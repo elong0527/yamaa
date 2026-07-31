@@ -1,0 +1,25 @@
+DS:
+  - formoid: ["FO.NCT00789880.DS"]
+    keys: ["StudyOID", "SubjectKey", "StudyEventOID", "ItemGroupRepeatKey"]
+    columns:
+      STUDYID:
+        source: "StudyOID"
+      DOMAIN:
+        literal: "DS"
+      USUBJID:
+        source: "SubjectKey"
+      DSSEQ:
+        group: ["USUBJID"]
+      DSCAT:
+        literal: "DISPOSITION EVENT"
+      DSDECOD:
+        source: "IT.NCT00789880.DS.DSDECOD"
+      DSTERM:
+        source: "IT.NCT00789880.DS.DSTERM"
+      EPOCH:
+        literal: "TREATMENT"
+      DSSTDY:
+        source: "IT.NCT00789880.DS.DSSTDY"
+      DSSTDTC:
+        function_: "calc_rfendtc"
+        args: ["_DM_REF.RFSTDTC", "DSSTDY"]

@@ -1,0 +1,35 @@
+# Event Domain Template (e.g., AE, MH, DS)
+# Characteristics:
+# - Multiple records per subject (repeating logs)
+# - Relies on default keys (Subject + RepeatKey + Event)
+# - Requires a Sequence (--SEQ) generator
+
+AE:
+  - formoid: ["AE"]
+    # We do NOT specify 'keys' here. It defaults to ["StudyOID", "SubjectKey", "ItemGroupRepeatKey", "StudyEventOID"]
+    columns:
+      STUDYID:
+        source: "StudyOID"
+      DOMAIN:
+        literal: "AE"
+      USUBJID:
+        source: "SubjectKey"
+      
+      # Event sequence number generation
+      AESEQ:
+        group: ["USUBJID"]
+        sort_by: ["AESTDTC"]
+      
+      AETERM:
+        source: "AETERM"
+      AESTDTC:
+        source: "AESTDAT"
+      AEENDTC:
+        source: "AEENDAT"
+        
+      # Example cross-domain reference (pulling Reference Start Date from DM)
+      AEDY:
+        function_: "calculate_study_day"
+        args:
+          - "AESTDTC"
+          - "DM.RFSTDTC" # Requires DM to be built first

@@ -1,0 +1,21 @@
+Package: cdiscbuildeR
+Title: A Package to Convert ODM XML to SDTM/ADaM Datasets
+Version: 0.1.0
+Authors@R: person("Ming-Chun", "Chen", email = "hellomingchun@gmail.com", role = c("aut", "cre"))
+Description: An R port of the cdiscbuilder Python package. It simplifies the transformation of clinical trial data from ODM (Operational Data Model) XML format into CDISC SDTM and ADaM datasets using configuration-driven mapping rules.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Imports:
+    dplyr,
+    tidyr,
+    purrr,
+    stringr,
+    xml2,
+    yaml,
+    rlang,
+    sqldf,
+    lubridate
+Suggests:
+    testthat
+Config/roxygen2/version: 8.0.0

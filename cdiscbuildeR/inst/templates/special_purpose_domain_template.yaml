@@ -1,0 +1,27 @@
+# Special Purpose Domain Template (e.g., DM, CO, SV)
+# Characteristics: 
+# - Often exactly one record per subject (like DM) or highly specific key structures
+# - Explicitly requires 'keys' to override default repeating keys when necessary
+
+DM:
+  - formoid: ["DEMO"]
+    # OVERRIDE DEFAULT KEYS for Subject-level granularity
+    keys: ["StudyOID", "SubjectKey"]
+    columns:
+      STUDYID:
+        source: "StudyOID"
+      DOMAIN:
+        literal: "DM"
+      USUBJID:
+        source: "SubjectKey"
+      SUBJID:
+        source: "SubjectKey"
+      # Example standard mappings
+      BRTHDTC:
+        source: "BRTHDAT"
+      SEX:
+        source: "SEX"
+        value_mapping:
+          "Male": "M"
+          "Female": "F"
+          "Unknown": "U"

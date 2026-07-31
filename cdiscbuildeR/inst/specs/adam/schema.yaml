@@ -1,0 +1,260 @@
+# ADaM YAML Specification Schema
+# Defines validation rules for ADaM specification files
+
+# Root level fields
+root:
+  required:
+    - domain
+    - columns
+    - dir
+    - schema
+  optional:
+    - key
+    - parents
+    - description
+    - version
+    - metadata
+  
+# Root field specific rules
+fields:
+  domain:
+    type: str
+    pattern: "^AD[A-Z0-9]{0,6}$"  # Must start with "AD", up to 8 chars total
+    description: "ADaM dataset domain name (e.g., ADSL, ADAE)"
+    
+  key:
+    type: list
+    item_type: str
+    min_items: 1
+    max_items: 5
+    description: "List of unique row identifier variables for the dataset"
+    validation_rules:
+      - all_must_be_columns: true
+      - derivation_type: source_only
+      - same_source_dataset: true
+      - no_duplicates: true
+    
+  parents:
+    type: list
+    item_type: str
+    description: "List of parent YAML files to inherit from"
+    
+  description:
+    type: str
+    max_length: 200
+    description: "Dataset description"
+    
+  version:
+    type: str
+    pattern: "^\\d+\\.\\d+(\\.\\d+)?$"
+    description: "Specification version"
+    
+  metadata:
+    type: dict
+    description: "Additional metadata"
+    
+  dir:
+    type: dict
+    description: "Directory paths for data sources and outputs"
+    required_fields:
+      - sdtm
+      - adam
+    fields:
+      sdtm:
+        type: str
+        description: "Path to SDTM data directory (relative to spec file or absolute)"
+      adam:
+        type: str
+        description: "Path to ADaM output directory (relative to spec file or absolute)"
+    
+  schema:
+    type: str
+    description: "Path to schema file for validation (relative to spec file)"
+    
+  columns:
+    type: list
+    required: true
+    min_items: 1
+    item_type: dict
+    description: "List of column specifications"
+
+# Column-level rules
+column:
+  required:
+    - name
+    - type
+    - derivation
+  optional:
+    - label
+    - core
+    - validation
+    - drop
+    - length
+    - format
+    - codelist
+    - value_mapping
+    - mapping_value
+    - mapping_default
+    - case_sensitive
+    
+  fields:
+    name:
+      type: str
+      pattern: "^[A-Z][A-Z0-9_]{0,7}$"  # Up to 8 chars, uppercase
+      description: "Column name (max 8 characters)"
+      
+    type:
+      type: str
+      allowed_values:
+        - str
+        - int
+        - float
+        - date
+        - datetime
+        - bool
+      description: "Data type"
+      
+    label:
+      type: str
+      max_length: 200
+      description: "Column label/description"
+      
+    core:
+      type: str
+      allowed_values:
+        - cdisc-required
+        - org-required
+        - optional
+        - conditional
+      description: "CDISC core designation"
+      
+    codelist:
+      type: str
+      description: "Reference to controlled terminology"
+      
+    drop:
+      type: bool
+      description: "Flag to drop inherited column"
+      
+    value_mapping:
+      type: dict
+      description: "Value mapping dictionary"
+      
+    mapping_value:
+      type: dict
+      description: "Alternative value mapping dictionary"
+      
+    mapping_default:
+      type: [str, int, float, bool]
+      description: "Default value if mapping fails"
+      
+    case_sensitive:
+      type: bool
+      description: "Whether mapping should be case sensitive"
+      
+    derivation:
+      type: dict
+      mutually_exclusive: [["constant", "source"], ["constant", "function"], ["constant", "condition"]]
+      fields:
+        source:
+          type: str
+          description: "Source variable(s)"
+        function:
+          type: str
+          description: "Derivation function"
+        constant:
+          type: [str, int, float]
+          description: "Constant value"
+        filter:
+          type: str
+          description: "Filter condition"
+        aggregation:
+          type: dict
+          fields:
+            function:
+              type: str
+              allowed_values: ["first", "last", "mean", "median", "min", "max", "sum", "count", "closest"]
+              description: "Aggregation function"
+            target:
+              type: str
+              description: "Target date/value for closest function"
+        mapping:
+          type: dict
+          description: "Value mapping dictionary"
+        value_mapping:
+          type: dict
+          description: "Value mapping dictionary"
+        mapping_value:
+          type: dict
+          description: "Alternative value mapping dictionary"
+        mapping_default:
+          type: [str, int, float, bool]
+          description: "Default value if mapping fails"
+        case_sensitive:
+          type: bool
+          description: "Whether mapping should be case sensitive"
+        cut:
+          type: dict
+          description: "Categorization rules"
+        condition:
+          type: list
+          description: "Conditional derivation rules"
+          item_type: dict
+          fields:
+            when:
+              type: str
+              description: "Condition expression"
+            then:
+              type: dict
+              description: "Derivation when condition is true"
+            else:
+              type: dict
+              description: "Default derivation"
+          
+    validation:
+      type: dict
+      fields:
+        unique:
+          type: bool
+          description: "Must values be unique"
+        min:
+          type: [int, float]
+          description: "Minimum value"
+        max:
+          type: [int, float]
+          description: "Maximum value"
+        min_length:
+          type: int
+          description: "Minimum string length"
+        max_length:
+          type: int
+          description: "Maximum string length"
+        allowed_values:
+          type: list
+          description: "List of allowed values"
+        pattern:
+          type: str
+          description: "Regex pattern for validation"
+        maximum_missing_percentage:
+          type: float
+          min: 0
+          max: 100
+          description: "Maximum allowed missing percentage"
+
+# Validation rules for spec-level constraints
+validation_rules:
+  key_variables:
+    description: "Strict rules for key variables"
+    rules:
+      - name: "source_only_derivation"
+        description: "Key variables must use only 'source' derivation type"
+        severity: "error"
+      - name: "same_source_dataset"
+        description: "All key variables must come from the same source dataset"
+        severity: "error"
+      - name: "format_dataset_column"
+        description: "Source must be in format DATASET.COLUMN"
+        severity: "error"
+      - name: "no_duplicates"
+        description: "Key variable combination must be unique in source dataset"
+        severity: "error"

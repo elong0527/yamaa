@@ -1,0 +1,117 @@
+version: "1.0" # Schema version
+definitions: # Reusable block definitions for the YAML schemas
+  column_general: # Standard definition for columns in general SDTM domains (like DM, EX, DS)
+    type: dict
+    properties:
+      # Build Execution Properties (Used by the R engine to map and derive data)
+      source: {type: str} # The source column or OID to extract data from (e.g. "IT.NCT...EXSTDTC")
+      literal: {type: [str, int, float, bool]} # Hardcoded exact value to populate (e.g. "TREATMENT")
+      type: {type: str, enum: [str, int, float, bool, iso8601, datetime]} # Desired output data type formatting
+      function_: {type: str} # Custom R function to call for this column (e.g. "calculate_study_day")
+      args: {type: list} # List of arguments passed to the custom function
+      kwargs: {type: dict} # Named keyword arguments passed to the custom function
+      max_missing_pct: {type: [int, float]} # Validation: flag error if missing percentage exceeds this threshold
+      value_mapping: {type: dict} # Exact dictionary lookup to map values (e.g. "Male": "M")
+      value_mapping_from: {type: str} # Reference an external mapping table or variable
+      conditions: {type: list} # Conditional logic for mapping (e.g. if-else cases)
+      case_sensitive: {type: bool} # Should string operations for this column be case-sensitive?
+      prefix: {type: str} # Add a static prefix to the output string
+      substring_start: {type: int} # Extract a substring starting at this index
+      substring_length: {type: int} # The length of the substring to extract
+      mapping_default: {type: [str, int, float, bool]} # The default value if mapping or source fails
+      mapping_default_source: {type: str} # The default fallback column if mapping fails
+      fallback: {type: str} # Alternative source column to use if the primary source is null
+      group: {type: list} # Columns used to group by for sequence generation (e.g., ["USUBJID"] for EXSEQ)
+      sort_by: {type: list} # Sorting order to apply before sequence generation or group operations
+      dependency: {type: str} # Column that must be non-null for this derivation to occur
+      dependency_false_value: {type: [str, int, float, bool]} # Default value if the dependency condition is not met
+      regex_extract: {type: str} # Regular expression pattern used to extract specific data from the string
+      
+      # Structural Metadata Properties (Used for generating Define-XML and define.pdf documentation)
+      label: {type: str} # The CDISC standard label for the variable (e.g. "Unique Subject Identifier")
+      role: {type: str} # The SDTM role (e.g. Identifier, Topic, Timing, Qualifier)
+      core: {type: str, enum: ["Req", "Exp", "Perm"]} # Required, Expected, or Permissible
+      description: {type: str} # Detailed description of what the variable represents
+      origin: {type: str} # Origin of the data (e.g. CRF, Derived, Assigned, eDT)
+      derivation_rule: {type: str} # Text description of how the derivation was performed
+      comments: {type: str} # Additional sponsor comments
+      conversion: {type: str} # Unit conversion notes
+      supp: # Supplemental Qualifiers (SUPPQUAL) definition if this is non-standard
+        type: dict
+        properties:
+          qlabel: {type: str} # The short label for the QNAM
+          qorig: {type: str} # Origin for the SUPPQUAL variable
+          qeval: {type: str} # Evaluator (e.g. INVESTIGATOR, SPONSOR)
+
+  column_findings: # Specialized definition for findings domains (e.g. VS, LB, QS)
+    type: dict
+    required: [name]
+    properties:
+      name: {type: str} # The generic finding name/identifier
+      # Build Execution Properties
+      type: {type: str} # Output data type
+      literal: {type: [str, int, float, bool]} # Hardcoded literal value
+      source: {type: str} # The source column or OID
+      function_: {type: str} # Custom R function to call
+      args: {type: list} # Function arguments
+      kwargs: {type: dict} # Function keyword arguments
+      formoid: {type: [str, list]} # Specific EDC Form OIDs this finding belongs to
+      itemoid: {type: [str, list]} # Specific EDC Item OIDs this finding maps from
+      value_mapping: {type: dict} # Dictionary lookup to map values
+      value_mapping_from: {type: str} # External reference for mapping
+      conditions: {type: list} # Conditional logic for mapping
+      case_sensitive: {type: bool} # String case-sensitivity flag
+      prefix: {type: str} # String prefix addition
+      substring_start: {type: int} # Substring extraction start index
+      substring_length: {type: int} # Substring extraction length
+      mapping_default: {type: [str, int, float, bool]} # Default fallback value for mapping
+      mapping_default_source: {type: str} # Default fallback column source for mapping
+      group: {type: list} # Grouping keys for sequencing (e.g., VSSEQ)
+      sort_by: {type: list} # Sorting order for sequencing
+      
+      # Structural Metadata Properties
+      label: {type: str} # Standard finding label
+      role: {type: str} # Finding role (Topic, Qualifier, etc)
+      core: {type: str, enum: ["Req", "Exp", "Perm"]} # Required, Expected, or Permissible
+      description: {type: str} # Description of the finding
+      origin: {type: str} # Where the finding originated (CRF, eDT, etc.)
+      derivation_rule: {type: str} # Text rule for derivation
+      comments: {type: str} # Sponsor comments
+      conversion: {type: str} # Conversion details
+      supp: # Supplemental Qualifier linking for findings
+        type: dict
+        properties:
+          qlabel: {type: str} # QNAM label
+          qorig: {type: str} # Origin
+          qeval: {type: str} # Evaluator
+
+schemas: # The root entry points for validating entire domain specs
+  general_domain: # Schema for non-findings SDTM templates
+    type: list
+    item_schema:
+      type: dict
+      required: [formoid, columns]
+      properties:
+        type: {type: str, enum: ["general", "findings"]} # Identifier for the domain type
+        item_group_regex: {type: str} # Optional regex to match EDC ItemGroup OIDs automatically
+        item_oid_regex: {type: str} # Optional regex to match EDC Item OIDs automatically
+        formoid: {type: [str, list]} # The source EDC Form OID(s) (e.g. ["FO.NCT00789880.EX"])
+        keys: {type: list} # Primary keys used to pivot long data (e.g. ["StudyOID", "SubjectKey"])
+        columns: # The variable definitions belonging directly to this domain
+          type: dict
+          values_schema: {ref: column_general}
+        observations: # For hierarchical multi-level domains (rarely used outside complex events)
+          type: list
+          item_schema:
+            type: dict
+            values_schema: {ref: column_general}
+
+  findings_domain: # Schema for findings SDTM templates
+    type: dict
+    required: [type, columns]
+    properties:
+      type: {const: FINDINGS} # Must explicitly flag as FINDINGS
+      definitions: {type: dict} # YAML Anchors container (e.g. shared timing variables)
+      columns: # The finding-specific variables
+        type: list
+        item_schema: {ref: column_findings}

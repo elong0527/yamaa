@@ -1,0 +1,51 @@
+# Finding Domain Template (e.g., LB, VS, QS, EG)
+# Characteristics:
+# - Multiple records per subject (repeating logs or visits)
+# - Relies on default keys (Subject + RepeatKey + Event)
+# - Requires a Sequence (--SEQ) generator
+# - Contains finding-specific variables: --TESTCD, --TEST, --ORRES, --ORRESU, --STRESC, etc.
+
+LB:
+  - formoid: ["LABS"]
+    # We do NOT specify 'keys' here. It defaults to ["StudyOID", "SubjectKey", "ItemGroupRepeatKey", "StudyEventOID"]
+    columns:
+      STUDYID:
+        source: "StudyOID"
+      DOMAIN:
+        literal: "LB"
+      USUBJID:
+        source: "SubjectKey"
+      
+      # Finding sequence number generation
+      LBSEQ:
+        group: ["USUBJID"]
+        sort_by: ["LBDTC"]
+      
+      # Core Finding Variables
+      LBTESTCD:
+        source: "LBTCD"
+      LBTEST:
+        source: "LBNAME"
+      LBDTC:
+        source: "LBDAT"
+        
+      # Results
+      LBORRES:
+        source: "LBRESLT"
+      LBORRESU:
+        source: "LBUNIT"
+      
+      # Example Mapping for Standardized Results
+      LBSTRESC:
+        source: "LBRESLT"
+        type: "str"
+      LBSTRESN:
+        source: "LBRESLT"
+        type: "float"
+        
+      # Example cross-domain reference (pulling Reference Start Date from DM for Study Day)
+      LBDY:
+        function_: "calculate_study_day"
+        args:
+          - "LBDTC"
+          - "DM.RFSTDTC" # Requires DM to be built first

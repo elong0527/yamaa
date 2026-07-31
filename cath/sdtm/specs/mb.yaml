@@ -1,0 +1,47 @@
+MB:
+  type: FINDINGS
+  definitions:
+    STUDYID:
+      source: "StudyOID"
+    DOMAIN:
+      literal: "MB"
+    USUBJID:
+      source: "SubjectKey"
+    MBSEQ:
+      group: ["USUBJID"]
+    EPOCH:
+      literal: "TREATMENT"
+    MBDY:
+      function_: "calculate_study_day"
+      args: ["MBDTC", "_DM_REF.RFSTDTC"]
+
+  columns:
+    - name: CFU_LES
+      formoid: ["FO.NCT00789880.MB"]
+      itemoid: ["IT.NCT00789880.MB.CFU_LES"]
+      MBTESTCD: {literal: "CFU"}
+      MBTEST: {literal: "Bacterial Colony Count"}
+      MBCAT: {literal: "MICROBIOLOGY"}
+      MBSPEC: {literal: "SKIN SWAB"}
+      MBLOC: {literal: "LESIONAL"}
+      MBORRES: {source: "IT.NCT00789880.MB.CFU_LES"}
+      MBORRESU: {literal: "log10 CFU"}
+      MBSTRESC: {source: "IT.NCT00789880.MB.CFU_LES"}
+      MBSTRESN: {source: "IT.NCT00789880.MB.CFU_LES", type: "float"}
+      MBSTRESU: {literal: "log10 CFU"}
+      MBDTC: {source: "IT.NCT00789880.MB.MBDTC"}
+
+    - name: CFU_NONLES
+      formoid: ["FO.NCT00789880.MB"]
+      itemoid: ["IT.NCT00789880.MB.CFU_NONLES"]
+      MBTESTCD: {literal: "CFU"}
+      MBTEST: {literal: "Bacterial Colony Count"}
+      MBCAT: {literal: "MICROBIOLOGY"}
+      MBSPEC: {literal: "SKIN SWAB"}
+      MBLOC: {literal: "NON-LESIONAL"}
+      MBORRES: {source: "IT.NCT00789880.MB.CFU_NONLES"}
+      MBORRESU: {literal: "log10 CFU"}
+      MBSTRESC: {source: "IT.NCT00789880.MB.CFU_NONLES"}
+      MBSTRESN: {source: "IT.NCT00789880.MB.CFU_NONLES", type: "float"}
+      MBSTRESU: {literal: "log10 CFU"}
+      MBDTC: {source: "IT.NCT00789880.MB.MBDTC"}
