@@ -16,8 +16,6 @@ column_class:
     - derivation: {type: derivation_class, required: false, unique: true}
     - metadata: {type: list, required: false, unique: true}
 
-# Row construction emits one row per matching base record. Derivations populate
-# output columns such as PARAMCD or AVAL without redefining column metadata.
 row_class:
     - id: {type: str, required: true, unique: true}
     - filter: {type: derivation_class, required: false, unique: true}
