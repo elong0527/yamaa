@@ -1,0 +1,83 @@
+domain: LB
+base: ODM
+keys: [STUDYID, USUBJID, LBSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    derivation:
+      literal: LB
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ODM.SubjectKey
+
+  - name: LBSEQ
+    type: int
+    derivation:
+      group_by: [STUDYID, USUBJID]
+      function:
+        name: row_number
+        args: [LBDTC, LBTESTCD]
+
+  - name: LBTESTCD
+    type: str
+
+  - name: LBTEST
+    type: str
+
+  - name: LBORRES
+    type: str
+
+  - name: LBORRESU
+    type: str
+
+  - name: LBSTRESN
+    type: float
+
+  - name: LBSTRESU
+    type: str
+
+  - name: LBDTC
+    type: date
+    derivation:
+      source: ODM.IT.LB.LBDTC
+
+rows:
+  - id: calcium
+    filter: "ODM.ItemOID = 'IT.LB.CALCIUM' AND ODM.Value IS NOT NULL"
+    derivations:
+      LBTESTCD:
+        literal: CA
+      LBTEST:
+        literal: Calcium
+      LBORRES:
+        source: ODM.Value
+      LBORRESU:
+        literal: mg/dL
+      LBSTRESN:
+        source: ODM.Value
+      LBSTRESU:
+        literal: mg/dL
+
+  - id: creatinine
+    filter: "ODM.ItemOID = 'IT.LB.CREAT' AND ODM.Value IS NOT NULL"
+    derivations:
+      LBTESTCD:
+        literal: CREAT
+      LBTEST:
+        literal: Creatinine
+      LBORRES:
+        source: ODM.Value
+      LBORRESU:
+        literal: mg/dL
+      LBSTRESN:
+        source: ODM.Value
+      LBSTRESU:
+        literal: mg/dL
