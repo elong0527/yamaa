@@ -1,0 +1,93 @@
+domain: ADLB
+datasets: [input/lb.csv, input/adsl.csv]
+base: LB
+keys: [STUDYID, USUBJID, PARAMCD, ADT, ASEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+
+  - name: PARAM
+    type: str
+
+  - name: ADT
+    type: date
+
+  - name: TRTSDT
+    type: date
+    derivation:
+      source: ADSL.TRTSDT
+
+  - name: TRT01A
+    type: str
+    derivation:
+      source: ADSL.TRT01A
+
+  - name: AVAL
+    type: float
+
+  - name: AVALU
+    type: str
+
+  - name: ABLFL
+    type: str
+    derivation:
+      group_by: [STUDYID, USUBJID, PARAMCD]
+      function:
+        name: baseline_flag
+        args: [ADT, TRTSDT]
+
+  - name: BASE
+    type: float
+    derivation:
+      group_by: [STUDYID, USUBJID, PARAMCD]
+      function:
+        name: baseline_value
+        args: [AVAL, ABLFL]
+
+  - name: CHG
+    type: float
+    derivation:
+      function:
+        name: subtract
+        args: [AVAL, BASE]
+
+  - name: PCHG
+    type: float
+    derivation:
+      function:
+        name: percent_change
+        args: [AVAL, BASE]
+
+  - name: ASEQ
+    type: int
+    derivation:
+      group_by: [STUDYID, USUBJID]
+      function:
+        name: row_number
+        args: [PARAMCD, ADT]
+
+rows:
+  - id: numeric_laboratory_results
+    filter: "LB.LBSTRESN IS NOT NULL"
+    derivations:
+      PARAMCD:
+        source: LB.LBTESTCD
+      PARAM:
+        source: LB.LBTEST
+      ADT:
+        source: LB.LBDTC
+      AVAL:
+        source: LB.LBSTRESN
+      AVALU:
+        source: LB.LBSTRESU

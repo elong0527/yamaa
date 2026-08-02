@@ -1,9 +1,10 @@
-version: "1.0" # Schema version
+version: "1.0"
 
 root_class:
     - domain: {type: str, required: true, unique: true}
+    - datasets: {type: [path, "list[path]"], required: true, unique: true}
     - base: {type: str, required: true, unique: true}
-    - parents: {type: "list[str]", required: false, unique: true}
+    - parents: {type: [path, "list[path]"], required: false, unique: true}
     - keys: {type: "list[str]", required: true, unique: true}
     - columns: {type: "list[column_class]", required: true, unique: true}
     - rows: {type: "list[row_class]", required: false, unique: true}
