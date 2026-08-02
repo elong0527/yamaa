@@ -6,6 +6,9 @@ parameter: ALT and AST map source results directly, while ALTSI derives a new
 SI-unit ALT parameter. ADSL contributes treatment variables by `STUDYID` and
 `USUBJID`; this enrichment must not change the number of rows.
 
+Using one row definition per parameter is a BDS modeling convention demonstrated
+by this fixture, not a general execution-engine rule.
+
 Portable function semantics used by this example:
 
 - `baseline_flag` uses `date = ADT` and `reference_date = TRTSDT` to select the
