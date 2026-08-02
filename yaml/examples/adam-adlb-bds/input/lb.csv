@@ -1,0 +1,7 @@
+STUDYID,USUBJID,LBTESTCD,LBTEST,LBDTC,LBSTRESN,LBSTRESU
+CATH,001,ALT,Alanine Aminotransferase,2025-01-01,10,U/L
+CATH,001,ALT,Alanine Aminotransferase,2025-01-08,15,U/L
+CATH,001,AST,Aspartate Aminotransferase,2025-01-01,20,U/L
+CATH,001,AST,Aspartate Aminotransferase,2025-01-08,18,U/L
+CATH,002,ALT,Alanine Aminotransferase,2025-01-01,8,U/L
+CATH,002,ALT,Alanine Aminotransferase,2025-01-08,12,U/L

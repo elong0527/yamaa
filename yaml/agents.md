@@ -25,6 +25,15 @@ Derivation occurs in two steps:
 When multiple source records match one output key, the derivation must filter,
 aggregate, or select one record before the join. Otherwise, it must fail.
 
+For a BDS dataset, each `rows` entry constructs exactly one parameter. Directly
+mapped and newly derived parameters use separate row definitions.
+
+### Dataset inputs
+
+`datasets` is a mapping from dataset identifiers to source data paths. The key
+is the dataset identifier used by `base` and qualified variable references.
+Paths are resolved relative to the specification file.
+
 ### Variable references
 
 Qualified references use `DATASET.VARIABLE`. For example, `ODM.ItemOID` reads
@@ -45,3 +54,21 @@ a valid SQL predicate. Supported core syntax includes `=`, `<>`,
 SQL three-valued logic applies: a row is retained only when the filter evaluates
 to `TRUE`; `FALSE` and `UNKNOWN` both remove the row. A list of filters is
 equivalent to joining the predicates with `AND`.
+
+### Function calls
+
+`function` is a quoted `function_call` expression using this language-agnostic
+grammar:
+
+```text
+function_call := name "(" [named_argument ("," named_argument)*] ")"
+named_argument := name "=" value
+value          := variable | literal | list | function_call
+```
+
+Arguments must be named and unique; their order has no meaning. Unquoted values
+inside the expression are variable references, while string literals use
+single quotes. Each function defines its required and optional argument names.
+Implementations must reject positional, missing, duplicate, and unknown
+arguments. They must parse calls into a syntax tree and dispatch registered
+functions rather than evaluate the expression as host-language code.

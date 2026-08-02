@@ -1,5 +1,6 @@
 domain: DM
-datasets: input/odm.csv
+datasets:
+  ODM: input/odm.csv
 base: ODM
 keys: [STUDYID, USUBJID]
 

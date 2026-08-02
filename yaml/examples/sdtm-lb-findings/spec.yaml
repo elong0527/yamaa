@@ -1,5 +1,6 @@
 domain: LB
-datasets: input/odm.csv
+datasets:
+  ODM: input/odm.csv
 base: ODM
 keys: [STUDYID, USUBJID, LBSEQ]
 
@@ -23,9 +24,7 @@ columns:
     type: int
     derivation:
       group_by: [STUDYID, USUBJID]
-      function:
-        name: row_number
-        args: [LBDTC, LBTESTCD]
+      function: "row_number(order_by = [LBDTC, LBTESTCD])"
 
   - name: LBTESTCD
     type: str

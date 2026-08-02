@@ -1,5 +1,7 @@
 domain: ADLB
-datasets: [input/lb.csv, input/adsl.csv]
+datasets:
+  LB: input/lb.csv
+  ADSL: input/adsl.csv
 base: LB
 keys: [STUDYID, USUBJID, PARAMCD, ADT, ASEQ]
 
@@ -43,48 +45,66 @@ columns:
     type: str
     derivation:
       group_by: [STUDYID, USUBJID, PARAMCD]
-      function:
-        name: baseline_flag
-        args: [ADT, TRTSDT]
+      function: "baseline_flag(date = ADT, reference_date = TRTSDT)"
 
   - name: BASE
     type: float
     derivation:
       group_by: [STUDYID, USUBJID, PARAMCD]
-      function:
-        name: baseline_value
-        args: [AVAL, ABLFL]
+      function: "baseline_value(value = AVAL, flag = ABLFL)"
 
   - name: CHG
     type: float
     derivation:
-      function:
-        name: subtract
-        args: [AVAL, BASE]
+      function: "subtract(minuend = AVAL, subtrahend = BASE)"
 
   - name: PCHG
     type: float
     derivation:
-      function:
-        name: percent_change
-        args: [AVAL, BASE]
+      function: "percent_change(value = AVAL, base = BASE)"
 
   - name: ASEQ
     type: int
     derivation:
       group_by: [STUDYID, USUBJID]
-      function:
-        name: row_number
-        args: [PARAMCD, ADT]
+      function: "row_number(order_by = [PARAMCD, ADT])"
 
 rows:
-  - id: numeric_laboratory_results
-    filter: "LB.LBSTRESN IS NOT NULL"
+  - id: alt
+    filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
     derivations:
       PARAMCD:
-        source: LB.LBTESTCD
+        literal: ALT
       PARAM:
-        source: LB.LBTEST
+        literal: Alanine Aminotransferase
+      ADT:
+        source: LB.LBDTC
+      AVAL:
+        source: LB.LBSTRESN
+      AVALU:
+        source: LB.LBSTRESU
+
+  - id: alt_si
+    filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
+    derivations:
+      PARAMCD:
+        literal: ALTSI
+      PARAM:
+        literal: Alanine Aminotransferase (SI)
+      ADT:
+        source: LB.LBDTC
+      AVAL:
+        function: "multiply(value = LB.LBSTRESN, factor = 0.0167)"
+      AVALU:
+        literal: ukat/L
+
+  - id: ast
+    filter: "LB.LBTESTCD = 'AST' AND LB.LBSTRESN IS NOT NULL"
+    derivations:
+      PARAMCD:
+        literal: AST
+      PARAM:
+        literal: Aspartate Aminotransferase
       ADT:
         source: LB.LBDTC
       AVAL:

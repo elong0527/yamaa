@@ -11,8 +11,8 @@ This reduction occurs during row construction and is therefore allowed.
 
 Portable function semantics used by this example:
 
-- `row_number` partitions by `group_by` and sorts ascending by its arguments.
-  Ties must preserve row-template order and then base-record order.
+- `row_number` partitions by `group_by` and sorts ascending by
+  `order_by`. Ties must preserve row-template order and then base-record order.
 
 After the three rows are constructed, shared column derivations populate
 `STUDYID`, `DOMAIN`, `USUBJID`, and `LBDTC`. `LBSEQ` is assigned last so that the
