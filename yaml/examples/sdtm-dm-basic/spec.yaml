@@ -1,0 +1,61 @@
+domain: DM
+base: ODM
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: DM
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: SUBJID
+    type: str
+    label: Subject Identifier for the Study
+
+  - name: SEX
+    type: str
+    label: Sex
+
+  - name: AGE
+    type: int
+    label: Age
+
+  - name: ARM
+    type: str
+    label: Description of Planned Arm
+
+  - name: ACTARM
+    type: str
+    label: Description of Actual Arm
+    derivation:
+      source: ARM
+
+rows:
+  - id: subject
+    filter: "ODM.ItemOID = 'IT.DM.SEX' AND ODM.Value IS NOT NULL"
+    derivations:
+      USUBJID:
+        source: ODM.SubjectKey
+      SUBJID:
+        source: ODM.SubjectKey
+      SEX:
+        source: ODM.Value
+        mapping:
+          dict:
+            Male: M
+            Female: F
+      AGE:
+        source: ODM.IT.DM.AGE
+      ARM:
+        source: ODM.IT.DM.ARM
