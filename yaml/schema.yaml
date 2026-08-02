@@ -1,0 +1,85 @@
+version: "1.0" # Schema version
+
+root_class:
+    - domain: {type: str, required: true, unique: true}
+    - base: {type: str, required: true, unique: true}
+    - parents: {type: "list[str]", required: false, unique: true}
+    - keys: {type: "list[str]", required: true, unique: true}
+    - columns: {type: "list[column_class]", required: true, unique: true}
+    - rows: {type: "list[row_class]", required: false, unique: true}
+    - metadata: {type: list, required: false, unique: true}
+    
+column_class:
+    - name: {type: str, required: true, unique: true}
+    - type: {type: str, required: true, unique: true}
+    - label: {type: str, required: false, unique: true}
+    - derivation: {type: derivation_class, required: false, unique: true}
+    - metadata: {type: list, required: false, unique: true}
+
+# Row construction emits one row per matching base record. Derivations populate
+# output columns such as PARAMCD or AVAL without redefining column metadata.
+row_class:
+    - id: {type: str, required: true, unique: true}
+    - where: {type: derivation_class, required: false, unique: true}
+    - derivations: {type: "dict[str, derivation_class]", required: true, unique: true}
+
+derivation_class: 
+    - source: {type: str, required: false, unique: true}
+    - literal: {type: [str, int, float, bool], required: false, unique: true}
+    - mapping: {type: mapping_class, required: false, unique: true}
+    - cut: {type: cut_class, required: false, unique: true}
+    - string_operation: {type: string_operation_class, required: false, unique: true}
+    - numeric_operation: {type: numeric_operation_class, required: false, unique: true}
+    - date_operation: {type: date_operation_class, required: false, unique: true}
+    - filter: {type: [str, "list[str]"], required: false, unique: true}
+    - group_by: {type: "list[str]", required: false, unique: true}
+    - aggregate: {type: aggregate_class, required: false, unique: true}
+    - function: {type: function_class, required: false, unique: true}
+    - exception: {type: exception_class, required: false, unique: true}
+
+mapping_class: 
+    - dict: {type: dict, required: false, unique: true}
+    - case_sensitive: {type: bool, required: false, unique: true}
+    - file: {type: str, required: false, unique: true}
+    - key: {type: str, required: false, unique: true}
+
+cut_class: 
+    - breaks: {type: "list[int, float]", required: true, unique: true}
+    - labels: {type: "list[str]", required: false, unique: true}
+    - include.lowest: {type: bool, required: false, unique: true}
+    - right: {type: bool, required: false, unique: true}    
+
+string_operation_class: 
+    # reference: https://rstudio.github.io/cheatsheets/html/strings.html
+    - detect: {type: str, required: false, unique: true}
+    - prefix: {type: str, required: false, unique: true}
+    - suffix: {type: str, required: false, unique: true}
+    - extract: {type: str, required: false, unique: true}
+    - glue: {type: str, required: false, unique: true}
+
+numeric_operation_class: 
+    - max: {type: [int, float], required: false, unique: true}
+    - min: {type: [int, float], required: false, unique: true}
+    - mean: {type: [int, float], required: false, unique: true}
+    - median: {type: [int, float], required: false, unique: true}
+    - mode: {type: [int, float], required: false, unique: true}
+    - sum: {type: [int, float], required: false, unique: true}
+    - sd: {type: [int, float], required: false, unique: true}
+    - var: {type: [int, float], required: false, unique: true}
+
+date_operation_class: 
+    - year: {type: str, required: false, unique: true}
+    - month: {type: str, required: false, unique: true}
+    - day: {type: str, required: false, unique: true}
+
+function_class:
+    - name: {type: str, required: true, unique: true}
+    - args: {type: list, required: false, unique: true}
+    - package: {type: str, required: false, unique: true}
+
+verification_class: 
+    - allowed_values: {type: list, required: false, unique: true} 
+    - range: {type: [int, float], required: false, unique: true}
+    - group_by: {type: "list[str]", required: false, unique: true}
+    - max_missing_pct: {type: [int, float], required: false, unique: true}
+    
