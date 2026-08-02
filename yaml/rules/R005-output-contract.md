@@ -18,6 +18,12 @@ in every `rows` entry. Intentional missing values use `literal: null`.
 
 Derivations targeting undeclared output columns are invalid.
 
+## Structural uniqueness
+
+Implementations must reject duplicate YAML mapping keys. Dataset identifiers,
+column names, and row IDs must be unique within their respective mappings or
+lists. Values in `keys` must not repeat.
+
 ## Type conversion
 
 After a value is derived, convert it to the column's declared `type` before it
@@ -39,6 +45,8 @@ Column declaration order controls final output column order.
 
 - Missing variable coverage: fail.
 - An undeclared derivation target: fail.
+- A duplicate YAML key, dataset identifier, column name, row ID, or `keys`
+  value: fail.
 - An unknown key column: fail.
 - A type conversion failure: fail.
 - A missing or duplicate final key combination: fail.
