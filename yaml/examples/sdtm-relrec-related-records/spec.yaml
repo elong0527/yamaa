@@ -1,0 +1,59 @@
+domain: RELREC
+datasets:
+  AE: input/ae.csv
+  CM: input/cm.csv
+keys: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
+
+columns:
+  - name: STUDYID
+    type: str
+
+  - name: USUBJID
+    type: str
+
+  - name: RDOMAIN
+    type: str
+
+  - name: IDVAR
+    type: str
+
+  - name: IDVARVAL
+    type: str
+
+  - name: RELID
+    type: str
+
+rows:
+  - id: adverse_event
+    dataset: AE
+    filter: "AE.AELNKID IS NOT NULL"
+    derivations:
+      STUDYID:
+        source: AE.STUDYID
+      USUBJID:
+        source: AE.USUBJID
+      RDOMAIN:
+        literal: AE
+      IDVAR:
+        literal: AESEQ
+      IDVARVAL:
+        source: AE.AESEQ
+      RELID:
+        source: AE.AELNKID
+
+  - id: concomitant_medication
+    dataset: CM
+    filter: "CM.CMLNKID IS NOT NULL"
+    derivations:
+      STUDYID:
+        source: CM.STUDYID
+      USUBJID:
+        source: CM.USUBJID
+      RDOMAIN:
+        literal: CM
+      IDVAR:
+        literal: CMSEQ
+      IDVARVAL:
+        source: CM.CMSEQ
+      RELID:
+        source: CM.CMLNKID

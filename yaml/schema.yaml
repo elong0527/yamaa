@@ -3,7 +3,7 @@ version: "1.0"
 root_class:
     - domain: {type: str, required: true, unique: true}
     - datasets: {type: "dict[str, path]", required: true, unique: true}
-    - base: {type: str, required: true, unique: true}
+    - base: {type: str, required: false, unique: true}
     - parents: {type: [path, "list[path]"], required: false, unique: true}
     - keys: {type: "list[str]", required: true, unique: true}
     - columns: {type: "list[column_class]", required: true, unique: true}
@@ -19,12 +19,13 @@ column_class:
 
 row_class:
     - id: {type: str, required: true, unique: true}
+    - dataset: {type: str, required: false, unique: true}
     - filter: {type: [sql, "list[sql]"], required: false, unique: true}
     - derivations: {type: "dict[str, derivation_class]", required: true, unique: true}
 
 derivation_class: 
     - source: {type: str, required: false, unique: true}
-    - literal: {type: [str, int, float, bool], required: false, unique: true}
+    - literal: {type: [str, int, float, bool, null], required: false, unique: true}
     - mapping: {type: mapping_class, required: false, unique: true}
     - cut: {type: cut_class, required: false, unique: true}
     - string_operation: {type: string_operation_class, required: false, unique: true}

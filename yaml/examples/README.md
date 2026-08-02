@@ -28,7 +28,9 @@ Examples are ordered by increasing complexity:
    current-dataset reference.
 2. `sdtm-lb-findings` — row construction, wide-to-long Findings conversion,
    missing-result filtering, and sequence generation.
-3. `adam-adlb-bds` — source-dataset enrichment, baseline selection, change from
+3. `sdtm-relrec-related-records` — row construction from multiple source
+   datasets for a one-to-many relationship between records.
+4. `adam-adlb-bds` — source-dataset enrichment, baseline selection, change from
    baseline, percentage change, and analysis sequence.
 
 Each example contains a specification, source CSV files, an expected CSV, and

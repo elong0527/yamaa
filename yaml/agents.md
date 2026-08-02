@@ -16,11 +16,22 @@ derivations.
 
 Derivation occurs in two steps:
 
-1. **Row construction** starts from the dataset declared by `base` and
-   establishes the output rows. Each row is identified by the dataset `keys`.
-   Row construction may change the number of rows.
+1. **Row construction** establishes the output rows. Each `rows` entry uses its
+   declared `dataset` as the row driver, or uses `base` as a default when
+   `dataset` is omitted. Constructed rows are appended in specification order.
+   Each row is identified by the dataset `keys`. Row construction may change
+   the number of rows.
 2. **Column derivation** adds one value per key combination by left-joining on
    the dataset `keys`. Column derivation must not change the number of rows.
+
+After a value is derived, it is converted to the column's declared `type`.
+Conversion must be deterministic and must fail when the value cannot be
+converted; implementations must not silently replace conversion errors with
+missing values.
+
+Every output column must have either a column-level derivation or a derivation
+in every `rows` entry. Intentional missing values must be explicit with
+`literal: null`; implementations must not infer same-named source variables.
 
 When multiple source records match one output key, the derivation must filter,
 aggregate, or select one record before the join. Otherwise, it must fail.
@@ -33,6 +44,11 @@ mapped and newly derived parameters use separate row definitions.
 `datasets` is a mapping from dataset identifiers to source data paths. The key
 is the dataset identifier used by `base` and qualified variable references.
 Paths are resolved relative to the specification file.
+
+When present, `base` and every `rows.dataset` value must match a key in
+`datasets`. If `rows.dataset` is omitted, that row definition uses `base`.
+Validation fails when a row has neither an explicit `dataset` nor a default
+`base`.
 
 ### Variable references
 
