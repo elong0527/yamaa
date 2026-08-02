@@ -18,7 +18,7 @@ column_class:
 
 row_class:
     - id: {type: str, required: true, unique: true}
-    - filter: {type: derivation_class, required: false, unique: true}
+    - filter: {type: [sql, "list[sql]"], required: false, unique: true}
     - derivations: {type: "dict[str, derivation_class]", required: true, unique: true}
 
 derivation_class: 
@@ -29,7 +29,7 @@ derivation_class:
     - string_operation: {type: string_operation_class, required: false, unique: true}
     - numeric_operation: {type: numeric_operation_class, required: false, unique: true}
     - date_operation: {type: date_operation_class, required: false, unique: true}
-    - filter: {type: [str, "list[str]"], required: false, unique: true}
+    - filter: {type: [sql, "list[sql]"], required: false, unique: true}
     - group_by: {type: "list[str]", required: false, unique: true}
     - aggregate: {type: aggregate_class, required: false, unique: true}
     - function: {type: function_class, required: false, unique: true}
