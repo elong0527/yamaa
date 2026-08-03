@@ -49,6 +49,16 @@ fold_ascii <- function(s) {
         collapse = "")
 }
 
+# R004 predicate identifiers. Kept deliberately simple: enough to check which
+# output columns a predicate names, not a full parser.
+predicate_vars <- function(text) {
+  kw <- c("AND", "OR", "NOT", "IS", "NULL", "IN", "TRUE", "FALSE")
+  stripped <- gsub("'([^']|'')*'", " ", text)
+  toks <- regmatches(stripped, gregexpr("[A-Za-z_][A-Za-z0-9_.]*", stripped))[[1]]
+  toks[!(toupper(toks) %in% kw)]
+}
+
+
 arg_spec <- function(entry) {
   out <- list()
   for (a in entry$arguments %||% list()) out[[names(a)[1]]] <- a[[1]]
@@ -159,8 +169,20 @@ validate_spec <- function(path, d = load_design()) {
     entry
   }
 
+  check_predicate <- function(text, where, label, declared) {
+    for (n in predicate_vars(text)) {
+      if (grepl(".", n, fixed = TRUE)) {
+        fail("%s.%s: '%s' is qualified; a predicate over output rows names output columns (R001)",
+             where, label, n)
+      } else if (!(n %in% declared)) {
+        fail("%s.%s: '%s' is not a declared output column (R001)", where, label, n)
+      }
+    }
+  }
+
   derivation <- function(dv, where, driver) {
     closed(dv, "derivation_class", where)
+    if (!is.null(dv$where)) check_predicate(dv$where, where, "where", declared)
     src <- dv$source
     if (!is.null(src) && grepl(".", src, fixed = TRUE)) {
       q <- sub("\\..*$", "", src)
@@ -214,6 +236,7 @@ validate_spec <- function(path, d = load_design()) {
     }
   }
 
+  declared <- vapply(spec$columns, function(c) c$name, "")
   closed(spec, "root_class", "root")
   if (!is.null(spec$domain) && spec$domain %in% datasets) {
     fail("root.datasets: '%s' is also the output domain (R002)", spec$domain)
@@ -224,7 +247,6 @@ validate_spec <- function(path, d = load_design()) {
     fail("root.base: '%s' is not a declared dataset (R002)", spec$base)
   }
 
-  declared <- vapply(spec$columns, function(c) c$name, "")
   for (col in spec$columns) {
     closed(col, "column_class", sprintf("columns[%s]", col$name))
     if (!is.null(col$derivation)) {

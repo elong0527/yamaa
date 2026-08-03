@@ -39,6 +39,7 @@ expressible but no fixture; **no** not expressible.
 | Baseline flag, value, change, percent change | yes | `adam-adlb-bds` |
 | Analysis sequence numbering | yes | `row_number` |
 | Conditional recode, `case_when` | untested | `case` |
+| Derive only where a condition holds | yes | `derivation.where`, `adam-adlb-bds` `PCHG` |
 | Range banding | untested | `cut` |
 | First non-missing | untested | `coalesce` |
 | Study day, no day 0 | untested | `call` |
@@ -46,17 +47,19 @@ expressible but no fixture; **no** not expressible.
 | First and last dose date | **no** | needs aggregate with ordering and a filter on the added dataset |
 | Existence flag from another dataset | **no** | `SAFFL` from "any EX record with dose > 0" |
 | Population and treatment-emergent flags | untested | `case` over output columns |
-| Occurrence flags, `AOCCFL` and friends | **no** | see restricted derivations below |
+| Occurrence flags, `AOCCFL` and friends | partial | `where` restricts the population; still needs first/last with ordering |
 | Ordered-categorical to numeric rank | untested | `mapping` |
 
-## The seven real gaps
+## The remaining gaps
 
-Ordered by how often they appear in `cath/`.
+Ordered by how often they appear in `cath/`. One of the original seven is
+closed; six remain.
 
-1. **Restricted derivations.** `restrict_derivation` appears six times per BDS
-   dataset: apply a derivation only where a condition holds and leave the rest
-   missing. `CHG` restricted to `!is.na(BASE)`, three `AOCC` flags restricted to
-   `TRTEMFL == "Y"`. Needs a first-class "derive only where" construct.
+1. ~~**Restricted derivations.**~~ **Closed.** `derivation.where` restricts a
+   derivation to the output rows satisfying a predicate, leaving the rest
+   missing, and a window operation inside it partitions only those rows.
+   Exercised by `PCHG` in `adam-adlb-bds`, which belongs only on post-baseline
+   records. This is the declarative form of `restrict_derivation`.
 
 2. **Extreme-record selection with ordering and a filter.** First dose is
    "earliest `EXSTDTM` among EX records with `EXDOSE > 0`, ordered by

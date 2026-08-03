@@ -29,6 +29,31 @@ per `base` record, in base-record order. `base` is required in that case. This
 is the ordinary shape for a one-record-per-subject dataset, where every output
 column has a column-level derivation and no row template is needed.
 
+## Restricted derivations
+
+`derivation.where` is a predicate over the output row. The derivation produces a
+value only where it is `TRUE`; every other row receives missing, and its pipeline
+is not evaluated at all. The column still exists for every row, so row count is
+unchanged and R005 conversion still applies.
+
+This is the declarative form of "derive only for these records". Percent change
+belongs only on post-baseline records, an occurrence flag only on
+treatment-emergent records, a change from baseline only where a baseline exists.
+Without it each such variable needs a conditional wrapped around every operation
+in its pipeline, and `case` cannot help because its branches return values rather
+than running a pipeline.
+
+`where` restricts which output rows receive a value. It is not `row.filter`,
+which selects source records during row construction and does change row count,
+and it is not `derivation.filter`, which narrows the right side of a join under
+R003. Three predicates, three operands: source records, joined records, and
+output rows.
+
+A window operation inside a restricted derivation partitions only the rows that
+satisfy `where`. Restricting first and then ranking is the reason the construct
+exists: an occurrence flag numbered within treatment-emergent records must not
+count the records it excludes.
+
 ## Dependency execution
 
 Implementations must infer dependencies rather than evaluate columns in YAML
@@ -40,7 +65,8 @@ ordering arguments. Lookup keys required by R003 are also dependencies.
 
 Dependencies also include every current-output variable named inside a
 predicate. A predicate is any argument whose registry signature declares the
-type `sql` under R007 or R008, such as `case.when` and `override.rules[].when`.
+type `sql` under R007 or R008, such as `case.when` and `override.rules[].when`,
+and every variable named in `derivation.where`.
 Implementations must extract identifier references from the predicate and add
 them to the dependency graph.
 
@@ -66,6 +92,7 @@ Column declaration order controls final column layout, not evaluation order.
 
 - A row without an explicit `dataset` or default `base`: fail.
 - A specification with no `rows` entry and no `base`: fail.
+- A `where` predicate naming a column that is not in the output: fail.
 - A variable named in a predicate that is absent from the dependency graph:
   fail.
 - A row dependency on a later-phase value: fail.

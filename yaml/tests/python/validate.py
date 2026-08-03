@@ -13,6 +13,8 @@ from pathlib import Path
 
 import yaml
 
+from predicates import DerivationError, check_syntax, predicate_vars
+
 YAML_DIR = Path(__file__).resolve().parents[2]
 
 
@@ -85,6 +87,7 @@ class _Validator:
         self.spec = spec
         self.raw = raw
         self.datasets = spec.get("datasets") or {}
+        self.declared = {c["name"] for c in spec.get("columns") or []}
         self.errs = []
 
     def fail(self, msg):
@@ -145,6 +148,14 @@ class _Validator:
                     f"{where}.{name}.{arg}: {args[arg]!r} is not a declared dataset "
                     f"(declared: {sorted(self.datasets)})"
                 )
+        for arg, desc in spec.items():
+            if desc.get("type") != "sql" or arg not in args:
+                continue
+            self.predicate(args[arg], f"{where}.{name}", arg)
+        for arg in args:
+            for item in (args[arg] if isinstance(args[arg], list) else []):
+                if isinstance(item, dict) and isinstance(item.get("when"), str):
+                    self.predicate(item["when"], f"{where}.{name}.{arg}", "when")
         if name == "mapping" and args.get("case_sensitive") is False:
             seen = {}
             for key in args.get("dict") or {}:
@@ -159,8 +170,25 @@ class _Validator:
 
     # ---- derivations ----------------------------------------------------
 
+    def predicate(self, text, where, label):
+        """R001: a predicate may only name declared output columns."""
+        try:
+            check_syntax(text)
+            names = predicate_vars(text)
+        except DerivationError as exc:
+            self.fail(f"{where}.{label}: {exc}")
+            return
+        for n in names:
+            if "." in n:
+                self.fail(f"{where}.{label}: {n!r} is qualified; a predicate over "
+                          f"output rows names output columns (R001)")
+            elif n not in self.declared:
+                self.fail(f"{where}.{label}: {n!r} is not a declared output column (R001)")
+
     def derivation(self, d, where, driver):
         self.closed(d, "derivation_class", where)
+        if d.get("where"):
+            self.predicate(d["where"], where, "where")
 
         src = d.get("source")
         if src is not None and not VARPAT.match(str(src)):

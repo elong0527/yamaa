@@ -127,6 +127,8 @@ class Spec:
             out.add(src)
         for k in deriv.get("group_by") or []:
             out.add(k)
+        if deriv.get("where"):
+            out |= {v for v in predicate_vars(deriv["where"]) if "." not in v}
         if src and "." in str(src) and str(src).split(".")[0] != driver:
             # an R003 join needs its applicable keys first
             out.update(self.keys)
@@ -149,6 +151,16 @@ class Spec:
 
     def evaluate(self, name, deriv, rows):
         exc = _exception_map(deriv)
+        if deriv.get("where"):
+            # R001 restricted derivation: only qualifying rows get a value, and
+            # a window inside the derivation partitions only those rows.
+            keep = [
+                r for r in rows
+                if evaluate_predicate(deriv["where"], lambda n, rr=r: rr.out.get(n))
+            ]
+            sub = self.evaluate(name, {k: v for k, v in deriv.items() if k != "where"}, keep)
+            by_id = {id(r): v for r, v in zip(keep, sub)}
+            return [by_id.get(id(r)) for r in rows]
         vals = []
         for row in rows:
             try:

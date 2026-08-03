@@ -29,6 +29,7 @@ derivation_class:
     - source: {type: variable, required: false}
     - literal: {type: [str, int, float, bool, "null"], required: false}
     - filter: {type: sql, required: false}
+    - where: {type: sql, required: false}
     - operations: {type: [action_class, "list[action_class]"], required: false}
     - group_by: {type: "list[variable]", required: false}
     - exception: {type: [action_class, "list[action_class]"], required: false}

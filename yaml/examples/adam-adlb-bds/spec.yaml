@@ -70,6 +70,7 @@ columns:
   - name: PCHG
     type: float
     derivation:
+      where: "ABLFL IS NULL"
       operations:
         - percent_change:
             value: {source: AVAL}
