@@ -1,0 +1,58 @@
+version: "1.0"
+
+exceptions:
+
+    missing_source:
+        stage: bind
+        semantics: >
+            The source variable or ODM item does not exist for this record.
+            Substitute `default` instead of missing. Does not apply when the
+            variable exists and holds a missing value.
+        arguments:
+            - default: {type: argument, required: true}
+
+    multiple_matches:
+        stage: join
+        relaxes: [R003]
+        semantics: >
+            The right side is not unique on the applicable keys. Sort the
+            matches ascending by `order_by` and keep the first or last, as
+            named by `keep`.
+        arguments:
+            - order_by: {type: argument, required: true}
+            - keep: {type: str, required: true, values: [first, last]}
+
+    unmapped:
+        stage: operation
+        semantics: >
+            The operation cannot produce a result for the input value.
+            Substitute `default` instead of failing.
+        arguments:
+            - default: {type: argument, required: true}
+
+    conversion_failure:
+        stage: convert
+        relaxes: [R005]
+        semantics: >
+            The value cannot be converted to the declared column type.
+            Substitute `default`.
+        arguments:
+            - default: {type: argument, required: true}
+
+    override:
+        stage: final
+        semantics: >
+            Evaluate `rules` in listed order and replace the value with the
+            `value` of the first rule whose `when` predicate is `TRUE`. Leave
+            the value unchanged when no rule matches. Predicates are evaluated
+            against the converted output row. `rules` is a list so that a study
+            correction log is expressed as data in one exception rather than as
+            several competing exceptions.
+        arguments:
+            - rules: {type: "list[override_rule]", required: true}
+
+argument_classes:
+
+    override_rule:
+        - when: {type: sql, required: true}
+        - value: {type: argument, required: true}

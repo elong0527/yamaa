@@ -6,6 +6,8 @@ and SDTM-to-ADaM derivations. The design is under active development.
 ## Contents
 
 - `schema.yaml` defines the allowed YAML structure.
+- `operations.yaml` and `exceptions.yaml` are the registries of names an
+  operation or exception may use, defined by R007 and R008.
 - `rules/` contains the execution semantics, with one rule per file.
 - `examples/` contains source data, derivation specifications, and exact
   expected outputs.

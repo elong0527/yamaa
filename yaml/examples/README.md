@@ -28,3 +28,32 @@ Examples are ordered by increasing complexity:
 
 Each example contains a specification, source CSV files, an expected CSV, and
 a README defining behavior that an implementation must reproduce.
+
+## Schema probes
+
+A probe is a fixture written to test whether the schema can express a real
+mapping pattern. A probe that does not pass is a design finding, not a defect in
+the fixture, and its README records what the schema could not express.
+
+5. `adam-adsl-mapping` — value mapping with an inline dictionary, deriving
+   ADaM numeric companions, including a value the dictionary does not define.
+6. `sdtm-ae-dictionary-coding` — value mapping where the dictionary is an
+   external file, including an uncoded term and the dictionary version.
+
+Both pass. Together they cover value standardization from both sources of
+mapping rule, inline and external, and the undefined-value case in each.
+
+## Coverage gaps
+
+Of the registered vocabulary, 8 of 16 operations and 4 of 5 exceptions are not
+exercised by any fixture:
+
+- operations: `add`, `case`, `coalesce`, `cut`, `date_diff`, `max`, `min`,
+  `str_extract`
+- exceptions: `conversion_failure`, `missing_source`, `multiple_matches`,
+  `override`
+
+Those entries are unverified. Losing `min` and `max` also left
+`derivation.filter`, the `aggregate` kind, and the R003 right-side reduction
+section with no fixture, and losing `case` left R001's predicate-dependency rule
+with none. Each should either regain a fixture or be removed.

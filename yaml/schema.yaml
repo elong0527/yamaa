@@ -22,12 +22,13 @@ column_class:
 row_class:
     - id: {type: str, required: true}
     - dataset: {type: str, required: false}
-    - filter: {type: [sql, "list[sql]"], required: false}
+    - filter: {type: sql, required: false}
     - derivations: {type: "dict[str, derivation_class]", required: true}
 
-derivation_class: 
+derivation_class:
     - source: {type: variable, required: false}
     - literal: {type: [str, int, float, bool, "null"], required: false}
+    - filter: {type: sql, required: false}
     - operations: {type: [action_class, "list[action_class]"], required: false}
     - group_by: {type: "list[variable]", required: false}
     - exception: {type: [action_class, "list[action_class]"], required: false}

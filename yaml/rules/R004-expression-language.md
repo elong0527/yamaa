@@ -20,8 +20,12 @@ host-language code.
 `AND`, `OR`, `NOT`, and parentheses. String literals use single quotes.
 
 SQL three-valued logic applies. A row is retained only when the predicate is
-`TRUE`; `FALSE` and `UNKNOWN` remove it. A list of filters is equivalent to
-joining its predicates with `AND`.
+`TRUE`; `FALSE` and `UNKNOWN` remove it.
+
+A filter is exactly one predicate. A compound condition is written with an
+explicit `AND` rather than as a list, so that `row.filter` and
+`derivation.filter` take the same shape and a filter always reads as a single
+expression.
 
 ## Derivation seed
 
@@ -30,12 +34,13 @@ seeds its operation pipeline. A derivation must contain at least one of
 `source`, `literal`, or `operations`.
 
 If neither `source` nor `literal` is present, the first operation must be a
-registered producer. A producer constructs its result entirely from named
-arguments. Later operations consume the result of the preceding operation.
+producer, meaning an operation whose registry entry declares `seed: ignored`
+under R007. A producer constructs its result entirely from named arguments.
+Later operations consume the result of the preceding operation.
 
 ## Operations
 
-`operations` accepts one `operation_class` or an ordered list of them. A single
+`operations` accepts one `action_class` or an ordered list of them. A single
 operation is equivalent to a one-item list. Each operation is a mapping with
 exactly one registered operation name and a mapping of named arguments:
 
@@ -46,22 +51,27 @@ operations:
       factor: 0.0167
 ```
 
-The operation registry defines each operation's kind, named signature, result
-type, and how it consumes the preceding pipeline value. Arguments must be named
-and unique; order has no meaning. An additional variable input is written
-explicitly as `{source: VARIABLE}`. Plain strings are literal argument values,
-not variable references.
+R007 is the operation registry. It defines each operation's kind, named
+signature, result type, and how it consumes the preceding pipeline value.
+Arguments must be named and unique; order has no meaning. An additional variable
+input is written explicitly as `{source: VARIABLE}`. Plain strings are literal
+argument values, not variable references, except where R007 declares an argument
+to be `sql`.
 
 Implementations must dispatch only registered operations and must not evaluate
 host-language code. Unknown operations and unknown, missing, or positional
 arguments are invalid. An operation used during column derivation must not
 change row count.
 
+Conditional mapping is the `case` operation in R007. There is no branch
+construct in the pipeline itself.
+
 String-oriented operation names and behavior should use this vocabulary where
 applicable: https://rstudio.github.io/cheatsheets/html/strings.html
 
-The complete filter grammar, coercion, collation, literal grammar, and operation
-registry remain unresolved, so this rule remains draft.
+The complete filter grammar, coercion, collation, and literal grammar remain
+unresolved, so this rule remains draft. The operation registry is resolved by
+R007.
 
 ## Errors
 

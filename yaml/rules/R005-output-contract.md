@@ -28,7 +28,12 @@ lists. Values in `keys` must not repeat.
 
 After the last operation in a derivation, convert its result to the column's
 declared `type` before it is used by dependent derivations. Conversion must be
-deterministic and must not replace errors with missing values.
+deterministic and must not replace errors with missing values, unless the
+derivation declares a `conversion_failure` exception, which R008 permits to
+relax this requirement.
+
+A `final` stage exception under R008 runs after conversion and replaces the
+converted value. Its replacement is subject to the same conversion.
 
 The closed type vocabulary and conversion matrix remain unresolved.
 
@@ -48,5 +53,5 @@ Column declaration order controls final output column order.
 - A duplicate YAML key, dataset identifier, column name, row ID, or `keys`
   value: fail.
 - An unknown key column: fail.
-- A type conversion failure: fail.
+- A type conversion failure with no `conversion_failure` exception: fail.
 - A missing or duplicate final key combination: fail.

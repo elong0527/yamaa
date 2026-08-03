@@ -24,6 +24,28 @@ to unknown named types are errors.
 The quoted string `"null"` is a type name. An unquoted YAML `null` is a null
 value and must not be interpreted as a type name.
 
+## Scalar resolution
+
+This section governs `schema.yaml`, the registry documents defined by R007 and
+R008, and every specification document.
+
+Implementations must resolve untagged scalars using the YAML 1.2 core schema.
+Only `true` and `false` resolve to Boolean. Every other alphabetic scalar,
+including `y`, `Y`, `n`, `N`, `yes`, `no`, `on`, and `off`, resolves to a
+string.
+
+Default parser settings do not satisfy this requirement. PyYAML resolves `yes`,
+`no`, `on`, and `off` as Boolean, and the R `yaml` package additionally resolves
+bare `Y` and `N` as Boolean. `Y` and `N` are the two most common values in SDTM
+and ADaM, so an unquoted `literal: Y` would otherwise be the string `Y` in one
+implementation and the Boolean true in the other, converting into a `str` column
+as `TRUE`. The divergence is silent and produces no error.
+
+Implementations must therefore configure or override their parser's resolver
+rather than rely on its defaults. Quoting the value in the specification is a
+workaround, not a substitute; a conforming implementation must produce the same
+result whether or not the author quoted it.
+
 ## Type declarations
 
 A named type is either a class or a value type.
@@ -88,6 +110,16 @@ Only these descriptor keywords are supported:
   counts Unicode code points without trimming the value.
 - `size` is permitted only for `list` or `dict`. It is a non-negative integer
   requiring exactly that many list items or mapping entries.
+- `values` is permitted only for `str`. It is a non-empty list of permitted
+  values, and the value must equal one of them. Comparison is exact.
+- `default` is permitted only where `required` is `false` or absent. Its value
+  must satisfy `type` and every other constraint in the same descriptor. When
+  the field or argument is omitted, an implementation must behave as though this
+  value were supplied.
+
+A default belongs in `default`, never only in prose. An implementation cannot
+apply a default it has to read English to discover, and two implementations that
+each guess will diverge.
 
 When more than one constraint is present, all constraints must pass. Constraint
 keywords apply after a value matches `type`.
@@ -97,9 +129,12 @@ keywords apply after a value matches `type`.
 Implementations must fail for:
 
 - invalid YAML or a prohibited YAML feature;
+- a scalar resolved outside the YAML 1.2 core schema;
 - an unknown schema keyword or named type;
 - an invalid type expression;
 - a descriptor keyword used with an incompatible type;
+- a `default` on a required field, or one that does not satisfy its own
+  descriptor;
 - an undeclared class field;
 - a missing required field;
 - a value that does not match its type or every applicable constraint.

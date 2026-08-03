@@ -54,7 +54,7 @@ rows:
       SEX:
         source: ODM.Value
         operations:
-          - map:
+          - mapping:
               dict:
                 Male: M
                 Female: F
