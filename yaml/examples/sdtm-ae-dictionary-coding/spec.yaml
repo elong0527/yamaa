@@ -1,0 +1,68 @@
+domain: AE
+datasets:
+  AE_RAW: input/ae_raw.csv
+  MEDDRA: input/meddra_26_1.csv
+base: AE_RAW
+keys: [STUDYID, USUBJID, AESEQ]
+metadata:
+  dictionary: MedDRA
+  dictionary_version: "26.1"
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: AE_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: AE
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: AE_RAW.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: AE_RAW.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation:
+      source: AE_RAW.AETERM
+
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation:
+      source: AE_RAW.AETERM
+      operations:
+        - mapping_from:
+            dataset: MEDDRA
+            key: LLTNAME
+            value: PTNAME
+      exception:
+        - unmapped:
+            default: NOT CODED
+
+  - name: AEBODSYS
+    type: str
+    label: Body System or Organ Class
+    derivation:
+      source: AE_RAW.AETERM
+      operations:
+        - mapping_from:
+            dataset: MEDDRA
+            key: LLTNAME
+            value: SOCNAME
+      exception:
+        - unmapped:
+            default: NOT CODED
