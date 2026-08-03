@@ -9,7 +9,8 @@ Before reviewing, implementing, or modifying this design:
 
 1. Read `README.md` for scope and navigation.
 2. Read `rules/R006-schema-language.md` for the notation used by the schema.
-3. Read `schema.yaml` for the allowed structure.
+3. Read `schema.yaml` for the allowed structure, and `operations.yaml` and
+   `exceptions.yaml` for the registered vocabulary.
 4. Read `rules/README.md` and every rule applicable to the fields in scope.
 5. Read the relevant example specification, README, input data, and expected
    output under `examples/`.
@@ -21,6 +22,9 @@ portable implementation contract.
 ## Maintenance rules
 
 - Keep `schema.yaml` compact and strictly valid YAML.
+- Register every operation and exception in `operations.yaml` or
+  `exceptions.yaml` before an example uses it. An example must not introduce
+  vocabulary that no registry declares.
 - Store each cohesive semantic area in one rule file under `rules/`.
 - Give every rule a stable ID and list it in `rules/README.md`.
 - Do not duplicate normative behavior across rule or example files; link to the
