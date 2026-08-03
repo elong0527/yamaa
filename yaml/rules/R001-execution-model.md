@@ -30,9 +30,8 @@ Implementations must infer dependencies rather than evaluate columns in YAML
 declaration order.
 
 Dependencies include current-output variable references in `source`, every
-`{source: VARIABLE}` expression nested in `operations`, `group_by`, ordering
-arguments, and derivation filters. Lookup keys required by R003 are also
-dependencies.
+`{source: VARIABLE}` expression nested in `operations`, `group_by`, and
+ordering arguments. Lookup keys required by R003 are also dependencies.
 
 For each row definition, evaluate row derivations using a dependency graph.
 Row derivations cannot depend on values produced only during the later column

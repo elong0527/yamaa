@@ -27,9 +27,8 @@ row_class:
 
 derivation_class: 
     - source: {type: variable, required: false}
-    - literal: {type: [str, int, float, bool, null], required: false}
+    - literal: {type: [str, int, float, bool, "null"], required: false}
     - operations: {type: [operation_class, "list[operation_class]"], required: false}
-    - filter: {type: [sql, "list[sql]"], required: false}
     - group_by: {type: "list[variable]", required: false}
     - exception: {type: exception_class, required: false}
 
@@ -50,7 +49,7 @@ operation_class:
     size: 1
 
 operation_argument:
-    type: [str, int, float, bool, null, variable_argument, "list[operation_argument]", "dict[str, operation_argument]"]
+    type: [str, int, float, bool, "null", variable_argument, "list[operation_argument]", "dict[str, operation_argument]"]
 
 variable_argument:
     - source: {type: variable, required: true}
@@ -60,12 +59,12 @@ exception_class:
     size: 1
 
 exception_argument:
-    type: [str, int, float, bool, null, variable_argument, "list[exception_argument]", "dict[str, exception_argument]"]
+    type: [str, int, float, bool, "null", variable_argument, "list[exception_argument]", "dict[str, exception_argument]"]
 
 verification_class:
     type: "dict[str, dict[str, verification_argument]]"
     size: 1
 
 verification_argument:
-    type: [str, int, float, bool, null, variable_argument, "list[verification_argument]", "dict[str, verification_argument]"]
+    type: [str, int, float, bool, "null", variable_argument, "list[verification_argument]", "dict[str, verification_argument]"]
     
