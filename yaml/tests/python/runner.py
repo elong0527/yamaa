@@ -94,8 +94,11 @@ class Spec:
 
         ops = _as_list(deriv.get("operations"))
         reducing = ops and OPS[next(iter(ops[0]))]["kind"] == "aggregate"
-        want = tuple(row.out.get(k) for k in applicable)
-        hits = [r for r in right if tuple(r.get(k) for k in applicable) == want]
+        # Compare as text on both sides: the left value has been converted by
+        # R005 while the right side is still raw CSV, so an int key would never
+        # match. R does the same, and parity depends on it.
+        want = tuple(_txt(row.out.get(k)) for k in applicable)
+        hits = [r for r in right if tuple(_txt(r.get(k)) for k in applicable) == want]
 
         if reducing:
             fn = AGGREGATE_OPS[next(iter(ops[0]))]
@@ -105,8 +108,8 @@ class Spec:
             if not stage or stage[0] != "multiple_matches":
                 raise DerivationError(f"{ds}.{col}: {len(hits)} right-side matches (R003)")
             _, args = stage
-            col = _var(args["order_by"]).split(".")[-1]
-            ordered = sorted(hits, key=lambda h: _ord_raw(h.get(col)))
+            ocol = _var(args["order_by"]).split(".")[-1]
+            ordered = sorted(hits, key=lambda h: _ord_raw(h.get(ocol)))
             hits = [ordered[-1] if args["keep"] == "last" else ordered[0]]
         return hits[0].get(col) if hits else None
 
@@ -308,6 +311,11 @@ class _Ctx:
     def __init__(self, data, row_lookup):
         self.data = data
         self.row_lookup = row_lookup
+
+
+def _txt(v):
+    """Render a value for key matching. Must agree with R's as.character."""
+    return "" if v is None else serialize(v)
 
 
 def _ord_raw(v):

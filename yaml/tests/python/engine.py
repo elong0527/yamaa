@@ -92,7 +92,10 @@ def serialize(value):
 
 
 def op_mapping(value, args, ctx):
-    table = args["dict"]
+    # YAML may parse a numeric codelist key as int; match on text so a spec
+    # written {1: MALE} behaves the same in both implementations.
+    table = {str(k): v for k, v in args["dict"].items()}
+    value = "" if value is None else str(value)
     if args.get("case_sensitive", _default("mapping", "case_sensitive")):
         if value in table:
             return table[value]

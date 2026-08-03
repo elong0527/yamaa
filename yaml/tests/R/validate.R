@@ -48,9 +48,12 @@ has_nested_action <- function(val, reg_names) {
 # here must therefore force character, and specifications must not rely on it.
 
 read_yaml_1_2 <- function(path) {
+  # The R yaml package tags these `bool#yes` / `bool#no`, not `bool_yes`. With
+  # the wrong names the handlers never fire and `a: Y` silently becomes TRUE,
+  # which is the exact divergence R006 exists to forbid.
+  keep <- function(x) x
   yaml::read_yaml(path, handlers = list(
-    bool_yes = function(x) x,
-    bool_no  = function(x) x
+    `bool#yes` = keep, `bool#no` = keep, `bool#on` = keep, `bool#off` = keep
   ))
 }
 
@@ -64,9 +67,12 @@ scalar_resolution_errors <- function(path) {
 }
 
 fold_ascii <- function(s) {
-  chartype <- strsplit(as.character(s), "")[[1]]
-  paste(ifelse(chartype >= "A" & chartype <= "Z", tolower(chartype), chartype),
-        collapse = "")
+  # Codepoint range, not a collation comparison: in R `"É" >= "A"` is locale
+  # dependent and true, so a range test folds non-ASCII and breaks the
+  # ASCII-only guarantee in operations.yaml.
+  cp <- utf8ToInt(enc2utf8(as.character(s)))
+  if (is.null(cp)) return("")
+  intToUtf8(ifelse(cp >= 65L & cp <= 90L, cp + 32L, cp))
 }
 
 # R004 predicate identifiers. Kept deliberately simple: enough to check which

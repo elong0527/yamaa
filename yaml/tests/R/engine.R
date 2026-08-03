@@ -152,7 +152,7 @@ convert_value <- function(value, declared) {
     n <- suppressWarnings(as.numeric(value))
     if (is.na(n)) stop(sprintf("cannot convert '%s' to int", value))
     if (n != round(n)) stop(sprintf("cannot convert '%s' to int without loss", value))
-    return(as.integer(round(n)))
+    return(round(n))   # a double: as.integer() would overflow past 2^31
   }
   if (identical(declared, "float")) {
     n <- suppressWarnings(as.numeric(value))
@@ -174,7 +174,10 @@ serialize_value <- function(value) {
   if (is_missing(value)) return("")
   if (is.logical(value)) return(if (isTRUE(value)) "TRUE" else "FALSE")
   if (is.numeric(value)) {
-    if (value == round(value)) return(format(as.integer(round(value)), scientific = FALSE))
+    if (value == round(value)) {
+      # as.integer() overflows past 2^31 and yields NA; format the double.
+      return(format(round(value), scientific = FALSE, trim = TRUE, digits = 17))
+    }
     s <- format(round(value, 10), scientific = FALSE, digits = 15)
     # Strip trailing zeros only inside a decimal fraction. Stripping
     # unconditionally turns "50" into "5".
@@ -189,14 +192,16 @@ serialize_value <- function(value) {
 # Operations ------------------------------------------------------------------
 
 fold_ascii_chr <- function(s) {
-  ch <- strsplit(as.character(s), "")[[1]]
-  paste(ifelse(ch >= "A" & ch <= "Z", tolower(ch), ch), collapse = "")
+  cp <- utf8ToInt(enc2utf8(as.character(s)))
+  if (is.null(cp)) return("")
+  intToUtf8(ifelse(cp >= 65L & cp <= 90L, cp + 32L, cp))
 }
 
 UNMAPPED <- "yamaa_unmapped"
 
 op_mapping <- function(value, args, ctx) {
   tbl <- args$dict
+  names(tbl) <- as.character(names(tbl))
   cs <- if (is.null(args$case_sensitive)) TRUE else isTRUE(args$case_sensitive)
   if (cs) {
     if (!is_missing(value) && as.character(value) %in% names(tbl)) return(tbl[[as.character(value)]])

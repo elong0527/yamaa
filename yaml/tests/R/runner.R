@@ -8,6 +8,31 @@ ODM_CONTEXT <- c("StudyOID", "SubjectKey", "StudyEventOID",
 
 HANDLED_STAGES <- c("bind", "join", "operation", "convert", "final")
 
+# Every registered name must be dispatchable. The counterpart of
+# check_implemented() in tests/python/test_fixtures.py.
+check_implemented <- function(d = load_design()) {
+  errs <- character()
+  tables <- list(scalar = SCALAR_OPS, window = WINDOW_OPS, aggregate = AGGREGATE_OPS)
+  dispatch <- c(names(SCALAR_OPS), names(WINDOW_OPS), names(AGGREGATE_OPS))
+  for (nm in names(d$ops)) {
+    if (!(nm %in% dispatch)) {
+      errs <- c(errs, sprintf("operation '%s' is registered but not implemented", nm))
+      next
+    }
+    if (!(nm %in% names(tables[[d$ops[[nm]]$kind]]))) {
+      errs <- c(errs, sprintf("operation '%s' declares kind '%s' but is implemented elsewhere",
+                              nm, d$ops[[nm]]$kind))
+    }
+  }
+  for (nm in names(d$exc)) {
+    if (!(d$exc[[nm]]$stage %in% HANDLED_STAGES)) {
+      errs <- c(errs, sprintf("exception '%s' binds to stage '%s', which the engine ignores",
+                              nm, d$exc[[nm]]$stage))
+    }
+  }
+  errs
+}
+
 read_csv_chr <- function(path) {
   df <- utils::read.csv(path, colClasses = "character", check.names = FALSE,
                         na.strings = character(0))

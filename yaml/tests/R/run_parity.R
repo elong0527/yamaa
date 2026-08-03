@@ -18,6 +18,11 @@ source(file.path(here, "runner.R"))
 d <- load_design()
 failures <- 0L
 
+impl <- check_implemented(d)
+cat(sprintf("%s registry is implementable\n", if (length(impl)) "FAIL" else "ok  "))
+for (e in impl) cat("       ", e, "\n", sep = "")
+failures <- failures + length(impl)
+
 python_output <- function(spec) {
   out <- suppressWarnings(system2(
     "uv", c("run", "--quiet", "--with", "pyyaml", "python",
@@ -65,7 +70,9 @@ for (spec in example_specs()) {
       diffs <- c(diffs, sprintf("parity row count: R %d, Python %d", length(got), length(py$rows)))
     }
     for (i in seq_len(min(length(got), length(py$rows)))) {
-      for (col in names(got[[i]])) {
+      # Union of both sides: iterating R's names alone hides any column Python
+      # emits and R does not.
+      for (col in union(names(got[[i]]), names(py$rows[[i]]))) {
         r <- as.character(got[[i]][[col]] %||% "")
         p <- as.character(py$rows[[i]][[col]] %||% "")
         if (!identical(r, p)) {
