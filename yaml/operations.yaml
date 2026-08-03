@@ -39,6 +39,28 @@ operations:
             - key: {type: str, required: true}
             - value: {type: str, required: true}
 
+    call:
+        kind: scalar
+        seed: ignored
+        result: any
+        semantics: >
+            Escape hatch. Invoke the host-language function named by `function`
+            with the named arguments in `args`, once per row, and return its
+            result. Registering every operation a real study needs is not
+            practical, so this exists for the long tail: study-day arithmetic,
+            partial-date imputation, sponsor-specific coding rules. Arguments
+            are named rather than positional, so a call reads the same way a
+            registered operation does. The named function must exist in every
+            implementation and must be a pure function of its arguments and
+            return one value per row. This is the one operation whose behavior
+            the registry cannot describe, so a specification that uses it is
+            portable only as far as its function library is, and R and Python
+            can silently disagree. Prefer a registered operation whenever one
+            fits, and reach for `call` only when none does.
+        arguments:
+            - function: {type: str, required: true}
+            - args: {type: "dict[str, argument]", required: false}
+
     cut:
         kind: scalar
         seed: required

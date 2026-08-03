@@ -93,6 +93,25 @@ means the operation constructs its result entirely from its named arguments;
 this is the "producer" of R004, and such an operation may open a pipeline with
 no seed.
 
+## The escape hatch
+
+Registering every operation a real study needs is not practical, so the registry
+includes `call`, which invokes a host-language function by name.
+
+`call` is the single exception to everything above. Its behavior is not
+described by the registry, its result type is whatever the function returns, and
+two implementations agree only insofar as their function libraries agree. A
+specification that uses it is portable exactly as far as that library is.
+
+It is still bound by the rules that keep the model analyzable. Arguments are
+named, so a call reads like any other operation. It runs once per row and
+returns one value, so it cannot change row count. It must be a pure function of
+its arguments, so R001 can place it in the dependency graph from its
+`{source: VARIABLE}` arguments alone.
+
+An operation that recurs across studies should graduate out of `call` into a
+registered entry. `call` is for the long tail, not for avoiding the registry.
+
 ## Dispatch
 
 Implementations must dispatch only registered names. For each operation:
