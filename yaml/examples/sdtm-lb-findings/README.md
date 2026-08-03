@@ -9,7 +9,7 @@ no Day 8 record. The creatinine template matches both visits.
 `ODM.IT.LB.LBDTC` is resolved using the current result row's ODM context keys.
 This reduction occurs during row construction and is therefore allowed.
 
-Portable function semantics used by this example:
+Portable operation semantics used by this example:
 
 - `row_number` partitions by `group_by` and sorts ascending by
   `order_by`. Ties must preserve row-template order and then base-record order.

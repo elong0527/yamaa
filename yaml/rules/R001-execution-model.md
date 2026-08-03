@@ -29,18 +29,20 @@ dataset. Constructed rows are appended in specification order.
 Implementations must infer dependencies rather than evaluate columns in YAML
 declaration order.
 
-Dependencies include current-output variable references in `source`, function
-arguments, `group_by`, ordering arguments, and derivation filters. Lookup keys
-required by R003 are also dependencies.
+Dependencies include current-output variable references in `source`, every
+`{source: VARIABLE}` expression nested in `operations`, `group_by`, ordering
+arguments, and derivation filters. Lookup keys required by R003 are also
+dependencies.
 
 For each row definition, evaluate row derivations using a dependency graph.
 Row derivations cannot depend on values produced only during the later column
 phase.
 
 After row construction, build the column dependency graph and evaluate it in
-topological order. When multiple nodes are ready, declaration order is the
-deterministic tie-breaker. Convert each result according to R005 before making
-it available to dependents.
+topological order. Operations within one derivation are evaluated in listed
+order. When multiple columns are ready, declaration order is the deterministic
+tie-breaker. Convert each result according to R005 before making it available
+to dependents.
 
 Column declaration order controls final column layout, not evaluation order.
 

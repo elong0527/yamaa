@@ -24,7 +24,11 @@ columns:
     type: int
     derivation:
       group_by: [STUDYID, USUBJID]
-      function: "row_number(order_by = [LBDTC, LBTESTCD])"
+      operations:
+        - row_number:
+            order_by:
+              - {source: LBDTC}
+              - {source: LBTESTCD}
 
   - name: LBTESTCD
     type: str

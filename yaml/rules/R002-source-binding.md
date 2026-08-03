@@ -2,7 +2,7 @@
 id: R002
 title: Source Binding
 status: draft
-applies_to: [root.datasets, root.base, row.dataset, derivation.source]
+applies_to: [root.datasets, root.base, row.dataset, derivation.source, derivation.operations]
 ---
 
 # Source binding
@@ -28,6 +28,10 @@ dataset currently being derived.
 
 A qualified reference to the current row-driving dataset reads the current
 source record directly. A qualified reference to another dataset follows R003.
+
+The same binding rules apply to every `{source: VARIABLE}` expression nested
+inside an operation argument. Plain strings in operation arguments are values,
+not variable references.
 
 Implementations must not infer same-named source variables when an output
 variable has no derivation.

@@ -2,7 +2,7 @@
 id: R003
 title: Cross-Dataset Left Join
 status: normative
-applies_to: [derivation.source]
+applies_to: [derivation.source, derivation.operations]
 depends_on: [R002, R005]
 ---
 
@@ -23,7 +23,9 @@ in each specification.
 ## Rule
 
 A qualified reference to a dataset other than the current row-driving dataset
-performs an automatic left join during column derivation.
+performs an automatic left join during column derivation. This applies both to
+the derivation's `source` and to `{source: VARIABLE}` expressions nested in
+operation arguments.
 
 The implementation must:
 

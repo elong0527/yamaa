@@ -8,6 +8,7 @@ root_class:
     - keys: {type: "list[str]", required: true}
     - columns: {type: "list[column_class]", required: true}
     - rows: {type: "list[row_class]", required: false}
+    - verifications: {type: [verification_class, "list[verification_class]"], required: false}
     - metadata: {type: list, required: false}
     
 column_class:
@@ -15,6 +16,7 @@ column_class:
     - type: {type: str, required: true}
     - label: {type: str, required: false}
     - derivation: {type: derivation_class, required: false}
+    - verifications: {type: [verification_class, "list[verification_class]"], required: false}
     - metadata: {type: list, required: false}
 
 row_class:
@@ -24,57 +26,46 @@ row_class:
     - derivations: {type: "dict[str, derivation_class]", required: true}
 
 derivation_class: 
-    - source: {type: str, required: false}
+    - source: {type: variable, required: false}
     - literal: {type: [str, int, float, bool, null], required: false}
-    - mapping: {type: mapping_class, required: false}
-    - cut: {type: cut_class, required: false}
-    - string_operation: {type: string_operation_class, required: false}
-    - numeric_operation: {type: numeric_operation_class, required: false}
-    - date_operation: {type: date_operation_class, required: false}
+    - operations: {type: [operation_class, "list[operation_class]"], required: false}
     - filter: {type: [sql, "list[sql]"], required: false}
-    - group_by: {type: "list[str]", required: false}
-    - aggregate: {type: aggregate_class, required: false}
-    - function: {type: function_call, required: false}
+    - group_by: {type: "list[variable]", required: false}
     - exception: {type: exception_class, required: false}
 
-mapping_class: 
-    - dict: {type: dict, required: false}
-    - case_sensitive: {type: bool, required: false}
-    - file: {type: str, required: false}
-    - key: {type: str, required: false}
+variable:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$'
 
-cut_class: 
-    - breaks: {type: "list[int, float]", required: true}
-    - labels: {type: "list[str]", required: false}
-    - include.lowest: {type: bool, required: false}
-    - right: {type: bool, required: false}
+path:
+    type: str
+    min_length: 1
 
-string_operation_class: 
-    # reference: https://rstudio.github.io/cheatsheets/html/strings.html
-    - detect: {type: str, required: false}
-    - prefix: {type: str, required: false}
-    - suffix: {type: str, required: false}
-    - extract: {type: str, required: false}
-    - glue: {type: str, required: false}
+sql:
+    type: str
+    min_length: 1
 
-numeric_operation_class: 
-    - max: {type: [int, float], required: false}
-    - min: {type: [int, float], required: false}
-    - mean: {type: [int, float], required: false}
-    - median: {type: [int, float], required: false}
-    - mode: {type: [int, float], required: false}
-    - sum: {type: [int, float], required: false}
-    - sd: {type: [int, float], required: false}
-    - var: {type: [int, float], required: false}
+operation_class:
+    type: "dict[str, dict[str, operation_argument]]"
+    size: 1
 
-date_operation_class: 
-    - year: {type: str, required: false}
-    - month: {type: str, required: false}
-    - day: {type: str, required: false}
+operation_argument:
+    type: [str, int, float, bool, null, variable_argument, "list[operation_argument]", "dict[str, operation_argument]"]
 
-verification_class: 
-    - allowed_values: {type: list, required: false}
-    - range: {type: [int, float], required: false}
-    - group_by: {type: "list[str]", required: false}
-    - max_missing_pct: {type: [int, float], required: false}
+variable_argument:
+    - source: {type: variable, required: true}
+
+exception_class:
+    type: "dict[str, dict[str, exception_argument]]"
+    size: 1
+
+exception_argument:
+    type: [str, int, float, bool, null, variable_argument, "list[exception_argument]", "dict[str, exception_argument]"]
+
+verification_class:
+    type: "dict[str, dict[str, verification_argument]]"
+    size: 1
+
+verification_argument:
+    type: [str, int, float, bool, null, variable_argument, "list[verification_argument]", "dict[str, verification_argument]"]
     

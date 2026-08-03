@@ -26,9 +26,9 @@ lists. Values in `keys` must not repeat.
 
 ## Type conversion
 
-After a value is derived, convert it to the column's declared `type` before it
-is used by dependent derivations. Conversion must be deterministic and must not
-replace errors with missing values.
+After the last operation in a derivation, convert its result to the column's
+declared `type` before it is used by dependent derivations. Conversion must be
+deterministic and must not replace errors with missing values.
 
 The closed type vocabulary and conversion matrix remain unresolved.
 

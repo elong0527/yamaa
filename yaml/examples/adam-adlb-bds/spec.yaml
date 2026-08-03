@@ -45,29 +45,45 @@ columns:
     type: str
     derivation:
       group_by: [STUDYID, USUBJID, PARAMCD]
-      function: "baseline_flag(date = ADT, reference_date = TRTSDT)"
+      operations:
+        - baseline_flag:
+            date: {source: ADT}
+            reference_date: {source: TRTSDT}
 
   - name: BASE
     type: float
     derivation:
       group_by: [STUDYID, USUBJID, PARAMCD]
-      function: "baseline_value(value = AVAL, flag = ABLFL)"
+      operations:
+        - baseline_value:
+            value: {source: AVAL}
+            flag: {source: ABLFL}
 
   - name: CHG
     type: float
     derivation:
-      function: "subtract(minuend = AVAL, subtrahend = BASE)"
+      operations:
+        - subtract:
+            minuend: {source: AVAL}
+            subtrahend: {source: BASE}
 
   - name: PCHG
     type: float
     derivation:
-      function: "percent_change(value = AVAL, base = BASE)"
+      operations:
+        - percent_change:
+            value: {source: AVAL}
+            base: {source: BASE}
 
   - name: ASEQ
     type: int
     derivation:
       group_by: [STUDYID, USUBJID]
-      function: "row_number(order_by = [PARAMCD, ADT])"
+      operations:
+        - row_number:
+            order_by:
+              - {source: PARAMCD}
+              - {source: ADT}
 
 rows:
   - id: alt
@@ -94,7 +110,10 @@ rows:
       ADT:
         source: LB.LBDTC
       AVAL:
-        function: "multiply(value = LB.LBSTRESN, factor = 0.0167)"
+        source: LB.LBSTRESN
+        operations:
+          - multiply:
+              factor: 0.0167
       AVALU:
         literal: ukat/L
 

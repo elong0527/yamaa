@@ -2,7 +2,7 @@
 id: R004
 title: Expression Language
 status: draft
-applies_to: [row.filter, derivation.filter, derivation.function]
+applies_to: [row.filter, derivation.filter, derivation.operations]
 depends_on: [R002]
 ---
 
@@ -10,8 +10,8 @@ depends_on: [R002]
 
 ## Intent
 
-Define portable filters and function calls without evaluating host-language
-code.
+Define portable filters and controlled operation pipelines without evaluating
+host-language code.
 
 ## Filters
 
@@ -23,27 +23,51 @@ SQL three-valued logic applies. A row is retained only when the predicate is
 `TRUE`; `FALSE` and `UNKNOWN` remove it. A list of filters is equivalent to
 joining its predicates with `AND`.
 
-## Function calls
+## Derivation seed
 
-`function` is a quoted expression using this grammar:
+A derivation may declare one `source` or one `literal`, but not both. That value
+seeds its operation pipeline. A derivation must contain at least one of
+`source`, `literal`, or `operations`.
 
-```text
-function_call := name "(" [named_argument ("," named_argument)*] ")"
-named_argument := name "=" value
-value          := variable | literal | list | function_call
+If neither `source` nor `literal` is present, the first operation must be a
+registered producer. A producer constructs its result entirely from named
+arguments. Later operations consume the result of the preceding operation.
+
+## Operations
+
+`operations` accepts one `operation_class` or an ordered list of them. A single
+operation is equivalent to a one-item list. Each operation is a mapping with
+exactly one registered operation name and a mapping of named arguments:
+
+```yaml
+source: LB.LBSTRESN
+operations:
+  - multiply:
+      factor: 0.0167
 ```
 
-Arguments must be named and unique; their order has no meaning. Unquoted values
-inside the expression are variable references, while string literals use
-single quotes. Implementations must parse expressions into a syntax tree and
-dispatch registered functions rather than use host-language `eval`.
+The operation registry defines each operation's kind, named signature, result
+type, and how it consumes the preceding pipeline value. Arguments must be named
+and unique; order has no meaning. An additional variable input is written
+explicitly as `{source: VARIABLE}`. Plain strings are literal argument values,
+not variable references.
 
-The complete filter grammar, coercion, collation, literal grammar, and function
+Implementations must dispatch only registered operations and must not evaluate
+host-language code. Unknown operations and unknown, missing, or positional
+arguments are invalid. An operation used during column derivation must not
+change row count.
+
+String-oriented operation names and behavior should use this vocabulary where
+applicable: https://rstudio.github.io/cheatsheets/html/strings.html
+
+The complete filter grammar, coercion, collation, literal grammar, and operation
 registry remain unresolved, so this rule remains draft.
 
 ## Errors
 
-- Invalid filter or function syntax: fail.
+- Invalid filter or operation syntax: fail.
 - An unresolved variable reference: fail.
-- A positional, duplicate, missing, or unknown function argument: fail.
-- An unknown function: fail.
+- Both `source` and `literal`, or no seed and no operation: fail.
+- A non-producer operation without a pipeline seed: fail.
+- A positional, duplicate, missing, or unknown operation argument: fail.
+- An unregistered operation: fail.

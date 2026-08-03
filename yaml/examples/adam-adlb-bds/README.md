@@ -9,7 +9,7 @@ SI-unit ALT parameter. ADSL contributes treatment variables by `STUDYID` and
 Using one row definition per parameter is a BDS modeling convention demonstrated
 by this fixture, not a general execution-engine rule.
 
-Portable function semantics used by this example:
+Portable operation semantics used by this example:
 
 - `baseline_flag` uses `date = ADT` and `reference_date = TRTSDT` to select the
   latest non-missing `ADT` on or before `TRTSDT` within `STUDYID`, `USUBJID`,
@@ -19,8 +19,9 @@ Portable function semantics used by this example:
 - `subtract` returns `minuend - subtrahend`.
 - `percent_change` returns `100 * (value - base) / base`; a zero or missing
   baseline returns missing.
-- `multiply` uses `value = LB.LBSTRESN` and `factor = 0.0167` to convert ALT from
-  `U/L` to `ukat/L` for the derived ALTSI parameter.
+- `multiply` consumes the pipeline value seeded by `LB.LBSTRESN` and uses
+  `factor = 0.0167` to convert ALT from `U/L` to `ukat/L` for the derived ALTSI
+  parameter.
 - `row_number` partitions by `group_by` and sorts ascending by `order_by`.
 
 The expected output demonstrates one-parameter-at-a-time row construction,
