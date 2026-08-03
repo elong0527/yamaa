@@ -46,6 +46,17 @@ final output identity.
 
 Column declaration order controls final output column order.
 
+Output rows are ordered by `keys`, ascending, after all derivations and type
+conversions. Missing sorts last. This is separate from R001 construction order,
+which appends rows in `rows` specification order: construction order determines
+which record a window operation sees as first, while this ordering determines
+only how the finished dataset is laid out.
+
+Without this, a specification with several `rows` entries has no defined output
+order. An ADLB built from one row template per parameter emits every record of
+the first parameter before any record of the second, which is a legal but
+unconventional layout, and two implementations could disagree.
+
 ## Errors
 
 - Missing variable coverage: fail.
@@ -55,3 +66,11 @@ Column declaration order controls final output column order.
 - An unknown key column: fail.
 - A type conversion failure with no `conversion_failure` exception: fail.
 - A missing or duplicate final key combination: fail.
+
+## Serialization
+
+Comparing an implementation against an expected CSV requires a shared rendering.
+An integer renders without a decimal point, a float renders without trailing
+zeros, missing renders as an empty field, and a boolean renders as `TRUE` or
+`FALSE`. The full serialization contract, including precision and how `date`
+renders, is unresolved along with the type vocabulary above.
