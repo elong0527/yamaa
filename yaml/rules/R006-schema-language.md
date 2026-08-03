@@ -110,6 +110,16 @@ Only these descriptor keywords are supported:
   counts Unicode code points without trimming the value.
 - `size` is permitted only for `list` or `dict`. It is a non-negative integer
   requiring exactly that many list items or mapping entries.
+- `values` is permitted only for `str`. It is a non-empty list of permitted
+  values, and the value must equal one of them. Comparison is exact.
+- `default` is permitted only where `required` is `false` or absent. Its value
+  must satisfy `type` and every other constraint in the same descriptor. When
+  the field or argument is omitted, an implementation must behave as though this
+  value were supplied.
+
+A default belongs in `default`, never only in prose. An implementation cannot
+apply a default it has to read English to discover, and two implementations that
+each guess will diverge.
 
 When more than one constraint is present, all constraints must pass. Constraint
 keywords apply after a value matches `type`.
@@ -123,6 +133,8 @@ Implementations must fail for:
 - an unknown schema keyword or named type;
 - an invalid type expression;
 - a descriptor keyword used with an incompatible type;
+- a `default` on a required field, or one that does not satisfy its own
+  descriptor;
 - an undeclared class field;
 - a missing required field;
 - a value that does not match its type or every applicable constraint.
