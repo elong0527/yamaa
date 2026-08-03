@@ -22,6 +22,11 @@ from engine import (
 from validate import EXC, OPS
 
 
+# R008 stages the engine actually applies. check_implemented() compares this
+# against exceptions.yaml so a stage cannot be registered and then ignored.
+HANDLED_STAGES = frozenset({"bind", "join", "operation", "convert", "final"})
+
+
 def _as_list(v):
     return [] if v is None else (v if isinstance(v, list) else [v])
 

@@ -12,9 +12,12 @@ From the repository root:
 ```sh
 python yaml/tests/python/test_fixtures.py   # validate and execute every fixture
 Rscript yaml/tests/R/run_tests.R            # validate every fixture
+Rscript yaml/tests/R/run_parity.R           # execute in R, diff vs expected AND vs Python
 ```
 
-Python needs `pyyaml`; R needs the `yaml` package.
+Python needs `pyyaml`; R needs `yaml` and `jsonlite`. The parity harness shells
+out to `emit_json.py`, so a difference it reports is a real disagreement between
+the two implementations rather than a reporting artifact.
 
 ## Layout
 
@@ -25,13 +28,26 @@ Python needs `pyyaml`; R needs the `yaml` package.
 | `python/runner.py` | Row construction, dependency ordering, joins, ODM context resolution |
 | `python/test_fixtures.py` | Runs every fixture and diffs against its expected CSV |
 | `R/validate.R` | The R conformance implementation |
-| `R/run_tests.R` | The R entry point |
+| `R/engine.R` | Predicates, conversion, serialization, operations, host functions |
+| `R/runner.R` | The R execution engine |
+| `R/run_tests.R` | The R validation entry point |
+| `R/run_parity.R` | Executes in R and diffs against both the CSV and Python |
 
 ## Status
 
-Python validates and **executes** all six fixtures, matching every expected CSV
-cell. R validates all six. The R execution engine is not written yet, so
-equivalence is currently proven for conformance only, not for output.
+Both implementations validate and **execute** all six fixtures. Every cell
+matches the expected CSV, and every cell matches between R and Python. That is
+the first actual evidence for the equivalence requirement in `../README.md`;
+before the parity harness existed the claim was prose.
+
+Two checks guard against the failure mode where something is registered and then
+silently does nothing. `check_implemented()` fails if any registered operation
+has no implementation, if an operation is implemented under the wrong `kind`, or
+if an exception binds to a stage the engine ignores. That check would have caught
+both `call` and `override` shipping broken.
+
+Conformance parity is still unproven: nothing yet compares the two validators,
+and they are known to disagree on at least four inputs.
 
 ## What the engine settled
 
@@ -47,6 +63,22 @@ R005 now orders output rows by `keys`, which made all six fixtures agree.
 **Serialization.** Comparing against a CSV needs a shared rendering of integers,
 floats, missing, and booleans. R005 records the convention and notes that
 precision and `date` rendering remain open with the type vocabulary.
+
+## What parity caught immediately
+
+Two defects that only a second implementation could surface.
+
+**`x[[i]] <- NULL` deletes a list element in R** rather than storing missing, so
+every operation returning missing silently shortened the value list and the run
+died with a subscript error. Five assignment sites needed single-bracket
+assignment instead.
+
+**Serialization diverged on a whole number reached through floating point.**
+`percent_change` produces 50 as `50.000000000000099`, which is not equal to its
+own rounding, so R formatted it as `"50"` and then stripped trailing zeros to
+`"5"`. Python was unaffected because it takes an integer branch first. The strip
+now requires a decimal point. This was the single numerically non-trivial cell in
+the suite, and it was wrong in R until the harness compared it.
 
 ## Deliberate limits
 

@@ -22,8 +22,42 @@ def diff_rows(got, want):
     return out
 
 
+def check_implemented():
+    """Every registered name must be dispatchable. A registered operation with
+    no implementation, or an exception stage the runner ignores, validates clean
+    and then does nothing -- which is how `call` and `override` shipped broken."""
+    from engine import AGGREGATE_OPS, SCALAR_OPS, WINDOW_OPS
+    from runner import HANDLED_STAGES
+    from validate import EXC, OPS
+
+    errs = []
+    dispatch = set(SCALAR_OPS) | set(WINDOW_OPS) | set(AGGREGATE_OPS)
+    for name, entry in OPS.items():
+        if name not in dispatch:
+            errs.append(f"operation {name!r} is registered but not implemented")
+        table = {"scalar": SCALAR_OPS, "window": WINDOW_OPS, "aggregate": AGGREGATE_OPS}
+        if name in dispatch and name not in table[entry["kind"]]:
+            errs.append(
+                f"operation {name!r} declares kind {entry['kind']!r} but is "
+                f"implemented in a different dispatch table"
+            )
+    for name, entry in EXC.items():
+        if entry["stage"] not in HANDLED_STAGES:
+            errs.append(
+                f"exception {name!r} binds to stage {entry['stage']!r}, which the "
+                f"engine does not handle, so it would be silently discarded"
+            )
+    return errs
+
+
 def main():
     failures = 0
+
+    impl = check_implemented()
+    print(f"{'FAIL' if impl else 'ok  '} registry is implementable")
+    for err in impl:
+        print(f"       {err}")
+    failures += len(impl)
 
     reg = check_registries()
     print(f"{'FAIL' if reg else 'ok  '} registries")
