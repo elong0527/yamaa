@@ -18,7 +18,14 @@ same-name inference.
 by `base`, `rows.dataset`, and qualified variable references. Paths are resolved
 relative to the specification file.
 
-Every referenced dataset identifier must exist in `datasets`.
+Every referenced dataset identifier must exist in `datasets`, including the one
+named by `base` and by any `rows` entry's `dataset`.
+
+A dataset identifier must not equal the output `domain`. The dataset being
+derived is addressed by unqualified variable names, so reusing the domain name
+for a source dataset makes a qualified reference read as though it addressed the
+output. A source of raw adverse events feeding domain `AE` is declared as
+`AE_RAW`.
 
 ## Variable references
 
@@ -47,6 +54,8 @@ behavior remain unresolved, so this rule remains draft.
 
 ## Errors
 
-- An unknown dataset identifier or variable: fail.
+- An unknown dataset identifier or variable, including in `base` or
+  `rows.dataset`: fail.
+- A dataset identifier equal to the output `domain`: fail.
 - A source path that cannot be resolved: fail.
 - An unresolved unqualified reference: fail.
