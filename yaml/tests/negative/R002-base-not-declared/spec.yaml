@@ -1,0 +1,16 @@
+domain: DM
+datasets:
+  ODM: input/odm.csv
+base: NOSUCH
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ODM.SubjectKey

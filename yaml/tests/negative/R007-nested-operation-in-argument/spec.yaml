@@ -1,0 +1,19 @@
+domain: DM
+datasets:
+  ODM: input/odm.csv
+base: ODM
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ODM.SubjectKey
+      operations:
+        - mapping:
+            dict: {A: {multiply: {factor: 2}}}

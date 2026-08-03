@@ -16,12 +16,31 @@ YAML_DIR <- Sys.getenv("YAMAA_YAML_DIR", unset = normalizePath(
   mustWork = FALSE
 ))
 
+source(file.path(YAML_DIR, "tests", "R", "functions.R"))
+
+VARPAT <- NULL  # set by load_design from schema.yaml
+
 load_design <- function(dir = YAML_DIR) {
   list(
     schema = yaml::read_yaml(file.path(dir, "schema.yaml")),
     ops    = yaml::read_yaml(file.path(dir, "operations.yaml"))$operations,
     exc    = yaml::read_yaml(file.path(dir, "exceptions.yaml"))$exceptions
   )
+}
+
+# R007: an argument holds values, never an operation. `action_argument` has no
+# `action_class` member, so a nested operation is a silent no-op.
+has_nested_action <- function(val, reg_names) {
+  if (!is.list(val)) return(NULL)
+  if (length(val) == 1L && !is.null(names(val))) {
+    only <- names(val)[1]
+    if (!identical(only, "source") && only %in% reg_names) return(only)
+  }
+  for (sub in val) {
+    hit <- has_nested_action(sub, reg_names)
+    if (!is.null(hit)) return(hit)
+  }
+  NULL
 }
 
 # R006 scalar resolution -----------------------------------------------------
@@ -159,6 +178,20 @@ validate_spec <- function(path, d = load_design()) {
         fail("%s.%s.%s: '%s' is not a declared dataset", where, nm, a, args[[a]])
       }
     }
+    reg_names <- c(names(d$ops), names(d$exc))
+    for (a in names(args)) {
+      hit <- has_nested_action(args[[a]], reg_names)
+      if (!is.null(hit)) {
+        fail("%s.%s.%s: '%s' is an operation nested where a value is expected; arguments cannot hold operations (R007)",
+             where, nm, a, hit)
+      }
+    }
+    if (identical(nm, "call") && is.character(args[["function"]])) {
+      if (!(args[["function"]] %in% names(HOST_FUNCTIONS))) {
+        fail("%s.call.function: '%s' is not in the host function library (available: %s) (R007)",
+             where, args[["function"]], paste(sort(names(HOST_FUNCTIONS)), collapse = ", "))
+      }
+    }
     if (identical(nm, "mapping") && identical(args$case_sensitive, FALSE)) {
       folded <- vapply(names(args$dict), fold_ascii, "")
       dup <- folded[duplicated(folded)]
@@ -184,7 +217,13 @@ validate_spec <- function(path, d = load_design()) {
   derivation <- function(dv, where, driver) {
     closed(dv, "derivation_class", where)
     if (!is.null(dv$where)) check_predicate(dv$where, where, "where", declared)
+    if (!is.null(dv$source) && !is.null(dv$literal)) {
+      fail("%s: both source and literal (R004)", where)
+    }
     src <- dv$source
+    if (!is.null(src) && !grepl(d$schema$variable$pattern, src)) {
+      fail("%s.source: '%s' fails the variable pattern (R006)", where, src)
+    }
     if (!is.null(src) && grepl(".", src, fixed = TRUE)) {
       q <- sub("\\..*$", "", src)
       if (!(q %in% datasets)) {
@@ -201,7 +240,7 @@ validate_spec <- function(path, d = load_design()) {
     entries <- list()
     for (i in seq_along(ops)) {
       e <- action(ops[[i]], sprintf("%s.operations[%d]", where, i - 1L), d$ops, "operation")
-      entries[[i]] <- e
+      entries[i] <- list(e)
       if (!is.null(e) && identical(e$kind, "aggregate") &&
           !((i == 1L && joins) || !is.null(dv$group_by))) {
         fail("%s.operations[%d]: aggregate outside its two legal positions (R007)",

@@ -13,6 +13,8 @@ From the repository root:
 python yaml/tests/python/test_fixtures.py   # validate and execute every fixture
 Rscript yaml/tests/R/run_tests.R            # validate every fixture
 Rscript yaml/tests/R/run_parity.R           # execute in R, diff vs expected AND vs Python
+python yaml/tests/python/test_negative.py   # every negative fixture must be rejected
+Rscript yaml/tests/R/run_negative.R         # the same corpus, against R
 ```
 
 Python needs `pyyaml`; R needs `yaml` and `jsonlite`. The parity harness shells
@@ -31,7 +33,10 @@ the two implementations rather than a reporting artifact.
 | `R/engine.R` | Predicates, conversion, serialization, operations, host functions |
 | `R/runner.R` | The R execution engine |
 | `R/run_tests.R` | The R validation entry point |
+| `R/functions.R` | Host functions reachable from `call`, mirroring `python/functions.py` |
 | `R/run_parity.R` | Executes in R and diffs against both the CSV and Python |
+| `negative/` | One fixture per error condition, with the message each must produce |
+| `python/test_negative.py`, `R/run_negative.R` | Both implementations against that corpus |
 
 ## Status
 
@@ -46,8 +51,11 @@ has no implementation, if an operation is implemented under the wrong `kind`, or
 if an exception binds to a stage the engine ignores. That check would have caught
 both `call` and `override` shipping broken.
 
-Conformance parity is still unproven: nothing yet compares the two validators,
-and they are known to disagree on at least four inputs.
+Conformance parity is now tested too. `negative/` holds 20 fixtures, one per
+error condition, each with the message it must produce, and both validators are
+run against all of them. Comparing error *messages* rather than accept/reject is
+deliberate: a validator that rejects a specification for the wrong reason is
+still wrong, and it misleads whoever has to fix the specification.
 
 ## What the engine settled
 
@@ -63,6 +71,24 @@ R005 now orders output rows by `keys`, which made all six fixtures agree.
 **Serialization.** Comparing against a CSV needs a shared rendering of integers,
 floats, missing, and booleans. R005 records the convention and notes that
 precision and `date` rendering remain open with the type vocabulary.
+
+## What the negative corpus caught immediately
+
+Four places where the two validators disagreed, found mechanically rather than by
+inspection.
+
+- `source` and `literal` together: R accepted it, so a derivation with two seeds
+  was legal in one implementation.
+- An operation nested where an argument value belongs: R had no check.
+- An unknown `call` function: R had no host-library check. Host functions moved
+  into `R/functions.R`, mirroring `python/functions.py`, so both sides check the
+  same list.
+- An unregistered operation: R crashed with a subscript error instead of
+  reporting it. Same `x[[i]] <- NULL` deletion that broke the engine, this time
+  in the validator.
+
+The R validator also never applied the variable pattern from `schema.yaml`, so
+`source: 9NOTAVAR` was accepted. Both now reject it.
 
 ## What parity caught immediately
 
