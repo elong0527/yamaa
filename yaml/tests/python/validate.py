@@ -13,6 +13,7 @@ from pathlib import Path
 
 import yaml
 
+from functions import HOST_FUNCTIONS
 from predicates import DerivationError, check_syntax, predicate_vars
 
 YAML_DIR = Path(__file__).resolve().parents[2]
@@ -156,6 +157,14 @@ class _Validator:
             for item in (args[arg] if isinstance(args[arg], list) else []):
                 if isinstance(item, dict) and isinstance(item.get("when"), str):
                     self.predicate(item["when"], f"{where}.{name}.{arg}", "when")
+        for arg, val in args.items():
+            self.no_nested_action(val, f"{where}.{name}.{arg}")
+        if name == "call" and isinstance(args.get("function"), str):
+            if args["function"] not in HOST_FUNCTIONS:
+                self.fail(
+                    f"{where}.call.function: {args['function']!r} is not in the host "
+                    f"function library (available: {sorted(HOST_FUNCTIONS)}) (R007)"
+                )
         if name == "mapping" and args.get("case_sensitive") is False:
             seen = {}
             for key in args.get("dict") or {}:
@@ -167,6 +176,24 @@ class _Validator:
                     )
                 seen[folded] = key
         return name, entry
+
+    def no_nested_action(self, val, where):
+        """An argument holds values, never an operation. R007: `action_argument`
+        has no `action_class` member, so a nested operation is a silent no-op
+        that lands the mapping itself in the output."""
+        if isinstance(val, dict):
+            if len(val) == 1:
+                only = next(iter(val))
+                if only != "source" and (only in OPS or only in EXC):
+                    self.fail(
+                        f"{where}: {only!r} is an operation nested where a value is "
+                        f"expected; arguments cannot hold operations (R007)"
+                    )
+            for k, sub in val.items():
+                self.no_nested_action(sub, f"{where}.{k}")
+        elif isinstance(val, list):
+            for i, sub in enumerate(val):
+                self.no_nested_action(sub, f"{where}[{i}]")
 
     # ---- derivations ----------------------------------------------------
 

@@ -13,6 +13,7 @@ from pathlib import Path
 
 import yaml
 
+from functions import HOST_FUNCTIONS
 from predicates import DerivationError, evaluate_predicate, predicate_vars, tokenize
 from validate import EXC, OPS, fold_ascii
 
@@ -178,6 +179,16 @@ def op_date_diff(value, args, ctx):
     return months if unit == "month" else months // 12
 
 
+def op_call(value, args, ctx):
+    fn = HOST_FUNCTIONS.get(args["function"])
+    if fn is None:
+        raise DerivationError(
+            f"call: {args['function']!r} is not in the host function library "
+            f"(available: {sorted(HOST_FUNCTIONS)})"
+        )
+    return fn(**(args.get("args") or {}))
+
+
 def op_case(value, args, ctx):
     for branch in args["branches"]:
         if evaluate_predicate(branch["when"], ctx.row_lookup):
@@ -197,6 +208,7 @@ SCALAR_OPS = {
     "str_extract": op_str_extract,
     "date_diff": op_date_diff,
     "case": op_case,
+    "call": op_call,
 }
 
 

@@ -100,7 +100,8 @@ class Spec:
             if not stage or stage[0] != "multiple_matches":
                 raise DerivationError(f"{ds}.{col}: {len(hits)} right-side matches (R003)")
             _, args = stage
-            ordered = sorted(hits, key=lambda h: str(h.get(_var(args["order_by"]).split(".")[-1])))
+            col = _var(args["order_by"]).split(".")[-1]
+            ordered = sorted(hits, key=lambda h: _ord_raw(h.get(col)))
             hits = [ordered[-1] if args["keep"] == "last" else ordered[0]]
         return hits[0].get(col) if hits else None
 
@@ -214,6 +215,20 @@ class Spec:
                 if "convert" not in exc:
                     raise
                 conv.append(convert(exc["convert"][1]["default"], self.coltype[name]))
+
+        if "final" in exc:
+            # R008 stage `final`: replace the converted value where a rule matches.
+            _, args = exc["final"]
+            out = []
+            for row, v in zip(rows, conv):
+                repl = v
+                for rule in args["rules"]:
+                    look = lambda n, r=row, nm=name, cur=v: cur if n == nm else r.out.get(n)
+                    if evaluate_predicate(rule["when"], look):
+                        repl = convert(rule["value"], self.coltype[name])
+                        break
+                out.append(repl)
+            conv = out
         return conv
 
     def _window(self, opname, raw, rows, vals, deriv):
@@ -288,6 +303,16 @@ class _Ctx:
     def __init__(self, data, row_lookup):
         self.data = data
         self.row_lookup = row_lookup
+
+
+def _ord_raw(v):
+    """Order a raw CSV value numerically when it looks numeric, else as text."""
+    if v is None or v == "":
+        return (2, 0.0, "")
+    try:
+        return (0, float(v), "")
+    except (TypeError, ValueError):
+        return (1, 0.0, str(v))
 
 
 def _ord(v):

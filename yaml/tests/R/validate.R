@@ -1,7 +1,8 @@
 # Conformance validation for derivation specifications.
 #
 # The R counterpart of tests/python/validate.py. Both implementations must
-# accept and reject exactly the same specifications; test-parity.R checks that.
+# accept and reject exactly the same specifications. NOTHING CHECKS THAT YET:
+# there is no parity harness, and the two are known to disagree.
 
 yaml_dir <- function() {
   normalizePath(file.path(dirname(sys.frame(1)$ofile %||% "."), "..", ".."),

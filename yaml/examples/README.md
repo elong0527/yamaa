@@ -45,13 +45,11 @@ mapping rule, inline and external, and the undefined-value case in each.
 
 ## Coverage gaps
 
-Of the registered vocabulary, 8 of 16 operations and 4 of 5 exceptions are not
+Of the registered vocabulary, 9 of 17 operations and 4 of 5 exceptions are not
 exercised by any fixture:
 
-- operations: `add`, `case`, `coalesce`, `cut`, `date_diff`, `max`, `min`,
-  `str_extract`
-- exceptions: `conversion_failure`, `missing_source`, `multiple_matches`,
-  `override`
+- operations: `add`, `call`, `case`, `coalesce`, `cut`, `date_diff`, `max`, `min`, `str_extract`
+- exceptions: `conversion_failure`, `missing_source`, `multiple_matches`, `override`
 
 Those entries are unverified. Losing `min` and `max` also left
 `derivation.filter`, the `aggregate` kind, and the R003 right-side reduction

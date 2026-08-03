@@ -14,6 +14,7 @@ expressible but no fixture; **no** not expressible.
 |---|---|---|
 | Direct item source, ItemOID to variable | yes | `sdtm-lb-findings` |
 | Structural key rename, `SubjectKey` to `USUBJID` | yes | every fixture |
+| **Deriving** `USUBJID` by concatenation | **no** | no string-construction operation; `STUDYID-SITEID-SUBJID` is inexpressible except through `call`. Every fixture dodges this by copying a pre-built value |
 | Literal constant | yes | every fixture |
 | Codelist recode, with case sensitivity | yes | `adam-adsl-mapping` |
 | Type cast | yes | R005 conversion |
@@ -21,7 +22,7 @@ expressible but no fixture; **no** not expressible.
 | Cross-domain lookup on inferred keys | yes | `adam-adlb-bds` |
 | Cross-domain lookup on **explicit** join keys | **no** | `cdiscbuildeR` `merge_on`; R003 infers keys from output `keys` only, so a join on `ItemGroupRepeatKey` cannot be stated |
 | Sequence numbering | yes | `row_number` |
-| Named function call | untested | `call`, added for this |
+| Named function call | yes | `call`, with a `study_day` probe; the host library is `tests/python/functions.py` |
 | Wide-to-tall explosion by enumeration | yes | `rows` templates |
 | Multi-source union into one domain | yes | `sdtm-relrec-related-records` |
 | Row filtering of source records | yes | `row.filter` |
@@ -42,7 +43,7 @@ expressible but no fixture; **no** not expressible.
 | Derive only where a condition holds | yes | `derivation.where`, `adam-adlb-bds` `PCHG` |
 | Range banding | untested | `cut` |
 | First non-missing | untested | `coalesce` |
-| Study day, no day 0 | untested | `call` |
+| Study day, no day 0 | yes | `call` with `study_day` |
 | Duration | untested | `date_diff` plus `add` |
 | First and last dose date | **no** | needs aggregate with ordering and a filter on the added dataset |
 | Existence flag from another dataset | **no** | `SAFFL` from "any EX record with dose > 0" |
@@ -52,8 +53,13 @@ expressible but no fixture; **no** not expressible.
 
 ## The remaining gaps
 
-Ordered by how often they appear in `cath/`. One of the original seven is
-closed; six remain.
+Frequency in `cath/` is how these were first ordered, and that was the wrong
+criterion: `cath/` is one short single-site study that hardcodes `EPOCH`,
+hardcodes every unit, and has no ADTTE, no multi-period design, and no partial
+dates. It bounds what these gaps look like, not what the requirement space is.
+
+One of the original seven is closed. Gaps 8 to 12 were missed on the first pass
+and found by review; several outrank the ones already listed.
 
 1. ~~**Restricted derivations.**~~ **Closed.** `derivation.where` restricts a
    derivation to the output rows satisfying a predicate, leaving the rest
@@ -84,6 +90,36 @@ closed; six remain.
 
 7. **Templating.** Nineteen LB blocks differing in two lines each. No loop,
    anchor, or parameterized template.
+
+8. **String construction.** There is no `concat`, `upper`, `lower`, `trim`,
+   `substr`, or `round`. `str_extract` is the only string operation, although
+   R004 points at the stringr vocabulary. This blocks `USUBJID`, `--SPID`,
+   composite match keys, and `--STRESN` rounding to study-specified digits.
+
+9. **Referencing a derived dataset.** `datasets` maps identifiers to source
+   files only, so a specification cannot read the output of another
+   specification. This is the same wound as SUPPQUAL: `SUPPEX` needs
+   `IDVARVAL` pointing at the parent's derived `EXSEQ`, which exists nowhere on
+   disk. `cath/` relies on it constantly through `_DM_REF`. `schema.yaml`
+   declares `parents` for what looks like exactly this and no rule, example, or
+   validator uses it. `adam-adlb-bds` only works because ADSL is supplied as a
+   pre-built CSV, so the build order is punted outside the design.
+
+10. **Non-equality joins.** R003 matches on equality only. `EPOCH` from
+    `SESTDTC`/`SEENDTC`, multi-period `TRTxxP` from `APxxSDT`/`APxxEDT`,
+    `ONTRTFL`, a `TRTEMFL` with an end window, and all of ADTTE need interval
+    comparison and are structurally impossible.
+
+11. **Join-miss defaults.** R003 returns missing on no match and no exception
+    covers it; `missing_source` is stage `bind` and scoped to a variable that
+    does not exist. `EOSSTT = "ONGOING"` and `SAFFL = "N"` on no match cannot be
+    stated.
+
+12. **Intermediate columns.** Every value must be a published output column,
+    because there is no temporary column and arguments cannot nest operations.
+    For SDTM and ADaM, where the variable list is fixed by the define, that
+    forces throwaway variables into the deliverable. This is the cost of
+    forbidding rebinding without adding either escape.
 
 ## Deliberately out of scope
 
