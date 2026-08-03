@@ -8,9 +8,10 @@ SDTM, and ADaM datasets.
 Before reviewing, implementing, or modifying this design:
 
 1. Read `README.md` for scope and navigation.
-2. Read `schema.yaml` for the allowed structure.
-3. Read `rules/README.md` and every rule applicable to the fields in scope.
-4. Read the relevant example specification, README, input data, and expected
+2. Read `rules/R006-schema-language.md` for the notation used by the schema.
+3. Read `schema.yaml` for the allowed structure.
+4. Read `rules/README.md` and every rule applicable to the fields in scope.
+5. Read the relevant example specification, README, input data, and expected
    output under `examples/`.
 
 Normative rule files are authoritative. Example READMEs explain fixtures but do

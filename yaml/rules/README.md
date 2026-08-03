@@ -13,6 +13,7 @@ design intent but are not complete enough for portable implementation.
 | R003 | [Cross-dataset left join](R003-cross-dataset-left-join.md) | normative |
 | R004 | [Expression language](R004-expression-language.md) | draft |
 | R005 | [Output contract](R005-output-contract.md) | draft |
+| R006 | [Compact schema language](R006-schema-language.md) | normative |
 
 ## Rule requirements
 
