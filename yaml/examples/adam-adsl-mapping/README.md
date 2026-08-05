@@ -14,13 +14,15 @@ value mapping is the only behavior on display.
 | `RACE` | `DM.RACE` | direct copy | — |
 | `RACEN` | `DM.RACE` | `WHITE` to 1, `BLACK OR AFRICAN AMERICAN` to 2, `ASIAN` to 3 | sensitive |
 
-All four mappings use the `mapping` operation, which returns `dict[value]` and
-raises `unmapped` for a value the dictionary does not contain.
+All four mappings use a self-contained `mapping` expression. Its `source` names
+the source variable or expression, `dict` defines the translation, and its optional
+`unmapped` expression defines the fallback for an input the dictionary does not
+contain.
 
 One source variable feeds three output columns with three different
 dictionaries, which is the whole of one-to-many variable mapping. The mappings
-also change type: `SEXN` reads a `str` and produces an `int`, converted by R005
-after the last operation.
+also change type: `SEXN` reads a `str` and produces an `int`, converted to the
+declared column type after the expression is evaluated.
 
 `SEX` maps `M` to `M`, which looks like a no-op and is not. It is the
 case-standardization step: subject `CATH-702-006` reports a lowercase `m`, and a
@@ -51,9 +53,9 @@ dictionary.
 
 ## Undefined values
 
-`MULTIPLE` is not in the `RACEN` dictionary, so `mapping` raises `unmapped` and
-the derivation substitutes 99. Without that exception the run fails, which is
-the correct default: an unmappable value is normally a data-management query
+`MULTIPLE` is not in the `RACEN` dictionary, so the mapping evaluates its local
+`unmapped: {literal: 99}` expression. Without `unmapped`, the run fails, which
+is the correct default: an unmappable value is normally a data-management query
 rather than something to pass through silently.
 
 ## Relation to other fixtures
@@ -68,9 +70,7 @@ dictionary held in an external file rather than inline, using `mapping_from`.
 
 ## Scope
 
-This fixture was reduced from a broader mapping taxonomy that also covered
-string parsing, range banding, first-non-missing, conditional flags, and
-aggregate-then-join. Those behaviors remain registered in `operations.yaml` but
-are no longer exercised by any fixture, and the reduction removed the only
-fixture that justified `derivation.filter`, the `aggregate` kind, and R001's
-predicate-dependency rule. See `../README.md` for the current coverage gap.
+This fixture covers only mapping expressions. String parsing, range banding,
+first-non-missing, conditional flags, and aggregate-then-join are defined by
+other expression classes but are not exercised here. See `../README.md` for the
+current fixture coverage gap.

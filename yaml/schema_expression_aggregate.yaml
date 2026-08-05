@@ -1,0 +1,9 @@
+version: "1.0"
+
+expression_variants:
+    min:
+        - value: {type: expression, required: true}
+        - group_by: {type: "list[variable]", required: false}
+    max:
+        - value: {type: expression, required: true}
+        - group_by: {type: "list[variable]", required: false}

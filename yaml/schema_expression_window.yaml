@@ -1,0 +1,14 @@
+version: "1.0"
+
+expression_variants:
+    row_number:
+        - group_by: {type: "list[variable]", required: false}
+        - order_by: {type: "list[expression]", required: true}
+    baseline_flag:
+        - group_by: {type: "list[variable]", required: false}
+        - date: {type: expression, required: true}
+        - reference_date: {type: expression, required: true}
+    baseline_value:
+        - group_by: {type: "list[variable]", required: false}
+        - value: {type: expression, required: true}
+        - flag: {type: expression, required: true}

@@ -1,0 +1,24 @@
+version: "1.0"
+
+expression_variants:
+    source: {type: [variable, source_binding_class]}
+    literal: {type: literal_value}
+    coalesce:
+        - values: {type: "list[expression]", required: true}
+    case:
+        - branches: {type: "list[case_branch_class]", required: true}
+        - else: {type: expression, required: false}
+
+source_binding_class:
+    - variable: {type: variable, required: true}
+    - filter: {type: sql, required: false}
+    - missing: {type: expression, required: false}
+    - multiple_matches: {type: multiple_matches_class, required: false}
+
+multiple_matches_class:
+    - order_by: {type: expression, required: true}
+    - keep: {type: str, required: true, values: [first, last]}
+
+case_branch_class:
+    - when: {type: sql, required: true}
+    - then: {type: expression, required: true}

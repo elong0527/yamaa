@@ -1,0 +1,15 @@
+version: "1.0"
+
+expression_variants:
+    multiply:
+        - value: {type: expression, required: true}
+        - factor: {type: float, required: true}
+    add:
+        - value: {type: expression, required: true}
+        - addend: {type: float, required: true}
+    subtract:
+        - minuend: {type: expression, required: true}
+        - subtrahend: {type: expression, required: true}
+    percent_change:
+        - value: {type: expression, required: true}
+        - base: {type: expression, required: true}

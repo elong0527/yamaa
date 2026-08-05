@@ -21,37 +21,34 @@ columns:
     type: str
     label: Sex
     derivation:
-      source: DM.SEX
-      operations:
-        - mapping:
-            case_sensitive: false
-            dict:
-              M: M
-              F: F
+      mapping:
+        source: DM.SEX
+        case_sensitive: false
+        dict:
+          M: M
+          F: F
 
   - name: SEXN
     type: int
     label: Sex (N)
     derivation:
-      source: DM.SEX
-      operations:
-        - mapping:
-            case_sensitive: false
-            dict:
-              M: 1
-              F: 2
+      mapping:
+        source: DM.SEX
+        case_sensitive: false
+        dict:
+          M: 1
+          F: 2
 
   - name: SEXDECOD
     type: str
     label: Sex Decoded
     derivation:
-      source: DM.SEX
-      operations:
-        - mapping:
-            case_sensitive: false
-            dict:
-              M: Male
-              F: Female
+      mapping:
+        source: DM.SEX
+        case_sensitive: false
+        dict:
+          M: Male
+          F: Female
 
   - name: RACE
     type: str
@@ -63,13 +60,10 @@ columns:
     type: int
     label: Race (N)
     derivation:
-      source: DM.RACE
-      operations:
-        - mapping:
-            dict:
-              WHITE: 1
-              BLACK OR AFRICAN AMERICAN: 2
-              ASIAN: 3
-      exception:
-        - unmapped:
-            default: 99
+      mapping:
+        source: DM.RACE
+        dict:
+          WHITE: 1
+          BLACK OR AFRICAN AMERICAN: 2
+          ASIAN: 3
+        unmapped: {literal: 99}

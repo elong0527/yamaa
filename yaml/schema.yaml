@@ -1,5 +1,9 @@
 version: "1.0"
 
+includes:
+    - schema_derivation.yaml
+    - schema_verification.yaml
+
 root_class:
     - domain: {type: str, required: true}
     - datasets: {type: "dict[str, path]", required: true}
@@ -8,30 +12,25 @@ root_class:
     - keys: {type: "list[str]", required: true}
     - columns: {type: "list[column_class]", required: true}
     - rows: {type: "list[row_class]", required: false}
-    - verifications: {type: [action_class, "list[action_class]"], required: false}
+    - verifications: {type: [dataset_verification, "list[dataset_verification]"], required: false}
     - metadata: {type: "dict[str, str]", required: false}
-    
+
 column_class:
     - name: {type: str, required: true}
     - type: {type: str, required: true}
     - label: {type: str, required: false}
-    - derivation: {type: derivation_class, required: false}
-    - verifications: {type: [action_class, "list[action_class]"], required: false}
+    - derivation: {type: derivation, required: false}
+    - verifications: {type: [column_verification, "list[column_verification]"], required: false}
     - metadata: {type: "dict[str, str]", required: false}
 
 row_class:
     - id: {type: str, required: true}
     - dataset: {type: str, required: false}
     - filter: {type: sql, required: false}
-    - derivations: {type: "dict[str, derivation_class]", required: true}
+    - derivations: {type: "dict[str, derivation]", required: true}
 
-derivation_class:
-    - source: {type: variable, required: false}
-    - literal: {type: [str, int, float, bool, "null"], required: false}
-    - filter: {type: sql, required: false}
-    - operations: {type: [action_class, "list[action_class]"], required: false}
-    - group_by: {type: "list[variable]", required: false}
-    - exception: {type: [action_class, "list[action_class]"], required: false}
+literal_value:
+    type: [str, int, float, bool, "null"]
 
 variable:
     type: str
@@ -44,13 +43,3 @@ path:
 sql:
     type: str
     min_length: 1
-
-action_class:
-    type: "dict[str, dict[str, action_argument]]"
-    size: 1
-
-action_argument:
-    type: [str, int, float, bool, "null", variable_argument, "list[action_argument]", "dict[str, action_argument]"]
-
-variable_argument:
-    - source: {type: variable, required: true}

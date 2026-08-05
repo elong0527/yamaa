@@ -1,0 +1,25 @@
+version: "1.0"
+
+includes:
+    - schema_expression_core.yaml
+    - schema_expression_mapping.yaml
+    - schema_expression_str.yaml
+    - schema_expression_numeric.yaml
+    - schema_expression_date.yaml
+    - schema_expression_window.yaml
+    - schema_expression_aggregate.yaml
+
+derivation:
+    type: [expression, handled_expression_class]
+
+handled_expression_class:
+    - value: {type: expression, required: true}
+    - conversion_failure: {type: expression, required: false}
+    - override: {type: "list[override_rule_class]", required: false}
+
+override_rule_class:
+    - when: {type: sql, required: true}
+    - value: {type: expression, required: true}
+
+expression:
+    variants: expression_variants

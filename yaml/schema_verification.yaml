@@ -1,0 +1,30 @@
+version: "1.0"
+
+column_verification:
+    variants: column_verification_variants
+
+column_verification_variants:
+    not_missing: {type: empty_class}
+    allowed_values:
+        - values: {type: "list[literal_value]", required: true}
+    range:
+        - min: {type: float, required: false}
+        - max: {type: float, required: false}
+    matches:
+        - pattern: {type: str, required: true}
+
+dataset_verification:
+    variants: dataset_verification_variants
+
+dataset_verification_variants:
+    unique:
+        - columns: {type: "list[variable]", required: true}
+    predicate:
+        - when: {type: sql, required: true}
+    row_count:
+        - min: {type: int, required: false}
+        - max: {type: int, required: false}
+
+empty_class:
+    type: "dict[str, literal_value]"
+    size: 0
