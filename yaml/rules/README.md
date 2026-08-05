@@ -14,8 +14,9 @@ design intent but are not complete enough for portable implementation.
 | R004 | [Expression language](R004-expression-language.md) | draft |
 | R005 | [Output contract](R005-output-contract.md) | draft |
 | R006 | [Compact schema language](R006-schema-language.md) | normative |
-| R007 | [Operation registry](R007-operation-registry.md) | normative |
-| R008 | [Exception registry](R008-exception-registry.md) | normative |
+| R007 | [Expression registry](R007-expression-registry.md) | normative |
+| R008 | [Local error handlers](R008-local-handlers.md) | normative |
+| R009 | [Verifications](R009-verifications.md) | draft |
 
 ## Rule requirements
 

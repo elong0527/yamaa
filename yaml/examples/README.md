@@ -45,15 +45,19 @@ mapping rule, inline and external, and the undefined-value case in each.
 
 ## Coverage gaps
 
-Of the registered vocabulary, 8 of 16 operations and 4 of 5 exceptions are not
-exercised by any fixture:
+Of the registered vocabulary, 8 of 16 non-leaf expressions and 4 of 5 local
+handler paths are not exercised by any fixture:
 
-- operations: `add`, `case`, `coalesce`, `cut`, `date_diff`, `max`, `min`,
+- expressions: `add`, `case`, `coalesce`, `cut`, `date_diff`, `max`, `min`,
   `str_extract`
-- exceptions: `conversion_failure`, `missing_source`, `multiple_matches`,
+- handlers: `conversion_failure`, `source.missing`, `multiple_matches`,
   `override`
 
-Those entries are unverified. Losing `min` and `max` also left
-`derivation.filter`, the `aggregate` kind, and the R003 right-side reduction
-section with no fixture, and losing `case` left R001's predicate-dependency rule
-with none. Each should either regain a fixture or be removed.
+Those paths are unverified. The absence of `min` and `max` also leaves
+`source.filter` and R003 right-side reduction with no fixture, while the absence
+of `case` leaves R001 predicate dependency extraction uncovered. Each should
+either gain a fixture or be removed.
+
+Four of seven verification keywords are exercised by `adam-adsl-mapping`:
+`not_missing`, `allowed_values`, `unique`, and `row_count`. The unexercised
+verification keywords are `range`, `matches`, and `predicate`.

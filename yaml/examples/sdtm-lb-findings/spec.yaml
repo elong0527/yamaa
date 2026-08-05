@@ -23,12 +23,11 @@ columns:
   - name: LBSEQ
     type: int
     derivation:
-      group_by: [STUDYID, USUBJID]
-      operations:
-        - row_number:
-            order_by:
-              - {source: LBDTC}
-              - {source: LBTESTCD}
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by:
+          - {source: LBDTC}
+          - {source: LBTESTCD}
 
   - name: LBTESTCD
     type: str

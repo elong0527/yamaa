@@ -2,7 +2,7 @@
 id: R001
 title: Execution Model
 status: normative
-applies_to: [root.base, root.rows, row.dataset, root.columns]
+applies_to: [root.base, root.rows, row.dataset, root.columns, derivation]
 depends_on: [R002, R003, R005, R007, R008]
 ---
 
@@ -10,8 +10,8 @@ depends_on: [R002, R003, R005, R007, R008]
 
 ## Intent
 
-Define how output rows and columns are constructed without relying on YAML
-declaration order for derivation dependencies.
+Define how output rows, columns, and recursive derivation expressions are
+evaluated without relying on YAML declaration order for dependencies.
 
 ## Phases
 
@@ -24,51 +24,48 @@ Each `rows` entry uses its explicit `dataset` as the row driver. If `dataset`
 is omitted, it uses root `base`. `base` is optional when every row declares a
 dataset. Constructed rows are appended in specification order.
 
-When `rows` is absent or empty, row construction produces exactly one output row
-per `base` record, in base-record order. `base` is required in that case. This
-is the ordinary shape for a one-record-per-subject dataset, where every output
-column has a column-level derivation and no row template is needed.
+When `rows` is absent or empty, row construction produces exactly one output
+row per `base` record, in base-record order. `base` is required in that case.
+
+## Expression evaluation
+
+An expression contains exactly one keyword registered by R007. Evaluate an
+expression recursively: evaluate every nested expression required by the
+keyword, then evaluate the keyword itself. A `source` or `literal` expression
+is a leaf. YAML mapping order has no execution meaning.
+
+Window expressions evaluate over the partitions declared by their own
+`group_by`. Aggregate expressions follow the two contexts defined by R003 and
+R007. All other expressions return one value per current row.
 
 ## Dependency execution
 
 Implementations must infer dependencies rather than evaluate columns in YAML
-declaration order.
+declaration order. Recursively traverse each expression and collect:
 
-Dependencies include current-output variable references in `source`, every
-`{source: VARIABLE}` expression nested in `operations`, `group_by`, and
-ordering arguments. Lookup keys required by R003 are also dependencies.
+- every unqualified output variable referenced by `source`;
+- variables in `group_by`, ordering expressions, and other nested expressions;
+- current-output identifiers used by an SQL predicate.
 
-Dependencies also include every current-output variable named inside a
-predicate. A predicate is any argument whose registry signature declares the
-type `sql` under R007 or R008, such as `case.when` and `override.rules[].when`.
-Implementations must extract identifier references from the predicate and add
-them to the dependency graph.
-
-Predicate references are easy to miss because they are ordinary strings rather
-than `{source: VARIABLE}` expressions. Omitting them does not raise an error; it
-silently evaluates a derivation before its input exists. Identifier extraction
-depends on the filter grammar, which R004 leaves unresolved, so implementations
-must not treat a predicate as dependency-free while that grammar is open.
+Predicates include `case.branches[].when`, `override[].when`, row filters, and
+structured-source filters. Identifier extraction depends on the SQL grammar in
+R004; an implementation must not treat a predicate as dependency-free.
 
 For each row definition, evaluate row derivations using a dependency graph.
-Row derivations cannot depend on values produced only during the later column
-phase.
+Row derivations cannot depend on values produced only during the column phase.
 
 After row construction, build the column dependency graph and evaluate it in
-topological order. Operations within one derivation are evaluated in listed
-order. When multiple columns are ready, declaration order is the deterministic
-tie-breaker. Convert each result according to R005 before making it available
-to dependents.
+topological order. When several columns are ready, declaration order is the
+deterministic tie-breaker. Convert each completed derivation according to R005
+before making it available to dependents.
 
-Column declaration order controls final column layout, not evaluation order.
+Column declaration order controls final layout, not evaluation order.
 
 ## Errors
 
 - A row without an explicit `dataset` or default `base`: fail.
 - A specification with no `rows` entry and no `base`: fail.
-- A variable named in a predicate that is absent from the dependency graph:
-  fail.
 - A row dependency on a later-phase value: fail.
-- An unresolved variable reference: fail.
+- An unresolved variable or predicate reference: fail.
 - A dependency cycle: fail and report the cycle path.
-- A column derivation that changes row count: fail.
+- An expression that changes row count during column derivation: fail.

@@ -22,4 +22,4 @@ override_rule_class:
     - value: {type: expression, required: true}
 
 expression:
-    variants: expression_variants
+    registry: expressions

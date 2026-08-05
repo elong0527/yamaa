@@ -1,6 +1,6 @@
 version: "1.0"
 
-expression_variants:
+expressions:
     multiply:
         - value: {type: expression, required: true}
         - factor: {type: float, required: true}

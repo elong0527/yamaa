@@ -44,46 +44,41 @@ columns:
   - name: ABLFL
     type: str
     derivation:
-      group_by: [STUDYID, USUBJID, PARAMCD]
-      operations:
-        - baseline_flag:
-            date: {source: ADT}
-            reference_date: {source: TRTSDT}
+      baseline_flag:
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        date: {source: ADT}
+        reference_date: {source: TRTSDT}
 
   - name: BASE
     type: float
     derivation:
-      group_by: [STUDYID, USUBJID, PARAMCD]
-      operations:
-        - baseline_value:
-            value: {source: AVAL}
-            flag: {source: ABLFL}
+      baseline_value:
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        value: {source: AVAL}
+        flag: {source: ABLFL}
 
   - name: CHG
     type: float
     derivation:
-      operations:
-        - subtract:
-            minuend: {source: AVAL}
-            subtrahend: {source: BASE}
+      subtract:
+        minuend: {source: AVAL}
+        subtrahend: {source: BASE}
 
   - name: PCHG
     type: float
     derivation:
-      operations:
-        - percent_change:
-            value: {source: AVAL}
-            base: {source: BASE}
+      percent_change:
+        value: {source: AVAL}
+        base: {source: BASE}
 
   - name: ASEQ
     type: int
     derivation:
-      group_by: [STUDYID, USUBJID]
-      operations:
-        - row_number:
-            order_by:
-              - {source: PARAMCD}
-              - {source: ADT}
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by:
+          - {source: PARAMCD}
+          - {source: ADT}
 
 rows:
   - id: alt
@@ -110,10 +105,9 @@ rows:
       ADT:
         source: LB.LBDTC
       AVAL:
-        source: LB.LBSTRESN
-        operations:
-          - multiply:
-              factor: 0.0167
+        multiply:
+          value: {source: LB.LBSTRESN}
+          factor: 0.0167
       AVALU:
         literal: ukat/L
 

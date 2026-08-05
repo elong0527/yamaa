@@ -1,6 +1,6 @@
 version: "1.0"
 
-expression_variants:
+expressions:
     row_number:
         - group_by: {type: "list[variable]", required: false}
         - order_by: {type: "list[expression]", required: true}

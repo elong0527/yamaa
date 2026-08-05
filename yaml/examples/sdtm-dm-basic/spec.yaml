@@ -52,12 +52,11 @@ rows:
       SUBJID:
         source: ODM.SubjectKey
       SEX:
-        source: ODM.Value
-        operations:
-          - mapping:
-              dict:
-                Male: M
-                Female: F
+        mapping:
+          source: ODM.Value
+          dict:
+            Male: M
+            Female: F
       AGE:
         source: ODM.IT.DM.AGE
       ARM:

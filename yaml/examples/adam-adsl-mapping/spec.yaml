@@ -20,6 +20,10 @@ columns:
   - name: SEX
     type: str
     label: Sex
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [M, F]
     derivation:
       mapping:
         source: DM.SEX
@@ -66,4 +70,12 @@ columns:
           WHITE: 1
           BLACK OR AFRICAN AMERICAN: 2
           ASIAN: 3
-        unmapped: {literal: 99}
+        unmapped:
+          literal: 99
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 6
+      max: 6

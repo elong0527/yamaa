@@ -9,49 +9,41 @@ applies_to: [schema]
 
 ## Intent
 
-Define the notation used by `schema.yaml` so R and Python implementations
-validate specifications consistently.
+Define the modular notation used by `schema.yaml` and `schema_*.yaml` so R and
+Python implementations validate specifications consistently.
 
-## YAML document
+## Schema bundle
 
-`schema.yaml` uses YAML 1.2. Implementations must reject duplicate mapping
-keys, aliases, merge keys, explicit tags, and unknown schema keywords.
+`schema.yaml` is the bundle entry point. Every schema document is a YAML 1.2
+mapping containing `version`, an optional `includes`, and declarations.
 
-The root is a mapping. `version` identifies this schema-language version. Every
-other root key declares a named type. Named types must be unique and references
-to unknown named types are errors.
+`includes` is an ordered list of filenames resolved relative to the including
+file. Included filenames must match `schema_[a-z0-9_]+.yaml`; absolute paths,
+parent traversal, URLs, missing files, and include cycles are errors. Every
+document in a bundle must declare the same version. Include order has no
+validation or execution meaning.
 
-The quoted string `"null"` is a type name. An unquoted YAML `null` is a null
-value and must not be interpreted as a type name.
+Implementations load the complete transitive bundle before resolving names.
+Except for registries, a declaration name may occur only once in the bundle.
+
+All schema documents must reject duplicate YAML keys, aliases, merge keys,
+explicit tags, and unknown schema constructs.
 
 ## Scalar resolution
 
-This section governs `schema.yaml`, the registry documents defined by R007 and
-R008, and every specification document.
+The schema bundle and every specification use the YAML 1.2 core schema. Only
+`true` and `false` resolve to Boolean. Every other alphabetic scalar, including
+`y`, `Y`, `n`, `N`, `yes`, `no`, `on`, and `off`, resolves to a string.
 
-Implementations must resolve untagged scalars using the YAML 1.2 core schema.
-Only `true` and `false` resolve to Boolean. Every other alphabetic scalar,
-including `y`, `Y`, `n`, `N`, `yes`, `no`, `on`, and `off`, resolves to a
-string.
+Default parser settings do not satisfy this requirement. Implementations must
+configure or override their parser rather than require authors to quote values.
 
-Default parser settings do not satisfy this requirement. PyYAML resolves `yes`,
-`no`, `on`, and `off` as Boolean, and the R `yaml` package additionally resolves
-bare `Y` and `N` as Boolean. `Y` and `N` are the two most common values in SDTM
-and ADaM, so an unquoted `literal: Y` would otherwise be the string `Y` in one
-implementation and the Boolean true in the other, converting into a `str` column
-as `TRUE`. The divergence is silent and produces no error.
+## Named types
 
-Implementations must therefore configure or override their parser's resolver
-rather than rely on its defaults. Quoting the value in the specification is a
-workaround, not a substitute; a conforming implementation must produce the same
-result whether or not the author quoted it.
+A named type is a class, value descriptor, or registry-backed type.
 
-## Type declarations
-
-A named type is either a class or a value type.
-
-A class is an ordered list of one-entry mappings. Each entry maps a permitted
-field name to a field descriptor:
+A class is an ordered list of one-entry mappings. Each entry maps an allowed
+field name to a descriptor:
 
 ```yaml
 example_class:
@@ -59,9 +51,8 @@ example_class:
     - values: {type: "list[str]", required: false}
 ```
 
-Class fields are closed: a specification value must not contain a field that is
-not declared by its class. Field order in the schema is descriptive and does
-not prescribe execution order. Duplicate class field names are errors.
+Class fields are closed. Field order is descriptive and has no execution
+meaning. Duplicate class field names are errors.
 
 A value type is a descriptor written directly as a mapping:
 
@@ -71,16 +62,47 @@ identifier:
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
 ```
 
-Recursive named types are allowed. A specification value is finite and must
-eventually match a non-recursive type.
+A registry-backed type points to a schema registry:
+
+```yaml
+expression:
+    registry: expressions
+```
+
+Its declaration contains exactly the `registry` keyword and cannot also declare
+`type` or descriptor constraints.
+
+Named-type references may cross module boundaries. Recursive types are allowed;
+a specification value is finite and must eventually match a non-recursive type.
+
+## Registries
+
+A registry is a mapping from a permitted keyword to its payload shape. A
+registry is identified because a named type references it with `registry`.
+Multiple modules may contribute entries to the same registry:
+
+```yaml
+expressions:
+    mapping:
+        - source: {type: [variable, expression], required: true}
+        - dict: {type: "dict[str, literal_value]", required: true}
+```
+
+Registry entry names must be unique across the complete bundle. An entry's
+payload shape is either a class or a value descriptor.
+
+A value matching a registry-backed type must be a mapping with exactly one
+entry. Its key must exist in the referenced registry, and its value must match
+that entry's payload shape. Registry declaration order has no meaning.
+
+An unreferenced registry, an empty registry, an unknown registry reference, or
+a duplicate registry entry is an error.
 
 ## Type expressions
 
-The built-in types are `str`, `int`, `float`, `bool`, `"null"`, `list`, and
-`dict`. Boolean values are not integers. An `int` is accepted where `float` is
-expected, but a `float` is not accepted where `int` is expected.
-
-A type expression has this grammar:
+Built-in types are `str`, `int`, `float`, `bool`, `"null"`, `list`, and `dict`.
+Boolean values are not integers. An `int` is accepted where `float` is expected,
+but a `float` is not accepted where `int` is expected.
 
 ```text
 type_expression := type_name
@@ -88,53 +110,35 @@ type_expression := type_name
                  | "dict[" type_expression "," type_expression "]"
 ```
 
-Whitespace surrounding a nested type expression or the comma is ignored. A
-YAML sequence of type expressions is a union; a value is valid when it matches
-at least one member.
-
-```yaml
-type: [path, "list[path]"]
-```
+Whitespace around nested expressions and the comma is ignored. A YAML sequence
+of type expressions is a union. The quoted string `"null"` is a type name; an
+unquoted YAML null is a value.
 
 ## Descriptor keywords
 
 Only these descriptor keywords are supported:
 
-- `type` is required and contains one type expression or a union of them.
-- `required` is permitted only in a class field descriptor. It is Boolean and
-  defaults to `false` when omitted.
-- `pattern` is permitted only for `str`. The value must match an ECMAScript
-  regular expression. Matching searches the string unless the expression uses
-  anchors such as `^` and `$`.
-- `min_length` is permitted only for `str`. It is a non-negative integer and
-  counts Unicode code points without trimming the value.
-- `size` is permitted only for `list` or `dict`. It is a non-negative integer
-  requiring exactly that many list items or mapping entries.
-- `values` is permitted only for `str`. It is a non-empty list of permitted
-  values, and the value must equal one of them. Comparison is exact.
-- `default` is permitted only where `required` is `false` or absent. Its value
-  must satisfy `type` and every other constraint in the same descriptor. When
-  the field or argument is omitted, an implementation must behave as though this
-  value were supplied.
+- `type` is required and contains one type expression or a union.
+- `required` is allowed only in a class field descriptor. It defaults to false.
+- `pattern` is allowed only for `str` and is an ECMAScript regular expression.
+- `min_length` is allowed only for `str` and counts Unicode code points.
+- `size` is allowed only for `list` or `dict` and requires an exact size.
+- `values` is allowed only for `str` and lists exact permitted values.
+- `default` is allowed only when `required` is false or absent and must satisfy
+  the same descriptor.
 
-A default belongs in `default`, never only in prose. An implementation cannot
-apply a default it has to read English to discover, and two implementations that
-each guess will diverge.
-
-When more than one constraint is present, all constraints must pass. Constraint
-keywords apply after a value matches `type`.
+When several constraints are present, all must pass. Defaults belong in the
+schema, not only in prose.
 
 ## Validation errors
 
 Implementations must fail for:
 
 - invalid YAML or a prohibited YAML feature;
-- a scalar resolved outside the YAML 1.2 core schema;
-- an unknown schema keyword or named type;
-- an invalid type expression;
-- a descriptor keyword used with an incompatible type;
-- a `default` on a required field, or one that does not satisfy its own
-  descriptor;
-- an undeclared class field;
-- a missing required field;
-- a value that does not match its type or every applicable constraint.
+- an invalid include or inconsistent bundle version;
+- an unknown or duplicate type, registry, registry entry, or schema construct;
+- an invalid type expression or unresolved reference;
+- an invalid descriptor keyword or default;
+- an undeclared or missing class field;
+- a registry-backed value with zero, multiple, or unknown keywords;
+- a value that fails its type or constraints.

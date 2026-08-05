@@ -1,9 +1,9 @@
 version: "1.0"
 
 column_verification:
-    variants: column_verification_variants
+    registry: column_verifications
 
-column_verification_variants:
+column_verifications:
     not_missing: {type: empty_class}
     allowed_values:
         - values: {type: "list[literal_value]", required: true}
@@ -14,9 +14,9 @@ column_verification_variants:
         - pattern: {type: str, required: true}
 
 dataset_verification:
-    variants: dataset_verification_variants
+    registry: dataset_verifications
 
-dataset_verification_variants:
+dataset_verifications:
     unique:
         - columns: {type: "list[variable]", required: true}
     predicate:

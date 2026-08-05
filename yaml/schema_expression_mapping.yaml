@@ -1,6 +1,6 @@
 version: "1.0"
 
-expression_variants:
+expressions:
     mapping:
         - source: {type: [variable, expression], required: true}
         - dict: {type: "dict[str, literal_value]", required: true}

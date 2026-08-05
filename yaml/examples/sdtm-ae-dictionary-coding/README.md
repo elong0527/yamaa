@@ -13,25 +13,24 @@ R003 matches on applicable keys, meaning output `keys` that also exist in the
 right-side dataset. This lookup matches on the reported term, which is not an
 output key and never will be. The key-based join cannot express it.
 
-The `mapping_from` operation names its dataset, match column, and return column
+The `mapping_from` expression names its dataset, match column, and return column
 explicitly:
 
 ```yaml
-source: AE_RAW.AETERM
-operations:
-  - mapping_from:
-      dataset: MEDDRA
-      key: LLTNAME
-      value: PTNAME
+mapping_from:
+  source: AE_RAW.AETERM
+  dataset: MEDDRA
+  key: LLTNAME
+  value: PTNAME
 ```
 
 The source dataset is `AE_RAW`, not `AE`. The output `domain` is `AE`, and a
 source dataset must not reuse that name, so that a qualified reference cannot be
 read as addressing the dataset being derived. See R002.
 
-`dataset` is typed `dataset_id` in the registry, so it must name a dataset
-declared in root `datasets` and is resolved by R002 like any other. That makes
-the dictionary an ordinary declared input rather than a special mechanism.
+`dataset` must name a dataset declared in root `datasets` and is resolved by
+R002 like any other. That makes the dictionary an ordinary declared input
+rather than a special mechanism.
 
 Two derivations read the same dictionary on the same key and return different
 columns, which is how one coding pass populates several output variables.
@@ -42,20 +41,19 @@ columns, which is how one coding pass populates several output variables.
 The derivation handles it:
 
 ```yaml
-exception:
-  - unmapped:
-      default: NOT CODED
+unmapped:
+  literal: NOT CODED
 ```
 
-Without that exception the run fails, which is the correct default: an
+Without that handler the run fails, which is the correct default: an
 uncodeable term is normally a data-management query, not something to pass
-through silently. Declaring the exception is how a specification states that it
+through silently. Declaring the handler is how a specification states that it
 has considered the case.
 
-R008 binds this to the `mapping_from` operation because it is the only
-operation in the pipeline whose registry `raises` list contains `unmapped`.
+R008 treats this as a local handler because `unmapped` belongs directly to the
+`mapping_from` expression that may fail to find a dictionary value.
 
-The same exception appears in `adam-adsl-mapping` against an inline `mapping`.
+The same handler appears in `adam-adsl-mapping` against an inline `mapping`.
 The two together show that the undefined-value case is a property of the
 mapping, not of where the dictionary is stored.
 

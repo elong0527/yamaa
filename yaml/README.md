@@ -5,9 +5,9 @@ and SDTM-to-ADaM derivations. The design is under active development.
 
 ## Contents
 
-- `schema.yaml` defines the allowed YAML structure.
-- `operations.yaml` and `exceptions.yaml` are the registries of names an
-  operation or exception may use, defined by R007 and R008.
+- `schema.yaml` is the schema-bundle entry point and defines shared structure.
+- `schema_derivation.yaml`, `schema_expression_*.yaml`, and
+  `schema_verification.yaml` register closed derivation and verification types.
 - `rules/` contains the execution semantics, with one rule per file.
 - `examples/` contains source data, derivation specifications, and exact
   expected outputs.
@@ -18,7 +18,7 @@ shape, while examples demonstrate rules without redefining them.
 
 ## Review workflow
 
-1. Review the proposed schema field in `schema.yaml`.
+1. Review the root field in `schema.yaml` and its included schema module.
 2. Review every applicable rule listed in `rules/README.md`.
 3. Review at least one positive fixture and its expected output.
 4. Add a negative fixture when the rule defines an error condition.

@@ -1,6 +1,6 @@
 version: "1.0"
 
-expression_variants:
+expressions:
     date_diff:
         - start: {type: expression, required: true}
         - end: {type: expression, required: true}
