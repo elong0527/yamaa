@@ -5,3 +5,6 @@ CATH,001,AST,Aspartate Aminotransferase,2025-01-01,20,U/L
 CATH,001,AST,Aspartate Aminotransferase,2025-01-08,18,U/L
 CATH,002,ALT,Alanine Aminotransferase,2025-01-01,8,U/L
 CATH,002,ALT,Alanine Aminotransferase,2025-01-08,12,U/L
+CATH,003,ALT,Alanine Aminotransferase,2025-01-01,0,U/L
+CATH,003,ALT,Alanine Aminotransferase,2025-01-08,5,U/L
+CATH,003,ALT,Alanine Aminotransferase,2025-01-15,,U/L

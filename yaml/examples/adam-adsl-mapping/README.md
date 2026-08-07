@@ -13,11 +13,12 @@ value mapping is the only behavior on display.
 | `SEXDECOD` | `DM.SEX` | `M` to `Male`, `F` to `Female` | insensitive |
 | `RACE` | `DM.RACE` | direct copy | — |
 | `RACEN` | `DM.RACE` | `WHITE` to 1, `BLACK OR AFRICAN AMERICAN` to 2, `ASIAN` to 3 | sensitive |
+| `AGEGR1` | derived `AGE` | `<18`, `18-64`, or `>=65` | — |
 
 All four mappings use a self-contained `mapping` expression. Its `source` names
-the source variable or expression, `dict` defines the translation, and its
-optional `unmapped` expression defines the fallback for a source the dictionary
-does not contain.
+one variable, `dict` defines the translation, `missing` handles a missing source
+value, and `unmapped` handles a non-missing value the dictionary does not
+contain. Both handlers are literal values rather than nested expressions.
 
 One source variable feeds three output columns with three different
 dictionaries, which is the whole of one-to-many variable mapping. The mappings
@@ -25,9 +26,11 @@ also change type: `SEXN` reads a `str` and produces an `int`, converted to the
 declared column type after the expression is evaluated.
 
 Column verifications require `SEX` to be non-missing and restricted to `M` or
-`F`. Dataset verifications require unique subject keys and exactly six rows.
-They demonstrate both verification registries without changing the expected
-output.
+`F` or `U`, and to match the same one-character pattern. `AGE` must be between
+0 and 120 when present. Dataset verifications require unique subject keys,
+exactly eight rows, and nonnegative numeric mappings. They demonstrate every
+currently registered verification without changing the expected-output
+contract.
 
 `SEX` maps `M` to `M`, which looks like a no-op and is not. It is the
 case-standardization step: subject `CATH-702-006` reports a lowercase `m`, and a
@@ -58,10 +61,20 @@ dictionary.
 
 ## Undefined values
 
-`MULTIPLE` is not in the `RACEN` dictionary, so the mapping evaluates its local
-`unmapped` expression, which returns literal 99. Without `unmapped`, the run
+`MULTIPLE` is not in the `RACEN` dictionary, so the mapping uses its local
+`unmapped` value, 99. Without `unmapped`, the run
 fails, which is the correct default: an unmappable value is normally a
 data-management query rather than something to pass through silently.
+
+Subjects `CATH-702-007` and `CATH-702-008` exercise missing and unexpected sex
+values. The mapping-level `missing` value changes the missing source to `U`;
+`unmapped` changes the unexpected `X` to the same controlled value. Numeric and
+decoded companions use corresponding literal fallbacks.
+
+`AGE` distinguishes missing from malformed input operationally but produces
+missing for both: an empty CSV value remains missing, while `unknown` takes the
+literal `conversion_failure` path. `cut` then maps valid ages to bands and uses
+its local `missing` value for both missing results.
 
 ## Relation to other fixtures
 

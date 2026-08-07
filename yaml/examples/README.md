@@ -45,19 +45,41 @@ mapping rule, inline and external, and the undefined-value case in each.
 
 ## Coverage gaps
 
-Of the registered vocabulary, 8 of 16 non-leaf expressions and 4 of 5 local
-handler paths are not exercised by any fixture:
+Of the registered vocabulary, 7 of 16 non-leaf expressions are not exercised
+by any fixture:
 
-- expressions: `add`, `case`, `coalesce`, `cut`, `date_diff`, `max`, `min`,
+- expressions: `add`, `case`, `coalesce`, `date_diff`, `max`, `min`,
   `str_extract`
-- handlers: `conversion_failure`, `source.missing`, `multiple_matches`,
-  `override`
+- handler behaviors: `multiple_matches`, `str_extract.missing`,
+  `str_extract.no_match`, and `override`
 
 Those paths are unverified. The absence of `min` and `max` also leaves
-`source.filter` and R003 right-side reduction with no fixture, while the absence
+aggregate `filter` and R003 right-side reduction with no fixture, while the absence
 of `case` leaves R001 predicate dependency extraction uncovered. Each should
 either gain a fixture or be removed.
 
-Four of seven verification keywords are exercised by `adam-adsl-mapping`:
-`not_missing`, `allowed_values`, `unique`, and `row_count`. The unexercised
-verification keywords are `range`, `matches`, and `predicate`.
+All seven verification keywords are exercised by `adam-adsl-mapping`.
+
+## Edge-case assessment
+
+The expanded fixtures demonstrate that local handlers remain readable for
+missing contextual items, unmapped terminology, failed numeric conversion, and
+missing inputs to banding. Row filters handle absent optional records, and the
+zero-baseline rule produces an intentional missing percentage without a special
+handler.
+
+Two design gaps became visible:
+
+1. Operations now consume named variables, which removes arbitrary expression
+   nesting and keeps mappings concise. A future named-intermediate or
+   definitions mechanism may still be useful when a real multi-step
+   transformation should not create an output column.
+2. The fixtures assume an empty CSV field is missing and distinguish it from a
+   nonempty malformed value. Source-format missing-value and type-inference
+   behavior needs a normative ingestion rule before implementations can be
+   portable.
+
+Positive fixtures do not prove failure behavior. Negative fixtures are still
+needed for duplicate dictionary keys, unhandled mappings, failed verifications,
+duplicate output keys, illegal expression contexts, and nested expressions in
+variable-only operand fields.

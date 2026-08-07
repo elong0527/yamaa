@@ -19,7 +19,7 @@ Portable expression semantics used by this example:
 - `subtract` returns `minuend - subtrahend`.
 - `percent_change` returns `100 * (value - base) / base`; a zero or missing
   baseline returns missing.
-- `multiply` evaluates `value = LB.LBSTRESN` and uses `factor = 0.0167` to
+- `multiply` reads `source = LB.LBSTRESN` and uses `factor = 0.0167` to
   convert ALT from `U/L` to `ukat/L` for the derived ALTSI parameter.
 - `row_number` partitions by `group_by` and sorts ascending by `order_by`.
 
@@ -27,3 +27,10 @@ The expected output demonstrates one-parameter-at-a-time row construction,
 creation of an additional parameter from the same source records, grouping
 independently by subject and parameter, treatment enrichment, baseline
 propagation, and deterministic analysis sequence.
+
+Expected rows remain in row-template order: all `alt` rows, then `alt_si`, then
+`ast`. Window calculations assign sequence values but do not reorder rows.
+
+Subject `003` has a zero ALT baseline, so `CHG` remains defined while `PCHG` is
+missing by rule. A later ALT record has a missing numeric result and is removed
+by both ALT row filters before it can generate either ALT or ALTSI output.
