@@ -22,6 +22,10 @@ The combined values of `STUDYID`, `RDOMAIN`, `USUBJID`, `IDVAR`, `IDVARVAL`,
 and `RELID` must be unique and non-missing. The output column order follows the
 order in `spec.yaml`.
 
+Both source datasets also contain an unlinked record with a missing link ID.
+The row filters remove those records, demonstrating that missing optional
+relationships do not create incomplete RELREC keys.
+
 This fixture covers relationships between individually identified records. A
 group-level or dataset-level relationship can require several source records to
 collapse into one RELREC row; that case requires a separate row-deduplication

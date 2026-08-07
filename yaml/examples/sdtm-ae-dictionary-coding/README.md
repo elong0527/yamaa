@@ -37,12 +37,13 @@ columns, which is how one coding pass populates several output variables.
 
 ## Undefined values
 
-`Felt a bit off` is not in the dictionary, so `mapping_from` raises `unmapped`.
-The derivation handles it:
+`Felt a bit off` and lowercase `headache` are non-missing values that are not
+exact keys in the dictionary, so `mapping_from` takes its local `unmapped`
+path. A blank term takes the distinct `missing` path:
 
 ```yaml
-unmapped:
-  literal: NOT CODED
+missing: NOT CODED
+unmapped: NOT CODED
 ```
 
 Without that handler the run fails, which is the correct default: an
@@ -50,8 +51,8 @@ uncodeable term is normally a data-management query, not something to pass
 through silently. Declaring the handler is how a specification states that it
 has considered the case.
 
-R008 treats this as a local handler because `unmapped` belongs directly to the
-`mapping_from` expression that may fail to find a dictionary value.
+R008 treats these as local handlers because both belong directly to the
+`mapping_from` expression that encounters the input condition.
 
 The same handler appears in `adam-adsl-mapping` against an inline `mapping`.
 The two together show that the undefined-value case is a property of the
