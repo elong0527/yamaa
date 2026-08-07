@@ -8,6 +8,8 @@ and SDTM-to-ADaM derivations. The design is under active development.
 - `schema.yaml` is the schema-bundle entry point and defines shared structure.
 - `schema_derivation.yaml`, `schema_expression_*.yaml`, and
   `schema_verification.yaml` register closed derivation and verification types.
+- `schema_function.yaml` registers calls to functions resolved by the project's
+  global execution environment.
 - `rules/` contains the execution semantics, with one rule per file.
 - `examples/` contains source data, derivation specifications, and exact
   expected outputs.
@@ -15,6 +17,41 @@ and SDTM-to-ADaM derivations. The design is under active development.
 
 The rule files are the authoritative source for behavior. The schema defines
 shape, while examples demonstrate rules without redefining them.
+
+## Version 1.0 design boundary
+
+Operations consume named variables rather than arbitrary nested expressions.
+This keeps every operation self-contained, exposes dependencies, and avoids
+mixed argument shapes. Multi-step derivations use named columns as intermediate
+values. Nested expressions remain only where nesting is intrinsic: `case`
+branch results, runtime-function arguments, and final `override` values.
+
+This is the version 1.0 direction for team review. A future named-intermediate
+or definitions mechanism may be considered if multi-step use cases would
+otherwise require unwanted output columns; it is not needed to validate the
+current fixtures.
+
+The version 1.0 input-shape audit covers every registered expression:
+
+| Expressions | Input policy |
+|---|---|
+| `source`, `literal` | Leaf expressions; unchanged |
+| `mapping`, `mapping_from`, `cut`, `str_extract` | One named source; exceptional results are literals |
+| `multiply`, `add` | One named source plus a literal parameter |
+| `subtract`, `percent_change`, `date_diff` | Named variable operands |
+| `coalesce` | Ordered named variables plus an optional literal default |
+| `row_number`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
+| `min`, `max` | One named variable or structured source binding |
+| `case` | Nested result expressions retained because selecting expressions is its purpose |
+| `function` | Named arguments may be variables, non-string literals, or explicit expressions |
+
+At the derivation-result level, `conversion_failure` is a literal and
+`override.value` remains an expression because a final correction may select a
+source, literal, or another registered operation.
+
+`function` is the deliberate extensibility boundary. Its environment, available
+functions, and package setup are global project configuration rather than fields
+repeated at each call site.
 
 ## Review workflow
 

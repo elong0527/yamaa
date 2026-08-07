@@ -8,6 +8,7 @@ includes:
     - schema_expression_date.yaml
     - schema_expression_window.yaml
     - schema_expression_aggregate.yaml
+    - schema_function.yaml
 
 derivation:
     type: [expression, handled_expression_class]
