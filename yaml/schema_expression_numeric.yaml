@@ -2,14 +2,14 @@ version: "1.0"
 
 expressions:
     multiply:
-        - value: {type: expression, required: true}
+        - source: {type: variable, required: true}
         - factor: {type: float, required: true}
     add:
-        - value: {type: expression, required: true}
+        - source: {type: variable, required: true}
         - addend: {type: float, required: true}
     subtract:
-        - minuend: {type: expression, required: true}
-        - subtrahend: {type: expression, required: true}
+        - minuend: {type: variable, required: true}
+        - subtrahend: {type: variable, required: true}
     percent_change:
-        - value: {type: expression, required: true}
-        - base: {type: expression, required: true}
+        - value: {type: variable, required: true}
+        - base: {type: variable, required: true}

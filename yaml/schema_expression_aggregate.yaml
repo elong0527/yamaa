@@ -2,8 +2,12 @@ version: "1.0"
 
 expressions:
     min:
-        - value: {type: expression, required: true}
+        - source: {type: variable, required: true}
+        - filter: {type: sql, required: false}
+        - missing: {type: literal_value, required: false}
         - group_by: {type: "list[variable]", required: false}
     max:
-        - value: {type: expression, required: true}
+        - source: {type: variable, required: true}
+        - filter: {type: sql, required: false}
+        - missing: {type: literal_value, required: false}
         - group_by: {type: "list[variable]", required: false}

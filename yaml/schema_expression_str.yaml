@@ -2,7 +2,8 @@ version: "1.0"
 
 expressions:
     str_extract:
-        - source: {type: [variable, expression], required: true}
+        - source: {type: variable, required: true}
         - pattern: {type: str, required: true}
         - group: {type: int, required: false, default: 0}
-        - unmapped: {type: expression, required: false}
+        - missing: {type: literal_value, required: false}
+        - no_match: {type: literal_value, required: false}

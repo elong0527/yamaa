@@ -2,19 +2,21 @@ version: "1.0"
 
 expressions:
     mapping:
-        - source: {type: [variable, expression], required: true}
+        - source: {type: variable, required: true}
         - dict: {type: "dict[str, literal_value]", required: true}
         - case_sensitive: {type: bool, required: false, default: true}
-        - unmapped: {type: expression, required: false}
+        - missing: {type: literal_value, required: false}
+        - unmapped: {type: literal_value, required: false}
     mapping_from:
-        - source: {type: [variable, expression], required: true}
+        - source: {type: variable, required: true}
         - dataset: {type: str, required: true}
         - key: {type: str, required: true}
         - value: {type: str, required: true}
-        - unmapped: {type: expression, required: false}
+        - missing: {type: literal_value, required: false}
+        - unmapped: {type: literal_value, required: false}
     cut:
-        - source: {type: [variable, expression], required: true}
+        - source: {type: variable, required: true}
         - breaks: {type: "list[float]", required: true}
         - labels: {type: "list[str]", required: true}
         - right: {type: bool, required: false, default: false}
-        - unmapped: {type: expression, required: false}
+        - missing: {type: literal_value, required: false}
