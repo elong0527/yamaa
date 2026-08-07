@@ -48,8 +48,8 @@ columns:
         dataset: MEDDRA
         key: LLTNAME
         value: PTNAME
-        unmapped:
-          literal: NOT CODED
+        missing: NOT CODED
+        unmapped: NOT CODED
 
   - name: AEBODSYS
     type: str
@@ -60,5 +60,5 @@ columns:
         dataset: MEDDRA
         key: LLTNAME
         value: SOCNAME
-        unmapped:
-          literal: NOT CODED
+        missing: NOT CODED
+        unmapped: NOT CODED

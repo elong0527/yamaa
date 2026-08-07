@@ -57,7 +57,13 @@ rows:
           dict:
             Male: M
             Female: F
+          missing: U
+          unmapped: U
       AGE:
-        source: ODM.IT.DM.AGE
+        source:
+          variable: ODM.IT.DM.AGE
+          missing: null
       ARM:
-        source: ODM.IT.DM.ARM
+        source:
+          variable: ODM.IT.DM.ARM
+          missing: Unassigned

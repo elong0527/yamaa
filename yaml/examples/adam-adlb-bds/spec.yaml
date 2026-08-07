@@ -46,39 +46,37 @@ columns:
     derivation:
       baseline_flag:
         group_by: [STUDYID, USUBJID, PARAMCD]
-        date: {source: ADT}
-        reference_date: {source: TRTSDT}
+        date: ADT
+        reference_date: TRTSDT
 
   - name: BASE
     type: float
     derivation:
       baseline_value:
         group_by: [STUDYID, USUBJID, PARAMCD]
-        value: {source: AVAL}
-        flag: {source: ABLFL}
+        value: AVAL
+        flag: ABLFL
 
   - name: CHG
     type: float
     derivation:
       subtract:
-        minuend: {source: AVAL}
-        subtrahend: {source: BASE}
+        minuend: AVAL
+        subtrahend: BASE
 
   - name: PCHG
     type: float
     derivation:
       percent_change:
-        value: {source: AVAL}
-        base: {source: BASE}
+        value: AVAL
+        base: BASE
 
   - name: ASEQ
     type: int
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]
-        order_by:
-          - {source: PARAMCD}
-          - {source: ADT}
+        order_by: [PARAMCD, ADT]
 
 rows:
   - id: alt
@@ -106,7 +104,7 @@ rows:
         source: LB.LBDTC
       AVAL:
         multiply:
-          value: {source: LB.LBSTRESN}
+          source: LB.LBSTRESN
           factor: 0.0167
       AVALU:
         literal: ukat/L

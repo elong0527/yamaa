@@ -25,9 +25,7 @@ columns:
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]
-        order_by:
-          - {source: LBDTC}
-          - {source: LBTESTCD}
+        order_by: [LBDTC, LBTESTCD]
 
   - name: LBTESTCD
     type: str
@@ -65,7 +63,9 @@ rows:
       LBORRESU:
         literal: mg/dL
       LBSTRESN:
-        source: ODM.Value
+        value:
+          source: ODM.Value
+        conversion_failure: null
       LBSTRESU:
         literal: mg/dL
 
@@ -81,6 +81,8 @@ rows:
       LBORRESU:
         literal: mg/dL
       LBSTRESN:
-        source: ODM.Value
+        value:
+          source: ODM.Value
+        conversion_failure: null
       LBSTRESU:
         literal: mg/dL
