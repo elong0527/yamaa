@@ -52,9 +52,9 @@ There is no implicit current value, pipeline seed, or execution order derived
 from YAML field order. R001 resolves the named dependencies.
 
 Fields typed explicitly as `expression` retain nesting where it is intrinsic to
-the construct: `case` branch results and final override values. Implementations
-must dispatch only registered expression keywords and must not evaluate R or
-Python code.
+the construct: `case` branch results, function arguments, and final override
+values. Registered operations must not evaluate host-language code themselves;
+the `function` expression is the explicit project-environment extension point.
 
 The complete SQL grammar, coercion, collation, and literal grammar remain
 unresolved, so this rule remains draft.

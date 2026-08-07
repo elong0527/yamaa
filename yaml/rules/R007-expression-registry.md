@@ -10,14 +10,16 @@ depends_on: [R004, R006]
 
 ## Intent
 
-Give every derivation keyword a closed, self-contained schema and portable
-semantics without a generic operation argument bag.
+Give every derivation keyword a closed, self-contained schema and defined
+dispatch semantics without a generic operation argument bag. Built-in
+expressions are portable; `function` is the explicit project-environment
+extension point.
 
 ## Registration
 
-`schema_expression_*.yaml` modules contribute entries to the `expressions`
-registry under R006. `schema_derivation.yaml` exposes that registry as the
-`expression` type.
+`schema_expression_*.yaml` and `schema_function.yaml` contribute entries to the
+`expressions` registry under R006. `schema_derivation.yaml` exposes that
+registry as the `expression` type.
 
 Each registered keyword owns all its inputs, options, grouping, and local error
 handlers. Adding a keyword requires one registry entry and normative semantics.
@@ -25,9 +27,10 @@ Unknown keywords and unknown payload fields fail schema validation.
 
 `source` and `literal` are expression leaves. Other expressions name their
 input variables directly unless a field is explicitly typed as `expression`.
-The latter is reserved for constructs whose purpose requires nested results,
-currently `case` and final overrides. Plain strings are values unless their
-schema field is typed as `variable` or `sql`.
+The latter is reserved for constructs whose purpose requires nested values:
+`case`, function arguments, and final overrides. Plain strings are values unless
+their schema field is typed as `variable`, `function_arg`, or `sql`. A string in
+`function_arg` is a variable; a string literal uses the `literal` expression.
 
 ## Evaluation kinds
 
@@ -64,6 +67,7 @@ runtime types:
 `percent_change` return floats. `date_diff` and `row_number` return integers.
 `baseline_flag` returns a string. Mapping, conditional, coalescing, baseline
 value, and aggregate expressions retain the selected or aggregated value type.
+The `function` expression retains the type returned by the project function.
 
 ## Registered semantics
 
@@ -127,6 +131,16 @@ value, and aggregate expressions retain the selected or aggregated value type.
 - `min` returns the smallest non-missing `source`, or missing if all are missing.
 - `max` returns the largest non-missing `source`, or missing if all are missing.
 
+### Project function expression
+
+- `function` resolves direct string arguments as variables, evaluates argument
+  expressions, retains direct numeric, Boolean, and null literals, resolves
+  `name` in the project's global execution environment, and invokes it with the
+  named arguments. String literals use the `literal` expression. Its logical
+  result is one scalar value per current row. An implementation may vectorize
+  calls only when that is equivalent to the logical row-wise result. Function
+  availability, signature, and package setup belong to the project environment.
+
 String collation for ordering and aggregation follows R004 and remains
 unresolved while that rule is draft.
 
@@ -139,3 +153,5 @@ unresolved while that rule is draft.
 - A window expression used during row construction: fail.
 - An aggregate outside its two permitted contexts: fail.
 - An unhandled local missing, mapping, or extraction condition: fail.
+- An unresolved function, failed function call, or non-scalar function result:
+  fail with the function name and original runtime context.

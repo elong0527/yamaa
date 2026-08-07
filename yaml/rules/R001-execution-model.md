@@ -32,8 +32,9 @@ row per `base` record, in base-record order. `base` is required in that case.
 An expression contains exactly one keyword registered by R007. Most keywords
 name their input variables directly. Resolve those variable dependencies, then
 evaluate the keyword. Fields explicitly typed as `expression`, such as `case`
-results and final override values, are evaluated recursively. A `source` or
-`literal` expression is a leaf. YAML mapping order has no execution meaning.
+results, function arguments, and final override values, are evaluated
+recursively. A `source` or `literal` expression is a leaf. YAML mapping order
+has no execution meaning.
 
 Window expressions evaluate over the partitions declared by their own
 `group_by`. Aggregate expressions follow the two contexts defined by R003 and
