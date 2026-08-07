@@ -10,12 +10,12 @@ depends_on: [R002, R006]
 
 ## Intent
 
-Define portable predicates and recursively composed derivations without
+Define portable predicates and self-contained derivations without
 evaluating host-language code.
 
 ## Predicates
 
-`row.filter`, structured-source `filter`, `case.when`, verification predicates,
+`row.filter`, aggregate `filter`, `case.when`, verification predicates,
 and override predicates use the `sql` primitive. Supported core syntax includes
 `=`, `<>`, `<`, `<=`, `>`, `>=`, `IN`, `BETWEEN`, `LIKE`, `IS NULL`,
 `IS NOT NULL`, `AND`, `OR`, `NOT`, and parentheses. String literals use single
@@ -30,23 +30,31 @@ An expression is a mapping containing exactly one keyword from the `expressions`
 registry assembled by the schema bundle. The keyword determines the complete,
 closed schema of its value.
 
-`source` and `literal` are leaves. Other expressions name every input. Nested
-expressions provide composition:
+`source` and `literal` are leaves. Other operations name every input variable.
+Multi-step composition uses named derived columns:
 
 ```yaml
-add:
-  value:
+- name: DOUBLED
+  type: float
+  derivation:
     multiply:
-      value: {source: AVAL}
+      source: AVAL
       factor: 2
-  addend: 1
+- name: ADJUSTED
+  type: float
+  derivation:
+    add:
+      source: DOUBLED
+      addend: 1
 ```
 
 There is no implicit current value, pipeline seed, or execution order derived
-from YAML field order. Evaluation is recursive under R001.
+from YAML field order. R001 resolves the named dependencies.
 
-Conditional derivation is the `case` expression. Implementations must dispatch
-only registered expression keywords and must not evaluate R or Python code.
+Fields typed explicitly as `expression` retain nesting where it is intrinsic to
+the construct: `case` branch results and final override values. Implementations
+must dispatch only registered expression keywords and must not evaluate R or
+Python code.
 
 The complete SQL grammar, coercion, collation, and literal grammar remain
 unresolved, so this rule remains draft.

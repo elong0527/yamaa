@@ -36,8 +36,7 @@ A derivation that needs conversion or final handling uses the result wrapper:
 derivation:
   value:
     source: RAW.AGE
-  conversion_failure:
-    literal: null
+  conversion_failure: null
   override:
     - when: "USUBJID = 'SPECIAL-01'"
       value: {literal: 99}

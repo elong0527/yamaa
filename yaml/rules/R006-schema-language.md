@@ -84,7 +84,7 @@ Multiple modules may contribute entries to the same registry:
 ```yaml
 expressions:
     mapping:
-        - source: {type: [variable, expression], required: true}
+        - source: {type: variable, required: true}
         - dict: {type: "dict[str, literal_value]", required: true}
 ```
 

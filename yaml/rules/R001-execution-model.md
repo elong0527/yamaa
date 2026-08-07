@@ -10,7 +10,7 @@ depends_on: [R002, R003, R005, R007, R008]
 
 ## Intent
 
-Define how output rows, columns, and recursive derivation expressions are
+Define how output rows, columns, and self-contained derivation expressions are
 evaluated without relying on YAML declaration order for dependencies.
 
 ## Phases
@@ -29,10 +29,11 @@ row per `base` record, in base-record order. `base` is required in that case.
 
 ## Expression evaluation
 
-An expression contains exactly one keyword registered by R007. Evaluate an
-expression recursively: evaluate every nested expression required by the
-keyword, then evaluate the keyword itself. A `source` or `literal` expression
-is a leaf. YAML mapping order has no execution meaning.
+An expression contains exactly one keyword registered by R007. Most keywords
+name their input variables directly. Resolve those variable dependencies, then
+evaluate the keyword. Fields explicitly typed as `expression`, such as `case`
+results and final override values, are evaluated recursively. A `source` or
+`literal` expression is a leaf. YAML mapping order has no execution meaning.
 
 Window expressions evaluate over the partitions declared by their own
 `group_by`. Aggregate expressions follow the two contexts defined by R003 and
@@ -44,11 +45,12 @@ Implementations must infer dependencies rather than evaluate columns in YAML
 declaration order. Recursively traverse each expression and collect:
 
 - every unqualified output variable referenced by `source`;
-- variables in `group_by`, ordering expressions, and other nested expressions;
+- variables in `group_by`, `order_by`, and other fields typed as `variable`;
+- variables referenced by the limited fields typed as nested `expression`;
 - current-output identifiers used by an SQL predicate.
 
 Predicates include `case.branches[].when`, `override[].when`, row filters, and
-structured-source filters. Identifier extraction depends on the SQL grammar in
+aggregate `filter`. Identifier extraction depends on the SQL grammar in
 R004; an implementation must not treat a predicate as dependency-free.
 
 For each row definition, evaluate row derivations using a dependency graph.

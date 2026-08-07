@@ -9,7 +9,7 @@ applies_to: [root.datasets, root.base, row.dataset, expression.source]
 
 ## Intent
 
-Bind source files, row drivers, and source expressions without implicit
+Bind source files, row drivers, and input variables without implicit
 same-name inference.
 
 ## Dataset declarations
@@ -37,17 +37,26 @@ currently being derived.
 A qualified reference to the current row-driving dataset reads the current
 source record. A qualified reference to another dataset follows R003.
 
-Operations whose schema declares `source: [variable, expression]` accept the
-same concise variable or a nested expression:
+Operation operand fields typed as `variable` accept a concise source or current
+output variable. Compose operations through an explicitly named derived column:
 
 ```yaml
-mapping:
-  source:
+- name: PREFIX
+  type: str
+  derivation:
     str_extract:
       source: RAW.TEXT
       pattern: '^[A-Z]+'
-  dict: {A: Alpha}
+- name: CATEGORY
+  type: str
+  derivation:
+    mapping:
+      source: PREFIX
+      dict: {A: Alpha}
 ```
+
+An operation cannot place an arbitrary nested expression in a variable field.
+This keeps each operation self-contained and makes dependencies visible.
 
 Plain strings outside fields typed as `variable` are literal strings.
 Implementations must not infer same-named source variables when an output
@@ -61,11 +70,12 @@ binding or join behavior:
 ```yaml
 source:
   variable: ADSL.TRTSDT
-  missing: {literal: null}
+  missing: null
 ```
 
-`filter` and `multiple_matches` are governed by R003. `missing` is governed by
-R008.
+`multiple_matches` is governed by R003. `missing` is governed by R008. Filtering
+a right side before aggregation is not part of this binding; it is the
+`filter` field of `min` and `max` under R003.
 
 ## ODM contextual references
 

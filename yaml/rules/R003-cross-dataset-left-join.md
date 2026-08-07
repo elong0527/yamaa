@@ -44,27 +44,30 @@ keys.
 
 ## Right-side reduction
 
-A structured source can filter right-side records before aggregation. A `min`
-or `max` expression whose `value` is that qualified source reduces the right
-side by applicable keys before joining:
+A `min` or `max` expression whose `source` is a qualified cross-dataset source
+reduces the right side by applicable keys before joining. Its optional
+`filter` selects which right-side records enter that reduction:
 
 ```yaml
 min:
-  value:
-    source:
-      variable: EX.EXSTDTC
-      filter: "EX.EXDOSE > 0"
+  source: EX.EXSTDTC
+  filter: "EX.EXDOSE > 0"
 ```
 
-`source.filter` is valid only for a cross-dataset source consumed directly by
-`min` or `max`. It differs from `row.filter`, which selects row-driver records
-during row construction. `group_by` is not used for right-side reduction; it
-partitions constructed output rows under R007.
+`filter` is declared only by `min` and `max`, so no other expression can
+filter a right side. It differs from `row.filter`, which selects row-driver
+records during row construction. It also differs from the sibling `group_by`,
+which is not used for right-side reduction; `group_by` partitions constructed
+output rows under R007.
 
 ## Multiple matches
 
 By default, multiple right-side matches fail. A structured source may declare
 `multiple_matches` as the local, explicit relaxation defined by R008.
+
+Reduction already yields at most one right-side record per applicable key, so
+`min` and `max` cannot encounter multiple matches and do not declare
+`multiple_matches`.
 
 ## Errors
 
@@ -72,4 +75,3 @@ By default, multiple right-side matches fail. A structured source may declare
 - An applicable left key is unavailable: fail.
 - Multiple matches after reduction: fail unless locally handled.
 - No right-side match: return missing.
-- `source.filter` outside the reduction context above: fail.
