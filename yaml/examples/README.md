@@ -32,20 +32,23 @@ a README defining behavior that an implementation must reproduce.
 ## Schema probes
 
 A probe is a fixture written to test whether the schema can express a real
-mapping pattern. A probe that does not pass is a design finding, not a defect in
-the fixture, and its README records what the schema could not express.
+derivation pattern. A probe that does not pass is a design finding, not a defect
+in the fixture, and its README records what the schema could not express.
 
 5. `adam-adsl-mapping` — value mapping with an inline dictionary, deriving
    ADaM numeric companions, including a value the dictionary does not define.
 6. `sdtm-ae-dictionary-coding` — value mapping where the dictionary is an
    external file, including an uncoded term and the dictionary version.
+7. `adam-adsl-bmi-function` — BMI derivation through a function supplied by the
+   project's global R environment.
 
-Both pass. Together they cover value standardization from both sources of
-mapping rule, inline and external, and the undefined-value case in each.
+All three pass. The first two cover value standardization from inline and
+external dictionaries. The third exercises the runtime-function extension
+point with source and literal arguments.
 
 ## Coverage gaps
 
-Of the registered vocabulary, 7 of 16 non-leaf expressions are not exercised
+Of the registered vocabulary, 7 of 17 non-leaf expressions are not exercised
 by any fixture:
 
 - expressions: `add`, `case`, `coalesce`, `date_diff`, `max`, `min`,
