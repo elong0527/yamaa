@@ -7,3 +7,12 @@ expressions:
         - group: {type: int, required: false, default: 0}
         - missing: {type: literal_value, required: false}
         - no_match: {type: literal_value, required: false}
+    str_concat:
+        - sources: {type: "list[expression]", required: true}
+        - missing: {type: literal_value, required: false}
+    str_upper:
+        - source: {type: variable, required: true}
+        - missing: {type: literal_value, required: false}
+    str_lower:
+        - source: {type: variable, required: true}
+        - missing: {type: literal_value, required: false}

@@ -58,12 +58,12 @@ runtime types:
   comparable type;
 - `cut`, `multiply`, `add`, `subtract`, and `percent_change` require numeric
   inputs;
-- `str_extract` requires a string source;
+- `str_extract`, `str_concat`, `str_upper`, and `str_lower` require string sources;
 - `date_diff` requires compatible date or datetime inputs;
 - `min`, `max`, and window ordering require mutually comparable values.
 
 `source` retains its source type and `literal` retains its YAML scalar type.
-`cut` and `str_extract` return strings. `multiply`, `add`, `subtract`, and
+`cut`, `str_extract`, `str_concat`, `str_upper`, and `str_lower` return strings. `multiply`, `add`, `subtract`, and
 `percent_change` return floats. `date_diff` and `row_number` return integers.
 `baseline_flag` returns a string. Mapping, conditional, coalescing, baseline
 value, and aggregate expressions retain the selected or aggregated value type.
@@ -96,6 +96,9 @@ The `function` expression retains the type returned by the project function.
   returns capture group `group`, where zero is the complete match. Missing input
   returns `missing` when supplied. A non-missing input with no match returns
   `no_match` when supplied. Otherwise either condition fails.
+- `str_concat` concatenates all expressions in `sources` in order. A missing source returns `missing` when supplied. Otherwise it fails on missing input.
+- `str_upper` converts all characters in `source` to uppercase. A missing source returns `missing` when supplied. Otherwise it fails on missing input.
+- `str_lower` converts all characters in `source` to lowercase. A missing source returns `missing` when supplied. Otherwise it fails on missing input.
 
 ### Numeric and conditional expressions
 
