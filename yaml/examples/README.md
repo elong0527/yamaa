@@ -53,19 +53,21 @@ point with source and literal arguments.
    specific contextual dates, structural absence versus explicit missingness,
    a collected nonnumeric result, repeated item groups, heterogeneous specimen
    metadata, and deterministic ordering ties.
-9. `adam-adsl-treatment-disposition` — a standalone SDTM-to-ADaM probe deriving
-   subject-level treatment and disposition from DM, EX, and DS. It covers
-   filtered first/last dates, ordered associated values, placebo dose zero,
-   no-match subjects, identifier fallback, inclusive duration, and final
-   disposition selection.
-10. `adam-adae-treatment-emergent` — classifies AE start dates against an
+9. `adam-adsl-treatment-selection` — a standalone SDTM-to-ADaM probe deriving
+   subject-level treatment from DM and EX. It covers filtered first/last dates,
+   ordered treatment selection, placebo dose zero, no-match subjects, fallback,
+   and inclusive duration.
+10. `adam-adsl-disposition` — a standalone SDTM-to-ADaM probe deriving final
+    subject disposition from DM and DS. It covers filtered final dates, ordered
+    associated values, no-match subjects, and deterministic same-day selection.
+11. `adam-adae-treatment-emergent` — classifies AE start dates against an
     inclusive ADSL treatment interval, including both boundaries and a subject
     with no ADSL match.
-11. `adam-adae-occurrence-flags` — derives first treatment-emergent occurrence
+12. `adam-adae-occurrence-flags` — derives first treatment-emergent occurrence
     flags at subject, SOC, and preferred-term levels, including same-day ties.
-12. `adam-adae-string-handlers` — isolates lowercase normalization and the
+13. `adam-adae-string-handlers` — isolates lowercase normalization and the
     distinct missing/no-match paths for sponsor event identifiers.
-13. `adam-adae-severity-override` — applies one approved final correction and
+14. `adam-adae-severity-override` — applies one approved final correction and
     demonstrates that a dependent numeric severity sees the corrected value.
 
 ## Coverage gaps
