@@ -53,22 +53,29 @@ point with source and literal arguments.
    specific contextual dates, structural absence versus explicit missingness,
    a collected nonnumeric result, repeated item groups, heterogeneous specimen
    metadata, and deterministic ordering ties.
+9. `adam-adsl-treatment-disposition` — a standalone SDTM-to-ADaM probe deriving
+   subject-level treatment and disposition from DM, EX, and DS. It covers
+   filtered first/last dates, ordered associated values, placebo dose zero,
+   no-match subjects, identifier fallback, inclusive duration, and final
+   disposition selection.
 
 ## Coverage gaps
 
-Of the registered vocabulary, 6 of 17 non-leaf expressions are not exercised
-by any fixture:
+Of the 20 registered non-leaf expressions, only `str_lower` is not exercised by
+any fixture.
 
-- expressions: `add`, `coalesce`, `date_diff`, `max`, `min`, `str_extract`
-- handler behaviors: `multiple_matches`, `str_extract.missing`,
-  `str_extract.no_match`, and `override`
+The remaining unexercised handler behaviors are `str_extract.missing` and
+`override`; `str_lower`, including its `missing` path, is also uncovered.
 
-Those paths are unverified. The absence of `min` and `max` also leaves
-aggregate `filter` and R003 right-side reduction with no fixture. The
-`sdtm-lb-multiform` probe now covers `case` and predicate dependency extraction.
-Each remaining path should either gain a fixture or be removed.
+`sdtm-lb-multiform` covers `case` and implication checks.
+`adam-adsl-treatment-disposition` covers `add`, `coalesce`, `date_diff`,
+`min`/`max` aggregate filters and R003 right-side reduction, `str_concat`,
+`str_extract.no_match`, `str_upper`, ordered `multiple_matches`, and grouped
+completeness verification.
 
-All seven verification keywords are exercised by `adam-adsl-mapping`.
+All nine verification keywords are exercised across the fixtures;
+`adam-adsl-mapping` covers the generic named `predicate`, while the two
+challenge probes cover `all_or_none` and `implies`.
 
 ## Edge-case assessment
 

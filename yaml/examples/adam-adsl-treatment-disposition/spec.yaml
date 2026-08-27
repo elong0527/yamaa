@@ -1,0 +1,247 @@
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+  EX: input/ex.csv
+  DS: input/ds.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: DM.USUBJID
+
+  - name: SUBJID
+    type: str
+    derivation:
+      source: DM.SUBJID
+
+  - name: ARMCD
+    type: str
+    derivation:
+      source: DM.ARMCD
+
+  - name: SITEIDP
+    type: str
+    derivation:
+      str_extract:
+        source: USUBJID
+        pattern: '^CATH-([^-]+)-[0-9]{4}$'
+        group: 1
+        missing: null
+        no_match: null
+
+  - name: SITEID
+    type: str
+    derivation:
+      coalesce:
+        sources: [SITEIDP, DM.SITEID]
+        default: UNKNOWN
+    verifications:
+      not_missing: {}
+
+  - name: SUBJREF
+    type: str
+    derivation:
+      str_concat:
+        sources:
+          - source: SITEID
+          - literal: ':'
+          - source: SUBJID
+        missing: UNKNOWN
+    verifications:
+      not_missing: {}
+
+  - name: COUNTRYUC
+    type: str
+    derivation:
+      str_upper:
+        source: DM.COUNTRY
+        missing: UNKNOWN
+    verifications:
+      allowed_values:
+        values: [USA, CAN, DEU, UNKNOWN]
+
+  - name: REGION1
+    type: str
+    derivation:
+      mapping:
+        source: COUNTRYUC
+        dict:
+          USA: North America
+          CAN: North America
+          DEU: Europe
+        unmapped: Rest of World
+    verifications:
+      allowed_values:
+        values: [North America, Europe, Rest of World]
+
+  - name: TRT01RAW
+    type: str
+    derivation:
+      source:
+        variable: EX.EXTRT
+        multiple_matches:
+          order_by: [EX.EXSTDTC, EX.EXSEQ]
+          keep: first
+
+  - name: TRT01SRC
+    type: str
+    derivation:
+      coalesce:
+        sources: [TRT01RAW, DM.ACTARM]
+        default: NOT TREATED
+
+  - name: TRT01A
+    type: str
+    derivation:
+      str_upper:
+        source: TRT01SRC
+    verifications:
+      allowed_values:
+        values: [VITAMIN D3, PLACEBO, NOT TREATED]
+
+  - name: TRTSDT
+    type: date
+    derivation:
+      min:
+        source: EX.EXSTDTC
+        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXSTDTC IS NOT NULL"
+
+  - name: TRTEDT
+    type: date
+    derivation:
+      max:
+        source: EX.EXENDTC
+        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXENDTC IS NOT NULL"
+
+  - name: TRTDUR0
+    type: int
+    derivation:
+      case:
+        branches:
+          - when: "TRTSDT IS NOT NULL AND TRTEDT IS NOT NULL"
+            then:
+              date_diff:
+                start: TRTSDT
+                end: TRTEDT
+                unit: day
+
+  - name: TRTDURD
+    type: float
+    derivation:
+      case:
+        branches:
+          - when: "TRTDUR0 IS NOT NULL"
+            then:
+              add:
+                source: TRTDUR0
+                addend: 1
+    verifications:
+      range:
+        min: 1
+
+  - name: EOSDT
+    type: date
+    derivation:
+      max:
+        source: DS.DSSTDTC
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
+
+  - name: EOSDECOD
+    type: str
+    derivation:
+      source:
+        variable: DS.DSDECOD
+        multiple_matches:
+          order_by: [DS.DSSTDTC, DS.DSSEQ]
+          keep: last
+
+  - name: EOSREAS
+    type: str
+    derivation:
+      source:
+        variable: DS.DSTERM
+        multiple_matches:
+          order_by: [DS.DSSTDTC, DS.DSSEQ]
+          keep: last
+
+  - name: EOSSTT
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "EOSDECOD = 'COMPLETED'"
+            then:
+              literal: COMPLETED
+          - when: "EOSDECOD IS NOT NULL"
+            then:
+              literal: DISCONTINUED
+        else:
+          literal: ONGOING
+    verifications:
+      allowed_values:
+        values: [COMPLETED, DISCONTINUED, ONGOING]
+
+  - name: DCSREAS
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "EOSSTT = 'DISCONTINUED'"
+            then:
+              source: EOSREAS
+
+  - name: SAFFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "TRTSDT IS NOT NULL"
+            then:
+              literal: Y
+        else:
+          literal: N
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [Y, N]
+
+  - name: ITTFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "ARMCD IS NOT NULL"
+            then:
+              literal: Y
+        else:
+          literal: N
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [Y, N]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 4
+      max: 4
+  - all_or_none:
+      id: treatment-period-completeness
+      columns: [TRTSDT, TRTEDT, TRTDURD]
+  - implies:
+      id: placebo-subject-is-in-safety-population
+      when: "TRT01A = 'PLACEBO'"
+      then: "SAFFL = 'Y'"
+  - implies:
+      id: discontinuation-has-reason
+      when: "EOSSTT = 'DISCONTINUED'"
+      then: "DCSREAS IS NOT NULL"
