@@ -46,20 +46,27 @@ All three pass. The first two cover value standardization from inline and
 external dictionaries. The third exercises the runtime-function extension
 point with source and literal arguments.
 
+## Challenge probe
+
+8. `sdtm-lb-multiform` — a compact CATH-derived ODM-to-SDTM probe consolidating
+   serum, skin-biopsy, saliva, and tape-strip data into LB. It covers form-
+   specific contextual dates, structural absence versus explicit missingness,
+   a collected nonnumeric result, repeated item groups, heterogeneous specimen
+   metadata, and deterministic ordering ties.
+
 ## Coverage gaps
 
-Of the registered vocabulary, 7 of 17 non-leaf expressions are not exercised
+Of the registered vocabulary, 6 of 17 non-leaf expressions are not exercised
 by any fixture:
 
-- expressions: `add`, `case`, `coalesce`, `date_diff`, `max`, `min`,
-  `str_extract`
+- expressions: `add`, `coalesce`, `date_diff`, `max`, `min`, `str_extract`
 - handler behaviors: `multiple_matches`, `str_extract.missing`,
   `str_extract.no_match`, and `override`
 
 Those paths are unverified. The absence of `min` and `max` also leaves
-aggregate `filter` and R003 right-side reduction with no fixture, while the absence
-of `case` leaves R001 predicate dependency extraction uncovered. Each should
-either gain a fixture or be removed.
+aggregate `filter` and R003 right-side reduction with no fixture. The
+`sdtm-lb-multiform` probe now covers `case` and predicate dependency extraction.
+Each remaining path should either gain a fixture or be removed.
 
 All seven verification keywords are exercised by `adam-adsl-mapping`.
 
