@@ -86,6 +86,6 @@ expected: 12 for `CATH-UCSD-0001` and 6 for `CATH-UCSD-0002`.
 for the collected `NOT DONE` saliva result. No other handler path is declared.
 
 The fixture expects all column verifications to pass, unique output keys, an
-exact row count of 18, and the final predicate relating `LBORRES`, `LBSTRESN`,
-and `LBSTAT` to pass for every row. These expectations remain in this README
-until the project defines a machine-readable diagnostics contract.
+exact row count of 18, and two named implication checks relating `LBORRES`,
+`LBSTRESN`, and `LBSTAT` to pass for every row. These expectations remain in
+this README until the project defines a machine-readable diagnostics contract.

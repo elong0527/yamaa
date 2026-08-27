@@ -19,8 +19,16 @@ dataset_verification:
 dataset_verifications:
     unique:
         - columns: {type: "list[variable]", required: true}
-    predicate:
+    all_or_none:
+        - id: {type: verification_id, required: true}
+        - columns: {type: "list[variable]", required: true}
+    implies:
+        - id: {type: verification_id, required: true}
         - when: {type: sql, required: true}
+        - then: {type: sql, required: true}
+    predicate:
+        - id: {type: verification_id, required: true}
+        - assert: {type: sql, required: true}
     row_count:
         - min: {type: int, required: false}
         - max: {type: int, required: false}
@@ -28,3 +36,7 @@ dataset_verifications:
 empty_class:
     type: "dict[str, literal_value]"
     size: 0
+
+verification_id:
+    type: str
+    min_length: 1

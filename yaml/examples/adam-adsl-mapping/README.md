@@ -28,9 +28,9 @@ declared column type after the expression is evaluated.
 Column verifications require `SEX` to be non-missing and restricted to `M` or
 `F` or `U`, and to match the same one-character pattern. `AGE` must be between
 0 and 120 when present. Dataset verifications require unique subject keys,
-exactly eight rows, and nonnegative numeric mappings. They demonstrate every
-currently registered verification without changing the expected-output
-contract.
+exactly eight rows, and nonnegative numeric mappings. The named `predicate`
+demonstrates the generic row-wise assertion used when no more specific
+verification type fits, without changing the expected-output contract.
 
 `SEX` maps `M` to `M`, which looks like a no-op and is not. It is the
 case-standardization step: subject `CATH-702-006` reports a lowercase `m`, and a

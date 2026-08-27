@@ -252,5 +252,11 @@ verifications:
   - row_count:
       min: 18
       max: 18
-  - predicate:
-      when: "(LBORRES = 'NOT DONE' AND LBSTRESN IS NULL AND LBSTAT = 'NOT DONE') OR (LBORRES <> 'NOT DONE' AND LBSTRESN IS NOT NULL AND LBSTAT IS NULL)"
+  - implies:
+      id: not-done-result-has-status
+      when: "LBORRES = 'NOT DONE'"
+      then: "LBSTRESN IS NULL AND LBSTAT = 'NOT DONE'"
+  - implies:
+      id: completed-result-is-numeric
+      when: "LBORRES <> 'NOT DONE'"
+      then: "LBSTRESN IS NOT NULL AND LBSTAT IS NULL"
