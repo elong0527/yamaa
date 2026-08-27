@@ -1,0 +1,111 @@
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+  EX: input/ex.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: DM.USUBJID
+
+  - name: TRT01RAW
+    type: str
+    derivation:
+      source:
+        variable: EX.EXTRT
+        multiple_matches:
+          order_by: [EX.EXSTDTC, EX.EXSEQ]
+          keep: first
+
+  - name: TRT01SRC
+    type: str
+    derivation:
+      coalesce:
+        sources: [TRT01RAW, DM.ACTARM]
+        default: NOT TREATED
+
+  - name: TRT01A
+    type: str
+    derivation:
+      str_upper:
+        source: TRT01SRC
+    verifications:
+      allowed_values:
+        values: [VITAMIN D3, PLACEBO, NOT TREATED]
+
+  - name: TRTSDT
+    type: date
+    derivation:
+      min:
+        source: EX.EXSTDTC
+        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXSTDTC IS NOT NULL"
+
+  - name: TRTEDT
+    type: date
+    derivation:
+      max:
+        source: EX.EXENDTC
+        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXENDTC IS NOT NULL"
+
+  - name: TRTDUR0
+    type: int
+    derivation:
+      case:
+        branches:
+          - when: "TRTSDT IS NOT NULL AND TRTEDT IS NOT NULL"
+            then:
+              date_diff:
+                start: TRTSDT
+                end: TRTEDT
+                unit: day
+
+  - name: TRTDURD
+    type: float
+    derivation:
+      case:
+        branches:
+          - when: "TRTDUR0 IS NOT NULL"
+            then:
+              add:
+                source: TRTDUR0
+                addend: 1
+    verifications:
+      range:
+        min: 1
+
+  - name: SAFFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "TRTSDT IS NOT NULL"
+            then:
+              literal: Y
+        else:
+          literal: N
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [Y, N]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 4
+      max: 4
+  - all_or_none:
+      id: treatment-period-completeness
+      columns: [TRTSDT, TRTEDT, TRTDUR0, TRTDURD]
+  - implies:
+      id: placebo-subject-is-in-safety-population
+      when: "TRT01A = 'PLACEBO'"
+      then: "SAFFL = 'Y'"
