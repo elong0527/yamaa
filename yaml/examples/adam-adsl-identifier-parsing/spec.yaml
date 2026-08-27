@@ -1,0 +1,59 @@
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: DM.USUBJID
+
+  - name: SUBJID
+    type: str
+    derivation:
+      source: DM.SUBJID
+
+  - name: SITEIDP
+    type: str
+    derivation:
+      str_extract:
+        source: USUBJID
+        pattern: '^CATH-([^-]+)-[0-9]{4}$'
+        group: 1
+        missing: null
+        no_match: null
+
+  - name: SITEID
+    type: str
+    derivation:
+      coalesce:
+        sources: [SITEIDP, DM.SITEID]
+        default: UNKNOWN
+    verifications:
+      not_missing: {}
+
+  - name: SUBJREF
+    type: str
+    derivation:
+      str_concat:
+        sources:
+          - source: SITEID
+          - literal: ':'
+          - source: SUBJID
+        missing: UNKNOWN
+    verifications:
+      not_missing: {}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 4
+      max: 4

@@ -1,0 +1,47 @@
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: DM.USUBJID
+
+  - name: COUNTRY
+    type: str
+    derivation:
+      str_upper:
+        source: DM.COUNTRY
+        missing: UNKNOWN
+    verifications:
+      allowed_values:
+        values: [USA, CAN, DEU, UNKNOWN]
+
+  - name: REGION1
+    type: str
+    derivation:
+      mapping:
+        source: COUNTRY
+        dict:
+          USA: North America
+          CAN: North America
+          DEU: Europe
+        unmapped: Rest of World
+    verifications:
+      allowed_values:
+        values: [North America, Europe, Rest of World]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 4
+      max: 4

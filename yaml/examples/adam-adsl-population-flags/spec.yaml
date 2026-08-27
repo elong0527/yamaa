@@ -1,0 +1,71 @@
+domain: ADSL
+datasets:
+  ADSLPRE: input/adsl_pre.csv
+base: ADSLPRE
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADSLPRE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADSLPRE.USUBJID
+
+  - name: ARMCD
+    type: str
+    derivation:
+      source: ADSLPRE.ARMCD
+
+  - name: TRTSDT
+    type: date
+    derivation:
+      source: ADSLPRE.TRTSDT
+
+  - name: SAFFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "TRTSDT IS NOT NULL"
+            then:
+              literal: Y
+        else:
+          literal: N
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [Y, N]
+
+  - name: ITTFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "ARMCD IS NOT NULL"
+            then:
+              literal: Y
+        else:
+          literal: N
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [Y, N]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 4
+      max: 4
+  - implies:
+      id: safety-flag-requires-treatment-start
+      when: "SAFFL = 'Y'"
+      then: "TRTSDT IS NOT NULL"
+  - implies:
+      id: intent-to-treat-flag-requires-arm
+      when: "ITTFL = 'Y'"
+      then: "ARMCD IS NOT NULL"

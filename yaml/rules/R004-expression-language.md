@@ -15,11 +15,11 @@ evaluating host-language code.
 
 ## Predicates
 
-`row.filter`, aggregate `filter`, `case.when`, verification predicates,
-and override predicates use the `sql` primitive. Supported core syntax includes
-`=`, `<>`, `<`, `<=`, `>`, `>=`, `IN`, `BETWEEN`, `LIKE`, `IS NULL`,
-`IS NOT NULL`, `AND`, `OR`, `NOT`, and parentheses. String literals use single
-quotes.
+`row.filter`, aggregate `filter`, `case.when`, `predicate.assert`,
+`implies.when`, `implies.then`, and override predicates use the `sql`
+primitive. Supported core syntax includes `=`, `<>`, `<`, `<=`, `>`, `>=`,
+`IN`, `BETWEEN`, `LIKE`, `IS NULL`, `IS NOT NULL`, `AND`, `OR`, `NOT`, and
+parentheses. String literals use single quotes.
 
 SQL three-valued logic applies. A filtering predicate retains a row only when
 it is `TRUE`; `FALSE` and `UNKNOWN` remove it.

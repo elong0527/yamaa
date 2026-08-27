@@ -1,0 +1,79 @@
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+  DS: input/ds.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: DM.USUBJID
+
+  - name: EOSDT
+    type: date
+    derivation:
+      max:
+        source: DS.DSSTDTC
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
+
+  - name: EOSDECOD
+    type: str
+    derivation:
+      source:
+        variable: DS.DSDECOD
+        multiple_matches:
+          order_by: [DS.DSSTDTC, DS.DSSEQ]
+          keep: last
+
+  - name: EOSREAS
+    type: str
+    derivation:
+      source:
+        variable: DS.DSTERM
+        multiple_matches:
+          order_by: [DS.DSSTDTC, DS.DSSEQ]
+          keep: last
+
+  - name: EOSSTT
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "EOSDECOD = 'COMPLETED'"
+            then:
+              literal: COMPLETED
+          - when: "EOSDECOD IS NOT NULL"
+            then:
+              literal: DISCONTINUED
+        else:
+          literal: ONGOING
+    verifications:
+      allowed_values:
+        values: [COMPLETED, DISCONTINUED, ONGOING]
+
+  - name: DCSREAS
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "EOSSTT = 'DISCONTINUED'"
+            then:
+              source: EOSREAS
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 4
+      max: 4
+  - implies:
+      id: discontinuation-has-reason
+      when: "EOSSTT = 'DISCONTINUED'"
+      then: "DCSREAS IS NOT NULL"

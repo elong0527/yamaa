@@ -113,4 +113,5 @@ verifications:
       min: 8
       max: 8
   - predicate:
-      when: "SEXN >= 0 AND RACEN >= 1"
+      id: numeric-mappings-are-in-range
+      assert: "SEXN >= 0 AND RACEN >= 1"

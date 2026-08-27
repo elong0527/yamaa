@@ -1,0 +1,114 @@
+domain: ADAE
+datasets:
+  ADAEPRE: input/adae_pre.csv
+base: ADAEPRE
+keys: [STUDYID, USUBJID, AESEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADAEPRE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADAEPRE.USUBJID
+
+  - name: AESEQ
+    type: int
+    derivation:
+      source: ADAEPRE.AESEQ
+
+  - name: AEBODSYS
+    type: str
+    derivation:
+      source: ADAEPRE.AEBODSYS
+
+  - name: AEDECOD
+    type: str
+    derivation:
+      source: ADAEPRE.AEDECOD
+
+  - name: ASTDT
+    type: date
+    derivation:
+      source: ADAEPRE.ASTDT
+
+  - name: TRTEMFL
+    type: str
+    derivation:
+      source: ADAEPRE.TRTEMFL
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  - name: TEORD
+    type: int
+    derivation:
+      case:
+        branches:
+          - when: "TRTEMFL = 'Y'"
+            then:
+              literal: 0
+        else:
+          literal: 1
+
+  - name: AOCCSEQ
+    type: int
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [TEORD, ASTDT, AESEQ]
+
+  - name: AOCCSSEQ
+    type: int
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID, AEBODSYS]
+        order_by: [TEORD, ASTDT, AESEQ]
+
+  - name: AOCCPSEQ
+    type: int
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID, AEBODSYS, AEDECOD]
+        order_by: [TEORD, ASTDT, AESEQ]
+
+  - name: AOCCFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "TRTEMFL = 'Y' AND AOCCSEQ = 1"
+            then:
+              literal: Y
+
+  - name: AOCCSFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "TRTEMFL = 'Y' AND AOCCSSEQ = 1"
+            then:
+              literal: Y
+
+  - name: AOCCPFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "TRTEMFL = 'Y' AND AOCCPSEQ = 1"
+            then:
+              literal: Y
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 7
+      max: 7
+  - implies:
+      id: occurrence-flag-requires-treatment-emergence
+      when: "AOCCFL = 'Y' OR AOCCSFL = 'Y' OR AOCCPFL = 'Y'"
+      then: "TRTEMFL = 'Y'"

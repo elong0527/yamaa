@@ -1,0 +1,83 @@
+domain: ADAE
+datasets:
+  AE: input/ae.csv
+base: AE
+keys: [STUDYID, USUBJID, AESEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    derivation:
+      source: AE.AESEQ
+
+  - name: AESPID
+    type: str
+    derivation:
+      source: AE.AESPID
+
+  - name: AEREFNUM
+    type: int
+    derivation:
+      str_extract:
+        source: AESPID
+        pattern: '^AE-([0-9]{3})$'
+        group: 1
+        missing: '0'
+        no_match: '-1'
+    verifications:
+      - not_missing: {}
+      - range:
+          min: -1
+          max: 999
+
+  - name: AETERM
+    type: str
+    derivation:
+      source: AE.AETERM
+
+  - name: AETERMLO
+    type: str
+    derivation:
+      str_lower:
+        source: AETERM
+    verifications:
+      not_missing: {}
+
+  - name: AERELLC
+    type: str
+    derivation:
+      str_lower:
+        source: AE.AEREL
+        missing: not reported
+
+  - name: AREL
+    type: str
+    derivation:
+      mapping:
+        source: AERELLC
+        dict:
+          related: RELATED
+          possibly related: POSSIBLY RELATED
+          not related: NOT RELATED
+          not reported: NOT REPORTED
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [RELATED, POSSIBLY RELATED, NOT RELATED, NOT REPORTED]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 4
+      max: 4

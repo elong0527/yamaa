@@ -1,0 +1,262 @@
+domain: LB
+datasets:
+  ODM: input/odm.csv
+base: ODM
+keys: [STUDYID, USUBJID, LBSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    derivation:
+      literal: LB
+    verifications:
+      allowed_values:
+        values: [LB]
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ODM.SubjectKey
+
+  - name: LBSEQ
+    type: int
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [LBDTC, LBTESTCD, LBSPEC]
+
+  - name: VISIT
+    type: str
+    derivation:
+      mapping:
+        source: ODM.StudyEventOID
+        dict:
+          SE.NCT00789880.SCRN: SCREENING
+          SE.NCT00789880.BL: BASELINE
+          SE.NCT00789880.D21: DAY 21
+          SE.NCT00789880.UNSCH: UNSCHEDULED
+    verifications:
+      allowed_values:
+        values: [SCREENING, BASELINE, DAY 21, UNSCHEDULED]
+
+  - name: VISITNUM
+    type: int
+    derivation:
+      mapping:
+        source: ODM.StudyEventOID
+        dict:
+          SE.NCT00789880.SCRN: 1
+          SE.NCT00789880.BL: 2
+          SE.NCT00789880.D21: 3
+          SE.NCT00789880.UNSCH: 99
+    verifications:
+      allowed_values:
+        values: [1, 2, 3, 99]
+
+  - name: LBTESTCD
+    type: str
+    verifications:
+      allowed_values:
+        values: [VITD25OH, IL13, CAMPPRO]
+
+  - name: LBTEST
+    type: str
+
+  - name: LBCAT
+    type: str
+
+  - name: LBSPEC
+    type: str
+    verifications:
+      allowed_values:
+        values: [SERUM, SKIN BIOPSY, SALIVA, TAPE STRIP]
+
+  - name: LBLOC
+    type: str
+    verifications:
+      allowed_values:
+        values: [LESIONAL, NON-LESIONAL]
+
+  - name: LBORRES
+    type: str
+    derivation:
+      source: ODM.Value
+    verifications:
+      not_missing: {}
+
+  - name: LBORRESU
+    type: str
+
+  - name: LBSTRESC
+    type: str
+    derivation:
+      source: LBORRES
+
+  - name: LBSTRESN
+    type: float
+    derivation:
+      value:
+        source: LBORRES
+      conversion_failure: null
+    verifications:
+      range:
+        min: 0
+
+  - name: LBSTRESU
+    type: str
+
+  - name: LBSTAT
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "LBORRES = 'NOT DONE'"
+            then:
+              literal: NOT DONE
+    verifications:
+      allowed_values:
+        values: [NOT DONE]
+
+  - name: LBDTC
+    type: date
+
+rows:
+  - id: serum_vitamin_d
+    filter: "ODM.ItemGroupOID = 'IG.NCT00789880.LB' AND ODM.ItemOID = 'IT.NCT00789880.LB.VITD' AND ODM.Value IS NOT NULL"
+    derivations:
+      LBTESTCD:
+        literal: VITD25OH
+      LBTEST:
+        literal: 25-Hydroxyvitamin D
+      LBCAT:
+        literal: CHEMISTRY
+      LBSPEC:
+        literal: SERUM
+      LBLOC:
+        literal: null
+      LBORRESU:
+        literal: ng/mL
+      LBSTRESU:
+        literal: ng/mL
+      LBDTC:
+        source: ODM.IT.NCT00789880.LB.LBDTC
+
+  - id: biopsy_il13_lesional
+    filter: "ODM.ItemGroupOID = 'IG.NCT00789880.BX' AND ODM.ItemOID = 'IT.NCT00789880.BX.IL13_LES' AND ODM.Value IS NOT NULL"
+    derivations:
+      LBTESTCD:
+        literal: IL13
+      LBTEST:
+        literal: Interleukin 13 mRNA
+      LBCAT:
+        literal: GENE EXPRESSION
+      LBSPEC:
+        literal: SKIN BIOPSY
+      LBLOC:
+        literal: LESIONAL
+      LBORRESU:
+        literal: CYCLE
+      LBSTRESU:
+        literal: CYCLE
+      LBDTC:
+        source: ODM.IT.NCT00789880.BX.BXDTC
+
+  - id: biopsy_il13_nonlesional
+    filter: "ODM.ItemGroupOID = 'IG.NCT00789880.BX' AND ODM.ItemOID = 'IT.NCT00789880.BX.IL13_NONLES' AND ODM.Value IS NOT NULL"
+    derivations:
+      LBTESTCD:
+        literal: IL13
+      LBTEST:
+        literal: Interleukin 13 mRNA
+      LBCAT:
+        literal: GENE EXPRESSION
+      LBSPEC:
+        literal: SKIN BIOPSY
+      LBLOC:
+        literal: NON-LESIONAL
+      LBORRESU:
+        literal: CYCLE
+      LBSTRESU:
+        literal: CYCLE
+      LBDTC:
+        source: ODM.IT.NCT00789880.BX.BXDTC
+
+  - id: saliva_cathelicidin
+    filter: "ODM.ItemGroupOID = 'IG.NCT00789880.SAL' AND ODM.ItemOID = 'IT.NCT00789880.SAL.SAL_CAMP' AND ODM.Value IS NOT NULL"
+    derivations:
+      LBTESTCD:
+        literal: CAMPPRO
+      LBTEST:
+        literal: Cathelicidin Protein
+      LBCAT:
+        literal: ANTIMICROBIAL PEPTIDE
+      LBSPEC:
+        literal: SALIVA
+      LBLOC:
+        literal: null
+      LBORRESU:
+        literal: ng/mL
+      LBSTRESU:
+        literal: ng/mL
+      LBDTC:
+        source: ODM.IT.NCT00789880.SAL.SALDTC
+
+  - id: tape_cathelicidin_lesional
+    filter: "ODM.ItemGroupOID = 'IG.NCT00789880.TS' AND ODM.ItemOID = 'IT.NCT00789880.TS.TS_CAMP_LES' AND ODM.Value IS NOT NULL"
+    derivations:
+      LBTESTCD:
+        literal: CAMPPRO
+      LBTEST:
+        literal: Cathelicidin Protein
+      LBCAT:
+        literal: ANTIMICROBIAL PEPTIDE
+      LBSPEC:
+        literal: TAPE STRIP
+      LBLOC:
+        literal: LESIONAL
+      LBORRESU:
+        literal: ng/mL
+      LBSTRESU:
+        literal: ng/mL
+      LBDTC:
+        source: ODM.IT.NCT00789880.TS.TSDTC
+
+  - id: tape_cathelicidin_nonlesional
+    filter: "ODM.ItemGroupOID = 'IG.NCT00789880.TS' AND ODM.ItemOID = 'IT.NCT00789880.TS.TS_CAMP_NONLES' AND ODM.Value IS NOT NULL"
+    derivations:
+      LBTESTCD:
+        literal: CAMPPRO
+      LBTEST:
+        literal: Cathelicidin Protein
+      LBCAT:
+        literal: ANTIMICROBIAL PEPTIDE
+      LBSPEC:
+        literal: TAPE STRIP
+      LBLOC:
+        literal: NON-LESIONAL
+      LBORRESU:
+        literal: ng/mL
+      LBSTRESU:
+        literal: ng/mL
+      LBDTC:
+        source: ODM.IT.NCT00789880.TS.TSDTC
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, LBSEQ]
+  - row_count:
+      min: 18
+      max: 18
+  - implies:
+      id: not-done-result-has-status
+      when: "LBORRES = 'NOT DONE'"
+      then: "LBSTRESN IS NULL AND LBSTAT = 'NOT DONE'"
+  - implies:
+      id: completed-result-is-numeric
+      when: "LBORRES <> 'NOT DONE'"
+      then: "LBSTRESN IS NOT NULL AND LBSTAT IS NULL"

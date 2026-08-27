@@ -46,22 +46,50 @@ All three pass. The first two cover value standardization from inline and
 external dictionaries. The third exercises the runtime-function extension
 point with source and literal arguments.
 
+## Challenge probe
+
+8. `sdtm-lb-multiform` — a compact CATH-derived ODM-to-SDTM probe consolidating
+   serum, skin-biopsy, saliva, and tape-strip data into LB. It covers form-
+   specific contextual dates, structural absence versus explicit missingness,
+   a collected nonnumeric result, repeated item groups, heterogeneous specimen
+   metadata, and deterministic ordering ties.
+9. `adam-adsl-treatment-selection` — a standalone SDTM-to-ADaM probe deriving
+   subject-level treatment from DM and EX. It covers filtered first/last dates,
+   ordered treatment selection, placebo dose zero, no-match subjects, fallback,
+   and inclusive duration.
+10. `adam-adsl-disposition` — a standalone SDTM-to-ADaM probe deriving final
+    subject disposition from DM and DS. It covers filtered final dates, ordered
+    associated values, no-match subjects, and deterministic same-day selection.
+11. `adam-adae-treatment-emergent` — classifies AE start dates against an
+    inclusive ADSL treatment interval, including both boundaries and a subject
+    with no ADSL match.
+12. `adam-adae-occurrence-flags` — derives first treatment-emergent occurrence
+    flags at subject, SOC, and preferred-term levels, including same-day ties.
+13. `adam-adae-string-handlers` — isolates lowercase normalization and the
+    distinct missing/no-match paths for sponsor event identifiers.
+14. `adam-adae-severity-override` — applies one approved final correction and
+    demonstrates that a dependent numeric severity sees the corrected value.
+
 ## Coverage gaps
 
-Of the registered vocabulary, 7 of 17 non-leaf expressions are not exercised
-by any fixture:
+All 20 registered non-leaf expressions are now exercised by at least one
+fixture. `adam-adae-string-handlers` closes the previously identified
+`str_lower` and `str_extract.missing` gaps;
+`adam-adae-severity-override` closes the `override` gap.
 
-- expressions: `add`, `case`, `coalesce`, `date_diff`, `max`, `min`,
-  `str_extract`
-- handler behaviors: `multiple_matches`, `str_extract.missing`,
-  `str_extract.no_match`, and `override`
+`sdtm-lb-multiform` covers `case` and implication checks.
+`adam-adsl-treatment-selection` covers `add`, `coalesce`, `date_diff`,
+`min`/`max` aggregate filters and R003 right-side reduction, `str_upper`, ordered
+`multiple_matches`, and grouped completeness verification.
+`adam-adsl-disposition` covers filtered `max` and ordered last-match selection.
+`adam-adsl-identifier-parsing` covers `str_concat` and `str_extract.no_match`.
+The four focused ADAE probes separately cover treatment-interval
+classification, deterministic hierarchical occurrence flags, string-handler
+paths, and final correction.
 
-Those paths are unverified. The absence of `min` and `max` also leaves
-aggregate `filter` and R003 right-side reduction with no fixture, while the absence
-of `case` leaves R001 predicate dependency extraction uncovered. Each should
-either gain a fixture or be removed.
-
-All seven verification keywords are exercised by `adam-adsl-mapping`.
+All nine verification keywords are exercised across the fixtures;
+`adam-adsl-mapping` covers the generic named `predicate`, while the challenge
+probes cover `all_or_none` and `implies`.
 
 ## Edge-case assessment
 
@@ -71,7 +99,7 @@ missing inputs to banding. Row filters handle absent optional records, and the
 zero-baseline rule produces an intentional missing percentage without a special
 handler.
 
-Two design gaps became visible:
+Three design gaps became visible:
 
 1. Operations now consume named variables, which removes arbitrary expression
    nesting and keeps mappings concise. A future named-intermediate or
@@ -81,6 +109,9 @@ Two design gaps became visible:
    nonempty malformed value. Source-format missing-value and type-inference
    behavior needs a normative ingestion rule before implementations can be
    portable.
+3. Hierarchical first-occurrence flags can use an eligibility sort column for
+   a Boolean treatment-emergence rule, but `row_number` still cannot exclude
+   ineligible rows. More general conditional windows need an explicit filter.
 
 Positive fixtures do not prove failure behavior. Negative fixtures are still
 needed for duplicate dictionary keys, unhandled mappings, failed verifications,
