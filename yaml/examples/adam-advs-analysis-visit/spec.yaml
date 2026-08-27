@@ -1,0 +1,113 @@
+domain: ADVS
+datasets:
+  ADVSPRE: input/advs_pre.csv
+base: ADVSPRE
+keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADVSPRE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADVSPRE.USUBJID
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      source: ADVSPRE.PARAMCD
+
+  - name: VSSEQ
+    type: int
+    derivation:
+      source: ADVSPRE.VSSEQ
+
+  - name: VISIT
+    type: str
+    derivation:
+      source: ADVSPRE.VISIT
+
+  - name: VISITNUM
+    type: float
+    derivation:
+      source: ADVSPRE.VISITNUM
+
+  - name: ADT
+    type: date
+    derivation:
+      source: ADVSPRE.ADT
+
+  - name: ADY
+    type: int
+    derivation:
+      source: ADVSPRE.ADY
+
+  - name: AVAL
+    type: float
+    derivation:
+      source: ADVSPRE.AVAL
+    verifications:
+      not_missing: {}
+
+  - name: AVISIT
+    type: str
+    derivation:
+      cut:
+        source: ADY
+        breaks: [0, 2, 22, 43]
+        labels: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
+        right: false
+        missing: null
+    verifications:
+      allowed_values:
+        values: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
+
+  - name: AVISITN
+    type: int
+    derivation:
+      mapping:
+        source: AVISIT
+        dict:
+          SCREENING: -1
+          BASELINE: 0
+          WEEK 2: 2
+          WEEK 4: 4
+          POST-TREATMENT: 99
+        missing: null
+
+  - name: AWRANK
+    type: int
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]
+        order_by: [ADY, VSSEQ]
+
+  - name: ANL01FL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "AVISIT IS NOT NULL AND AWRANK = 1"
+            then:
+              literal: Y
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]
+  - row_count:
+      min: 9
+      max: 9
+  - all_or_none:
+      id: analysis-visit-completeness
+      columns: [AVISIT, AVISITN]
+  - implies:
+      id: analysis-record-has-analysis-visit
+      when: "ANL01FL = 'Y'"
+      then: "AVISIT IS NOT NULL AND ADY IS NOT NULL"
+  - implies:
+      id: baseline-window-is-study-day-one
+      when: "AVISIT = 'BASELINE'"
+      then: "ADY = 1"
