@@ -76,10 +76,11 @@ fixture. `adam-adae-string-handlers` closes the previously identified
 `adam-adae-severity-override` closes the `override` gap.
 
 `sdtm-lb-multiform` covers `case` and implication checks.
-`adam-adsl-treatment-disposition` covers `add`, `coalesce`, `date_diff`,
-`min`/`max` aggregate filters and R003 right-side reduction, `str_concat`,
-`str_extract.no_match`, `str_upper`, ordered `multiple_matches`, and grouped
-completeness verification.
+`adam-adsl-treatment-selection` covers `add`, `coalesce`, `date_diff`,
+`min`/`max` aggregate filters and R003 right-side reduction, `str_upper`, ordered
+`multiple_matches`, and grouped completeness verification.
+`adam-adsl-disposition` covers filtered `max` and ordered last-match selection.
+`adam-adsl-identifier-parsing` covers `str_concat` and `str_extract.no_match`.
 The four focused ADAE probes separately cover treatment-interval
 classification, deterministic hierarchical occurrence flags, string-handler
 paths, and final correction.
