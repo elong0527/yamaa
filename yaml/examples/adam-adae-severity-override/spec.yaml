@@ -1,0 +1,63 @@
+domain: ADAE
+datasets:
+  AE: input/ae.csv
+base: AE
+keys: [STUDYID, USUBJID, AESEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    derivation:
+      source: AE.AESEQ
+
+  - name: ASEV
+    type: str
+    derivation:
+      value:
+        str_upper:
+          source: AE.AESEV
+      override:
+        - when: "USUBJID = 'CATH-01-001' AND AESEQ = 2"
+          value:
+            literal: SEVERE
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [MILD, MODERATE, SEVERE, LIFE-THREATENING]
+
+  - name: ASEVN
+    type: int
+    derivation:
+      mapping:
+        source: ASEV
+        dict:
+          MILD: 1
+          MODERATE: 2
+          SEVERE: 3
+          LIFE-THREATENING: 4
+    verifications:
+      - not_missing: {}
+      - range:
+          min: 1
+          max: 4
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 3
+      max: 3
+  - implies:
+      id: approved-correction-is-applied
+      when: "USUBJID = 'CATH-01-001' AND AESEQ = 2"
+      then: "ASEV = 'SEVERE' AND ASEVN = 3"
