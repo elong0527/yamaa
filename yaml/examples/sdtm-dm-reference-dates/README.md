@@ -49,9 +49,9 @@ This fixture is a **probe**. It passes, and it makes three gaps visible.
    same EX record: they agree here only because both order by `EXENDTC` and the
    fixture breaks the remaining tie with `EXSEQ`. A single expression returning
    an extreme row, rather than an extreme value, would make the guarantee
-   structural. The known limitation that ordered `source.multiple_matches`
-   cannot take a filter applies here too, as recorded by
-   `../adam-adsl-treatment-selection`.
+   structural. Both may now declare the same `filter`, so the two reductions can
+   at least be made to see the same records; nothing still ties them to the same
+   one.
 3. **No match and empty match are indistinguishable.** `CATH-UCSD-0003` has no
    EX record and `CATH-UCSD-0002` has no AE record; both produce missing, and
    so would a subject whose EX records all had missing dates. Diagnostics that

@@ -3,7 +3,7 @@ version: "1.0"
 expressions:
     row_number:
         - group_by: {type: "list[variable]", required: false}
-        - order_by: {type: "list[variable]", required: true}
+        - order_by: {type: "list[order_by_term]", required: true}
     baseline_flag:
         - group_by: {type: "list[variable]", required: false}
         - date: {type: variable, required: true}

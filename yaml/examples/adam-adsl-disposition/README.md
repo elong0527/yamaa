@@ -8,10 +8,13 @@ disposition selected from DS?
 subjects cover completion, two same-day discontinuation records, no DS match,
 and screen failure. Protocol milestones are excluded from the date reduction.
 
-Expected `EOSDECOD.source.multiple_matches` and
-`EOSREAS.source.multiple_matches` counts are both two. Ordered source selection
-cannot currently use the `EOSDT` filter, so each subject's final DS row in this
-positive fixture is disposition-relevant.
+`EOSDT`, `EOSDECOD`, and `EOSREAS` now declare the same `filter`, so the date
+reduction and the two ordered selections agree on which records are eligible by
+construction rather than by coincidence. Expected
+`EOSDECOD.source.multiple_matches` and `EOSREAS.source.multiple_matches` counts
+are both one: only `CATH-UCSD-0002` has more than one disposition event once
+protocol milestones are excluded. The selected values are unchanged, because
+the milestone records never sorted last.
 
 Rows remain in DM order; the key is `[STUDYID, USUBJID]`; exactly four rows are
 expected. A discontinued subject must have `DCSREAS`.

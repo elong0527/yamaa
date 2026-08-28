@@ -44,32 +44,15 @@ columns:
         source: EX.EXENDTC
         filter: "EX.APERIOD = 2 AND EX.EXENDTC IS NOT NULL"
 
-  - name: EXFIRST
-    type: str
-    derivation:
-      source:
-        variable: EX.EXTRT
-        multiple_matches:
-          order_by: [EX.APERIOD, EX.EXSTDTC, EX.EXSEQ]
-          keep: first
-
-  - name: EXLAST
-    type: str
-    derivation:
-      source:
-        variable: EX.EXTRT
-        multiple_matches:
-          order_by: [EX.APERIOD, EX.EXSTDTC, EX.EXSEQ]
-          keep: last
-
   - name: TRT01A
     type: str
     derivation:
-      case:
-        branches:
-          - when: "TR01SDT IS NOT NULL"
-            then:
-              source: EXFIRST
+      source:
+        variable: EX.EXTRT
+        multiple_matches:
+          order_by: [EX.EXSTDTC, EX.EXSEQ]
+          keep: first
+          filter: "EX.APERIOD = 1"
     verifications:
       allowed_values:
         values: [VITAMIN D3, PLACEBO]
@@ -77,11 +60,12 @@ columns:
   - name: TRT02A
     type: str
     derivation:
-      case:
-        branches:
-          - when: "TR02SDT IS NOT NULL"
-            then:
-              source: EXLAST
+      source:
+        variable: EX.EXTRT
+        multiple_matches:
+          order_by: [EX.EXSTDTC, EX.EXSEQ]
+          keep: first
+          filter: "EX.APERIOD = 2"
     verifications:
       allowed_values:
         values: [VITAMIN D3, PLACEBO]

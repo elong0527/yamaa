@@ -66,13 +66,6 @@ columns:
         min: 1
         max: 3
 
-  - name: NEGSEVN
-    type: float
-    output: false
-    derivation:
-      compute:
-        expr: "-AESEVN"
-
   - name: TEORD
     type: int
     output: false
@@ -91,7 +84,11 @@ columns:
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, AEDECOD]
-        order_by: [TEORD, NEGSEVN, ASTDT, AESEQ]
+        order_by:
+          - TEORD
+          - {variable: AESEVN, direction: desc}
+          - ASTDT
+          - AESEQ
 
   - name: AWSEVFL
     type: str
@@ -108,9 +105,6 @@ verifications:
   - row_count:
       min: 8
       max: 8
-  - all_or_none:
-      id: severity-order-completeness
-      columns: [AESEVN, NEGSEVN]
   - implies:
       id: worst-severity-flag-requires-graded-treatment-emergent-event
       when: "AWSEVFL = 'Y'"

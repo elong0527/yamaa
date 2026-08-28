@@ -21,20 +21,19 @@ target, and a record on the lower window boundary.
 
 ## How the distance is built
 
-The distance is one expression, `ABS(ADY - AWTARGET)`. One workaround remains:
+The distance is one expression, `ABS(ADY - AWTARGET)`, and the tie-break is one
+order term, `{variable: ADY, direction: desc}`. No workaround column remains.
 
-- `NEGADY` is `-ADY`, existing only so that `row_number.order_by`, which is
-  ascending with no direction option, can prefer the later record on a tie.
+Three columns used to carry this rule. `DIST0` was `add` with an `addend` of
+`-15`, because `subtract` typed both operands as variables and could not take
+the literal target. `ADIST` was a `case` that multiplied a negative `DIST0` by
+`-1` — the absolute value, spelled out. `NEGADY` was `ADY` multiplied by `-1`,
+existing only so that an ascending-only `order_by` could prefer the later
+record. All three are gone. `ADIST` needs no guard either: `AWTARGET` is
+missing outside the window, and `NULL` propagates.
 
-Before R010 the distance took two more columns. `DIST0` was `add` with an
-`addend` of `-15`, because `subtract` typed both operands as variables and
-could not take the literal target, and `ADIST` was a `case` that multiplied a
-negative `DIST0` by `-1` — the absolute value, spelled out. Both are gone.
-`ADIST` also needs no guard: `AWTARGET` is missing outside the window, and
-`NULL` propagates.
-
-`ARNK` then orders by `[ADIST, NEGADY, LBSEQ]`: nearest first, later date next,
-and sequence as the final tie-breaker so the result is total. `ANL01FL` flags
+`ARNK` then orders by nearest distance, descending `ADY` for the later record,
+and `LBSEQ` as the final tie-breaker so the result is total. `ANL01FL` flags
 rank one inside the window.
 
 For subject `CATH-UCSD-0001`, days 10 and 20 are both five days from the
@@ -64,10 +63,10 @@ This fixture is a **probe**. It passes, and it names four gaps.
 
 1. **Closed: no absolute value and no literal subtrahend.** A date distance
    took three columns to express; under R010 it is one expression.
-2. **`order_by` has no direction.** Any preference for a later or larger value
-   requires a negated companion column. This works for numbers and has no
-   equivalent for dates or strings, so a preference rule over a date column
-   would need the day number to exist first.
+2. **Closed: `order_by` had no direction.** A preference for a later or larger
+   value required a negated companion column, which works only for numbers. A
+   preference over a date or a string had no expression at all, because there
+   is nothing to negate. `direction: desc` applies to any comparable type.
 3. **Partly closed: arithmetic operands can now be variables**, so the target
    day is read from `AWTARGET`. The window bounds still cannot be, because
    `cut.breaks` and predicate literals are not variables.
@@ -75,9 +74,9 @@ This fixture is a **probe**. It passes, and it names four gaps.
    chosen is still spread across five columns rather than carried by the
    selection itself. `output: false` lets the author split them: `AWTARGET`
    and `ADIST` stay in the artifact as the audit trail a reviewer needs, while
-   `NEGADY` and `ARNK` are internal mechanism. Two of the five columns this
-   fixture once needed are gone, but the rest are still unrelated columns
-   rather than one construct.
+   `ARNK` is internal mechanism. Three of the five columns this fixture once
+   needed are gone, and the two that remain are the two a reviewer actually
+   reads — but they are still columns rather than one construct.
 
 ## Diagnostics and verifications
 

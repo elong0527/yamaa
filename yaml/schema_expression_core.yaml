@@ -16,8 +16,17 @@ source_binding_class:
     - multiple_matches: {type: multiple_matches_class, required: false}
 
 multiple_matches_class:
-    - order_by: {type: "list[variable]", required: true}
+    - order_by: {type: "list[order_by_term]", required: true}
     - keep: {type: str, required: true, values: [first, last]}
+    - filter: {type: sql, required: false}
+
+order_by_term:
+    type: [variable, order_term_class]
+
+order_term_class:
+    - variable: {type: variable, required: true}
+    - direction: {type: str, required: false, default: asc, values: [asc, desc]}
+    - nulls: {type: str, required: false, default: last, values: [first, last]}
 
 case_branch_class:
     - when: {type: sql, required: true}

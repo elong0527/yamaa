@@ -54,16 +54,35 @@ min:
   filter: "EX.EXDOSE > 0"
 ```
 
-`filter` is declared only by `min` and `max`, so no other expression can
-filter a right side. It differs from `row.filter`, which selects row-driver
-records during row construction. It also differs from the sibling `group_by`,
-which is not used for right-side reduction; `group_by` partitions constructed
-output rows under R007.
+A structured `source` declaring `multiple_matches` may also declare `filter`.
+It selects which right-side records are eligible before ordering, using the
+same evaluation as the aggregate form:
+
+```yaml
+source:
+  variable: EX.EXTRT
+  multiple_matches:
+    order_by: [EX.EXSTDTC, EX.EXSEQ]
+    keep: first
+    filter: "EX.APERIOD = 1"
+```
+
+`filter` is therefore declared by `min`, `max`, and `multiple_matches`, and by
+nothing else. In every case it is a predicate over right-side records only.
+A left row whose right side is empty after filtering has no match and receives
+missing, exactly as if no record had existed.
+
+`filter` differs from `row.filter`, which selects row-driver records during
+row construction. It also differs from the sibling `group_by`, which is not
+used for right-side reduction; `group_by` partitions constructed output rows
+under R007.
 
 ## Multiple matches
 
 By default, multiple right-side matches fail. A structured source may declare
-`multiple_matches` as the local, explicit relaxation defined by R008.
+`multiple_matches` as the local, explicit relaxation defined by R008. Its
+`order_by` uses the order terms defined by R007, so a right-side selection
+declares direction and null placement the same way a window does.
 
 Reduction already yields at most one right-side record per applicable key, so
 `min` and `max` cannot encounter multiple matches and do not declare

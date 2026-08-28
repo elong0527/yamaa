@@ -23,7 +23,7 @@ Handlers occur in this fixed lifecycle:
 | Stage | Local declaration | Behavior |
 |---|---|---|
 | bind | `source.missing`, aggregate `missing` | Use a literal for an absent source variable or ODM item |
-| join | `source.multiple_matches` | Select one duplicate right-side match |
+| join | `source.multiple_matches` | Filter, then select one duplicate right-side match |
 | mapping | `missing` | Use a literal for a missing mapping input |
 | mapping | `unmapped` | Use a literal for a non-missing value with no mapping |
 | cut | `missing` | Use a literal for a missing numeric input |
@@ -52,9 +52,16 @@ own handler fields alongside it, so they take the concise form only.
 `missing` applies when the variable or ODM item does not exist in context. It
 does not apply when the variable exists and contains a missing value.
 
-`multiple_matches` relaxes R003 right-side uniqueness. Sort matches ascending by
-its `order_by` variables on each matching right-side record, then retain `first`
-or `last`. Remaining ties are resolved by right-side record order.
+`multiple_matches` relaxes R003 right-side uniqueness. Apply its optional
+`filter` to the matching right-side records first, then sort the survivors by
+its `order_by` terms and retain `first` or `last`. Remaining ties are resolved
+by right-side record order.
+
+Filtering to no surviving record is not a handled condition. It is an ordinary
+absent match under R003 and yields missing, so a `filter` narrow enough to
+empty the right side silently produces missing rather than firing this
+handler. The handler count reports only the records where more than one match
+survived the filter.
 
 ## Expression handlers
 

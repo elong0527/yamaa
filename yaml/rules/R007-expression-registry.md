@@ -49,6 +49,32 @@ Omitting `group_by` creates one partition.
 
 Any other aggregate context is an error.
 
+## Ordering
+
+`row_number.order_by` and `multiple_matches.order_by` are lists of order terms.
+An order term is either a bare variable or a mapping declaring `variable`,
+`direction`, and `nulls`. A bare variable means
+`{variable: X, direction: asc, nulls: last}`, so an existing specification keeps
+its meaning.
+
+- `direction` is `asc` or `desc` and defaults to `asc`.
+- `nulls` is `last` or `first` and defaults to `last`. It states where missing
+  values sit among the non-missing ones for that term.
+
+**`nulls` does not flip with `direction`.** `last` means last under `asc` and
+last under `desc`. SQL engines disagree here — PostgreSQL places nulls last
+under `asc` and first under `desc`, while SQLite and MySQL place them first
+under `asc` — so an implementation must apply the declared placement rather
+than inherit its engine's default.
+
+Terms apply in order, each with its own direction and placement. Records equal
+on every term preserve row-template order and then base-record order, which
+makes the result total.
+
+Ordering therefore has no undefined case. A specification no longer needs a
+negated companion column to express a descending preference, and it no longer
+needs to be built so that two records with a missing sort key cannot meet.
+
 ## Type behavior
 
 No implicit conversion occurs between named operation inputs. R005 converts
@@ -62,7 +88,10 @@ runtime types:
 - `compute` requires every identifier in its expression to be numeric;
 - `str_extract`, `str_concat`, `str_upper`, and `str_lower` require string sources;
 - `date_diff` requires compatible date or datetime inputs;
-- `min`, `max`, and window ordering require mutually comparable values.
+- `min`, `max`, and window ordering require mutually comparable values. Every
+  record's value for one order term must be comparable with every other, so a
+  term whose column mixes incomparable types is an error rather than an
+  implementation-defined order.
 
 `source` retains its source type and `literal` retains its YAML scalar type.
 `cut`, `str_extract`, `str_concat`, `str_upper`, and `str_lower` return strings.
@@ -126,9 +155,8 @@ The `function` expression retains the type returned by the project function.
 
 ### Window expressions
 
-- `row_number` numbers rows from one within each partition, ascending by the
-  variables in `order_by`. Ties preserve row-template order and then
-  base-record order.
+- `row_number` numbers rows from one within each partition, by the order terms
+  in `order_by` under the ordering rule above.
 - `baseline_flag` returns `Y` for the row with the latest non-missing `date` at
   or before `reference_date`, and missing elsewhere. Ties are errors.
 - `baseline_value` copies the `value` from the row whose `flag` is `Y` to every

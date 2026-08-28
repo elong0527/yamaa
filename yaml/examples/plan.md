@@ -66,11 +66,20 @@ Widening operands would have left one operator per column and one column per
 step. The formula was the cheaper change: one registry entry, no new dependency
 machinery, because R001 already extracted identifiers from SQL predicates.
 
-### S3. Ordering declares direction and null placement
+### ~~S3. Ordering declares direction and null placement~~ (landed)
 
-Deletes the negation columns in `adam-adlb-closest-visit` and
-`adam-adae-worst-severity`, and closes the undefined-missing-order gap in the
-same change.
+Landed as the `order_by_term` union in `schema_expression_core.yaml`, with the
+ordering semantics stated once in [R007](../rules/R007-expression-registry.md)
+and referenced by R003 for `multiple_matches`.
+
+`NEGADY` and `NEGSEVN` are deleted, which were the suite's last two workaround
+columns. Both golden outputs were checked unchanged: the ranking each fixture
+depends on is reproduced exactly by the declared order terms.
+
+R007 fixes `nulls` at `last` by default and, unlike PostgreSQL, does not flip
+it under `desc`. That detail is the point of the item rather than a footnote:
+engines disagree, and an implementation inheriting its engine's convention
+would select a different record and still look conformant.
 
 ```yaml
 order_term:
@@ -79,27 +88,35 @@ order_term:
     - nulls: {type: str, required: false, default: last, values: [first, last]}
 ```
 
-`row_number.order_by` and `multiple_matches.order_by` become
-`list[order_term]`. A bare string keeps its current meaning, so no existing
-specification changes.
+`row_number.order_by` and `multiple_matches.order_by` became
+`list[order_by_term]`. A bare string keeps its meaning, so the other nineteen
+`order_by` declarations in the suite are untouched.
 
-Declaring `nulls` also removes the reason `adam-adae-worst-severity` must be
-built so that no partition holds two ineligible records.
+Declaring `nulls` also removed the reason `adam-adae-worst-severity` had to be
+built so that no partition holds two ineligible records. Its README said that
+was "a property of the data, not a guarantee of the specification"; it is now a
+guarantee.
 
-### S4. Ordered selection accepts a filter
+### ~~S4. Ordered selection accepts a filter~~ (landed)
 
-```yaml
-multiple_matches_class:
-    - order_by: {type: "list[order_term]", required: true}
-    - keep: {type: str, required: true, values: [first, last]}
-    - filter: {type: sql, required: false}
-```
+`filter` is now declared by `min`, `max`, and `multiple_matches`, and by
+nothing else. R003 states that it is a predicate over right-side records only
+and that a right side emptied by filtering is an ordinary absent match, not a
+handled condition. R008 states that the filter runs before ordering and that
+the handler count reports only records where more than one match survived it.
 
-Three fixtures name this as their blocker. The semantics already exist: R003
-defines right-side reduction by `filter` for `min` and `max`, and this applies
-the same reduction before ordering. `adam-adsl-crossover-periods` would then
-select a period directly instead of depending on an unrelated guard column, and
-`adam-adsl-disposition` could restrict ordering to disposition events.
+Three fixtures used it. `adam-adsl-disposition` and
+`adam-adsl-treatment-selection` now share one filter between the aggregate and
+the ordered selections, so the reductions agree on eligibility by construction;
+neither value changed. `adam-adsl-crossover-periods` selects each period
+directly and drops the guard.
+
+One prediction was wrong. This item was expected to change no golden output,
+and `adam-adsl-crossover-periods` changed: `EXFIRST` and `EXLAST` existed only
+to expose the workaround and are gone with it. Its exposure input also gained a
+second administration in each period, so the ordering inside a filtered right
+side does real work rather than picking the only candidate. Every date and
+treatment value is unchanged.
 
 ### ~~R1. Arithmetic propagates missing~~ (landed, via R010)
 
@@ -186,11 +203,12 @@ Two Tier 1 items are breaking to the fixtures, so the order matters.
    arithmetic keywords rather than widening them. Seven fixtures were rewritten
    and every converted expression was checked bit-identical to the one it
    replaced, so no golden output moved.
-2. **S4.** No golden output changes.
-3. **S3.** Two fixtures lose a negation column, `NEGADY` and `NEGSEVN`, both
-   now written as `compute` with a unary minus. Regenerate
-   `adam-adlb-closest-visit` and `adam-adae-worst-severity`, and update both
-   READMEs, which still describe the workaround as necessary.
+2. ~~**S4.**~~ Landed. One golden output changed after all, in
+   `adam-adsl-crossover-periods`; the other two fixtures kept every value. The only Tier 1 item left.
+3. ~~**S3.**~~ Landed. `NEGADY` and `NEGSEVN` are gone, both fixtures keep
+   their golden output, and both READMEs were rewritten. The
+   `severity-order-completeness` verification went with `NEGSEVN`: it paired an
+   output column with the internal one and had nothing left to assert.
 4. ~~**S1.**~~ Done ahead of the other Tier 1 items. Eleven fixtures lost 28
    columns and eleven READMEs were revised. One change was not mechanical:
    `adam-adsl-dependency-order` marks `RANDFL` internal so that an output
@@ -201,7 +219,8 @@ Two Tier 1 items are breaking to the fixtures, so the order matters.
 6. **Tier 3**, design documents before schema changes.
 
 These steps also remove text from `README.md`: gaps 1, 2, 3, 10, and 16 are
-retired by `compute`, gap 6 by S1, and gaps 4, 14, and 18 by S3.
+retired by `compute`, gap 6 by S1, the right-side half of gap 13 by S4, and
+gaps 4, 14, and 18 by S3.
 
 ## Negative fixtures this plan requires
 

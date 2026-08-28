@@ -22,28 +22,32 @@ EX to one period before the R003 join, so a subject-level join never collapses
 period records and each period gets its own dates. This is the part of X06 the
 language handles well.
 
-Selecting the treatment given in a period does not work the same way. Ordered
-`source.multiple_matches` cannot take a filter, so `TRT01A` and `TRT02A` are
-built from a first-and-last selection over all of a subject's exposure records.
-That is correct only because there are exactly two periods and they coincide
-with first and last. A three-period design could not be written this way at
-all.
+Selecting the treatment given in a period now works the same way. R003 allows
+`source.multiple_matches` to declare the same `filter`, so `TRT01A` and
+`TRT02A` narrow EX to their own period and then order within it. Each subject
+has two administrations in one period, so the ordering is doing real work
+rather than picking the only candidate.
 
-Worse, the workaround is wrong on its own. `CATH-UCSD-0003` never crossed over,
-and its last exposure record is still period one, so `EXLAST` reports
-`VITAMIN D3`. `TRT02A` is missing only because a `case` guards it on
-`TR02SDT`, a column derived by a completely different mechanism. Correctness
-depends on two unrelated derivations agreeing rather than on the selection
-itself. `EXFIRST` and `EXLAST` are emitted so this is visible in the golden
-output.
+`CATH-UCSD-0003` never crossed over. Its period-two right side is empty after
+filtering, which R003 treats as an absent match, so `TRT02A` is missing because
+the selection found nothing. Nothing guards it and nothing has to agree with
+anything else.
+
+An earlier version of this fixture selected the first and last exposure record
+over all periods and guarded `TRT02A` on `TR02SDT`, a column derived by a
+different mechanism. That workaround was correct only for exactly two periods
+and only because an unrelated column happened to be missing. It is recorded
+here because the two golden files differ: the old one carried `EXFIRST` and
+`EXLAST` as evidence that the selection itself was wrong.
 
 ## Status and named gaps
 
-This fixture is a **probe**. It names three gaps.
+This fixture is a **probe**. One of its three original gaps is closed and two
+remain.
 
-1. **Ordered selection cannot be filtered.** The aggregate `filter` exists for
-   `min` and `max` only. Extending it to `source.multiple_matches` would make
-   period-scoped value selection direct and would remove the guard.
+1. ~~**Ordered selection cannot be filtered.**~~ Closed. `filter` is now
+   declared by `min`, `max`, and `multiple_matches`, so a period-scoped value
+   selection is direct.
 2. **Period is not a concept.** `APERIOD` is an ordinary column matched by a
    literal in four separate predicates. Adding a period means editing every
    predicate and adding another pair of columns, so the specification grows
@@ -52,11 +56,8 @@ This fixture is a **probe**. It names three gaps.
    `TR02SDT`/`TR02EDT` except naming. A period-aware structure would make the
    grouping checkable.
 
-`EXFIRST` and `EXLAST` are not ADaM variables, and they stay in the output
-deliberately rather than by force. `output: false` is available and is used for
-`WASH0`; these two are kept visible because the golden file is the evidence
-that `EXLAST` reports a period-one treatment for a subject who never crossed
-over.
+`WASH0` declares `output: false`. No other intermediate remains: the two
+columns that existed to expose the old workaround are gone with it.
 
 ## Diagnostics and verifications
 

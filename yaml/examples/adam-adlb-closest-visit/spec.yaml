@@ -70,24 +70,16 @@ columns:
       range:
         min: 0
 
-  - name: NEGADY
-    type: float
-    output: false
-    derivation:
-      case:
-        branches:
-          - when: "AVISIT IS NOT NULL"
-            then:
-              compute:
-                expr: "-ADY"
-
   - name: ARNK
     type: int
     output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]
-        order_by: [ADIST, NEGADY, LBSEQ]
+        order_by:
+          - ADIST
+          - {variable: ADY, direction: desc}
+          - LBSEQ
 
   - name: ANL01FL
     type: str
@@ -106,7 +98,7 @@ verifications:
       max: 6
   - all_or_none:
       id: window-derivation-completeness
-      columns: [AVISIT, AWTARGET, ADIST, NEGADY]
+      columns: [AVISIT, AWTARGET, ADIST]
   - implies:
       id: analysis-record-is-inside-window
       when: "ANL01FL = 'Y'"
