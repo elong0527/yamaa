@@ -73,13 +73,8 @@ columns:
   - name: TRTDURD
     type: float
     derivation:
-      case:
-        branches:
-          - when: "TRTDUR0 IS NOT NULL"
-            then:
-              add:
-                source: TRTDUR0
-                addend: 1
+      compute:
+        expr: "TRTDUR0 + 1"
     verifications:
       range:
         min: 1

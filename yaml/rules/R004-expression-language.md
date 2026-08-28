@@ -15,9 +15,15 @@ evaluating host-language code.
 
 ## Predicates
 
+The `sql` primitive is Boolean-valued and is used only by predicates:
 `row.filter`, aggregate `filter`, `case.when`, `predicate.assert`,
-`implies.when`, `implies.then`, and override predicates use the `sql`
-primitive. Supported core syntax includes `=`, `<>`, `<`, `<=`, `>`, `>=`,
+`implies.when`, `implies.then`, and override predicates.
+
+Numeric-valued expressions are a separate primitive. `compute.expr` is typed
+`numeric_expression` and is governed by R010, which closes its grammar,
+function vocabulary, type promotion, and failure conditions. The two primitives
+share notation and identifier resolution but not their type or their permitted
+vocabulary, and neither grammar admits the other's constructs. Supported core syntax includes `=`, `<>`, `<`, `<=`, `>`, `>=`,
 `IN`, `BETWEEN`, `LIKE`, `IS NULL`, `IS NOT NULL`, `AND`, `OR`, `NOT`, and
 parentheses. String literals use single quotes.
 
@@ -56,8 +62,10 @@ the construct: `case` branch results, function arguments, and final override
 values. Registered operations must not evaluate host-language code themselves;
 the `function` expression is the explicit project-environment extension point.
 
-The complete SQL grammar, coercion, collation, and literal grammar remain
-unresolved, so this rule remains draft.
+The complete predicate grammar, coercion, collation, and literal grammar remain
+unresolved, so this rule remains draft. R010 resolves those questions for
+numeric computation only; it does not settle string collation or the predicate
+literal grammar.
 
 ## Errors
 

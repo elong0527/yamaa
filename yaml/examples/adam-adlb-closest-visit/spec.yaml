@@ -61,30 +61,11 @@ columns:
             then:
               literal: 15
 
-  - name: DIST0
-    type: float
-    output: false
-    derivation:
-      case:
-        branches:
-          - when: "AVISIT IS NOT NULL AND ADY IS NOT NULL"
-            then:
-              add:
-                source: ADY
-                addend: -15
-
   - name: ADIST
     type: float
     derivation:
-      case:
-        branches:
-          - when: "DIST0 < 0"
-            then:
-              multiply:
-                source: DIST0
-                factor: -1
-        else:
-          source: DIST0
+      compute:
+        expr: "ABS(ADY - AWTARGET)"
     verifications:
       range:
         min: 0
@@ -95,11 +76,10 @@ columns:
     derivation:
       case:
         branches:
-          - when: "AVISIT IS NOT NULL AND ADY IS NOT NULL"
+          - when: "AVISIT IS NOT NULL"
             then:
-              multiply:
-                source: ADY
-                factor: -1
+              compute:
+                expr: "-ADY"
 
   - name: ARNK
     type: int
@@ -126,7 +106,7 @@ verifications:
       max: 6
   - all_or_none:
       id: window-derivation-completeness
-      columns: [AVISIT, AWTARGET, DIST0, ADIST, NEGADY]
+      columns: [AVISIT, AWTARGET, ADIST, NEGADY]
   - implies:
       id: analysis-record-is-inside-window
       when: "ANL01FL = 'Y'"

@@ -25,7 +25,7 @@ severity and date, and an event whose severity was not collected.
 `AESEV` is `MILD`, `MODERATE`, `SEVERE`. Sorted as text that order is
 `MILD`, `MODERATE`, `SEVERE` by coincidence of spelling, and `SEVERE` would sort
 last rather than first in any case. The clinical order has to be introduced:
-`AESEVN` maps the term to 1, 2, 3, and `NEGSEVN` multiplies by `-1` so that
+`AESEVN` maps the term to 1, 2, 3, and `NEGSEVN` is `-AESEVN` so that
 `row_number.order_by`, which is ascending with no direction option, puts the
 most severe record first.
 
@@ -37,7 +37,9 @@ meaningful numeric mapping still could not be ordered by preference.
 `TEORD` ranks ineligible records last, the same eligibility-sort technique
 `../adam-adae-occurrence-flags` records, because `row_number` cannot filter.
 Two records in one partition are ineligible only if both have missing
-`NEGSEVN`, which would require comparing missing values during ordering. This
+`NEGSEVN`, which would require comparing missing values during ordering.
+`NEGSEVN` needs no guard for that: R010 propagates `NULL`, so an ungraded
+event negates to missing on its own. This
 fixture is built so that no partition holds more than one ineligible record.
 That is a property of the data, not a guarantee of the specification, and it is
 the reason portable missing-value ordering needs a rule.

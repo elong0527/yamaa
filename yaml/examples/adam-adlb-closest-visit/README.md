@@ -21,16 +21,17 @@ target, and a record on the lower window boundary.
 
 ## How the distance is built
 
-There is no absolute value, no subtraction by a literal, and no descending sort.
-Each is worked around:
+The distance is one expression, `ABS(ADY - AWTARGET)`. One workaround remains:
 
-- `DIST0` is `add` with an `addend` of `-15`, because `subtract` types both
-  operands as variables and cannot take the literal target.
-- `ADIST` is a `case` that multiplies a negative `DIST0` by `-1`. That is the
-  absolute value, spelled out.
-- `NEGADY` is `ADY` multiplied by `-1`, existing only so that
-  `row_number.order_by`, which is ascending with no direction option, can
-  prefer the later record on a tie.
+- `NEGADY` is `-ADY`, existing only so that `row_number.order_by`, which is
+  ascending with no direction option, can prefer the later record on a tie.
+
+Before R010 the distance took two more columns. `DIST0` was `add` with an
+`addend` of `-15`, because `subtract` typed both operands as variables and
+could not take the literal target, and `ADIST` was a `case` that multiplied a
+negative `DIST0` by `-1` — the absolute value, spelled out. Both are gone.
+`ADIST` also needs no guard: `AWTARGET` is missing outside the window, and
+`NULL` propagates.
 
 `ARNK` then orders by `[ADIST, NEGADY, LBSEQ]`: nearest first, later date next,
 and sequence as the final tie-breaker so the result is total. `ANL01FL` flags
@@ -41,38 +42,42 @@ target. The rule selects day 20, and the golden output shows `ARNK = 1` on the
 later record. This is the case `../adam-advs-analysis-visit` gets wrong by
 design, and the difference between the two fixtures is the whole point.
 
-## The target is written twice
+## The target is written once
 
-`AWTARGET` carries the target day as data, so the selection can be audited.
-The arithmetic cannot use it: `add.addend` and `multiply.factor` are literal
-floats, never variables. The value `15` therefore appears both as a column and
-as a literal inside `DIST0`, and nothing keeps the two consistent. A second
-window would need its own `case` branch with its own literal, so the branch
-count grows with the number of windows rather than with the rule.
+`AWTARGET` carries the target day as data, and `ADIST` now reads it:
+`ABS(ADY - AWTARGET)`. The two can no longer disagree.
 
-This is the same shape as the per-row conversion factor recorded by
-`../sdtm-vs-unit-standardization`. A window, its bounds, and its target are one
-concept in the protocol and three unrelated pieces of specification here.
+This closes the complaint this fixture originally recorded, that `15` appeared
+both as a column and as a literal with nothing keeping them consistent, because
+`add.addend` and `multiply.factor` were literal floats and never variables.
+`compute` accepts a column in every operand position.
+
+The window bounds are not closed. `AVISIT` still tests `ADY >= 8 AND ADY <= 22`
+against literals inside a predicate, so a second window still needs its own
+`case` branch and the branch count still grows with the number of windows. A
+window, its bounds, and its target remain one concept in the protocol and two
+unrelated pieces of specification here.
 
 ## Status and named gaps
 
 This fixture is a **probe**. It passes, and it names four gaps.
 
-1. **No absolute value and no literal subtrahend.** A date distance takes three
-   columns to express.
+1. **Closed: no absolute value and no literal subtrahend.** A date distance
+   took three columns to express; under R010 it is one expression.
 2. **`order_by` has no direction.** Any preference for a later or larger value
    requires a negated companion column. This works for numbers and has no
    equivalent for dates or strings, so a preference rule over a date column
    would need the day number to exist first.
-3. **Arithmetic operands cannot be variables.** The target day cannot be read
-   from a column, so windows cannot be data.
+3. **Partly closed: arithmetic operands can now be variables**, so the target
+   day is read from `AWTARGET`. The window bounds still cannot be, because
+   `cut.breaks` and predicate literals are not variables.
 4. **Selection is not auditable as one object.** The reason a record was
    chosen is still spread across five columns rather than carried by the
-   selection itself. `output: false` now lets the author split them: `AWTARGET`
+   selection itself. `output: false` lets the author split them: `AWTARGET`
    and `ADIST` stay in the artifact as the audit trail a reviewer needs, while
-   `DIST0`, `NEGADY`, and `ARNK` are internal mechanism. That is a real
-   improvement in the output and not a fix for the underlying gap, because the
-   five values are still five unrelated columns.
+   `NEGADY` and `ARNK` are internal mechanism. Two of the five columns this
+   fixture once needed are gone, but the rest are still unrelated columns
+   rather than one construct.
 
 ## Diagnostics and verifications
 

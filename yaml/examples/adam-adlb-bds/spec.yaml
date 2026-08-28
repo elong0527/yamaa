@@ -60,16 +60,14 @@ columns:
   - name: CHG
     type: float
     derivation:
-      subtract:
-        minuend: AVAL
-        subtrahend: BASE
+      compute:
+        expr: "AVAL - BASE"
 
   - name: PCHG
     type: float
     derivation:
-      percent_change:
-        value: AVAL
-        base: BASE
+      compute:
+        expr: "100 * (AVAL - BASE) / NULLIF(BASE, 0)"
 
   - name: ASEQ
     type: int
@@ -103,9 +101,8 @@ rows:
       ADT:
         source: LB.LBDTC
       AVAL:
-        multiply:
-          source: LB.LBSTRESN
-          factor: 0.0167
+        compute:
+          expr: "LB.LBSTRESN * 0.0167"
       AVALU:
         literal: ukat/L
 

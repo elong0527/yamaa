@@ -1,0 +1,48 @@
+domain: ADSL
+datasets:
+  SOURCE: input/adsl.csv
+base: SOURCE
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: SOURCE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: SOURCE.USUBJID
+
+  - name: HEIGHTCM
+    type: float
+    label: Height (cm)
+    derivation:
+      source: SOURCE.HEIGHTCM
+
+  - name: WEIGHTKG
+    type: float
+    label: Weight (kg)
+    derivation:
+      source: SOURCE.WEIGHTKG
+
+  - name: BMI
+    type: float
+    label: Body Mass Index (kg/m2)
+    derivation:
+      compute:
+        expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 5
+      max: 5
+  - implies:
+      id: bmi-missing-only-without-usable-height
+      when: "BMI IS NULL"
+      then: "HEIGHTCM IS NULL OR HEIGHTCM = 0"

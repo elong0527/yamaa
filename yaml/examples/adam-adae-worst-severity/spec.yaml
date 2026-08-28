@@ -70,13 +70,8 @@ columns:
     type: float
     output: false
     derivation:
-      case:
-        branches:
-          - when: "AESEVN IS NOT NULL"
-            then:
-              multiply:
-                source: AESEVN
-                factor: -1
+      compute:
+        expr: "-AESEVN"
 
   - name: TEORD
     type: int

@@ -64,33 +64,19 @@ columns:
     derivation:
       source: VS_RAW.VSORRES
 
-  - name: TEMPADJ
-    type: float
-    output: false
-    derivation:
-      case:
-        branches:
-          - when: "VSTESTCD = 'TEMP' AND VSORRESU = 'F' AND VSORRESN IS NOT NULL"
-            then:
-              add:
-                source: VSORRESN
-                addend: -32
-
   - name: VSSTRESN
     type: float
     derivation:
       case:
         branches:
-          - when: "VSTESTCD = 'WEIGHT' AND VSORRESU = 'LB' AND VSORRESN IS NOT NULL"
+          - when: "VSTESTCD = 'WEIGHT' AND VSORRESU = 'LB'"
             then:
-              multiply:
-                source: VSORRESN
-                factor: 0.45359237
-          - when: "VSTESTCD = 'TEMP' AND VSORRESU = 'F' AND TEMPADJ IS NOT NULL"
+              compute:
+                expr: "VSORRESN * 0.45359237"
+          - when: "VSTESTCD = 'TEMP' AND VSORRESU = 'F'"
             then:
-              multiply:
-                source: TEMPADJ
-                factor: 0.5555555555555556
+              compute:
+                expr: "(VSORRESN - 32) * 5 / 9"
         else:
           source: VSORRESN
 

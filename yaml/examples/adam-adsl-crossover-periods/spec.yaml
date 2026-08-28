@@ -102,13 +102,8 @@ columns:
   - name: WASHDUR
     type: float
     derivation:
-      case:
-        branches:
-          - when: "WASH0 IS NOT NULL"
-            then:
-              add:
-                source: WASH0
-                addend: -1
+      compute:
+        expr: "WASH0 - 1"
     verifications:
       range:
         min: 0

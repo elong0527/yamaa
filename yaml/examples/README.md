@@ -41,80 +41,88 @@ in the fixture, and its README records what the schema could not express.
    external file, including an uncoded term and the dictionary version.
 7. `adam-adsl-bmi-function` — BMI derivation through a function supplied by the
    project's global R environment.
+8. `adam-adsl-bmi-compute` — the same BMI derivation as one closed numeric
+   expression, with a zero-height guard, `NULL` propagation, and a genuine
+   rounding tie.
 
-All three pass. The first two cover value standardization from inline and
+All four pass. The first two cover value standardization from inline and
 external dictionaries. The third exercises the runtime-function extension
-point with source and literal arguments.
+point with source and literal arguments. The fourth supersedes the third as the
+portable way to write arithmetic and leaves it as the only `function`
+coverage.
 
 ## Challenge probes
 
-8. `sdtm-lb-multiform` — a compact CATH-derived ODM-to-SDTM probe consolidating
-   serum, skin-biopsy, saliva, and tape-strip data into LB. It covers form-
-   specific contextual dates, structural absence versus explicit missingness,
-   a collected nonnumeric result, repeated item groups, heterogeneous specimen
-   metadata, and deterministic ordering ties.
-9. `adam-adsl-identifier-parsing` — parses a site from `USUBJID`, falls back to
-   collected `SITEID`, and constructs a subject reference.
-10. `adam-adsl-geography-normalization` — normalizes collected country text and
-    maps country codes to regions, including missing and unmapped paths.
-11. `adam-adsl-treatment-selection` — selects actual treatment and first/last
+9. `sdtm-lb-multiform` — a compact CATH-derived ODM-to-SDTM probe
+   consolidating serum, skin-biopsy, saliva, and tape-strip data into LB. It
+   covers form-specific contextual dates, structural absence versus explicit
+   missingness, a collected nonnumeric result, repeated item groups,
+   heterogeneous specimen metadata, and deterministic ordering ties.
+10. `adam-adsl-identifier-parsing` — parses a site from `USUBJID`, falls back
+    to collected `SITEID`, and constructs a subject reference.
+11. `adam-adsl-geography-normalization` — normalizes collected country text
+    and maps country codes to regions, including missing and unmapped paths.
+12. `adam-adsl-treatment-selection` — selects actual treatment and first/last
     exposure dates, including placebo dose zero, no EX match, and inclusive
     duration.
-12. `adam-adsl-disposition` — selects final disposition values, including
+13. `adam-adsl-disposition` — selects final disposition values, including
     same-day ties, protocol milestones, no DS match, and screen failure.
-13. `adam-adsl-population-flags` — derives safety and intent-to-treat flags from
-    a small pre-derived ADSL slice.
-14. `adam-adae-treatment-emergent` — classifies AE start dates against an
+14. `adam-adsl-population-flags` — derives safety and intent-to-treat flags
+    from a small pre-derived ADSL slice.
+15. `adam-adae-treatment-emergent` — classifies AE start dates against an
     inclusive ADSL treatment interval, including both boundaries and a subject
     with no ADSL match.
-15. `adam-adae-occurrence-flags` — derives first treatment-emergent occurrence
+16. `adam-adae-occurrence-flags` — derives first treatment-emergent occurrence
     flags at subject, SOC, and preferred-term levels, including same-day ties.
-16. `adam-adae-string-handlers` — isolates lowercase normalization and the
+17. `adam-adae-string-handlers` — isolates lowercase normalization and the
     distinct missing/no-match paths for sponsor event identifiers.
-17. `adam-adae-severity-override` — applies one approved final correction and
+18. `adam-adae-severity-override` — applies one approved final correction and
     demonstrates that a dependent numeric severity sees the corrected value.
-18. `sdtm-vs-visit-study-day` — looks up visit metadata by an explicit key and
+19. `sdtm-vs-visit-study-day` — looks up visit metadata by an explicit key and
     derives study day under the SDTM no-Day-0 rule, including an unscheduled
     visit, a missing date, and a subject with no reference date.
-19. `adam-advs-analysis-visit` — assigns records to analysis windows by study
+20. `adam-advs-analysis-visit` — assigns records to analysis windows by study
     day, separates `AVISIT`/`AVISITN` from collected `VISIT`/`VISITNUM`, and
     flags one analysis record per window.
-20. `sdtm-vs-unit-standardization` — keeps a collected result and its
-    standardized companion separate, converting pounds and Fahrenheit without
-    `divide` or `round`.
-21. `sdtm-suppmh-qualifiers` — reshapes non-standard qualifier columns into
+21. `sdtm-vs-unit-standardization` — keeps a collected result and its
+    standardized companion separate, converting pounds and Fahrenheit as one
+    formula each and committing an unrounded product.
+22. `sdtm-suppmh-qualifiers` — reshapes non-standard qualifier columns into
     SUPPQUAL rows and links them to a pre-assigned parent sequence.
-22. `sdtm-dm-reference-dates` — reduces EX, DS, and AE into the DM reference
+23. `sdtm-dm-reference-dates` — reduces EX, DS, and AE into the DM reference
     dates, including a three-way latest-participation date, a screen failure
     with no exposure, and an adverse event ending after the last dose.
-23. `adam-adae-partial-dates` — rebuilds analysis dates from year-only,
+24. `adam-adae-partial-dates` — rebuilds analysis dates from year-only,
     year-month, complete, unparseable, and uncollected values, with an
     imputation flag and its effect on treatment emergence.
-24. `adam-adlb-closest-visit` — selects the record nearest a target study day,
+25. `adam-adlb-closest-visit` — selects the record nearest a target study day,
     including a tie broken toward the later record and a record outside the
     window.
-25. `adam-adae-worst-severity` — selects the worst-severity event per preferred
-    term, ordering a controlled vocabulary through a numeric proxy.
-26. `sdtm-lb-conditional-compartments` — separates a structurally inapplicable
+26. `adam-adae-worst-severity` — selects the worst-severity event per
+    preferred term, ordering a controlled vocabulary through a numeric proxy.
+27. `sdtm-lb-conditional-compartments` — separates a structurally inapplicable
     compartment from an applicable sample that was not collected.
-27. `sdtm-ae-effective-transaction` — selects the effective state of a record
+28. `sdtm-ae-effective-transaction` — selects the effective state of a record
     from an insert/update/remove transaction log.
-28. `adam-adsl-crossover-periods` — derives period-scoped treatments and dates
+29. `adam-adsl-crossover-periods` — derives period-scoped treatments and dates
     across a washout, including a subject who never crossed over.
-29. `sdtm-relrec-many-to-many` — represents records belonging to two
+30. `sdtm-relrec-many-to-many` — represents records belonging to two
     relationships at once.
-30. `adam-adrs-composite-response` — combines an efficacy threshold, a safety
+31. `adam-adrs-composite-response` — combines an efficacy threshold, a safety
     condition, and a discontinuation rule into one responder value.
-31. `adam-adsl-dependency-order` — declares every column in reverse dependency
+32. `adam-adsl-dependency-order` — declares every column in reverse dependency
     order, with dependencies reachable only through predicates and window
     fields.
-32. `sdtm-dm-metadata-contract` — declares labels, origins, lengths, and
+33. `sdtm-dm-metadata-contract` — declares labels, origins, lengths, and
     codelists on every column and shows how little of that is governed.
 
 ## Coverage gaps
 
-All 20 registered non-leaf expressions are now exercised by at least one
-fixture. `adam-adae-string-handlers` closes the previously identified
+Nineteen of the 21 registered non-leaf expressions are exercised by at least
+one fixture. `compute` replaced every use of `multiply`, `add`, `subtract`, and
+`percent_change`, so those four are now registered and unexercised. R010
+records their retirement as an open question; this suite no longer has an
+argument for keeping them. `adam-adae-string-handlers` closes the previously identified
 `str_lower` and `str_extract.missing` gaps;
 `adam-adae-severity-override` closes the `override` gap.
 
@@ -134,9 +142,11 @@ join with an explicit-key `mapping_from` lookup, and the first to exercise
 `adam-advs-analysis-visit` is the first fixture to use `cut` for interval
 membership rather than value banding, and the first to exercise the `cut` and
 `mapping` `missing` handlers together.
-`sdtm-vs-unit-standardization` is the first fixture to nest `multiply` and
-`mapping` inside `case` branches and the first to use a negative `add` addend
-in place of an unavailable literal subtraction.
+`sdtm-vs-unit-standardization` is the first fixture to nest `compute` and
+`mapping` inside `case` branches, and the pair of spellings it records —
+`(VSORRESN - 32) * 5 / 9` returning exactly `37` where `(VSORRESN - 32) / 1.8`
+returns `36.99999999999999` — is the suite's only evidence for R010's
+prohibition on reassociating a formula.
 `sdtm-suppmh-qualifiers` is the first fixture to build a SUPPQUAL structure
 and the first to reshape several qualifier columns of one row driver into rows.
 `sdtm-dm-reference-dates` is the first fixture to reduce three different
@@ -146,8 +156,9 @@ with an ordered selection over the same records.
 exercising `str_extract`, `coalesce` defaults, and `str_concat` together, and
 the first to use every declared handler on one source value.
 `adam-adlb-closest-visit` closes the closest-to-target question left open by
-`adam-advs-analysis-visit`: the selection is expressible, using a spelled-out
-absolute value and a negated companion column for descending preference.
+`adam-advs-analysis-visit`: the distance is `ABS(ADY - AWTARGET)`, one
+expression reading the target from the column that publishes it, and only the
+negated companion column for descending preference remains.
 `adam-adae-worst-severity` extends that answer to a categorical criterion: a
 controlled vocabulary can be ordered by preference only after a `mapping` gives
 it a numeric proxy to negate.
@@ -157,6 +168,12 @@ endpoints, dependency ordering, and the metadata contract.
 `adam-adsl-dependency-order` is the only fixture that tests R001 dependency
 inference directly, and the only one whose column layout is deliberately not
 submission order.
+`adam-adlb-bds` is the only fixture where `compute` runs during row
+construction, so it is the only one that exercises a row-driver-qualified
+identifier in a numeric expression.
+No fixture exercises `ROUND`: R010 requires a derivation to carry full
+precision and leaves rounding to the report, so the half-away-from-zero
+requirement is currently an unverified assertion.
 
 All nine verification keywords are exercised across the fixtures;
 `adam-adsl-mapping` covers the generic named `predicate`, while the challenge
@@ -170,24 +187,34 @@ inputs to banding. Row filters handle absent optional records, and the
 zero-baseline rule produces an intentional missing percentage without a special
 handler.
 
-Twenty-six design gaps have been recorded across the suite, of which one is
-now closed. They are grouped by root
+Twenty-six design gaps have been recorded across the suite. Group B is closed
+and most of group A is, leaving the arithmetic workarounds behind. They are
+grouped by root
 cause rather than by the fixture that found them, because most of them are
 consequences of six underlying decisions rather than independent omissions.
 
-### A. Operands must be literals, and ordering is ascending and numeric
+### A. Literal operands and ascending ordering (mostly closed)
 
-This single constraint produces more workarounds than any other.
+This constraint produced more workarounds than any other. Arithmetic is now out
+from under it; banding, windowing, and ordering are not.
 
-1. Arithmetic takes a variable source and literal operands only. `add.addend`,
-   `multiply.factor`, `cut.breaks`, and window bounds cannot be read from a
-   column, so a target day, conversion factor, or window bound cannot be data.
-2. `subtract` types both operands as variables and so cannot subtract a
-   literal, while `add` accepts one. The two are asymmetric and only `add` is
-   usable for a literal offset.
-3. `divide`, `round`, and absolute value are unregistered. A reciprocal literal
-   replaces division, a `case` that multiplies by `-1` replaces absolute value,
-   and nothing replaces rounding.
+1. `cut.breaks` and window bounds are still literal lists and cannot be read
+   from a column, so an analysis window bound or a per-test grading threshold
+   cannot be data. **The arithmetic half is closed by `compute`, defined in
+   R010:** a column is accepted in every operand position, so a conversion
+   factor or a target day may now be data.
+2. **Closed by `compute`.** `add.addend` is a literal and `subtract` types both
+   operands as variables, so the schema could subtract two columns but not add
+   them. One numeric expression now accepts columns on both sides of every
+   operator. The asymmetry survives in `multiply`, `add`, and `subtract`
+   themselves, and whether they should be retired is recorded in R010 as an
+   unresolved question.
+3. **Closed by `compute`.** Division, absolute value, exponentiation, and
+   roots are in R010's closed function table. `sdtm-vs-unit-standardization`
+   shows why the boundary had to be drawn precisely: two algebraically equal
+   spellings of one conversion return different doubles, so R010 forbids
+   reassociating a formula. Rounding is in the table but deliberately unused;
+   derivations carry full precision.
 4. `row_number.order_by` is ascending with no direction option. Preferring a
    later or larger value requires a negated companion column. A controlled
    vocabulary can be ordered only after a `mapping` gives it a numeric proxy;
@@ -201,9 +228,13 @@ The consequence is that one concept in the protocol becomes several unlinked
 pieces of specification. In `adam-adlb-closest-visit` a window's bounds, its
 target, and the distance to that target are three separate constructs, and the
 target day appears both as a column and as a literal with nothing keeping them
-consistent. In `sdtm-vs-unit-standardization` each unit pair needs its own
-`case` branch. Closest-to-target and worst-severity selection are both
-expressible, but only through these workarounds.
+consistent. In `sdtm-vs-unit-standardization` each unit pair
+needs its own `case` branch, and while `compute` now expresses each conversion
+as one formula, the factor still cannot come from a per-unit dictionary.
+`adam-adlb-closest-visit` no longer belongs in this list for its distance, which
+reads its target from a column, but its window bounds are still predicate
+literals. Closest-to-target and worst-severity selection are both expressible,
+and only the descending-sort workaround in A4 remains under them.
 
 ### B. Named intermediates (closed)
 
@@ -235,10 +266,12 @@ expressible, but only through these workarounds.
 
 ### D. Aggregates and selection operate on values, not rows
 
-10. There is no row-wise maximum over several derived columns. `min` and `max`
-    reduce one right-side dataset and `coalesce` returns the first non-missing
-    value, so a latest-of-several date is written as null-guarded `case`
-    branches that grow with each candidate.
+10. **Closed for numbers by `compute`.** `GREATEST` and `LEAST` in R010's
+    function table reduce several columns row-wise, so a largest-of-several
+    numeric value is one expression rather than null-guarded `case` branches
+    that grow with each candidate. It is not closed for dates: R010 is numeric,
+    so a latest-of-several date still needs the `case` chain that
+    `sdtm-dm-reference-dates` writes.
 11. An extreme value and the values associated with it come from two
     independent reductions that nothing ties to the same right-side record.
 12. A missing aggregate result cannot distinguish no matching record from
@@ -255,13 +288,22 @@ expressible, but only through these workarounds.
 15. Source-format missing values and type inference have no normative rule. The
     fixtures assume an empty CSV field is missing and distinguish it from a
     nonempty malformed value.
-16. R007 defines missing-input handlers for mapping, banding, and string
-    expressions but not for arithmetic. Specifications must guard `add`,
-    `subtract`, and `multiply` with explicit predicates until a rule states
-    whether arithmetic propagates missing or fails.
+16. **Closed for `compute` by R010:** `NULL` propagates, and division by zero
+    fails rather than returning missing, so a specification chooses missing
+    explicitly with `NULLIF`. R007 still defines no missing-input behavior for
+    `multiply`, `add`, and `subtract`, but no fixture uses them any more, so
+    nothing in the suite still carries a guarding predicate for arithmetic. The
+    entry survives only as a reason to retire the three keywords.
 17. Float-to-string conversion is undefined. `sdtm-vs-unit-standardization`
     proposes a shortest-round-trip rule and commits a value to force the
-    decision.
+    decision. `adam-adsl-bmi-compute` is the second piece of evidence and the
+    sharper one: it commits `24.999999999999996` where
+    `adam-adsl-bmi-function` records `25` for the same formula and the same
+    inputs. One of the two expected outputs is wrong, and nothing in R005 says
+    which. `adam-adlb-bds` carries the same problem independently: its ALTSI
+    `AVAL` of `0.167` is the shortened form of `0.16699999999999998`, and its
+    `CHG` and `PCHG` inherit it. Three fixtures now disagree with
+    full-precision arithmetic in their golden output.
 18. A declared `date` is complete or nothing. Partial dates have no precision,
     so imputation is written as regular-expression extraction, string defaults,
     and reassembly, and the rule itself is invisible to the schema.
@@ -308,11 +350,13 @@ expressible, but only through these workarounds.
 
 ### What the grouping changes
 
-Group B is closed. Group A is the remaining cheap one: allowing a variable
-wherever a literal operand is accepted, adding `divide`, `round`, and absolute
-value, and giving `order_by` a direction would remove workarounds from at least
-seven fixtures without changing any semantics already fixed by a golden output.
-`plan.md` sequences the rest.
+Groups A and B are mostly closed. `compute` removed the arithmetic
+workarounds from group A in one registry entry, which is a better trade than
+the several operator keywords first proposed: R010 states the numeric semantics
+once, and R001 already extracted identifiers from SQL text, so dependency
+inference needed no new machinery. What remains of A is cheap and unrelated to
+arithmetic: accepting a variable in `cut.breaks` and window bounds, and giving
+`order_by` a direction. `plan.md` sequences the rest.
 
 Groups C, D, F, and G are language additions rather than relaxations and need
 their failure behavior fixed by negative fixtures before they are specified.

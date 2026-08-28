@@ -98,9 +98,8 @@ columns:
         branches:
           - when: "VSDTC >= RFSTDTC"
             then:
-              add:
-                source: VSDY0
-                addend: 1
+              compute:
+                expr: "VSDY0 + 1"
         else:
           source: VSDY0
 

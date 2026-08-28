@@ -5,6 +5,7 @@ includes:
     - schema_expression_mapping.yaml
     - schema_expression_str.yaml
     - schema_expression_numeric.yaml
+    - schema_expression_compute.yaml
     - schema_expression_date.yaml
     - schema_expression_window.yaml
     - schema_expression_aggregate.yaml
