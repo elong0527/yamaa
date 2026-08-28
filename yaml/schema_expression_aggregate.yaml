@@ -1,13 +1,31 @@
 version: "1.0"
 
 expressions:
-    min:
-        - source: {type: variable, required: true}
-        - filter: {type: sql, required: false}
-        - missing: {type: literal_value, required: false}
-        - group_by: {type: "list[variable]", required: false}
-    max:
-        - source: {type: variable, required: true}
-        - filter: {type: sql, required: false}
-        - missing: {type: literal_value, required: false}
-        - group_by: {type: "list[variable]", required: false}
+    min: # Returns the smallest non-missing value, or missing when none exist.
+        - source:
+            type: variable
+            required: true
+            description: Variable to reduce.
+        - filter:
+            type: sql
+            description: Predicate selecting records before reduction.
+        - missing:
+            type: literal_value
+            description: Value used when the source variable is absent.
+        - group_by:
+            type: "list[variable]"
+            description: Current-output partition for a broadcast aggregate.
+    max: # Returns the largest non-missing value, or missing when none exist.
+        - source:
+            type: variable
+            required: true
+            description: Variable to reduce.
+        - filter:
+            type: sql
+            description: Predicate selecting records before reduction.
+        - missing:
+            type: literal_value
+            description: Value used when the source variable is absent.
+        - group_by:
+            type: "list[variable]"
+            description: Current-output partition for a broadcast aggregate.

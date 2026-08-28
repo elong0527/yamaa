@@ -21,9 +21,9 @@ extension point.
 `expressions` registry under R006. `schema_derivation.yaml` exposes that
 registry as the `expression` type.
 
-Each registered keyword owns all its inputs, options, grouping, and local error
-handlers. Adding a keyword requires one registry entry and normative semantics.
-Unknown keywords and unknown payload fields fail schema validation.
+Each registered keyword owns all its inputs, options, grouping, local error
+handlers, and operation-local semantics. Adding a keyword requires one complete
+registry entry. Unknown keywords and unknown payload fields fail validation.
 
 `source` and `literal` are expression leaves. Other expressions name their
 input variables directly unless a field is explicitly typed as `expression`,
@@ -98,119 +98,31 @@ runtime types:
 
 `source` retains its source type and `literal` retains its YAML scalar type.
 `cut`, `str_extract`, `str_concat`, `str_upper`, and `str_lower` return strings.
-`compute` returns the numeric type its expression promotes to under R010. `date_diff` and `row_number` return integers.
+`compute` returns the numeric type its expression promotes to under R010.
+`date_diff` and `row_number` return integers.
 `baseline_flag` returns a string. Mapping, conditional, coalescing, extreme,
 baseline value, and aggregate expressions retain the selected or aggregated
 value type.
 The `function` expression retains the type returned by the project function.
 
-## Registered semantics
+## Operation definitions
 
-### Leaves
+Each operation is documented where it is registered in
+`schema_expression_*.yaml` or `schema_function.yaml`. An inline comment states
+the operation's result, and descriptor `description` fields explain its
+parameters. These adjacent definitions are authoritative for operation-local
+behavior and do not affect schema validation.
 
-- `source` resolves its variable under R002 and R003. Structured binding fields
-  are governed by R003 and R008.
-- `literal` returns its scalar value exactly as resolved by R006.
-
-### Mapping and string expressions
-
-- `mapping` reads `source` and returns `dict[value]`. A missing source value
-  returns `missing` when supplied. A non-missing value absent from `dict`
-  returns `unmapped` when supplied. Otherwise either condition fails. When
-  `case_sensitive` is false, fold ASCII `A`-`Z` to `a`-`z` in the input and
-  dictionary keys and leave every other code point unchanged. Dictionary keys
-  that collide after folding are an error.
-- `mapping_from` reads `source`, matches it against column `key` in the declared
-  `dataset`, and returns column `value`. `source` and `key` are each one value or
-  a list of values. A scalar means a one-element list, so an existing
-  specification keeps its meaning. The lists pair by position: a record matches
-  when `source[i]` equals `key[i]` for every position, and the two lists must
-  have the same length. Pair order does not affect the result. The dictionary
-  must be unique on the `key` columns taken together. A missing source returns
-  `missing` when supplied; with several sources that condition holds when any
-  one of them is missing, because a partial key cannot identify a record. A key
-  whose sources are all non-missing and that matches no record returns
-  `unmapped` when supplied. Otherwise either condition fails.
-- `cut` assigns one of `len(breaks) + 1` labels using ascending breaks. Labels
-  must have that exact length. With `right: false`, intervals are left-closed
-  and right-open. Missing input returns `missing` when supplied, or fails.
-- `str_extract` matches `pattern` as an ECMAScript regular expression and
-  returns capture group `group`, where zero is the complete match. Missing input
-  returns `missing` when supplied. A non-missing input with no match returns
-  `no_match` when supplied. Otherwise either condition fails.
-- `str_concat` concatenates all expressions in `sources` in order. A missing source returns `missing` when supplied. Otherwise it fails on missing input.
-- `str_upper` converts all characters in `source` to uppercase. A missing source returns `missing` when supplied. Otherwise it fails on missing input.
-- `str_lower` converts all characters in `source` to lowercase. A missing source returns `missing` when supplied. Otherwise it fails on missing input.
-
-### Numeric, selection, and conditional expressions
-
-- `compute` evaluates `expr` as a scalar numeric formula over current-output
-  columns and numeric literals. R010 defines its grammar, its closed function
-  vocabulary, type promotion, `NULL` propagation, and failure conditions. It is
-  scalar: it must not contain an aggregate, a window function, a comparison, a
-  conditional, a string, or a host-language call, so it cannot bypass the
-  evaluation-kind rules above. It is the only arithmetic expression: it accepts
-  a column in every operand position and needs no guarding predicate for
-  missing inputs.
-- `coalesce` returns the first non-missing variable in `sources`. If all are
-  missing, it returns the literal `default` when supplied, or missing.
-- `greatest` returns the largest non-missing variable in `sources` and `least`
-  the smallest, or missing when every source is missing. They reduce across
-  the columns of one row, which is what distinguishes them from `min` and
-  `max`, and they place no restriction on type beyond comparability, which is
-  what distinguishes them from R010's `GREATEST` and `LEAST`. Use the R010
-  functions inside a numeric formula and these expressions to derive a column,
-  including a column of dates.
-- `case` evaluates branches in order and returns the `then` expression of the
-  first `TRUE` predicate. It returns `else` when no branch matches, or missing
-  when `else` is absent.
-
-### Date expression
-
-- `date_diff` returns the count of whole `unit` intervals from `start` to `end`,
-  negative when `end` precedes `start`. It excludes the start point. Permitted
-  units are `day`, `week`, `month`, and `year`.
-
-### Window expressions
-
-- `row_number` numbers rows from one within each partition, by the order terms
-  in `order_by` under the ordering rule above. Its optional `filter` is a
-  predicate over constructed output rows, evaluated before partitioning: a row
-  for which it is not `TRUE` receives missing, and surviving rows are numbered
-  from one within their partition as though the excluded rows had not been
-  constructed. A partition in which no row survives yields no number rather
-  than an error, so a rank of one always identifies a record that satisfied the
-  filter. Identifiers in `filter` are dependencies under R001, exactly as in
-  `case.branches[].when`. Encoding the same condition as a leading order term
-  is not equivalent: ordering ranks an excluded row last but still numbers it,
-  so rank one would not imply the condition.
-- `baseline_flag` returns `Y` for the row with the latest non-missing `date` at
-  or before `reference_date`, and missing elsewhere. Ties are errors.
-- `baseline_value` copies the `value` from the row whose `flag` is `Y` to every
-  row in the partition. More than one flagged row is an error.
-
-### Aggregate expressions
-
-- `min` returns the smallest non-missing `source`, or missing if all are missing.
-- `max` returns the largest non-missing `source`, or missing if all are missing.
-
-### Project function expression
-
-- `function` resolves direct string arguments as variables, evaluates argument
-  expressions, retains direct numeric, Boolean, and null literals, resolves
-  `name` in the project's global execution environment, and invokes it with the
-  named arguments. String literals use the `literal` expression. Its logical
-  result is one scalar value per current row. An implementation may vectorize
-  calls only when that is equivalent to the logical row-wise result. Function
-  availability, signature, and package setup belong to the project environment.
-
-String collation for ordering and aggregation follows R004 and remains
-unresolved while that rule is draft.
+Cross-cutting behavior remains in rules: R002 and R003 govern source binding,
+R008 governs local handlers, and R010 governs `compute`. Predicate evaluation
+and string collation follow R004; collation remains unresolved while that rule
+is draft.
 
 ## Errors
 
 - An unregistered expression keyword or invalid payload: fail under R006.
-- A semantic constraint stated above that is not satisfied: fail.
+- A semantic constraint in an operation definition or applicable rule that is
+  not satisfied: fail.
 - An input with an incompatible runtime type: fail.
 - A scalar or window expression that changes row count: fail under R001, which
   owns the phase invariant.

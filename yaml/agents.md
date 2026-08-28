@@ -15,9 +15,10 @@ Before reviewing, implementing, or modifying this design:
 5. Read the relevant example specification, README, input data, and expected
    output under `examples/`.
 
-Normative rule files are authoritative. Example READMEs explain fixtures but do
-not override rules. Draft rules record intent and must not be treated as a
-portable implementation contract.
+Schema comments and descriptions are authoritative for operation-local
+behavior; normative rule files are authoritative for shared behavior. Example
+READMEs explain fixtures but do not override either. Draft rules record intent
+and must not be treated as a portable implementation contract.
 
 ## Maintenance rules
 
@@ -29,8 +30,9 @@ portable implementation contract.
   do not recreate a generic exception list.
 - Store each cohesive semantic area in one rule file under `rules/`.
 - Give every rule a stable ID and list it in `rules/README.md`.
-- Do not duplicate normative behavior across rule or example files; link to the
-  authoritative rule instead.
+- Do not duplicate normative behavior across schema definitions, rules, or
+  examples. Keep operation-local behavior beside its schema entry and shared
+  behavior in the applicable rule.
 - Do not infer unspecified behavior. Record it as an unresolved design question
   or propose a new rule.
 - Update or add fixtures whenever a normative rule changes behavior.

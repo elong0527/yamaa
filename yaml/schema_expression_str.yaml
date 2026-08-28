@@ -1,18 +1,46 @@
 version: "1.0"
 
 expressions:
-    str_extract:
-        - source: {type: variable, required: true}
-        - pattern: {type: str, required: true}
-        - group: {type: int, required: false, default: 0}
-        - missing: {type: literal_value, required: false}
-        - no_match: {type: literal_value, required: false}
-    str_concat:
-        - sources: {type: "list[expression]", required: true}
-        - missing: {type: literal_value, required: false}
-    str_upper:
-        - source: {type: variable, required: true}
-        - missing: {type: literal_value, required: false}
-    str_lower:
-        - source: {type: variable, required: true}
-        - missing: {type: literal_value, required: false}
+    str_extract: # Extracts one regular-expression match group from a string.
+        - source:
+            type: variable
+            required: true
+            description: String variable to search.
+        - pattern:
+            type: str
+            required: true
+            description: ECMAScript regular expression matched against source.
+        - group:
+            type: int
+            default: 0
+            description: Match group to return; 0 is the full match.
+        - missing:
+            type: literal_value
+            description: Value returned when source is missing.
+        - no_match:
+            type: literal_value
+            description: Value returned when pattern does not match source.
+    str_concat: # Concatenates string expression results in order.
+        - sources:
+            type: "list[expression]"
+            required: true
+            description: Expressions to concatenate in order.
+        - missing:
+            type: literal_value
+            description: Value returned when any source is missing.
+    str_upper: # Converts every character in a string to uppercase.
+        - source:
+            type: variable
+            required: true
+            description: String variable to convert to uppercase.
+        - missing:
+            type: literal_value
+            description: Value returned when source is missing.
+    str_lower: # Converts every character in a string to lowercase.
+        - source:
+            type: variable
+            required: true
+            description: String variable to convert to lowercase.
+        - missing:
+            type: literal_value
+            description: Value returned when source is missing.

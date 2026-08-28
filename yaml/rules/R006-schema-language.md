@@ -48,7 +48,7 @@ field name to a descriptor:
 
 ```yaml
 example_class:
-    - name: {type: str, required: true}
+    - name: {type: str, required: true, description: Name of the example.}
     - values: {type: "list[str]", required: false}
 ```
 
@@ -126,6 +126,9 @@ Only these descriptor keywords are supported:
 
 - `type` is required and contains one type expression or a union.
 - `required` is allowed only in a class field descriptor. It defaults to false.
+- `description` is an optional non-empty string. It documents the declared
+  field or value type and has no effect on validation. R007 makes registry
+  descriptions part of the operation-local language definition.
 - `pattern` is allowed only for `str` and is an ECMAScript regular expression.
 - `min_length` is allowed only for `str` and counts Unicode code points.
 - `size` is allowed only for `list` or `dict` and requires an exact size.

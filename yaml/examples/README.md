@@ -4,9 +4,9 @@ These fixtures exercise `yaml/schema.yaml` with small inputs and exact expected
 outputs. They are intended for human review, automated tests, and AI-assisted
 implementation.
 
-Execution behavior is defined by the normative rules in
-[`../rules/README.md`](../rules/README.md). Example READMEs describe only the
-fixture-specific application of those rules.
+Execution behavior is defined by the schema's adjacent operation descriptions
+and the shared normative rules in [`../rules/README.md`](../rules/README.md).
+Example READMEs describe only their fixture-specific application.
 
 `odm.csv` is a tabular projection of ODM clinical data, not an ODM exchange
 document itself. Its fields map to the official

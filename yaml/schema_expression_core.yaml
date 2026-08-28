@@ -1,37 +1,91 @@
 version: "1.0"
 
 expressions:
-    source: {type: [variable, source_binding_class]}
-    literal: {type: literal_value}
-    coalesce:
-        - sources: {type: "list[variable]", required: true}
-        - default: {type: literal_value, required: false}
-    greatest:
-        - sources: {type: "list[variable]", required: true}
-    least:
-        - sources: {type: "list[variable]", required: true}
-    case:
-        - branches: {type: "list[case_branch_class]", required: true}
-        - else: {type: expression, required: false}
+    source: # Copies a named source or derived variable.
+        type: [variable, source_binding_class]
+        description: Copies a named source or derived variable.
+    literal: # Returns the declared scalar value unchanged.
+        type: literal_value
+        description: Returns the declared scalar value unchanged.
+    coalesce: # Returns the first non-missing source, else default or missing.
+        - sources:
+            type: "list[variable]"
+            required: true
+            description: Variables to test in order.
+        - default:
+            type: literal_value
+            description: Value returned when every source is missing.
+    greatest: # Returns the largest non-missing source, or missing when none exist.
+        - sources:
+            type: "list[variable]"
+            required: true
+            description: Mutually comparable variables to inspect.
+    least: # Returns the smallest non-missing source, or missing when none exist.
+        - sources:
+            type: "list[variable]"
+            required: true
+            description: Mutually comparable variables to inspect.
+    case: # Returns the first true branch, then else, or missing when neither exists.
+        - branches:
+            type: "list[case_branch_class]"
+            required: true
+            description: Ordered conditions and result expressions.
+        - else:
+            type: expression
+            description: Result used when no branch condition is true.
 
 source_binding_class:
-    - variable: {type: variable, required: true}
-    - missing: {type: literal_value, required: false}
-    - multiple_matches: {type: multiple_matches_class, required: false}
+    - variable:
+        type: variable
+        required: true
+        description: Variable to copy.
+    - missing:
+        type: literal_value
+        description: Value used when the source variable or item is absent.
+    - multiple_matches:
+        type: multiple_matches_class
+        description: Rule for selecting one of several right-side matches.
 
 multiple_matches_class:
-    - order_by: {type: "list[order_by_term]", required: true}
-    - keep: {type: str, required: true, values: [first, last]}
-    - filter: {type: sql, required: false}
+    - order_by:
+        type: "list[order_by_term]"
+        required: true
+        description: Terms used to order eligible right-side matches.
+    - keep:
+        type: str
+        required: true
+        values: [first, last]
+        description: Ordered match to retain.
+    - filter:
+        type: sql
+        description: Predicate selecting eligible right-side matches.
 
 order_by_term:
     type: [variable, order_term_class]
+    description: Bare variables use ascending order with missing values last.
 
 order_term_class:
-    - variable: {type: variable, required: true}
-    - direction: {type: str, required: false, default: asc, values: [asc, desc]}
-    - nulls: {type: str, required: false, default: last, values: [first, last]}
+    - variable:
+        type: variable
+        required: true
+        description: Variable used as an ordering term.
+    - direction:
+        type: str
+        default: asc
+        values: [asc, desc]
+        description: Sort direction for non-missing values.
+    - nulls:
+        type: str
+        default: last
+        values: [first, last]
+        description: Placement of missing values, independent of direction.
 
 case_branch_class:
-    - when: {type: sql, required: true}
-    - then: {type: expression, required: true}
+    - when:
+        type: sql
+        required: true
+        description: Condition that selects this branch when true.
+    - then:
+        type: expression
+        required: true
+        description: Result returned when the condition is true.

@@ -1,22 +1,68 @@
 version: "1.0"
 
 expressions:
-    mapping:
-        - source: {type: variable, required: true}
-        - dict: {type: "dict[str, literal_value]", required: true}
-        - case_sensitive: {type: bool, required: false, default: true}
-        - missing: {type: literal_value, required: false}
-        - unmapped: {type: literal_value, required: false}
-    mapping_from:
-        - source: {type: [variable, "list[variable]"], required: true}
-        - dataset: {type: str, required: true}
-        - key: {type: [str, "list[str]"], required: true}
-        - value: {type: str, required: true}
-        - missing: {type: literal_value, required: false}
-        - unmapped: {type: literal_value, required: false}
-    cut:
-        - source: {type: variable, required: true}
-        - breaks: {type: "list[float]", required: true}
-        - labels: {type: "list[str]", required: true}
-        - right: {type: bool, required: false, default: false}
-        - missing: {type: literal_value, required: false}
+    mapping: # Looks up a string source in an inline dictionary.
+        # Case-insensitive lookup folds only ASCII A-Z; folded keys must be unique.
+        - source:
+            type: variable
+            required: true
+            description: String variable used as the dictionary key.
+        - dict:
+            type: "dict[str, literal_value]"
+            required: true
+            description: Source-value to result-value dictionary.
+        - case_sensitive:
+            type: bool
+            default: true
+            description: Compare exactly when true; fold ASCII case when false.
+        - missing:
+            type: literal_value
+            description: Value returned when source is missing.
+        - unmapped:
+            type: literal_value
+            description: Value returned when source has no dictionary entry.
+    mapping_from: # Looks up a value in a declared dataset by explicit key pairs.
+        # Source and key lists pair by position, have equal length, and form a
+        # unique combined dataset key. Pair order does not change the result.
+        - source:
+            type: [variable, "list[variable]"]
+            required: true
+            description: One or more current-row lookup values.
+        - dataset:
+            type: str
+            required: true
+            description: Declared dataset containing the lookup table.
+        - key:
+            type: [str, "list[str]"]
+            required: true
+            description: Dataset columns paired by position with source.
+        - value:
+            type: str
+            required: true
+            description: Dataset column returned by the lookup.
+        - missing:
+            type: literal_value
+            description: Value returned when any source is missing.
+        - unmapped:
+            type: literal_value
+            description: Value returned when the complete key has no match.
+    cut: # Assigns a numeric source to one of the labeled break intervals.
+        - source:
+            type: variable
+            required: true
+            description: Numeric variable to classify.
+        - breaks:
+            type: "list[float]"
+            required: true
+            description: Ascending interval boundaries.
+        - labels:
+            type: "list[str]"
+            required: true
+            description: One label per interval; exactly one more than breaks.
+        - right:
+            type: bool
+            default: false
+            description: Right-closed/left-open; false is left-closed/right-open.
+        - missing:
+            type: literal_value
+            description: Value returned when source is missing.
