@@ -29,13 +29,14 @@ sequence is handed to it as input.
    specification describes one output dataset, so MH and SUPPMH cannot be
    derived together, and `MHSEQ` has to arrive pre-assigned. This is the
    multi-output pipeline gap the plan records for C01 and X10.
-2. **The linkage join is not expressible.** If the qualifiers arrived on a
+2. **Closed. The linkage join is expressible.** If the qualifiers arrived on a
    separate collected dataset, `IDVARVAL` would have to come from MH matched on
-   subject plus repeat key. The R003 automatic join uses only output keys that
-   also exist on the right side, which here is `[STUDYID, USUBJID]`, and MH is
-   not unique on those. `mapping_from` matches one key column to one value
-   column and cannot take a compound key. An explicit multi-column equality
-   join is required and does not exist.
+   subject plus a second identifying column. The R003 automatic join cannot do
+   it: it uses only output keys that also exist on the right side, which here
+   is `[STUDYID, USUBJID]`, and MH is not unique on those. `mapping_from` now
+   takes a list for `source` and `key` and pairs them by position, so the
+   compound match is declared directly. `../sdtm-suppmh-parent-linkage` is that
+   fixture.
 3. **Referential integrity cannot be verified.** The
    `qualifier-value-has-parent-identifier` check only asserts that the linkage
    columns are populated. Asserting that every `IDVARVAL` exists as an `MHSEQ`

@@ -66,11 +66,15 @@ survived the filter.
 ## Expression handlers
 
 `mapping` and `mapping_from` distinguish a missing source from a non-missing
-source with no dictionary entry through `missing` and `unmapped`. `cut` uses
-`missing`. `str_extract` distinguishes `missing` and `no_match`. `min` and `max`
-use `missing` for an absent source variable; a right side that reduces to no
-matching record is governed by R003, not by this handler. Each field is a
-literal replacement. Omitting the applicable field makes the condition fatal.
+source with no dictionary entry through `missing` and `unmapped`. When
+`mapping_from` declares several sources, `missing` fires when any one of them is
+missing, and `unmapped` fires only when every one is present and no record
+matches, so the two conditions stay disjoint and neither is reachable by an
+incomplete key. `cut` uses `missing`. `str_extract` distinguishes `missing` and
+`no_match`. `min` and `max` use `missing` for an absent source variable; a right
+side that reduces to no matching record is governed by R003, not by this
+handler. Each field is a literal replacement. Omitting the applicable field
+makes the condition fatal.
 
 ## Result handlers
 

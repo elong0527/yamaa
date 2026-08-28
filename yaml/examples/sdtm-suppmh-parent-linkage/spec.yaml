@@ -1,0 +1,96 @@
+domain: SUPPMH
+datasets:
+  MH_SUPP_RAW: input/mh_supp_raw.csv
+  MH: input/mh.csv
+base: MH_SUPP_RAW
+keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: MH_SUPP_RAW.STUDYID
+
+  - name: RDOMAIN
+    type: str
+    derivation:
+      literal: MH
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: MH_SUPP_RAW.USUBJID
+
+  - name: IDVAR
+    type: str
+    derivation:
+      literal: MHSEQ
+
+  - name: IDVARVAL
+    type: str
+    derivation:
+      mapping_from:
+        source: [MH_SUPP_RAW.USUBJID, MH_SUPP_RAW.MHTERM]
+        dataset: MH
+        key: [USUBJID, MHTERM]
+        value: MHSEQ
+    verifications:
+      not_missing: {}
+
+  - name: QNAM
+    type: str
+    verifications:
+      allowed_values:
+        values: [MHFAMHX, MHCONF]
+
+  - name: QLABEL
+    type: str
+
+  - name: QVAL
+    type: str
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [Y, N]
+
+  - name: QORIG
+    type: str
+    derivation:
+      literal: CRF
+
+  - name: QEVAL
+    type: str
+    derivation:
+      literal: null
+
+rows:
+  - id: family_history
+    filter: "MH_SUPP_RAW.MHFAMHX IS NOT NULL"
+    derivations:
+      QNAM:
+        literal: MHFAMHX
+      QLABEL:
+        literal: Family History
+      QVAL:
+        source: MH_SUPP_RAW.MHFAMHX
+
+  - id: medical_record_confirmation
+    filter: "MH_SUPP_RAW.MHCONF IS NOT NULL"
+    derivations:
+      QNAM:
+        literal: MHCONF
+      QLABEL:
+        literal: Confirmed by Medical Records
+      QVAL:
+        source: MH_SUPP_RAW.MHCONF
+
+verifications:
+  - unique:
+      columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
+  - row_count:
+      min: 7
+      max: 7
+  - implies:
+      id: qualifier-value-has-parent-identifier
+      when: "QVAL IS NOT NULL"
+      then: "RDOMAIN IS NOT NULL AND IDVAR IS NOT NULL AND IDVARVAL IS NOT NULL"

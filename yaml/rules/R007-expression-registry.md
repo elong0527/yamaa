@@ -82,8 +82,8 @@ only the completed derivation result. Inputs must therefore have compatible
 runtime types:
 
 - `mapping` requires a string source because dictionary keys are strings;
-- `mapping_from` requires the source and dictionary key column to have the same
-  comparable type;
+- `mapping_from` requires each source and its positionally corresponding
+  dictionary key column to have the same comparable type;
 - `cut` requires a numeric source;
 - `compute` requires every identifier in its expression to be numeric;
 - `str_extract`, `str_concat`, `str_upper`, and `str_lower` require string sources;
@@ -117,9 +117,16 @@ The `function` expression retains the type returned by the project function.
   dictionary keys and leave every other code point unchanged. Dictionary keys
   that collide after folding are an error.
 - `mapping_from` reads `source`, matches it against column `key` in the declared
-  `dataset`, and returns column `value`. The dictionary must be unique on `key`.
-  A missing source returns `missing` when supplied. A non-missing value with no
-  match returns `unmapped` when supplied. Otherwise either condition fails.
+  `dataset`, and returns column `value`. `source` and `key` are each one value or
+  a list of values. A scalar means a one-element list, so an existing
+  specification keeps its meaning. The lists pair by position: a record matches
+  when `source[i]` equals `key[i]` for every position, and the two lists must
+  have the same length. Pair order does not affect the result. The dictionary
+  must be unique on the `key` columns taken together. A missing source returns
+  `missing` when supplied; with several sources that condition holds when any
+  one of them is missing, because a partial key cannot identify a record. A key
+  whose sources are all non-missing and that matches no record returns
+  `unmapped` when supplied. Otherwise either condition fails.
 - `cut` assigns one of `len(breaks) + 1` labels using ascending breaks. Labels
   must have that exact length. With `right: false`, intervals are left-closed
   and right-open. Missing input returns `missing` when supplied, or fails.
@@ -188,6 +195,7 @@ unresolved while that rule is draft.
 - A scalar or window expression that changes row count: fail.
 - A window expression used during row construction: fail.
 - An aggregate outside its two permitted contexts: fail.
+- `mapping_from` whose `source` and `key` lists differ in length: fail.
 - An unhandled local missing, mapping, or extraction condition: fail.
 - A `compute` expression that violates R010: fail.
 - An unresolved function, failed function call, or non-scalar function result:

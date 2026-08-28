@@ -36,11 +36,15 @@ must:
 The join is many-to-one and preserves left row count and order. Right records
 with a missing applicable key cannot match. Key names must match exactly.
 
-## Dictionary lookup
+## Declared-key lookup
 
-`mapping_from` is not this join. It matches its source value against an
-explicit dictionary column and returns another column. It does not use output
-keys.
+`mapping_from` is not this join. Both are equality left joins that add one
+column, so they differ only in where the keys come from. This rule's join
+derives them from output `keys` that also exist on the right side.
+`mapping_from` declares its own pairs of source variable and right-side column
+and never consults output `keys`, so it reaches a right side that is keyed on
+something else, or that is not unique on the applicable keys. R007 defines its
+semantics.
 
 ## Right-side reduction
 

@@ -21,8 +21,9 @@ fixture the acceptance rule requires.
 | `order_by_term` with `direction` and `nulls` | two negated companion columns deleted; closes gaps 4 and 14 |
 | `filter` on `multiple_matches`, R003 and R008 | ordered selection narrows its right side before ordering; closes the right-side half of gap 13 |
 | `column_type` and R011 | `column.type` became a closed enumeration and the conversion matrix is defined; closes gap 20 and the definitional half of gap 18, leaving gap 17 as the one open cell |
+| `mapping_from.source` and `mapping_from.key` as lists, R003 and R007 and R008 | a lookup declares a compound key and pairs it by position; closes gap 8 and leaves gap 7 open |
 
-Seven gaps are closed, four are partly closed, and fifteen are open.
+Eight gaps are closed, four are partly closed, and fourteen are open.
 
 Two lessons from the first four changes are worth keeping.
 
@@ -31,6 +32,14 @@ proposed widening `add` and `multiply` and adding `divide`, `round`, `abs`,
 `greatest`, and `least`. One `compute` entry replaced all of it, and R010
 states the semantics once. Prefer the same shape wherever a family of
 operators is proposed.
+
+**Widening a field beat adding an entry, again.** T3 was written as a new
+`lookup` expression with a `dataset`/`on`/`value` payload. Under the design's
+own constraint — left join only, one column added per call — that entry was a
+second spelling of `mapping_from`, and its only new capability was the compound
+key. Widening `source` and `key` to lists bought exactly that, left the registry
+unchanged, and rewrote no existing call site. Ask what a proposed entry does
+that an existing one could not be widened to do.
 
 **Predictions about golden output were wrong twice.** `compute` was expected to
 move nothing and moved nothing, but S4 was also expected to move nothing and
@@ -69,30 +78,6 @@ Decision it forces: tie semantics, and whether a flag over a tied set is a
 window expression or a verification concern.
 
 Negative fixture: ranking on a column whose ordering is not total.
-
-### T3. `lookup`, an explicit multi-column join
-
-```yaml
-lookup:
-    - dataset: {type: str, required: true}
-    - on: {type: "list[join_key_class]", required: true}
-    - value: {type: str, required: true}
-    - missing: {type: literal_value, required: false}
-    - unmapped: {type: literal_value, required: false}
-```
-
-Evidence: gaps 7 and 8. `sdtm-vs-visit-study-day` calls `mapping_from` twice
-against the same dictionary row to get `VISITNUM` and `EPOCH`.
-`sdtm-suppmh-qualifiers` cannot join a parent sequence on subject plus repeat
-key at all, and `sdtm-relrec-many-to-many` needs the same join to reach `IDVAR`
-and `IDVARVAL` from a link table.
-
-It returns one column per call. A multi-column return conflicts with one
-expression producing one value and should be considered separately, after
-`lookup` exists.
-
-Negative fixtures: a duplicate right-side key, and no match with no `unmapped`
-handler.
 
 ### T4. Row-wise extremes over dates
 
@@ -196,10 +181,11 @@ an `EPOCH` assignment actually needs.
 
 ## Sequencing
 
-1. **T2 and T3**, one at a time, each with its negative fixtures. Both are
-   registry entries with committed evidence and bounded semantics.
-2. **T4**, once the `lookup` work has settled whether R010 grows comparable
-   types or a separate expression appears.
+1. **T2**, with its negative fixtures. It is a registry entry with committed
+   evidence and bounded semantics. T3 landed as a widened `mapping_from` and
+   still owes the four negative fixtures listed below.
+2. **T4**, once T3's negative fixtures have settled whether R010 grows
+   comparable types or a separate expression appears.
 3. **T7**, which is rule text rather than schema and unblocks nothing else but
    is required before any implementation can claim R and Python parity.
 4. **T5, T6, T8, T9, T10** are design documents. Write the document before the
@@ -208,11 +194,11 @@ an `EPOCH` assignment actually needs.
 5. **T1** last, because its answer probably lies inside T10 rather than in a
    widened field.
 
-Expected README edits: T2 retires gap 5, T3 retires gaps 7 and 8, T4 retires
-the rest of gap 10, T5 retires gaps 11, 12, and the window half of 13, T6
-retires gaps 18 to 20, T7 retires gaps 15 and 17, T8 retires gaps 21 and 22,
-T9 retires gap 26, and T10 retires gaps 9, 23, 24, and 25, along with whatever
-remains of gap 1.
+Expected README edits: T2 retires gap 5, T4 retires the rest of gap 10, T5
+retires gaps 11, 12, the window half of 13, and gap 7, T6 retires gaps 18 to
+20, T7 retires gaps 15 and 17, T8 retires gaps 21 and 22, T9 retires gap 26,
+and T10 retires gaps 9, 23, 24, and 25, along with whatever remains of gap 1.
+T3 has landed and retired gap 8.
 
 ## Negative fixtures this plan requires
 
@@ -230,12 +216,17 @@ item above and not a separate workstream.
 | `direction: desc` on a column of mixed types | order-term comparability | already landed, untested |
 | a `multiple_matches` filter that empties the right side | R003 treats it as an absent match, not a handled condition | already landed, untested |
 | ranking on a column whose ordering is not total | tie semantics | T2 |
-| `lookup` with a duplicate right-side key, and with no match | join failure behavior | T3 |
+| `mapping_from` with a duplicate right-side key on the `key` columns | R007 dictionary uniqueness | already landed, untested |
+| `mapping_from` with no match and no `unmapped` handler | join failure behavior | already landed, untested |
+| `mapping_from` with one of two sources missing and no `missing` handler | R008 partial-key semantics | already landed, untested |
+| `mapping_from` whose `source` and `key` lists differ in length | R007's new error | already landed, untested |
 
-The first six gate nothing new, because the features already landed. They are
+All but one gate nothing new, because the features already landed. They are
 the more urgent set: every fail-closed claim in the fixture READMEs and in
-R003, R005, R008, and R010 is currently an assertion rather than a tested
-behavior.
+R003, R005, R007, R008, and R010 is currently an assertion rather than a tested
+behavior. `sdtm-suppmh-parent-linkage` states plainly that its own
+`not_missing` verification is meaningful only if the lookup fails closed, which
+is exactly the claim no fixture tests.
 
 ## Acceptance rule for adding a schema feature
 
