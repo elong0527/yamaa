@@ -95,6 +95,21 @@ point with source and literal arguments.
     window.
 25. `adam-adae-worst-severity` — selects the worst-severity event per preferred
     term, ordering a controlled vocabulary through a numeric proxy.
+26. `sdtm-lb-conditional-compartments` — separates a structurally inapplicable
+    compartment from an applicable sample that was not collected.
+27. `sdtm-ae-effective-transaction` — selects the effective state of a record
+    from an insert/update/remove transaction log.
+28. `adam-adsl-crossover-periods` — derives period-scoped treatments and dates
+    across a washout, including a subject who never crossed over.
+29. `sdtm-relrec-many-to-many` — represents records belonging to two
+    relationships at once.
+30. `adam-adrs-composite-response` — combines an efficacy threshold, a safety
+    condition, and a discontinuation rule into one responder value.
+31. `adam-adsl-dependency-order` — declares every column in reverse dependency
+    order, with dependencies reachable only through predicates and window
+    fields.
+32. `sdtm-dm-metadata-contract` — declares labels, origins, lengths, and
+    codelists on every column and shows how little of that is governed.
 
 ## Coverage gaps
 
@@ -136,6 +151,12 @@ absolute value and a negated companion column for descending preference.
 `adam-adae-worst-severity` extends that answer to a categorical criterion: a
 controlled vocabulary can be ordered by preference only after a `mapping` gives
 it a numeric proxy to negate.
+The seven Priority 2 fixtures added last cover conditional compartments,
+transactional sources, crossover periods, many-to-many relationships, composite
+endpoints, dependency ordering, and the metadata contract.
+`adam-adsl-dependency-order` is the only fixture that tests R001 dependency
+inference directly, and the only one whose column layout is deliberately not
+submission order.
 
 All nine verification keywords are exercised across the fixtures;
 `adam-adsl-mapping` covers the generic named `predicate`, while the challenge
@@ -149,7 +170,7 @@ inputs to banding. Row filters handle absent optional records, and the
 zero-baseline rule produces an intentional missing percentage without a special
 handler.
 
-Twenty-one design gaps are visible across the suite. They are grouped by root
+Twenty-six design gaps are visible across the suite. They are grouped by root
 cause rather than by the fixture that found them, because most of them are
 consequences of six underlying decisions rather than independent omissions.
 
@@ -239,18 +260,43 @@ expressible, but only through these workarounds.
 19. Imputed and collected dates compare identically. Nothing marks a comparison
     made under uncertainty, so an imputed day silently decides classifications
     such as treatment emergence.
+20. There is no datetime type distinct from `date`.
+    `sdtm-ae-effective-transaction` carries an audit timestamp as `str` and
+    orders it correctly only because ISO 8601 text sorts chronologically.
 
 ### F. The output and pipeline contract stops at one dataset
 
-20. One specification derives one dataset. `sdtm-suppmh-qualifiers` cannot
+21. One specification derives one dataset. `sdtm-suppmh-qualifiers` cannot
     assign a parent sequence and consume it in the same run, and
     `sdtm-dm-reference-dates` depends on DM being derived before the domains
     that reference it without being able to say so. R001 cycle detection is per
     specification, so a cross-dataset cycle cannot be reported either.
-21. Nothing controls output row order, and verifications are row-wise over the
+22. Nothing controls output row order, and verifications are row-wise over the
     completed output. Rows leave in row-template order rather than a
     submission sort order, and referential integrity between a SUPPQUAL record
     and its parent domain cannot be asserted.
+
+### G. Structure that the data has cannot be declared
+
+23. Conditional applicability, treatment period, relationship degree, and
+    analysis window are all real structure in a protocol and none of them is a
+    concept in the schema. Each is re-expressed as a filter, a literal in a
+    predicate, or one row template per slot, so the specification grows with
+    the data rather than describing the design. `sdtm-lb-conditional-compartments`,
+    `adam-adsl-crossover-periods`, and `sdtm-relrec-many-to-many` each show a
+    different face of this.
+24. Row construction cannot consume values resolved during column derivation.
+    A logically removed record cannot be dropped, because `row.filter` sees
+    only the row driver and nothing deletes a row afterwards, as
+    `sdtm-ae-effective-transaction` shows by committing a record that must not
+    exist.
+25. A derivation cannot carry both a value and the reason for it.
+    `adam-adrs-composite-response` writes the same four predicates twice, once
+    for the endpoint and once for its audit trail, with nothing linking them.
+26. Metadata is an ungoverned string map. Labels are first class, but origin,
+    length, and controlled terminology are free-form text that no
+    implementation can validate, and no expected metadata artifact exists to
+    assert them, as `sdtm-dm-metadata-contract` records.
 
 ### What the grouping changes
 
@@ -260,8 +306,16 @@ adding `divide`, `round`, and absolute value, giving `order_by` a direction,
 and adding named intermediates would remove workarounds from at least seven
 fixtures without changing any semantics already fixed by a golden output.
 
-Groups C, D, and F are language additions rather than relaxations and need
+Groups C, D, F, and G are language additions rather than relaxations and need
 their failure behavior fixed by negative fixtures before they are specified.
+Group G is the largest of them and the least explored: it asks the schema to
+describe study design, not just data movement.
+
+Two things in the suite are now blocked on negative fixtures rather than on
+design. R001 cycle reporting has no positive expression, so
+`adam-adsl-dependency-order` can only prove that valid graphs are sorted
+correctly. And every claim about fail-closed behavior in these READMEs is
+still an assertion.
 
 Positive fixtures do not prove failure behavior. Negative fixtures are still
 needed for duplicate dictionary keys, unhandled mappings, failed verifications,
