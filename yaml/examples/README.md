@@ -225,7 +225,9 @@ the vocabulary.
 8. Partial dates have no precision. R011 fixes that a declared `date` is
    complete or nothing, so imputation is written as regular-expression
    extraction, string defaults, and reassembly, and the rule itself is
-   invisible to the schema.
+   invisible to the schema. `adam-adae-partial-dates` covers only trailing
+   precision loss, because the SDTM form for a known day in an unknown month
+   needs an agreed representation before a fixture can assert it.
 9. Imputed and collected dates compare identically. Nothing marks a comparison
    made under uncertainty, so an imputed day silently decides classifications
    such as treatment emergence.
