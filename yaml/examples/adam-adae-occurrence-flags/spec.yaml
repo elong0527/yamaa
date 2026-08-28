@@ -43,25 +43,14 @@ columns:
       allowed_values:
         values: [Y]
 
-  - name: TEORD
-    type: int
-    output: false
-    derivation:
-      case:
-        branches:
-          - when: "TRTEMFL = 'Y'"
-            then:
-              literal: 0
-        else:
-          literal: 1
-
   - name: AOCCSEQ
     type: int
     output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]
-        order_by: [TEORD, ASTDT, AESEQ]
+        order_by: [ASTDT, AESEQ]
+        filter: "TRTEMFL = 'Y'"
 
   - name: AOCCSSEQ
     type: int
@@ -69,7 +58,8 @@ columns:
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, AEBODSYS]
-        order_by: [TEORD, ASTDT, AESEQ]
+        order_by: [ASTDT, AESEQ]
+        filter: "TRTEMFL = 'Y'"
 
   - name: AOCCPSEQ
     type: int
@@ -77,14 +67,15 @@ columns:
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, AEBODSYS, AEDECOD]
-        order_by: [TEORD, ASTDT, AESEQ]
+        order_by: [ASTDT, AESEQ]
+        filter: "TRTEMFL = 'Y'"
 
   - name: AOCCFL
     type: str
     derivation:
       case:
         branches:
-          - when: "TRTEMFL = 'Y' AND AOCCSEQ = 1"
+          - when: "AOCCSEQ = 1"
             then:
               literal: Y
 
@@ -93,7 +84,7 @@ columns:
     derivation:
       case:
         branches:
-          - when: "TRTEMFL = 'Y' AND AOCCSSEQ = 1"
+          - when: "AOCCSSEQ = 1"
             then:
               literal: Y
 
@@ -102,7 +93,7 @@ columns:
     derivation:
       case:
         branches:
-          - when: "TRTEMFL = 'Y' AND AOCCPSEQ = 1"
+          - when: "AOCCPSEQ = 1"
             then:
               literal: Y
 

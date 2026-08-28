@@ -80,13 +80,14 @@ columns:
           - ADIST
           - {variable: ADY, direction: desc}
           - LBSEQ
+        filter: "AVISIT IS NOT NULL"
 
   - name: ANL01FL
     type: str
     derivation:
       case:
         branches:
-          - when: "AVISIT IS NOT NULL AND ARNK = 1"
+          - when: "ARNK = 1"
             then:
               literal: Y
 

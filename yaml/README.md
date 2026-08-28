@@ -32,9 +32,7 @@ This is the version 1.0 direction for team review.
 per arithmetic operation makes a single formula such as
 `WEIGHTKG / POWER(HEIGHTCM / 100, 2)` into several columns and grows the
 registry without end, so `compute` takes one closed numeric expression instead
-and is the only arithmetic expression: `multiply`, `add`, `subtract`, and
-`percent_change` were deleted when it landed.
-It stays inside the boundary's purpose: its payload is a leaf field, not a
+and is the only arithmetic expression. It stays inside the boundary's purpose: its payload is a leaf field, not a
 nested argument tree, and R001 extracts its identifiers exactly as it already
 extracts them from `case.when`, so dependencies remain visible. R010 closes its
 grammar and function vocabulary and confines it to numeric results, so it

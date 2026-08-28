@@ -18,75 +18,53 @@ overwrites the collected result.
 
 ## Conversions as written
 
-Each conversion is now one `compute` formula, stated the way a protocol states
-it:
+Each conversion is one `compute` formula, stated the way a protocol states it:
 
 - Pounds to kilograms is `VSORRESN * 0.45359237`.
 - Fahrenheit to Celsius is `(VSORRESN - 32) * 5 / 9`.
 
-Before R010 neither could be written that way. `subtract` typed both operands
-as variables and so could not subtract the literal `32`, which forced an `add`
-with an `addend` of `-32` into a separate `output: false` column; and with no
-`divide`, `5/9` had to be the decimal literal `0.5555555555555556`.
+`NULL` propagates, so the uncollected temperature in the last record
+standardizes to missing with no guard in the specification.
 
-**The two spellings are not interchangeable.** `(VSORRESN - 32) * 5 / 9`
-returns exactly `37` for `98.6 F`, and `(VSORRESN - 32) / 1.8` returns
-`36.99999999999999`. Both are correct IEEE 754; they differ because they
-associate differently. This is why R010 requires an implementation to evaluate
-a formula as written and forbids reassociating it.
+**The two spellings of the temperature conversion are not interchangeable.**
+`(VSORRESN - 32) * 5 / 9` returns exactly `37` for `98.6 F`, and
+`(VSORRESN - 32) / 1.8` returns `36.99999999999999`. Both are correct IEEE 754;
+they differ because they associate differently. This is why R010 requires an
+implementation to evaluate a formula as written and forbids reassociating it.
 
-A per-row conversion factor is still impossible for a different reason: the
-factor would have to come from a per-unit dictionary, and `mapping_from` is a
-column lookup rather than a term in an expression. Each unit pair still needs
-its own `case` branch, and the branch list still grows with the number of
-collected units.
+The derivation does not round. `175 LB` standardizes to the exact product
+`79.37866475 kg`, and that is the value every comparison and verification sees.
+The expected output writes `79.3787` because R011 renders a `float` at the
+project's declared four decimal places.
 
-There is no rounding. `175 LB` standardizes to `79.37866475 kg`, the exact
-product. R010 has no rounding function: a derivation carries full precision and
-rounding is a reporting concern.
+## Two gaps this fixture names
 
-## Status and named gaps
+**A conversion factor cannot be data.** `compute` accepts a column in any
+operand position, but the factor for a unit pair lives in a dictionary, and
+there is no way to bring a looked-up value into an expression as a term. Each
+unit pair needs its own `case` branch, and the branch list grows with the
+number of collected units.
 
-This fixture is a **probe**. It makes four gaps visible.
+## `VSSTRESC` and `VSSTRESN` cannot disagree
 
-1. **Closed: no `divide`, no literal subtrahend.** Both were named here first
-   and both are answered by `compute` under R010.
-2. **Closed: arithmetic had no declared missing policy.** Every branch used to
-   guard with an explicit `IS NOT NULL` predicate, because R007 said nothing
-   about `add`, `subtract`, or `multiply` receiving a missing input. R010 fixes
-   it: `NULL` propagates, so the uncollected temperature in the last record
-   standardizes to missing with no guard in the specification.
-3. **A conversion factor still cannot be data.** The remaining half of the
-   original gap: `compute` accepts a column in any operand position, but the
-   factor for a unit pair lives in a dictionary, and there is no way to bring a
-   looked-up value into an expression as a term.
-4. **Float-to-string conversion is undefined.** `VSSTRESC` is the character
-   form of `VSSTRESN` and is derived by declaring `type: str` over the same
-   value, which relies on the R005 conversion matrix that is still unresolved.
+`VSSTRESC` is the character form of `VSSTRESN`, derived by declaring
+`type: str` over the same value. SDTM requires the two to match, and they do
+because R011 uses one float-to-text form for both the declared conversion and
+the artifact's rendering of a `float` column. Both read `79.3787`, and both
+read `37` rather than `37.0` for the standardized Fahrenheit record, because an
+integral value is written without a decimal point.
 
-`VSORRESN` is not an SDTM variable and declares `output: false`. The former
-`TEMPADJ` column is gone: it existed only to hold `F - 32` between two
-operations.
-The `unconverted-result-is-unchanged` verification still compares `VSSTRESN`
-with the internal `VSORRESN`, which is exactly the case R005 allows: the
-assertion is about the conversion, not about the artifact.
-
-## Proposed rule for `VSSTRESC`
-
-The expected output commits `37`, not `37.0`, for the standardized Fahrenheit
-record. This proposes that float-to-string conversion render the shortest form
-that round-trips to the same value and drop a trailing zero for an integral
-value. R and Python disagree by default here, so an implementation producing
-`37.0` today is not wrong; it is evidence that R005 must state the rule. The
-same rule governs whether `79.37866475` may ever be shortened, which it must
-not be.
+`VSSTRESC` stores its rendered text, so unlike `VSSTRESN` it does not keep the
+last places. A derivation needing them must read `VSSTRESN`.
 
 ## Diagnostics and verifications
 
 No handler path is declared. `VSORRESN` converts a collected character result
 to float, and every value in this fixture converts cleanly, so no
 `conversion_failure` handler is present; `../sdtm-lb-multiform` covers the
-failing path.
+failing path. `VSORRESN` is not an SDTM variable and declares `output: false`,
+so the `unconverted-result-is-unchanged` verification names an internal column,
+which R005 allows: the assertion is about the conversion, not the artifact.
 
 Rows remain in `VS_RAW` order; the key is `[STUDYID, USUBJID, VSSEQ]`; exactly
 six rows are expected. The standardized value, its character form, and its unit

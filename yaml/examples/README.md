@@ -44,10 +44,9 @@ in the fixture, and its README records what the schema could not express.
    rounding tie.
 
 All four pass. The first two cover value standardization from inline and
-external dictionaries. The third exercises the runtime-function extension
-point with source and literal arguments. The fourth supersedes the third as the
-portable way to write arithmetic and leaves it as the only `function`
-coverage.
+external dictionaries. The third is the suite's only coverage of the
+runtime-function extension point; the fourth is how the same arithmetic should
+be written portably.
 
 ## Challenge probes
 
@@ -120,284 +119,134 @@ coverage.
     reported term, where the right side is unique on the pair and on neither
     column alone.
 
-## Coverage gaps
+## Coverage
 
-All 17 registered non-leaf expressions are exercised by at least one fixture.
-`compute` replaced every use of `multiply`, `add`, `subtract`, and
-`percent_change`, and those four keywords were deleted rather than left
-registered and unexercised. `adam-adae-string-handlers` closes the previously identified
-`str_lower` and `str_extract.missing` gaps;
-`adam-adae-severity-override` closes the `override` gap.
+All 17 registered non-leaf expressions and all nine verification keywords are
+exercised by at least one fixture. A few fixtures are the only coverage of
+something and should not be deleted without a replacement:
 
-`sdtm-lb-multiform` covers `case` and implication checks.
-The five focused ADSL probes separately cover identifier parsing and fallback,
-geography normalization, treatment selection and duration, disposition
-selection, and population flags.
-`adam-adsl-treatment-selection` covers `compute`, `coalesce`, `date_diff`,
-`min`/`max` aggregate filters and R003 right-side reduction, `str_upper`, ordered
-`multiple_matches`, and grouped completeness verification.
-`adam-adsl-disposition` covers filtered `max` and ordered last-match selection.
-`adam-adsl-identifier-parsing` covers `str_concat` and `str_extract.no_match`.
-The four focused ADAE probes separately cover treatment-interval
-classification, deterministic hierarchical occurrence flags, string-handler
-paths, and final correction.
-`sdtm-vs-visit-study-day` is the first fixture to contrast the R003 automatic
-join with an explicit-key `mapping_from` lookup, and the first to exercise
-`date_diff` at an SDTM boundary.
-`adam-advs-analysis-visit` is the first fixture to use `cut` for interval
-membership rather than value banding, and the first to exercise the `cut` and
-`mapping` `missing` handlers together.
-`sdtm-vs-unit-standardization` is the first fixture to nest `compute` and
-`mapping` inside `case` branches, and the pair of spellings it records —
-`(VSORRESN - 32) * 5 / 9` returning exactly `37` where `(VSORRESN - 32) / 1.8`
-returns `36.99999999999999` — is the suite's only evidence for R010's
-prohibition on reassociating a formula.
-`sdtm-suppmh-qualifiers` is the first fixture to build a SUPPQUAL structure
-and the first to reshape several qualifier columns of one row driver into rows.
-`sdtm-dm-reference-dates` is the first fixture to reduce three different
-right-side datasets into one output row and the first to combine an aggregate
-with an ordered selection over the same records.
-`adam-adae-partial-dates` is the first fixture to treat a date as text,
-exercising `str_extract`, `coalesce` defaults, and `str_concat` together, and
-the first to use every declared handler on one source value.
-`adam-adlb-closest-visit` closes the closest-to-target question left open by
-`adam-advs-analysis-visit`: the distance is `ABS(ADY - AWTARGET)`, one
-expression reading the target from the column that publishes it, and only the
-negated companion column for descending preference remains.
-`adam-adae-worst-severity` extends that answer to a categorical criterion: a
-controlled vocabulary can be ordered by preference only after a `mapping` gives
-it a numeric proxy to negate.
-The seven Priority 2 fixtures added last cover conditional compartments,
-transactional sources, crossover periods, many-to-many relationships, composite
-endpoints, dependency ordering, and the metadata contract.
-`adam-adsl-dependency-order` is the only fixture that tests R001 dependency
-inference directly, and the only one whose column layout is deliberately not
-submission order.
-`adam-adlb-bds` is the only fixture where `compute` runs during row
-construction, so it is the only one that exercises a row-driver-qualified
-identifier in a numeric expression.
-R010's grammar has no rounding function at all: a derivation carries full
-precision and the number of places shown is decided when the value is reported.
-No fixture rounds, and none can.
+- `adam-adsl-bmi-function` is the only use of the `function` extension point.
+- `adam-adsl-dependency-order` is the only test of R001 dependency inference,
+  and the only fixture whose column layout is deliberately not submission order.
+- `adam-adlb-bds` is the only fixture where `compute` runs during row
+  construction, so the only one exercising a row-driver-qualified identifier in
+  a numeric expression.
+- `sdtm-vs-unit-standardization` is the only evidence for R010's prohibition on
+  reassociating a formula: `(VSORRESN - 32) * 5 / 9` returns exactly `37` where
+  `(VSORRESN - 32) / 1.8` returns `36.99999999999999`.
+- `adam-adsl-mapping` is the only use of the generic named `predicate`
+  verification.
+- `sdtm-suppmh-parent-linkage` is the only compound-key `mapping_from`.
 
-All nine verification keywords are exercised across the fixtures;
-`adam-adsl-mapping` covers the generic named `predicate`, while the challenge
-probes cover `all_or_none` and `implies`.
+No derivation rounds: R010 has no rounding function, so every `float` column
+carries full binary64 precision. The expected outputs show four decimal places
+because R011 renders a `float` at the project's declared precision, which this
+suite sets to four. Rendering never changes a stored value, so an assertion
+about a `float` sees the full value and an artifact does not.
 
-## Edge-case assessment
+## Open design gaps
 
-The fixtures demonstrate that local handlers remain readable for missing
-contextual items, unmapped terminology, failed numeric conversion, and missing
-inputs to banding. Row filters handle absent optional records, and the
-zero-baseline rule produces an intentional missing percentage without a special
-handler.
+Sixteen gaps are open across the suite, grouped by root cause rather than by
+the fixture that found them, because most are consequences of a few underlying
+decisions rather than independent omissions. Closed gaps are removed from this
+list rather than marked; `plan.md` records what was closed and how.
 
-Twenty-six design gaps have been recorded across the suite. Six are closed,
-three are partly closed, and seventeen are open. Group B is closed and group A
-is down to a single item. They are grouped by root cause rather than by the
-fixture that found them, because most of them are consequences of six
-underlying decisions rather than independent omissions.
+### A. Literal operands and ordering
 
-### A. Literal operands and ascending ordering (one item open)
-
-This constraint produced more workarounds than any other. Arithmetic is now out
-from under it; banding, windowing, and ordering are not.
-
-1. `cut.breaks` and window bounds are still literal lists and cannot be read
-   from a column, so an analysis window bound or a per-test grading threshold
-   cannot be data. **The arithmetic half is closed by `compute`, defined in
-   R010:** a column is accepted in every operand position, so a conversion
-   factor or a target day may now be data.
-2. **Closed by `compute`.** `add.addend` was a literal and `subtract` typed
-   both operands as variables, so the schema could subtract two columns but not
-   add them. One numeric expression now accepts columns on both sides of every
-   operator, and the four asymmetric keywords were deleted.
-3. **Closed by `compute`.** Division, absolute value, exponentiation, and
-   roots are in R010's closed function table. `sdtm-vs-unit-standardization`
-   shows why the boundary had to be drawn precisely: two algebraically equal
-   spellings of one conversion return different doubles, so R010 forbids
-   reassociating a formula. Rounding is deliberately absent from the grammar;
-   derivations carry full precision.
-4. **Closed by order terms.** `order_by` accepts `direction` and `nulls` on
-   every term, in `row_number` and in `multiple_matches` alike, so
-   `adam-adlb-closest-visit` and `adam-adae-worst-severity` dropped their
-   negated companion columns. A controlled vocabulary still needs a `mapping`
-   to give it a numeric proxy before it can be ordered at all; direction is no
-   longer the reason.
-5. Only `row_number` is registered. Without `rank` and `dense_rank`, ties can
+1. `cut.breaks` and window bounds are literal lists and cannot be read from a
+   column, so an analysis window bound or a per-test grading threshold cannot
+   be data. `compute` accepts a column in every operand position, so this is
+   now confined to banding and to predicate literals:
+   `adam-adlb-closest-visit` reads its target day from `AWTARGET` but still
+   tests `ADY >= 8 AND ADY <= 22` against literals, and a second window needs
+   another `case` branch.
+2. Only `row_number` is registered. Without `rank` and `dense_rank`, ties can
    be broken but not preserved, so a flag cannot cover every record tied at a
    worst value and distinct-level counts cannot be expressed.
+   `adam-adae-worst-severity` has two events tied on severity and date and
+   flags exactly one.
 
-The consequence is that one concept in the protocol becomes several unlinked
-pieces of specification. In `adam-adlb-closest-visit` a window's bounds, its
-target, and the distance to that target are three separate constructs, and the
-target day appears both as a column and as a literal with nothing keeping them
-consistent. In `sdtm-vs-unit-standardization` each unit pair
-needs its own `case` branch, and while `compute` now expresses each conversion
-as one formula, the factor still cannot come from a per-unit dictionary.
-`adam-adlb-closest-visit` no longer belongs in this list for its distance, which
-reads its target from a column, but its window bounds are still predicate
-literals. Closest-to-target and worst-severity selection are both expressible,
-and only the descending-sort workaround in A4 remains under them.
+A controlled vocabulary also still needs a `mapping` to give it a numeric proxy
+before anything can order it. The order lives in a dictionary rather than in
+the vocabulary.
 
-### B. Named intermediates (closed)
+### B. Joins
 
-6. Multi-step logic used to require emitting every step as an output column,
-   which was a conformance problem rather than an inconvenience:
-   `sdtm-vs-visit-study-day` published a DM reference date inside an SDTM VS
-   dataset, and `adam-adae-partial-dates` had more scaffolding than analysis.
-   **Closed by `output: false` on a column, defined in R005.** Twenty-eight
-   columns across eleven fixtures are now internal: derived, converted,
-   verified, and available to dependents, but absent from the artifact.
-
-   Two things did not change. A selection still cannot be audited as one
-   object, because its reasoning remains several unrelated columns rather than
-   one construct; `adam-adlb-closest-visit` now chooses to publish `AWTARGET`
-   and `ADIST` as an audit trail and hide the rest, which is an improvement in
-   the artifact and not a fix for the gap. And a dataset verification may still
-   name an internal column, which is deliberate: those assertions are about the
-   derivation, not the output.
-
-### C. Joins are limited to one automatic key join and a declared-key lookup
-
-7. `mapping_from` returns one column per call, so a multi-column visit or
-   parameter lookup repeats the same match. Widening its key did not change
-   this: `sdtm-vs-visit-study-day` still calls it twice against one `TV` row.
-   Returning several columns from one matched record conflicts with one
-   expression producing one value and belongs with gaps 11 and 12.
-8. **Closed.** `mapping_from.source` and `mapping_from.key` each accept a list,
-   pairing by position, so a subject-plus-repeat-key match is written directly.
-   `sdtm-suppmh-parent-linkage` performs the SUPPQUAL linkage the previous
-   wording said could not be written, against a right side that is unique on
-   the pair and on neither column alone. The R003 automatic join is unchanged
-   and still uses only output keys shared with the right side; R003 now frames
-   the two as derived keys versus declared keys.
-9. There is no interval join, so `EPOCH` cannot be assigned to a record the
+3. `mapping_from` returns one column per call, so reading several columns from
+   one matched record repeats the match. `sdtm-vs-visit-study-day` calls it
+   twice against one `TV` row. A multi-column return conflicts with one
+   expression producing one value and belongs with gaps 6 and 7.
+4. There is no interval join, so `EPOCH` cannot be assigned to a record the
    trial design does not name.
 
-### D. Aggregates and selection operate on values, not rows
+### C. Aggregates and selection operate on values, not rows
 
-10. **Closed for numbers by `compute`.** `GREATEST` and `LEAST` in R010's
-    function table reduce several columns row-wise, so a largest-of-several
-    numeric value is one expression rather than null-guarded `case` branches
-    that grow with each candidate. It is not closed for dates: R010 is numeric,
-    so a latest-of-several date still needs the `case` chain that
-    `sdtm-dm-reference-dates` writes.
-11. An extreme value and the values associated with it come from two
-    independent reductions that nothing ties to the same right-side record.
-12. A missing aggregate result cannot distinguish no matching record from
-    matching records whose values are all missing.
-13. `row_number` cannot filter. An eligibility sort column expresses a Boolean
-    condition, but a general conditional window needs an explicit filter.
-    **The right-side half is closed:** `filter` is now declared by `min`,
-    `max`, and `multiple_matches`, so an ordered selection narrows its right
-    side before ordering and `adam-adsl-crossover-periods` selects a period
-    directly.
-14. **Closed by order terms.** Each term declares `nulls: first` or
-    `nulls: last`, so a specification states how missing values sort instead of
-    depending on the runtime. Eligibility sort columns remain useful for
-    excluding records, but a fixture no longer has to be built around the
-    ordering being undefined.
+5. There is no row-wise maximum for dates. R010's `GREATEST` and `LEAST` are
+   numeric, so a latest-of-several date is still the null-guarded `case` chain
+   `sdtm-dm-reference-dates` writes, widening with each candidate.
+6. An extreme value and the values associated with it come from two independent
+   reductions that nothing ties to the same right-side record. A shared
+   `filter` can make them see the same records, not the same one.
+7. A missing aggregate result cannot distinguish no matching record from
+   matching records whose values are all missing.
+### D. Types, conversion, and missing-value semantics
 
-### E. Types, conversion, and missing-value semantics are unresolved
-
-15. Source-format missing values and type inference have no normative rule. The
-    fixtures assume an empty CSV field is missing and distinguish it from a
-    nonempty malformed value.
-16. **Closed for `compute` by R010:** `NULL` propagates, and division by zero
-    fails rather than returning missing, so a specification chooses missing
-    explicitly with `NULLIF`. R007 still defines no missing-input behavior for
-    the deleted `multiply`, `add`, and `subtract` keywords, which is why every
-    fixture using them carried a guarding predicate. Those guards are gone with
-    the keywords.
-17. Float-to-string conversion is undefined. `sdtm-vs-unit-standardization`
-    proposes a shortest-round-trip rule and commits a value to force the
-    decision. `adam-adsl-bmi-compute` is the second piece of evidence and the
-    sharper one: it commits `24.999999999999996` where
-    `adam-adsl-bmi-function` records `25` for the same formula and the same
-    inputs. One of the two expected outputs is wrong, and nothing in R005 says
-    which. `adam-adlb-bds` carries the same problem independently: its ALTSI
-    `AVAL` of `0.167` is the shortened form of `0.16699999999999998`, and its
-    `CHG` and `PCHG` inherit it. Three fixtures now disagree with
-    full-precision arithmetic in their golden output. R011 defines every
-    other conversion into a declared type and leaves this one open, so it
-    is now the only undefined cell in the matrix.
-18. **Normative in R011:** a declared `date` is complete or nothing. Partial
-    dates still have no precision, so imputation is written as
-    regular-expression extraction, string defaults, and reassembly, and the
-    rule itself is invisible to the schema.
-19. Imputed and collected dates compare identically. Nothing marks a comparison
+8. Source-format missing values and type inference have no normative rule.
+   Every fixture assumes an empty CSV field is missing and distinguishes it
+   from a nonempty malformed value.
+9. Partial dates have no precision. R011 fixes that a declared `date` is
+   complete or nothing, so imputation is written as regular-expression
+   extraction, string defaults, and reassembly, and the rule itself is
+   invisible to the schema.
+10. Imputed and collected dates compare identically. Nothing marks a comparison
     made under uncertainty, so an imputed day silently decides classifications
     such as treatment emergence.
-20. **Closed by R011:** there is no datetime type distinct from `date`, and
-    `column_type` is a closed enumeration of `str`, `int`, `float`, and
-    `date` rather than the free string `column.type` accepted before.
-    `sdtm-ae-effective-transaction` carries an audit timestamp as `str` and
-    orders it correctly only because ISO 8601 text sorts chronologically.
 
-### F. The output and pipeline contract stops at one dataset
+### E. The output and pipeline contract stops at one dataset
 
-21. One specification derives one dataset. `sdtm-suppmh-qualifiers` cannot
+11. One specification derives one dataset. `sdtm-suppmh-qualifiers` cannot
     assign a parent sequence and consume it in the same run, and
     `sdtm-dm-reference-dates` depends on DM being derived before the domains
     that reference it without being able to say so. R001 cycle detection is per
     specification, so a cross-dataset cycle cannot be reported either.
-22. Nothing controls output row order, and verifications are row-wise over the
-    completed output. Rows leave in row-template order rather than a
-    submission sort order, and referential integrity between a SUPPQUAL record
-    and its parent domain cannot be asserted.
+12. Nothing controls output row order, and verifications are row-wise over the
+    completed output. Rows leave in row-template order rather than a submission
+    sort order, and referential integrity between a SUPPQUAL record and its
+    parent domain cannot be asserted.
 
-### G. Structure that the data has cannot be declared
+### F. Structure that the data has cannot be declared
 
-23. Conditional applicability, treatment period, relationship degree, and
-    analysis window are all real structure in a protocol and none of them is a
-    concept in the schema. Each is re-expressed as a filter, a literal in a
-    predicate, or one row template per slot, so the specification grows with
-    the data rather than describing the design. `sdtm-lb-conditional-compartments`,
+13. Conditional applicability, treatment period, relationship degree, and
+    analysis window are all real structure in a protocol and none is a concept
+    in the schema. Each is re-expressed as a filter, a literal in a predicate,
+    or one row template per slot, so the specification grows with the data
+    rather than describing the design. `sdtm-lb-conditional-compartments`,
     `adam-adsl-crossover-periods`, and `sdtm-relrec-many-to-many` each show a
     different face of this.
-24. Row construction cannot consume values resolved during column derivation.
+14. Row construction cannot consume values resolved during column derivation.
     A logically removed record cannot be dropped, because `row.filter` sees
     only the row driver and nothing deletes a row afterwards, as
     `sdtm-ae-effective-transaction` shows by committing a record that must not
     exist.
-25. A derivation cannot carry both a value and the reason for it.
+15. A derivation cannot carry both a value and the reason for it.
     `adam-adrs-composite-response` writes the same four predicates twice, once
     for the endpoint and once for its audit trail, with nothing linking them.
-26. Metadata is an ungoverned string map. Labels are first class, but origin,
+16. Metadata is an ungoverned string map. Labels are first class, but origin,
     length, and controlled terminology are free-form text that no
     implementation can validate, and no expected metadata artifact exists to
     assert them, as `sdtm-dm-metadata-contract` records.
 
-### What the grouping changes
+## Negative fixtures
 
-Groups A and B are mostly closed. `compute` removed the arithmetic
-workarounds from group A in one registry entry, which is a better trade than
-the several operator keywords first proposed: R010 states the numeric semantics
-once, and R001 already extracted identifiers from SQL text, so dependency
-inference needed no new machinery. What remains of A is one item, cheap and unrelated to
-arithmetic: accepting a variable in `cut.breaks` and window bounds.
-`plan.md` sequences the rest.
+There are none, and that is the suite's binding limitation. Every fail-closed
+claim in these READMEs is an assertion rather than a tested behavior, and R001
+cycle reporting has no positive expression, so `adam-adsl-dependency-order` can
+only prove that valid graphs are sorted correctly.
 
-Group E is half closed. R011 names the three things called a type, closes the
-column vocabulary, and defines the conversion matrix, so what is left there is
-the float-to-text decision, source-format value recognition, and the absence of
-any mark on an imputed date.
-
-Groups C, D, F, and G are language additions rather than relaxations and need
-their failure behavior fixed by negative fixtures before they are specified.
-Group G is the largest of them and the least explored: it asks the schema to
-describe study design, not just data movement.
-
-Two things in the suite are now blocked on negative fixtures rather than on
-design. R001 cycle reporting has no positive expression, so
-`adam-adsl-dependency-order` can only prove that valid graphs are sorted
-correctly. And every claim about fail-closed behavior in these READMEs is
-still an assertion.
-
-Positive fixtures do not prove failure behavior. Negative fixtures are still
-needed for duplicate dictionary keys, unhandled mappings, failed verifications,
+Needed: duplicate dictionary keys, unhandled mappings, failed verifications,
 duplicate output keys, illegal expression contexts, nested expressions in
-variable-only operand fields, a column type outside `column_type`, and the R011
-conversion failures: unparseable numeric text, an incomplete date, and a
-non-integral value converted to `int`.
+variable-only operand fields, a column type outside `column_type`, the R011
+conversion failures (unparseable numeric text, an incomplete date, a
+non-integral value converted to `int`), a `row_number` partition in which every
+row fails the window `filter`, and the four `mapping_from` compound-key failures
+listed in `plan.md`.

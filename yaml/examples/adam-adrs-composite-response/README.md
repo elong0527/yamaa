@@ -41,21 +41,16 @@ That is the sharpest finding here. A derivation whose branches carry both a
 value and a reason would remove the duplication; so would a named intermediate
 holding the matched branch.
 
-## Status and named gaps
+## Three further gaps
 
-This fixture is a **probe**. It names four gaps.
-
-1. **A reason column duplicates the whole predicate list.** Traceable
-   intermediate calculations, which X08 asks for, are only available by writing
-   the logic twice.
-2. **The missing-component policy is implicit.** Whether a missing component
+1. **The missing-component policy is implicit.** Whether a missing component
    means not evaluable or non-response is expressed only by where the branch
    sits in the list. No declaration states the policy, so two studies cannot be
    compared without reading the branch order.
-3. **The threshold is a literal.** `-75` appears inside a predicate and cannot
+2. **The threshold is a literal.** `-75` appears inside a predicate and cannot
    be read from a parameter dataset, the same constraint recorded by
    `../adam-adlb-closest-visit`.
-4. **Visit selection is out of scope here.** The input is already one record
+3. **Visit selection is out of scope here.** The input is already one record
    per subject at one visit. Choosing which visit feeds a responder definition
    needs the window and selection machinery probed by
    `../adam-adlb-closest-visit`, which cannot be combined with this derivation

@@ -19,39 +19,34 @@ exercised.
 
 ## The bootstrap question
 
-The circular dependency C08 asks about does not arise inside this
-specification. `--DY` variables in EX, DS, and AE need `DM.RFSTDTC`, while
-`DM.RFXSTDTC` needs EX; because one specification derives one dataset, DM is
-simply derived first and the dependent domains read it as an input. R001 cycle
-detection is per specification, so nothing here can report a cycle across
-datasets either.
+The apparent circular dependency does not arise inside this specification.
+`--DY` variables in EX, DS, and AE need `DM.RFSTDTC`, while `DM.RFXSTDTC` needs
+EX; because one specification derives one dataset, DM is derived first and the
+dependent domains read it as an input.
 
-That means the language does not need a `_DM_REF` intermediate dataset, but it
-also cannot state the ordering it depends on. Which specification runs first is
-outside the schema. The multi-output pipeline manifest recorded for C01 and X10
-is where that ordering has to be declared.
+So the language needs no intermediate dataset, but it also cannot state the
+ordering it depends on. Which specification runs first is outside the schema,
+and R001 cycle detection is per specification, so a cycle across datasets
+cannot be reported either. Declaring that ordering needs the multi-output
+pipeline manifest.
 
-## Status and named gaps
+## Three gaps this fixture names
 
-This fixture is a **probe**. It passes, and it makes three gaps visible.
-
-1. **There is no row-wise maximum.** `min` and `max` reduce one right-side
-   dataset; nothing takes the latest of several already-derived columns.
-   `coalesce` returns the first non-missing value, not the greatest.
-   `RFENDTC` therefore spells the three-way maximum out as `case` branches with
-   null-guarded pairwise comparisons. The predicates are correct and
+1. **There is no row-wise maximum for dates.** R010's `GREATEST` covers
+   numbers, but it is numeric only. `min` and `max` reduce one right-side
+   dataset, and `coalesce` returns the first non-missing value rather than the
+   greatest, so `RFENDTC` spells the three-way maximum out as `case` branches
+   with null-guarded pairwise comparisons. The predicates are correct and
    deterministic, but each additional candidate date adds a branch and widens
-   every earlier predicate. A `greatest` expression over a list of variables
-   would replace the whole block.
+   every earlier predicate.
 2. **An extreme and its associated values come from two independent
    reductions.** `RFXENDTC` is `max` over `EX.EXENDTC`, while `EXDOSE0` is an
    ordered `source` selection over the same records. Nothing ties them to the
    same EX record: they agree here only because both order by `EXENDTC` and the
-   fixture breaks the remaining tie with `EXSEQ`. A single expression returning
-   an extreme row, rather than an extreme value, would make the guarantee
-   structural. Both may now declare the same `filter`, so the two reductions can
-   at least be made to see the same records; nothing still ties them to the same
-   one.
+   fixture breaks the remaining tie with `EXSEQ`. Both can declare the same
+   `filter`, so the two reductions can be made to see the same records, but
+   nothing ties them to the same one. A single expression returning an extreme
+   row, rather than an extreme value, would make the guarantee structural.
 3. **No match and empty match are indistinguishable.** `CATH-UCSD-0003` has no
    EX record and `CATH-UCSD-0002` has no AE record; both produce missing, and
    so would a subject whose EX records all had missing dates. Diagnostics that

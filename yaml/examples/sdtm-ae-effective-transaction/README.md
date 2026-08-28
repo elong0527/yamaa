@@ -41,27 +41,23 @@ transactions share a timestamp, and only `TXNSEQ` makes the selection total.
 Without it the result would be ambiguous, which R008 requires the specification
 to prevent rather than the runtime to guess.
 
-## Status and named gaps
+## Three further gaps
 
-This fixture is a **probe**. It names four gaps.
+**Each column selects independently.** Four separate `multiple_matches`
+selections agree here only because all four declare the same ordering. Nothing
+ties them to one transaction record, the same gap
+`../sdtm-dm-reference-dates` records for aggregates.
 
-1. **Row construction cannot consume resolved values.** Deleting a logically
-   removed record needs either a filter that can see another dataset or a
-   post-column row filter. Neither exists.
-2. **Each column selects independently.** Four separate `multiple_matches`
-   selections agree here only because all four declare the same ordering.
-   Nothing ties them to one transaction record, the same gap
-   `../sdtm-dm-reference-dates` records for aggregates.
-3. **There is no datetime type.** `AUDITDTC` is carried as `str`. Ordering is
-   correct only because ISO 8601 text sorts chronologically. A rule is needed
-   on whether date and datetime are distinct declared types.
-4. **Provenance is not modeled.** Transaction type and audit timestamp survive
-   only because this fixture emits them as columns. A rule about what
-   provenance a derived record must carry does not exist.
+**There is no datetime type.** R011 declares none, so `AUDITDTC` is carried as
+`str` and ordering is correct only because ISO 8601 text sorts chronologically.
+
+**Provenance is not modeled.** Transaction type and audit timestamp survive
+only because this fixture emits them as columns. Nothing states what provenance
+a derived record must carry.
 
 Whether transactional ODM is in scope at all is the decision this fixture is
-meant to force. If only snapshots are in scope, gap one disappears and the
-other three remain.
+meant to force. If only snapshots are in scope, the removal gap disappears and
+these three remain.
 
 ## Diagnostics and verifications
 

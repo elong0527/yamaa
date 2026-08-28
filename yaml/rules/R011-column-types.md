@@ -76,7 +76,7 @@ column is the declared type:
 | missing | missing | missing | missing | missing |
 | `str` | identity | parse, then numeric to `int` | parse | parse ISO 8601 |
 | `int` | decimal text | identity | widen | fail |
-| `float` | unresolved | integral only | identity | fail |
+| `float` | decimal text, see below | integral only | identity | fail |
 | `date` | ISO 8601 text | fail | fail | identity |
 | `bool` | fail | fail | fail | fail |
 
@@ -110,18 +110,40 @@ conservative reading: it is deterministic, no fixture depends on any other
 outcome, and a later rule may define a mapping without invalidating a
 specification written under this one.
 
+## Float to text
+
+A `float` becomes text in two places: this conversion, and the decimal text an
+artifact writes for a `float` column under R005. Both use the same form, so a
+`str` column derived from a `float` and the artifact's rendering of that same
+`float` never disagree.
+
+**The schema fixes no precision.** How many decimal places a value carries is a
+property of the study and its instruments, not of the derivation language. The
+form is therefore a project setting, resolved from the global project
+configuration in the same way `function` resolves its environment:
+
+- With no project setting, a `float` renders as the shortest decimal text that
+  parses back to the same binary64 value, with a trailing `.0` omitted for an
+  integral value. This is lossless and is the default because it cannot silently
+  discard a derived digit.
+- A project may declare a number of decimal places. The value is then rendered
+  with exactly that many places, trailing zeros removed, and a value with no
+  fractional part written without a decimal point.
+
+Rendering never changes a stored value. A `float` column keeps full binary64
+precision for every comparison, verification, and dependent derivation; only
+its text form is affected. A `str` column derived from a `float` does store the
+rendered text, and from that point it is a string like any other.
+
+The example suite declares **four decimal places**, which is what its committed
+expected outputs record.
+
 ## Unresolved
 
-`float` to `str` is not defined here and remains open under finding 17 of
-`examples/README.md`. It is the same decision as the decimal text an artifact
-writes for a `float` column, which R005 also leaves open and which three
-committed fixtures currently disagree about. A specification must not depend on
-either until that decision is recorded. This rule does not close it, because
-resolving it changes committed expected outputs.
-
-Source-format value recognition remains open under finding 15. This rule
-governs conversion of a value that evaluation already produced; it does not say
-how a reader decides that a source field is missing rather than empty text.
+Source-format value recognition remains open under gap 8 of
+`examples/README.md`. This rule governs conversion of a value that evaluation
+already produced; it does not say how a reader decides that a source field is
+missing rather than empty text.
 
 ## Errors
 

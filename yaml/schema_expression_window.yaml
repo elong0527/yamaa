@@ -4,6 +4,7 @@ expressions:
     row_number:
         - group_by: {type: "list[variable]", required: false}
         - order_by: {type: "list[order_by_term]", required: true}
+        - filter: {type: sql, required: false}
     baseline_flag:
         - group_by: {type: "list[variable]", required: false}
         - date: {type: variable, required: true}

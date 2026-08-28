@@ -51,26 +51,22 @@ possible days would have made it treatment-emergent. Event three, collected as
 no measure of that uncertainty: `ASTDTF` says a component was imputed, but
 nothing downstream distinguishes a confident `TRTEMFL` from a coerced one.
 
-## Status and named gaps
+## Three gaps this fixture names
 
-This fixture is a **probe**. It passes, and it names four gaps.
+**There is no date type with precision.** R011 records the decision that a
+declared `date` is complete or nothing, so partial dates must live as strings
+until they are made whole and every specification that touches them repeats
+this extraction block.
 
-1. **There is no date type with precision.** A declared `date` is complete or
-   it is nothing. Partial dates must live as strings until they are made whole,
-   so every specification that touches them repeats this extraction block.
-2. **Imputation is not a language concept.** The rule, the defaults, and the
-   flag are all hand-written. Two studies writing the same standard rule will
-   write it differently, and neither R nor Python is told what the rule was.
-3. **Comparisons under uncertainty are unmarked.** An imputed date compares
-   exactly like a collected one. A rule stating how an interval comparison
-   behaves when an operand is imputed, or a way to propagate that uncertainty,
-   does not exist.
-4. **Only trailing precision loss is covered.** SDTM also represents a known
-   day in an unknown month. That form needs an agreed representation before a
-   fixture can assert it, so this fixture deliberately stops at ISO 8601
-   truncation and records the rest as an open question. Conflicting start and
-   end precision, also listed for X04, needs an end date and is not covered
-   here.
+**Imputation is not a language concept.** The rule, the defaults, and the flag
+are all hand-written. Two studies writing the same standard rule will write it
+differently, and neither R nor Python is told what the rule was. An imputed
+date then compares exactly like a collected one: nothing states how an interval
+comparison behaves when an operand is imputed.
+
+**Only trailing precision loss is covered.** SDTM also represents a known day
+in an unknown month. That form needs an agreed representation before a fixture
+can assert it, so this fixture stops at ISO 8601 truncation.
 
 ## Diagnostics and verifications
 

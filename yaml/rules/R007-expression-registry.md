@@ -38,7 +38,9 @@ their schema field is typed as `variable`, `function_arg`, or `sql`. A string in
 
 Scalar expressions return one value per row. Window expressions partition
 constructed output rows by their local `group_by` and preserve row count.
-Omitting `group_by` creates one partition.
+Omitting `group_by` creates one partition. A window that declares `filter`
+still preserves row count: an excluded row receives missing rather than being
+dropped.
 
 `min` and `max` are aggregates. They are valid in exactly two contexts:
 
@@ -163,7 +165,16 @@ The `function` expression retains the type returned by the project function.
 ### Window expressions
 
 - `row_number` numbers rows from one within each partition, by the order terms
-  in `order_by` under the ordering rule above.
+  in `order_by` under the ordering rule above. Its optional `filter` is a
+  predicate over constructed output rows, evaluated before partitioning: a row
+  for which it is not `TRUE` receives missing, and surviving rows are numbered
+  from one within their partition as though the excluded rows had not been
+  constructed. A partition in which no row survives yields no number rather
+  than an error, so a rank of one always identifies a record that satisfied the
+  filter. Identifiers in `filter` are dependencies under R001, exactly as in
+  `case.branches[].when`. Encoding the same condition as a leading order term
+  is not equivalent: ordering ranks an excluded row last but still numbers it,
+  so rank one would not imply the condition.
 - `baseline_flag` returns `Y` for the row with the latest non-missing `date` at
   or before `reference_date`, and missing elsewhere. Ties are errors.
 - `baseline_value` copies the `value` from the row whose `flag` is `Y` to every
@@ -194,6 +205,8 @@ unresolved while that rule is draft.
 - An input with an incompatible runtime type: fail.
 - A scalar or window expression that changes row count: fail.
 - A window expression used during row construction: fail.
+- A `row_number` filter that is not a Boolean predicate over current-output
+  columns: fail.
 - An aggregate outside its two permitted contexts: fail.
 - `mapping_from` whose `source` and `key` lists differ in length: fail.
 - An unhandled local missing, mapping, or extraction condition: fail.

@@ -17,11 +17,10 @@ Portable expression semantics used by this example:
 - `baseline_value` uses `value = AVAL` and `flag = ABLFL` to copy the flagged
   baseline value to every record in its group.
 - `CHG` is `compute` with `AVAL - BASE`.
-- `PCHG` is `compute` with `100 * (AVAL - BASE) / NULLIF(BASE, 0)`. This is the
-  formula the deleted `percent_change` keyword defined, with the
-  zero-baseline rule made visible: `NULLIF` is what turns a zero baseline into
-  a missing percentage, rather than the rule hiding inside a keyword. Subject
-  `003` has a zero baseline and shows it.
+- `PCHG` is `compute` with `100 * (AVAL - BASE) / NULLIF(BASE, 0)`. The
+  zero-baseline rule is visible in the formula: `NULLIF` is what turns a zero
+  baseline into a missing percentage. Subject `003` has a zero baseline and
+  shows it.
 - `AVAL` for the derived ALTSI parameter is `compute` with
   `LB.LBSTRESN * 0.0167`, converting ALT from `U/L` to `ukat/L`. This is the
   only fixture where `compute` runs during row construction, so its identifier

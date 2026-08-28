@@ -28,19 +28,14 @@ last rather than first in any case. The clinical order has to be introduced:
 `AESEVN` maps the term to 1, 2, 3, and the order term declares
 `{variable: AESEVN, direction: desc}`.
 
-The mapping is still required. Severity has no order in the schema, so the
-vocabulary needs a numeric proxy before anything can sort it. What is no longer
-required is a second column: the proxy used to be negated into `NEGSEVN` so
-that an ascending-only `order_by` would put the most severe record first.
+The mapping is the gap this fixture names. A controlled vocabulary with a
+clinical order has none in the schema, so every specification restates that
+order as a `mapping` dictionary rather than reading it from the vocabulary.
 
-`TEORD` ranks ineligible records last, the same eligibility-sort technique
-`../adam-adae-occurrence-flags` records, because `row_number` cannot filter.
-Two records in one partition are ineligible only if both have a missing
-`AESEVN`, and R007 now defines how they compare: `nulls` defaults to `last`, so
-they sort after every graded record and then break their tie on `ASTDT` and
-`AESEQ`. This fixture still contains no such partition, but that is no longer
-load-bearing. It used to be a property of the data rather than a guarantee of
-the specification.
+`AWSRNK` declares `filter: "TRTEMFL = 'Y' AND AESEVN IS NOT NULL"`, so an
+ungraded or non-emergent event is never numbered and `AWSEVFL` tests the rank
+alone. A preferred term whose events are all ineligible yields no rank at all
+rather than a spurious rank of one.
 
 ## One record is flagged, not all tied records
 
@@ -55,28 +50,8 @@ severity" cannot be expressed and neither can any count of distinct severity
 levels. The distinction is invisible in this fixture's output, which is why it
 is stated here.
 
-## Status and named gaps
-
-This fixture is a **probe**. It passes, and one of the three gaps it named
-remains.
-
-1. **Categorical ordering needs a numeric proxy.** A controlled vocabulary with
-   a clinical order has none in the schema, so every specification restates the
-   order as a `mapping`. Declaring `direction: desc` removed the negation but
-   not the mapping: the order still lives in a dictionary rather than in the
-   vocabulary.
-2. **Closed: `order_by` had no direction.** The order term declares it.
-3. **Closed: ordering across missing values was undefined.** `nulls` declares
-   the placement, and R007 fixes the default at `last` under both directions
-   rather than inheriting an engine's convention.
-
-Still open beside these: without `rank` and `dense_rank`, ties can be broken
-but not preserved, so a flag cannot cover a tied set. Subject
-`CATH-UCSD-0002` has two events tied on severity and date, and only one is
-flagged.
-
-`AESEVN` is a real ADaM variable and stays in the output. `TEORD` and `AWSRNK`
-are not, and declare `output: false`.
+`AESEVN` is a real ADaM variable and stays in the output. `AWSRNK` is not, and
+declares `output: false`.
 
 ## Diagnostics and verifications
 
@@ -87,5 +62,4 @@ dictionary would fail rather than pass silently; the `allowed_values` check on
 
 Rows remain in source order; window expressions assign values without
 reordering. The exact key is `[STUDYID, USUBJID, AESEQ]`, and exactly eight
-rows are expected. The numeric severity and its negation must be present or
-absent together, and a flagged record must be treatment-emergent and graded.
+rows are expected. A flagged record must be treatment-emergent and graded.
