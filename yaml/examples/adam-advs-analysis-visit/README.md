@@ -43,11 +43,13 @@ That rule is expressible, deterministic, and auditable, but it is not the rule
 most studies use. Subject `CATH-UCSD-0001` has `ADY = 8` and `ADY = 15` in a
 window whose target day is 15, and first-in-window flags the `ADY = 8` record.
 Selecting the record closest to a target day needs a distance calculation and
-an ordering over it, which the language cannot express: `cut` gives window
-membership but not a target, and `row_number` orders only by existing
-variables. This is the concrete case behind plan item X03, and the expected
-output deliberately commits the first-in-window answer rather than hiding the
-difference.
+an ordering over it. `cut` gives window membership but not a target, and
+`row_number` orders only by existing variables, so neither is enough on its
+own. `../adam-adlb-closest-visit` later showed that the selection is
+expressible, but only by emitting a distance column, a spelled-out absolute
+value, and a negated companion column for the tie preference. This fixture
+keeps the simpler first-in-window rule and commits its answer rather than
+hiding the difference; the two golden outputs disagree on exactly this case.
 
 `AWRANK` also has to be emitted because named intermediates are unsupported,
 the same gap recorded by `../adam-adae-occurrence-flags`.

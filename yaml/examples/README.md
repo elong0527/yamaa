@@ -143,80 +143,125 @@ probes cover `all_or_none` and `implies`.
 
 ## Edge-case assessment
 
-The expanded fixtures demonstrate that local handlers remain readable for
-missing contextual items, unmapped terminology, failed numeric conversion, and
-missing inputs to banding. Row filters handle absent optional records, and the
+The fixtures demonstrate that local handlers remain readable for missing
+contextual items, unmapped terminology, failed numeric conversion, and missing
+inputs to banding. Row filters handle absent optional records, and the
 zero-baseline rule produces an intentional missing percentage without a special
 handler.
 
-Twenty design gaps became visible:
+Twenty-one design gaps are visible across the suite. They are grouped by root
+cause rather than by the fixture that found them, because most of them are
+consequences of six underlying decisions rather than independent omissions.
 
-1. Operations now consume named variables, which removes arbitrary expression
-   nesting and keeps mappings concise. A future named-intermediate or
-   definitions mechanism may still be useful when a real multi-step
-   transformation should not create an output column.
-2. The fixtures assume an empty CSV field is missing and distinguish it from a
-   nonempty malformed value. Source-format missing-value and type-inference
-   behavior needs a normative ingestion rule before implementations can be
-   portable.
-3. Hierarchical first-occurrence flags can use an eligibility sort column for
-   a Boolean treatment-emergence rule, but `row_number` still cannot exclude
-   ineligible rows. More general conditional windows need an explicit filter.
-4. `mapping_from` returns one column per call, so a multi-column visit or
-   parameter lookup repeats the same dictionary match. There is no explicit
-   equality join that copies several columns, and no interval join that could
-   assign `EPOCH` to an unscheduled record.
-5. Analysis windows are expressible with `cut`, and first-in-window selection
-   is expressible with `row_number`. Closest-to-target selection is not: no
-   expression computes a distance to a declared target day, so the two records
-   competing for one window in `adam-advs-analysis-visit` are resolved by
-   arrival order instead of proximity.
-6. Unit conversion needs `divide` and `round`, which are unregistered, and it
-   needs a literal subtrahend, which `subtract` does not accept. `multiply`
-   takes only a literal factor, so each unit pair needs its own `case` branch.
-7. R007 defines missing-input handlers for mapping, banding, and string
-   expressions but not for arithmetic. Specifications must guard `add`,
-   `subtract`, and `multiply` with explicit predicates until a rule states
-   whether arithmetic propagates missing or fails.
-8. `VSSTRESC` needs the character form of a float. Deriving it by declared type
-   alone depends on the unresolved R005 conversion matrix;
-   `sdtm-vs-unit-standardization` proposes a shortest-round-trip rule.
-9. SUPPQUAL linkage needs an explicit multi-column equality join. The R003
-   automatic join uses only output keys shared with the right side, and
-   `mapping_from` takes a single key column, so a subject-plus-repeat-key match
-   cannot be written.
-10. Nothing controls output row order. `keys` declares identity and column
-    order controls layout, but rows leave in row-template order, which is not
-    the conventional SUPPQUAL sort order.
-11. Verifications are row-wise over the completed output, so referential
-    integrity between a SUPPQUAL record and its parent domain cannot be
-    asserted.
-12. There is no row-wise maximum over several derived columns. `min` and `max`
+### A. Operands must be literals, and ordering is ascending and numeric
+
+This single constraint produces more workarounds than any other.
+
+1. Arithmetic takes a variable source and literal operands only. `add.addend`,
+   `multiply.factor`, `cut.breaks`, and window bounds cannot be read from a
+   column, so a target day, conversion factor, or window bound cannot be data.
+2. `subtract` types both operands as variables and so cannot subtract a
+   literal, while `add` accepts one. The two are asymmetric and only `add` is
+   usable for a literal offset.
+3. `divide`, `round`, and absolute value are unregistered. A reciprocal literal
+   replaces division, a `case` that multiplies by `-1` replaces absolute value,
+   and nothing replaces rounding.
+4. `row_number.order_by` is ascending with no direction option. Preferring a
+   later or larger value requires a negated companion column. A controlled
+   vocabulary can be ordered only after a `mapping` gives it a numeric proxy;
+   a categorical with no meaningful numeric order still cannot be ranked by
+   preference.
+5. Only `row_number` is registered. Without `rank` and `dense_rank`, ties can
+   be broken but not preserved, so a flag cannot cover every record tied at a
+   worst value and distinct-level counts cannot be expressed.
+
+The consequence is that one concept in the protocol becomes several unlinked
+pieces of specification. In `adam-adlb-closest-visit` a window's bounds, its
+target, and the distance to that target are three separate constructs, and the
+target day appears both as a column and as a literal with nothing keeping them
+consistent. In `sdtm-vs-unit-standardization` each unit pair needs its own
+`case` branch. Closest-to-target and worst-severity selection are both
+expressible, but only through these workarounds.
+
+### B. There are no named intermediates
+
+6. Multi-step logic must emit every step as an output column. This was noted
+   early as a convenience; the later fixtures show it as a conformance problem.
+   `sdtm-vs-visit-study-day` emits `RFSTDTC` and `VSDY0` into an SDTM VS
+   dataset, `adam-adae-partial-dates` has more intermediate columns than
+   analysis columns, and five of the fourteen columns in
+   `adam-adlb-closest-visit` exist only to explain one flag. A selection cannot
+   be audited as one object either, because its reasoning is spread across
+   several emitted columns.
+
+### C. Joins are limited to one automatic key join and a single-column lookup
+
+7. `mapping_from` returns one column per call, so a multi-column visit or
+   parameter lookup repeats the same dictionary match.
+8. There is no explicit multi-column equality join. The R003 automatic join
+   uses only output keys shared with the right side, so a subject-plus-repeat-key
+   match such as SUPPQUAL linkage cannot be written.
+9. There is no interval join, so `EPOCH` cannot be assigned to a record the
+   trial design does not name.
+
+### D. Aggregates and selection operate on values, not rows
+
+10. There is no row-wise maximum over several derived columns. `min` and `max`
     reduce one right-side dataset and `coalesce` returns the first non-missing
-    value, so a latest-of-several date must be written as null-guarded `case`
+    value, so a latest-of-several date is written as null-guarded `case`
     branches that grow with each candidate.
-13. An extreme value and the values associated with it come from two
+11. An extreme value and the values associated with it come from two
     independent reductions that nothing ties to the same right-side record.
-14. A missing aggregate result cannot distinguish no matching record from
+12. A missing aggregate result cannot distinguish no matching record from
     matching records whose values are all missing.
-15. A declared `date` is complete or nothing. Partial dates have no precision,
-    so imputation is written as regular-expression extraction, string
-    defaults, and reassembly, and the rule itself is invisible to the schema.
-16. Imputed and collected dates compare identically. Nothing marks a comparison
-    made under uncertainty, so an imputed day silently decides classifications
-    such as treatment emergence.
-17. `row_number.order_by` is ascending with no direction option. Preferring a
-    later or larger value requires a negated companion column, which exists
-    for numbers and has no equivalent for dates or strings.
-18. Arithmetic operands other than the source must be literals, so a target
-    day, conversion factor, or window bound cannot be read from a column and
-    windows cannot be data.
-19. Only `row_number` is registered. Without `rank` and `dense_rank`, ties can
-    be broken but not preserved, so a flag cannot cover every record tied at a
-    worst value and distinct-level counts cannot be expressed.
-20. Ordering across missing values is undefined. Eligibility sort columns keep
+13. `row_number` cannot filter. An eligibility sort column expresses a Boolean
+    condition, but a general conditional window needs an explicit filter.
+    Ordered `source.multiple_matches` cannot be filtered either.
+14. Ordering across missing values is undefined. Eligibility sort columns keep
     ineligible records out of contention without defining how two of them
     compare, so fixtures must avoid the case rather than specify it.
+
+### E. Types, conversion, and missing-value semantics are unresolved
+
+15. Source-format missing values and type inference have no normative rule. The
+    fixtures assume an empty CSV field is missing and distinguish it from a
+    nonempty malformed value.
+16. R007 defines missing-input handlers for mapping, banding, and string
+    expressions but not for arithmetic. Specifications must guard `add`,
+    `subtract`, and `multiply` with explicit predicates until a rule states
+    whether arithmetic propagates missing or fails.
+17. Float-to-string conversion is undefined. `sdtm-vs-unit-standardization`
+    proposes a shortest-round-trip rule and commits a value to force the
+    decision.
+18. A declared `date` is complete or nothing. Partial dates have no precision,
+    so imputation is written as regular-expression extraction, string defaults,
+    and reassembly, and the rule itself is invisible to the schema.
+19. Imputed and collected dates compare identically. Nothing marks a comparison
+    made under uncertainty, so an imputed day silently decides classifications
+    such as treatment emergence.
+
+### F. The output and pipeline contract stops at one dataset
+
+20. One specification derives one dataset. `sdtm-suppmh-qualifiers` cannot
+    assign a parent sequence and consume it in the same run, and
+    `sdtm-dm-reference-dates` depends on DM being derived before the domains
+    that reference it without being able to say so. R001 cycle detection is per
+    specification, so a cross-dataset cycle cannot be reported either.
+21. Nothing controls output row order, and verifications are row-wise over the
+    completed output. Rows leave in row-template order rather than a
+    submission sort order, and referential integrity between a SUPPQUAL record
+    and its parent domain cannot be asserted.
+
+### What the grouping changes
+
+Groups A and B account for most of the awkward YAML in the suite and are the
+cheapest to fix: allowing a variable wherever a literal operand is accepted,
+adding `divide`, `round`, and absolute value, giving `order_by` a direction,
+and adding named intermediates would remove workarounds from at least seven
+fixtures without changing any semantics already fixed by a golden output.
+
+Groups C, D, and F are language additions rather than relaxations and need
+their failure behavior fixed by negative fixtures before they are specified.
 
 Positive fixtures do not prove failure behavior. Negative fixtures are still
 needed for duplicate dictionary keys, unhandled mappings, failed verifications,
