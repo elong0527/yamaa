@@ -84,6 +84,9 @@ point with source and literal arguments.
     `divide` or `round`.
 21. `sdtm-suppmh-qualifiers` — reshapes non-standard qualifier columns into
     SUPPQUAL rows and links them to a pre-assigned parent sequence.
+22. `sdtm-dm-reference-dates` — reduces EX, DS, and AE into the DM reference
+    dates, including a three-way latest-participation date, a screen failure
+    with no exposure, and an adverse event ending after the last dose.
 
 ## Coverage gaps
 
@@ -113,6 +116,9 @@ membership rather than value banding, and the first to exercise the `cut` and
 in place of an unavailable literal subtraction.
 `sdtm-suppmh-qualifiers` is the first fixture to build a SUPPQUAL structure
 and the first to reshape several qualifier columns of one row driver into rows.
+`sdtm-dm-reference-dates` is the first fixture to reduce three different
+right-side datasets into one output row and the first to combine an aggregate
+with an ordered selection over the same records.
 
 All nine verification keywords are exercised across the fixtures;
 `adam-adsl-mapping` covers the generic named `predicate`, while the challenge
@@ -126,7 +132,7 @@ missing inputs to banding. Row filters handle absent optional records, and the
 zero-baseline rule produces an intentional missing percentage without a special
 handler.
 
-Eleven design gaps became visible:
+Fourteen design gaps became visible:
 
 1. Operations now consume named variables, which removes arbitrary expression
    nesting and keeps mappings concise. A future named-intermediate or
@@ -168,6 +174,14 @@ Eleven design gaps became visible:
 11. Verifications are row-wise over the completed output, so referential
     integrity between a SUPPQUAL record and its parent domain cannot be
     asserted.
+12. There is no row-wise maximum over several derived columns. `min` and `max`
+    reduce one right-side dataset and `coalesce` returns the first non-missing
+    value, so a latest-of-several date must be written as null-guarded `case`
+    branches that grow with each candidate.
+13. An extreme value and the values associated with it come from two
+    independent reductions that nothing ties to the same right-side record.
+14. A missing aggregate result cannot distinguish no matching record from
+    matching records whose values are all missing.
 
 Positive fixtures do not prove failure behavior. Negative fixtures are still
 needed for duplicate dictionary keys, unhandled mappings, failed verifications,
