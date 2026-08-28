@@ -93,6 +93,8 @@ point with source and literal arguments.
 24. `adam-adlb-closest-visit` — selects the record nearest a target study day,
     including a tie broken toward the later record and a record outside the
     window.
+25. `adam-adae-worst-severity` — selects the worst-severity event per preferred
+    term, ordering a controlled vocabulary through a numeric proxy.
 
 ## Coverage gaps
 
@@ -131,6 +133,9 @@ the first to use every declared handler on one source value.
 `adam-adlb-closest-visit` closes the closest-to-target question left open by
 `adam-advs-analysis-visit`: the selection is expressible, using a spelled-out
 absolute value and a negated companion column for descending preference.
+`adam-adae-worst-severity` extends that answer to a categorical criterion: a
+controlled vocabulary can be ordered by preference only after a `mapping` gives
+it a numeric proxy to negate.
 
 All nine verification keywords are exercised across the fixtures;
 `adam-adsl-mapping` covers the generic named `predicate`, while the challenge
@@ -144,7 +149,7 @@ missing inputs to banding. Row filters handle absent optional records, and the
 zero-baseline rule produces an intentional missing percentage without a special
 handler.
 
-Eighteen design gaps became visible:
+Twenty design gaps became visible:
 
 1. Operations now consume named variables, which removes arbitrary expression
    nesting and keeps mappings concise. A future named-intermediate or
@@ -206,6 +211,12 @@ Eighteen design gaps became visible:
 18. Arithmetic operands other than the source must be literals, so a target
     day, conversion factor, or window bound cannot be read from a column and
     windows cannot be data.
+19. Only `row_number` is registered. Without `rank` and `dense_rank`, ties can
+    be broken but not preserved, so a flag cannot cover every record tied at a
+    worst value and distinct-level counts cannot be expressed.
+20. Ordering across missing values is undefined. Eligibility sort columns keep
+    ineligible records out of contention without defining how two of them
+    compare, so fixtures must avoid the case rather than specify it.
 
 Positive fixtures do not prove failure behavior. Negative fixtures are still
 needed for duplicate dictionary keys, unhandled mappings, failed verifications,
