@@ -121,7 +121,7 @@ behavior is fixed by a negative fixture.
 | Expression | Shape | Evidence | Decision it forces |
 |---|---|---|---|
 | ~~`divide`~~ | — | superseded: `/` in R010's grammar | zero denominator **fails**; `NULLIF` chooses missing |
-| ~~`round`~~ | — | superseded: `ROUND` in R010's table, deliberately unused | half away from zero; but derivations must not round at all |
+| ~~`round`~~ | — | rejected: R010 has no rounding function | derivations must not round at all |
 | ~~`abs`~~ | — | superseded: `ABS` in R010's table | none |
 | ~~`greatest` / `least`~~ | — | superseded for numbers: `GREATEST` / `LEAST` in R010's table | all-missing returns missing |
 | `rank` / `dense_rank` | same fields as `row_number` | `adam-adae-worst-severity` cannot flag a tied set | tie semantics |
@@ -130,13 +130,18 @@ behavior is fixed by a negative fixture.
 Four of the six are superseded by one registry entry, which is the argument for
 preferring a closed grammar over an expression per operator.
 
-`round` was right to be singled out. R and Python both round half to even by
-default while SAS rounds half away from zero, so a `round` inheriting the host
-language disagrees across runtimes on exactly the values a reviewer checks.
-R010 pins half away from zero — and then goes further: a derivation must not
-round for presentation at all, so no fixture uses `ROUND` and the rule's
-rounding mode is currently an untested assertion. Whether `ROUND` should stay
-in the table is open.
+`round` was right to be singled out, and the answer went further than a mode
+field. R and Python both round half to even by default while SAS rounds half
+away from zero, so a `round` inheriting the host language disagrees across
+runtimes on exactly the values a reviewer checks. R010 resolves this by
+**omitting rounding entirely**: a derivation carries full precision and the
+number of places shown is decided when the value is reported. There is no mode
+to pin and no fixture that can round. `CEIL`, `FLOOR`, and `TRUNC` remain,
+because an integral part is exact and has no mode.
+
+What this does not settle is float-to-string conversion, which is R005's
+question and now has three fixtures disagreeing with full-precision
+arithmetic in their golden output.
 
 `GREATEST` and `LEAST` close the row-wise maximum only for numbers.
 `sdtm-dm-reference-dates` compares dates and still needs its null-guarded

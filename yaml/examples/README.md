@@ -170,9 +170,9 @@ submission order.
 `adam-adlb-bds` is the only fixture where `compute` runs during row
 construction, so it is the only one that exercises a row-driver-qualified
 identifier in a numeric expression.
-No fixture exercises `ROUND`: R010 requires a derivation to carry full
-precision and leaves rounding to the report, so the half-away-from-zero
-requirement is currently an unverified assertion.
+R010's grammar has no rounding function at all: a derivation carries full
+precision and the number of places shown is decided when the value is reported.
+No fixture rounds, and none can.
 
 All nine verification keywords are exercised across the fixtures;
 `adam-adsl-mapping` covers the generic named `predicate`, while the challenge
@@ -210,7 +210,7 @@ from under it; banding, windowing, and ordering are not.
    roots are in R010's closed function table. `sdtm-vs-unit-standardization`
    shows why the boundary had to be drawn precisely: two algebraically equal
    spellings of one conversion return different doubles, so R010 forbids
-   reassociating a formula. Rounding is in the table but deliberately unused;
+   reassociating a formula. Rounding is deliberately absent from the grammar;
    derivations carry full precision.
 4. `row_number.order_by` is ascending with no direction option. Preferring a
    later or larger value requires a negated companion column. A controlled

@@ -83,8 +83,6 @@ Permitted functions are exactly:
 | `CEIL(x)` | least integer value not less than `x` |
 | `FLOOR(x)` | greatest integer value not greater than `x` |
 | `TRUNC(x)` | `x` with its fractional part removed, toward zero |
-| `ROUND(x)` | `ROUND(x, 0)` |
-| `ROUND(x, n)` | `x` rounded to `n` decimal places, half away from zero |
 | `SQRT(x)` | non-negative square root |
 | `POWER(x, y)` | `x` raised to `y` |
 | `EXP(x)` | `e` raised to `x` |
@@ -105,18 +103,23 @@ checkable; widening it requires amending this table.
 `LOG` is excluded because its base differs between dialects. Write `LN(x)` or
 `LN(x) / LN(b)`.
 
-### Rounding
+### There is no rounding function
 
-A derivation must not round a value for presentation. Tabulation and analysis
-datasets carry the computed value at full precision, and the number of places
-shown is decided when the value is reported. `ROUND` is therefore for the rare
-quantity whose definition is itself rounded, and a specification that applies
-it to make an analysis value look tidy is wrong.
+A derivation must not round. Tabulation and analysis datasets carry the
+computed value at full precision, and the number of places shown is decided
+when the value is reported, so a rounding function in this grammar would only
+ever be misused. `ROUND` is therefore absent, not merely discouraged, and a
+specification cannot round a value at all.
 
-No fixture exercises `ROUND`, so the half-away-from-zero requirement below is
-an unverified assertion. Retiring `ROUND` from the table is an open question;
-`CEIL`, `FLOOR`, and `TRUNC` are not affected, because `FLOOR(a / b)` is how
-this grammar expresses integer division.
+This also removes a portability hazard rather than managing one. R's `round()`,
+Python's built-in `round()`, and `numpy.round()` round half to even while SAS
+rounds half away from zero, so any rounding that inherits the host language
+disagrees across runtimes on exactly the values a reviewer checks. With no
+rounding in the language there is no mode to pin and nothing to get wrong.
+
+`CEIL`, `FLOOR`, and `TRUNC` remain. They are not presentation rounding: they
+return an integral part exactly, with no mode to choose, and `FLOOR(a / b)` is
+how this grammar expresses integer division.
 
 ## Types
 
@@ -126,9 +129,8 @@ this grammar expresses integer division.
   `float`.
 - `/`: always returns `float`. There is no integer division. Write
   `FLOOR(a / b)` for a floor-divided integer.
-- `SQRT`, `POWER`, `EXP`, `LN`, and `ROUND(x, n)` with a nonzero `n` return
-  `float`.
-- `CEIL`, `FLOOR`, `TRUNC`, and `ROUND(x)` return `float`. Declare the column
+- `SQRT`, `POWER`, `EXP`, and `LN` return `float`.
+- `CEIL`, `FLOOR`, and `TRUNC` return `float`. Declare the column
   `type: int` when an integer is wanted; R005 converts the completed result.
 - `ABS`, `GREATEST`, `LEAST`, `MOD`, `NULLIF`, and `COALESCE` return the
   promoted type of their arguments: `int` when every argument is `int`,
@@ -165,8 +167,9 @@ R005: an implementation must not replace an error with a missing value.
 - A float result that is infinite or not a number.
 
 Floating-point results are not exact decimals. `POWER(x, 2)` and `x * x` are
-permitted to differ in the last place, and a specification that needs a stable
-decimal must apply `ROUND` explicitly.
+permitted to differ in the last place. A specification cannot round that away,
+so a derivation that needs a stable decimal must be written as the formula that
+produces one.
 
 ## Determinism
 
@@ -174,9 +177,6 @@ Evaluation must be deterministic and free of side effects. Implementations must
 produce identical results in R and Python for every fixture. Two consequences
 are not optional:
 
-- `ROUND` rounds half away from zero. R's `round()`, Python's built-in
-  `round()`, and `numpy.round()` round half to even and must not be used
-  directly.
 - `/` never truncates. Language or engine settings that make division integral
   must be overridden.
 - Evaluation follows the written association exactly. Implementations must not

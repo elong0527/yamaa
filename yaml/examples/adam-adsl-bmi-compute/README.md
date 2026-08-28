@@ -15,9 +15,9 @@ failure conditions are defined by [R010](../../rules/R010-scalar-computation.md)
 The first four rows repeat `../adam-adsl-bmi-function` exactly so the two
 derivations can be compared row for row; `CATH-005` adds the zero-height guard.
 
-No value is rounded. R010 requires a derivation to carry full precision and
-leaves the number of places shown to the report, so this fixture does not use
-`ROUND` and no fixture in the suite does.
+No value is rounded. R010 has no rounding function: a derivation carries full
+precision and the number of places shown is decided when the value is
+reported.
 
 ## What this establishes
 
@@ -59,8 +59,9 @@ the unresolved float-to-string question in R005, not an R010 question: no
 rounding mode, association, or grammar decision changes it.
 
 It follows that comparing a golden output by string equality requires that rule
-to be settled. Rounding is not the escape: under R010 the dataset carries
-`24.999999999999996` and the report decides how it is shown.
+to be settled. Rounding is not available as an escape: R010 has no rounding
+function, so the dataset carries `24.999999999999996` and the report decides
+how it is shown.
 
 The same question is open in `../adam-adlb-bds`, whose expected `AVAL` of
 `0.167` for the ALTSI parameter is the shortened form of `0.16699999999999998`,

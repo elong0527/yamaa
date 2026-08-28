@@ -42,8 +42,8 @@ its own `case` branch, and the branch list still grows with the number of
 collected units.
 
 There is no rounding. `175 LB` standardizes to `79.37866475 kg`, the exact
-product. R010 requires this: a derivation carries full precision and rounding
-is a reporting concern.
+product. R010 has no rounding function: a derivation carries full precision and
+rounding is a reporting concern.
 
 ## Status and named gaps
 
