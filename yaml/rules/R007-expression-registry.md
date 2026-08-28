@@ -212,7 +212,8 @@ unresolved while that rule is draft.
 - An unregistered expression keyword or invalid payload: fail under R006.
 - A semantic constraint stated above that is not satisfied: fail.
 - An input with an incompatible runtime type: fail.
-- A scalar or window expression that changes row count: fail.
+- A scalar or window expression that changes row count: fail under R001, which
+  owns the phase invariant.
 - A window expression used during row construction: fail.
 - A `row_number` filter that is not a Boolean predicate over current-output
   columns: fail.

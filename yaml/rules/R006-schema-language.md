@@ -35,8 +35,9 @@ The schema bundle and every specification use the YAML 1.2 core schema. Only
 `true` and `false` resolve to Boolean. Every other alphabetic scalar, including
 `y`, `Y`, `n`, `N`, `yes`, `no`, `on`, and `off`, resolves to a string.
 
-Default parser settings do not satisfy this requirement. Implementations must
-configure or override their parser rather than require authors to quote values.
+Default parser settings do not satisfy this requirement. How an implementation
+meets it is its own choice, but it must not be met by requiring authors to
+quote values.
 
 ## Named types
 
