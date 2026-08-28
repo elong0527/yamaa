@@ -140,7 +140,7 @@ expected outputs record.
 
 ## Unresolved
 
-Source-format value recognition remains open under gap 8 of
+Source-format value recognition remains open under gap 7 of
 `examples/README.md`. This rule governs conversion of a value that evaluation
 already produced; it does not say how a reader decides that a source field is
 missing rather than empty text.

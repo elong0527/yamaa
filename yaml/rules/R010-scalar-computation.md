@@ -137,6 +137,11 @@ how this grammar expresses integer division.
   promoted type of their arguments: `int` when every argument is `int`,
   otherwise `float`.
 
+`GREATEST` and `LEAST` stay numeric here like every other function in this
+grammar. A row-wise extreme over dates, or over any other comparable type, is
+the `greatest` and `least` registry expressions that R007 defines; this
+grammar is not widened to reach them.
+
 An identifier whose runtime type is neither `int` nor `float` is an error.
 R007 already forbids implicit conversion between operation inputs, and this
 rule does not relax that: a collected string is converted by binding it to a

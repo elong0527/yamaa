@@ -6,6 +6,10 @@ expressions:
     coalesce:
         - sources: {type: "list[variable]", required: true}
         - default: {type: literal_value, required: false}
+    greatest:
+        - sources: {type: "list[variable]", required: true}
+    least:
+        - sources: {type: "list[variable]", required: true}
     case:
         - branches: {type: "list[case_branch_class]", required: true}
         - else: {type: expression, required: false}

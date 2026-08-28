@@ -14,8 +14,9 @@ adverse-event end date.
 The four subjects cover consent before treatment, two qualifying exposures,
 early discontinuation, an adverse event ending after the last dose, a screen
 failure with no exposure at all, and a subject with no disposition record. All
-three `RFENDTC` sources win for at least one subject, so every branch is
-exercised.
+three `RFENDTC` sources win for at least one subject, and two subjects are
+missing one of them, so `greatest` is exercised over a full set, a partial set,
+and a set whose first candidate is absent.
 
 ## The bootstrap question
 
@@ -30,15 +31,17 @@ and R001 cycle detection is per specification, so a cycle across datasets
 cannot be reported either. Declaring that ordering needs the multi-output
 pipeline manifest.
 
-## Three gaps this fixture names
+## Gaps this fixture names
 
-1. **There is no row-wise maximum for dates.** R010's `GREATEST` covers
-   numbers, but it is numeric only. `min` and `max` reduce one right-side
-   dataset, and `coalesce` returns the first non-missing value rather than the
-   greatest, so `RFENDTC` spells the three-way maximum out as `case` branches
-   with null-guarded pairwise comparisons. The predicates are correct and
-   deterministic, but each additional candidate date adds a branch and widens
-   every earlier predicate.
+1. **Closed by `greatest`.** `RFENDTC` is a row-wise maximum over three dates,
+   and it is now written as one expression over named columns. It previously
+   spelled the three-way maximum out as `case` branches with null-guarded
+   pairwise comparisons, where each additional candidate date added a branch
+   and widened every earlier predicate. R010's `GREATEST` stays numeric, `min`
+   and `max` reduce one right-side dataset, and `coalesce` returns the first
+   non-missing value rather than the greatest, so none of the three covered
+   this; the registry entry does, for any comparable type. A fourth candidate
+   date is now one more entry in `sources`.
 2. **An extreme and its associated values come from two independent
    reductions.** `RFXENDTC` is `max` over `EX.EXENDTC`, while `EXDOSE0` is an
    ordered `source` selection over the same records. Nothing ties them to the

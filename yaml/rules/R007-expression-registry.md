@@ -90,6 +90,7 @@ runtime types:
 - `compute` requires every identifier in its expression to be numeric;
 - `str_extract`, `str_concat`, `str_upper`, and `str_lower` require string sources;
 - `date_diff` requires `date` inputs; R011 declares no datetime type;
+- `greatest` and `least` require mutually comparable `sources`;
 - `min`, `max`, and window ordering require mutually comparable values. Every
   record's value for one order term must be comparable with every other, so a
   term whose column mixes incomparable types is an error rather than an
@@ -98,8 +99,9 @@ runtime types:
 `source` retains its source type and `literal` retains its YAML scalar type.
 `cut`, `str_extract`, `str_concat`, `str_upper`, and `str_lower` return strings.
 `compute` returns the numeric type its expression promotes to under R010. `date_diff` and `row_number` return integers.
-`baseline_flag` returns a string. Mapping, conditional, coalescing, baseline
-value, and aggregate expressions retain the selected or aggregated value type.
+`baseline_flag` returns a string. Mapping, conditional, coalescing, extreme,
+baseline value, and aggregate expressions retain the selected or aggregated
+value type.
 The `function` expression retains the type returned by the project function.
 
 ## Registered semantics
@@ -140,7 +142,7 @@ The `function` expression retains the type returned by the project function.
 - `str_upper` converts all characters in `source` to uppercase. A missing source returns `missing` when supplied. Otherwise it fails on missing input.
 - `str_lower` converts all characters in `source` to lowercase. A missing source returns `missing` when supplied. Otherwise it fails on missing input.
 
-### Numeric and conditional expressions
+### Numeric, selection, and conditional expressions
 
 - `compute` evaluates `expr` as a scalar numeric formula over current-output
   columns and numeric literals. R010 defines its grammar, its closed function
@@ -152,6 +154,13 @@ The `function` expression retains the type returned by the project function.
   missing inputs.
 - `coalesce` returns the first non-missing variable in `sources`. If all are
   missing, it returns the literal `default` when supplied, or missing.
+- `greatest` returns the largest non-missing variable in `sources` and `least`
+  the smallest, or missing when every source is missing. They reduce across
+  the columns of one row, which is what distinguishes them from `min` and
+  `max`, and they place no restriction on type beyond comparability, which is
+  what distinguishes them from R010's `GREATEST` and `LEAST`. Use the R010
+  functions inside a numeric formula and these expressions to derive a column,
+  including a column of dates.
 - `case` evaluates branches in order and returns the `then` expression of the
   first `TRUE` predicate. It returns `else` when no branch matches, or missing
   when `else` is absent.
