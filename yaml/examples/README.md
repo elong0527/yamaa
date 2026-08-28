@@ -127,18 +127,14 @@ registered and unexercised. `adam-adae-string-handlers` closes the previously id
 `str_lower` and `str_extract.missing` gaps;
 `adam-adae-severity-override` closes the `override` gap.
 
-`sdtm-lb-multiform` covers `case` and implication checks.
-The five focused ADSL probes separately cover identifier parsing and fallback,
+`sdtm-lb-multiform` covers `case` and implication checks.The five focused ADSL probes separately cover identifier parsing and fallback,
 geography normalization, treatment selection and duration, disposition
-selection, and population flags. Together they retain the combined fixture's
-`compute`, `coalesce`, `date_diff`, filtered `min`/`max`, `str_concat`,
-`str_extract.no_match`, `str_upper`, ordered `multiple_matches`, and grouped
-completeness coverage.
-The four focused ADAE probes separately cover treatment-interval
-classification, deterministic hierarchical occurrence flags, string-handler
-paths, and final correction.
-`sdtm-vs-visit-study-day` is the first fixture to contrast the R003 automatic
-join with an explicit-key `mapping_from` lookup, and the first to exercise
+selection, and population flags.
+`adam-adsl-treatment-selection` covers `compute`, `coalesce`, `date_diff`,
+`min`/`max` aggregate filters and R003 right-side reduction, `str_upper`, ordered
+`multiple_matches`, and grouped completeness verification.
+`adam-adsl-disposition` covers filtered `max` and ordered last-match selection.
+`adam-adsl-identifier-parsing` covers `str_concat` and `str_extract.no_match`.th an explicit-key `mapping_from` lookup, and the first to exercise
 `date_diff` at an SDTM boundary.
 `adam-advs-analysis-visit` is the first fixture to use `cut` for interval
 membership rather than value banding, and the first to exercise the `cut` and
