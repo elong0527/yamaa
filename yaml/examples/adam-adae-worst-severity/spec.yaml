@@ -66,18 +66,6 @@ columns:
         min: 1
         max: 3
 
-  - name: TEORD
-    type: int
-    output: false
-    derivation:
-      case:
-        branches:
-          - when: "TRTEMFL = 'Y' AND AESEVN IS NOT NULL"
-            then:
-              literal: 0
-        else:
-          literal: 1
-
   - name: AWSRNK
     type: int
     output: false
@@ -85,17 +73,17 @@ columns:
       row_number:
         group_by: [STUDYID, USUBJID, AEDECOD]
         order_by:
-          - TEORD
           - {variable: AESEVN, direction: desc}
           - ASTDT
           - AESEQ
+        filter: "TRTEMFL = 'Y' AND AESEVN IS NOT NULL"
 
   - name: AWSEVFL
     type: str
     derivation:
       case:
         branches:
-          - when: "TEORD = 0 AND AWSRNK = 1"
+          - when: "AWSRNK = 1"
             then:
               literal: Y
 

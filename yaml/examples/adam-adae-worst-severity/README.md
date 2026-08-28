@@ -32,11 +32,10 @@ The mapping is the gap this fixture names. A controlled vocabulary with a
 clinical order has none in the schema, so every specification restates that
 order as a `mapping` dictionary rather than reading it from the vocabulary.
 
-`TEORD` ranks ineligible records last, the same eligibility-sort technique
-`../adam-adae-occurrence-flags` records, because `row_number` cannot filter.
-Two records in one partition are ineligible only if both have a missing
-`AESEVN`; `nulls` defaults to `last`, so they sort after every graded record and
-break their tie on `ASTDT` and `AESEQ`.
+`AWSRNK` declares `filter: "TRTEMFL = 'Y' AND AESEVN IS NOT NULL"`, so an
+ungraded or non-emergent event is never numbered and `AWSEVFL` tests the rank
+alone. A preferred term whose events are all ineligible yields no rank at all
+rather than a spurious rank of one.
 
 ## One record is flagged, not all tied records
 
@@ -51,8 +50,8 @@ severity" cannot be expressed and neither can any count of distinct severity
 levels. The distinction is invisible in this fixture's output, which is why it
 is stated here.
 
-`AESEVN` is a real ADaM variable and stays in the output. `TEORD` and `AWSRNK`
-are not, and declare `output: false`.
+`AESEVN` is a real ADaM variable and stays in the output. `AWSRNK` is not, and
+declares `output: false`.
 
 ## Diagnostics and verifications
 

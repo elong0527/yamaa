@@ -25,9 +25,10 @@ target, and a record on the lower window boundary.
 is one expression, `ABS(ADY - AWTARGET)`, and the two cannot disagree. No guard
 is needed: `AWTARGET` is missing outside the window, and `NULL` propagates.
 
-`ARNK` then orders by nearest distance, `{variable: ADY, direction: desc}` for
+`ARNK` declares `filter: "AVISIT IS NOT NULL"` so only in-window records are
+ranked, then orders by nearest distance, `{variable: ADY, direction: desc}` for
 the later record, and `LBSEQ` as the final tie-breaker so the result is total.
-`ANL01FL` flags rank one inside the window.
+`ANL01FL` flags rank one.
 
 For subject `CATH-UCSD-0001`, days 10 and 20 are both five days from the
 target. The rule selects day 20, and the golden output shows `ARNK = 1` on the

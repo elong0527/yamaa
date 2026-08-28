@@ -21,9 +21,10 @@ fixture the acceptance rule requires.
 | `filter` on `multiple_matches`, R003 and R008 | ordered selection narrows its right side before ordering |
 | `column_type` and R011 | `column.type` became a closed enumeration and the conversion matrix is defined, leaving float-to-string as its one open cell |
 | `mapping_from.source` and `mapping_from.key` as lists, R003 and R007 and R008 | a lookup declares a compound key and pairs it by position |
+| `filter` on `row_number`, R001 and R003 and R007 | a window states its eligibility once; two `TEORD` sort columns and six duplicated flag predicates deleted |
 
-Eight gaps closed and were removed from the catalogue in
-[`README.md`](README.md); eighteen remain, and the numbering below refers to
+Nine gaps closed and were removed from the catalogue in
+[`README.md`](README.md); seventeen remain, and the numbering below refers to
 that renumbered list.
 
 Three lessons from those changes are worth keeping.
@@ -91,8 +92,7 @@ form or whether a separate `greatest`/`least` expression covers dates.
 
 ### T5. Selection that returns a record
 
-Three separate gaps have the same cause: an expression selects a value, never a
-row.
+Two gaps have the same cause: an expression selects a value, never a row.
 
 - Gap 6: `sdtm-dm-reference-dates` derives an extreme date with `max` and its
   associated dose with an ordered `source`, and nothing ties them to the same
@@ -100,18 +100,19 @@ row.
   that agree only because all four declare the same ordering.
 - Gap 7: a missing aggregate cannot distinguish no matching record from
   matching records whose values are all missing.
-- Gap 8: `row_number` still cannot filter, so eligibility
-  is expressed as a sort column that ranks ineligible records last.
 
 `filter` on `multiple_matches` narrowed this but did not close it: two
 selections can now be made to see the same records without being tied to the
 same one. A construct that selects a right-side record once and reads several
-columns from it would close all three. This is design work, not a registry
-entry.
+columns from it would close both. This is design work, not a registry entry.
+
+The window half of this item was filed here and did not belong: restricting
+which rows a window sees is separable from returning a record, and it landed as
+`row_number.filter`.
 
 ### T6. Dates and times
 
-Evidence: gaps 11 and 12. `adam-adae-partial-dates` rebuilds dates with
+Evidence: gaps 10 and 11. `adam-adae-partial-dates` rebuilds dates with
 regular expressions and string defaults because a declared `date` is complete
 or nothing. `sdtm-ae-effective-transaction` carries an audit timestamp as `str`
 and orders it correctly only because ISO 8601 text sorts chronologically.
@@ -120,17 +121,17 @@ R011 settled the vocabulary half: `column_type` is closed, a declared `date` is
 complete or nothing, and there is no datetime type, so the type split is a
 decision already recorded rather than an open question. What remains is the
 harder half: a precision concept, a declared imputation rule with its flag, and
-a statement about comparison when an operand is imputed. Gap 12 is untouched
+a statement about comparison when an operand is imputed. Gap 11 is untouched
 by R011.
 
 ### T7. Ingestion and conversion rules
 
 Two unrelated questions that both block portability.
 
-- Gap 9: source-format missing values and type inference have no normative
+- Gap 8: source-format missing values and type inference have no normative
   rule. Every fixture assumes an empty CSV field is missing and distinguishes
   it from a nonempty malformed value.
-- Gap 10: float-to-string conversion is undefined.
+- Gap 9: float-to-string conversion is undefined.
   `sdtm-vs-unit-standardization` proposes a shortest-round-trip rule and
   commits `37` rather than `37.0` to force the decision. R010 made this more
   urgent, not less: derivations now carry full precision by design, so three
@@ -141,20 +142,20 @@ Two unrelated questions that both block portability.
 
 ### T8. The output and pipeline contract
 
-- Gap 13: one specification derives one dataset. `sdtm-suppmh-qualifiers`
+- Gap 12: one specification derives one dataset. `sdtm-suppmh-qualifiers`
   cannot assign a parent sequence and consume it in one run, and
   `sdtm-dm-reference-dates` depends on an execution order it cannot state.
   R001 cycle detection is per specification, so a cross-dataset cycle cannot be
   reported. Needs a manifest, cross-specification dependency inference, and
   cycle reporting.
-- Gap 14: nothing controls output row order, and verifications are row-wise
+- Gap 13: nothing controls output row order, and verifications are row-wise
   over the completed output. `sdtm-suppmh-qualifiers` leaves rows in
   row-template order rather than a submission order, and referential integrity
   between a SUPPQUAL record and its parent domain cannot be asserted.
 
 ### T9. Governed metadata
 
-Evidence: gap 18. `sdtm-dm-metadata-contract` declares origin, length, and
+Evidence: gap 17. `sdtm-dm-metadata-contract` declares origin, length, and
 codelist as free-form strings, marks `USUBJID` as `Derived` by hand although
 `str_concat` already encodes that, and declares a codelist name next to an
 unrelated `allowed_values` list.
@@ -165,7 +166,7 @@ artifact. Until that artifact is defined, fixtures must not invent its shape.
 
 ### T10. Declarable study structure
 
-Group F, gaps 15 to 17, and the largest open area.
+Group F, gaps 14 to 16, and the largest open area.
 
 - Conditional applicability, treatment period, relationship degree, and
   analysis window are protocol structure re-expressed as filters, predicate
@@ -196,9 +197,9 @@ an `EPOCH` assignment actually needs.
    widened field.
 
 Expected README edits: T2 retires gap 2, T4 retires gap 5, T5 retires gaps 3,
-6, 7, and 8, T6 retires gaps 11 and 12, T7 retires gaps 9 and 10, T8 retires
-gaps 13 and 14, T9 retires gap 18, and T10 retires gaps 4, 15, 16, and 17,
-along with whatever remains of gap 1.
+6, and 7, T6 retires gaps 10 and 11, T7 retires gaps 8 and 9, T8 retires gaps
+12 and 13, T9 retires gap 17, and T10 retires gaps 4, 14, 15, and 16, along
+with whatever remains of gap 1.
 
 ## Negative fixtures this plan requires
 
@@ -220,6 +221,7 @@ item above and not a separate workstream.
 | `mapping_from` with no match and no `unmapped` handler | join failure behavior | already landed, untested |
 | `mapping_from` with one of two sources missing and no `missing` handler | R008 partial-key semantics | already landed, untested |
 | `mapping_from` whose `source` and `key` lists differ in length | R007's new error | already landed, untested |
+| a `row_number` partition in which every row fails the window `filter` | R007: no rank rather than a spurious rank of one | already landed, untested |
 
 All but one gate nothing new, because the features already landed. They are
 the more urgent set: every fail-closed claim in the fixture READMEs and in

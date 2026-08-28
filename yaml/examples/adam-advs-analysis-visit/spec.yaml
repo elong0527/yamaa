@@ -85,13 +85,14 @@ columns:
       row_number:
         group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]
         order_by: [ADY, VSSEQ]
+        filter: "AVISIT IS NOT NULL"
 
   - name: ANL01FL
     type: str
     derivation:
       case:
         branches:
-          - when: "AVISIT IS NOT NULL AND AWRANK = 1"
+          - when: "AWRANK = 1"
             then:
               literal: Y
 

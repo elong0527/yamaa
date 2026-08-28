@@ -51,8 +51,8 @@ declaration order. Recursively traverse each expression and collect:
 - current-output identifiers used by an SQL predicate;
 - current-output identifiers used by a `compute` numeric expression.
 
-Predicates include `case.branches[].when`, `override[].when`, row filters, and
-aggregate `filter`. Identifier extraction depends on the SQL grammar in
+Predicates include `case.branches[].when`, `override[].when`, row filters,
+aggregate `filter`, and window `filter`. Identifier extraction depends on the SQL grammar in
 R004; an implementation must not treat a predicate as dependency-free.
 The same requirement applies to `compute.expr` under the grammar in R010: an
 implementation must not treat a computed expression as dependency-free.

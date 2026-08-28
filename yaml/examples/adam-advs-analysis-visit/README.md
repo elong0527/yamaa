@@ -54,10 +54,10 @@ artifact carries only the analysis visit, its numeric companion, and the flag.
 ## Diagnostics and verifications
 
 Expected `AVISIT.cut.missing` and `AVISITN.mapping.missing` counts are both
-one, for the record with no analysis date. That record still receives a rank
-because its window partition is missing rather than absent, so `ANL01FL`
-requires a non-missing `AVISIT` as well as rank one. No other handler path is
-declared.
+one, for the record with no analysis date. `AWRANK` declares
+`filter: "AVISIT IS NOT NULL"`, so that record falls outside the window
+ranking and receives no rank, and `ANL01FL` tests the rank alone. No other
+handler path is declared.
 
 Rows remain in source order; window expressions assign values without
 reordering. The exact key is `[STUDYID, USUBJID, PARAMCD, VSSEQ]`, and exactly
