@@ -40,18 +40,19 @@ closed schema of its value.
 Multi-step composition uses named derived columns:
 
 ```yaml
-- name: DOUBLED
-  type: float
+- name: ADY
+  type: int
+  output: false
   derivation:
-    multiply:
-      source: AVAL
-      factor: 2
-- name: ADJUSTED
-  type: float
+    date_diff:
+      start: TRTSDT
+      end: ADT
+      unit: day
+- name: ADYPOS
+  type: int
   derivation:
-    add:
-      source: DOUBLED
-      addend: 1
+    compute:
+      expr: "ADY + 1"
 ```
 
 There is no implicit current value, pipeline seed, or execution order derived

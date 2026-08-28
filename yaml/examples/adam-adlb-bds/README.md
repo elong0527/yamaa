@@ -18,7 +18,7 @@ Portable expression semantics used by this example:
   baseline value to every record in its group.
 - `CHG` is `compute` with `AVAL - BASE`.
 - `PCHG` is `compute` with `100 * (AVAL - BASE) / NULLIF(BASE, 0)`. This is the
-  formula R007 gives for the retired `percent_change` keyword, with the
+  formula the deleted `percent_change` keyword defined, with the
   zero-baseline rule made visible: `NULLIF` is what turns a zero baseline into
   a missing percentage, rather than the rule hiding inside a keyword. Subject
   `003` has a zero baseline and shows it.

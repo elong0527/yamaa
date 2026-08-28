@@ -20,7 +20,7 @@ Measured across the committed specifications rather than estimated:
 |---|---|---|
 | Columns emitted only to hold an intermediate value | 25 columns in 11 specs | no named intermediates |
 | `case` branches that exist only to guard arithmetic against missing input | 8 purely defensive branches, more partially | arithmetic missing policy undefined |
-| Companion columns multiplied by `-1` to fake a descending sort | 2 specs | `order_by` has no direction |
+| Companion columns negated to fake a descending sort | 2 specs | `order_by` has no direction |
 | A selection made correct by guarding it with an unrelated column | 3 specs state this explicitly | ordered selection cannot filter |
 
 Most of the awkwardness in the suite comes from four constraints, and three of
@@ -50,31 +50,21 @@ This is the only Tier 1 item that introduces a new error, and its negative
 fixture does not exist yet. An internal column named in `keys` must fail; that
 behavior is currently asserted by R005 and untested.
 
-### S2. Numeric operands accept a variable or a literal
+### ~~S2. Numeric operands accept a variable or a literal~~ (superseded)
 
-The current asymmetry is sharper than the gap list records. `subtract` and
-`percent_change` take variable and variable; `add` and `multiply` take variable
-and literal. Neither form accepts a mix, which is why
-`sdtm-vs-unit-standardization` converts Fahrenheit with `add` and an `addend` of
-`-32`, and why `adam-adlb-closest-visit` writes target day `15` both as a column
-and as a literal inside the same derivation.
+Superseded by `compute` and [R010](../rules/R010-scalar-computation.md), which
+went further than this item proposed. Rather than widening each operator's
+operand types, one expression takes a closed numeric formula, and `multiply`,
+`add`, `subtract`, and `percent_change` were **deleted**.
 
-```yaml
-numeric_operand: {type: [float, variable]}
+The evidence this item cited is resolved. `sdtm-vs-unit-standardization` now
+converts Fahrenheit with `(VSORRESN - 32) * 5 / 9`, and
+`adam-adlb-closest-visit` reads the target day from the column that publishes
+it, `ABS(ADY - AWTARGET)`.
 
-add:
-    - source: {type: numeric_operand, required: true}
-    - addend: {type: numeric_operand, required: true}
-subtract:
-    - minuend: {type: numeric_operand, required: true}
-    - subtrahend: {type: numeric_operand, required: true}
-multiply:
-    - source: {type: numeric_operand, required: true}
-    - factor: {type: numeric_operand, required: true}
-```
-
-Every existing specification stays valid, because a literal and a variable are
-both still accepted where they were before.
+Widening operands would have left one operator per column and one column per
+step. The formula was the cheaper change: one registry entry, no new dependency
+machinery, because R001 already extracted identifiers from SQL predicates.
 
 ### S3. Ordering declares direction and null placement
 
@@ -111,15 +101,17 @@ the same reduction before ordering. `adam-adsl-crossover-periods` would then
 select a period directly instead of depending on an unrelated guard column, and
 `adam-adsl-disposition` could restrict ordering to disposition events.
 
-### R1. Arithmetic propagates missing
+### ~~R1. Arithmetic propagates missing~~ (landed, via R010)
 
-A rule change in R007 with no schema change. State that `add`, `subtract`,
-`multiply`, `divide`, and `percent_change` return missing when any operand is
-missing, and permit an optional local `missing` handler for the cases that want
-a substitute.
+R010 states it for `compute`, which is now the only arithmetic expression:
+`NULL` propagates through every operator and function, and division by zero
+fails rather than returning missing, so a specification chooses missing
+explicitly with `NULLIF`.
 
-Eight defensive `case` branches disappear and no golden output moves, because
-the guarded expressions already produce missing today.
+The predicted saving was real. The defensive `case` branches are gone from
+`adam-adsl-treatment-selection`, `adam-adsl-crossover-periods`,
+`adam-adae-worst-severity`, `adam-adsl-bmi-compute`, and both branches of
+`sdtm-vs-unit-standardization`, and no golden output moved.
 
 ## Tier 2: new expressions with committed evidence
 
@@ -128,18 +120,27 @@ behavior is fixed by a negative fixture.
 
 | Expression | Shape | Evidence | Decision it forces |
 |---|---|---|---|
-| `divide` | `numerator`, `denominator` | `sdtm-vs-unit-standardization` writes `5/9` as a decimal literal | zero denominator returns missing, following the `percent_change` precedent |
-| `round` | `source`, `digits`, `mode` | `175 LB` standardizes to `79.37866475 kg` | rounding mode must be declared, not inherited |
-| `abs` | `source` | `adam-adlb-closest-visit` spells absolute value as a `case` | none |
-| `greatest` / `least` | `sources: list[variable]` | `sdtm-dm-reference-dates` writes a three-way maximum as null-guarded branches | whether all-missing returns missing or fails |
+| ~~`divide`~~ | — | superseded: `/` in R010's grammar | zero denominator **fails**; `NULLIF` chooses missing |
+| ~~`round`~~ | — | superseded: `ROUND` in R010's table, deliberately unused | half away from zero; but derivations must not round at all |
+| ~~`abs`~~ | — | superseded: `ABS` in R010's table | none |
+| ~~`greatest` / `least`~~ | — | superseded for numbers: `GREATEST` / `LEAST` in R010's table | all-missing returns missing |
 | `rank` / `dense_rank` | same fields as `row_number` | `adam-adae-worst-severity` cannot flag a tied set | tie semantics |
 | `lookup` | `dataset`, `on: list[{left, right}]`, `value` | `sdtm-suppmh-qualifiers`, `sdtm-vs-visit-study-day` | duplicate right side and no match |
 
-`round` deserves particular care. R and Python both round half to even by
-default while SAS rounds half away from zero, so a `round` that inherits the
-host language will disagree across runtimes on exactly the values a reviewer
-checks. The mode must be an explicit field, and `half_up` is the expected
-clinical default.
+Four of the six are superseded by one registry entry, which is the argument for
+preferring a closed grammar over an expression per operator.
+
+`round` was right to be singled out. R and Python both round half to even by
+default while SAS rounds half away from zero, so a `round` inheriting the host
+language disagrees across runtimes on exactly the values a reviewer checks.
+R010 pins half away from zero — and then goes further: a derivation must not
+round for presentation at all, so no fixture uses `ROUND` and the rule's
+rounding mode is currently an untested assertion. Whether `ROUND` should stay
+in the table is open.
+
+`GREATEST` and `LEAST` close the row-wise maximum only for numbers.
+`sdtm-dm-reference-dates` compares dates and still needs its null-guarded
+branches.
 
 `lookup` replaces the two `mapping_from` calls in `sdtm-vs-visit-study-day` and
 makes the SUPPQUAL parent join expressible. It returns one column per call; a
@@ -176,21 +177,26 @@ as an incremental schema edit.
 
 Two Tier 1 items are breaking to the fixtures, so the order matters.
 
-1. **R1, S2, S4.** No golden output changes. Land first and confirm the suite
-   still reproduces byte for byte.
-2. **S3.** Two fixtures lose a negation column. Regenerate
+1. ~~**R1, S2.**~~ Landed as `compute` and R010, which deleted the four
+   arithmetic keywords rather than widening them. Seven fixtures were rewritten
+   and every converted expression was checked bit-identical to the one it
+   replaced, so no golden output moved.
+2. **S4.** No golden output changes.
+3. **S3.** Two fixtures lose a negation column, `NEGADY` and `NEGSEVN`, both
+   now written as `compute` with a unary minus. Regenerate
    `adam-adlb-closest-visit` and `adam-adae-worst-severity`, and update both
-   READMEs, which currently describe the workaround as necessary.
-3. ~~**S1.**~~ Done ahead of the other Tier 1 items. Eleven fixtures lost 28
+   READMEs, which still describe the workaround as necessary.
+4. ~~**S1.**~~ Done ahead of the other Tier 1 items. Eleven fixtures lost 28
    columns and eleven READMEs were revised. One change was not mechanical:
    `adam-adsl-dependency-order` marks `RANDFL` internal so that an output
    column depends on a non-output one, which is the case that detects an
    implementation building its dependency graph from output columns alone.
-4. **Tier 2**, one expression at a time, each with its negative fixture.
-5. **Tier 3**, design documents before schema changes.
+5. **Tier 2**, one expression at a time, each with its negative fixture. Only
+   `rank`/`dense_rank` and `lookup` remain.
+6. **Tier 3**, design documents before schema changes.
 
-Steps 2 and 3 also remove text from `README.md`: gaps 4, 6, 14, and 18 are
-retired by S1 and S3, and gap 16 by R1.
+These steps also remove text from `README.md`: gaps 1, 2, 3, 10, and 16 are
+retired by `compute`, gap 6 by S1, and gaps 4, 14, and 18 by S3.
 
 ## Negative fixtures this plan requires
 
@@ -201,9 +207,9 @@ Tier 2.
 | Fixture | Provokes |
 |---|---|
 | non-output column named in `keys` | S1's only new error |
-| division by zero, with and without a handler | `divide` |
-| a value exactly half way between two rounded results | `round` |
-| `greatest` over columns that are all missing | `greatest` |
+| unguarded division by zero, and the same expression guarded by `NULLIF` | R010's failure conditions |
+| `SQRT` of a negative value, `LN` of zero, integer overflow | the rest of R010's failure conditions |
+| an expression using `SUM`, `LAG`, a comparison, or a qualified identifier in the column phase | R010's closed grammar |
 | `lookup` with a duplicate right-side key, and with no match | `lookup` |
 | a specification declaring `direction: desc` on a column of mixed types | S3 |
 

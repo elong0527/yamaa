@@ -42,7 +42,7 @@ three gaps visible.
    `output: false`, so a VS artifact no longer carries a DM reference date and
    a raw day count. Both are still available to predicates and to the
    `study-day-completeness` verification.
-3. Closed. `VSDY` used `add`, which returns a float under R007, while SDTM
+3. Closed. `VSDY` used `add`, which returned a float, while SDTM
    `--DY` is integral, so the column depended on exact float-to-int conversion
    under R005's unresolved conversion matrix. `compute` with `VSDY0 + 1`
    returns an integer instead: R010 promotes `int + int` to `int`, and `VSDY0`

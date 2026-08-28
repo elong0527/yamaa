@@ -31,7 +31,9 @@ This is the version 1.0 direction for team review.
 `compute` is the one exception, and it is a narrow one. Registering an operator
 per arithmetic operation makes a single formula such as
 `WEIGHTKG / POWER(HEIGHTCM / 100, 2)` into several columns and grows the
-registry without end, so `compute` takes one closed numeric expression instead.
+registry without end, so `compute` takes one closed numeric expression instead
+and is the only arithmetic expression: `multiply`, `add`, `subtract`, and
+`percent_change` were deleted when it landed.
 It stays inside the boundary's purpose: its payload is a leaf field, not a
 nested argument tree, and R001 extracts its identifiers exactly as it already
 extracts them from `case.when`, so dependencies remain visible. R010 closes its
@@ -45,9 +47,8 @@ The version 1.0 input-shape audit covers every registered expression:
 |---|---|
 | `source`, `literal` | Leaf expressions; unchanged |
 | `mapping`, `mapping_from`, `cut`, `str_extract` | One named source; exceptional results are literals |
-| `multiply`, `add` | One named source plus a literal parameter |
 | `compute` | One closed numeric expression over named output columns (R010) |
-| `subtract`, `percent_change`, `date_diff` | Named variable operands |
+| `date_diff` | Named variable operands |
 | `coalesce` | Ordered named variables plus an optional literal default |
 | `row_number`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
 | `min`, `max` | One named variable or structured source binding |

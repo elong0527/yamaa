@@ -22,10 +22,11 @@ leaves the number of places shown to the report, so this fixture does not use
 ## What this establishes
 
 1. **A column may appear in every operand position.** `add.addend` and
-   `multiply.factor` are literals and `subtract` types both operands as
-   variables, so before `compute` the schema could subtract two columns but
-   could not add, divide, or exponentiate them. Here `WEIGHTKG` and `HEIGHTCM`
-   are both columns and the formula stays one object.
+   `multiply.factor` were literals and `subtract` typed both operands as
+   variables, so before R010 the schema could subtract two columns but could
+   not add, divide, or exponentiate them. Those four keywords are deleted.
+   Here `WEIGHTKG` and `HEIGHTCM` are both columns and the formula stays one
+   object.
 
 2. **Division and exponentiation are expressible without `function`.**
    `../adam-adsl-bmi-function` exists because `divide` is unregistered. That
@@ -33,11 +34,10 @@ leaves the number of places shown to the report, so this fixture does not use
    no longer needs the extension point.
 
 3. **Missing propagates without a guarding predicate.** `CATH-004` has no
-   height, and `BMI` is missing with no handler declared. R007 leaves the
-   missing-value behavior of `multiply`, `add`, and `subtract` undefined, so
-   specifications using them must guard with an explicit `IS NOT NULL`
-   predicate, as `../sdtm-vs-unit-standardization` does. R010 fixes the answer
-   for `compute`: `NULL` propagates.
+   height, and `BMI` is missing with no handler declared. The deleted
+   arithmetic keywords declared no missing policy, so every specification using
+   one had to guard it with an explicit `IS NOT NULL` predicate. R010 fixes the
+   answer: `NULL` propagates.
 
 4. **Division by zero is an explicit choice, not a default.** `CATH-005` has a
    collected height of `0`. Under R010 an unguarded division by zero fails the

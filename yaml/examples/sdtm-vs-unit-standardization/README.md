@@ -24,7 +24,7 @@ it:
 - Pounds to kilograms is `VSORRESN * 0.45359237`.
 - Fahrenheit to Celsius is `(VSORRESN - 32) * 5 / 9`.
 
-Before R010 neither could be written that way. `subtract` types both operands
+Before R010 neither could be written that way. `subtract` typed both operands
 as variables and so could not subtract the literal `32`, which forced an `add`
 with an `addend` of `-32` into a separate `output: false` column; and with no
 `divide`, `5/9` had to be the decimal literal `0.5555555555555556`.
@@ -52,10 +52,10 @@ This fixture is a **probe**. It makes four gaps visible.
 1. **Closed: no `divide`, no literal subtrahend.** Both were named here first
    and both are answered by `compute` under R010.
 2. **Closed: arithmetic had no declared missing policy.** Every branch used to
-   guard with an explicit `IS NOT NULL` predicate, because R007 says nothing
+   guard with an explicit `IS NOT NULL` predicate, because R007 said nothing
    about `add`, `subtract`, or `multiply` receiving a missing input. R010 fixes
-   it for `compute`: `NULL` propagates, so the uncollected temperature in the
-   last record standardizes to missing with no guard in the specification.
+   it: `NULL` propagates, so the uncollected temperature in the last record
+   standardizes to missing with no guard in the specification.
 3. **A conversion factor still cannot be data.** The remaining half of the
    original gap: `compute` accepts a column in any operand position, but the
    factor for a unit pair lives in a dictionary, and there is no way to bring a

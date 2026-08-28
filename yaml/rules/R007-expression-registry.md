@@ -58,17 +58,15 @@ runtime types:
 - `mapping` requires a string source because dictionary keys are strings;
 - `mapping_from` requires the source and dictionary key column to have the same
   comparable type;
-- `cut`, `multiply`, `add`, `subtract`, and `percent_change` require numeric
-  inputs;
+- `cut` requires a numeric source;
 - `compute` requires every identifier in its expression to be numeric;
 - `str_extract`, `str_concat`, `str_upper`, and `str_lower` require string sources;
 - `date_diff` requires compatible date or datetime inputs;
 - `min`, `max`, and window ordering require mutually comparable values.
 
 `source` retains its source type and `literal` retains its YAML scalar type.
-`cut`, `str_extract`, `str_concat`, `str_upper`, and `str_lower` return strings. `multiply`, `add`, `subtract`, and
-`percent_change` return floats. `compute` returns the numeric type its
-expression promotes to under R010. `date_diff` and `row_number` return integers.
+`cut`, `str_extract`, `str_concat`, `str_upper`, and `str_lower` return strings.
+`compute` returns the numeric type its expression promotes to under R010. `date_diff` and `row_number` return integers.
 `baseline_flag` returns a string. Mapping, conditional, coalescing, baseline
 value, and aggregate expressions retain the selected or aggregated value type.
 The `function` expression retains the type returned by the project function.
@@ -106,19 +104,14 @@ The `function` expression retains the type returned by the project function.
 
 ### Numeric and conditional expressions
 
-- `multiply` returns `source * factor`.
-- `add` returns `source + addend`.
-- `subtract` returns `minuend - subtrahend`.
-- `percent_change` returns `100 * (value - base) / base`; a zero or missing
-  base returns missing.
 - `compute` evaluates `expr` as a scalar numeric formula over current-output
   columns and numeric literals. R010 defines its grammar, its closed function
   vocabulary, type promotion, `NULL` propagation, and failure conditions. It is
   scalar: it must not contain an aggregate, a window function, a comparison, a
   conditional, a string, or a host-language call, so it cannot bypass the
-  evaluation-kind rules above. Unlike `multiply`, `add`, and `subtract`, it
-  accepts a column in every operand position and needs no guarding predicate
-  for missing inputs.
+  evaluation-kind rules above. It is the only arithmetic expression: it accepts
+  a column in every operand position and needs no guarding predicate for
+  missing inputs.
 - `coalesce` returns the first non-missing variable in `sources`. If all are
   missing, it returns the literal `default` when supplied, or missing.
 - `case` evaluates branches in order and returns the `then` expression of the

@@ -145,9 +145,10 @@ numeric column first.
 `NULL` result, except `COALESCE`, `NULLIF`, `GREATEST`, and `LEAST`, whose
 argument-level behavior is defined in the table above.
 
-This settles arithmetic missing-value behavior, which R007 leaves undefined for
-`multiply`, `add`, and `subtract`. A `compute` derivation needs no guarding
-predicate to survive a missing input.
+This settles arithmetic missing-value behavior, which was previously undefined:
+the deleted `multiply`, `add`, and `subtract` keywords declared no missing
+policy and had to be guarded by an explicit predicate at each call site. A
+`compute` derivation needs no guard to survive a missing input.
 
 ## Failure conditions
 
@@ -184,16 +185,21 @@ are not optional:
   `a / b / b` are different formulas and may return different doubles; both are
   correct, and an implementation must return the one that was written.
 
-## Relationship to registered numeric expressions
+## Relationship to other expressions
 
-`multiply`, `add`, `subtract`, and `percent_change` remain registered and
-unchanged. `percent_change` and `date_diff` carry semantics this grammar does
-not express: a zero or missing base returning missing, and calendar-unit
-differences.
+`compute` is the only arithmetic expression. `multiply`, `add`, `subtract`, and
+`percent_change` were registered before it and are now deleted: each was a
+single operator with one operand fixed to a literal, and every fixture that
+used one is expressed more directly by a formula.
 
-Whether `multiply`, `add`, and `subtract` should be retired now that `compute`
-covers them is an unresolved design question and must not be assumed by an
-implementation.
+Percentage change was the one deleted keyword carrying semantics beyond its
+operator, returning missing rather than failing on a zero base. That rule is
+not lost, it is written where it applies:
+`100 * (VALUE - BASE) / NULLIF(BASE, 0)`.
+
+`date_diff` is not superseded. Calendar-unit differences are not arithmetic on
+numbers, and this grammar is numeric, so a study day is still `date_diff`
+followed by `compute`.
 
 ## Errors
 

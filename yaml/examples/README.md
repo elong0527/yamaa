@@ -118,11 +118,10 @@ coverage.
 
 ## Coverage gaps
 
-Nineteen of the 21 registered non-leaf expressions are exercised by at least
-one fixture. `compute` replaced every use of `multiply`, `add`, `subtract`, and
-`percent_change`, so those four are now registered and unexercised. R010
-records their retirement as an open question; this suite no longer has an
-argument for keeping them. `adam-adae-string-handlers` closes the previously identified
+All 17 registered non-leaf expressions are exercised by at least one fixture.
+`compute` replaced every use of `multiply`, `add`, `subtract`, and
+`percent_change`, and those four keywords were deleted rather than left
+registered and unexercised. `adam-adae-string-handlers` closes the previously identified
 `str_lower` and `str_extract.missing` gaps;
 `adam-adae-severity-override` closes the `override` gap.
 
@@ -130,7 +129,7 @@ argument for keeping them. `adam-adae-string-handlers` closes the previously ide
 The five focused ADSL probes separately cover identifier parsing and fallback,
 geography normalization, treatment selection and duration, disposition
 selection, and population flags. Together they retain the combined fixture's
-`add`, `coalesce`, `date_diff`, filtered `min`/`max`, `str_concat`,
+`compute`, `coalesce`, `date_diff`, filtered `min`/`max`, `str_concat`,
 `str_extract.no_match`, `str_upper`, ordered `multiple_matches`, and grouped
 completeness coverage.
 The four focused ADAE probes separately cover treatment-interval
@@ -203,12 +202,10 @@ from under it; banding, windowing, and ordering are not.
    cannot be data. **The arithmetic half is closed by `compute`, defined in
    R010:** a column is accepted in every operand position, so a conversion
    factor or a target day may now be data.
-2. **Closed by `compute`.** `add.addend` is a literal and `subtract` types both
-   operands as variables, so the schema could subtract two columns but not add
-   them. One numeric expression now accepts columns on both sides of every
-   operator. The asymmetry survives in `multiply`, `add`, and `subtract`
-   themselves, and whether they should be retired is recorded in R010 as an
-   unresolved question.
+2. **Closed by `compute`.** `add.addend` was a literal and `subtract` typed
+   both operands as variables, so the schema could subtract two columns but not
+   add them. One numeric expression now accepts columns on both sides of every
+   operator, and the four asymmetric keywords were deleted.
 3. **Closed by `compute`.** Division, absolute value, exponentiation, and
    roots are in R010's closed function table. `sdtm-vs-unit-standardization`
    shows why the boundary had to be drawn precisely: two algebraically equal
@@ -291,9 +288,9 @@ and only the descending-sort workaround in A4 remains under them.
 16. **Closed for `compute` by R010:** `NULL` propagates, and division by zero
     fails rather than returning missing, so a specification chooses missing
     explicitly with `NULLIF`. R007 still defines no missing-input behavior for
-    `multiply`, `add`, and `subtract`, but no fixture uses them any more, so
-    nothing in the suite still carries a guarding predicate for arithmetic. The
-    entry survives only as a reason to retire the three keywords.
+    the deleted `multiply`, `add`, and `subtract` keywords, which is why every
+    fixture using them carried a guarding predicate. Those guards are gone with
+    the keywords.
 17. Float-to-string conversion is undefined. `sdtm-vs-unit-standardization`
     proposes a shortest-round-trip rule and commits a value to force the
     decision. `adam-adsl-bmi-compute` is the second piece of evidence and the
