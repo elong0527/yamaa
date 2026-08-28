@@ -7,7 +7,7 @@ test_that("apply_sql_cut works correctly", {
     "> 8" = "HIGH"
   )
 
-  res <- cdiscbuildeR:::.apply_sql_cut(series, cuts)
+  res <- cdiscbuilder:::.apply_sql_cut(series, cuts)
   expect_equal(res, c("LOW", "MED", "HIGH", NA_character_))
 })
 
@@ -26,7 +26,7 @@ test_that("execute_closest works correctly", {
     )
   )
 
-  res <- cdiscbuildeR:::.execute_closest(
+  res <- cdiscbuilder:::.execute_closest(
     "CLOSEST:VS.VSSTRESN:TARGET_DATE",
     c("USUBJID"),
     target_df,
