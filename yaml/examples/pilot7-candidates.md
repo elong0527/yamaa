@@ -45,7 +45,7 @@ must state its own rule and compute its own expected CSV.
 
 The real ODM nests two `ItemGroupData` levels: `Type="Form"` (`FO.*`) wrapping
 `Type="Section"` (`IG.*`). The CATH source that the existing fixtures came from
-has both levels too, and `cath/odm/long_data.csv` keeps a `FormOID` column —
+has both levels too, and its long-form ODM projection kept a `FormOID` column —
 but the fixture projection `input/odm.csv` has only `ItemGroupOID`, and every
 value in it is the `IG.*` level.
 
