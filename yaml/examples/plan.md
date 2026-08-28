@@ -23,10 +23,13 @@ fixture the acceptance rule requires.
 | `mapping_from.source` and `mapping_from.key` as lists, R003 and R007 and R008 | a lookup declares a compound key and pairs it by position |
 | `filter` on `row_number`, R001 and R003 and R007 | a window states its eligibility once; two `TEORD` sort columns and six duplicated flag predicates deleted |
 | float-to-text, R005 and R011 | one form for the declared conversion and the artifact; the schema fixes no precision, the project does, and this suite declares four decimal places |
+| `greatest` and `least`, R007 | a row-wise extreme over any comparable type; `sdtm-dm-reference-dates` replaced a three-way null-guarded `case` chain with one expression, and R010's numeric functions stay where they are |
 
-Ten gaps closed and were removed from the catalogue in
-[`README.md`](README.md); sixteen remain, and the numbering below refers to
-that renumbered list.
+Eleven gaps closed and were removed from the catalogue in
+[`README.md`](README.md); fifteen remain, and the numbering below refers to
+that renumbered list. Three of the fifteen were reworded rather than closed:
+gaps 1, 2, and 4 each stated a limitation broader than the evidence supported,
+and each now names only the case that is actually blocked.
 
 Three lessons from those changes are worth keeping.
 
@@ -52,54 +55,51 @@ that removes a workaround also removes the fixture columns that documented it.
 
 ## Open work
 
-### T1. A variable wherever a literal list is accepted
+### T1. Banding criteria that are not proportional
 
-`cut.breaks` and the window bounds written as
-predicate literals cannot be read from a column, so an analysis window bound or
-a per-test grading threshold cannot be data.
+`cut.breaks` is a literal list, so a parameter whose criteria are absolute
+rather than multiples of a reference needs its own break list.
 
-`compute` solved this for arithmetic by accepting a column in every operand
-position. The same question for `cut` is harder, because `breaks` is a list and
-a per-row list has no meaning; the likely answer is a parameter dataset and a
-lookup rather than a variable in `breaks`. `adam-advs-analysis-visit` and
-`adam-adlb-closest-visit` both hold window bounds as literals inside
-predicates, so this overlaps with group F and should not be settled by widening
-one field.
+The scope is much narrower than it first looked, and no schema change is
+obviously justified. A grading rule stated as multiples normalizes first and
+cuts on literal breaks, so the data carries the reference limit and the
+specification carries the rule. Predicate bounds were never restricted.
 
-Evidence: gap 1. Decide the shape before writing schema.
+A `cut_from` reading bands from a keyed dataset was drafted and rejected. It
+worked, but it moved the medical rule out of the specification and into a
+reference table, so a reviewer had to open a CSV to learn what the criteria
+were. Normalizing splits the two correctly. The remaining case is rare enough
+that `function` is the honest answer until a fixture proves otherwise.
+
+Evidence: gap 1. No action until a fixture needs it.
 
 ### T2. `rank` and `dense_rank`
 
 Registry entries with the same fields as `row_number`.
 
 Evidence: gap 2. `adam-adae-worst-severity` has two events tied on severity and
-date; `row_number` assigns 1 and 2 so exactly one is flagged, and a sponsor who
-flags every record tied at the worst severity cannot express it. Distinct-level
-counts are unavailable for the same reason.
+date, and `row_number` numbers them 1 and 2, so a rule whose output is the rank
+itself cannot preserve the tie. Distinct-level counts are unavailable for the
+same reason.
 
-Decision it forces: tie semantics, and whether a flag over a tied set is a
-window expression or a verification concern.
+Flagging every record tied at a worst value is not evidence for this item. R007
+already lets `max` declare `group_by`, reduce output rows within a partition,
+and broadcast the result, so a predicate against that value flags the whole
+tied set without a new expression.
+
+Decision it forces: tie semantics for a rank number.
 
 Negative fixture: ranking on a column whose ordering is not total.
-
-### T4. Row-wise extremes over dates
-
-`GREATEST` and `LEAST` closed this for numbers. R010 is numeric, so
-`sdtm-dm-reference-dates` still writes a three-way latest-participation date as
-null-guarded `case` branches that widen with each candidate.
-
-Evidence: gap 5. Decide whether R010 grows a comparable-typed
-form or whether a separate `greatest`/`least` expression covers dates.
 
 ### T5. Selection that returns a record
 
 Two gaps have the same cause: an expression selects a value, never a row.
 
-- Gap 6: `sdtm-dm-reference-dates` derives an extreme date with `max` and its
+- Gap 5: `sdtm-dm-reference-dates` derives an extreme date with `max` and its
   associated dose with an ordered `source`, and nothing ties them to the same
   EX record. `sdtm-ae-effective-transaction` runs four independent selections
   that agree only because all four declare the same ordering.
-- Gap 7: a missing aggregate cannot distinguish no matching record from
+- Gap 6: a missing aggregate cannot distinguish no matching record from
   matching records whose values are all missing.
 
 `filter` on `multiple_matches` narrowed this but did not close it: two
@@ -113,7 +113,7 @@ which rows a window sees is separable from returning a record, and it landed as
 
 ### T6. Dates and times
 
-Evidence: gaps 9 and 10. `adam-adae-partial-dates` rebuilds dates with
+Evidence: gaps 8 and 9. `adam-adae-partial-dates` rebuilds dates with
 regular expressions and string defaults because a declared `date` is complete
 or nothing. `sdtm-ae-effective-transaction` carries an audit timestamp as `str`
 and orders it correctly only because ISO 8601 text sorts chronologically.
@@ -122,12 +122,16 @@ R011 settled the vocabulary half: `column_type` is closed, a declared `date` is
 complete or nothing, and there is no datetime type, so the type split is a
 decision already recorded rather than an open question. What remains is the
 harder half: a precision concept, a declared imputation rule with its flag, and
-a statement about comparison when an operand is imputed. Gap 10 is untouched
+a statement about comparison when an operand is imputed. Gap 9 is untouched
 by R011.
+
+`greatest` and `least` compare dates as ordinary comparable values. If a
+precision concept lands here, a row-wise extreme over dates has to say whether
+an imputed operand can win, so this item owns that decision rather than R007.
 
 ### T7. Source-format ingestion
 
-Gap 8: source-format missing values and type inference have no normative rule.
+Gap 7: source-format missing values and type inference have no normative rule.
 Every fixture assumes an empty CSV field is missing and distinguishes it from a
 nonempty malformed value, and nothing says so.
 
@@ -141,20 +145,20 @@ untouched, because it is about recognising a value rather than rendering one.
 
 ### T8. The output and pipeline contract
 
-- Gap 11: one specification derives one dataset. `sdtm-suppmh-qualifiers`
+- Gap 10: one specification derives one dataset. `sdtm-suppmh-qualifiers`
   cannot assign a parent sequence and consume it in one run, and
   `sdtm-dm-reference-dates` depends on an execution order it cannot state.
   R001 cycle detection is per specification, so a cross-dataset cycle cannot be
   reported. Needs a manifest, cross-specification dependency inference, and
   cycle reporting.
-- Gap 12: nothing controls output row order, and verifications are row-wise
+- Gap 11: nothing controls output row order, and verifications are row-wise
   over the completed output. `sdtm-suppmh-qualifiers` leaves rows in
   row-template order rather than a submission order, and referential integrity
   between a SUPPQUAL record and its parent domain cannot be asserted.
 
 ### T9. Governed metadata
 
-Evidence: gap 16. `sdtm-dm-metadata-contract` declares origin, length, and
+Evidence: gap 15. `sdtm-dm-metadata-contract` declares origin, length, and
 codelist as free-form strings, marks `USUBJID` as `Derived` by hand although
 `str_concat` already encodes that, and declares a codelist name next to an
 unrelated `allowed_values` list.
@@ -165,7 +169,7 @@ artifact. Until that artifact is defined, fixtures must not invent its shape.
 
 ### T10. Declarable study structure
 
-Group F, gaps 13 to 15, and the largest open area.
+Group F, gaps 12 to 14, and the largest open area.
 
 - Conditional applicability, treatment period, relationship degree, and
   analysis window are protocol structure re-expressed as filters, predicate
@@ -185,21 +189,19 @@ an `EPOCH` assignment actually needs.
 1. **T2**, with its negative fixtures. It is a registry entry with committed
    evidence and bounded semantics. T3 landed as a widened `mapping_from` and
    still owes the four negative fixtures listed below.
-2. **T4**, once T3's negative fixtures have settled whether R010 grows
-   comparable types or a separate expression appears.
-3. **T7**, which is rule text rather than schema. Its conversion half landed
+2. **T7**, which is rule text rather than schema. Its conversion half landed
    with float-to-text; what remains is source-format recognition, still
    required before any implementation can claim R and Python parity.
-4. **T5, T6, T8, T9, T10** are design documents. Write the document before the
+3. **T5, T6, T8, T9, T10** are design documents. Write the document before the
    schema change, and expect each to retire several gaps at once, as `compute`
    did.
-5. **T1** last, because its answer probably lies inside T10 rather than in a
+4. **T1** last, because its answer probably lies inside T10 rather than in a
    widened field.
 
-Expected README edits: T2 retires gap 2, T4 retires gap 5, T5 retires gaps 3,
-6, and 7, T6 retires gaps 9 and 10, T7 retires gap 8, T8 retires gaps 11 and
-12, T9 retires gap 16, and T10 retires gaps 4, 13, 14, and 15, along with
-whatever remains of gap 1.
+Expected README edits: T2 retires gap 2, T5 retires gaps 3, 5, and 6, T6
+retires gaps 8 and 9, T7 retires gap 7, T8 retires gaps 10 and 11, T9 retires
+gap 15, and T10 retires gaps 4, 12, 13, and 14, along with whatever remains of
+gap 1.
 
 ## Negative fixtures this plan requires
 

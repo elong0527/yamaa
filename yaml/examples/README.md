@@ -121,9 +121,9 @@ be written portably.
 
 ## Coverage
 
-All 17 registered non-leaf expressions and all nine verification keywords are
-exercised by at least one fixture. A few fixtures are the only coverage of
-something and should not be deleted without a replacement:
+Eighteen of the 19 registered non-leaf expressions and all nine verification
+keywords are exercised by at least one fixture. A few fixtures are the only
+coverage of something and should not be deleted without a replacement:
 
 - `adam-adsl-bmi-function` is the only use of the `function` extension point.
 - `adam-adsl-dependency-order` is the only test of R001 dependency inference,
@@ -137,6 +137,22 @@ something and should not be deleted without a replacement:
 - `adam-adsl-mapping` is the only use of the generic named `predicate`
   verification.
 - `sdtm-suppmh-parent-linkage` is the only compound-key `mapping_from`.
+
+Registered and unexercised, which is how a working capability gets written
+down as a missing one:
+
+- `least`. `greatest` landed with `sdtm-dm-reference-dates` as its evidence,
+  and the opposite direction is registered for symmetry with `min` and `max`
+  and with R010. No fixture needs an earliest-of-several yet, and none should
+  be contrived to manufacture one.
+- `min` and `max` with `group_by`. R007 gives them two contexts, and all twelve
+  uses in the suite are the first: a cross-dataset source reduced before the
+  R003 join. No fixture reduces constructed output rows and broadcasts the
+  result.
+- `cut` with `right: true`. Three fixtures use `cut`; two set `right: false`
+  and one takes the default. The inclusive-upper form is what a criterion
+  stated as `>ULN to 3 x ULN` needs, so gap 1's normalization path depends on
+  a branch nothing covers.
 
 No derivation rounds: R010 has no rounding function, so every `float` column
 carries full binary64 precision. The expected outputs show four decimal places
@@ -153,18 +169,26 @@ list rather than marked; `plan.md` records what was closed and how.
 
 ### A. Literal operands and ordering
 
-1. `cut.breaks` and window bounds are literal lists and cannot be read from a
-   column, so an analysis window bound or a per-test grading threshold cannot
-   be data. `compute` accepts a column in every operand position, so this is
-   now confined to banding and to predicate literals:
-   `adam-adlb-closest-visit` reads its target day from `AWTARGET` but still
-   tests `ADY >= 8 AND ADY <= 22` against literals, and a second window needs
-   another `case` branch.
-2. Only `row_number` is registered. Without `rank` and `dense_rank`, ties can
-   be broken but not preserved, so a flag cannot cover every record tied at a
-   worst value and distinct-level counts cannot be expressed.
+1. `cut.breaks` is a literal list, so banding criteria that are not
+   proportional to a single reference cannot be written as one `cut`. The
+   common case is not blocked. Criteria stated as multiples, as CTCAE states
+   liver enzymes and creatinine, are `mapping_from` for the reference limit,
+   `compute` for the ratio, and `cut` with literal breaks and `right: true`,
+   which puts the varying fact in data and the medical rule in the
+   specification. Predicate bounds are not blocked either: `sql` compares one
+   column with another, as `ASTDT >= TRTSDT` does in
+   `adam-adae-treatment-emergent`. What remains is a criterion with no such
+   reference, such as an absolute electrolyte threshold that differs per
+   parameter, where each parameter needs its own break list.
+2. Only `row_number` is registered. Without `rank` and `dense_rank` a tie
+   cannot carry a rank number, so distinct-level counts, and any rule whose
+   output is the rank itself, cannot be expressed.
    `adam-adae-worst-severity` has two events tied on severity and date and
-   flags exactly one.
+   numbers them 1 and 2. Flagging every record tied at a worst value is a
+   separate question and is not blocked: R007 lets `max` declare `group_by`,
+   reduce constructed output rows within each partition, and broadcast the
+   result, so a predicate comparing each row with that value flags the whole
+   tied set. That fixture flags one record because that is the rule it models.
 
 A controlled vocabulary also still needs a `mapping` to give it a numeric proxy
 before anything can order it. The order lives in a dictionary rather than in
@@ -175,63 +199,67 @@ the vocabulary.
 3. `mapping_from` returns one column per call, so reading several columns from
    one matched record repeats the match. `sdtm-vs-visit-study-day` calls it
    twice against one `TV` row. A multi-column return conflicts with one
-   expression producing one value and belongs with gaps 6 and 7.
-4. There is no interval join, so `EPOCH` cannot be assigned to a record the
-   trial design does not name.
+   expression producing one value and belongs with gaps 5 and 6.
+4. There is no interval join, so a record cannot be matched against a table of
+   per-subject intervals of irregular count and length, which is what an
+   `EPOCH` derived from collected subject elements needs. Regular structure is
+   not blocked: repeating intervals are arithmetic, so a treatment cycle is
+   `FLOOR((ADY - 1) / 21) + 1` and its day is `MOD(ADY - 1, 21) + 1`, and a
+   three-epoch design is a `case` chain over subject-level start and end dates
+   that `mapping_from` supplies. The gap is the irregular table, where the
+   boundaries share no structure to compute against.
 
 ### C. Aggregates and selection operate on values, not rows
 
-5. There is no row-wise maximum for dates. R010's `GREATEST` and `LEAST` are
-   numeric, so a latest-of-several date is still the null-guarded `case` chain
-   `sdtm-dm-reference-dates` writes, widening with each candidate.
-6. An extreme value and the values associated with it come from two independent
+5. An extreme value and the values associated with it come from two independent
    reductions that nothing ties to the same right-side record. A shared
    `filter` can make them see the same records, not the same one.
-7. A missing aggregate result cannot distinguish no matching record from
+6. A missing aggregate result cannot distinguish no matching record from
    matching records whose values are all missing.
+
 ### D. Types, conversion, and missing-value semantics
 
-8. Source-format missing values and type inference have no normative rule.
+7. Source-format missing values and type inference have no normative rule.
    Every fixture assumes an empty CSV field is missing and distinguishes it
    from a nonempty malformed value.
-9. Partial dates have no precision. R011 fixes that a declared `date` is
+8. Partial dates have no precision. R011 fixes that a declared `date` is
    complete or nothing, so imputation is written as regular-expression
    extraction, string defaults, and reassembly, and the rule itself is
    invisible to the schema.
-10. Imputed and collected dates compare identically. Nothing marks a comparison
-    made under uncertainty, so an imputed day silently decides classifications
-    such as treatment emergence.
+9. Imputed and collected dates compare identically. Nothing marks a comparison
+   made under uncertainty, so an imputed day silently decides classifications
+   such as treatment emergence.
 
 ### E. The output and pipeline contract stops at one dataset
 
-11. One specification derives one dataset. `sdtm-suppmh-qualifiers` cannot
+10. One specification derives one dataset. `sdtm-suppmh-qualifiers` cannot
     assign a parent sequence and consume it in the same run, and
     `sdtm-dm-reference-dates` depends on DM being derived before the domains
     that reference it without being able to say so. R001 cycle detection is per
     specification, so a cross-dataset cycle cannot be reported either.
-12. Nothing controls output row order, and verifications are row-wise over the
+11. Nothing controls output row order, and verifications are row-wise over the
     completed output. Rows leave in row-template order rather than a submission
     sort order, and referential integrity between a SUPPQUAL record and its
     parent domain cannot be asserted.
 
 ### F. Structure that the data has cannot be declared
 
-13. Conditional applicability, treatment period, relationship degree, and
+12. Conditional applicability, treatment period, relationship degree, and
     analysis window are all real structure in a protocol and none is a concept
     in the schema. Each is re-expressed as a filter, a literal in a predicate,
     or one row template per slot, so the specification grows with the data
     rather than describing the design. `sdtm-lb-conditional-compartments`,
     `adam-adsl-crossover-periods`, and `sdtm-relrec-many-to-many` each show a
     different face of this.
-14. Row construction cannot consume values resolved during column derivation.
+13. Row construction cannot consume values resolved during column derivation.
     A logically removed record cannot be dropped, because `row.filter` sees
     only the row driver and nothing deletes a row afterwards, as
     `sdtm-ae-effective-transaction` shows by committing a record that must not
     exist.
-15. A derivation cannot carry both a value and the reason for it.
+14. A derivation cannot carry both a value and the reason for it.
     `adam-adrs-composite-response` writes the same four predicates twice, once
     for the endpoint and once for its audit trail, with nothing linking them.
-16. Metadata is an ungoverned string map. Labels are first class, but origin,
+15. Metadata is an ungoverned string map. Labels are first class, but origin,
     length, and controlled terminology are free-form text that no
     implementation can validate, and no expected metadata artifact exists to
     assert them, as `sdtm-dm-metadata-contract` records.
@@ -248,5 +276,5 @@ duplicate output keys, illegal expression contexts, nested expressions in
 variable-only operand fields, a column type outside `column_type`, the R011
 conversion failures (unparseable numeric text, an incomplete date, a
 non-integral value converted to `int`), a `row_number` partition in which every
-row fails the window `filter`, and the four `mapping_from` compound-key failures
-listed in `plan.md`.
+row fails the window `filter`, a `greatest` whose `sources` mix incomparable
+types, and the four `mapping_from` compound-key failures listed in `plan.md`.

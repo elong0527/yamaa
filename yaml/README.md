@@ -49,6 +49,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `compute` | One closed numeric expression over named output columns (R010) |
 | `date_diff` | Named variable operands |
 | `coalesce` | Ordered named variables plus an optional literal default |
+| `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
 | `row_number`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
 | `min`, `max` | One named variable or structured source binding |
 | `case` | Nested result expressions retained because selecting expressions is its purpose |

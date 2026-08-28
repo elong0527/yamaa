@@ -78,16 +78,8 @@ columns:
   - name: RFENDTC
     type: date
     derivation:
-      case:
-        branches:
-          - when: "RFXENDTC IS NOT NULL AND (DSDT0 IS NULL OR RFXENDTC >= DSDT0) AND (AEDT0 IS NULL OR RFXENDTC >= AEDT0)"
-            then:
-              source: RFXENDTC
-          - when: "DSDT0 IS NOT NULL AND (AEDT0 IS NULL OR DSDT0 >= AEDT0)"
-            then:
-              source: DSDT0
-        else:
-          source: AEDT0
+      greatest:
+        sources: [RFXENDTC, DSDT0, AEDT0]
 
 verifications:
   - unique:
