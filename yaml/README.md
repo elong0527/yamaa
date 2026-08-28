@@ -46,7 +46,8 @@ The version 1.0 input-shape audit covers every registered expression:
 | Expressions | Input policy |
 |---|---|
 | `source`, `literal` | Leaf expressions; unchanged |
-| `mapping`, `mapping_from`, `cut`, `str_extract` | One named source; exceptional results are literals |
+| `mapping`, `cut`, `str_extract` | One named source; exceptional results are literals |
+| `mapping_from` | One or more named sources paired by position with declared right-side key columns; exceptional results are literals |
 | `compute` | One closed numeric expression over named output columns (R010) |
 | `date_diff` | Named variable operands |
 | `coalesce` | Ordered named variables plus an optional literal default |

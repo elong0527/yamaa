@@ -8,9 +8,9 @@ expressions:
         - missing: {type: literal_value, required: false}
         - unmapped: {type: literal_value, required: false}
     mapping_from:
-        - source: {type: variable, required: true}
+        - source: {type: [variable, "list[variable]"], required: true}
         - dataset: {type: str, required: true}
-        - key: {type: str, required: true}
+        - key: {type: [str, "list[str]"], required: true}
         - value: {type: str, required: true}
         - missing: {type: literal_value, required: false}
         - unmapped: {type: literal_value, required: false}
