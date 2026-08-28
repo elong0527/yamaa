@@ -127,14 +127,20 @@ registered and unexercised. `adam-adae-string-handlers` closes the previously id
 `str_lower` and `str_extract.missing` gaps;
 `adam-adae-severity-override` closes the `override` gap.
 
-`sdtm-lb-multiform` covers `case` and implication checks.The five focused ADSL probes separately cover identifier parsing and fallback,
+`sdtm-lb-multiform` covers `case` and implication checks.
+The five focused ADSL probes separately cover identifier parsing and fallback,
 geography normalization, treatment selection and duration, disposition
 selection, and population flags.
 `adam-adsl-treatment-selection` covers `compute`, `coalesce`, `date_diff`,
 `min`/`max` aggregate filters and R003 right-side reduction, `str_upper`, ordered
 `multiple_matches`, and grouped completeness verification.
 `adam-adsl-disposition` covers filtered `max` and ordered last-match selection.
-`adam-adsl-identifier-parsing` covers `str_concat` and `str_extract.no_match`.th an explicit-key `mapping_from` lookup, and the first to exercise
+`adam-adsl-identifier-parsing` covers `str_concat` and `str_extract.no_match`.
+The four focused ADAE probes separately cover treatment-interval
+classification, deterministic hierarchical occurrence flags, string-handler
+paths, and final correction.
+`sdtm-vs-visit-study-day` is the first fixture to contrast the R003 automatic
+join with an explicit-key `mapping_from` lookup, and the first to exercise
 `date_diff` at an SDTM boundary.
 `adam-advs-analysis-visit` is the first fixture to use `cut` for interval
 membership rather than value banding, and the first to exercise the `cut` and
@@ -154,12 +160,11 @@ exercising `str_extract`, `coalesce` defaults, and `str_concat` together, and
 the first to use every declared handler on one source value.
 `adam-adlb-closest-visit` closes the closest-to-target question left open by
 `adam-advs-analysis-visit`: the distance is `ABS(ADY - AWTARGET)`, one
-expression reading the target from the column that publishes it, and the
-tie-break is an order term rather than a negated companion column. It is the
-first fixture to carry a selection rule with no workaround column at all.
+expression reading the target from the column that publishes it, and only the
+negated companion column for descending preference remains.
 `adam-adae-worst-severity` extends that answer to a categorical criterion: a
 controlled vocabulary can be ordered by preference only after a `mapping` gives
-it a numeric proxy, though the proxy no longer has to be negated.
+it a numeric proxy to negate.
 The seven Priority 2 fixtures added last cover conditional compartments,
 transactional sources, crossover periods, many-to-many relationships, composite
 endpoints, dependency ordering, and the metadata contract.
@@ -173,10 +178,6 @@ R010's grammar has no rounding function at all: a derivation carries full
 precision and the number of places shown is decided when the value is reported.
 No fixture rounds, and none can.
 
-`adam-adlb-closest-visit` and `adam-adae-worst-severity` are the only fixtures
-that declare an order term rather than a bare variable, and between them they
-cover `direction: desc` over a numeric column and over a mapped vocabulary.
-
 All nine verification keywords are exercised across the fixtures;
 `adam-adsl-mapping` covers the generic named `predicate`, while the challenge
 probes cover `all_or_none` and `implies`.
@@ -189,13 +190,13 @@ inputs to banding. Row filters handle absent optional records, and the
 zero-baseline rule produces an intentional missing percentage without a special
 handler.
 
-Twenty-six design gaps have been recorded across the suite. Group B is closed
-and most of group A is, leaving the arithmetic workarounds behind. They are
-grouped by root
-cause rather than by the fixture that found them, because most of them are
-consequences of six underlying decisions rather than independent omissions.
+Twenty-six design gaps have been recorded across the suite. Six are closed,
+three are partly closed, and seventeen are open. Group B is closed and group A
+is down to a single item. They are grouped by root cause rather than by the
+fixture that found them, because most of them are consequences of six
+underlying decisions rather than independent omissions.
 
-### A. Literal operands and ascending ordering (mostly closed)
+### A. Literal operands and ascending ordering (one item open)
 
 This constraint produced more workarounds than any other. Arithmetic is now out
 from under it; banding, windowing, and ordering are not.
@@ -215,14 +216,12 @@ from under it; banding, windowing, and ordering are not.
    spellings of one conversion return different doubles, so R010 forbids
    reassociating a formula. Rounding is deliberately absent from the grammar;
    derivations carry full precision.
-4. **Closed by the order term.** `row_number.order_by` and
-   `multiple_matches.order_by` were ascending with no direction option, so any
-   preference for a later or larger value needed a negated companion column —
-   a workaround available only to numbers, leaving a date or a string with no
-   descending expression at all. `{variable: X, direction: desc}` applies to
-   any comparable type. A controlled vocabulary still needs a `mapping` to give
-   it a numeric proxy, because the order lives in a dictionary rather than in
-   the vocabulary; that half is unchanged.
+4. **Closed by order terms.** `order_by` accepts `direction` and `nulls` on
+   every term, in `row_number` and in `multiple_matches` alike, so
+   `adam-adlb-closest-visit` and `adam-adae-worst-severity` dropped their
+   negated companion columns. A controlled vocabulary still needs a `mapping`
+   to give it a numeric proxy before it can be ordered at all; direction is no
+   longer the reason.
 5. Only `row_number` is registered. Without `rank` and `dense_rank`, ties can
    be broken but not preserved, so a flag cannot cover every record tied at a
    worst value and distinct-level counts cannot be expressed.
@@ -281,15 +280,15 @@ and only the descending-sort workaround in A4 remains under them.
     matching records whose values are all missing.
 13. `row_number` cannot filter. An eligibility sort column expresses a Boolean
     condition, but a general conditional window needs an explicit filter.
-    Ordered `source.multiple_matches` **can** now be filtered, which closed the
-    right-side half of this gap; the window half remains.
-14. **Closed by the order term.** Ordering across missing values was
-    undefined, so eligibility sort columns kept ineligible records out of
-    contention without defining how two of them compared and fixtures had to
-    avoid the case rather than specify it. `nulls` declares the placement.
-    R007 fixes the default at `last` and, unlike PostgreSQL, does not flip it
-    under `desc`, so an implementation cannot inherit its engine's convention
-    and select a different record.
+    **The right-side half is closed:** `filter` is now declared by `min`,
+    `max`, and `multiple_matches`, so an ordered selection narrows its right
+    side before ordering and `adam-adsl-crossover-periods` selects a period
+    directly.
+14. **Closed by order terms.** Each term declares `nulls: first` or
+    `nulls: last`, so a specification states how missing values sort instead of
+    depending on the runtime. Eligibility sort columns remain useful for
+    excluding records, but a fixture no longer has to be built around the
+    ordering being undefined.
 
 ### E. Types, conversion, and missing-value semantics are unresolved
 
@@ -362,10 +361,8 @@ Groups A and B are mostly closed. `compute` removed the arithmetic
 workarounds from group A in one registry entry, which is a better trade than
 the several operator keywords first proposed: R010 states the numeric semantics
 once, and R001 already extracted identifiers from SQL text, so dependency
-inference needed no new machinery. What remains of A is cheap and unrelated to
-arithmetic: accepting a variable in `cut.breaks` and window bounds. Giving
-`order_by` a direction and a null placement has since landed, which closed
-gaps 4 and 14 and removed the suite's last two workaround columns.
+inference needed no new machinery. What remains of A is one item, cheap and unrelated to
+arithmetic: accepting a variable in `cut.breaks` and window bounds.
 `plan.md` sequences the rest.
 
 Groups C, D, F, and G are language additions rather than relaxations and need
