@@ -1,0 +1,149 @@
+domain: ADAE
+datasets:
+  AE: input/ae.csv
+  ADSL: input/adsl.csv
+base: AE
+keys: [STUDYID, USUBJID, AESEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    derivation:
+      source: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    derivation:
+      source: AE.AETERM
+
+  - name: AESTDTC
+    type: str
+    derivation:
+      source: AE.AESTDTC
+
+  - name: YR0
+    type: str
+    derivation:
+      str_extract:
+        source: AESTDTC
+        pattern: '^(\d{4})(?:-|$)'
+        group: 1
+        missing: null
+        no_match: null
+
+  - name: MO0
+    type: str
+    derivation:
+      str_extract:
+        source: AESTDTC
+        pattern: '^\d{4}-(\d{2})(?:-|$)'
+        group: 1
+        missing: null
+        no_match: null
+
+  - name: DA0
+    type: str
+    derivation:
+      str_extract:
+        source: AESTDTC
+        pattern: '^\d{4}-\d{2}-(\d{2})$'
+        group: 1
+        missing: null
+        no_match: null
+
+  - name: MOI
+    type: str
+    derivation:
+      coalesce:
+        sources: [MO0]
+        default: '01'
+
+  - name: DAI
+    type: str
+    derivation:
+      coalesce:
+        sources: [DA0]
+        default: '01'
+
+  - name: ASTDTC
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "YR0 IS NOT NULL"
+            then:
+              str_concat:
+                sources:
+                  - source: YR0
+                  - literal: '-'
+                  - source: MOI
+                  - literal: '-'
+                  - source: DAI
+
+  - name: ASTDT
+    type: date
+    derivation:
+      source: ASTDTC
+
+  - name: ASTDTF
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "YR0 IS NULL"
+            then:
+              literal: null
+          - when: "MO0 IS NULL"
+            then:
+              literal: M
+          - when: "DA0 IS NULL"
+            then:
+              literal: D
+    verifications:
+      allowed_values:
+        values: [M, D]
+
+  - name: TRTSDT
+    type: date
+    derivation:
+      source: ADSL.TRTSDT
+
+  - name: TRTEMFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "ASTDT IS NOT NULL AND TRTSDT IS NOT NULL AND ASTDT >= TRTSDT"
+            then:
+              literal: Y
+    verifications:
+      allowed_values:
+        values: [Y]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 6
+      max: 6
+  - all_or_none:
+      id: analysis-date-completeness
+      columns: [ASTDTC, ASTDT]
+  - implies:
+      id: imputation-flag-requires-analysis-date
+      when: "ASTDTF IS NOT NULL"
+      then: "ASTDT IS NOT NULL"
+  - implies:
+      id: complete-collected-date-is-not-flagged
+      when: "DA0 IS NOT NULL"
+      then: "ASTDTF IS NULL"

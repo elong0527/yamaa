@@ -87,6 +87,9 @@ point with source and literal arguments.
 22. `sdtm-dm-reference-dates` — reduces EX, DS, and AE into the DM reference
     dates, including a three-way latest-participation date, a screen failure
     with no exposure, and an adverse event ending after the last dose.
+23. `adam-adae-partial-dates` — rebuilds analysis dates from year-only,
+    year-month, complete, unparseable, and uncollected values, with an
+    imputation flag and its effect on treatment emergence.
 
 ## Coverage gaps
 
@@ -119,6 +122,9 @@ and the first to reshape several qualifier columns of one row driver into rows.
 `sdtm-dm-reference-dates` is the first fixture to reduce three different
 right-side datasets into one output row and the first to combine an aggregate
 with an ordered selection over the same records.
+`adam-adae-partial-dates` is the first fixture to treat a date as text,
+exercising `str_extract`, `coalesce` defaults, and `str_concat` together, and
+the first to use every declared handler on one source value.
 
 All nine verification keywords are exercised across the fixtures;
 `adam-adsl-mapping` covers the generic named `predicate`, while the challenge
@@ -132,7 +138,7 @@ missing inputs to banding. Row filters handle absent optional records, and the
 zero-baseline rule produces an intentional missing percentage without a special
 handler.
 
-Fourteen design gaps became visible:
+Sixteen design gaps became visible:
 
 1. Operations now consume named variables, which removes arbitrary expression
    nesting and keeps mappings concise. A future named-intermediate or
@@ -182,6 +188,12 @@ Fourteen design gaps became visible:
     independent reductions that nothing ties to the same right-side record.
 14. A missing aggregate result cannot distinguish no matching record from
     matching records whose values are all missing.
+15. A declared `date` is complete or nothing. Partial dates have no precision,
+    so imputation is written as regular-expression extraction, string
+    defaults, and reassembly, and the rule itself is invisible to the schema.
+16. Imputed and collected dates compare identically. Nothing marks a comparison
+    made under uncertainty, so an imputed day silently decides classifications
+    such as treatment emergence.
 
 Positive fixtures do not prove failure behavior. Negative fixtures are still
 needed for duplicate dictionary keys, unhandled mappings, failed verifications,
