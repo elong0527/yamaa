@@ -1,7 +1,7 @@
 # ADaM ADSL population flags
 
-This focused component probe answers one question: how are safety and
-intent-to-treat flags derived from existing ADSL state?
+This fixture answers one question: how are safety and intent-to-treat flags
+derived from existing ADSL state?
 
 `SAFFL` is `Y` when `TRTSDT` is present. `ITTFL` is `Y` when `ARMCD` is present.
 The four rows cover every combination used by the original combined example:

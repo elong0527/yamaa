@@ -1,7 +1,7 @@
 # SDTM VS unit standardization
 
-This focused collected-to-SDTM probe answers one question: how does one
-collected result produce both an original record and a standardized result?
+This collected-to-SDTM fixture answers one question: how does one collected
+result produce both an original record and a standardized result?
 
 ## Rule and record grain
 

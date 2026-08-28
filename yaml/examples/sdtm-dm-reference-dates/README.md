@@ -1,7 +1,7 @@
 # SDTM DM reference dates and participation bounds
 
-This focused probe answers one question: how are the DM reference dates derived
-from the domains that DM itself is the reference for?
+This fixture answers one question: how are the DM reference dates derived from
+the domains that DM itself is the reference for?
 
 ## Rule and record grain
 

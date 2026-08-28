@@ -1,7 +1,7 @@
 # ADaM ADSL treatment selection and duration
 
-This focused SDTM-to-ADaM probe answers one question: how are a subject's
-actual treatment and inclusive treatment interval selected from EX?
+This SDTM-to-ADaM fixture answers one question: how are a subject's actual
+treatment and inclusive treatment interval selected from EX?
 
 The two treated subjects each have two EX rows stored out of chronological
 order. `TRT01RAW` selects the first treatment by date and sequence; `TRTSDT`

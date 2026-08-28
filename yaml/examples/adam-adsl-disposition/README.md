@@ -1,6 +1,6 @@
 # ADaM ADSL disposition selection
 
-This focused SDTM-to-ADaM probe answers one question: how is the final subject
+This SDTM-to-ADaM fixture answers one question: how is the final subject
 disposition selected from DS?
 
 `EOSDT` is the maximum date among disposition-event records. `EOSDECOD` and

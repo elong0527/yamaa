@@ -1,8 +1,7 @@
 # ADaM ADAE partial date imputation
 
-This focused SDTM-to-ADaM probe answers one question: can a partial collected
-date be turned into an analysis date and an imputation flag without a project
-function?
+This SDTM-to-ADaM fixture answers one question: can a partial collected date be
+turned into an analysis date and an imputation flag without a project function?
 
 ## Rule and record grain
 

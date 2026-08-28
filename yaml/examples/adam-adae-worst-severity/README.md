@@ -1,7 +1,7 @@
 # ADaM ADAE worst-severity selection
 
-This focused probe answers one question: can the worst-severity record be
-selected when the ordering is a controlled vocabulary rather than a number?
+This fixture answers one question: can the worst-severity record be selected
+when the ordering is a controlled vocabulary rather than a number?
 
 `../adam-adae-occurrence-flags` covers first-occurrence flags at subject, SOC,
 and preferred-term levels. This fixture keeps only the preferred-term level and

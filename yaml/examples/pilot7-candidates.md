@@ -133,10 +133,11 @@ derivation: derive `STRAT1R`/`STRAT1` pairs and assert agreement with
 silently resolved. Nothing in the suite currently contrasts as-randomized with
 as-derived.
 
-## 3. Proposed challenge probes
+## 3. Proposed challenge fixtures
 
 Each is expected to expose a named gap. The point of the fixture is the record
-of what could not be written, per the "schema probe" convention in `README.md`.
+of what could not be written, per the expressiveness-fixture convention in
+`README.md`.
 
 ### P1 `adam-adrs-confirmed-response` — proposes gap **H**
 
@@ -201,7 +202,7 @@ before `PD`; no post-baseline assessment, censored at day 1.
 `RECURRENCE` 361, `DEATH` 8), `OSCNSR`, `OSDY`, plus `RECURSITE` (`DISTANT`
 279, `LOCAL` 82, `NONE` 633).
 
-**What it probes.** Two `PARAMCD` rows per subject from one specification, with
+**What it tests.** Two `PARAMCD` rows per subject from one specification, with
 a competing-event classifier. Whether `rows` can emit one row per parameter
 without the specification growing per parameter, and whether the two parameters
 can share a derived intermediate.
@@ -235,7 +236,7 @@ oncology safety analysis.
 reference range anywhere in the ODM**. Units and ranges must come from an
 external per-test dictionary, which is exactly the real situation.
 
-**What it probes.** `LBORRESU`, `LBSTNRLO`, `LBSTNRHI` all come from one
+**What it tests.** `LBORRESU`, `LBSTNRLO`, `LBSTNRHI` all come from one
 dictionary row; `mapping_from` returns one column per call, so the same match is
 written three times. `LBNRIND` then compares the result to the two looked-up
 bounds — the first `case` predicate in the suite that compares two derived
@@ -302,7 +303,7 @@ subject-specific period table.
 **Source.** `kn189` `EX` first and last dose, `DS` disposition, and the
 Screening / C1D1..C32D1 / EOT / Follow-up / Survival Follow-up event structure.
 
-**What it probes.** With two boundaries this is expressible — `date_diff`
+**What it tests.** With two boundaries this is expressible — `date_diff`
 against joined ADSL dates compared to literals inside a `case`. Drive it instead
 from a period table with a variable number of rows per subject and the
 expressibility ends: there is no interval join, so the specification needs one

@@ -1,8 +1,8 @@
 # ADaM ADRS composite responder endpoint
 
-This focused probe answers one question: can a response derived from an
-efficacy threshold, a safety condition, and a discontinuation rule be expressed
-as one analysis value?
+This fixture answers one question: can a response derived from an efficacy
+threshold, a safety condition, and a discontinuation rule be expressed as one
+analysis value?
 
 ## Rule and input boundary
 
@@ -52,7 +52,7 @@ holding the matched branch.
    `../adam-adlb-closest-visit`.
 3. **Visit selection is out of scope here.** The input is already one record
    per subject at one visit. Choosing which visit feeds a responder definition
-   needs the window and selection machinery probed by
+   needs the window and selection machinery exercised by
    `../adam-adlb-closest-visit`, which cannot be combined with this derivation
    in one specification without emitting both sets of intermediates.
 

@@ -1,6 +1,6 @@
 # ADaM ADSL identifier parsing and fallback
 
-This focused SDTM-to-ADaM probe answers one question: how is a site parsed from
+This SDTM-to-ADaM fixture answers one question: how is a site parsed from
 `USUBJID` with a collected `SITEID` fallback?
 
 `SITEIDP` extracts the site from `CATH-<site>-<four digits>`. `SITEID`

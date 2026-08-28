@@ -1,7 +1,7 @@
 ---
 id: R005
 title: Output Contract
-status: draft
+status: normative
 applies_to: [root.keys, root.columns, column.type, row.derivations, derivation]
 ---
 

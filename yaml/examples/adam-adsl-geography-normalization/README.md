@@ -1,7 +1,7 @@
 # ADaM ADSL geography normalization
 
-This focused probe answers one question: how is collected country text
-normalized and grouped into a region?
+This fixture answers one question: how is collected country text normalized and
+grouped into a region?
 
 `COUNTRY` uppercases the source and substitutes `UNKNOWN` when it is missing.
 `REGION1` maps supported country codes and sends the non-missing `UNKNOWN`

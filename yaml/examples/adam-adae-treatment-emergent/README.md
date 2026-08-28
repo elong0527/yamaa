@@ -1,7 +1,7 @@
 # ADaM ADAE treatment-emergent classification
 
-This focused SDTM-to-ADaM probe answers one question: is an adverse event start
-date inside the subject's treatment interval?
+This SDTM-to-ADaM fixture answers one question: is an adverse event start date
+inside the subject's treatment interval?
 
 ## Rule and record grain
 
@@ -21,6 +21,6 @@ Rows remain in AE source order. The exact key is `[STUDYID, USUBJID, AESEQ]`,
 and exactly six rows are expected. Dataset verifications require both treatment
 dates or neither and require every flagged event to lie inside the interval.
 
-This is a **probe** because date conversion and SQL comparison remain draft
-under R004 and R005. The treatment-emergence definition is local to this
+Date conversion and SQL comparison remain draft under R004 and R005, so this
+fixture is not yet portable. The treatment-emergence definition is local to this
 fixture, not a universal ADaM rule. No handler path is declared.

@@ -1,16 +1,16 @@
 # SDTM LB multi-form consolidation
 
-This standalone ODM-to-SDTM probe condenses the CATH serum, skin-biopsy,
-saliva, and tape-strip sources into one LB dataset. It uses the real CATH study,
-event, item-group, and item OIDs with synthetic values and dates chosen to make
-edge behavior visible.
+This standalone ODM-to-SDTM fixture condenses the CATH serum, skin-biopsy,
+saliva, and tape-strip sources into one LB dataset. It uses the real CATH
+study, event, item-group, and item OIDs with synthetic values and dates chosen
+to make edge behavior visible.
 
 ## Status and boundary
 
-This fixture is a **probe**. Its specification uses only registered schema
-constructs, but portable ODM contextual binding is still draft under R002. In
-particular, the exact context keys must include event and item-group repeat keys
-for the repeated unscheduled saliva collections to resolve the correct date.
+The specification uses only registered schema constructs, but portable ODM
+contextual binding is still draft under R002. In particular, the exact context
+keys must include event and item-group repeat keys for the repeated unscheduled
+saliva collections to resolve the correct date.
 
 The fixture covers only ODM to SDTM. The existing `../adam-adlb-bds` fixture is
 the separate SDTM-to-ADaM boundary.

@@ -1,7 +1,7 @@
 # SDTM SUPPMH parent linkage by compound key
 
-This focused probe answers one question: how does a derivation reach a parent
-record that is identified by more than one column?
+This fixture answers one question: how does a derivation reach a parent record
+that is identified by more than one column?
 
 ## Rule and input boundary
 

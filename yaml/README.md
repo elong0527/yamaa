@@ -7,16 +7,18 @@ and SDTM-to-ADaM derivations. The design is under active development.
 
 - `schema.yaml` is the schema-bundle entry point and defines shared structure.
 - `schema_derivation.yaml`, `schema_expression_*.yaml`, and
-  `schema_verification.yaml` register closed derivation and verification types.
+  `schema_verification.yaml` register and document closed derivation and
+  verification types.
 - `schema_function.yaml` registers calls to functions resolved by the project's
   global execution environment.
-- `rules/` contains the execution semantics, with one rule per file.
+- `rules/` contains shared execution semantics, with one rule per file.
 - `examples/` contains source data, derivation specifications, and exact
   expected outputs.
 - `agents.md` tells AI coding agents how to discover and maintain the design.
 
-The rule files are the authoritative source for behavior. The schema defines
-shape, while examples demonstrate rules without redefining them.
+The schema defines shape and operation-local behavior through adjacent comments
+and validation-neutral parameter descriptions. Rule files define behavior
+shared across operations. Examples demonstrate both without redefining them.
 
 ## Version 1.0 design boundary
 

@@ -4,9 +4,9 @@ These fixtures exercise `yaml/schema.yaml` with small inputs and exact expected
 outputs. They are intended for human review, automated tests, and AI-assisted
 implementation.
 
-Execution behavior is defined by the normative rules in
-[`../rules/README.md`](../rules/README.md). Example READMEs describe only the
-fixture-specific application of those rules.
+Execution behavior is defined by the schema's adjacent operation descriptions
+and the shared normative rules in [`../rules/README.md`](../rules/README.md).
+Example READMEs describe only their fixture-specific application.
 
 `odm.csv` is a tabular projection of ODM clinical data, not an ODM exchange
 document itself. Its fields map to the official
@@ -27,11 +27,11 @@ Examples are ordered by increasing complexity:
 Each example contains a specification, source CSV files, an expected CSV, and
 a README defining behavior that an implementation must reproduce.
 
-## Schema probes
+## Expressiveness fixtures
 
-A probe is a fixture written to test whether the schema can express a real
-derivation pattern. A probe that does not pass is a design finding, not a defect
-in the fixture, and its README records what the schema could not express.
+These ask whether the schema can express a real derivation pattern. A fixture
+that does not pass is a design finding rather than a defect in the fixture, and
+its README records what the schema could not express.
 
 4. `adam-adsl-mapping` — value mapping with an inline dictionary, deriving
    ADaM numeric companions, including a value the dictionary does not define.
@@ -48,9 +48,9 @@ external dictionaries. The third is the suite's only coverage of the
 runtime-function extension point; the fourth is how the same arithmetic should
 be written portably.
 
-## Challenge probes
+## Challenge fixtures
 
-8. `sdtm-lb-multiform` — a compact CATH-derived ODM-to-SDTM probe consolidating
+8. `sdtm-lb-multiform` — a compact CATH-derived ODM-to-SDTM fixture consolidating
    serum, skin-biopsy, saliva, and tape-strip data into LB. It covers form-
    specific contextual dates, structural absence versus explicit missingness,
    a collected nonnumeric result, repeated item groups, heterogeneous specimen
@@ -59,11 +59,11 @@ be written portably.
    to collected `SITEID`, and constructs a subject reference.
 10. `adam-adsl-geography-normalization` — normalizes collected country text
     and maps country codes to regions, including missing and unmapped paths.
-11. `adam-adsl-treatment-selection` — a standalone SDTM-to-ADaM probe deriving
+11. `adam-adsl-treatment-selection` — a standalone SDTM-to-ADaM fixture deriving
     subject-level treatment from DM and EX. It covers filtered first/last dates,
     ordered treatment selection, placebo dose zero, no-match subjects, fallback,
     and inclusive duration.
-12. `adam-adsl-disposition` — a standalone SDTM-to-ADaM probe deriving final
+12. `adam-adsl-disposition` — a standalone SDTM-to-ADaM fixture deriving final
     subject disposition from DM and DS. It covers filtered final dates, ordered
     associated values, no-match subjects, and deterministic same-day selection.
 13. `adam-adsl-population-flags` — derives safety and intent-to-treat flags

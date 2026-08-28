@@ -1,15 +1,43 @@
 version: "1.0"
 
 expressions:
-    row_number:
-        - group_by: {type: "list[variable]", required: false}
-        - order_by: {type: "list[order_by_term]", required: true}
-        - filter: {type: sql, required: false}
-    baseline_flag:
-        - group_by: {type: "list[variable]", required: false}
-        - date: {type: variable, required: true}
-        - reference_date: {type: variable, required: true}
-    baseline_value:
-        - group_by: {type: "list[variable]", required: false}
-        - value: {type: variable, required: true}
-        - flag: {type: variable, required: true}
+    row_number: # Numbers eligible rows from 1 within each partition.
+        # Filtering happens before partitioning; excluded rows receive missing.
+        # Ordering ties preserve row-template order, then base-record order.
+        - group_by:
+            type: "list[variable]"
+            description: Variables defining partitions; omission uses one partition.
+        - order_by:
+            type: "list[order_by_term]"
+            required: true
+            description: Terms ordering eligible rows within each partition.
+        - filter:
+            type: sql
+            description: Predicate selecting rows to number.
+    baseline_flag: # Returns Y for the unique latest eligible row, missing elsewhere.
+        # An eligible row has a non-missing date at or before reference_date.
+        # A tie for the latest eligible date is an error.
+        - group_by:
+            type: "list[variable]"
+            description: Variables defining baseline-selection partitions.
+        - date:
+            type: variable
+            required: true
+            description: Candidate baseline date.
+        - reference_date:
+            type: variable
+            required: true
+            description: Inclusive upper bound for the baseline date.
+    baseline_value: # Broadcasts the value from the row whose flag is Y.
+        # No flagged row returns missing; more than one is an error.
+        - group_by:
+            type: "list[variable]"
+            description: Variables defining broadcast partitions.
+        - value:
+            type: variable
+            required: true
+            description: Variable copied from the flagged row.
+        - flag:
+            type: variable
+            required: true
+            description: Variable identifying the source row with Y.
