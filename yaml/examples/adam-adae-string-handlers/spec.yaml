@@ -63,13 +63,8 @@ columns:
   - name: AREL
     type: str
     derivation:
-      mapping:
+      str_upper:
         source: AERELLC
-        dict:
-          related: RELATED
-          possibly related: POSSIBLY RELATED
-          not related: NOT RELATED
-          not reported: NOT REPORTED
     verifications:
       - not_missing: {}
       - allowed_values:
