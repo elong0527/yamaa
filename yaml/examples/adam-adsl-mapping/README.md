@@ -78,17 +78,7 @@ its local `missing` value for both missing results.
 
 ## Relation to other fixtures
 
-`sdtm-dm-basic` also maps values, translating collected `Male` and `Female` into
-SDTM `M` and `F`. It standardizes collected data into SDTM terminology, while
+`../sdtm-dm-basic` standardizes collected data into SDTM terminology, while
 this fixture derives ADaM companions from terminology that is already
-standardized.
-
-`sdtm-ae-dictionary-coding` performs the same kind of value mapping with the
-dictionary held in an external file rather than inline, using `mapping_from`.
-
-## Scope
-
-This fixture covers only mapping expressions. String parsing, range banding,
-first-non-missing, conditional flags, and aggregate-then-join are defined by
-other registered expressions but are not exercised here. See `../README.md` for the
-current fixture coverage gap.
+standardized. `../sdtm-ae-dictionary-coding` performs the same mapping with the
+dictionary held in an external file, using `mapping_from`.

@@ -43,10 +43,10 @@ relationships a record may have, which is a property of the data rather than of
 the study design.
 
 The natural representation is a separate link table with one row per record and
-relationship. That table could be a row driver, but the RELREC row also needs
-`IDVAR` and `IDVARVAL` describing which domain variable identifies the parent,
-and those come from the parent domain. Reaching them would need the
-multi-column equality join recorded by `../sdtm-suppmh-qualifiers`.
+relationship. That table could be a row driver, and `mapping_from` can now
+declare the compound key that reaches `IDVAR` and `IDVARVAL` from the parent
+domain, as `../sdtm-suppmh-parent-linkage` does. What is still missing is a way
+to state the degree itself rather than one template per slot.
 
 ## Group-level relationships cannot be keyed
 
@@ -64,20 +64,15 @@ another column distinguishes the row, or a `RELTYPE`-aware key. `RELTYPE` is
 declared here as `literal: null` so the column exists in the output and the
 gap is visible in the golden file.
 
-## Status and named gaps
+## Two further gaps
 
-This fixture is a **probe**. It names four gaps.
+**Referential integrity is unverifiable.** Nothing checks that `IDVARVAL`
+matches an existing `AESEQ` or `CMSEQ`, the same gap
+`../sdtm-suppmh-qualifiers` records.
 
-1. **Relationship degree is fixed in the specification.** One row template per
-   link slot means the YAML grows with the data rather than the design.
-2. **Group-level rows cannot satisfy the key contract.** A missing `IDVARVAL`
-   is legitimate in RELREC and illegal as a key value.
-3. **Referential integrity is unverifiable.** Nothing checks that `IDVARVAL`
-   matches an existing `AESEQ` or `CMSEQ`, the same gap
-   `../sdtm-suppmh-qualifiers` records.
-4. **There is no dedup.** Row templates append. If two link slots on one record
-   held the same `RELID`, the output would carry a duplicate key and fail, and
-   no distinct operation exists to prevent it.
+**There is no dedup.** Row templates append. If two link slots on one record
+held the same `RELID`, the output would carry a duplicate key and fail, and no
+distinct operation exists to prevent it.
 
 ## Diagnostics and verifications
 

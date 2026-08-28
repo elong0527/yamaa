@@ -42,34 +42,18 @@ That has consequences the fixture makes visible.
 
 ## No expected artifact
 
-X11 asks for a metadata manifest to be asserted alongside the data. This
-fixture commits `expected/dm.csv` only.
-
-The plan's fixture contract says that until a machine-readable diagnostics or
-metadata schema is defined, expectations belong in a README rather than in an
-invented file shape. Writing an `expected/metadata.yaml` here would fix a shape
-by accident. The missing piece is therefore not this fixture; it is the
-decision about what a metadata artifact contains and which parts of it are
-normative.
+This fixture commits `expected/dm.csv` only. Until a machine-readable metadata
+schema is defined, expectations belong in a README rather than in an invented
+file shape; writing an `expected/metadata.yaml` here would fix a shape by
+accident. The missing piece is not this fixture, it is the decision about what
+a metadata artifact contains and which parts of it are normative.
 
 Output column order is declaration order, which for this fixture matches the
 conventional DM order. `../sdtm-suppmh-qualifiers` shows that output *row*
 order has no control at all, and a transport artifact needs both.
 
-## Status and named gaps
-
-This fixture is a **probe**, and it is the one that passes while proving the
-least. It names five gaps.
-
-1. Metadata is an ungoverned string map with no vocabulary and no validation.
-2. Length is declared as text and is unconnected to the column type, so a
-   transport format cannot be produced from the specification.
-3. Controlled terminology is named in metadata and enforced separately in
-   verifications, with no link between them.
-4. Origin and lineage are hand-written although the derivation already encodes
-   them.
-5. There is no expected metadata artifact, so none of the above is asserted by
-   any golden file.
+This is the probe that passes while proving the least: none of the five points
+above is asserted by any golden file.
 
 ## Diagnostics and verifications
 

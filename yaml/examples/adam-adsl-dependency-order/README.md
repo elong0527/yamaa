@@ -49,25 +49,20 @@ anything else. That is deliberate: it shows that column
 order in the output is the declared order and carries no evaluation meaning. A
 real ADSL would not be laid out this way.
 
-## Status and named gaps
+## What it cannot reach
 
-This fixture is a **probe**. It covers the column-level half of X10 and names
-what the schema cannot reach.
+**The dataset-level graph does not exist.** One specification derives one
+dataset, so a cross-dataset graph cannot be declared, sorted, or cycle-checked.
+This fixture covers only the graph inside a single specification.
 
-1. **The dataset-level graph does not exist.** X10 asks for one compact slice
-   producing DM, EX, DS, AE, LB, ADSL, ADAE, and ADLB with declarations out of
-   dependency order. One specification derives one dataset, so a
-   cross-dataset graph cannot be declared, sorted, or cycle-checked. This
-   fixture covers only the graph inside a single specification.
-2. **Cycles cannot be demonstrated positively.** A cycle is a failure, and this
-   suite has no negative fixtures yet. The cycle path reporting R001 requires
-   is untested.
-3. **There is no lineage diagnostic.** Nothing emits the dependency graph an
-   implementation inferred, so two implementations could evaluate in different
-   valid orders and neither could be inspected.
-4. **Reuse is unobservable.** `RANDFL` is read by one column and `AGE` by three.
-   Whether an implementation caches or recomputes cannot be seen from the
-   output.
+**Cycles cannot be demonstrated positively.** A cycle is a failure, and this
+suite has no negative fixtures, so the cycle-path reporting R001 requires is
+untested.
+
+**Neither lineage nor reuse is observable.** Nothing emits the dependency graph
+an implementation inferred, so two implementations could evaluate in different
+valid orders and neither could be inspected; whether `AGE`, read by three
+columns, is cached or recomputed cannot be seen from the output.
 
 ## Diagnostics and verifications
 

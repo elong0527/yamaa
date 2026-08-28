@@ -34,23 +34,23 @@ open question. This fixture resolves it for the author, not for the schema: the
 two cases now produce different output, but only because two different
 mechanisms were chosen by hand.
 
-## Status and named gaps
+## Three gaps this fixture names
 
-This fixture is a **probe**. It passes, and it names three gaps.
+**Applicability is not declarable.** A conditional compartment is expressed as
+a row filter. Nothing states that a parameter is expected for one population and
+inapplicable for another, so no implementation can check the filter against the
+protocol.
 
-1. **Applicability is not declarable.** A conditional compartment is expressed
-   as a row filter. There is no way to state that a parameter is expected for
-   one population and inapplicable for another, so no implementation can check
-   that the filter matches the protocol.
-2. **Expected record counts cannot be asserted.** The fixture verifies that a
-   `NOT DONE` record has no result and that a collected result is not flagged.
-   It cannot verify that every atopic subject has exactly two records and every
-   non-atopic subject exactly one, because verifications are row-wise over the
-   completed output and no counting aggregate exists.
-3. **Row filters see only the row driver.** `row.filter` references `BX_RAW`
-   alone. A conditional compartment whose applicability lived in another
-   dataset, such as a diagnosis in DM, could not be filtered without first
-   copying that column onto the driver.
+**Expected record counts cannot be asserted.** The fixture verifies that a
+`NOT DONE` record has no result and that a collected result is not flagged. It
+cannot verify that every atopic subject has exactly two records, because
+verifications are row-wise over the completed output and no counting aggregate
+exists.
+
+**Row filters see only the row driver.** `row.filter` references `BX_RAW`
+alone. A conditional compartment whose applicability lived in another dataset,
+such as a diagnosis in DM, could not be filtered without first copying that
+column onto the driver.
 
 ## Diagnostics and verifications
 

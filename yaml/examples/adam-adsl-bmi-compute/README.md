@@ -21,23 +21,14 @@ reported.
 
 ## What this establishes
 
-1. **A column may appear in every operand position.** `add.addend` and
-   `multiply.factor` were literals and `subtract` typed both operands as
-   variables, so before R010 the schema could subtract two columns but could
-   not add, divide, or exponentiate them. Those four keywords are deleted.
-   Here `WEIGHTKG` and `HEIGHTCM` are both columns and the formula stays one
-   object.
+1. **A column may appear in every operand position.** `WEIGHTKG` and
+   `HEIGHTCM` are both columns and the formula stays one object.
 
-2. **Division and exponentiation are expressible without `function`.**
-   `../adam-adsl-bmi-function` exists because `divide` is unregistered. That
-   fixture now establishes only the runtime-function call lifecycle; BMI itself
-   no longer needs the extension point.
+2. **Division and exponentiation are expressible without `function`**, so the
+   extension point is not needed for ordinary arithmetic.
 
 3. **Missing propagates without a guarding predicate.** `CATH-004` has no
-   height, and `BMI` is missing with no handler declared. The deleted
-   arithmetic keywords declared no missing policy, so every specification using
-   one had to guard it with an explicit `IS NOT NULL` predicate. R010 fixes the
-   answer: `NULL` propagates.
+   height, and `BMI` is missing with no handler declared.
 
 4. **Division by zero is an explicit choice, not a default.** `CATH-005` has a
    collected height of `0`. Under R010 an unguarded division by zero fails the
@@ -55,17 +46,15 @@ last place below `25`. R and Python agree on this value.
 output records `25`. **That value is not the full-precision result.** This
 fixture commits the exact value instead, following the shortest-round-trip
 proposal in `../sdtm-vs-unit-standardization`. The discrepancy is evidence for
-the unresolved float-to-string question in R005, not an R010 question: no
-rounding mode, association, or grammar decision changes it.
+the unresolved float-to-string question, not an R010 question: no rounding
+mode, association, or grammar decision changes it.
 
 It follows that comparing a golden output by string equality requires that rule
 to be settled. Rounding is not available as an escape: R010 has no rounding
 function, so the dataset carries `24.999999999999996` and the report decides
-how it is shown.
-
-The same question is open in `../adam-adlb-bds`, whose expected `AVAL` of
-`0.167` for the ALTSI parameter is the shortened form of `0.16699999999999998`,
-and in `../adam-adsl-bmi-function`.
+how it is shown. The same question is open in `../adam-adlb-bds`, whose
+expected `AVAL` of `0.167` for the ALTSI parameter is the shortened form of
+`0.16699999999999998`.
 
 Written association is significant here. `WEIGHTKG / (HEIGHTCM / 100) / (HEIGHTCM / 100)`
 returns exactly `25` for this subject while the `POWER` form does not. Both are

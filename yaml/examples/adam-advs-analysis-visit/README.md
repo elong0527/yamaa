@@ -34,22 +34,19 @@ Because SDTM study day has no day zero, the `[0, 2)` baseline window can only
 contain `ADY = 1`. The `baseline-window-is-study-day-one` verification asserts
 that link rather than leaving it as an implementation convention.
 
-## Status and named gap
-
-This fixture is a **probe**, and its `WEEK 2` window records the gap.
+## The gap: first-in-window is not closest-to-target
 
 `ANL01FL` selects the first record in the window by `ADY` and then `VSSEQ`.
 That rule is expressible, deterministic, and auditable, but it is not the rule
 most studies use. Subject `CATH-UCSD-0001` has `ADY = 8` and `ADY = 15` in a
 window whose target day is 15, and first-in-window flags the `ADY = 8` record.
-Selecting the record closest to a target day needs a distance calculation and
-an ordering over it. `cut` gives window membership but not a target, and
-`row_number` orders only by existing variables, so neither is enough on its
-own. `../adam-adlb-closest-visit` later showed that the selection is
-expressible, but only by emitting a distance column, a spelled-out absolute
-value, and a negated companion column for the tie preference. This fixture
-keeps the simpler first-in-window rule and commits its answer rather than
-hiding the difference; the two golden outputs disagree on exactly this case.
+
+`cut` gives window membership but not a target, and `row_number` orders only by
+existing variables, so neither expresses closest-to-target on its own.
+`../adam-adlb-closest-visit` does express it, by carrying the target as a
+column and computing the distance from it. This fixture keeps the simpler rule
+and commits its answer rather than hiding the difference; the two golden
+outputs disagree on exactly this case.
 
 `AWRANK` declares `output: false`, so the window ranking stays internal and the
 artifact carries only the analysis visit, its numeric companion, and the flag.

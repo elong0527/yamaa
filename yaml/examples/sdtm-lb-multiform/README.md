@@ -55,17 +55,9 @@ current row filters. That is intentional for this fixture, but it exposes a
 future diagnostics question: validation may need to distinguish an
 inapplicable item from a present-but-missing collection.
 
-## Schema and rule coverage
-
-The specification is shaped for `../../schema.yaml`. It exercises row
-construction and dependency ordering from R001; repeated-context ODM lookup
-from draft R002; SQL filtering, mapping, and `case` from draft R004; output
-coverage, conversion, and keys from draft R005; mapping, row-number, and
-conditional semantics from R007; conversion-failure handling from R008; and
-column/dataset verifications from draft R009.
-
-The large repeated metadata blocks also pressure X01's reusable Findings-
-template question without inventing a macro syntax in the fixture.
+The six templates repeat large blocks of near-identical metadata. That
+repetition is a finding, not a style choice: the language has no reusable
+Findings template, and the fixture does not invent a macro syntax to hide it.
 
 ## Deterministic output
 
@@ -87,5 +79,4 @@ for the collected `NOT DONE` saliva result. No other handler path is declared.
 
 The fixture expects all column verifications to pass, unique output keys, an
 exact row count of 18, and two named implication checks relating `LBORRES`,
-`LBSTRESN`, and `LBSTAT` to pass for every row. These expectations remain in
-this README until the project defines a machine-readable diagnostics contract.
+`LBSTRESN`, and `LBSTAT` to pass for every row.

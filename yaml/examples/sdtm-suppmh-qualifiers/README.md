@@ -16,28 +16,21 @@ converted to character, as SUPPQUAL requires. `QEVAL` is `literal: null`
 because these values are collected on the CRF rather than assessed, which is
 the R005 way to declare an intentionally missing value.
 
-The reshaping mechanism itself is already covered by `../sdtm-lb-findings`.
-What this fixture adds is the SUPPQUAL linkage contract and the three gaps
-below.
+The reshaping mechanism itself is already covered by `../sdtm-lb-findings`, and
+`../sdtm-suppmh-parent-linkage` covers the case where the qualifiers arrive on
+their own form and the parent sequence must be looked up. What this fixture
+adds is the SUPPQUAL linkage contract and the two gaps below.
 
-## Status and named gaps
+## Two gaps this fixture names
 
-This fixture is a **probe**. It passes as written, but only because the parent
-sequence is handed to it as input.
+It passes as written, but only because the parent sequence is handed to it as
+input.
 
 1. **The parent sequence cannot be assigned and consumed in one run.** A
    specification describes one output dataset, so MH and SUPPMH cannot be
    derived together, and `MHSEQ` has to arrive pre-assigned. This is the
-   multi-output pipeline gap the plan records for C01 and X10.
-2. **Closed. The linkage join is expressible.** If the qualifiers arrived on a
-   separate collected dataset, `IDVARVAL` would have to come from MH matched on
-   subject plus a second identifying column. The R003 automatic join cannot do
-   it: it uses only output keys that also exist on the right side, which here
-   is `[STUDYID, USUBJID]`, and MH is not unique on those. `mapping_from` now
-   takes a list for `source` and `key` and pairs them by position, so the
-   compound match is declared directly. `../sdtm-suppmh-parent-linkage` is that
-   fixture.
-3. **Referential integrity cannot be verified.** The
+   multi-output pipeline gap.
+2. **Referential integrity cannot be verified.** The
    `qualifier-value-has-parent-identifier` check only asserts that the linkage
    columns are populated. Asserting that every `IDVARVAL` exists as an `MHSEQ`
    in MH needs a cross-dataset verification; R009 verifications are row-wise
