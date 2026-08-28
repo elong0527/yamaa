@@ -17,7 +17,7 @@ root_class:
 
 column_class:
     - name: {type: str, required: true}
-    - type: {type: str, required: true}
+    - type: {type: column_type, required: true}
     - output: {type: bool, required: false, default: true}
     - label: {type: str, required: false}
     - derivation: {type: derivation, required: false}
@@ -29,6 +29,10 @@ row_class:
     - dataset: {type: str, required: false}
     - filter: {type: sql, required: false}
     - derivations: {type: "dict[str, derivation]", required: true}
+
+column_type:
+    type: str
+    values: [str, int, float, date]
 
 literal_value:
     type: [str, int, float, bool, "null"]

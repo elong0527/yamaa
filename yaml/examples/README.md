@@ -310,14 +310,19 @@ and only the descending-sort workaround in A4 remains under them.
     which. `adam-adlb-bds` carries the same problem independently: its ALTSI
     `AVAL` of `0.167` is the shortened form of `0.16699999999999998`, and its
     `CHG` and `PCHG` inherit it. Three fixtures now disagree with
-    full-precision arithmetic in their golden output.
-18. A declared `date` is complete or nothing. Partial dates have no precision,
-    so imputation is written as regular-expression extraction, string defaults,
-    and reassembly, and the rule itself is invisible to the schema.
+    full-precision arithmetic in their golden output. R011 defines every
+    other conversion into a declared type and leaves this one open, so it
+    is now the only undefined cell in the matrix.
+18. **Normative in R011:** a declared `date` is complete or nothing. Partial
+    dates still have no precision, so imputation is written as
+    regular-expression extraction, string defaults, and reassembly, and the
+    rule itself is invisible to the schema.
 19. Imputed and collected dates compare identically. Nothing marks a comparison
     made under uncertainty, so an imputed day silently decides classifications
     such as treatment emergence.
-20. There is no datetime type distinct from `date`.
+20. **Closed by R011:** there is no datetime type distinct from `date`, and
+    `column_type` is a closed enumeration of `str`, `int`, `float`, and
+    `date` rather than the free string `column.type` accepted before.
     `sdtm-ae-effective-transaction` carries an audit timestamp as `str` and
     orders it correctly only because ISO 8601 text sorts chronologically.
 
@@ -365,6 +370,11 @@ inference needed no new machinery. What remains of A is one item, cheap and unre
 arithmetic: accepting a variable in `cut.breaks` and window bounds.
 `plan.md` sequences the rest.
 
+Group E is half closed. R011 names the three things called a type, closes the
+column vocabulary, and defines the conversion matrix, so what is left there is
+the float-to-text decision, source-format value recognition, and the absence of
+any mark on an imputed date.
+
 Groups C, D, F, and G are language additions rather than relaxations and need
 their failure behavior fixed by negative fixtures before they are specified.
 Group G is the largest of them and the least explored: it asks the schema to
@@ -378,5 +388,7 @@ still an assertion.
 
 Positive fixtures do not prove failure behavior. Negative fixtures are still
 needed for duplicate dictionary keys, unhandled mappings, failed verifications,
-duplicate output keys, illegal expression contexts, and nested expressions in
-variable-only operand fields.
+duplicate output keys, illegal expression contexts, nested expressions in
+variable-only operand fields, a column type outside `column_type`, and the R011
+conversion failures: unparseable numeric text, an incomplete date, and a
+non-integral value converted to `int`.

@@ -20,10 +20,11 @@ fixture the acceptance rule requires.
 | `compute` and R010, replacing `add`, `subtract`, `multiply`, `percent_change` | one closed numeric grammar with columns in every operand position; closes gaps 2, 3, 16, the arithmetic half of 1, and the numeric half of 10 |
 | `order_by_term` with `direction` and `nulls` | two negated companion columns deleted; closes gaps 4 and 14 |
 | `filter` on `multiple_matches`, R003 and R008 | ordered selection narrows its right side before ordering; closes the right-side half of gap 13 |
+| `column_type` and R011 | `column.type` became a closed enumeration and the conversion matrix is defined; closes gap 20 and the definitional half of gap 18, leaving gap 17 as the one open cell |
 
-Six gaps are closed, three are partly closed, and seventeen are open.
+Seven gaps are closed, four are partly closed, and fifteen are open.
 
-Two lessons from those four changes are worth keeping.
+Two lessons from the first four changes are worth keeping.
 
 **A closed grammar beat an expression per operator.** The original plan
 proposed widening `add` and `multiply` and adding `divide`, `round`, `abs`,
@@ -129,9 +130,12 @@ regular expressions and string defaults because a declared `date` is complete
 or nothing. `sdtm-ae-effective-transaction` carries an audit timestamp as `str`
 and orders it correctly only because ISO 8601 text sorts chronologically.
 
-Needs a type split, a precision concept, a declared imputation rule with its
-flag, and a statement about comparison when an operand is imputed. The largest
-Tier 3 item with the most fixture evidence behind it.
+R011 settled the vocabulary half: `column_type` is closed, a declared `date` is
+complete or nothing, and there is no datetime type, so gap 20 is closed and the
+type split is a decision already recorded rather than an open question. What
+remains is the harder half: a precision concept, a declared imputation rule
+with its flag, and a statement about comparison when an operand is imputed.
+Still the largest Tier 3 item, and gap 19 is untouched by R011.
 
 ### T7. Ingestion and conversion rules
 
@@ -144,7 +148,10 @@ Two unrelated questions that both block portability.
   `sdtm-vs-unit-standardization` proposes a shortest-round-trip rule and
   commits `37` rather than `37.0` to force the decision. R010 made this more
   urgent, not less: derivations now carry full precision by design, so three
-  fixtures hold golden values whose rendering is unspecified.
+  fixtures hold golden values whose rendering is unspecified. R011 defined
+  every other conversion and deliberately left this one open, so it is now
+  the single undefined cell in the matrix and the same decision as the text
+  an artifact writes for a `float`.
 
 ### T8. The output and pipeline contract
 
