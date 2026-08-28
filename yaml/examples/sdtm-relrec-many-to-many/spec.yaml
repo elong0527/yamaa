@@ -1,0 +1,109 @@
+domain: RELREC
+datasets:
+  AE: input/ae.csv
+  CM: input/cm.csv
+keys: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
+
+columns:
+  - name: STUDYID
+    type: str
+
+  - name: USUBJID
+    type: str
+
+  - name: RDOMAIN
+    type: str
+
+  - name: IDVAR
+    type: str
+
+  - name: IDVARVAL
+    type: str
+
+  - name: RELTYPE
+    type: str
+    derivation:
+      literal: null
+
+  - name: RELID
+    type: str
+
+rows:
+  - id: ae_link_1
+    dataset: AE
+    filter: "AE.AELNKID1 IS NOT NULL"
+    derivations:
+      STUDYID:
+        source: AE.STUDYID
+      USUBJID:
+        source: AE.USUBJID
+      RDOMAIN:
+        literal: AE
+      IDVAR:
+        literal: AESEQ
+      IDVARVAL:
+        source: AE.AESEQ
+      RELID:
+        source: AE.AELNKID1
+
+  - id: ae_link_2
+    dataset: AE
+    filter: "AE.AELNKID2 IS NOT NULL"
+    derivations:
+      STUDYID:
+        source: AE.STUDYID
+      USUBJID:
+        source: AE.USUBJID
+      RDOMAIN:
+        literal: AE
+      IDVAR:
+        literal: AESEQ
+      IDVARVAL:
+        source: AE.AESEQ
+      RELID:
+        source: AE.AELNKID2
+
+  - id: cm_link_1
+    dataset: CM
+    filter: "CM.CMLNKID1 IS NOT NULL"
+    derivations:
+      STUDYID:
+        source: CM.STUDYID
+      USUBJID:
+        source: CM.USUBJID
+      RDOMAIN:
+        literal: CM
+      IDVAR:
+        literal: CMSEQ
+      IDVARVAL:
+        source: CM.CMSEQ
+      RELID:
+        source: CM.CMLNKID1
+
+  - id: cm_link_2
+    dataset: CM
+    filter: "CM.CMLNKID2 IS NOT NULL"
+    derivations:
+      STUDYID:
+        source: CM.STUDYID
+      USUBJID:
+        source: CM.USUBJID
+      RDOMAIN:
+        literal: CM
+      IDVAR:
+        literal: CMSEQ
+      IDVARVAL:
+        source: CM.CMSEQ
+      RELID:
+        source: CM.CMLNKID2
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
+  - row_count:
+      min: 6
+      max: 6
+  - implies:
+      id: relationship-row-identifies-a-record
+      when: "RELID IS NOT NULL"
+      then: "RDOMAIN IS NOT NULL AND IDVAR IS NOT NULL AND IDVARVAL IS NOT NULL"
