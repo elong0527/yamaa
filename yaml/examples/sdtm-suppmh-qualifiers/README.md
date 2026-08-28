@@ -1,6 +1,6 @@
 # SDTM SUPPMH non-standard qualifiers
 
-This focused probe answers one question: how are non-standard qualifier columns
+This fixture answers one question: how are non-standard qualifier columns
 reshaped into SUPPQUAL rows and linked back to their parent record?
 
 ## Rule and input boundary

@@ -1,7 +1,7 @@
 # SDTM AE effective transaction selection
 
-This focused probe answers one question: given a transactional collected
-source, can the effective state of a record be selected?
+This fixture answers one question: given a transactional collected source, can
+the effective state of a record be selected?
 
 ## Rule and input boundary
 

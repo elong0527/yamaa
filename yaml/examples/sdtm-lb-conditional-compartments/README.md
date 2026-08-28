@@ -1,7 +1,7 @@
 # SDTM LB conditional compartments
 
-This focused probe answers one question: can a structurally inapplicable
-compartment be told apart from a sample that was applicable but not collected?
+This fixture answers one question: can a structurally inapplicable compartment
+be told apart from a sample that was applicable but not collected?
 
 ## Rule and record grain
 

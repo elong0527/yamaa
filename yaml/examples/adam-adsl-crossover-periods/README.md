@@ -1,8 +1,7 @@
 # ADaM ADSL crossover periods
 
-This focused SDTM-to-ADaM probe answers one question: can period-scoped
-treatment and dates be derived without a subject-level join collapsing the
-periods?
+This SDTM-to-ADaM fixture answers one question: can period-scoped treatment and
+dates be derived without a subject-level join collapsing the periods?
 
 ## Rule and record grain
 

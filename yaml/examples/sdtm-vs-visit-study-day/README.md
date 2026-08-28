@@ -1,7 +1,7 @@
 # SDTM VS visit metadata and study day
 
-This focused collected-to-SDTM probe answers one question: how are visit
-metadata and study day attached to a Findings record?
+This collected-to-SDTM fixture answers one question: how are visit metadata and
+study day attached to a Findings record?
 
 ## Rule and record grain
 

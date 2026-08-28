@@ -1,8 +1,8 @@
 # SDTM RELREC many-to-many relationships
 
-This probe answers two related questions: how is a RELREC row constructed from
-several source datasets, and can a record that participates in more than one
-relationship be represented?
+This fixture answers two related questions: how is a RELREC row constructed
+from several source datasets, and can a record that participates in more than
+one relationship be represented?
 
 ## Rule and record grain
 

@@ -1,6 +1,6 @@
 # ADaM ADAE approved severity override
 
-This focused probe answers one question: does a final override run after normal
+This fixture answers one question: does a final override run after normal
 conversion and before a dependent variable is derived?
 
 `ASEV` first uppercases the collected severity. The approved correction changes

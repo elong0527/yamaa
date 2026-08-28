@@ -1,7 +1,7 @@
 # ADaM ADAE hierarchical occurrence flags
 
-This focused probe answers one question: which treatment-emergent event is
-first for a subject, system organ class, and preferred term?
+This fixture answers one question: which treatment-emergent event is first for
+a subject, system organ class, and preferred term?
 
 ## Rule and input boundary
 

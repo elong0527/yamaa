@@ -1,7 +1,7 @@
 # ADaM ADSL dependency ordering
 
-This focused probe answers one question: does declaration order have any effect
-on evaluation?
+This fixture answers one question: does declaration order have any effect on
+evaluation?
 
 ## Rule and record grain
 

@@ -1,7 +1,7 @@
 # ADaM ADLB closest-to-target record selection
 
-This focused probe answers one question: can the record closest to a target
-study day be selected, and is the tie rule expressible?
+This fixture answers one question: can the record closest to a target study day
+be selected, and is the tie rule expressible?
 
 `../adam-advs-analysis-visit` records closest-to-target selection as a gap and
 commits the first-in-window answer instead. This fixture shows the selection is

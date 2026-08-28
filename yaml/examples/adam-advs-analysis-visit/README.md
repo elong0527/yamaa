@@ -1,7 +1,7 @@
 # ADaM ADVS analysis visit windowing
 
-This focused probe answers one question: how is a record assigned to an
-analysis window, and which record in that window is the analysis record?
+This fixture answers one question: how is a record assigned to an analysis
+window, and which record in that window is the analysis record?
 
 ## Rule and input boundary
 

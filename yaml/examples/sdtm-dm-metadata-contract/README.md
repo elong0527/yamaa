@@ -1,7 +1,7 @@
 # SDTM DM metadata and artifact contract
 
-This focused probe answers one question: how much of a submission metadata
-contract can the schema carry today?
+This fixture answers one question: how much of a submission metadata contract
+can the schema carry today?
 
 ## Rule and record grain
 
@@ -52,7 +52,7 @@ Output column order is declaration order, which for this fixture matches the
 conventional DM order. `../sdtm-suppmh-qualifiers` shows that output *row*
 order has no control at all, and a transport artifact needs both.
 
-This is the probe that passes while proving the least: none of the five points
+This is the fixture that passes while proving the least: none of the five points
 above is asserted by any golden file.
 
 ## Diagnostics and verifications
