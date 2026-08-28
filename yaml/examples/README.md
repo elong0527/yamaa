@@ -90,6 +90,9 @@ point with source and literal arguments.
 23. `adam-adae-partial-dates` — rebuilds analysis dates from year-only,
     year-month, complete, unparseable, and uncollected values, with an
     imputation flag and its effect on treatment emergence.
+24. `adam-adlb-closest-visit` — selects the record nearest a target study day,
+    including a tie broken toward the later record and a record outside the
+    window.
 
 ## Coverage gaps
 
@@ -125,6 +128,9 @@ with an ordered selection over the same records.
 `adam-adae-partial-dates` is the first fixture to treat a date as text,
 exercising `str_extract`, `coalesce` defaults, and `str_concat` together, and
 the first to use every declared handler on one source value.
+`adam-adlb-closest-visit` closes the closest-to-target question left open by
+`adam-advs-analysis-visit`: the selection is expressible, using a spelled-out
+absolute value and a negated companion column for descending preference.
 
 All nine verification keywords are exercised across the fixtures;
 `adam-adsl-mapping` covers the generic named `predicate`, while the challenge
@@ -138,7 +144,7 @@ missing inputs to banding. Row filters handle absent optional records, and the
 zero-baseline rule produces an intentional missing percentage without a special
 handler.
 
-Sixteen design gaps became visible:
+Eighteen design gaps became visible:
 
 1. Operations now consume named variables, which removes arbitrary expression
    nesting and keeps mappings concise. A future named-intermediate or
@@ -194,6 +200,12 @@ Sixteen design gaps became visible:
 16. Imputed and collected dates compare identically. Nothing marks a comparison
     made under uncertainty, so an imputed day silently decides classifications
     such as treatment emergence.
+17. `row_number.order_by` is ascending with no direction option. Preferring a
+    later or larger value requires a negated companion column, which exists
+    for numbers and has no equivalent for dates or strings.
+18. Arithmetic operands other than the source must be literals, so a target
+    day, conversion factor, or window bound cannot be read from a column and
+    windows cannot be data.
 
 Positive fixtures do not prove failure behavior. Negative fixtures are still
 needed for duplicate dictionary keys, unhandled mappings, failed verifications,
