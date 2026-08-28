@@ -70,10 +70,11 @@ listed order after conversion and use the first rule whose predicate is `TRUE`.
 An override replacement is subject to the same conversion. R008 defines these
 handlers.
 
-R011 closes the column type vocabulary and defines the conversion matrix.
-The decimal text an artifact writes for a `float` column remains
-unresolved, and R011 leaves the matching `float` to `str` conversion open
-for the same reason.
+R011 closes the column type vocabulary and defines the conversion matrix. The
+decimal text an artifact writes for a `float` column is the float-to-text form
+R011 defines: shortest round-trip by default, or the project's declared number
+of decimal places. The artifact and a `str` column derived from the same
+`float` therefore always agree, and rendering never changes a stored value.
 
 ## Output keys and verification
 

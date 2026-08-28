@@ -22,9 +22,10 @@ fixture the acceptance rule requires.
 | `column_type` and R011 | `column.type` became a closed enumeration and the conversion matrix is defined, leaving float-to-string as its one open cell |
 | `mapping_from.source` and `mapping_from.key` as lists, R003 and R007 and R008 | a lookup declares a compound key and pairs it by position |
 | `filter` on `row_number`, R001 and R003 and R007 | a window states its eligibility once; two `TEORD` sort columns and six duplicated flag predicates deleted |
+| float-to-text, R005 and R011 | one form for the declared conversion and the artifact; the schema fixes no precision, the project does, and this suite declares four decimal places |
 
-Nine gaps closed and were removed from the catalogue in
-[`README.md`](README.md); seventeen remain, and the numbering below refers to
+Ten gaps closed and were removed from the catalogue in
+[`README.md`](README.md); sixteen remain, and the numbering below refers to
 that renumbered list.
 
 Three lessons from those changes are worth keeping.
@@ -112,7 +113,7 @@ which rows a window sees is separable from returning a record, and it landed as
 
 ### T6. Dates and times
 
-Evidence: gaps 10 and 11. `adam-adae-partial-dates` rebuilds dates with
+Evidence: gaps 9 and 10. `adam-adae-partial-dates` rebuilds dates with
 regular expressions and string defaults because a declared `date` is complete
 or nothing. `sdtm-ae-effective-transaction` carries an audit timestamp as `str`
 and orders it correctly only because ISO 8601 text sorts chronologically.
@@ -121,41 +122,39 @@ R011 settled the vocabulary half: `column_type` is closed, a declared `date` is
 complete or nothing, and there is no datetime type, so the type split is a
 decision already recorded rather than an open question. What remains is the
 harder half: a precision concept, a declared imputation rule with its flag, and
-a statement about comparison when an operand is imputed. Gap 11 is untouched
+a statement about comparison when an operand is imputed. Gap 10 is untouched
 by R011.
 
-### T7. Ingestion and conversion rules
+### T7. Source-format ingestion
 
-Two unrelated questions that both block portability.
+Gap 8: source-format missing values and type inference have no normative rule.
+Every fixture assumes an empty CSV field is missing and distinguishes it from a
+nonempty malformed value, and nothing says so.
 
-- Gap 8: source-format missing values and type inference have no normative
-  rule. Every fixture assumes an empty CSV field is missing and distinguishes
-  it from a nonempty malformed value.
-- Gap 9: float-to-string conversion is undefined.
-  `sdtm-vs-unit-standardization` proposes a shortest-round-trip rule and
-  commits `37` rather than `37.0` to force the decision. R010 made this more
-  urgent, not less: derivations now carry full precision by design, so three
-  fixtures hold golden values whose rendering is unspecified. R011 defined
-  every other conversion and deliberately left this one open, so it is now
-  the single undefined cell in the matrix and the same decision as the text
-  an artifact writes for a `float`.
+The conversion half of this item has landed. Float-to-text was the last
+undefined cell in R011's matrix, and closing it corrected two committed values
+rather than the three the item predicted: the golden files were written by R's
+default fifteen-significant-digit output, so `adam-adlb-bds` was already
+consistent with a four-decimal setting and only `adam-adsl-bmi-compute` and
+`sdtm-vs-unit-standardization` moved. Ingestion is the harder half and is
+untouched, because it is about recognising a value rather than rendering one.
 
 ### T8. The output and pipeline contract
 
-- Gap 12: one specification derives one dataset. `sdtm-suppmh-qualifiers`
+- Gap 11: one specification derives one dataset. `sdtm-suppmh-qualifiers`
   cannot assign a parent sequence and consume it in one run, and
   `sdtm-dm-reference-dates` depends on an execution order it cannot state.
   R001 cycle detection is per specification, so a cross-dataset cycle cannot be
   reported. Needs a manifest, cross-specification dependency inference, and
   cycle reporting.
-- Gap 13: nothing controls output row order, and verifications are row-wise
+- Gap 12: nothing controls output row order, and verifications are row-wise
   over the completed output. `sdtm-suppmh-qualifiers` leaves rows in
   row-template order rather than a submission order, and referential integrity
   between a SUPPQUAL record and its parent domain cannot be asserted.
 
 ### T9. Governed metadata
 
-Evidence: gap 17. `sdtm-dm-metadata-contract` declares origin, length, and
+Evidence: gap 16. `sdtm-dm-metadata-contract` declares origin, length, and
 codelist as free-form strings, marks `USUBJID` as `Derived` by hand although
 `str_concat` already encodes that, and declares a codelist name next to an
 unrelated `allowed_values` list.
@@ -166,7 +165,7 @@ artifact. Until that artifact is defined, fixtures must not invent its shape.
 
 ### T10. Declarable study structure
 
-Group F, gaps 14 to 16, and the largest open area.
+Group F, gaps 13 to 15, and the largest open area.
 
 - Conditional applicability, treatment period, relationship degree, and
   analysis window are protocol structure re-expressed as filters, predicate
@@ -188,8 +187,9 @@ an `EPOCH` assignment actually needs.
    still owes the four negative fixtures listed below.
 2. **T4**, once T3's negative fixtures have settled whether R010 grows
    comparable types or a separate expression appears.
-3. **T7**, which is rule text rather than schema and unblocks nothing else but
-   is required before any implementation can claim R and Python parity.
+3. **T7**, which is rule text rather than schema. Its conversion half landed
+   with float-to-text; what remains is source-format recognition, still
+   required before any implementation can claim R and Python parity.
 4. **T5, T6, T8, T9, T10** are design documents. Write the document before the
    schema change, and expect each to retire several gaps at once, as `compute`
    did.
@@ -197,9 +197,9 @@ an `EPOCH` assignment actually needs.
    widened field.
 
 Expected README edits: T2 retires gap 2, T4 retires gap 5, T5 retires gaps 3,
-6, and 7, T6 retires gaps 10 and 11, T7 retires gaps 8 and 9, T8 retires gaps
-12 and 13, T9 retires gap 17, and T10 retires gaps 4, 14, 15, and 16, along
-with whatever remains of gap 1.
+6, and 7, T6 retires gaps 9 and 10, T7 retires gap 8, T8 retires gaps 11 and
+12, T9 retires gap 16, and T10 retires gaps 4, 13, 14, and 15, along with
+whatever remains of gap 1.
 
 ## Negative fixtures this plan requires
 

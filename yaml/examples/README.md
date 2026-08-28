@@ -138,13 +138,15 @@ something and should not be deleted without a replacement:
   verification.
 - `sdtm-suppmh-parent-linkage` is the only compound-key `mapping_from`.
 
-No fixture rounds a value, and none can: R010 has no rounding function, so a
-derivation carries full precision and the number of places shown is decided
-when the value is reported.
+No derivation rounds: R010 has no rounding function, so every `float` column
+carries full binary64 precision. The expected outputs show four decimal places
+because R011 renders a `float` at the project's declared precision, which this
+suite sets to four. Rendering never changes a stored value, so an assertion
+about a `float` sees the full value and an artifact does not.
 
 ## Open design gaps
 
-Seventeen gaps are open across the suite, grouped by root cause rather than by
+Sixteen gaps are open across the suite, grouped by root cause rather than by
 the fixture that found them, because most are consequences of a few underlying
 decisions rather than independent omissions. Closed gaps are removed from this
 list rather than marked; `plan.md` records what was closed and how.
@@ -192,52 +194,44 @@ the vocabulary.
 8. Source-format missing values and type inference have no normative rule.
    Every fixture assumes an empty CSV field is missing and distinguishes it
    from a nonempty malformed value.
-9. Float-to-string conversion is undefined, and it is the only undefined cell
-    left in R011's matrix. `sdtm-vs-unit-standardization` proposes a
-    shortest-round-trip rule and commits `37` to force the decision.
-    `adam-adsl-bmi-compute` commits `24.999999999999996` where
-    `adam-adsl-bmi-function` records `25` for the same formula and inputs, and
-    `adam-adlb-bds` carries an ALTSI `AVAL` of `0.167` for
-    `0.16699999999999998`. Three golden outputs disagree with full-precision
-    arithmetic and nothing says which is right.
-10. Partial dates have no precision. R011 fixes that a declared `date` is
-    complete or nothing, so imputation is written as regular-expression
-    extraction, string defaults, and reassembly, and the rule itself is
-    invisible to the schema.
-11. Imputed and collected dates compare identically. Nothing marks a comparison
+9. Partial dates have no precision. R011 fixes that a declared `date` is
+   complete or nothing, so imputation is written as regular-expression
+   extraction, string defaults, and reassembly, and the rule itself is
+   invisible to the schema.
+10. Imputed and collected dates compare identically. Nothing marks a comparison
     made under uncertainty, so an imputed day silently decides classifications
     such as treatment emergence.
 
 ### E. The output and pipeline contract stops at one dataset
 
-12. One specification derives one dataset. `sdtm-suppmh-qualifiers` cannot
+11. One specification derives one dataset. `sdtm-suppmh-qualifiers` cannot
     assign a parent sequence and consume it in the same run, and
     `sdtm-dm-reference-dates` depends on DM being derived before the domains
     that reference it without being able to say so. R001 cycle detection is per
     specification, so a cross-dataset cycle cannot be reported either.
-13. Nothing controls output row order, and verifications are row-wise over the
+12. Nothing controls output row order, and verifications are row-wise over the
     completed output. Rows leave in row-template order rather than a submission
     sort order, and referential integrity between a SUPPQUAL record and its
     parent domain cannot be asserted.
 
 ### F. Structure that the data has cannot be declared
 
-14. Conditional applicability, treatment period, relationship degree, and
+13. Conditional applicability, treatment period, relationship degree, and
     analysis window are all real structure in a protocol and none is a concept
     in the schema. Each is re-expressed as a filter, a literal in a predicate,
     or one row template per slot, so the specification grows with the data
     rather than describing the design. `sdtm-lb-conditional-compartments`,
     `adam-adsl-crossover-periods`, and `sdtm-relrec-many-to-many` each show a
     different face of this.
-15. Row construction cannot consume values resolved during column derivation.
+14. Row construction cannot consume values resolved during column derivation.
     A logically removed record cannot be dropped, because `row.filter` sees
     only the row driver and nothing deletes a row afterwards, as
     `sdtm-ae-effective-transaction` shows by committing a record that must not
     exist.
-16. A derivation cannot carry both a value and the reason for it.
+15. A derivation cannot carry both a value and the reason for it.
     `adam-adrs-composite-response` writes the same four predicates twice, once
     for the endpoint and once for its audit trail, with nothing linking them.
-17. Metadata is an ungoverned string map. Labels are first class, but origin,
+16. Metadata is an ungoverned string map. Labels are first class, but origin,
     length, and controlled terminology are free-form text that no
     implementation can validate, and no expected metadata artifact exists to
     assert them, as `sdtm-dm-metadata-contract` records.

@@ -39,6 +39,6 @@ handler. The expected output preserves all four source rows, which are shared
 with `../adam-adsl-bmi-compute`. The project owns the `bmi` implementation, its
 signature, and its environment dependencies.
 
-The expected `BMI` of `25` for `CATH-002` is not the full-precision result of
-this formula; R returns `24.999999999999996`. `../adam-adsl-bmi-compute`
-commits the exact value and explains why the two disagree.
+The expected `BMI` of `25` for `CATH-002` is the rendered form of
+`24.999999999999996`, which is what both R and the portable `compute` formula
+return. `../adam-adsl-bmi-compute` explains where the last places go.

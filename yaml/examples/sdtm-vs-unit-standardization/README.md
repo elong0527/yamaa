@@ -32,9 +32,10 @@ standardizes to missing with no guard in the specification.
 they differ because they associate differently. This is why R010 requires an
 implementation to evaluate a formula as written and forbids reassociating it.
 
-There is no rounding. `175 LB` standardizes to `79.37866475 kg`, the exact
-product. R010 has no rounding function: a derivation carries full precision and
-rounding is a reporting concern.
+The derivation does not round. `175 LB` standardizes to the exact product
+`79.37866475 kg`, and that is the value every comparison and verification sees.
+The expected output writes `79.3787` because R011 renders a `float` at the
+project's declared four decimal places.
 
 ## Two gaps this fixture names
 
@@ -44,17 +45,17 @@ there is no way to bring a looked-up value into an expression as a term. Each
 unit pair needs its own `case` branch, and the branch list grows with the
 number of collected units.
 
-**Float-to-string conversion is undefined.** `VSSTRESC` is the character form
-of `VSSTRESN`, derived by declaring `type: str` over the same value, and R011
-defines every conversion in its matrix except this one.
+## `VSSTRESC` and `VSSTRESN` cannot disagree
 
-The expected output commits `37`, not `37.0`, for the standardized Fahrenheit
-record. This proposes that float-to-string conversion render the shortest form
-that round-trips to the same value and drop a trailing zero for an integral
-value. R and Python disagree by default here, so an implementation producing
-`37.0` today is not wrong; it is evidence that the rule must be stated. The
-same rule governs whether `79.37866475` may ever be shortened, which it must
-not be.
+`VSSTRESC` is the character form of `VSSTRESN`, derived by declaring
+`type: str` over the same value. SDTM requires the two to match, and they do
+because R011 uses one float-to-text form for both the declared conversion and
+the artifact's rendering of a `float` column. Both read `79.3787`, and both
+read `37` rather than `37.0` for the standardized Fahrenheit record, because an
+integral value is written without a decimal point.
+
+`VSSTRESC` stores its rendered text, so unlike `VSSTRESN` it does not keep the
+last places. A derivation needing them must read `VSSTRESN`.
 
 ## Diagnostics and verifications
 
