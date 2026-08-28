@@ -21,9 +21,7 @@ Examples are ordered by increasing complexity:
    current-dataset reference.
 2. `sdtm-lb-findings` — row construction, wide-to-long Findings conversion,
    missing-result filtering, and sequence generation.
-3. `sdtm-relrec-related-records` — row construction from multiple source
-   datasets for a one-to-many relationship between records.
-4. `adam-adlb-bds` — source-dataset enrichment, baseline selection, change from
+3. `adam-adlb-bds` — source-dataset enrichment, baseline selection, change from
    baseline, percentage change, and analysis sequence.
 
 Each example contains a specification, source CSV files, an expected CSV, and
@@ -35,13 +33,13 @@ A probe is a fixture written to test whether the schema can express a real
 derivation pattern. A probe that does not pass is a design finding, not a defect
 in the fixture, and its README records what the schema could not express.
 
-5. `adam-adsl-mapping` — value mapping with an inline dictionary, deriving
+4. `adam-adsl-mapping` — value mapping with an inline dictionary, deriving
    ADaM numeric companions, including a value the dictionary does not define.
-6. `sdtm-ae-dictionary-coding` — value mapping where the dictionary is an
+5. `sdtm-ae-dictionary-coding` — value mapping where the dictionary is an
    external file, including an uncoded term and the dictionary version.
-7. `adam-adsl-bmi-function` — BMI derivation through a function supplied by the
+6. `adam-adsl-bmi-function` — BMI derivation through a function supplied by the
    project's global R environment.
-8. `adam-adsl-bmi-compute` — the same BMI derivation as one closed numeric
+7. `adam-adsl-bmi-compute` — the same BMI derivation as one closed numeric
    expression, with a zero-height guard, `NULL` propagation, and a genuine
    rounding tie.
 
@@ -53,69 +51,70 @@ coverage.
 
 ## Challenge probes
 
-9. `sdtm-lb-multiform` — a compact CATH-derived ODM-to-SDTM probe consolidating
+8. `sdtm-lb-multiform` — a compact CATH-derived ODM-to-SDTM probe consolidating
    serum, skin-biopsy, saliva, and tape-strip data into LB. It covers form-
    specific contextual dates, structural absence versus explicit missingness,
    a collected nonnumeric result, repeated item groups, heterogeneous specimen
    metadata, and deterministic ordering ties.
-10. `adam-adsl-identifier-parsing` — parses a site from `USUBJID`, falls back
-    to collected `SITEID`, and constructs a subject reference.
-11. `adam-adsl-geography-normalization` — normalizes collected country text
+9. `adam-adsl-identifier-parsing` — parses a site from `USUBJID`, falls back
+   to collected `SITEID`, and constructs a subject reference.
+10. `adam-adsl-geography-normalization` — normalizes collected country text
     and maps country codes to regions, including missing and unmapped paths.
-12. `adam-adsl-treatment-selection` — a standalone SDTM-to-ADaM probe deriving
+11. `adam-adsl-treatment-selection` — a standalone SDTM-to-ADaM probe deriving
     subject-level treatment from DM and EX. It covers filtered first/last dates,
     ordered treatment selection, placebo dose zero, no-match subjects, fallback,
     and inclusive duration.
-13. `adam-adsl-disposition` — a standalone SDTM-to-ADaM probe deriving final
+12. `adam-adsl-disposition` — a standalone SDTM-to-ADaM probe deriving final
     subject disposition from DM and DS. It covers filtered final dates, ordered
     associated values, no-match subjects, and deterministic same-day selection.
-14. `adam-adsl-population-flags` — derives safety and intent-to-treat flags
+13. `adam-adsl-population-flags` — derives safety and intent-to-treat flags
     from a small pre-derived ADSL slice.
-15. `adam-adae-treatment-emergent` — classifies AE start dates against an
+14. `adam-adae-treatment-emergent` — classifies AE start dates against an
     inclusive ADSL treatment interval, including both boundaries and a subject
     with no ADSL match.
-16. `adam-adae-occurrence-flags` — derives first treatment-emergent occurrence
+15. `adam-adae-occurrence-flags` — derives first treatment-emergent occurrence
     flags at subject, SOC, and preferred-term levels, including same-day ties.
-17. `adam-adae-string-handlers` — isolates lowercase normalization and the
+16. `adam-adae-string-handlers` — isolates lowercase normalization and the
     distinct missing/no-match paths for sponsor event identifiers.
-18. `adam-adae-severity-override` — applies one approved final correction and
+17. `adam-adae-severity-override` — applies one approved final correction and
     demonstrates that a dependent numeric severity sees the corrected value.
-19. `sdtm-vs-visit-study-day` — looks up visit metadata by an explicit key and
+18. `sdtm-vs-visit-study-day` — looks up visit metadata by an explicit key and
     derives study day under the SDTM no-Day-0 rule, including an unscheduled
     visit, a missing date, and a subject with no reference date.
-20. `adam-advs-analysis-visit` — assigns records to analysis windows by study
+19. `adam-advs-analysis-visit` — assigns records to analysis windows by study
     day, separates `AVISIT`/`AVISITN` from collected `VISIT`/`VISITNUM`, and
     flags one analysis record per window.
-21. `sdtm-vs-unit-standardization` — keeps a collected result and its
+20. `sdtm-vs-unit-standardization` — keeps a collected result and its
     standardized companion separate, converting pounds and Fahrenheit as one
     formula each and committing an unrounded product.
-22. `sdtm-suppmh-qualifiers` — reshapes non-standard qualifier columns into
+21. `sdtm-suppmh-qualifiers` — reshapes non-standard qualifier columns into
     SUPPQUAL rows and links them to a pre-assigned parent sequence.
-23. `sdtm-dm-reference-dates` — reduces EX, DS, and AE into the DM reference
+22. `sdtm-dm-reference-dates` — reduces EX, DS, and AE into the DM reference
     dates, including a three-way latest-participation date, a screen failure
     with no exposure, and an adverse event ending after the last dose.
-24. `adam-adae-partial-dates` — rebuilds analysis dates from year-only,
+23. `adam-adae-partial-dates` — rebuilds analysis dates from year-only,
     year-month, complete, unparseable, and uncollected values, with an
     imputation flag and its effect on treatment emergence.
-25. `adam-adlb-closest-visit` — selects the record nearest a target study day,
+24. `adam-adlb-closest-visit` — selects the record nearest a target study day,
     including a tie broken toward the later record and a record outside the
     window.
-26. `adam-adae-worst-severity` — selects the worst-severity event per
+25. `adam-adae-worst-severity` — selects the worst-severity event per
     preferred term, ordering a controlled vocabulary through a numeric proxy.
-27. `sdtm-lb-conditional-compartments` — separates a structurally inapplicable
+26. `sdtm-lb-conditional-compartments` — separates a structurally inapplicable
     compartment from an applicable sample that was not collected.
-28. `sdtm-ae-effective-transaction` — selects the effective state of a record
+27. `sdtm-ae-effective-transaction` — selects the effective state of a record
     from an insert/update/remove transaction log.
-29. `adam-adsl-crossover-periods` — derives period-scoped treatments and dates
+28. `adam-adsl-crossover-periods` — derives period-scoped treatments and dates
     across a washout, including a subject who never crossed over.
-30. `sdtm-relrec-many-to-many` — represents records belonging to two
-    relationships at once.
-31. `adam-adrs-composite-response` — combines an efficacy threshold, a safety
+29. `sdtm-relrec-many-to-many` — row construction from multiple source
+    datasets, covering a one-to-many relationship between records and
+    records that belong to two relationships at once.
+30. `adam-adrs-composite-response` — combines an efficacy threshold, a safety
     condition, and a discontinuation rule into one responder value.
-32. `adam-adsl-dependency-order` — declares every column in reverse dependency
+31. `adam-adsl-dependency-order` — declares every column in reverse dependency
     order, with dependencies reachable only through predicates and window
     fields.
-33. `sdtm-dm-metadata-contract` — declares labels, origins, lengths, and
+32. `sdtm-dm-metadata-contract` — declares labels, origins, lengths, and
     codelists on every column and shows how little of that is governed.
 
 ## Coverage gaps

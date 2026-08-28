@@ -58,7 +58,7 @@ rule and a new field rather than an implementation convention.
 ## Diagnostics and verifications
 
 No handler path is declared. `IDVARVAL` converts an integer to character under
-R005, the same conversion `../sdtm-relrec-related-records` performs, and
+R005, the same conversion `../sdtm-relrec-many-to-many` performs, and
 `../sdtm-vs-unit-standardization` proposes the rule that governs it.
 
 The exact key is `[STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]`, and
