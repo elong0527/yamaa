@@ -131,7 +131,8 @@ how this grammar expresses integer division.
   `FLOOR(a / b)` for a floor-divided integer.
 - `SQRT`, `POWER`, `EXP`, and `LN` return `float`.
 - `CEIL`, `FLOOR`, and `TRUNC` return `float`. Declare the column
-  `type: int` when an integer is wanted; R005 converts the completed result.
+  `type: int` when an integer is wanted; R005 converts the completed result
+  and R011 defines that conversion.
 - `ABS`, `GREATEST`, `LEAST`, `MOD`, `NULLIF`, and `COALESCE` return the
   promoted type of their arguments: `int` when every argument is `int`,
   otherwise `float`.

@@ -54,6 +54,11 @@ example_class:
 Class fields are closed. Field order is descriptive and has no execution
 meaning. Duplicate class field names are errors.
 
+A field name is not a descriptor keyword and may coincide with one. In
+`- type: {type: column_type, required: true}` the outer name is the field
+`type` of `column_class` and the inner `type` is this rule's descriptor
+keyword. The two are unrelated; R011 separates the vocabularies.
+
 A value type is a descriptor written directly as a mapping:
 
 ```yaml

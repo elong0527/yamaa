@@ -87,7 +87,7 @@ runtime types:
 - `cut` requires a numeric source;
 - `compute` requires every identifier in its expression to be numeric;
 - `str_extract`, `str_concat`, `str_upper`, and `str_lower` require string sources;
-- `date_diff` requires compatible date or datetime inputs;
+- `date_diff` requires `date` inputs; R011 declares no datetime type;
 - `min`, `max`, and window ordering require mutually comparable values. Every
   record's value for one order term must be comparable with every other, so a
   term whose column mixes incomparable types is an error rather than an
