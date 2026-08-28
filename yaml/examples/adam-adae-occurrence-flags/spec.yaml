@@ -45,6 +45,7 @@ columns:
 
   - name: TEORD
     type: int
+    output: false
     derivation:
       case:
         branches:
@@ -56,6 +57,7 @@ columns:
 
   - name: AOCCSEQ
     type: int
+    output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]
@@ -63,6 +65,7 @@ columns:
 
   - name: AOCCSSEQ
     type: int
+    output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, AEBODSYS]
@@ -70,6 +73,7 @@ columns:
 
   - name: AOCCPSEQ
     type: int
+    output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, AEBODSYS, AEDECOD]

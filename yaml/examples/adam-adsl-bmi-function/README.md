@@ -34,3 +34,12 @@ handler. The expected output preserves all four source rows.
 
 This fixture establishes only the registered call lifecycle. The project owns
 the `bmi` implementation, its signature, and its environment dependencies.
+
+BMI is no longer a motivating case for `function`. `../adam-adsl-bmi-compute`
+derives the same value in portable YAML under R010, and this fixture is
+retained solely because it is the only coverage of the runtime-function
+extension point. Its first four input rows are shared with that fixture.
+
+The expected `BMI` of `25` for `CATH-002` is not the full-precision result of
+this formula; R returns `24.999999999999996`. `../adam-adsl-bmi-compute`
+commits the exact value and explains why the two disagree.

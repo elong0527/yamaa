@@ -3,7 +3,7 @@ id: R007
 title: Expression Registry
 status: normative
 applies_to: [expression, expressions, schema_expression]
-depends_on: [R004, R006]
+depends_on: [R004, R006, R010]
 ---
 
 # Expression registry
@@ -26,7 +26,9 @@ handlers. Adding a keyword requires one registry entry and normative semantics.
 Unknown keywords and unknown payload fields fail schema validation.
 
 `source` and `literal` are expression leaves. Other expressions name their
-input variables directly unless a field is explicitly typed as `expression`.
+input variables directly unless a field is explicitly typed as `expression`,
+or typed as `numeric_expression`, whose identifiers R010 resolves against
+current-output columns.
 The latter is reserved for constructs whose purpose requires nested values:
 `case`, function arguments, and final overrides. Plain strings are values unless
 their schema field is typed as `variable`, `function_arg`, or `sql`. A string in
@@ -47,6 +49,32 @@ Omitting `group_by` creates one partition.
 
 Any other aggregate context is an error.
 
+## Ordering
+
+`row_number.order_by` and `multiple_matches.order_by` are lists of order terms.
+An order term is either a bare variable or a mapping declaring `variable`,
+`direction`, and `nulls`. A bare variable means
+`{variable: X, direction: asc, nulls: last}`, so an existing specification keeps
+its meaning.
+
+- `direction` is `asc` or `desc` and defaults to `asc`.
+- `nulls` is `last` or `first` and defaults to `last`. It states where missing
+  values sit among the non-missing ones for that term.
+
+**`nulls` does not flip with `direction`.** `last` means last under `asc` and
+last under `desc`. SQL engines disagree here — PostgreSQL places nulls last
+under `asc` and first under `desc`, while SQLite and MySQL place them first
+under `asc` — so an implementation must apply the declared placement rather
+than inherit its engine's default.
+
+Terms apply in order, each with its own direction and placement. Records equal
+on every term preserve row-template order and then base-record order, which
+makes the result total.
+
+Ordering therefore has no undefined case. A specification no longer needs a
+negated companion column to express a descending preference, and it no longer
+needs to be built so that two records with a missing sort key cannot meet.
+
 ## Type behavior
 
 No implicit conversion occurs between named operation inputs. R005 converts
@@ -56,15 +84,18 @@ runtime types:
 - `mapping` requires a string source because dictionary keys are strings;
 - `mapping_from` requires the source and dictionary key column to have the same
   comparable type;
-- `cut`, `multiply`, `add`, `subtract`, and `percent_change` require numeric
-  inputs;
+- `cut` requires a numeric source;
+- `compute` requires every identifier in its expression to be numeric;
 - `str_extract`, `str_concat`, `str_upper`, and `str_lower` require string sources;
 - `date_diff` requires compatible date or datetime inputs;
-- `min`, `max`, and window ordering require mutually comparable values.
+- `min`, `max`, and window ordering require mutually comparable values. Every
+  record's value for one order term must be comparable with every other, so a
+  term whose column mixes incomparable types is an error rather than an
+  implementation-defined order.
 
 `source` retains its source type and `literal` retains its YAML scalar type.
-`cut`, `str_extract`, `str_concat`, `str_upper`, and `str_lower` return strings. `multiply`, `add`, `subtract`, and
-`percent_change` return floats. `date_diff` and `row_number` return integers.
+`cut`, `str_extract`, `str_concat`, `str_upper`, and `str_lower` return strings.
+`compute` returns the numeric type its expression promotes to under R010. `date_diff` and `row_number` return integers.
 `baseline_flag` returns a string. Mapping, conditional, coalescing, baseline
 value, and aggregate expressions retain the selected or aggregated value type.
 The `function` expression retains the type returned by the project function.
@@ -102,11 +133,14 @@ The `function` expression retains the type returned by the project function.
 
 ### Numeric and conditional expressions
 
-- `multiply` returns `source * factor`.
-- `add` returns `source + addend`.
-- `subtract` returns `minuend - subtrahend`.
-- `percent_change` returns `100 * (value - base) / base`; a zero or missing
-  base returns missing.
+- `compute` evaluates `expr` as a scalar numeric formula over current-output
+  columns and numeric literals. R010 defines its grammar, its closed function
+  vocabulary, type promotion, `NULL` propagation, and failure conditions. It is
+  scalar: it must not contain an aggregate, a window function, a comparison, a
+  conditional, a string, or a host-language call, so it cannot bypass the
+  evaluation-kind rules above. It is the only arithmetic expression: it accepts
+  a column in every operand position and needs no guarding predicate for
+  missing inputs.
 - `coalesce` returns the first non-missing variable in `sources`. If all are
   missing, it returns the literal `default` when supplied, or missing.
 - `case` evaluates branches in order and returns the `then` expression of the
@@ -121,9 +155,8 @@ The `function` expression retains the type returned by the project function.
 
 ### Window expressions
 
-- `row_number` numbers rows from one within each partition, ascending by the
-  variables in `order_by`. Ties preserve row-template order and then
-  base-record order.
+- `row_number` numbers rows from one within each partition, by the order terms
+  in `order_by` under the ordering rule above.
 - `baseline_flag` returns `Y` for the row with the latest non-missing `date` at
   or before `reference_date`, and missing elsewhere. Ties are errors.
 - `baseline_value` copies the `value` from the row whose `flag` is `Y` to every
@@ -156,5 +189,6 @@ unresolved while that rule is draft.
 - A window expression used during row construction: fail.
 - An aggregate outside its two permitted contexts: fail.
 - An unhandled local missing, mapping, or extraction condition: fail.
+- A `compute` expression that violates R010: fail.
 - An unresolved function, failed function call, or non-scalar function result:
   fail with the function name and original runtime context.

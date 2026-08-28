@@ -1,0 +1,112 @@
+domain: DM
+datasets:
+  DM_RAW: input/dm_raw.csv
+  EX: input/ex.csv
+  DS: input/ds.csv
+  AE: input/ae.csv
+base: DM_RAW
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: DM_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    derivation:
+      literal: DM
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: DM_RAW.USUBJID
+
+  - name: RFICDTC
+    type: date
+    derivation:
+      source: DM_RAW.RFICDTC
+    verifications:
+      not_missing: {}
+
+  - name: RFXSTDTC
+    type: date
+    derivation:
+      min:
+        source: EX.EXSTDTC
+        filter: "EX.EXSTDTC IS NOT NULL"
+
+  - name: RFXENDTC
+    type: date
+    derivation:
+      max:
+        source: EX.EXENDTC
+        filter: "EX.EXENDTC IS NOT NULL"
+
+  - name: RFSTDTC
+    type: date
+    derivation:
+      source: RFXSTDTC
+
+  - name: EXDOSE0
+    type: float
+    output: false
+    derivation:
+      source:
+        variable: EX.EXDOSE
+        multiple_matches:
+          order_by: [EX.EXENDTC, EX.EXSEQ]
+          keep: last
+
+  - name: DSDT0
+    type: date
+    output: false
+    derivation:
+      max:
+        source: DS.DSSTDTC
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
+
+  - name: AEDT0
+    type: date
+    output: false
+    derivation:
+      max:
+        source: AE.AEENDTC
+        filter: "AE.AEENDTC IS NOT NULL"
+
+  - name: RFENDTC
+    type: date
+    derivation:
+      case:
+        branches:
+          - when: "RFXENDTC IS NOT NULL AND (DSDT0 IS NULL OR RFXENDTC >= DSDT0) AND (AEDT0 IS NULL OR RFXENDTC >= AEDT0)"
+            then:
+              source: RFXENDTC
+          - when: "DSDT0 IS NOT NULL AND (AEDT0 IS NULL OR DSDT0 >= AEDT0)"
+            then:
+              source: DSDT0
+        else:
+          source: AEDT0
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 4
+      max: 4
+  - all_or_none:
+      id: exposure-reference-completeness
+      columns: [RFXSTDTC, RFXENDTC, RFSTDTC, EXDOSE0]
+  - implies:
+      id: exposure-window-is-ordered
+      when: "RFXSTDTC IS NOT NULL AND RFXENDTC IS NOT NULL"
+      then: "RFXENDTC >= RFXSTDTC"
+  - implies:
+      id: consent-precedes-first-exposure
+      when: "RFXSTDTC IS NOT NULL"
+      then: "RFICDTC <= RFXSTDTC"
+  - implies:
+      id: participation-ends-no-earlier-than-last-exposure
+      when: "RFXENDTC IS NOT NULL"
+      then: "RFENDTC >= RFXENDTC"

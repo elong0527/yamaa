@@ -1,0 +1,106 @@
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+  EX: input/ex.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: POPFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "SAFFL = 'Y' AND ITTFL = 'Y'"
+            then:
+              literal: Y
+        else:
+          literal: N
+
+  - name: SAFFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "TRTSDT IS NOT NULL"
+            then:
+              literal: Y
+        else:
+          literal: N
+
+  - name: ITTFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "RANDFL = 'Y'"
+            then:
+              literal: Y
+        else:
+          literal: N
+
+  - name: RANDFL
+    type: str
+    output: false
+    derivation:
+      case:
+        branches:
+          - when: "RANDDT IS NOT NULL"
+            then:
+              literal: Y
+        else:
+          literal: N
+
+  - name: TRTSDT
+    type: date
+    derivation:
+      min:
+        source: EX.EXSTDTC
+        filter: "EX.EXSTDTC IS NOT NULL"
+
+  - name: RANDDT
+    type: date
+    derivation:
+      source: DM.RANDDT
+
+  - name: AGEGR1
+    type: str
+    derivation:
+      cut:
+        source: AGE
+        breaks: [65]
+        labels: ["<65", ">=65"]
+        right: false
+
+  - name: AGERNK
+    type: int
+    derivation:
+      row_number:
+        group_by: [STUDYID]
+        order_by: [AGE, USUBJID]
+
+  - name: STUDYID
+    type: str
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: DM.USUBJID
+
+  - name: AGE
+    type: int
+    derivation:
+      source: DM.AGE
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 3
+      max: 3
+  - implies:
+      id: analysis-population-requires-both-flags
+      when: "POPFL = 'Y'"
+      then: "SAFFL = 'Y' AND ITTFL = 'Y'"

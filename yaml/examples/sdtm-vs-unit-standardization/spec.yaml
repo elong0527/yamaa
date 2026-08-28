@@ -1,0 +1,117 @@
+domain: VS
+datasets:
+  VS_RAW: input/vs_raw.csv
+base: VS_RAW
+keys: [STUDYID, USUBJID, VSSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: VS_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    derivation:
+      literal: VS
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: VS_RAW.USUBJID
+
+  - name: VSSEQ
+    type: int
+    derivation:
+      source: VS_RAW.VSSEQ
+    verifications:
+      not_missing: {}
+
+  - name: VISIT
+    type: str
+    derivation:
+      source: VS_RAW.VISIT
+
+  - name: VSTESTCD
+    type: str
+    derivation:
+      source: VS_RAW.VSTESTCD
+    verifications:
+      allowed_values:
+        values: [HEIGHT, WEIGHT, TEMP]
+
+  - name: VSTEST
+    type: str
+    derivation:
+      source: VS_RAW.VSTEST
+
+  - name: VSORRES
+    type: str
+    derivation:
+      source: VS_RAW.VSORRES
+
+  - name: VSORRESU
+    type: str
+    derivation:
+      source: VS_RAW.VSORRESU
+    verifications:
+      allowed_values:
+        values: [cm, kg, C, LB, F]
+
+  - name: VSORRESN
+    type: float
+    output: false
+    derivation:
+      source: VS_RAW.VSORRES
+
+  - name: VSSTRESN
+    type: float
+    derivation:
+      case:
+        branches:
+          - when: "VSTESTCD = 'WEIGHT' AND VSORRESU = 'LB'"
+            then:
+              compute:
+                expr: "VSORRESN * 0.45359237"
+          - when: "VSTESTCD = 'TEMP' AND VSORRESU = 'F'"
+            then:
+              compute:
+                expr: "(VSORRESN - 32) * 5 / 9"
+        else:
+          source: VSORRESN
+
+  - name: VSSTRESC
+    type: str
+    derivation:
+      source: VSSTRESN
+
+  - name: VSSTRESU
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "VSSTRESN IS NOT NULL"
+            then:
+              mapping:
+                source: VSTESTCD
+                dict:
+                  HEIGHT: cm
+                  WEIGHT: kg
+                  TEMP: C
+    verifications:
+      allowed_values:
+        values: [cm, kg, C]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VSSEQ]
+  - row_count:
+      min: 6
+      max: 6
+  - all_or_none:
+      id: standardized-result-completeness
+      columns: [VSSTRESN, VSSTRESC, VSSTRESU]
+  - implies:
+      id: unconverted-result-is-unchanged
+      when: "VSORRESU = VSSTRESU"
+      then: "VSSTRESN = VSORRESN"

@@ -1,0 +1,120 @@
+domain: DM
+datasets:
+  DM_RAW: input/dm_raw.csv
+base: DM_RAW
+keys: [STUDYID, USUBJID]
+metadata:
+  dataset_label: Demographics
+  dataset_class: SPECIAL PURPOSE
+  dataset_structure: One record per subject
+  standard: SDTMIG 3.4
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM_RAW.STUDYID
+    metadata:
+      origin: Protocol
+      length: "20"
+    verifications:
+      not_missing: {}
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: DM
+    metadata:
+      origin: Assigned
+      length: "2"
+      codelist: DOMAIN
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      str_concat:
+        sources:
+          - source: DM_RAW.STUDYID
+          - literal: '-'
+          - source: DM_RAW.SITEID
+          - literal: '-'
+          - source: DM_RAW.SUBJID
+    metadata:
+      origin: Derived
+      length: "30"
+    verifications:
+      not_missing: {}
+
+  - name: SUBJID
+    type: str
+    label: Subject Identifier for the Study
+    derivation:
+      source: DM_RAW.SUBJID
+    metadata:
+      origin: CRF
+      length: "10"
+
+  - name: SITEID
+    type: str
+    label: Study Site Identifier
+    derivation:
+      source: DM_RAW.SITEID
+    metadata:
+      origin: CRF
+      length: "10"
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation:
+      source: DM_RAW.AGE
+    metadata:
+      origin: CRF
+      length: "8"
+    verifications:
+      range:
+        min: 0
+        max: 120
+
+  - name: AGEU
+    type: str
+    label: Age Units
+    derivation:
+      literal: YEARS
+    metadata:
+      origin: Assigned
+      length: "6"
+      codelist: AGEU
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation:
+      source: DM_RAW.SEX
+    metadata:
+      origin: CRF
+      length: "1"
+      codelist: SEX
+    verifications:
+      allowed_values:
+        values: [F, M, U]
+
+  - name: COUNTRY
+    type: str
+    label: Country
+    derivation:
+      source: DM_RAW.COUNTRY
+    metadata:
+      origin: CRF
+      length: "3"
+      codelist: COUNTRY
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 3
+      max: 3

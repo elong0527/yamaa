@@ -10,10 +10,14 @@ to the date difference. Placebo administrations have `EXDOSE = 0` but remain
 real treatment records. Two subjects have no EX: one falls back to planned
 treatment and one to `NOT TREATED`.
 
-Expected `TRT01RAW.source.multiple_matches` count is two. The current language
-cannot filter ordered `source.multiple_matches`, so every EX row in this
-positive fixture is treatment-relevant. `TRT01RAW`, `TRT01SRC`, and `TRTDUR0`
-remain visible because internal intermediates are not yet supported.
+Expected `TRT01RAW.source.multiple_matches` count is two. `TRT01RAW` declares
+the same `filter` as `TRTSDT` and `TRTEDT`, so all three agree on which
+exposure records qualify; every EX row in this positive fixture is
+treatment-relevant, so the filter changes no value here and exists to keep the
+three derivations from drifting apart. `TRT01RAW`, `TRT01SRC`, and `TRTDUR0`
+declare `output: false` and stay out of the artifact; the
+`treatment-period-completeness` verification still names `TRTDUR0`, which R005
+permits for an internal column.
 
 Rows remain in DM order; the key is `[STUDYID, USUBJID]`; exactly four rows are
 expected. Treatment dates and durations must be all present or all missing,

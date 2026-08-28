@@ -22,8 +22,9 @@ flag counts are two `AOCCFL`, three `AOCCSFL`, and three `AOCCPFL` values.
 
 `row_number` cannot filter records. `TEORD` makes this Boolean eligibility case
 expressible by ranking nonqualifying rows later, but it does not replace a
-general filtered window. `TEORD` and the three rank variables also have to be
-emitted because the schema has no internal-intermediate mechanism.
+general filtered window. `TEORD` and the three rank variables declare
+`output: false` under R005, so the ranking machinery stays out of the artifact
+while the three flags remain.
 
 Rows remain in source order; window expressions assign values without
 reordering. The exact key is `[STUDYID, USUBJID, AESEQ]`, and exactly seven rows

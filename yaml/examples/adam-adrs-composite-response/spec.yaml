@@ -1,0 +1,118 @@
+domain: ADRS
+datasets:
+  ADRSPRE: input/adrs_pre.csv
+  ADSL: input/adsl.csv
+base: ADRSPRE
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADRSPRE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADRSPRE.USUBJID
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      literal: RESP75
+
+  - name: PARAM
+    type: str
+    derivation:
+      literal: EASI-75 Response
+
+  - name: AVISIT
+    type: str
+    derivation:
+      source: ADRSPRE.AVISIT
+
+  - name: PCHG
+    type: float
+    derivation:
+      source: ADRSPRE.PCHG
+
+  - name: SAEFL
+    type: str
+    derivation:
+      source: ADSL.SAEFL
+
+  - name: DCSREAS
+    type: str
+    derivation:
+      source: ADSL.DCSREAS
+
+  - name: AVALC
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "SAEFL = 'Y' OR DCSREAS IS NOT NULL"
+            then:
+              literal: NON-RESPONDER
+          - when: "PCHG IS NULL"
+            then:
+              literal: NOT EVALUABLE
+          - when: "PCHG <= -75"
+            then:
+              literal: RESPONDER
+        else:
+          literal: NON-RESPONDER
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [RESPONDER, NON-RESPONDER, NOT EVALUABLE]
+
+  - name: ARSN
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "SAEFL = 'Y' OR DCSREAS IS NOT NULL"
+            then:
+              literal: SAFETY OR DISCONTINUATION RULE
+          - when: "PCHG IS NULL"
+            then:
+              literal: COMPONENT MISSING
+          - when: "PCHG <= -75"
+            then:
+              literal: THRESHOLD MET
+        else:
+          literal: THRESHOLD NOT MET
+    verifications:
+      not_missing: {}
+
+  - name: AVAL
+    type: int
+    derivation:
+      case:
+        branches:
+          - when: "AVALC = 'RESPONDER'"
+            then:
+              literal: 1
+          - when: "AVALC = 'NON-RESPONDER'"
+            then:
+              literal: 0
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
+  - row_count:
+      min: 5
+      max: 5
+  - implies:
+      id: numeric-response-is-missing-only-when-not-evaluable
+      when: "AVAL IS NULL"
+      then: "AVALC = 'NOT EVALUABLE'"
+  - implies:
+      id: responder-meets-threshold
+      when: "AVALC = 'RESPONDER'"
+      then: "PCHG <= -75"
+  - implies:
+      id: safety-override-is-not-a-responder
+      when: "SAEFL = 'Y' OR DCSREAS IS NOT NULL"
+      then: "AVALC = 'NON-RESPONDER'"

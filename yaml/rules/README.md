@@ -17,6 +17,7 @@ design intent but are not complete enough for portable implementation.
 | R007 | [Expression registry](R007-expression-registry.md) | normative |
 | R008 | [Local error handlers](R008-local-handlers.md) | normative |
 | R009 | [Verifications](R009-verifications.md) | draft |
+| R010 | [Scalar numeric computation](R010-scalar-computation.md) | normative |
 
 ## Rule requirements
 

@@ -1,0 +1,125 @@
+domain: VS
+datasets:
+  VS_RAW: input/vs_raw.csv
+  DM: input/dm.csv
+  TV: input/tv.csv
+base: VS_RAW
+keys: [STUDYID, USUBJID, VSSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: VS_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    derivation:
+      literal: VS
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: VS_RAW.USUBJID
+
+  - name: VSSEQ
+    type: int
+    derivation:
+      source: VS_RAW.VSSEQ
+    verifications:
+      not_missing: {}
+
+  - name: VSTESTCD
+    type: str
+    derivation:
+      source: VS_RAW.VSTESTCD
+
+  - name: VSORRES
+    type: str
+    derivation:
+      source: VS_RAW.VSORRES
+
+  - name: VSDTC
+    type: date
+    derivation:
+      source: VS_RAW.VSDTC
+
+  - name: VISIT
+    type: str
+    derivation:
+      source: VS_RAW.VISIT
+
+  - name: VISITNUM
+    type: float
+    derivation:
+      mapping_from:
+        source: VISIT
+        dataset: TV
+        key: VISIT
+        value: VISITNUM
+        unmapped: null
+
+  - name: EPOCH
+    type: str
+    derivation:
+      mapping_from:
+        source: VISIT
+        dataset: TV
+        key: VISIT
+        value: EPOCH
+        unmapped: null
+    verifications:
+      allowed_values:
+        values: [SCREENING, TREATMENT, FOLLOW-UP]
+
+  - name: RFSTDTC
+    type: date
+    output: false
+    derivation:
+      source: DM.RFSTDTC
+
+  - name: VSDY0
+    type: int
+    output: false
+    derivation:
+      case:
+        branches:
+          - when: "VSDTC IS NOT NULL AND RFSTDTC IS NOT NULL"
+            then:
+              date_diff:
+                start: RFSTDTC
+                end: VSDTC
+                unit: day
+
+  - name: VSDY
+    type: int
+    derivation:
+      case:
+        branches:
+          - when: "VSDTC >= RFSTDTC"
+            then:
+              compute:
+                expr: "VSDY0 + 1"
+        else:
+          source: VSDY0
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VSSEQ]
+  - row_count:
+      min: 7
+      max: 7
+  - all_or_none:
+      id: scheduled-visit-metadata-completeness
+      columns: [VISITNUM, EPOCH]
+  - all_or_none:
+      id: study-day-completeness
+      columns: [VSDY0, VSDY]
+  - implies:
+      id: study-day-has-no-day-zero
+      when: "VSDY IS NOT NULL"
+      then: "VSDY <> 0"
+  - implies:
+      id: reference-start-date-is-study-day-one
+      when: "VSDTC IS NOT NULL AND RFSTDTC IS NOT NULL AND VSDTC = RFSTDTC"
+      then: "VSDY = 1"

@@ -1,0 +1,105 @@
+domain: ADLB
+datasets:
+  ADLBPRE: input/adlb_pre.csv
+base: ADLBPRE
+keys: [STUDYID, USUBJID, PARAMCD, LBSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADLBPRE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADLBPRE.USUBJID
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      source: ADLBPRE.PARAMCD
+
+  - name: LBSEQ
+    type: int
+    derivation:
+      source: ADLBPRE.LBSEQ
+
+  - name: ADT
+    type: date
+    derivation:
+      source: ADLBPRE.ADT
+
+  - name: ADY
+    type: int
+    derivation:
+      source: ADLBPRE.ADY
+
+  - name: AVAL
+    type: float
+    derivation:
+      source: ADLBPRE.AVAL
+
+  - name: AVISIT
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "ADY >= 8 AND ADY <= 22"
+            then:
+              literal: WEEK 2
+    verifications:
+      allowed_values:
+        values: [WEEK 2]
+
+  - name: AWTARGET
+    type: int
+    derivation:
+      case:
+        branches:
+          - when: "AVISIT IS NOT NULL"
+            then:
+              literal: 15
+
+  - name: ADIST
+    type: float
+    derivation:
+      compute:
+        expr: "ABS(ADY - AWTARGET)"
+    verifications:
+      range:
+        min: 0
+
+  - name: ARNK
+    type: int
+    output: false
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]
+        order_by:
+          - ADIST
+          - {variable: ADY, direction: desc}
+          - LBSEQ
+
+  - name: ANL01FL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "AVISIT IS NOT NULL AND ARNK = 1"
+            then:
+              literal: Y
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, LBSEQ]
+  - row_count:
+      min: 6
+      max: 6
+  - all_or_none:
+      id: window-derivation-completeness
+      columns: [AVISIT, AWTARGET, ADIST]
+  - implies:
+      id: analysis-record-is-inside-window
+      when: "ANL01FL = 'Y'"
+      then: "ADY >= 8 AND ADY <= 22"

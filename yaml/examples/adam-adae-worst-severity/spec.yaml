@@ -1,0 +1,111 @@
+domain: ADAE
+datasets:
+  ADAEPRE: input/adae_pre.csv
+base: ADAEPRE
+keys: [STUDYID, USUBJID, AESEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADAEPRE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADAEPRE.USUBJID
+
+  - name: AESEQ
+    type: int
+    derivation:
+      source: ADAEPRE.AESEQ
+
+  - name: AEBODSYS
+    type: str
+    derivation:
+      source: ADAEPRE.AEBODSYS
+
+  - name: AEDECOD
+    type: str
+    derivation:
+      source: ADAEPRE.AEDECOD
+
+  - name: ASTDT
+    type: date
+    derivation:
+      source: ADAEPRE.ASTDT
+
+  - name: AESEV
+    type: str
+    derivation:
+      source: ADAEPRE.AESEV
+    verifications:
+      allowed_values:
+        values: [MILD, MODERATE, SEVERE]
+
+  - name: TRTEMFL
+    type: str
+    derivation:
+      source: ADAEPRE.TRTEMFL
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  - name: AESEVN
+    type: int
+    derivation:
+      mapping:
+        source: AESEV
+        dict:
+          MILD: 1
+          MODERATE: 2
+          SEVERE: 3
+        missing: null
+    verifications:
+      range:
+        min: 1
+        max: 3
+
+  - name: TEORD
+    type: int
+    output: false
+    derivation:
+      case:
+        branches:
+          - when: "TRTEMFL = 'Y' AND AESEVN IS NOT NULL"
+            then:
+              literal: 0
+        else:
+          literal: 1
+
+  - name: AWSRNK
+    type: int
+    output: false
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID, AEDECOD]
+        order_by:
+          - TEORD
+          - {variable: AESEVN, direction: desc}
+          - ASTDT
+          - AESEQ
+
+  - name: AWSEVFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "TEORD = 0 AND AWSRNK = 1"
+            then:
+              literal: Y
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 8
+      max: 8
+  - implies:
+      id: worst-severity-flag-requires-graded-treatment-emergent-event
+      when: "AWSEVFL = 'Y'"
+      then: "TRTEMFL = 'Y' AND AESEVN IS NOT NULL"

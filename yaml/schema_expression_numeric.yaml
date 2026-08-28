@@ -1,15 +1,11 @@
 version: "1.0"
 
+# R010 defines the closed numeric grammar, types, and failure conditions.
+
 expressions:
-    multiply:
-        - source: {type: variable, required: true}
-        - factor: {type: float, required: true}
-    add:
-        - source: {type: variable, required: true}
-        - addend: {type: float, required: true}
-    subtract:
-        - minuend: {type: variable, required: true}
-        - subtrahend: {type: variable, required: true}
-    percent_change:
-        - value: {type: variable, required: true}
-        - base: {type: variable, required: true}
+    compute:
+        - expr: {type: numeric_expression, required: true}
+
+numeric_expression:
+    type: str
+    min_length: 1
