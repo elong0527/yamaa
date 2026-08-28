@@ -116,6 +116,9 @@ coverage.
     fields.
 32. `sdtm-dm-metadata-contract` — declares labels, origins, lengths, and
     codelists on every column and shows how little of that is governed.
+33. `sdtm-suppmh-parent-linkage` — looks up a parent sequence on subject plus
+    reported term, where the right side is unique on the pair and on neither
+    column alone.
 
 ## Coverage gaps
 
@@ -255,13 +258,20 @@ and only the descending-sort workaround in A4 remains under them.
    name an internal column, which is deliberate: those assertions are about the
    derivation, not the output.
 
-### C. Joins are limited to one automatic key join and a single-column lookup
+### C. Joins are limited to one automatic key join and a declared-key lookup
 
 7. `mapping_from` returns one column per call, so a multi-column visit or
-   parameter lookup repeats the same dictionary match.
-8. There is no explicit multi-column equality join. The R003 automatic join
-   uses only output keys shared with the right side, so a subject-plus-repeat-key
-   match such as SUPPQUAL linkage cannot be written.
+   parameter lookup repeats the same match. Widening its key did not change
+   this: `sdtm-vs-visit-study-day` still calls it twice against one `TV` row.
+   Returning several columns from one matched record conflicts with one
+   expression producing one value and belongs with gaps 11 and 12.
+8. **Closed.** `mapping_from.source` and `mapping_from.key` each accept a list,
+   pairing by position, so a subject-plus-repeat-key match is written directly.
+   `sdtm-suppmh-parent-linkage` performs the SUPPQUAL linkage the previous
+   wording said could not be written, against a right side that is unique on
+   the pair and on neither column alone. The R003 automatic join is unchanged
+   and still uses only output keys shared with the right side; R003 now frames
+   the two as derived keys versus declared keys.
 9. There is no interval join, so `EPOCH` cannot be assigned to a record the
    trial design does not name.
 
