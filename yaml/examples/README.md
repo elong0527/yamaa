@@ -82,6 +82,8 @@ point with source and literal arguments.
 20. `sdtm-vs-unit-standardization` — keeps a collected result and its
     standardized companion separate, converting pounds and Fahrenheit without
     `divide` or `round`.
+21. `sdtm-suppmh-qualifiers` — reshapes non-standard qualifier columns into
+    SUPPQUAL rows and links them to a pre-assigned parent sequence.
 
 ## Coverage gaps
 
@@ -109,6 +111,8 @@ membership rather than value banding, and the first to exercise the `cut` and
 `sdtm-vs-unit-standardization` is the first fixture to nest `multiply` and
 `mapping` inside `case` branches and the first to use a negative `add` addend
 in place of an unavailable literal subtraction.
+`sdtm-suppmh-qualifiers` is the first fixture to build a SUPPQUAL structure
+and the first to reshape several qualifier columns of one row driver into rows.
 
 All nine verification keywords are exercised across the fixtures;
 `adam-adsl-mapping` covers the generic named `predicate`, while the challenge
@@ -122,7 +126,7 @@ missing inputs to banding. Row filters handle absent optional records, and the
 zero-baseline rule produces an intentional missing percentage without a special
 handler.
 
-Eight design gaps became visible:
+Eleven design gaps became visible:
 
 1. Operations now consume named variables, which removes arbitrary expression
    nesting and keeps mappings concise. A future named-intermediate or
@@ -154,6 +158,16 @@ Eight design gaps became visible:
 8. `VSSTRESC` needs the character form of a float. Deriving it by declared type
    alone depends on the unresolved R005 conversion matrix;
    `sdtm-vs-unit-standardization` proposes a shortest-round-trip rule.
+9. SUPPQUAL linkage needs an explicit multi-column equality join. The R003
+   automatic join uses only output keys shared with the right side, and
+   `mapping_from` takes a single key column, so a subject-plus-repeat-key match
+   cannot be written.
+10. Nothing controls output row order. `keys` declares identity and column
+    order controls layout, but rows leave in row-template order, which is not
+    the conventional SUPPQUAL sort order.
+11. Verifications are row-wise over the completed output, so referential
+    integrity between a SUPPQUAL record and its parent domain cannot be
+    asserted.
 
 Positive fixtures do not prove failure behavior. Negative fixtures are still
 needed for duplicate dictionary keys, unhandled mappings, failed verifications,
