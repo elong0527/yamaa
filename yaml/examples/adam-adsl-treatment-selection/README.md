@@ -13,7 +13,9 @@ treatment and one to `NOT TREATED`.
 Expected `TRT01RAW.source.multiple_matches` count is two. The current language
 cannot filter ordered `source.multiple_matches`, so every EX row in this
 positive fixture is treatment-relevant. `TRT01RAW`, `TRT01SRC`, and `TRTDUR0`
-remain visible because internal intermediates are not yet supported.
+declare `output: false` and stay out of the artifact; the
+`treatment-period-completeness` verification still names `TRTDUR0`, which R005
+permits for an internal column.
 
 Rows remain in DM order; the key is `[STUDYID, USUBJID]`; exactly four rows are
 expected. Treatment dates and durations must be all present or all missing,

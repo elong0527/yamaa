@@ -60,11 +60,13 @@ columns:
 
   - name: VSORRESN
     type: float
+    output: false
     derivation:
       source: VS_RAW.VSORRES
 
   - name: TEMPADJ
     type: float
+    output: false
     derivation:
       case:
         branches:

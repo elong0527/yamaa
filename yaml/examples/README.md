@@ -170,7 +170,8 @@ inputs to banding. Row filters handle absent optional records, and the
 zero-baseline rule produces an intentional missing percentage without a special
 handler.
 
-Twenty-six design gaps are visible across the suite. They are grouped by root
+Twenty-six design gaps have been recorded across the suite, of which one is
+now closed. They are grouped by root
 cause rather than by the fixture that found them, because most of them are
 consequences of six underlying decisions rather than independent omissions.
 
@@ -204,16 +205,23 @@ consistent. In `sdtm-vs-unit-standardization` each unit pair needs its own
 `case` branch. Closest-to-target and worst-severity selection are both
 expressible, but only through these workarounds.
 
-### B. There are no named intermediates
+### B. Named intermediates (closed)
 
-6. Multi-step logic must emit every step as an output column. This was noted
-   early as a convenience; the later fixtures show it as a conformance problem.
-   `sdtm-vs-visit-study-day` emits `RFSTDTC` and `VSDY0` into an SDTM VS
-   dataset, `adam-adae-partial-dates` has more intermediate columns than
-   analysis columns, and five of the fourteen columns in
-   `adam-adlb-closest-visit` exist only to explain one flag. A selection cannot
-   be audited as one object either, because its reasoning is spread across
-   several emitted columns.
+6. Multi-step logic used to require emitting every step as an output column,
+   which was a conformance problem rather than an inconvenience:
+   `sdtm-vs-visit-study-day` published a DM reference date inside an SDTM VS
+   dataset, and `adam-adae-partial-dates` had more scaffolding than analysis.
+   **Closed by `output: false` on a column, defined in R005.** Twenty-eight
+   columns across eleven fixtures are now internal: derived, converted,
+   verified, and available to dependents, but absent from the artifact.
+
+   Two things did not change. A selection still cannot be audited as one
+   object, because its reasoning remains several unrelated columns rather than
+   one construct; `adam-adlb-closest-visit` now chooses to publish `AWTARGET`
+   and `ADIST` as an audit trail and hide the rest, which is an improvement in
+   the artifact and not a fix for the gap. And a dataset verification may still
+   name an internal column, which is deliberate: those assertions are about the
+   derivation, not the output.
 
 ### C. Joins are limited to one automatic key join and a single-column lookup
 
@@ -300,11 +308,11 @@ expressible, but only through these workarounds.
 
 ### What the grouping changes
 
-Groups A and B account for most of the awkward YAML in the suite and are the
-cheapest to fix: allowing a variable wherever a literal operand is accepted,
-adding `divide`, `round`, and absolute value, giving `order_by` a direction,
-and adding named intermediates would remove workarounds from at least seven
-fixtures without changing any semantics already fixed by a golden output.
+Group B is closed. Group A is the remaining cheap one: allowing a variable
+wherever a literal operand is accepted, adding `divide`, `round`, and absolute
+value, and giving `order_by` a direction would remove workarounds from at least
+seven fixtures without changing any semantics already fixed by a golden output.
+`plan.md` sequences the rest.
 
 Groups C, D, F, and G are language additions rather than relaxations and need
 their failure behavior fixed by negative fixtures before they are specified.

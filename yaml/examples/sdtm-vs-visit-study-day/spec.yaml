@@ -74,11 +74,13 @@ columns:
 
   - name: RFSTDTC
     type: date
+    output: false
     derivation:
       source: DM.RFSTDTC
 
   - name: VSDY0
     type: int
+    output: false
     derivation:
       case:
         branches:

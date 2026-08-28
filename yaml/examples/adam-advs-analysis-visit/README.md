@@ -51,8 +51,8 @@ value, and a negated companion column for the tie preference. This fixture
 keeps the simpler first-in-window rule and commits its answer rather than
 hiding the difference; the two golden outputs disagree on exactly this case.
 
-`AWRANK` also has to be emitted because named intermediates are unsupported,
-the same gap recorded by `../adam-adae-occurrence-flags`.
+`AWRANK` declares `output: false`, so the window ranking stays internal and the
+artifact carries only the analysis visit, its numeric companion, and the flag.
 
 ## Diagnostics and verifications
 

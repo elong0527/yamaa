@@ -52,8 +52,11 @@ This fixture is a **probe**. It names three gaps.
    `TR02SDT`/`TR02EDT` except naming. A period-aware structure would make the
    grouping checkable.
 
-`EXFIRST` and `EXLAST` are not ADaM variables and are emitted only because
-named intermediates are unsupported.
+`EXFIRST` and `EXLAST` are not ADaM variables, and they stay in the output
+deliberately rather than by force. `output: false` is available and is used for
+`WASH0`; these two are kept visible because the golden file is the evidence
+that `EXLAST` reports a period-one treatment for a subject who never crossed
+over.
 
 ## Diagnostics and verifications
 

@@ -88,6 +88,7 @@ columns:
 
   - name: WASH0
     type: int
+    output: false
     derivation:
       case:
         branches:

@@ -58,9 +58,10 @@ This fixture is a **probe**. It passes, and it makes three gaps visible.
    need to separate "never exposed" from "exposed, dates not collected" have
    nothing to read.
 
-`EXDOSE0`, `DSDT0`, and `AEDT0` are not DM variables. They remain output
-columns because named intermediates are unsupported, the same gap recorded by
-`../adam-adsl-treatment-selection`.
+`EXDOSE0`, `DSDT0`, and `AEDT0` are not DM variables and declare
+`output: false`, so the artifact is conformant DM while the three candidate
+dates that feed `RFENDTC` stay internal. The `exposure-reference-completeness`
+verification still names `EXDOSE0`.
 
 `RFSTDTC` duplicates `RFXSTDTC` because this study defines the reference start
 as the first exposure. They are distinct SDTM variables and the equality is a

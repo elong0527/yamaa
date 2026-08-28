@@ -66,10 +66,13 @@ This fixture is a **probe**. It passes, and it names four gaps.
    would need the day number to exist first.
 3. **Arithmetic operands cannot be variables.** The target day cannot be read
    from a column, so windows cannot be data.
-4. **Selection is not auditable as one object.** The reason a record was chosen
-   is spread across `AWTARGET`, `DIST0`, `ADIST`, `NEGADY`, and `ARNK`, all of
-   which have to be emitted because named intermediates are unsupported. Five
-   of this fixture's fourteen columns exist only to explain one flag.
+4. **Selection is not auditable as one object.** The reason a record was
+   chosen is still spread across five columns rather than carried by the
+   selection itself. `output: false` now lets the author split them: `AWTARGET`
+   and `ADIST` stay in the artifact as the audit trail a reviewer needs, while
+   `DIST0`, `NEGADY`, and `ARNK` are internal mechanism. That is a real
+   improvement in the output and not a fix for the underlying gap, because the
+   five values are still five unrelated columns.
 
 ## Diagnostics and verifications
 

@@ -33,6 +33,7 @@ columns:
 
   - name: YR0
     type: str
+    output: false
     derivation:
       str_extract:
         source: AESTDTC
@@ -43,6 +44,7 @@ columns:
 
   - name: MO0
     type: str
+    output: false
     derivation:
       str_extract:
         source: AESTDTC
@@ -53,6 +55,7 @@ columns:
 
   - name: DA0
     type: str
+    output: false
     derivation:
       str_extract:
         source: AESTDTC
@@ -63,6 +66,7 @@ columns:
 
   - name: MOI
     type: str
+    output: false
     derivation:
       coalesce:
         sources: [MO0]
@@ -70,6 +74,7 @@ columns:
 
   - name: DAI
     type: str
+    output: false
     derivation:
       coalesce:
         sources: [DA0]

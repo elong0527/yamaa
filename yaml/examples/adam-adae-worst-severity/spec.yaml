@@ -68,6 +68,7 @@ columns:
 
   - name: NEGSEVN
     type: float
+    output: false
     derivation:
       case:
         branches:
@@ -79,6 +80,7 @@ columns:
 
   - name: TEORD
     type: int
+    output: false
     derivation:
       case:
         branches:
@@ -90,6 +92,7 @@ columns:
 
   - name: AWSRNK
     type: int
+    output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, AEDECOD]

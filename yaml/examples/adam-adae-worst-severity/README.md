@@ -67,8 +67,10 @@ This fixture is a **probe**. It passes, and it names three gaps.
 3. **Ordering across missing values is undefined.** `TEORD` keeps ineligible
    records out of contention, but it does not define how two of them compare.
 
-`AESEVN` is a real ADaM variable. `NEGSEVN`, `TEORD`, and `AWSRNK` are not, and
-are emitted only because named intermediates are unsupported.
+`AESEVN` is a real ADaM variable and stays in the output. `NEGSEVN`, `TEORD`,
+and `AWSRNK` are not, and declare `output: false`. The
+`severity-order-completeness` verification pairs an output column with an
+internal one, which R005 permits.
 
 ## Diagnostics and verifications
 

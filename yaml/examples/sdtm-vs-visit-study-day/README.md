@@ -38,9 +38,10 @@ three gaps visible.
    that the trial design does not name requires comparing its date against
    period intervals, which needs an interval join the language does not have.
    The fixture leaves the value missing rather than inventing terminology.
-2. `RFSTDTC` and `VSDY0` are not SDTM VS variables. They remain output columns
-   because named intermediates are still unsupported, the same gap recorded by
-   `../adam-adsl-treatment-selection`.
+2. `RFSTDTC` and `VSDY0` are not SDTM VS variables and declare
+   `output: false`, so a VS artifact no longer carries a DM reference date and
+   a raw day count. Both are still available to predicates and to the
+   `study-day-completeness` verification.
 3. `add` returns a float under R007, while SDTM `--DY` is integral. `VSDY` is
    therefore declared `int` and depends on exact float-to-int conversion under
    R005, whose conversion matrix is unresolved. A whole value must convert; a

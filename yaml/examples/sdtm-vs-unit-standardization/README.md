@@ -56,9 +56,10 @@ This fixture is a **probe**. It makes four gaps visible.
    form of `VSSTRESN` and is derived by declaring `type: str` over the same
    value, which relies on the R005 conversion matrix that is still unresolved.
 
-`VSORRESN` and `TEMPADJ` are not SDTM variables. They remain output columns
-because named intermediates are unsupported, the same gap recorded by
-`../adam-adsl-treatment-selection`.
+`VSORRESN` and `TEMPADJ` are not SDTM variables and declare `output: false`.
+The `unconverted-result-is-unchanged` verification still compares `VSSTRESN`
+with the internal `VSORRESN`, which is exactly the case R005 allows: the
+assertion is about the conversion, not about the artifact.
 
 ## Proposed rule for `VSSTRESC`
 

@@ -31,9 +31,12 @@ literals `'01'` rather than date parts. Branch order in `ASTDTF` carries real
 meaning: the `YR0 IS NULL` guard must come first, because otherwise an
 unparseable value would report an imputed month.
 
-This fixture has more intermediate columns than analysis columns. `YR0`, `MO0`,
-`DA0`, `MOI`, and `DAI` all have to be emitted because named intermediates are
-unsupported, the same gap recorded by `../adam-adsl-treatment-selection`.
+Five of this fixture's fifteen columns exist only to take a date apart and put
+it back together. All five declare `output: false`, so the artifact carries the
+analysis date and its imputation flag while the extraction steps stay internal.
+The `complete-collected-date-is-not-flagged` verification still reads `DA0`,
+which R005 permits: it asserts a property of the derivation rather than of the
+artifact.
 
 ## Imputation silently decides treatment emergence
 

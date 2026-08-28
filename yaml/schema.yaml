@@ -18,6 +18,7 @@ root_class:
 column_class:
     - name: {type: str, required: true}
     - type: {type: str, required: true}
+    - output: {type: bool, required: false, default: true}
     - label: {type: str, required: false}
     - derivation: {type: derivation, required: false}
     - verifications: {type: [column_verification, "list[column_verification]"], required: false}

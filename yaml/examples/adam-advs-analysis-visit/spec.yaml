@@ -80,6 +80,7 @@ columns:
 
   - name: AWRANK
     type: int
+    output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]

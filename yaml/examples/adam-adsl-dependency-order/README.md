@@ -35,8 +35,17 @@ detects an implementation which does.
 through `order_by` and on `STUDYID` through `group_by`, neither of which is an
 expression.
 
-**Layout is declaration order.** The golden file's first column is `POPFL` and
-its key columns are ninth and tenth. That is deliberate: it shows that column
+**Internal columns are part of the graph.** `RANDFL` declares `output: false`.
+It is not in the artifact, and `ITTFL`, which is, depends on it through a
+predicate. An implementation that built its dependency graph from output
+columns alone would fail to resolve `ITTFL`. R005 requires one graph over all
+declared columns, and this is the case that detects an implementation which
+prunes the graph by output.
+
+**Layout is declaration order, minus internal columns.** The golden file's
+first column is `POPFL`, its key columns are eighth and ninth, and `RANDFL` is
+absent from between `ITTFL` and `TRTSDT` without disturbing the order of
+anything else. That is deliberate: it shows that column
 order in the output is the declared order and carries no evaluation meaning. A
 real ADSL would not be laid out this way.
 

@@ -51,6 +51,7 @@ columns:
 
   - name: EXDOSE0
     type: float
+    output: false
     derivation:
       source:
         variable: EX.EXDOSE
@@ -60,6 +61,7 @@ columns:
 
   - name: DSDT0
     type: date
+    output: false
     derivation:
       max:
         source: DS.DSSTDTC
@@ -67,6 +69,7 @@ columns:
 
   - name: AEDT0
     type: date
+    output: false
     derivation:
       max:
         source: AE.AEENDTC
