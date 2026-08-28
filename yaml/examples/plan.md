@@ -3,7 +3,7 @@
 ## Purpose
 
 The example suite is complete for Priority 1 and Priority 2 of the earlier
-assessment plan: 33 fixtures, each covering one derivation boundary with
+assessment plan: 32 fixtures, each covering one derivation boundary with
 committed golden output. Their READMEs record 26 design gaps, grouped by root
 cause in [`README.md`](README.md).
 

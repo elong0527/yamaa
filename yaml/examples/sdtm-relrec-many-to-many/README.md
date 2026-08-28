@@ -1,21 +1,37 @@
 # SDTM RELREC many-to-many relationships
 
-This focused probe answers one question: can a record that participates in more
-than one relationship be represented?
-
-`../sdtm-relrec-related-records` covers the one-to-many case, where each record
-carries at most one link identifier. This fixture keeps the same structure and
-adds records that belong to two relationships.
+This probe answers two related questions: how is a RELREC row constructed from
+several source datasets, and can a record that participates in more than one
+relationship be represented?
 
 ## Rule and record grain
 
 Two relationships are collected. `RELID` 1 groups one adverse event with two
-concomitant medications. `RELID` 2 groups two adverse events with one
-medication. `HEADACHE` and `ONDANSETRON` each belong to both, which is what
-makes the set many-to-many rather than two independent one-to-many groups.
+concomitant medications, which is the ordinary one-to-many case. `RELID` 2
+groups two adverse events with one medication. `HEADACHE` and `ONDANSETRON`
+each belong to both, which is what makes the set many-to-many rather than two
+independent one-to-many groups. `NAUSEA` carries a single link and `RASH`
+carries none, so the one-link and no-link shapes are covered by the same
+fixture.
 
 Four row templates produce six RELREC records: one template per link slot per
 domain. Records with no link produce nothing.
+
+## Row construction
+
+RELREC has no single base dataset. Each row definition declares its row-driving
+`dataset`, and the constructed rows are appended in specification order. Source
+record order is preserved within each row definition.
+
+Each row explicitly defines every output variable. `STUDYID` and `USUBJID` are
+copied from the row-driving dataset, while `RDOMAIN` names the SDTM domain
+containing the related record and does not depend on a dataset alias. The
+declared `str` type converts the numeric sequence values to the character
+`IDVARVAL` that RELREC requires.
+
+Both source datasets contain a record with no link identifier. The row filters
+remove those records, so a missing optional relationship does not create an
+incomplete RELREC key.
 
 ## A link slot is a column, so the maximum degree is fixed by the schema
 
@@ -34,8 +50,10 @@ multi-column equality join recorded by `../sdtm-suppmh-qualifiers`.
 
 ## Group-level relationships cannot be keyed
 
-RELREC also represents a relationship between whole datasets, with `IDVAR`
-naming a variable and `IDVARVAL` left empty. R005 requires every value in
+RELREC also represents a relationship between whole datasets, with `RELTYPE`
+carrying `ONE` or `MANY`, `IDVAR` naming a variable, and `IDVARVAL` left
+empty. Every row here identifies an individual record, so `RELTYPE` is empty
+throughout. R005 requires every value in
 `keys` to be non-missing, and `IDVARVAL` is part of the key that makes a
 record-level row unique. A dataset-level row therefore cannot be expressed with
 this key at all.
