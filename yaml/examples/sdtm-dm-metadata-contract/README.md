@@ -1,63 +1,20 @@
-# SDTM DM metadata and artifact contract
+# SDTM DM: declare the metadata a submission needs
 
-This fixture answers one question: how much of a submission metadata contract
-can the schema carry today?
+This example uses collected DM data and a `yamaa` specification to derive one
+record per subject. `SITEID`, `AGE`, `AGEU`, `SEX`, and `COUNTRY` are collected
+values copied through, and `USUBJID` is built from study, site, and subject
+number. The derivations are deliberately ordinary so that the subject of the
+example is the metadata declared around them rather than the values
+themselves.
 
-## Rule and record grain
+Every variable declares the label a reviewer sees, where its value came from,
+how long it can be, and, where one applies, the controlled terminology list it
+draws on. The dataset itself declares its label, its class, its structure, and
+the standard version it follows.
 
-`DM_RAW` is the base, so each collected subject produces one DM row. The
-derivations are deliberately ordinary: direct sources, two literals, and one
-`str_concat` building `USUBJID` from study, site, and subject. The subject of
-the fixture is the metadata around them, not the values.
-
-Every column declares a `label`. Every column declares `metadata` with an
-`origin`, a `length`, and, where a controlled terminology list applies, a
-`codelist`. The root declares a dataset label, class, structure, and the
-standard version.
-
-## What is carried, and what carrying it means
-
-`label` is a first-class field, so a label is part of the specification and
-survives review. Everything else is a free-form `dict[str, str]`.
-
-That has consequences the fixture makes visible.
-
-- **There is no vocabulary.** `origin`, `length`, and `codelist` are names this
-  fixture invented. Another specification could call them `Origin`, `len`, and
-  `ct` and be equally valid. Nothing can be validated, compared, or
-  automatically transformed into Define-XML.
-- **Lengths are strings.** `metadata` values are typed `str`, so `"20"` is
-  quoted text. No implementation can enforce it, and nothing connects it to the
-  declared `type`.
-- **A codelist is a name, not a reference.** `SEX` declares
-  `codelist: SEX` and separately declares `allowed_values: [F, M, U]`. The two
-  are unrelated: one is documentation, one is enforced, and nothing keeps them
-  consistent.
-- **Origin is not derivable.** `USUBJID` is marked `Derived` by hand even
-  though the schema already knows it comes from a `str_concat` over three
-  collected columns. The lineage exists in the specification and is not exposed.
-- **Dictionary versions live in two places.** `../sdtm-ae-dictionary-coding`
-  declares `dictionary_version` in root metadata while the dictionary itself is
-  an input dataset. Nothing ties the declared version to the file loaded.
-
-## No expected artifact
-
-This fixture commits `expected/dm.csv` only. Until a machine-readable metadata
-schema is defined, expectations belong in a README rather than in an invented
-file shape; writing an `expected/metadata.yaml` here would fix a shape by
-accident. The missing piece is not this fixture, it is the decision about what
-a metadata artifact contains and which parts of it are normative.
-
-Output column order is declaration order, which for this fixture matches the
-conventional DM order. `../sdtm-suppmh-qualifiers` shows that output *row*
-order has no control at all, and a transport artifact needs both.
-
-This is the fixture that passes while proving the least: none of the five points
-above is asserted by any golden file.
-
-## Diagnostics and verifications
-
-No handler path is declared. Rows remain in `DM_RAW` order; the key is
-`[STUDYID, USUBJID]`; exactly three rows are expected. `STUDYID` and `USUBJID`
-must be present, `AGE` must be within a plausible range, and `SEX` must be one
-of three values.
+Only the labels are governed. The rest is free text: nothing checks that a
+length matches the variable it describes, that a named terminology list is the
+one actually enforced on the values, or that a variable marked as derived is
+one. Two studies can describe the same dataset in different words and both be
+accepted, and no file is produced that a submission could carry, so none of it
+is asserted anywhere.

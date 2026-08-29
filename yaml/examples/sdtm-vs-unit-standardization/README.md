@@ -3,8 +3,9 @@
 This example uses collected vital signs and a `yamaa` specification to derive
 one row per collected record, describing each vital sign on its own:
 
-- `VSORRES` and `VSORRESU` are the result and the unit exactly as collected,
-  and nothing overwrites them;
+- `VSTESTCD` and `VSTEST` identify the vital sign, and `VSORRES` and
+  `VSORRESU` are the result and the unit exactly as collected, which nothing
+  overwrites;
 - `VSSTRESN` is that result expressed in the study's standard unit for the
   test, and `VSSTRESU` is that unit. Height is already in centimetres. Weight
   is kilograms, so pounds are multiplied by 0.45359237. Temperature is Celsius,
