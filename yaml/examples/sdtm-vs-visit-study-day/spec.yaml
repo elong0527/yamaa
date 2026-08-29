@@ -78,30 +78,12 @@ columns:
     derivation:
       source: DM.RFSTDTC
 
-  - name: VSDY0
-    type: int
-    output: false
-    derivation:
-      case:
-        branches:
-          - when: "VSDTC IS NOT NULL AND RFSTDTC IS NOT NULL"
-            then:
-              date_diff:
-                start: RFSTDTC
-                end: VSDTC
-                unit: day
-
   - name: VSDY
     type: int
     derivation:
-      case:
-        branches:
-          - when: "VSDTC >= RFSTDTC"
-            then:
-              compute:
-                expr: "VSDY0 + 1"
-        else:
-          source: VSDY0
+      study_day:
+        date: VSDTC
+        reference: RFSTDTC
 
 verifications:
   - unique:
@@ -112,9 +94,10 @@ verifications:
   - all_or_none:
       id: scheduled-visit-metadata-completeness
       columns: [VISITNUM, EPOCH]
-  - all_or_none:
-      id: study-day-completeness
-      columns: [VSDY0, VSDY]
+  - implies:
+      id: study-day-requires-both-dates
+      when: "VSDTC IS NOT NULL AND RFSTDTC IS NOT NULL"
+      then: "VSDY IS NOT NULL"
   - implies:
       id: study-day-has-no-day-zero
       when: "VSDY IS NOT NULL"

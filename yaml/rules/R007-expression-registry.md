@@ -89,7 +89,10 @@ runtime types:
 - `cut` requires a numeric source;
 - `compute` requires every identifier in its expression to be numeric;
 - `str_extract`, `str_concat`, `str_upper`, and `str_lower` require string sources;
-- `date_diff` requires `date` inputs; R011 declares no datetime type;
+- `date_diff` and `study_day` require `date` inputs; R011 declares no datetime type;
+- `date_impute` requires a string source, because a partial date is text under
+  R011 until it is completed, and integer `month` and `day` within the calendar
+  ranges its registration states;
 - `greatest` and `least` require mutually comparable `sources`;
 - `min`, `max`, and window ordering require mutually comparable values. Every
   record's value for one order term must be comparable with every other, so a
@@ -99,7 +102,8 @@ runtime types:
 `source` retains its source type and `literal` retains its YAML scalar type.
 `cut`, `str_extract`, `str_concat`, `str_upper`, and `str_lower` return strings.
 `compute` returns the numeric type its expression promotes to under R010.
-`date_diff` and `row_number` return integers.
+`date_diff`, `study_day`, and `row_number` return integers. `study_day` never
+returns zero. `date_impute` returns a `date`.
 `baseline_flag` returns a string. Mapping, conditional, coalescing, extreme,
 baseline value, and aggregate expressions retain the selected or aggregated
 value type.
@@ -131,6 +135,8 @@ is draft.
   columns: fail.
 - An aggregate outside its two permitted contexts: fail.
 - `mapping_from` whose `source` and `key` lists differ in length: fail.
+- `date_impute` whose `month` or `day` is outside the calendar range, or whose
+  completed value is not a real calendar date: fail.
 - An unhandled local missing, mapping, or extraction condition: fail.
 - A `compute` expression that violates R010: fail.
 - An unresolved function, failed function call, or non-scalar function result:

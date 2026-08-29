@@ -180,7 +180,7 @@ produces one.
 ## Determinism
 
 Evaluation must be deterministic and free of side effects. Implementations must
-produce identical results in R and Python for every fixture. Two consequences
+produce identical results in R and Python for every example. Two consequences
 are not optional:
 
 - `/` never truncates. Language or engine settings that make division integral
@@ -195,7 +195,7 @@ are not optional:
 
 `compute` is the only arithmetic expression. `multiply`, `add`, `subtract`, and
 `percent_change` were registered before it and are now deleted: each was a
-single operator with one operand fixed to a literal, and every fixture that
+single operator with one operand fixed to a literal, and every example that
 used one is expressed more directly by a formula.
 
 Percentage change was the one deleted keyword carrying semantics beyond its

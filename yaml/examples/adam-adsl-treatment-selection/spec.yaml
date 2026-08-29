@@ -58,24 +58,14 @@ columns:
         source: EX.EXENDTC
         filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXENDTC IS NOT NULL"
 
-  - name: TRTDUR0
-    type: int
-    output: false
-    derivation:
-      case:
-        branches:
-          - when: "TRTSDT IS NOT NULL AND TRTEDT IS NOT NULL"
-            then:
-              date_diff:
-                start: TRTSDT
-                end: TRTEDT
-                unit: day
-
   - name: TRTDURD
-    type: float
+    type: int
     derivation:
-      compute:
-        expr: "TRTDUR0 + 1"
+      date_diff:
+        start: TRTSDT
+        end: TRTEDT
+        unit: day
+        bounds: inclusive
     verifications:
       range:
         min: 1
@@ -103,7 +93,7 @@ verifications:
       max: 4
   - all_or_none:
       id: treatment-period-completeness
-      columns: [TRTSDT, TRTEDT, TRTDUR0, TRTDURD]
+      columns: [TRTSDT, TRTEDT, TRTDURD]
   - implies:
       id: placebo-subject-is-in-safety-population
       when: "TRT01A = 'PLACEBO'"

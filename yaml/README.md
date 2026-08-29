@@ -46,10 +46,12 @@ The version 1.0 input-shape audit covers every registered expression:
 | Expressions | Input policy |
 |---|---|
 | `source`, `literal` | Leaf expressions; unchanged |
-| `mapping`, `cut`, `str_extract` | One named source; exceptional results are literals |
+| `mapping`, `cut`, `str_extract`, `str_upper`, `str_lower` | One named source; exceptional results are literals |
+| `str_concat` | An ordered list of expressions, because concatenating requires literals beside sources |
 | `mapping_from` | One or more named sources paired by position with declared right-side key columns; exceptional results are literals |
 | `compute` | One closed numeric expression over named output columns (R010) |
-| `date_diff` | Named variable operands |
+| `date_diff`, `study_day` | Named variable operands; `date_diff` declares which endpoints it counts |
+| `date_impute` | One named source plus integer literals for the imputed components; exceptional results are literals |
 | `coalesce` | Ordered named variables plus an optional literal default |
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
 | `row_number`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
@@ -69,10 +71,10 @@ repeated at each call site.
 
 1. Review the root field in `schema.yaml` and its included schema module.
 2. Review every applicable rule listed in `rules/README.md`.
-3. Review at least one positive fixture and its expected output.
-4. Add a negative fixture when the rule defines an error condition.
+3. Review at least one positive example and its expected output.
+4. Add a negative example when the rule defines an error condition.
 5. Require R and Python implementations to produce equivalent outputs and
-   errors from the same fixtures.
+   errors from the same examples.
 
 Behavior not defined by a normative rule must not be inferred by an
 implementation. It should be proposed as a new rule or marked as an unresolved

@@ -58,27 +58,8 @@ columns:
       allowed_values:
         values: [cm, kg, C, LB, F]
 
-  - name: VSORRESN
-    type: float
-    output: false
-    derivation:
-      source: VS_RAW.VSORRES
-
   - name: VSSTRESN
     type: float
-    derivation:
-      case:
-        branches:
-          - when: "VSTESTCD = 'WEIGHT' AND VSORRESU = 'LB'"
-            then:
-              compute:
-                expr: "VSORRESN * 0.45359237"
-          - when: "VSTESTCD = 'TEMP' AND VSORRESU = 'F'"
-            then:
-              compute:
-                expr: "(VSORRESN - 32) * 5 / 9"
-        else:
-          source: VSORRESN
 
   - name: VSSTRESC
     type: str
@@ -87,20 +68,60 @@ columns:
 
   - name: VSSTRESU
     type: str
-    derivation:
-      case:
-        branches:
-          - when: "VSSTRESN IS NOT NULL"
-            then:
-              mapping:
-                source: VSTESTCD
-                dict:
-                  HEIGHT: cm
-                  WEIGHT: kg
-                  TEMP: C
     verifications:
       allowed_values:
         values: [cm, kg, C]
+
+rows:
+  - id: height
+    filter: "VS_RAW.VSTESTCD = 'HEIGHT'"
+    derivations:
+      VSSTRESN:
+        source: VS_RAW.VSORRES
+      VSSTRESU:
+        case:
+          branches:
+            - when: "VS_RAW.VSORRES IS NOT NULL"
+              then:
+                literal: cm
+
+  - id: weight
+    filter: "VS_RAW.VSTESTCD = 'WEIGHT'"
+    derivations:
+      VSSTRESN:
+        case:
+          branches:
+            - when: "VS_RAW.VSORRESU = 'LB'"
+              then:
+                compute:
+                  expr: "VS_RAW.VSORRES * 0.45359237"
+          else:
+            source: VS_RAW.VSORRES
+      VSSTRESU:
+        case:
+          branches:
+            - when: "VS_RAW.VSORRES IS NOT NULL"
+              then:
+                literal: kg
+
+  - id: temp
+    filter: "VS_RAW.VSTESTCD = 'TEMP'"
+    derivations:
+      VSSTRESN:
+        case:
+          branches:
+            - when: "VS_RAW.VSORRESU = 'F'"
+              then:
+                compute:
+                  expr: "(VS_RAW.VSORRES - 32) * 5 / 9"
+          else:
+            source: VS_RAW.VSORRES
+      VSSTRESU:
+        case:
+          branches:
+            - when: "VS_RAW.VSORRES IS NOT NULL"
+              then:
+                literal: C
 
 verifications:
   - unique:
@@ -114,4 +135,4 @@ verifications:
   - implies:
       id: unconverted-result-is-unchanged
       when: "VSORRESU = VSSTRESU"
-      then: "VSSTRESN = VSORRESN"
+      then: "VSSTRESC = VSORRES"

@@ -70,24 +70,14 @@ columns:
       allowed_values:
         values: [VITAMIN D3, PLACEBO]
 
-  - name: WASH0
-    type: int
-    output: false
-    derivation:
-      case:
-        branches:
-          - when: "TR01EDT IS NOT NULL AND TR02SDT IS NOT NULL"
-            then:
-              date_diff:
-                start: TR01EDT
-                end: TR02SDT
-                unit: day
-
   - name: WASHDUR
-    type: float
+    type: int
     derivation:
-      compute:
-        expr: "WASH0 - 1"
+      date_diff:
+        start: TR01EDT
+        end: TR02SDT
+        unit: day
+        bounds: between
     verifications:
       range:
         min: 0
@@ -100,7 +90,7 @@ verifications:
       max: 3
   - all_or_none:
       id: period-two-completeness
-      columns: [TR02SDT, TR02EDT, TRT02A, WASH0, WASHDUR]
+      columns: [TR02SDT, TR02EDT, TRT02A, WASHDUR]
   - implies:
       id: period-two-follows-period-one
       when: "TR02SDT IS NOT NULL"

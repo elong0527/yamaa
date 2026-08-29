@@ -17,7 +17,7 @@ Before reviewing, implementing, or modifying this design:
 
 Schema comments and descriptions are authoritative for operation-local
 behavior; normative rule files are authoritative for shared behavior. Example
-READMEs explain fixtures but do not override either. Draft rules record intent
+READMEs explain examples but do not override either. Draft rules record intent
 and must not be treated as a portable implementation contract.
 
 ## Maintenance rules
@@ -35,6 +35,6 @@ and must not be treated as a portable implementation contract.
   behavior in the applicable rule.
 - Do not infer unspecified behavior. Record it as an unresolved design question
   or propose a new rule.
-- Update or add fixtures whenever a normative rule changes behavior.
+- Update or add examples whenever a normative rule changes behavior.
 - Preserve deterministic behavior and require equivalent results from R and
   Python implementations.
