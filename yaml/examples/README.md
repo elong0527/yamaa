@@ -84,8 +84,8 @@ be written portably.
     day, separates `AVISIT`/`AVISITN` from collected `VISIT`/`VISITNUM`, and
     flags one analysis record per window.
 20. `sdtm-vs-unit-standardization` — keeps a collected result and its
-    standardized companion separate, converting pounds and Fahrenheit as one
-    formula each and committing an unrounded product.
+    standardized companion separate, with one row template per vital sign so
+    each conversion sits beside the test it belongs to.
 21. `sdtm-suppmh-qualifiers` — reshapes non-standard qualifier columns into
     SUPPQUAL rows and links them to a pre-assigned parent sequence.
 22. `sdtm-dm-reference-dates` — reduces EX, DS, and AE into the DM reference
@@ -180,6 +180,15 @@ list rather than marked; `plan.md` records what was closed and how.
    `adam-adae-treatment-emergent`. What remains is a criterion with no such
    reference, such as an absolute electrolyte threshold that differs per
    parameter, where each parameter needs its own break list.
+
+   The same root cause appears where the formula varies rather than a bound.
+   `sdtm-vs-unit-standardization` converts pounds by multiplication and
+   Fahrenheit by an affine formula, so what differs per test is the shape of
+   the expression, not an operand in it. `compute` takes a column in any
+   operand position, so a multiplicative factor could be looked up, but nothing
+   selects an expression from data. A row template per test is the workaround
+   the fixture uses: it puts each formula beside the test it belongs to, at the
+   cost of leaving rows grouped by test rather than in collection order.
 2. Only `row_number` is registered. Without `rank` and `dense_rank` a tie
    cannot carry a rank number, so distinct-level counts, and any rule whose
    output is the rank itself, cannot be expressed.
