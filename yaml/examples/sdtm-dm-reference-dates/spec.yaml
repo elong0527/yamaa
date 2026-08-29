@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: DM
 datasets:
   DM_RAW: input/dm_raw.csv
-  EX: input/ex.csv
+  EX: {path: input/ex.csv, types: {EXSEQ: int}}
   DS: input/ds.csv
   AE: input/ae.csv
 base: DM_RAW

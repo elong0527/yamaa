@@ -17,13 +17,17 @@ inference.
 
 This rule owns dataset declaration and how a name resolves to a value. What
 happens when a qualified name reaches another dataset is R003. What happens
-when a bound name is absent or matches several records is R008.
+when a bound name is absent or matches several records is R008. What a stored
+field becomes before it is bound at all, including when it is missing and which
+type it carries, is R013.
 
 ## Dataset declarations
 
-`datasets` maps dataset identifiers to source data paths. Identifiers are used
-by `base`, `rows.dataset`, qualified source variables, and `mapping_from`.
-Paths are resolved relative to the specification file.
+`datasets` maps dataset identifiers to source data declarations. Identifiers
+are used by `base`, `rows.dataset`, qualified source variables, and
+`mapping_from`. A declaration is a path, or a path with the types its fields
+carry; R013 owns that reading and the shorthand between the two forms. Paths
+are resolved relative to the specification file.
 
 Every referenced dataset identifier must exist in `datasets`. A dataset
 identifier must not equal the output `domain`; unqualified names address the

@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: AE
 datasets:
   AE_REC: input/ae_records.csv
-  AE_TXN: input/ae_txn.csv
+  AE_TXN: {path: input/ae_txn.csv, types: {TXNSEQ: int}}
 base: AE_REC
 keys: [STUDYID, USUBJID, AESEQ]
 

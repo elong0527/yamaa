@@ -18,7 +18,10 @@ declared type.
 This rule owns what a declared type is and which conversions are defined. R005
 owns when conversion happens in the derivation lifecycle and what an unhandled
 failure does to the run. R008 owns `conversion_failure`. R010 owns the
-arithmetic that produces a numeric value in the first place.
+arithmetic that produces a numeric value in the first place. R013 owns the
+other end: which stored fields are missing and what type a bound value carries
+before any conversion is reached. It applies this rule's `str` row to a field's
+declared type, so text is parsed the same way wherever it is read.
 
 ## Three type namespaces
 
@@ -139,13 +142,6 @@ rendered text, and from that point it is a string like any other.
 
 The example suite declares **four decimal places**, which is what its committed
 expected outputs record.
-
-## Unresolved
-
-Source-format value recognition remains open under gap 7 of
-`examples/plan.md`. This rule governs conversion of a value that evaluation
-already produced; it does not say how a reader decides that a source field is
-missing rather than empty text.
 
 ## Errors
 

@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADTTE
 datasets:
   ADSL: input/adsl.csv
-  RS: input/rs.csv
-  DS: input/ds.csv
+  RS: {path: input/rs.csv, types: {RSSEQ: int}}
+  DS: {path: input/ds.csv, types: {DSSEQ: int}}
 base: ADSL
 keys: [STUDYID, USUBJID, PARAMCD]
 

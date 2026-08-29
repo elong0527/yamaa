@@ -134,7 +134,8 @@ runtime types:
   term whose column mixes incomparable types is an error rather than an
   implementation-defined order.
 
-`source` retains its source type and `literal` retains its YAML scalar type.
+`source` retains its source type, which R013 defines, and `literal` retains
+its YAML scalar type.
 `cut`, `str_extract`, `str_concat`, `str_template`, `str_upper`, and
 `str_lower` return strings. `compute` returns the numeric type its expression
 promotes to under R010.

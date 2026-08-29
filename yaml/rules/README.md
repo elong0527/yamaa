@@ -20,6 +20,7 @@ design intent but are not complete enough for portable implementation.
 | R010 | [Scalar numeric computation](R010-scalar-computation.md) | normative | The `numeric_expression` primitive | R001, R004, R005, R006, R007, R011 |
 | R011 | [Column types](R011-column-types.md) | normative | The `column_type` vocabulary and conversion | R005, R006, R007, R008, R010 |
 | R012 | [String templates](R012-string-templates.md) | normative | Interpolation grammar, escaping, and evaluation | R001, R002, R006, R007, R008 |
+| R013 | [Source-format ingestion](R013-source-ingestion.md) | normative | Missing recognition and field typing at the source | R002, R006, R011 |
 
 ## Draft surface
 

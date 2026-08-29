@@ -7,7 +7,7 @@ includes:
 root_class:
     - schema_version: {type: str, required: true}
     - domain: {type: domain_name, required: true}
-    - datasets: {type: "dict[dataset_id, path]", required: true}
+    - datasets: {type: "dict[dataset_id, dataset_source]", required: true}
     - base: {type: dataset_id, required: false}
     - parents: {type: [path, "list[path]"], required: false}
     - keys: {type: "list[column_name]", required: true}
@@ -47,6 +47,20 @@ domain_name:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
     description: Name of the dataset this specification derives.
+
+dataset_source:
+    type: [path, dataset_class]
+    description: Path to the dataset, or a path with the types its fields carry.
+
+dataset_class:
+    - path:
+        type: path
+        required: true
+        description: Source data path, resolved relative to the specification.
+    - types:
+        type: "dict[dataset_column, column_type]"
+        required: false
+        description: Type each named field carries; R013 types the rest.
 
 dataset_id:
     type: str

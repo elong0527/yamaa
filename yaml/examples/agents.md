@@ -121,6 +121,7 @@ say so the same way:
 | Phase | Rejects |
 |---|---|
 | `validation` | the specification itself, before any data is read |
+| `ingest` | a stored value, against the type its field carries |
 | `row_construction` | evaluating a row template |
 | `derivation` | evaluating a column's expression over a row |
 | `output` | output identity, once every column holds its final value |

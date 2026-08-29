@@ -1,0 +1,9 @@
+phase: ingest
+condition: field_parse_failed
+spec_paths:
+  - datasets.EX.types.EXDOSE
+context:
+  dataset: EX
+  field: EXDOSE
+  type: float
+  value: "200 mg"
