@@ -49,15 +49,15 @@ columns:
     type: date
     derivation:
       aggregate:
-        expr: "MIN(EX.EXSTDTC)"
         filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXSTDTC IS NOT NULL"
+        expr: "MIN(EX.EXSTDTC)"
 
   - name: TRTEDT
     type: date
     derivation:
       aggregate:
-        expr: "MAX(EX.EXENDTC)"
         filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXENDTC IS NOT NULL"
+        expr: "MAX(EX.EXENDTC)"
 
   - name: TRTDURD
     type: int

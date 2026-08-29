@@ -56,8 +56,8 @@ columns:
     type: date
     derivation:
       aggregate:
-        expr: "MIN(EX.EXSTDTC)"
         filter: "EX.EXSTDTC IS NOT NULL"
+        expr: "MIN(EX.EXSTDTC)"
 
   - name: RANDDT
     type: date

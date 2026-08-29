@@ -21,8 +21,8 @@ columns:
     type: date
     derivation:
       aggregate:
-        expr: "MAX(DS.DSSTDTC)"
         filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
+        expr: "MAX(DS.DSSTDTC)"
 
   - name: EOSDECOD
     type: str

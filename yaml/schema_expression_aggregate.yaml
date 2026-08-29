@@ -7,16 +7,16 @@ expressions:
         type: [aggregate_expression, aggregate_class]
 
 aggregate_class:
+    - filter:
+        type: sql
+        description: Predicate selecting records before reduction.
+    - group_by:
+        type: "list[variable]"
+        description: Grain of the reduction; right-side columns for a qualified expression and current-output columns for an unqualified one.
     - expr:
         type: aggregate_expression
         required: true
         description: Closed reducer expression over the records of one relation.
-    - group_by:
-        type: "list[variable]"
-        description: Grain of the reduction; right-side columns for a qualified expression and current-output columns for an unqualified one.
-    - filter:
-        type: sql
-        description: Predicate selecting records before reduction.
 
 aggregate_expression:
     type: str
