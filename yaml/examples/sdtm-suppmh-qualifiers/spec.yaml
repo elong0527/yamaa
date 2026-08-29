@@ -1,3 +1,4 @@
+schema_version: "1.0"
 domain: SUPPMH
 datasets:
   MH_PRE: input/mh_pre.csv

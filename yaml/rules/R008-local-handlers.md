@@ -79,7 +79,8 @@ literal replacement. Omitting the applicable field makes the condition fatal.
 ## Result handlers
 
 A derivation with conversion or final handling uses `value` to hold its normal
-expression. `conversion_failure` supplies a literal replacement only when
+expression. A bare expression is the R006 shorthand for that wrapper, so every
+derivation carries its expression in `value` once expanded. `conversion_failure` supplies a literal replacement only when
 conversion to the declared column type fails.
 
 After successful conversion, evaluate `override` predicates in list order

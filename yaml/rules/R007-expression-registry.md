@@ -55,9 +55,9 @@ Any other aggregate context is an error.
 
 `row_number.order_by` and `multiple_matches.order_by` are lists of order terms.
 An order term is either a bare variable or a mapping declaring `variable`,
-`direction`, and `nulls`. A bare variable means
-`{variable: X, direction: asc, nulls: last}`, so an existing specification keeps
-its meaning.
+`direction`, and `nulls`. The bare form is an R006 shorthand union, so a bare
+variable means `{variable: X, direction: asc, nulls: last}` and an existing
+specification keeps its meaning.
 
 - `direction` is `asc` or `desc` and defaults to `asc`.
 - `nulls` is `last` or `first` and defaults to `last`. It states where missing

@@ -5,14 +5,18 @@ expressions:
         # Vectorization is valid only when equivalent to logical row-wise calls.
         # Availability, signature, and package setup are project configuration.
         - name:
-            type: str
+            type: function_name
             required: true
-            min_length: 1
             description: Function name resolved in the project environment.
         - args:
             type: "dict[str, function_arg]"
             default: {}
             description: Named arguments passed to the function.
+
+function_name:
+    type: str
+    min_length: 1
+    description: Name of a function resolved in the project environment.
 
 function_arg:
     type: [variable, int, float, bool, "null", expression]

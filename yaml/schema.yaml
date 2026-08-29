@@ -5,18 +5,19 @@ includes:
     - schema_verification.yaml
 
 root_class:
-    - domain: {type: str, required: true}
-    - datasets: {type: "dict[str, path]", required: true}
-    - base: {type: str, required: false}
+    - schema_version: {type: str, required: true}
+    - domain: {type: domain_name, required: true}
+    - datasets: {type: "dict[dataset_id, path]", required: true}
+    - base: {type: dataset_id, required: false}
     - parents: {type: [path, "list[path]"], required: false}
-    - keys: {type: "list[str]", required: true}
+    - keys: {type: "list[column_name]", required: true}
     - columns: {type: "list[column_class]", required: true}
     - rows: {type: "list[row_class]", required: false}
     - verifications: {type: [dataset_verification, "list[dataset_verification]"], required: false}
     - metadata: {type: "dict[str, str]", required: false}
 
 column_class:
-    - name: {type: str, required: true}
+    - name: {type: column_name, required: true}
     - type: {type: column_type, required: true}
     - output: {type: bool, required: false, default: true}
     - label: {type: str, required: false}
@@ -25,10 +26,10 @@ column_class:
     - metadata: {type: "dict[str, str]", required: false}
 
 row_class:
-    - id: {type: str, required: true}
-    - dataset: {type: str, required: false}
+    - id: {type: row_id, required: true}
+    - dataset: {type: dataset_id, required: false}
     - filter: {type: sql, required: false}
-    - derivations: {type: "dict[str, derivation]", required: true}
+    - derivations: {type: "dict[column_name, derivation]", required: true}
 
 column_type:
     type: str
@@ -40,6 +41,37 @@ literal_value:
 variable:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$'
+    description: Qualified source variable or unqualified current-output column.
+
+domain_name:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: Name of the dataset this specification derives.
+
+dataset_id:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: Identifier of a dataset declared in datasets.
+
+dataset_column:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: Column of a declared dataset, named without its dataset prefix.
+
+column_name:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: Name of a column declared by this specification.
+
+row_id:
+    type: str
+    min_length: 1
+    description: Identifier of a row template, unique within rows.
+
+regex:
+    type: str
+    min_length: 1
+    description: Regular expression applied to a string value.
 
 path:
     type: str

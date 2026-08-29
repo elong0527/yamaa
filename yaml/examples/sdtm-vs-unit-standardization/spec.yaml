@@ -1,3 +1,4 @@
+schema_version: "1.0"
 domain: VS
 datasets:
   VS_RAW: input/vs_raw.csv
@@ -77,7 +78,7 @@ columns:
             then:
               compute:
                 expr: "(VSORRESN - 32) * 5 / 9"
-        else:
+        otherwise:
           source: VSORRESN
 
   - name: VSSTRESC

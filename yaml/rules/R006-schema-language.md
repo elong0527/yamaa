@@ -26,6 +26,12 @@ validation or execution meaning.
 Implementations load the complete transitive bundle before resolving names.
 Except for registries, a declaration name may occur only once in the bundle.
 
+A specification declares the bundle it is written against in `schema_version`.
+It must equal the bundle version. A specification declaring any other version
+is an error and is not validated against this bundle, so a later version can be
+introduced without silently reinterpreting a specification written for an
+earlier one.
+
 All schema documents must reject duplicate YAML keys, aliases, merge keys,
 explicit tags, and unknown schema constructs.
 
@@ -120,6 +126,29 @@ Whitespace around nested expressions and the comma is ignored. A YAML sequence
 of type expressions is a union. The quoted string `"null"` is a type name; an
 unquoted YAML null is a value.
 
+## Shorthand unions
+
+Two union shapes are shorthand for a canonical form. An implementation expands
+a shorthand while validating, so a validated document contains only the
+canonical form and two implementations agree on what they validated.
+
+A union of `T` and `list[T]` accepts either. A bare `T` expands to a
+one-element list, and the list is canonical.
+
+A union of a value type `V` and a class declaring exactly one required field
+whose type is `V` accepts either. A bare `V` expands to that class with the
+field set to it, and the class is canonical. The remaining fields take their
+declared defaults.
+
+Expansion happens after the written value has been validated against the union
+member it matched, so a constraint on the written form is checked before the
+value is expanded.
+
+No other union is shorthand. A union matching neither shape, such as
+`literal_value`, selects a member and expands nothing. These are the only
+shorthand mechanisms in the language. A rule may say where a shorthand applies
+and what the expanded value means, but must not define a different expansion.
+
 ## Descriptor keywords
 
 Only these descriptor keywords are supported:
@@ -144,7 +173,8 @@ schema, not only in prose.
 Implementations must fail for:
 
 - invalid YAML or a prohibited YAML feature;
-- an invalid include or inconsistent bundle version;
+- an invalid include, an inconsistent bundle version, or a specification
+  whose `schema_version` does not equal the bundle version;
 - an unknown or duplicate type, registry, registry entry, or schema construct;
 - an invalid type expression or unresolved reference;
 - an invalid descriptor keyword or default;

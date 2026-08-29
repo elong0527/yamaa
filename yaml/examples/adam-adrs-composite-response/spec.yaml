@@ -1,3 +1,4 @@
+schema_version: "1.0"
 domain: ADRS
 datasets:
   ADRSPRE: input/adrs_pre.csv
@@ -60,7 +61,7 @@ columns:
           - when: "PCHG <= -75"
             then:
               literal: RESPONDER
-        else:
+        otherwise:
           literal: NON-RESPONDER
     verifications:
       - not_missing: {}
@@ -81,7 +82,7 @@ columns:
           - when: "PCHG <= -75"
             then:
               literal: THRESHOLD MET
-        else:
+        otherwise:
           literal: THRESHOLD NOT MET
     verifications:
       not_missing: {}
