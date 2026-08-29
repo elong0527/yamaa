@@ -145,6 +145,37 @@ nothing to them: R008 has no operand to attach to when the body is
 `SUM(a) + MAX(b)`; R007's input types stop being structurally checkable; and
 `SUM(a) + b` raises a grain question the entry cannot answer.
 
+A further cost is visible in the payload itself. `source: EX` names a dataset,
+and `source` is `variable`-typed in every other entry; the dataset-typed
+precedent is `row_class.dataset`, so the field would have to be `dataset: EX`.
+More than naming is at stake. R002 already resolves `EX.EXDOSE`, so the field
+looks redundant — write `group_by: [EX.STUDYID, ...]` and `expr:
+"SUM(EX.EXDOSE)"` and the dataset comes from qualification, as it does
+everywhere else. Qualifying also settles an ambiguity the sketch has:
+`group_by` on an aggregate already means the current-output partition of R007's
+context 2, so unqualified grain columns read as that rather than as right-side
+columns of `EX`.
+
+The field is not redundant, though, because it is not naming a source. It
+declares a scope, and a text grammar needs one in three places:
+
+- an `expr` that references no column at all, such as a record count, has no
+  qualified identifier to carry the dataset;
+- nothing otherwise stops `SUM(EX.EXDOSE) * MAX(DS.DSSTDY)`, which is two right
+  sides at two join grains, so the formula would be performing joins. R010
+  forbids a qualified identifier for exactly this reason, and closing the hole
+  by rule — every identifier in one `expr` must resolve to one dataset — is the
+  same declaration made implicitly and checkable only after parsing;
+- R004 and R010 share identifier resolution by phase, so admitting qualified
+  identifiers in a third grammar either diverges from both or reopens R010's
+  ban for everyone.
+
+So the entry needs a field whose only job is to re-close a hole the grammar
+opens. A view needs neither field: it declares the relation once and the grain
+once, identifiers resolve under plain R002, and a record count is `count` over
+a grain column, which decision 1 below makes non-missing so that counting
+values and counting records coincide.
+
 The sharper objection is what the proposal does *not* buy. Its `group_by` is
 the valuable half — it names a grain — but that half is separable from the
 text grammar and does not require it. The text grammar half buys arithmetic
