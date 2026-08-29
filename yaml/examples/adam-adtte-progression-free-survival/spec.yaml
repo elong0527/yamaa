@@ -113,9 +113,9 @@ columns:
     type: date
     output: false
     derivation:
-      min:
-        source: RS.RSDTC
+      aggregate:
         filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y'"
+        expr: "MIN(RS.RSDTC)"
 
   - name: PDSEQ
     type: int
@@ -132,9 +132,9 @@ columns:
     type: date
     output: false
     derivation:
-      min:
-        source: DS.DSDTC
+      aggregate:
         filter: "DS.DSDECOD = 'DEATH'"
+        expr: "MIN(DS.DSDTC)"
 
   - name: DEATHSEQ
     type: int
@@ -151,9 +151,9 @@ columns:
     type: date
     output: false
     derivation:
-      max:
-        source: RS.RSDTC
+      aggregate:
         filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y'"
+        expr: "MAX(RS.RSDTC)"
 
   - name: CENSORSEQ
     type: int

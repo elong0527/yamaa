@@ -20,30 +20,30 @@ columns:
   - name: TR01SDT
     type: date
     derivation:
-      min:
-        source: EX.EXSTDTC
+      aggregate:
         filter: "EX.APERIOD = 1 AND EX.EXSTDTC IS NOT NULL"
+        expr: "MIN(EX.EXSTDTC)"
 
   - name: TR01EDT
     type: date
     derivation:
-      max:
-        source: EX.EXENDTC
+      aggregate:
         filter: "EX.APERIOD = 1 AND EX.EXENDTC IS NOT NULL"
+        expr: "MAX(EX.EXENDTC)"
 
   - name: TR02SDT
     type: date
     derivation:
-      min:
-        source: EX.EXSTDTC
+      aggregate:
         filter: "EX.APERIOD = 2 AND EX.EXSTDTC IS NOT NULL"
+        expr: "MIN(EX.EXSTDTC)"
 
   - name: TR02EDT
     type: date
     derivation:
-      max:
-        source: EX.EXENDTC
+      aggregate:
         filter: "EX.APERIOD = 2 AND EX.EXENDTC IS NOT NULL"
+        expr: "MAX(EX.EXENDTC)"
 
   - name: TRT01A
     type: str

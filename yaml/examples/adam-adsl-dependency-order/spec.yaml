@@ -55,9 +55,9 @@ columns:
   - name: TRTSDT
     type: date
     derivation:
-      min:
-        source: EX.EXSTDTC
+      aggregate:
         filter: "EX.EXSTDTC IS NOT NULL"
+        expr: "MIN(EX.EXSTDTC)"
 
   - name: RANDDT
     type: date
