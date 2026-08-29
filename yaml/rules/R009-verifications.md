@@ -13,6 +13,13 @@ depends_on: [R004, R005, R006]
 Define closed, portable assertions over completed output values without using a
 generic function or argument bag.
 
+## Boundaries
+
+This rule owns what each verification asserts, when it runs, and how a failure
+is reported. R005 owns key uniqueness, which is checked by the output contract
+rather than declared as a verification, and R004 owns the predicates that
+`implies` and `predicate` evaluate.
+
 ## Registration and timing
 
 `schema_verification.yaml` registers column checks in `column_verifications`

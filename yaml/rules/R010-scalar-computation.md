@@ -3,7 +3,7 @@ id: R010
 title: Scalar Numeric Computation
 status: normative
 applies_to: [expression.compute, numeric_expression]
-depends_on: [R001, R004, R005, R006, R007]
+depends_on: [R001, R004, R005, R006, R007, R011]
 ---
 
 # Scalar numeric computation
@@ -13,19 +13,22 @@ depends_on: [R001, R004, R005, R006, R007]
 Express arithmetic that combines several columns as one readable formula,
 without a registry entry per operator and without host-language code.
 
+## Boundaries
+
+This rule owns the `numeric_expression` primitive: its grammar, function
+vocabulary, numeric types, missing-value behavior, and failure conditions.
+`compute` is the only arithmetic expression and is deliberately numeric.
+Strings, dates, comparison, conditional selection, and row-wise extremes over
+non-numeric types keep their registered expressions under R007, so a general
+expression string cannot displace the typed registry. The Boolean-valued `sql`
+primitive is R004; the two share notation and identifier resolution but not
+their type or their permitted vocabulary.
+
 ## Scope
 
 `compute` evaluates a closed numeric grammar over current-output columns and
-numeric literals and returns one numeric value per current row.
-
-The grammar is a subset of SQL. R004 governs the Boolean-valued `sql` primitive
-used by predicates; this rule governs the numeric-valued `numeric_expression`
-primitive used by `compute`. They share notation and identifier resolution but
-not their type or their permitted vocabulary.
-
-`compute` is deliberately numeric. Strings, dates, comparison, and conditional
-selection keep their registered expressions, so a general expression string
-cannot displace the typed registry.
+numeric literals and returns one numeric value per current row. The grammar is
+a subset of SQL.
 
 ## Identifiers
 
@@ -105,17 +108,15 @@ checkable; widening it requires amending this table.
 
 ### There is no rounding function
 
-A derivation must not round. Tabulation and analysis datasets carry the
-computed value at full precision, and the number of places shown is decided
-when the value is reported, so a rounding function in this grammar would only
-ever be misused. `ROUND` is therefore absent, not merely discouraged, and a
-specification cannot round a value at all.
-
-This also removes a portability hazard rather than managing one. R's `round()`,
-Python's built-in `round()`, and `numpy.round()` round half to even while SAS
-rounds half away from zero, so any rounding that inherits the host language
-disagrees across runtimes on exactly the values a reviewer checks. With no
-rounding in the language there is no mode to pin and nothing to get wrong.
+**A derivation must not round.** `ROUND` is absent, not merely discouraged, and
+a specification cannot round a value at all. Analysis datasets carry the
+computed value at full precision and the number of places shown is decided when
+the value is reported, so a rounding function here could only be misused. It
+would also be a portability hazard: R, Python, and `numpy` round half to even
+while SAS rounds half away from zero, so any rounding inheriting the host
+language disagrees across runtimes on exactly the values a reviewer checks.
+R011 keeps the same position at conversion, where a non-integral value fails
+rather than being truncated.
 
 `CEIL`, `FLOOR`, and `TRUNC` remain. They are not presentation rounding: they
 return an integral part exactly, with no mode to choose, and `FLOOR(a / b)` is
@@ -153,10 +154,10 @@ numeric column first.
 `NULL` result, except `COALESCE`, `NULLIF`, `GREATEST`, and `LEAST`, whose
 argument-level behavior is defined in the table above.
 
-This settles arithmetic missing-value behavior, which was previously undefined:
-the deleted `multiply`, `add`, and `subtract` keywords declared no missing
-policy and had to be guarded by an explicit predicate at each call site. A
-`compute` derivation needs no guard to survive a missing input.
+A `compute` derivation therefore needs no guarding predicate to survive a
+missing input, and a formula that must yield missing rather than fail says so
+with `NULLIF`. Percentage change against a zero base is
+`100 * (VALUE - BASE) / NULLIF(BASE, 0)`.
 
 ## Failure conditions
 
@@ -190,22 +191,6 @@ are not optional:
   not enable fast-math or optimizer rewrites that do. `a / (b * b)` and
   `a / b / b` are different formulas and may return different doubles; both are
   correct, and an implementation must return the one that was written.
-
-## Relationship to other expressions
-
-`compute` is the only arithmetic expression. `multiply`, `add`, `subtract`, and
-`percent_change` were registered before it and are now deleted: each was a
-single operator with one operand fixed to a literal, and every example that
-used one is expressed more directly by a formula.
-
-Percentage change was the one deleted keyword carrying semantics beyond its
-operator, returning missing rather than failing on a zero base. That rule is
-not lost, it is written where it applies:
-`100 * (VALUE - BASE) / NULLIF(BASE, 0)`.
-
-`date_diff` is not superseded. Calendar-unit differences are not arithmetic on
-numbers, and this grammar is numeric, so a study day is still `date_diff`
-followed by `compute`.
 
 ## Errors
 

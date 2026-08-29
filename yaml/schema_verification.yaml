@@ -11,7 +11,7 @@ column_verifications:
         - min: {type: float, required: false}
         - max: {type: float, required: false}
     matches:
-        - pattern: {type: str, required: true}
+        - pattern: {type: regex, required: true}
 
 dataset_verification:
     registry: dataset_verifications

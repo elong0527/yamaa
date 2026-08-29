@@ -25,12 +25,12 @@ expressions:
             type: "list[variable]"
             required: true
             description: Mutually comparable variables to inspect.
-    case: # Returns the first true branch, then else, or missing when neither exists.
+    case: # Returns the first true branch, then otherwise, or missing.
         - branches:
             type: "list[case_branch_class]"
             required: true
             description: Ordered conditions and result expressions.
-        - else:
+        - otherwise:
             type: expression
             description: Result used when no branch condition is true.
 

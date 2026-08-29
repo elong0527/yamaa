@@ -10,15 +10,21 @@ depends_on: [R002, R006]
 
 ## Intent
 
-Define the portable Boolean predicate. Expression structure belongs to R006,
-which closes the shape of a registry value, and to R007, which defines what each
-registered keyword means.
+Define the portable Boolean predicate written in a field typed `sql`.
+
+## Boundaries
+
+This rule owns the Boolean primitive only. Expression structure is R006, what
+each registered keyword means is R007, and the numeric-valued
+`numeric_expression` primitive used by `compute` is R010. The two primitives
+share notation and identifier resolution but not their type or their permitted
+vocabulary, and neither grammar admits the other's constructs.
 
 ## Predicates
 
 The `sql` primitive is Boolean-valued and is used only by predicates:
-`row.filter`, aggregate `filter`, `case.when`, `predicate.assert`,
-`implies.when`, `implies.then`, and override predicates.
+`row.filter`, aggregate `filter`, window `filter`, `case.branches[].when`,
+`override[].when`, `predicate.assert`, `implies.when`, and `implies.then`.
 
 Supported core syntax includes `=`, `<>`, `<`, `<=`, `>`, `>=`, `IN`,
 `BETWEEN`, `LIKE`, `IS NULL`, `IS NOT NULL`, `AND`, `OR`, `NOT`, and
@@ -27,15 +33,15 @@ parentheses. String literals use single quotes.
 SQL three-valued logic applies. A filtering predicate retains a row only when
 it is `TRUE`; `FALSE` and `UNKNOWN` remove it.
 
-Numeric-valued expressions are a separate primitive. `compute.expr` is typed
-`numeric_expression` and is governed by R010. The two share notation and
-identifier resolution but not their type or their permitted vocabulary, and
-neither grammar admits the other's constructs.
+An identifier resolves against the phase in which the predicate is evaluated,
+as R001 defines.
+
+## Unresolved
 
 The complete predicate grammar, coercion, collation, and literal grammar remain
-unresolved, so this rule remains draft. R010 resolves those questions for
-numeric computation only; it does not settle string collation or the predicate
-literal grammar.
+unresolved, so this rule remains draft. R010 closes those questions for numeric
+computation only; it settles neither string collation nor the predicate literal
+grammar.
 
 ## Errors
 

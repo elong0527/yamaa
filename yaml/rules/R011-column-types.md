@@ -10,30 +10,32 @@ depends_on: [R005, R006, R007, R010]
 
 ## Intent
 
-Separate the three unrelated things this design calls a type, close the
-vocabulary a column may declare, and define value conversion into a declared
-type. R005 owns when conversion happens in the derivation lifecycle. This rule
-owns what a declared type is and which conversions are defined.
+Close the vocabulary a column may declare, and define value conversion into a
+declared type.
+
+## Boundaries
+
+This rule owns what a declared type is and which conversions are defined. R005
+owns when conversion happens in the derivation lifecycle and what an unhandled
+failure does to the run. R008 owns `conversion_failure`. R010 owns the
+arithmetic that produces a numeric value in the first place.
 
 ## Three type namespaces
 
-The word `type` appears in three roles. They are distinguished by position, not
-by name, and no value is shared between their vocabularies except by
-coincidence of spelling.
+The word `type` appears in three roles, distinguished by position rather than
+by name. No value is shared between their vocabularies except by coincidence of
+spelling.
 
 | Role | Where it is written | Vocabulary |
 |---|---|---|
 | Schema descriptor keyword | `type` inside a descriptor, in a class field or a value type | R006 type expressions over `str`, `int`, `float`, `bool`, `"null"`, `list`, `dict`, and named types |
-| Declared column type | The `type` field of a `column_class` entry in a specification | `column_type` |
+| Declared column type | The `type` field of a `column_class` entry in a specification | `column_type`, below |
 | Runtime value type | Never written; the type a value carries during evaluation | R007 type behavior |
 
 `column_class` declares a field whose own name is `type`, so its declaration
 reads `- type: {type: column_type, required: true}`. The outer `type` is a
-specification field name and the inner `type` is the R006 descriptor keyword.
-R006 resolves the two without ambiguity, because a class is an ordered list of
-one-entry mappings whose keys are field names while a descriptor is the mapping
-that follows. A class field name may coincide with a descriptor keyword and
-carries no descriptor meaning when it does.
+specification field name and the inner `type` is the R006 descriptor keyword;
+R006 resolves the two without ambiguity.
 
 The schema vocabulary and the column vocabulary are not the same set. `str`,
 `int`, and `float` are spelled the same in both and mean the same runtime
@@ -95,13 +97,11 @@ written `YYYY-MM-DD`. A partial date, a date with a time component, and a
 non-date string all fail.
 
 Converting a numeric value to `int` succeeds only when the value is exactly
-integral and within the 64-bit signed range. A non-integral value fails. It is
-neither truncated nor rounded: R010 states that a derivation must not round at
-all and omits `ROUND` from its grammar for that reason, so a conversion that
-quietly discarded a fractional part would reintroduce in the type system
-exactly what the expression language excludes. Write `FLOOR`, `CEIL`, or
-`TRUNC` in the `compute` expression to choose the integer explicitly, as R010
-directs.
+integral and within the 64-bit signed range. A non-integral value fails; it is
+neither truncated nor rounded, because a conversion that quietly discarded a
+fractional part would reintroduce in the type system exactly what R010 excludes
+from the expression language. Write `FLOOR`, `CEIL`, or `TRUNC` in the
+`compute` expression to choose the integer explicitly.
 
 Widening an `int` to `float` is exact for magnitudes below 2^53 and is
 otherwise the nearest binary64 value.
@@ -115,9 +115,9 @@ specification written under this one.
 ## Float to text
 
 A `float` becomes text in two places: this conversion, and the decimal text an
-artifact writes for a `float` column under R005. Both use the same form, so a
-`str` column derived from a `float` and the artifact's rendering of that same
-`float` never disagree.
+artifact writes for a `float` column. Both use the same form, so a `str` column
+derived from a `float` and the artifact's rendering of that same `float` never
+disagree, and rendering never changes a stored value.
 
 **The schema fixes no precision.** How many decimal places a value carries is a
 property of the study and its instruments, not of the derivation language. The

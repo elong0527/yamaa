@@ -3,7 +3,7 @@ id: R003
 title: Cross-Dataset Left Join
 status: normative
 applies_to: [expression.source, expression.min, expression.max]
-depends_on: [R002, R005, R007]
+depends_on: [R002, R004, R005, R007, R008]
 ---
 
 # Cross-dataset left join
@@ -12,6 +12,13 @@ depends_on: [R002, R005, R007]
 
 Enrich constructed rows from another dataset without repeating join keys in
 each specification.
+
+## Boundaries
+
+This rule owns the implicit join a qualified cross-dataset source performs, and
+the right-side reduction that precedes it. It does not own `mapping_from`,
+whose keys are declared rather than derived from output `keys`, or any window
+or row-construction use of `filter`; R007 owns both.
 
 ## Terminology
 
@@ -71,19 +78,11 @@ source:
     filter: "EX.APERIOD = 1"
 ```
 
-Within this rule `filter` is declared by `min`, `max`, and `multiple_matches`,
-and in each case it is a predicate over right-side records only. A left row
+In both places `filter` is a predicate over right-side records only. A left row
 whose right side is empty after filtering has no match and receives missing,
 exactly as if no record had existed.
 
-`filter` is also declared by `row_number`, where the records are constructed
-output rows rather than right-side records; R007 defines that form. The field
-means the same thing in both places — restrict the records this operation
-considers — and the record space is always the one the owning expression works
-in. `group_by` follows the same principle: it performs no right-side reduction
-here, and it partitions constructed output rows for a window.
-
-`filter` differs from `row.filter`, which selects row-driver records during row
+This is not `row.filter`, which selects row-driver records during row
 construction, before any column is derived.
 
 ## Multiple matches

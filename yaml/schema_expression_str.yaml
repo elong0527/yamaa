@@ -7,7 +7,7 @@ expressions:
             required: true
             description: String variable to search.
         - pattern:
-            type: str
+            type: regex
             required: true
             description: ECMAScript regular expression matched against source.
         - group:
