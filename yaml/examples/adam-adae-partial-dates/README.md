@@ -1,12 +1,16 @@
 # ADaM ADAE: impute partial dates
 
-This example uses sample AE and ADSL data and a `yamaa` specification to:
+This example uses sample AE and ADSL data and a `yamaa` specification to derive
+one row per adverse event:
 
-- complete `AESTDTC` into the analysis date `ASTDT` with `date_impute`, using
-  month `6` and day `15` for the components the collected value does not carry.
-  `UNKNOWN` is an invalid date and an uncollected value is a missing one; both
-  yield no analysis date;
-- render `ASTDT` back as the character date `ASTDTC`, which R011 writes as
-  ISO 8601;
-- flag an event starting on or after `ADSL.TRTSDT` as `TRTEMFL`. An imputed day
-  decides the flag by the same rule as a collected one.
+- `AESTDTC` is the start date as collected, which may carry only a year, or a
+  year and month, or nothing usable at all;
+- `ASTDT` is the analysis start date. A date collected in full is used as it
+  stands; one missing its day is placed on the 15th, and one missing its month
+  as well is placed in June. A collected value that is not a date and an
+  uncollected value both give no analysis date;
+- `ASTDTC` is the same analysis date written as text;
+- `TRTSDT` is the subject's treatment start date, and `TRTEMFL` marks an event
+  as treatment-emergent when it starts on or after it. An imputed day decides
+  this exactly as a collected one would, and nothing in the output says which
+  events rested on an imputed component.

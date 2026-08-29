@@ -1,20 +1,16 @@
-# ADaM ADSL disposition selection
+# ADaM ADSL: select the final subject disposition from DS
 
-This SDTM-to-ADaM fixture answers one question: how is the final subject
-disposition selected from DS?
+This example uses sample DM and DS data and a `yamaa` specification to derive
+one row per subject:
 
-`EOSDT` is the maximum date among disposition-event records. `EOSDECOD` and
-`EOSREAS` sort matching DS rows by date and sequence and keep the last. The four
-subjects cover completion, two same-day discontinuation records, no DS match,
-and screen failure. Protocol milestones are excluded from the date reduction.
-
-`EOSDT`, `EOSDECOD`, and `EOSREAS` now declare the same `filter`, so the date
-reduction and the two ordered selections agree on which records are eligible by
-construction rather than by coincidence. Expected
-`EOSDECOD.source.multiple_matches` and `EOSREAS.source.multiple_matches` counts
-are both one: only `CATH-UCSD-0002` has more than one disposition event once
-protocol milestones are excluded. The selected values are unchanged, because
-the milestone records never sorted last.
-
-Rows remain in DM order; the key is `[STUDYID, USUBJID]`; exactly four rows are
-expected. A discontinued subject must have `DCSREAS`.
+- `EOSDT` is the subject's latest disposition event date. Only disposition
+  events count; protocol milestones do not;
+- `EOSDECOD` and `EOSREAS` are the decoded term and the reason recorded on the
+  subject's last disposition event, taken from the same set of records as
+  `EOSDT` so the three cannot describe different events. When two events fall
+  on the same day the higher sequence number is the later one;
+- `EOSSTT` is `COMPLETED` when the last event says so, `DISCONTINUED` when
+  there is any other event, and `ONGOING` when the subject has no disposition
+  event at all;
+- `DCSREAS` repeats the reason only for a discontinued subject, and is empty
+  for one who completed or is ongoing.

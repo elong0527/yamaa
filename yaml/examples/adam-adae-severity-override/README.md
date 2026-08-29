@@ -1,13 +1,12 @@
-# ADaM ADAE approved severity override
+# ADaM ADAE: apply an approved severity correction
 
-This fixture answers one question: does a final override run after normal
-conversion and before a dependent variable is derived?
+This example uses sample AE data and a `yamaa` specification to derive one row
+per adverse event:
 
-`ASEV` first uppercases the collected severity. The approved correction changes
-subject `CATH-01-001`, event 2, from `MODERATE` to `SEVERE`. `ASEVN` then maps
-the final `ASEV`, so the corrected row must contain both `SEVERE` and `3`.
+- `ASEV` is the collected severity in upper case, except for one event that an
+  approved data correction reassigns to `SEVERE`;
+- `ASEVN` is the numeric rank of `ASEV`, from `1` for mild to `4` for
+  life-threatening.
 
-The expected count for `ASEV.override[0]` is one. Rows remain in AE source
-order, the exact key is `[STUDYID, USUBJID, AESEQ]`, and exactly three rows are
-expected. The named implication verifies that the correction is visible to the
-dependent mapping. No other handler or business rule is included.
+`ASEVN` reads the severity after the correction, not the collected value, so a
+corrected event carries both the corrected term and its matching rank.

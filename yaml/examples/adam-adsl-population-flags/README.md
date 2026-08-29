@@ -1,13 +1,15 @@
-# ADaM ADSL population flags
+# ADaM ADSL: derive the safety and intent-to-treat flags
 
-This fixture answers one question: how are safety and intent-to-treat flags
-derived from existing ADSL state?
+This example uses a pre-derived ADSL slice and a `yamaa` specification to
+derive one row per subject:
 
-`SAFFL` is `Y` when `TRTSDT` is present. `ITTFL` is `Y` when `ARMCD` is present.
-The four rows cover every combination used by the original combined example:
-treated and randomized, randomized but untreated, and neither.
+- `ARMCD` and `TRTSDT` are carried through as given: the subject's planned
+  treatment arm and the date they started treatment;
+- `SAFFL` is `Y` for a subject who has a treatment start date and `N`
+  otherwise, so it marks the subjects who received any treatment;
+- `ITTFL` is `Y` for a subject who has a planned arm and `N` otherwise, so it
+  marks the subjects who were randomized.
 
-The input is a pre-derived ADSL slice so treatment selection does not obscure
-the flag rules. Rows remain in input order; the key is `[STUDYID, USUBJID]`;
-exactly four rows are expected. Named implications verify the evidence required
-for each positive flag. No handler path is declared.
+The two flags are independent: a subject can be randomized without being
+treated, and each flag names the one fact that justifies it. Taking the arm and
+the treatment start date as given keeps the flag rules visible on their own.

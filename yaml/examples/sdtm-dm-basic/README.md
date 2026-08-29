@@ -1,28 +1,20 @@
-# SDTM DM basic mapping
+# SDTM DM: build one subject record from collected data
 
-This is the smallest complete ODM-to-SDTM example. Its input has the same
-long-form columns produced by the ODM XML parser.
+This example uses collected long-form clinical data and a `yamaa` specification
+to derive one record per subject:
 
-The `odm.csv` fields follow the ODM 2.0 clinical-data hierarchy. The `subject`
-row template selects the required sex item as one anchor record per subject.
-It reads `SEX` from the anchor's `ODM.Value` and resolves `ODM.IT.DM.AGE` and
-`ODM.IT.DM.ARM` using the same study, subject, event, item-group, and repeat-key
-context. The first six input item rows produce two complete DM rows. A third
-subject has only an unexpected sex value and intentionally lacks age and arm
-items, producing a third row through explicit local handlers.
+- `USUBJID` and `SUBJID` identify the subject;
+- `SEX` is the collected sex translated into the standard `M`, `F`, and `U`.
+  A sex that was not collected, and one reported as something the study does
+  not recognise, both become `U`;
+- `AGE` is the collected age as a whole number, and is empty for a subject
+  whose age was never collected;
+- `ARM` is the planned treatment arm, and a subject with no arm collected is
+  `Unassigned`;
+- `ACTARM` is the arm the subject actually received, which this study takes to
+  be the planned one, so it repeats the resolved `ARM` including its
+  `Unassigned` fallback.
 
-It demonstrates:
-
-- a direct ODM context source for `STUDYID` and a literal for `DOMAIN`;
-- direct source mapping from ODM context and full `ItemOID` references;
-- controlled terminology mapping for `SEX`;
-- integer conversion for `AGE`; and
-- an unqualified current-dataset reference, `ACTARM` from `ARM`.
-
-`Not Reported` takes the mapping's `unmapped` path and produces `U`. Structured
-source bindings produce missing `AGE` and literal `Unassigned` when the
-contextual items do not exist. `ACTARM` then demonstrates that a dependent
-column sees the handled `ARM` result.
-
-The combined values of `STUDYID` and `USUBJID` must be unique and non-missing.
-The output column order follows the order in `spec.yaml`.
+Every subject yields a record even when only some items were collected, so a
+sparsely collected subject appears with the substituted values rather than
+being dropped.

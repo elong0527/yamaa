@@ -1,13 +1,15 @@
-# ADaM ADSL identifier parsing and fallback
+# ADaM ADSL: parse the site from USUBJID with a collected fallback
 
-This SDTM-to-ADaM fixture answers one question: how is a site parsed from
-`USUBJID` with a collected `SITEID` fallback?
+This example uses sample DM data and a `yamaa` specification to derive one row
+per subject:
 
-`SITEIDP` extracts the site from `CATH-<site>-<four digits>`. `SITEID`
-coalesces the parsed value with `DM.SITEID`, and `SUBJREF` concatenates the
-resolved site and subject identifier. The four rows contain two valid compound
-identifiers, one malformed identifier, and one missing `SUBJID`.
-
-Expected handler counts are one `SITEIDP.str_extract.no_match`, zero
-`SITEIDP.str_extract.missing`, and one `SUBJREF.str_concat.missing`. Rows remain
-in DM order; the key is `[STUDYID, USUBJID]`; exactly four rows are expected.
+- `SUBJID` is the subject number as collected;
+- `SITEIDP` is the site read out of the middle of `USUBJID`, which is formed as
+  study, site, and a four-digit subject number. A `USUBJID` not in that form
+  leaves it empty;
+- `SITEID` is the site to use: the parsed value when there is one, otherwise
+  the collected site, and `UNKNOWN` when there is neither. Publishing both it
+  and `SITEIDP` shows which subjects fell back;
+- `SUBJREF` is a display reference combining `SITEID` and `SUBJID`, separated
+  by a colon. A subject with no subject number gets `UNKNOWN` in its place
+  rather than a partial reference.
