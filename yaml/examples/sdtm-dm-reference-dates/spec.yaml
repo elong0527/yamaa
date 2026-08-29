@@ -8,6 +8,13 @@ datasets:
 base: DM_RAW
 keys: [STUDYID, USUBJID]
 
+selections:
+  - id: LASTEX
+    dataset: EX
+    filter: "EX.EXENDTC IS NOT NULL"
+    order_by: [EX.EXENDTC, EX.EXSEQ]
+    keep: last
+
 columns:
   - name: STUDYID
     type: str
@@ -41,9 +48,7 @@ columns:
   - name: RFXENDTC
     type: date
     derivation:
-      max:
-        source: EX.EXENDTC
-        filter: "EX.EXENDTC IS NOT NULL"
+      source: LASTEX.EXENDTC
 
   - name: RFSTDTC
     type: date
@@ -54,11 +59,7 @@ columns:
     type: float
     output: false
     derivation:
-      source:
-        variable: EX.EXDOSE
-        multiple_matches:
-          order_by: [EX.EXENDTC, EX.EXSEQ]
-          keep: last
+      source: LASTEX.EXDOSE
 
   - name: DSDT0
     type: date

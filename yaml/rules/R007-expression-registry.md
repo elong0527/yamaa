@@ -22,7 +22,8 @@ terms, and cross-operation type compatibility. Behavior specific to one
 operation is documented beside its registry entry. Cross-cutting behavior stays
 in its owning rule: R002 and R003 for source binding and joins, R008 for local
 handlers, R010 for `compute`, R011 for column types, R012 for string templates,
-and R004 for predicates.
+R013 for the type a source field carries, R014 for a record selected once and
+read by several columns, and R004 for predicates.
 
 ## Registration
 

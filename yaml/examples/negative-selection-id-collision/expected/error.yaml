@@ -1,0 +1,7 @@
+phase: validation
+condition: duplicate_identifier
+spec_paths:
+  - selections[0].id
+  - datasets.EX
+context:
+  identifier: EX

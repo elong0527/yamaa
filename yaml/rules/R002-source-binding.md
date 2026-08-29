@@ -43,7 +43,8 @@ source: DM.SEX
 
 `DATASET.VARIABLE` refers to `VARIABLE` in the declared source dataset.
 An unqualified reference such as `AVAL` refers to a variable in the output
-currently being derived.
+currently being derived. A qualifier is a dataset identifier or a selection
+identifier, which share one namespace; R014 owns what a selection resolves to.
 
 A qualified reference to the current row-driving dataset reads the current
 source record. A qualified reference to another dataset follows R003.

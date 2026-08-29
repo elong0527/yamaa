@@ -10,11 +10,53 @@ root_class:
     - datasets: {type: "dict[dataset_id, dataset_source]", required: true}
     - base: {type: dataset_id, required: false}
     - parents: {type: [path, "list[path]"], required: false}
+    - selections: {type: "list[selection_class]", required: false}
     - keys: {type: "list[column_name]", required: true}
     - columns: {type: "list[column_class]", required: true}
     - rows: {type: "list[row_class]", required: false}
     - verifications: {type: [dataset_verification, "list[dataset_verification]"], required: false}
     - metadata: {type: "dict[str, str]", required: false}
+
+selection_class:
+    - id:
+        type: selection_id
+        required: true
+        description: Name the selected record is read through.
+    - dataset:
+        type: dataset_id
+        required: true
+        description: Declared dataset the record is selected from.
+    - source:
+        type: [variable, "list[variable]"]
+        required: false
+        description: Current-row values matched by position with key; output keys are used when absent.
+    - key:
+        type: [dataset_column, "list[dataset_column]"]
+        required: false
+        description: Dataset columns paired by position with source.
+    - filter:
+        type: sql
+        required: false
+        description: Predicate selecting eligible records before matching.
+    - order_by:
+        type: "list[order_by_term]"
+        required: false
+        description: Terms ordering eligible records; declared with keep.
+    - keep:
+        type: str
+        required: false
+        values: [first, last]
+        description: Ordered record to retain; declared with order_by.
+    - unmatched:
+        type: str
+        required: false
+        values: [missing, fail]
+        description: Result when no record matches; R014 states the default.
+    - incomplete:
+        type: str
+        required: false
+        values: [missing, fail]
+        description: Result when a declared source value is missing; defaults to fail.
 
 column_class:
     - name: {type: column_name, required: true}
@@ -66,6 +108,11 @@ dataset_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
     description: Identifier of a dataset declared in datasets.
+
+selection_id:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: Identifier of a selected record, unique among dataset identifiers.
 
 dataset_column:
     type: str

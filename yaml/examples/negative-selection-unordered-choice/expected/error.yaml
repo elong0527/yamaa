@@ -1,0 +1,11 @@
+phase: join
+condition: multiple_matches
+spec_paths:
+  - selections[0]
+context:
+  selection: DOSING
+  dataset: EX
+  match_count: 2
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-321

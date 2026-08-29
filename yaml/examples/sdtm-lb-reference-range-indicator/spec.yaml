@@ -6,6 +6,12 @@ datasets:
 base: LB_RAW
 keys: [STUDYID, USUBJID, LBSEQ]
 
+selections:
+  - id: REFRANGE
+    dataset: LBRANGE
+    source: [LBTESTCD, SEX]
+    key: [LBTESTCD, SEX]
+
 columns:
   - name: STUDYID
     type: str
@@ -45,29 +51,17 @@ columns:
   - name: LBORRESU
     type: str
     derivation:
-      mapping_from:
-        source: [LBTESTCD, SEX]
-        dataset: LBRANGE
-        key: [LBTESTCD, SEX]
-        value: UNIT
+      source: REFRANGE.UNIT
 
   - name: LBSTNRLO
     type: float
     derivation:
-      mapping_from:
-        source: [LBTESTCD, SEX]
-        dataset: LBRANGE
-        key: [LBTESTCD, SEX]
-        value: NRLO
+      source: REFRANGE.NRLO
 
   - name: LBSTNRHI
     type: float
     derivation:
-      mapping_from:
-        source: [LBTESTCD, SEX]
-        dataset: LBRANGE
-        key: [LBTESTCD, SEX]
-        value: NRHI
+      source: REFRANGE.NRHI
 
   - name: LBNRIND
     type: str

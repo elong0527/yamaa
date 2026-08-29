@@ -1,0 +1,29 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+  EX: input/ex.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+selections:
+  - id: EX
+    dataset: EX
+    order_by: [EX.EXSTDTC, EX.EXSEQ]
+    keep: first
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: DM.USUBJID
+
+  - name: TRT01A
+    type: str
+    derivation:
+      source: EX.EXTRT

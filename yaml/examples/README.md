@@ -89,6 +89,8 @@ CSV records the intended artifact once that capability exists.
 | [`negative-row-value-self-reference`](negative-row-value-self-reference/) | reject a weight carried forward from a carried-forward weight |
 | [`negative-row-value-zero-offset`](negative-row-value-zero-offset/) | reject a previous weight that names no earlier visit |
 | [`negative-source-duplicate-right-key`](negative-source-duplicate-right-key/) | reject duplicate subject enrichment |
+| [`negative-selection-id-collision`](negative-selection-id-collision/) | reject a first treatment named after its own source |
+| [`negative-selection-unordered-choice`](negative-selection-unordered-choice/) | reject a treatment and dose taken from an unchosen record |
 | [`negative-sum-non-numeric-source`](negative-sum-non-numeric-source/) | reject a severity burden totalled from severity words |
 | [`negative-variable-nested-expression`](negative-variable-nested-expression/) | reject an uppercased country chosen inside the same step |
 | [`negative-verification-implausible-age`](negative-verification-implausible-age/) | reject an implausible age |

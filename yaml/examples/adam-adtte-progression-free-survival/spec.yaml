@@ -7,6 +7,23 @@ datasets:
 base: ADSL
 keys: [STUDYID, USUBJID, PARAMCD]
 
+selections:
+  - id: PROGRESSION
+    dataset: RS
+    filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y'"
+    order_by: [RS.RSDTC, RS.RSSEQ]
+    keep: first
+  - id: DEATH
+    dataset: DS
+    filter: "DS.DSDECOD = 'DEATH'"
+    order_by: [DS.DSDTC, DS.DSSEQ]
+    keep: first
+  - id: LASTASSESS
+    dataset: RS
+    filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y'"
+    order_by: [RS.RSDTC, RS.RSSEQ]
+    keep: last
+
 columns:
   - name: STUDYID
     type: str
@@ -113,58 +130,37 @@ columns:
     type: date
     output: false
     derivation:
-      min:
-        source: RS.RSDTC
-        filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y'"
+      source: PROGRESSION.RSDTC
 
   - name: PDSEQ
     type: int
     output: false
     derivation:
-      source:
-        variable: RS.RSSEQ
-        multiple_matches:
-          order_by: [RS.RSDTC, RS.RSSEQ]
-          keep: first
-          filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y'"
+      source: PROGRESSION.RSSEQ
 
   - name: DEATHDT
     type: date
     output: false
     derivation:
-      min:
-        source: DS.DSDTC
-        filter: "DS.DSDECOD = 'DEATH'"
+      source: DEATH.DSDTC
 
   - name: DEATHSEQ
     type: int
     output: false
     derivation:
-      source:
-        variable: DS.DSSEQ
-        multiple_matches:
-          order_by: [DS.DSDTC, DS.DSSEQ]
-          keep: first
-          filter: "DS.DSDECOD = 'DEATH'"
+      source: DEATH.DSSEQ
 
   - name: CENSORDT
     type: date
     output: false
     derivation:
-      max:
-        source: RS.RSDTC
-        filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y'"
+      source: LASTASSESS.RSDTC
 
   - name: CENSORSEQ
     type: int
     output: false
     derivation:
-      source:
-        variable: RS.RSSEQ
-        multiple_matches:
-          order_by: [RS.RSDTC, RS.RSSEQ]
-          keep: last
-          filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y'"
+      source: LASTASSESS.RSSEQ
 
   - name: EVENTDT
     type: date
