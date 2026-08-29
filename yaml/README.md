@@ -12,6 +12,7 @@ and SDTM-to-ADaM derivations. The design is under active development.
 - `schema_function.yaml` registers calls to functions resolved by the project's
   global execution environment.
 - `rules/` contains shared execution semantics, with one rule per file.
+- `design/` contains assessments of proposed directions that are not yet rules.
 - `examples/` contains source data, derivation specifications, and exact
   expected outputs.
 - `agents.md` tells AI coding agents how to discover and maintain the design.
