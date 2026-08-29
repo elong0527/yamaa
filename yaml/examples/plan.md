@@ -4,71 +4,23 @@
 
 The suite holds 47 examples: 42 successful golden outputs and five expected
 failures. One failure example also commits the completed dataset beside the
-structured error. This file records the design gaps they expose,
-grouped by root cause, and tracks the schema work those findings justify.
+structured error. This file records the design gaps they expose, grouped by
+root cause, and tracks the schema work that remains.
 [`README.md`](README.md) is the reader-facing index of the examples
 themselves.
 
-This file tracks the schema and rule work those findings justify. It lists what
-has landed in one table and then only the work that remains. Every open item
+Only open work appears here. A change that lands is deleted from this file
+rather than marked, so the git history of this file and of
+[`../rules/`](../rules/) is the record of what closed and how. Every open item
 names the gap it closes, the evidence that justifies it, and the negative
 example the acceptance rule requires.
-
-## Landed
-
-| Change | Effect |
-|---|---|
-| `output: false` on a column, R005 | 28 columns across 11 examples became internal, so named intermediates no longer pollute the artifact |
-| `compute` and R010, replacing `add`, `subtract`, `multiply`, `percent_change` | one closed numeric grammar with columns in every operand position, a defined missing policy, and row-wise numeric extremes |
-| `order_by_term` with `direction` and `nulls` | descending and null placement are declared, and two negated companion columns were deleted |
-| `filter` on `multiple_matches`, R003 and R008 | ordered selection narrows its right side before ordering |
-| `column_type` and R011 | `column.type` became a closed enumeration and the conversion matrix is defined, leaving float-to-string as its one open cell |
-| `mapping_from.source` and `mapping_from.key` as lists, R003 and R007 and R008 | a lookup declares a compound key and pairs it by position |
-| `filter` on `row_number`, R001 and R003 and R007 | a window states its eligibility once; two `TEORD` sort columns and six duplicated flag predicates deleted |
-| float-to-text, R005 and R011 | one form for the declared conversion and the artifact; the schema fixes no precision, the project does, and this suite declares four decimal places |
-| `date_impute`, R007 and R008 and R011 | the completion rule for a truncated ISO 8601 date is declared rather than spelled out; five internal columns and three regular expressions deleted from `adam-adae-partial-dates` |
-| `study_day`, R007 | the SDTM no-Day-0 rule is one expression instead of a guarded `date_diff`, a `compute`, and a conditional; one internal column deleted from `sdtm-vs-visit-study-day` |
-| `date_diff.bounds`, and a stated missing-operand result | an inclusive or strictly-between count is declared rather than adjusted afterwards; two internal columns, two `compute` calls, and three guarding predicates deleted |
-| `greatest` and `least`, R007 | a row-wise extreme over any comparable type; `sdtm-dm-reference-dates` replaced a three-way null-guarded `case` chain with one expression, and R010's numeric functions stay where they are |
-| Form-scoped ODM context, R002 | contextual item lookup now includes every available collection level, including `FormOID`, and fixes zero-match and multiple-match behavior |
-| `str_template` and R012 | a closed interpolation grammar makes composite strings concise while keeping dependencies visible and host-language code out |
-| `row_value`, R001 and R007 | one window reads any row of an ordered partition, so `adam-adrs-confirmed-response` became a golden output; a signed offset carries the direction rather than a `lead` and `lag` pair whose field lists would be identical, and reading a column's own earlier value stays a cycle rather than an iteration |
-| `sum` and `count`, R003 and R007 and R008 | the aggregate registry covers ordinary reductions, so `adam-adex-cumulative-dose` became a golden output; `count` counts non-missing values, an all-missing group totals to missing rather than zero, and four rules stopped naming `min` and `max` by hand. Replacing the entries with one grouping expression over a reducer grammar was deferred to issue #30 |
-
-Thirteen gaps closed and were removed from the catalogue in
-[`README.md`](README.md); fifteen remain, and the numbering below refers to
-that renumbered list. Three of the fifteen were reworded rather than closed:
-gaps 1, 2, and 4 each stated a limitation broader than the evidence supported,
-and each now names only the case that is actually blocked.
-
-Three lessons from those changes are worth keeping.
-
-**A closed grammar beat an expression per operator.** The original plan
-proposed widening `add` and `multiply` and adding `divide`, `round`, `abs`,
-`greatest`, and `least`. One `compute` entry replaced all of it, and R010
-states the semantics once. Prefer the same shape wherever a family of
-operators is proposed.
-
-**Widening a field beat adding an entry, again.** T3 was written as a new
-`lookup` expression with a `dataset`/`on`/`value` payload. Under the design's
-own constraint — left join only, one column added per call — that entry was a
-second spelling of `mapping_from`, and its only new capability was the compound
-key. Widening `source` and `key` to lists bought exactly that, left the
-registry unchanged, and rewrote no existing call site. Ask what a proposed
-entry does that an existing one could not be widened to do.
-
-**Predictions about golden output were wrong twice.** `compute` was expected to
-move nothing and moved nothing, but the `multiple_matches` filter was also
-expected to move nothing and changed `adam-adsl-crossover-periods`, because two
-columns existed only to expose the workaround it removed. Assume any change
-that removes a workaround also removes the columns that documented it.
 
 ## Open design gaps
 
 Fifteen gaps are open across the suite, grouped by root cause rather than by
 the example that found them, because most are consequences of a few underlying
-decisions rather than independent omissions. Closed gaps are removed from this
-list rather than marked; `plan.md` records what was closed and how.
+decisions rather than independent omissions. A closed gap is deleted and the
+list renumbered, so every number below is live.
 
 ### A. Literal operands and ordering
 
@@ -261,27 +213,18 @@ selections can now be made to see the same records without being tied to the
 same one. A construct that selects a right-side record once and reads several
 columns from it would close both. This is design work, not a registry entry.
 
-The window half of this item was filed here and did not belong: restricting
-which rows a window sees is separable from returning a record, and it landed as
-`row_number.filter`.
-
 ### T6. Dates and times
 
 Evidence: gaps 8 and 9. `sdtm-ae-effective-transaction` carries an audit
 timestamp as `str` and orders it correctly only because ISO 8601 text sorts
 chronologically.
 
-Two of the three parts are settled. R011 closed the vocabulary: `column_type`
-is closed, a declared `date` is complete or nothing, and there is no datetime
-type. `date_impute` closed the declared imputation rule, so completion is a
-statement in the specification rather than regular expressions and string
-defaults.
-
-What remains is the part neither addressed. A `date` produced by imputation is
-indistinguishable from a collected one, so precision can only be recovered from
-the source text, and nothing marks a comparison made against an imputed
-operand. A precision concept would close both at once, and a `date_precision`
-expression would close the first alone. Gap 9 is untouched.
+The type vocabulary and the declared imputation rule are settled; precision is
+not. A `date` produced by imputation is indistinguishable from a collected one,
+so precision can only be recovered from the source text, and nothing marks a
+comparison made against an imputed operand. A precision concept would close
+both at once, and a `date_precision` expression would close the first alone.
+Gap 9 is untouched.
 
 No example now carries an imputation flag, so both halves are argued from the
 rules rather than shown in golden output. An example that records which
@@ -297,13 +240,10 @@ Gap 7: source-format missing values and type inference have no normative rule.
 Every example assumes an empty CSV field is missing and distinguishes it from a
 nonempty malformed value, and nothing says so.
 
-The conversion half of this item has landed. Float-to-text was the last
-undefined cell in R011's matrix, and closing it corrected two committed values
-rather than the three the item predicted: the golden files were written by R's
-default fifteen-significant-digit output, so `adam-adlb-bds` was already
-consistent with a four-decimal setting and only `adam-adsl-bmi-compute` and
-`sdtm-vs-unit-standardization` moved. Ingestion is the harder half and is
+Conversion is defined by R011's matrix. Ingestion is the harder half and is
 untouched, because it is about recognising a value rather than rendering one.
+It is rule text rather than schema, and it is required before any
+implementation can claim R and Python parity.
 
 ### T8. The output and pipeline contract
 
@@ -349,11 +289,9 @@ an `EPOCH` assignment actually needs.
 ## Sequencing
 
 1. **T2**, with its negative example. It is registry work with committed
-   evidence and bounded semantics. T3 landed as a widened `mapping_from` and
-   still owes the four negative examples listed below.
-2. **T7**, which is rule text rather than schema. Its conversion half landed
-   with float-to-text; what remains is source-format recognition, still
-   required before any implementation can claim R and Python parity.
+   evidence and bounded semantics.
+2. **T7**, which is rule text rather than schema, and is required before any
+   implementation can claim R and Python parity.
 3. **T5, T6, T8, T9, T10** are design documents. Write the document before the
    schema change, and expect each to retire several gaps at once, as `compute`
    did.
@@ -370,67 +308,51 @@ gap 1.
 The acceptance rule needs failure behavior fixed before a feature is added.
 Five expected-failure examples now establish a self-referential ordered window,
 duplicate implicit-join matches, unmapped dictionary values, malformed string
-templates, and dataset-predicate reporting. The table below lists the remaining
-contracts. ODM form scoping is a positive example backed by normative rule
-text.
+templates, and dataset-predicate reporting. Every contract below is still rule
+text that no example tests. All the features they guard have landed except rank
+tie semantics, which arrives with T2.
 
-| Example | Provokes | Gates |
-|---|---|---|
-| non-output column named in `keys` | S1's only new error | already landed, untested |
-| unguarded division by zero, and the same expression guarded by `NULLIF` | R010's failure conditions | already landed, untested |
-| `SQRT` of a negative value, `LN` of zero, integer overflow | the rest of R010's failure conditions | already landed, untested |
-| an expression using `SUM`, `LAG`, a comparison, or a qualified identifier in the column phase | R010's closed grammar | already landed, untested |
-| `direction: desc` on a column of mixed types | order-term comparability | already landed, untested |
-| a `multiple_matches` filter that empties the right side | R003 treats it as an absent match, not a handled condition | already landed, untested |
-| a cross-dataset `source` with duplicate applicable keys | R003 right-side uniqueness | `negative-source-duplicate-right-key` |
-| ranking on a column whose ordering is not total | tie semantics | T2 |
-| a column reading its own value from an earlier row of its partition | R001 reports a cycle rather than iterating | `negative-row-value-self-reference` |
-| `row_value` with `offset: 0` | R007 keeps `source` the only spelling of the current row | already landed, untested |
-| `sum` over a non-numeric source | R007's aggregate input type | already landed, untested |
-| `mapping_from` with a duplicate right-side key on the `key` columns | R007 dictionary uniqueness | already landed, untested |
-| `mapping_from` with no match and no `unmapped` handler | join failure behavior | already landed, untested |
-| `mapping_from` with one of two sources missing and no `missing` handler | R008 partial-key semantics | already landed, untested |
-| `mapping_from` whose `source` and `key` lists differ in length | R007's new error | already landed, untested |
-| a `row_number` partition in which every row fails the window `filter` | R007: no rank rather than a spurious rank of one | already landed, untested |
-| `date_impute` with `month: 15`, and with a `day` the imputed month does not have | R007's calendar-range error | already landed, untested |
-| `date_impute` over an invalid source with no `invalid` handler | fail rather than yield missing | already landed, untested |
-| a `mapping` whose `dict` keys collide once folded under `case_sensitive: false` | R007 rejects the dictionary rather than picking one | already landed, untested |
-| a non-missing value absent from `dict` with no `unmapped` handler | R008 makes the condition fatal | `negative-mapping-unmapped-value` |
-| a column type outside `column_type` | R011's closed vocabulary | already landed, untested |
-| unparseable numeric text, an incomplete date, and a non-integral value converted to `int` | R011's conversion failures | already landed, untested |
-| `greatest` whose `sources` mix incomparable types | R007 comparability | already landed, untested |
-| duplicate output keys | R005 key uniqueness | already landed, untested |
-| a failed column verification | R009 reporting | already landed, untested |
-| a failed dataset predicate | R009 reporting | `negative-adam-adsl-stratification-reconciliation` |
-| an operator inside a string-template placeholder | R012's closed grammar | `negative-adsl-subject-reference` |
-| a nested expression in a field typed as `variable` | the version 1.0 input-shape boundary | already landed, untested |
+| Example | Provokes |
+|---|---|
+| non-output column named in `keys` | S1's only new error |
+| unguarded division by zero, and the same expression guarded by `NULLIF` | R010's failure conditions |
+| `SQRT` of a negative value, `LN` of zero, integer overflow | the rest of R010's failure conditions |
+| an expression using `SUM`, `LAG`, a comparison, or a qualified identifier in the column phase | R010's closed grammar |
+| `direction: desc` on a column of mixed types | order-term comparability |
+| a `multiple_matches` filter that empties the right side | R003 treats it as an absent match, not a handled condition |
+| ranking on a column whose ordering is not total | tie semantics; gated by T2 |
+| `row_value` with `offset: 0` | R007 keeps `source` the only spelling of the current row |
+| `sum` over a non-numeric source | R007's aggregate input type |
+| `mapping_from` with a duplicate right-side key on the `key` columns | R007 dictionary uniqueness |
+| `mapping_from` with no match and no `unmapped` handler | join failure behavior |
+| `mapping_from` with one of two sources missing and no `missing` handler | R008 partial-key semantics |
+| `mapping_from` whose `source` and `key` lists differ in length | R007's list-length error |
+| a `row_number` partition in which every row fails the window `filter` | R007: no rank rather than a spurious rank of one |
+| `date_impute` with `month: 15`, and with a `day` the imputed month does not have | R007's calendar-range error |
+| `date_impute` over an invalid source with no `invalid` handler | fail rather than yield missing |
+| a `mapping` whose `dict` keys collide once folded under `case_sensitive: false` | R007 rejects the dictionary rather than picking one |
+| a column type outside `column_type` | R011's closed vocabulary |
+| unparseable numeric text, an incomplete date, and a non-integral value converted to `int` | R011's conversion failures |
+| `greatest` whose `sources` mix incomparable types | R007 comparability |
+| duplicate output keys | R005 key uniqueness |
+| a failed column verification | R009 reporting |
+| a nested expression in a field typed as `variable` | the version 1.0 input-shape boundary |
 
-Most gate nothing new because the features already landed. They remain urgent:
-many fail-closed claims in R003, R005, R007, R008, and R010 are still rule text
-rather than tested behavior. `sdtm-suppmh-parent-linkage` states plainly that
-its own `not_missing` check is meaningful only if the lookup fails closed,
-which is exactly the claim no example tests.
+These gate nothing new, because the features they guard already landed. They
+remain urgent: many fail-closed claims in R003, R005, R007, R008, and R010 are
+still rule text rather than tested behavior. `sdtm-suppmh-parent-linkage`
+states plainly that its own `not_missing` check is meaningful only if the
+lookup fails closed, which is exactly the claim no example tests.
 
-## Pilot 7 coverage audit
+## Pilot 7 coverage
 
 The live examples retain every actionable finding from the
 [RConsortium pilot 7 synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
-survey. Endpoint values in its `RE` form are simulated, so
-`adam-adtte-progression-free-survival` computes its own target from `RS` and
-`DS`. ODM form context is normative in R002 and exercised by
-`odm-form-scoped-item-resolution`. Fields that the source declares but never
-varies are not used as evidence for a rule.
-
-Ideas that did not become separate directories are covered as follows:
-
-| Survey idea | Current coverage |
-|---|---|
-| multi-parameter ADTTE row templates | `adam-adlb-bds` already shows one template per parameter; gap 12 records the structural growth |
-| metastatic-site count across columns | R010 `compute` accepts columns on both sides of `+`; no language boundary remains |
-| Fridericia QT correction | R010 `compute` supports data divisors and fractional `POWER`; `adam-adsl-bmi-compute` already fixes both operation families |
-| irregular `EPOCH` interval join | gap 4 is already evidenced by `sdtm-vs-visit-study-day` and `adam-adsl-crossover-periods` |
-| questionnaire scale score | `sum` and `count` are registered, but a total across item columns is a row-wise reduction over columns rather than a partition, and the pilot source has no item-level input to demonstrate it |
-| invalid endpoint date | `negative-adam-adsl-stratification-reconciliation` fixes the same dataset-predicate failure contract without duplicating a PFS example |
+survey, and fields that the source declares but never varies are not used as
+evidence for a rule. Two of its ideas remain undemonstrated: the irregular
+`EPOCH` interval join, which is gap 4, and a questionnaire scale score, which
+is a row-wise reduction over columns rather than over a partition and has no
+item-level input in the pilot source to demonstrate.
 
 ## Acceptance rule for adding a schema feature
 
