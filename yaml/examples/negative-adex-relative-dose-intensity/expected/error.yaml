@@ -1,7 +1,7 @@
 phase: validation
 condition: aggregate_identifier_not_grouped
 spec_paths:
-  - columns.RDI.derivation.aggregate.expr
+  - columns.RDI.derivation.aggregate
 context:
   dataset: EX
   identifier: EX.EXPLDOS
