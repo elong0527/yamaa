@@ -1,3 +1,4 @@
+schema_version: "1.0"
 domain: VS
 datasets:
   VS_RAW: input/vs_raw.csv
@@ -95,7 +96,7 @@ rows:
               then:
                 compute:
                   expr: "VS_RAW.VSORRES * 0.45359237"
-          else:
+          otherwise:
             source: VS_RAW.VSORRES
       VSSTRESU:
         case:
@@ -114,7 +115,7 @@ rows:
               then:
                 compute:
                   expr: "(VS_RAW.VSORRES - 32) * 5 / 9"
-          else:
+          otherwise:
             source: VS_RAW.VSORRES
       VSSTRESU:
         case:

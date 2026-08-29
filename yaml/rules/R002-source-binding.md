@@ -3,14 +3,21 @@ id: R002
 title: Source Binding
 status: draft
 applies_to: [root.datasets, root.base, row.dataset, expression.source]
+depends_on: [R003, R006, R008]
 ---
 
 # Source binding
 
 ## Intent
 
-Bind source files, row drivers, and input variables without implicit
-same-name inference.
+Bind source files, row drivers, and input variables without implicit same-name
+inference.
+
+## Boundaries
+
+This rule owns dataset declaration and how a name resolves to a value. What
+happens when a qualified name reaches another dataset is R003. What happens
+when a bound name is absent or matches several records is R008.
 
 ## Dataset declarations
 
@@ -73,9 +80,8 @@ source:
   missing: null
 ```
 
-`multiple_matches` is governed by R003. `missing` is governed by R008. Filtering
-a right side before aggregation is not part of this binding; it is the
-`filter` field of `min` and `max` under R003.
+`missing` and `multiple_matches` are handlers; R008 defines them and R003
+defines the join uniqueness that `multiple_matches` relaxes.
 
 ## ODM contextual references
 

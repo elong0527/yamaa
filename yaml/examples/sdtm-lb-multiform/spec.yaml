@@ -1,3 +1,4 @@
+schema_version: "1.0"
 domain: LB
 datasets:
   ODM: input/odm.csv

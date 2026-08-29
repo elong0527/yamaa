@@ -3,7 +3,7 @@ id: R008
 title: Local Error Handlers
 status: normative
 applies_to: [source.missing, source.multiple_matches, expression, derivation]
-depends_on: [R002, R003, R005, R006, R007]
+depends_on: [R001, R002, R003, R005, R006, R007, R011]
 ---
 
 # Local error handlers
@@ -15,6 +15,12 @@ encounter it. Handlers are not conditional mapping; use `case` for that.
 
 There is no standalone handler registry. Closed expression and derivation
 schemas determine which handlers are legal.
+
+## Boundaries
+
+This rule owns the handler lifecycle: which stage each handler belongs to, when
+it fires, what it may substitute, and what must be reported. Which handler
+fields an operation offers is declared by its registry entry under R007.
 
 ## Evaluation order
 
@@ -36,6 +42,29 @@ Handlers occur in this fixed lifecycle:
 
 Literal handlers are substituted only when their condition occurs. Final
 override values are the only handler values that remain nested expressions.
+Omitting an applicable handler field makes its condition fatal.
+
+## What `missing` means, by stage
+
+`missing` names two related conditions, distinguished by where it is declared:
+
+- On a `source` binding, and on `min` and `max`, it applies when the variable
+  or ODM item **does not exist in context**. It does not apply when the
+  variable exists and holds a missing value.
+- On every other expression, it applies when the named **input value is
+  missing**.
+
+## Present but unusable
+
+`unmapped`, `no_match`, and `invalid` fire only when every input is present: a
+value with no dictionary entry, a string the pattern does not match, and text
+that is not an ISO 8601 date are each a different defect from an uncollected
+value, and a specification may answer them differently.
+
+Where an operation takes several inputs, as `mapping_from` does, `missing`
+fires when any one of them is missing and the present-but-unusable handler
+fires only when all of them are present. The two conditions therefore stay
+disjoint and an incomplete key can never reach the second.
 
 ## Source handlers
 
@@ -51,9 +80,6 @@ source:
 Other expressions type their `source` as a plain `variable` and declare their
 own handler fields alongside it, so they take the concise form only.
 
-`missing` applies when the variable or ODM item does not exist in context. It
-does not apply when the variable exists and contains a missing value.
-
 `multiple_matches` relaxes R003 right-side uniqueness. Apply its optional
 `filter` to the matching right-side records first, then sort the survivors by
 its `order_by` terms and retain `first` or `last`. Remaining ties are resolved
@@ -61,31 +87,23 @@ by right-side record order.
 
 Filtering to no surviving record is not a handled condition. It is an ordinary
 absent match under R003 and yields missing, so a `filter` narrow enough to
-empty the right side silently produces missing rather than firing this
-handler. The handler count reports only the records where more than one match
-survived the filter.
+empty the right side silently produces missing rather than firing this handler.
+The handler count reports only the records where more than one match survived
+the filter.
 
-## Expression handlers
-
-`mapping` and `mapping_from` distinguish a missing source from a non-missing
-source with no dictionary entry through `missing` and `unmapped`. When
-`mapping_from` declares several sources, `missing` fires when any one of them is
-missing, and `unmapped` fires only when every one is present and no record
-matches, so the two conditions stay disjoint and neither is reachable by an
-incomplete key. `cut`, `str_concat`, `str_upper`, and `str_lower` use `missing`.
-`str_extract` distinguishes `missing` and `no_match`, and `date_impute`
-distinguishes `missing` from `invalid` on the same principle: an uncollected
-date and a value that is not ISO 8601 date text are different defects and a
-specification may answer them differently. `min` and `max` use
-`missing` for an absent source variable; a right side that reduces to no
-matching record is governed by R003, not by this handler. Each field is a
-literal replacement. Omitting the applicable field makes the condition fatal.
+The same boundary applies to `min` and `max`: their `missing` handler covers an
+absent source variable, while a right side that reduces to no matching record
+is R003's absent match.
 
 ## Result handlers
 
 A derivation with conversion or final handling uses `value` to hold its normal
-expression. `conversion_failure` supplies a literal replacement only when
-conversion to the declared column type fails.
+expression. A bare expression is the R006 shorthand for that wrapper, so every
+derivation carries its expression in `value` once expanded.
+`conversion_failure` supplies a literal replacement only when conversion to the
+declared column type fails. R011 defines which conversions fail and states that
+a missing input is not converted at all, so `conversion_failure` never fires
+for one.
 
 After successful conversion, evaluate `override` predicates in list order
 against the converted output row. Evaluate the first matching `value`, convert

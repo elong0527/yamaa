@@ -3,15 +3,21 @@ id: R001
 title: Execution Model
 status: normative
 applies_to: [root.base, root.rows, row.dataset, root.columns, derivation]
-depends_on: [R002, R003, R005, R007, R008, R010]
+depends_on: [R002, R003, R004, R005, R007, R008, R010]
 ---
 
 # Execution model
 
 ## Intent
 
-Define how output rows, columns, and self-contained derivation expressions are
-evaluated without relying on YAML declaration order for dependencies.
+Define how output rows, columns, and derivation expressions are evaluated
+without relying on YAML declaration order for dependencies.
+
+## Boundaries
+
+This rule owns the two phases, dependency inference, and evaluation order. It
+does not define what an expression means (R007), how a name binds to a source
+(R002), or what happens to a result after its expression completes (R005).
 
 ## Phases
 
@@ -31,14 +37,13 @@ row per `base` record, in base-record order. `base` is required in that case.
 
 An expression contains exactly one keyword registered by R007. Most keywords
 name their input variables directly. Resolve those variable dependencies, then
-evaluate the keyword. Fields explicitly typed as `expression`, such as `case`
-results, function arguments, and final override values, are evaluated
-recursively. A `source` or `literal` expression is a leaf. YAML mapping order
-has no execution meaning.
+evaluate the keyword. Fields whose declared type contains `expression` are
+evaluated recursively. A `source` or `literal` expression is a leaf. YAML
+mapping order has no execution meaning.
 
 Window expressions evaluate over the partitions declared by their own
-`group_by`. Aggregate expressions follow the two contexts defined by R003 and
-R007. All other expressions return one value per current row.
+`group_by`. Aggregate expressions evaluate in the two contexts R007 permits.
+All other expressions return one value per current row.
 
 ## Dependency execution
 
@@ -47,23 +52,24 @@ declaration order. Recursively traverse each expression and collect:
 
 - every unqualified output variable referenced by `source`;
 - variables in `group_by`, `order_by`, and other fields typed as `variable`;
-- variables referenced by the limited fields typed as nested `expression`;
-- current-output identifiers used by an SQL predicate;
-- current-output identifiers used by a `compute` numeric expression.
+- variables referenced by fields whose type contains nested `expression`;
+- current-output identifiers used by an `sql` predicate;
+- current-output identifiers used by a `numeric_expression`.
 
-Predicates include `case.branches[].when`, `override[].when`, row filters,
-aggregate `filter`, and window `filter`. Identifier extraction depends on the SQL grammar in
-R004; an implementation must not treat a predicate as dependency-free.
-The same requirement applies to `compute.expr` under the grammar in R010: an
-implementation must not treat a computed expression as dependency-free.
+Predicates include `case.branches[].when`, `override[].when`, `row.filter`,
+aggregate `filter`, and window `filter`. Identifier extraction requires parsing
+the predicate under the R004 grammar and the numeric expression under the R010
+grammar; an implementation must not treat either as dependency-free.
 
 For each row definition, evaluate row derivations using a dependency graph.
 Row derivations cannot depend on values produced only during the column phase.
 
 After row construction, build the column dependency graph and evaluate it in
 topological order. When several columns are ready, declaration order is the
-deterministic tie-breaker. Convert each completed derivation according to R005
-before making it available to dependents.
+deterministic tie-breaker.
+
+In both phases, a completed derivation runs the R005 lifecycle before anything
+depends on it, so a dependent always reads a value of the declared type.
 
 Column declaration order controls final layout, not evaluation order.
 

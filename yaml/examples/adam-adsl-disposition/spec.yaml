@@ -1,3 +1,4 @@
+schema_version: "1.0"
 domain: ADSL
 datasets:
   DM: input/dm.csv
@@ -54,7 +55,7 @@ columns:
           - when: "EOSDECOD IS NOT NULL"
             then:
               literal: DISCONTINUED
-        else:
+        otherwise:
           literal: ONGOING
     verifications:
       allowed_values:

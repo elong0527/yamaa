@@ -1,3 +1,4 @@
+schema_version: "1.0"
 domain: ADSL
 datasets:
   ADSLPRE: input/adsl_pre.csv
@@ -33,7 +34,7 @@ columns:
           - when: "TRTSDT IS NOT NULL"
             then:
               literal: Y
-        else:
+        otherwise:
           literal: N
     verifications:
       - not_missing: {}
@@ -48,7 +49,7 @@ columns:
           - when: "ARMCD IS NOT NULL"
             then:
               literal: Y
-        else:
+        otherwise:
           literal: N
     verifications:
       - not_missing: {}
