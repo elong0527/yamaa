@@ -124,9 +124,10 @@ runtime types:
   require string sources;
 - `date_diff` and `study_day` require `date` inputs; R011 declares no datetime
   type;
-- `date_impute` requires a string source, because a partial date is text under
-  R011 until it is completed, and integer `month` and `day` within the calendar
-  ranges its registration states;
+- `date_impute` and `date_precision` require a string source, because a partial
+  date is text under R011 until it is completed, and `date_impute` requires
+  integer `month` and `day` within the calendar ranges its registration
+  states;
 - `greatest` and `least` require mutually comparable `sources`;
 - `row_value` requires an integer `offset` and accepts any `source` type;
 - `sum` requires a numeric source; `count` accepts any source type;
@@ -146,7 +147,7 @@ promotes to under R010.
 `date_diff`, `study_day`, `row_number`, `rank`, `dense_rank`, and `count`
 return integers.
 `study_day` never returns zero. `date_impute` returns a `date`.
-`baseline_flag` returns a string. Mapping, conditional, coalescing, extreme,
+`baseline_flag` and `date_precision` return strings. Mapping, conditional, coalescing, extreme,
 baseline value, offset row, and aggregate expressions retain the selected or
 aggregated value type; `sum` retains the numeric type of its source and fails
 on integer overflow, as R010 does. The `function` expression retains the type

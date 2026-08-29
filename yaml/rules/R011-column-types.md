@@ -62,7 +62,9 @@ A `date` is a complete date. There is no month or year precision, so a partial
 collected date is carried as text and completed before it becomes a `date`.
 `date_impute` performs that completion as a declared rule rather than as string
 surgery; its result is a `date` like any other, and nothing distinguishes it
-from a fully collected one. There is no `datetime` type: a value carrying a time of day
+from a fully collected one. `date_precision` reads how much of a date the
+collected text carried, so a specification can record beside the date what it
+supplied; the date value itself still carries no precision. There is no `datetime` type: a value carrying a time of day
 is declared `str`, and ISO 8601 text orders chronologically under R007
 comparison. There is no Boolean column type; a flag is a `str` column with an
 `allowed_values` verification, as the examples write it.

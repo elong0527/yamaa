@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The suite holds 83 examples: 45 successful golden outputs and 38 expected
+The suite holds 84 examples: 45 successful golden outputs and 39 expected
 failures. Two failure examples also commit the completed dataset beside the
 structured error. This file records the design gaps they expose, grouped by
 root cause, and tracks the schema work that remains.
@@ -65,15 +65,14 @@ severity. The order lives in a dictionary rather than in the vocabulary.
 
 ### C. Types, conversion, and missing-value semantics
 
-3. Partial dates have no precision. `date_impute` declares the completion
-   rule, so it is no longer string surgery, but the resulting `date` is
-   indistinguishable from a collected one and a partial value still cannot be
-   carried, compared, or verified as such. No example demonstrates this:
-   `adam-adae-partial-dates` imputes without recording which component it
-   supplied, so the cost is visible in `TRTEMFL` and nowhere in the artifact.
-   The suite also covers only trailing precision loss,
-   because the SDTM form for a known day in an unknown month needs an agreed
-   representation before an example can assert it.
+3. A `date` value carries no precision. What a specification supplied can now
+   be reported beside the date, and `adam-adae-partial-dates` reports it, but
+   the date itself is still indistinguishable from a collected one. Nothing
+   ties a flag to the date it describes, so the two are kept in step by
+   convention, and a partial value still cannot be held as one. The suite also
+   covers only trailing precision loss, because the SDTM form for a known day
+   in an unknown month needs an agreed representation before an example can
+   assert it.
 4. Imputed and collected dates compare identically. Nothing marks a comparison
    made under uncertainty, so an imputed day silently decides classifications
    such as treatment emergence.
@@ -148,16 +147,18 @@ Evidence: gaps 3 and 4. `sdtm-ae-effective-transaction` carries an audit
 timestamp as `str` and orders it correctly only because ISO 8601 text sorts
 chronologically.
 
-The type vocabulary and the declared imputation rule are settled; precision is
-not. A `date` produced by imputation is indistinguishable from a collected one,
-so precision can only be recovered from the source text, and nothing marks a
-comparison made against an imputed operand. A precision concept would close
-both at once, and a `date_precision` expression would close the first alone.
-Gap 4 is untouched.
+The type vocabulary, the declared imputation rule, and the reporting of what
+was supplied are settled. `date_precision` reads the collected text, so
+`adam-adae-partial-dates` now carries the flag ADaM expects and a reader can
+tell a recorded day from a supplied one.
 
-No example now carries an imputation flag, so both halves are argued from the
-rules rather than shown in golden output. An example that records which
-component was supplied is the first thing this item needs.
+What remains is the value itself. A `date` carries no precision, so the flag
+and the date it describes are two columns that nothing binds together, and no
+comparison is made under uncertainty: an imputed day still decides treatment
+emergence exactly as a collected one would, which is gap 4 and is untouched. A
+precision attached to the value would close both, and it is a change to the
+type vocabulary rather than a registry entry, so this item now owns the case
+for one.
 
 `greatest` and `least` compare dates as ordinary comparable values. If a
 precision concept lands here, a row-wise extreme over dates has to say whether

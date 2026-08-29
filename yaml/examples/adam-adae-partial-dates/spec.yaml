@@ -47,6 +47,29 @@ columns:
     derivation:
       source: ASTDT
 
+  - name: ASTDTPR
+    type: str
+    output: false
+    derivation:
+      date_precision:
+        source: AESTDTC
+        missing: null
+        invalid: null
+
+  - name: ASTDTF
+    type: str
+    derivation:
+      mapping:
+        source: ASTDTPR
+        missing: null
+        dict:
+          D: null
+          M: "D"
+          Y: "M"
+    verifications:
+      allowed_values:
+        values: ["D", "M", "Y"]
+
   - name: TRTSDT
     type: date
     derivation:
@@ -73,6 +96,10 @@ verifications:
   - all_or_none:
       id: analysis-date-completeness
       columns: [ASTDTC, ASTDT]
+  - implies:
+      id: imputation-flag-requires-an-analysis-date
+      when: "ASTDTF IS NOT NULL"
+      then: "ASTDT IS NOT NULL"
   - implies:
       id: treatment-emergent-event-has-an-analysis-date
       when: "TRTEMFL = 'Y'"

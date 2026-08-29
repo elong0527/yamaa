@@ -70,6 +70,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `compute` | One closed numeric expression over named output columns (R010) |
 | `date_diff`, `study_day` | Named variable operands; `date_diff` declares which endpoints it counts |
 | `date_impute` | One named source plus integer literals for the imputed components; exceptional results are literals |
+| `date_precision` | One named source; exceptional results are literals |
 | `coalesce` | Ordered named variables plus an optional literal default |
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
 | `row_number`, `rank`, `dense_rank`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
