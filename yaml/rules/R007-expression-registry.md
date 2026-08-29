@@ -3,7 +3,7 @@ id: R007
 title: Expression Registry
 status: normative
 applies_to: [expression, expressions, schema_expression]
-depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012]
+depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013]
 ---
 
 # Expression registry
@@ -22,8 +22,7 @@ terms, and cross-operation type compatibility. Behavior specific to one
 operation is documented beside its registry entry. Cross-cutting behavior stays
 in its owning rule: R002 and R003 for source binding and joins, R008 for local
 handlers, R010 for `compute`, R011 for column types, R012 for string templates,
-R013 for the type a source field carries, R014 for a record selected once and
-read by several columns, and R004 for predicates.
+R013 for aggregate reduction, R014 for the type a source field carries, R015 for a record selected once and read by several columns, and R004 for predicates.
 
 ## Registration
 
@@ -53,11 +52,11 @@ selecting or composing expressions is the field's purpose:
 but they hold a derivation's own top-level expression rather than nest one
 inside an operation, so this policy does not restrict them.
 
-Fields typed `numeric_expression` and `string_template` are leaves whose
-identifiers R010 and R012 resolve. Plain strings are values unless their schema
-field is typed as `variable`, `function_arg`, `sql`, or `string_template`. A
-string in `function_arg` is a variable; a string literal uses the `literal`
-expression.
+Fields typed `numeric_expression`, `string_template`, and
+`aggregate_expression` are leaves whose identifiers R010, R012, and R013
+resolve. Plain strings are values unless their schema field is typed as
+`variable`, `function_arg`, `sql`, or `string_template`. A string in
+`function_arg` is a variable; a string literal uses the `literal` expression.
 
 ## Evaluation kinds
 
@@ -69,13 +68,15 @@ dropped. A window that reads another row of its partition returns missing when
 that row does not exist, which is the same result as a neighbouring row whose
 value is missing.
 
-`min`, `max`, `sum`, and `count` are aggregates. They are valid in exactly two
-contexts:
+`aggregate` is the only aggregate expression. R013 defines its grammar, the
+reducers it permits, and what each returns; this rule fixes where it may be
+used. It is valid in exactly two contexts:
 
-1. Their `source` is a qualified cross-dataset source. They then reduce the
+1. Its identifiers are qualified to another dataset. It then reduces that
    right side before the R003 join, which R003 defines.
-2. They declare `group_by`, reduce constructed output rows within each
-   partition, and broadcast the result to each row.
+2. Its identifiers are unqualified. It then declares `group_by`, reduces
+   constructed output rows within each partition, and broadcasts the result to
+   each row.
 
 Any other aggregate context is an error. A `filter` narrows the records the
 owning expression already works in: right-side records for context 1, and
@@ -130,28 +131,26 @@ runtime types:
   states;
 - `greatest` and `least` require mutually comparable `sources`;
 - `row_value` requires an integer `offset` and accepts any `source` type;
-- `sum` requires a numeric source; `count` accepts any source type;
-- `min`, `max`, and window ordering require mutually comparable values. One
-  order term names one variable, and a variable has exactly one type — R013
+- window ordering requires mutually comparable values. One
+  order term names one variable, and a variable has exactly one type — R014
   gives it to a source field and R011 to a declared column — so the values a
   term compares are of one type by construction and ordering has no
   incomparable case. An expression naming several variables, as `greatest` and
   `least` do, is where comparability is a requirement rather than a
-  consequence.
+  consequence;
+- `aggregate` states its own input types in R013.
 
 `source` retains its source type, which R013 defines, and `literal` retains
 its YAML scalar type.
 `cut`, `str_extract`, `str_concat`, `str_template`, `str_upper`, and
 `str_lower` return strings. `compute` returns the numeric type its expression
 promotes to under R010.
-`date_diff`, `study_day`, `row_number`, `rank`, `dense_rank`, and `count`
-return integers.
+`date_diff`, `study_day`, `row_number`, `rank`, and `dense_rank` return integers.
 `study_day` never returns zero. `date_impute` returns a `date`.
 `baseline_flag` and `date_precision` return strings. Mapping, conditional, coalescing, extreme,
-baseline value, offset row, and aggregate expressions retain the selected or
-aggregated value type; `sum` retains the numeric type of its source and fails
-on integer overflow, as R010 does. The `function` expression retains the type
-returned by the project function.
+baseline value, and offset row expressions retain the selected value type.
+`aggregate` returns the type R013 gives its expression. The `function`
+expression retains the type returned by the project function.
 
 ## Operation definitions
 
@@ -175,6 +174,7 @@ behavior and do not affect schema validation.
 - A `row_value` whose `offset` is zero: fail. The current row's own value is
   `source`, and a window must not be a second spelling of it.
 - An aggregate outside its two permitted contexts: fail.
+- An `aggregate` expression that violates R013: fail.
 - `mapping_from` whose `source` and `key` lists differ in length: fail.
 - `date_impute` whose `month` or `day` is outside the calendar range, or whose
   completed value is not a real calendar date: fail.

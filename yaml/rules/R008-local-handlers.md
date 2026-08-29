@@ -28,7 +28,7 @@ Handlers occur in this fixed lifecycle:
 
 | Stage | Local declaration | Behavior |
 |---|---|---|
-| bind | `source.missing`, aggregate `missing` | Use a literal for an absent source variable or ODM item |
+| bind | `source.missing` | Use a literal for an absent source variable or ODM item |
 | join | `source.multiple_matches` | Filter, then select one duplicate right-side match |
 | mapping | `missing` | Use a literal for a missing mapping input |
 | mapping | `unmapped` | Use a literal for a non-missing value with no mapping |
@@ -49,9 +49,9 @@ Omitting an applicable handler field makes its condition fatal.
 
 `missing` names two related conditions, distinguished by where it is declared:
 
-- On a `source` binding, and on an aggregate, it applies when the variable
-  or ODM item **does not exist in context**. It does not apply when the
-  variable exists and holds a missing value.
+- On a `source` binding, it applies when the variable or ODM item **does not
+  exist in context**. It does not apply when the variable exists and holds a
+  missing value.
 - On every other expression, it applies when the named **input value is
   missing**.
 
@@ -92,11 +92,10 @@ empty the right side silently produces missing rather than firing this handler.
 The handler count reports only the records where more than one match survived
 the filter.
 
-The same boundary applies to an aggregate: its `missing` handler covers an
-absent source variable, while a right side that reduces to no matching record
-is R003's absent match. A group whose records all hold missing values is
-neither condition; each aggregate's registration states what it returns
-there.
+An aggregate declares no handler at all. A variable it names that does not
+exist is R002's unresolved reference, a right side that reduces to no matching
+record is R003's absent match, and a group whose records all hold missing
+values is neither condition: R013 states what each reducer returns there.
 
 ## Result handlers
 

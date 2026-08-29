@@ -31,7 +31,7 @@ results, string concatenation inputs, runtime-function arguments, and final
 
 This is the version 1.0 direction for team review.
 
-Two closed scalar mini-languages are narrow exceptions to fields that name
+Three closed mini-languages are narrow exceptions to fields that name
 their inputs directly. Registering an operator per arithmetic operation makes a
 single formula such as
 `WEIGHTKG / POWER(HEIGHTCM / 100, 2)` into several columns and grows the
@@ -48,6 +48,16 @@ variable placeholders only. R001 extracts every placeholder as a dependency,
 and R012 fixes its grammar and escaping, so it cannot become host-language
 evaluation or displace typed string operations. `str_concat` remains the form
 that composes nested expressions.
+
+`aggregate` is the third, and it replaced `min`, `max`, `sum`, and `count` for
+the reason `compute` replaced the arithmetic operators: an entry per reducer
+grows the registry without end and cannot express arithmetic over the records
+being reduced. R013 closes its reducer table and its grammar, requires every
+identifier to name one relation, and requires every identifier to sit inside a
+reduction unless the reduction groups on it. Those three limits keep it from
+becoming a join, a window, or a second spelling of `compute`, and they leave
+where an aggregate may be used with R007 and the join that consumes it with
+R003.
 
 `column.output` keeps any binding column it needs out of the final dataset.
 
@@ -75,7 +85,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
 | `row_number`, `rank`, `dense_rank`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
 | `row_value` | One named source with named grouping and ordering variables, plus a signed integer literal offset along the declared order |
-| `min`, `max`, `sum`, `count` | One named variable or structured source binding |
+| `aggregate` | One closed reducer expression over the records of one relation (R013) |
 | `case` | Nested result expressions retained because selecting expressions is its purpose |
 | `function` | Named arguments may be variables, non-string literals, or explicit expressions |
 

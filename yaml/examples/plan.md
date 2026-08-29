@@ -2,8 +2,8 @@
 
 ## Purpose
 
-The suite holds 84 examples: 45 successful golden outputs and 39 expected
-failures. Two failure examples also commit the completed dataset beside the
+The suite holds 91 examples: 50 successful golden outputs and 41 expected
+failures. Four failure examples also commit the completed dataset beside the
 structured error. This file records the design gaps they expose, grouped by
 root cause, and tracks the schema work that remains.
 [`README.md`](README.md) is the reader-facing index of the examples
@@ -89,7 +89,11 @@ severity. The order lives in a dictionary rather than in the vocabulary.
    sort order, and referential integrity between a SUPPQUAL record and its
    parent domain cannot be asserted. Nothing counts rows within a group
    either, so `sdtm-lb-conditional-compartments` cannot assert that every
-   subject in an applicable cohort has both of its compartments.
+   subject in an applicable cohort has both of its compartments. An assertion
+    over an ordered series reaches one neighbour and no further:
+    `negative-adrs-partial-response-after-complete-response` rejects a partial
+    response directly after a complete one, and the same fault with an
+    intervening assessment passes.
 
 ### E. Structure that the data has cannot be declared
 
@@ -114,6 +118,10 @@ severity. The order lives in a dictionary rather than in the vocabulary.
     not evaluable or non-response is carried only by where a branch sits in the
     list, so no declaration states the policy and two studies cannot be
     compared without reading their branch order.
+    `adam-adrs-best-overall-response` shows the cost in a published
+    definition: which response wins, and whether an assessment that came too
+    early leaves the subject progressive or not evaluable, is carried by the
+    order of the branches and by nothing a reader can check.
 10. Metadata is an ungoverned string map. Labels are first class, but origin,
     length, and controlled terminology are free-form text that no
     implementation can validate, and no expected metadata artifact exists to

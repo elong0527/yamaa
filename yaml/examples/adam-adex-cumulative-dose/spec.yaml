@@ -30,14 +30,12 @@ columns:
   - name: DOSECUM
     type: float
     derivation:
-      sum:
-        source: EX.EXDOSE
+      aggregate: "SUM(EX.EXDOSE)"
 
   - name: NCYCLES
     type: int
     derivation:
-      count:
-        source: EX.EXSEQ
+      aggregate: "COUNT(EX.EXSEQ)"
 
   - name: PLANDOSE
     type: float

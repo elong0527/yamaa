@@ -1,0 +1,91 @@
+schema_version: "1.0"
+domain: ADTR
+datasets:
+  TRVISIT: input/trvisit.csv
+  TR: input/tr.csv
+  TU: input/tu.csv
+base: TRVISIT
+keys: [STUDYID, USUBJID, AVISIT]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: TRVISIT.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: TRVISIT.USUBJID
+
+  - name: AVISIT
+    type: str
+    derivation:
+      source: TRVISIT.AVISIT
+
+  - name: AVISITN
+    type: int
+    derivation:
+      source: TRVISIT.AVISITN
+
+  - name: ADT
+    type: date
+    derivation:
+      source: TRVISIT.ADT
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      literal: SDIAM
+
+  - name: PARAM
+    type: str
+    derivation:
+      literal: Sum of Target Lesion Diameters (mm)
+
+  - name: AVAL
+    type: float
+    derivation:
+      aggregate:
+        filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
+        expr: "SUM(TR.TRSTRESN)"
+
+  - name: NMEAS
+    type: int
+    derivation:
+      aggregate:
+        filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
+        expr: "COUNT(TR.TRSTRESN)"
+
+  - name: NTARGET
+    type: int
+    derivation:
+      aggregate:
+        filter: "TU.TUGRPID = 'TARGET'"
+        expr: "COUNT(TU.TULNKID)"
+
+  - name: ANL01FL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "NMEAS = NTARGET"
+            then:
+              literal: Y
+    verifications:
+      allowed_values:
+        values: [Y]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AVISIT]
+  - row_count:
+      min: 6
+      max: 6
+  - predicate:
+      id: measured-lesions-do-not-exceed-the-target-lesions
+      assert: "NMEAS IS NULL OR NMEAS <= NTARGET"
+  - implies:
+      id: complete-assessment-has-a-sum
+      when: "ANL01FL = 'Y'"
+      then: "AVAL IS NOT NULL"

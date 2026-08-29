@@ -25,20 +25,17 @@ columns:
   - name: DOSECUM
     type: float
     derivation:
-      sum:
-        source: EX.EXDOSE
+      aggregate: "SUM(EX.EXDOSE)"
 
   - name: NDOSREC
     type: int
     derivation:
-      count:
-        source: EX.EXSEQ
+      aggregate: "COUNT(EX.EXSEQ)"
 
   - name: NDOSVAL
     type: int
     derivation:
-      count:
-        source: EX.EXDOSE
+      aggregate: "COUNT(EX.EXDOSE)"
 
 verifications:
   - row_count:

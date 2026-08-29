@@ -1,0 +1,165 @@
+schema_version: "1.0"
+domain: ADRS
+datasets:
+  ADSL: input/adsl.csv
+  ADRSPRE: input/adrs_pre.csv
+base: ADSL
+keys: [STUDYID, USUBJID, PARAMCD]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADSL.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADSL.USUBJID
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      literal: BOR
+
+  - name: PARAM
+    type: str
+    derivation:
+      literal: Best Overall Response by Investigator
+
+  - name: RANDDT
+    type: date
+    derivation:
+      source: ADSL.RANDDT
+    verifications:
+      not_missing: {}
+
+  - name: AVALC
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "CRDT IS NOT NULL"
+            then:
+              literal: CR
+          - when: "PRDT IS NOT NULL"
+            then:
+              literal: PR
+          - when: "SDDT IS NOT NULL"
+            then:
+              literal: SD
+          - when: "NCNPDDT IS NOT NULL"
+            then:
+              literal: NON-CR/NON-PD
+          - when: "PDDT IS NOT NULL"
+            then:
+              literal: PD
+          - when: "NEDT IS NOT NULL"
+            then:
+              literal: NE
+    verifications:
+      allowed_values:
+        values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]
+
+  - name: AVAL
+    type: int
+    derivation:
+      mapping:
+        source: AVALC
+        dict:
+          CR: 1
+          PR: 2
+          SD: 3
+          NON-CR/NON-PD: 4
+          PD: 5
+          NE: 6
+    verifications:
+      range:
+        min: 1
+        max: 6
+
+  - name: ADT
+    type: date
+    derivation:
+      case:
+        branches:
+          - when: "AVALC = 'CR'"
+            then:
+              source: CRDT
+          - when: "AVALC = 'PR'"
+            then:
+              source: PRDT
+          - when: "AVALC = 'SD'"
+            then:
+              source: SDDT
+          - when: "AVALC = 'NON-CR/NON-PD'"
+            then:
+              source: NCNPDDT
+          - when: "AVALC = 'PD'"
+            then:
+              source: PDDT
+          - when: "AVALC = 'NE'"
+            then:
+              source: NEDT
+
+  - name: CRDT
+    type: date
+    output: false
+    derivation:
+      aggregate:
+        filter: "ADRSPRE.AVALC = 'CR'"
+        expr: "MIN(ADRSPRE.ADT)"
+
+  - name: PRDT
+    type: date
+    output: false
+    derivation:
+      aggregate:
+        filter: "ADRSPRE.AVALC = 'PR'"
+        expr: "MIN(ADRSPRE.ADT)"
+
+  - name: SDDT
+    type: date
+    output: false
+    derivation:
+      aggregate:
+        filter: "ADRSPRE.AVALC = 'SD' AND ADRSPRE.RANDDY >= 42"
+        expr: "MIN(ADRSPRE.ADT)"
+
+  - name: NCNPDDT
+    type: date
+    output: false
+    derivation:
+      aggregate:
+        filter: "ADRSPRE.AVALC = 'NON-CR/NON-PD' AND ADRSPRE.RANDDY >= 42"
+        expr: "MIN(ADRSPRE.ADT)"
+
+  - name: PDDT
+    type: date
+    output: false
+    derivation:
+      aggregate:
+        filter: "ADRSPRE.AVALC = 'PD'"
+        expr: "MIN(ADRSPRE.ADT)"
+
+  - name: NEDT
+    type: date
+    output: false
+    derivation:
+      aggregate:
+        filter: "ADRSPRE.AVALC IN ('CR', 'PR', 'SD', 'NON-CR/NON-PD', 'NE')"
+        expr: "MIN(ADRSPRE.ADT)"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD]
+  - row_count:
+      min: 6
+      max: 6
+  - all_or_none:
+      id: best-response-value-rank-and-date-agree
+      columns: [AVALC, AVAL, ADT]
+  - implies:
+      id: best-response-is-not-before-randomization
+      when: "ADT IS NOT NULL"
+      then: "ADT >= RANDDT"

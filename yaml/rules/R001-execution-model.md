@@ -3,7 +3,7 @@ id: R001
 title: Execution Model
 status: normative
 applies_to: [root.base, root.rows, row.dataset, root.columns, derivation]
-depends_on: [R002, R003, R004, R005, R007, R008, R010, R012]
+depends_on: [R002, R003, R004, R005, R007, R008, R010, R012, R013]
 ---
 
 # Execution model
@@ -57,13 +57,15 @@ declaration order. Recursively traverse each expression and collect:
 - variables referenced by fields whose type contains nested `expression`;
 - current-output identifiers used by an `sql` predicate;
 - current-output identifiers used by a `numeric_expression`;
+- identifiers used by an `aggregate_expression`;
 - variables used as placeholders in a `string_template`.
 
 Predicates include `case.branches[].when`, `override[].when`, `row.filter`,
 aggregate `filter`, and window `filter`. Identifier extraction requires parsing
 the predicate under the R004 grammar, the numeric expression under the R010
-grammar, and the string template under the R012 grammar; an implementation
-must not treat any of them as dependency-free.
+grammar, the string template under the R012 grammar, and the reducer
+expression under the R013 grammar; an implementation must not treat any of
+them as dependency-free.
 
 For each row definition, evaluate row derivations using a dependency graph.
 Row derivations cannot depend on values produced only during the column phase.
