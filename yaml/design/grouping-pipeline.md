@@ -176,6 +176,24 @@ once, identifiers resolve under plain R002, and a record count is `count` over
 a grain column, which decision 1 below makes non-missing so that counting
 values and counting records coincide.
 
+The surface form is settled by R006 and needs no invention. A union of a
+non-class type with a class declaring exactly one required field of that type
+is shorthand, which is how `source: DM.SEX` expands to
+`source: {variable: DM.SEX}`. Declaring `aggregate` as
+`[aggregate_expression, aggregate_class]`, with `expr` as the class's only
+required field, makes `aggregate: "SUM(EX.EXDOSE)"` the one-line default and
+leaves `group_by` and `filter` as ordinary structured fields.
+
+The payload around the grammar must stay native YAML rather than an embedded
+JSON string. YAML 1.2 is a superset of JSON, so a string buys no
+expressiveness and costs R006's closed-field validation, R001's identifier
+extraction, and reviewable diffs. The three string-typed fields the design
+already has — `sql`, `numeric_expression`, and `string_template` — are each a
+closed grammar owned by a rule, which is the entry price for being a string;
+none is a serialization escape. How an implementation caches a parsed
+expression is its own affair, until it reaches an artifact, where T9 governs
+it.
+
 The sharper objection is what the proposal does *not* buy. Its `group_by` is
 the valuable half — it names a grain — but that half is separable from the
 text grammar and does not require it. The text grammar half buys arithmetic
