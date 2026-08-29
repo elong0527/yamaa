@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The suite holds 47 examples: 42 successful golden outputs and five expected
+The suite holds 48 examples: 42 successful golden outputs and six expected
 failures. One failure example also commits the completed dataset beside the
 structured error. This file records the design gaps they expose,
 grouped by root cause, and tracks the schema work those findings justify.
@@ -33,7 +33,9 @@ example the acceptance rule requires.
 | Form-scoped ODM context, R002 | contextual item lookup now includes every available collection level, including `FormOID`, and fixes zero-match and multiple-match behavior |
 | `str_template` and R012 | a closed interpolation grammar makes composite strings concise while keeping dependencies visible and host-language code out |
 | `row_value`, R001 and R007 | one window reads any row of an ordered partition, so `adam-adrs-confirmed-response` became a golden output; a signed offset carries the direction rather than a `lead` and `lag` pair whose field lists would be identical, and reading a column's own earlier value stays a cycle rather than an iteration |
-| `sum` and `count`, R003 and R007 and R008 | the aggregate registry covers ordinary reductions, so `adam-adex-cumulative-dose` became a golden output; `count` counts non-missing values, an all-missing group totals to missing rather than zero, and four rules stopped naming `min` and `max` by hand. Replacing the entries with one grouping expression over a reducer grammar was deferred to issue #30 |
+| `sum` and `count`, R003 and R007 and R008 | the aggregate registry covers ordinary reductions, so `adam-adex-cumulative-dose` became a golden output; `count` counts non-missing values, an all-missing group totals to missing rather than zero, and four rules stopped naming `min` and `max` by hand. Replacing the entries with one grouping expression over a reducer grammar was deferred to issue #30 and landed in the row below |
+
+| one `aggregate` expression and R013, replacing `min`, `max`, `sum`, and `count` | one closed reducer grammar in place of an entry per reducer, so a fifth reduction is a table row rather than a registry entry; arithmetic over the records being reduced became expressible, which issue #30 named as its real motivation; the aggregate `missing:` handler was removed rather than relocated, because an expression body gives it no operand to attach to; twenty call sites across eight examples moved with no change of meaning |
 
 Thirteen gaps closed and were removed from the catalogue in
 [`README.md`](README.md); fifteen remain, and the numbering below refers to
@@ -99,10 +101,10 @@ list rather than marked; `plan.md` records what was closed and how.
    output is the rank itself, cannot be expressed.
    `adam-adae-worst-severity` has two events tied on severity and date and
    numbers them 1 and 2. Flagging every record tied at a worst value is a
-   separate question and is not blocked: R007 lets `max` declare `group_by`,
-   reduce constructed output rows within each partition, and broadcast the
-   result, so a predicate comparing each row with that value flags the whole
-   tied set. That example flags one record because that is the rule it models.
+   separate question and is not blocked: R007 lets an `aggregate` over
+   current-output columns declare `group_by`, reduce those rows within each
+   partition, and broadcast the result, so a predicate comparing each row with
+   that value flags the whole tied set. That example flags one record because that is the rule it models.
 
 A controlled vocabulary also still needs a `mapping` to give it a numeric proxy
 before anything can order it. The order lives in a dictionary rather than in
@@ -234,9 +236,9 @@ itself cannot preserve the tie. Distinct-level counts are unavailable for the
 same reason.
 
 Flagging every record tied at a worst value is not evidence for this item. R007
-already lets `max` declare `group_by`, reduce output rows within a partition,
-and broadcast the result, so a predicate against that value flags the whole
-tied set without a new expression.
+already lets an `aggregate` over current-output columns declare `group_by`,
+reduce those rows within a partition, and broadcast the result, so a predicate
+against that value flags the whole tied set without a new expression.
 
 Decision it forces: tie semantics for a rank number.
 
@@ -246,9 +248,9 @@ Negative example: ranking on a column whose ordering is not total.
 
 Two gaps have the same cause: an expression selects a value, never a row.
 
-- Gap 5: `sdtm-dm-reference-dates` derives an extreme date with `max` and its
-  associated dose with an ordered `source`, and nothing ties them to the same
-  EX record. `sdtm-ae-effective-transaction` runs four independent selections
+- Gap 5: `sdtm-dm-reference-dates` derives an extreme date with an `aggregate`
+  and its associated dose with an ordered `source`, and nothing ties them to
+  the same EX record. `sdtm-ae-effective-transaction` runs four independent selections
   that agree only because all four declare the same ordering.
   `adam-adtte-progression-free-survival` independently selects its endpoint
   date and traceability sequence, even though ADaM requires them to identify
@@ -346,6 +348,44 @@ Group F, gaps 12 to 14, and the largest open area.
 Also here: gap 4, the absent interval join, which is what an analysis window or
 an `EPOCH` assignment actually needs.
 
+### T11. The fold: rows at a derived grain
+
+A specification can name one grain, its own output, plus one implicit grain,
+the right side of an R003 join. Row construction can fan out and never fold, so
+`summarise()` has no spelling: a grouped grain can only be bought as an input
+file. `adam-adex-cumulative-dose` buys its subject-treatment grain from
+`input/subject_treatment.csv` although `EX` already contains those pairs, and
+four examples start from a `*_pre.csv` whose provenance no specification
+states.
+
+The `aggregate` grammar closed the reducer half of this and left the fold
+open, deliberately: a reducer computes a value and never a row. What remains is
+issue #30's two-level reduction — group `EX` by subject and cycle, total each,
+then take the largest — output rows at a derived grain, and, through them, gaps
+5, 11, and 13. R013 rejects a nested reduction for exactly this reason: the
+intermediate grain has no name.
+
+Three shapes were considered and none was taken with the reducer work:
+
+- `group_by` on `row_class`, so a row template emits one row per distinct
+  combination of its driver. The smallest of the three; R001 phase 1 already
+  permits a row-count change, and only fan-out uses it today. It folds the
+  output itself, so it needs R002 and R003 to say what a qualified driver
+  reference means when there is no current record.
+- A summarise-only view: a named relation with a driver, a filter, keys, and
+  reduced columns, reached through the R003 join like any dataset. It reaches
+  two-level reduction because a view may drive a view, and it leaves R002 and
+  R003 untouched, because a view is foreign to the output.
+- A full view, which also derives per-record columns. The only shape that
+  reaches gaps 5 and 13, and the largest.
+
+Per the acceptance rule, a second example needing an intermediate grain is the
+trigger.
+
+Decision it forces: whether a fold produces the output grain itself or a named
+relation beside it, and whether that relation may select a record as well as
+reduce one, which is T5's question seen from here.
+
 ## Sequencing
 
 1. **T2**, with its negative example. It is registry work with committed
@@ -354,23 +394,27 @@ an `EPOCH` assignment actually needs.
 2. **T7**, which is rule text rather than schema. Its conversion half landed
    with float-to-text; what remains is source-format recognition, still
    required before any implementation can claim R and Python parity.
-3. **T5, T6, T8, T9, T10** are design documents. Write the document before the
-   schema change, and expect each to retire several gaps at once, as `compute`
-   did.
+3. **T5, T6, T8, T9, T10, T11** are design documents. Write the document before
+   the schema change, and expect each to retire several gaps at once, as
+   `compute` did. T5, T8, and T11 overlap enough that the three should be
+   decided together rather than in sequence.
 4. **T1** last, because its answer probably lies inside T10 rather than in a
    widened field.
 
 Expected catalogue edits: T2 retires gap 2, T5 retires gaps 3, 5, and 6, T6
 retires gaps 8 and 9, T7 retires gap 7, T8 retires gaps 10 and 11, T9 retires
 gap 15, and T10 retires gaps 4, 12, 13, and 14 along with whatever remains of
-gap 1.
+gap 1. T11 claims no gap of its own: it reaches gaps 5, 11, and 13 from a
+different direction, so whichever of T5, T8, and T11 is decided first should
+record which of those it actually closed.
 
 ## Negative examples this plan requires
 
 The acceptance rule needs failure behavior fixed before a feature is added.
-Five expected-failure examples now establish a self-referential ordered window,
+Six expected-failure examples now establish a self-referential ordered window,
 duplicate implicit-join matches, unmapped dictionary values, malformed string
-templates, and dataset-predicate reporting. The table below lists the remaining
+templates, dataset-predicate reporting, and a reducer expression reading a
+value that varies within its group. The table below lists the remaining
 contracts. ODM form scoping is a positive example backed by normative rule
 text.
 
@@ -386,7 +430,13 @@ text.
 | ranking on a column whose ordering is not total | tie semantics | T2 |
 | a column reading its own value from an earlier row of its partition | R001 reports a cycle rather than iterating | `negative-row-value-self-reference` |
 | `row_value` with `offset: 0` | R007 keeps `source` the only spelling of the current row | already landed, untested |
-| `sum` over a non-numeric source | R007's aggregate input type | already landed, untested |
+| `SUM` over a string column | R013's reducer input types | already landed, untested |
+| `SUM(EX.EXDOSE) / EX.EXPLDOS` where `EX.EXPLDOS` is not grouped on | R013's grain rule | `negative-adex-relative-dose-intensity` |
+| a reducer name outside R013's table | R013's closed vocabulary | already landed, untested |
+| a nested reducer, `MAX(SUM(EX.EXDOSE))` | R013 rejects it rather than inventing an intermediate grain | already landed, untested |
+| an `expr` naming two datasets, and one mixing a qualified identifier with an unqualified column | R013's one-relation rule | already landed, untested |
+| a `group_by` column that is not an output key, and an unqualified `expr` with no `group_by` | R013's grain declarations | already landed, untested |
+| a window, `CASE`, or comparison inside an `expr` | R013's boundary against R004 and R007 | already landed, untested |
 | `mapping_from` with a duplicate right-side key on the `key` columns | R007 dictionary uniqueness | already landed, untested |
 | `mapping_from` with no match and no `unmapped` handler | join failure behavior | already landed, untested |
 | `mapping_from` with one of two sources missing and no `missing` handler | R008 partial-key semantics | already landed, untested |
@@ -429,7 +479,7 @@ Ideas that did not become separate directories are covered as follows:
 | metastatic-site count across columns | R010 `compute` accepts columns on both sides of `+`; no language boundary remains |
 | Fridericia QT correction | R010 `compute` supports data divisors and fractional `POWER`; `adam-adsl-bmi-compute` already fixes both operation families |
 | irregular `EPOCH` interval join | gap 4 is already evidenced by `sdtm-vs-visit-study-day` and `adam-adsl-crossover-periods` |
-| questionnaire scale score | `sum` and `count` are registered, but a total across item columns is a row-wise reduction over columns rather than a partition, and the pilot source has no item-level input to demonstrate it |
+| questionnaire scale score | `aggregate` reduces records within a partition, but a total across item columns is a row-wise reduction over columns instead, and the pilot source has no item-level input to demonstrate it |
 | invalid endpoint date | `negative-adam-adsl-stratification-reconciliation` fixes the same dataset-predicate failure contract without duplicating a PFS example |
 
 ## Acceptance rule for adding a schema feature

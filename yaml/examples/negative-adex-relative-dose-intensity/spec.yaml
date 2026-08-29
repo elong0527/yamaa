@@ -22,26 +22,17 @@ columns:
     derivation:
       source: TRT.EXTRT
 
+  - name: EXDOSU
+    type: str
+    derivation:
+      source: TRT.EXDOSU
+
   - name: DOSECUM
     type: float
     derivation:
       aggregate: "SUM(EX.EXDOSE)"
 
-  - name: NDOSREC
-    type: int
+  - name: RDI
+    type: float
     derivation:
-      aggregate: "COUNT(EX.EXSEQ)"
-
-  - name: NDOSVAL
-    type: int
-    derivation:
-      aggregate: "COUNT(EX.EXDOSE)"
-
-verifications:
-  - row_count:
-      min: 3
-      max: 3
-  - implies:
-      id: recorded-dose-implies-a-record
-      when: "NDOSVAL > 0"
-      then: "NDOSREC >= NDOSVAL"
+      aggregate: "100 * SUM(EX.EXDOSE) / EX.EXPLDOS"
