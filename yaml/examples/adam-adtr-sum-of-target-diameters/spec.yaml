@@ -46,23 +46,23 @@ columns:
   - name: AVAL
     type: float
     derivation:
-      sum:
-        source: TR.TRSTRESN
+      aggregate:
         filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
+        expr: "SUM(TR.TRSTRESN)"
 
   - name: NMEAS
     type: int
     derivation:
-      count:
-        source: TR.TRSTRESN
+      aggregate:
         filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
+        expr: "COUNT(TR.TRSTRESN)"
 
   - name: NTARGET
     type: int
     derivation:
-      count:
-        source: TU.TULNKID
+      aggregate:
         filter: "TU.TUGRPID = 'TARGET'"
+        expr: "COUNT(TU.TULNKID)"
 
   - name: ANL01FL
     type: str

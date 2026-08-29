@@ -99,8 +99,8 @@ columns:
     type: int
     output: false
     derivation:
-      max:
-        source: AVAL
+      aggregate:
+        expr: "MAX(AVAL)"
         group_by: [STUDYID, USUBJID, ADT]
 
   - name: WORSTORD

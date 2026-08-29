@@ -30,16 +30,16 @@ columns:
   - name: PDDT
     type: date
     derivation:
-      min:
-        source: ADRSPRE.ADT
+      aggregate:
         filter: "ADRSPRE.AVALC = 'PD'"
+        expr: "MIN(ADRSPRE.ADT)"
 
   - name: AVAL
     type: int
     derivation:
-      min:
-        source: ADRSPRE.AVAL
+      aggregate:
         filter: "PDDT IS NULL OR ADRSPRE.ADT <= PDDT"
+        expr: "MIN(ADRSPRE.AVAL)"
 
   - name: AVALC
     type: str

@@ -54,17 +54,17 @@ columns:
     type: date
     output: false
     derivation:
-      min:
-        source: CM.CMSTDTC
+      aggregate:
         filter: "CM.CMCAT = 'ON TREATMENT' AND CM.CMSTDTC IS NOT NULL"
+        expr: "MIN(CM.CMSTDTC)"
 
   - name: PRNACTDT
     type: date
     output: false
     derivation:
-      min:
-        source: PR.PRSTDTC
+      aggregate:
         filter: "PR.PRCAT = 'CANCER RELATED' AND PR.PRSCAT = 'ON TREATMENT' AND PR.PRSTDTC IS NOT NULL"
+        expr: "MIN(PR.PRSTDTC)"
 
 verifications:
   - unique:

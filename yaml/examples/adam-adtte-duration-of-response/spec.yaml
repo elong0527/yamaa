@@ -145,9 +145,9 @@ columns:
     type: date
     output: false
     derivation:
-      min:
-        source: ADRSPRE.ADT
+      aggregate:
         filter: "ADRSPRE.AVALC = 'PD'"
+        expr: "MIN(ADRSPRE.ADT)"
 
   - name: PDSEQ
     type: int
@@ -164,9 +164,9 @@ columns:
     type: date
     output: false
     derivation:
-      min:
-        source: DS.DSSTDTC
+      aggregate:
         filter: "DS.DSDECOD = 'DEATH'"
+        expr: "MIN(DS.DSSTDTC)"
 
   - name: DEATHSEQ
     type: int
@@ -183,9 +183,9 @@ columns:
     type: date
     output: false
     derivation:
-      max:
-        source: ADRSPRE.ADT
+      aggregate:
         filter: "ADRSPRE.AVALC <> 'NE'"
+        expr: "MAX(ADRSPRE.ADT)"
 
   - name: LASTVLSEQ
     type: int
