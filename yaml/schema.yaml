@@ -51,7 +51,7 @@ selection_class:
         type: str
         required: false
         values: [missing, fail]
-        description: Result when no record matches; R014 states the default.
+        description: Result when no record matches; R015 states the default.
     - incomplete:
         type: str
         required: false
@@ -102,7 +102,7 @@ dataset_class:
     - types:
         type: "dict[dataset_column, column_type]"
         required: false
-        description: Type each named field carries; R013 types the rest.
+        description: Type each named field carries; R014 types the rest.
 
 dataset_id:
     type: str

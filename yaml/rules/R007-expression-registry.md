@@ -140,7 +140,7 @@ runtime types:
   consequence;
 - `aggregate` states its own input types in R013.
 
-`source` retains its source type, which R013 defines, and `literal` retains
+`source` retains its source type, which R014 defines, and `literal` retains
 its YAML scalar type.
 `cut`, `str_extract`, `str_concat`, `str_template`, `str_upper`, and
 `str_lower` return strings. `compute` returns the numeric type its expression

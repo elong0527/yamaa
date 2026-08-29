@@ -19,7 +19,7 @@ This rule owns the implicit join a qualified cross-dataset source performs, and
 the right-side reduction that precedes it. It does not own `mapping_from`,
 whose keys are declared rather than derived from output `keys`, or any window
 or row-construction use of `filter`; R007 owns both. A named selection reaching
-one record for several columns at once is R014, which performs this join and
+one record for several columns at once is R015, which performs this join and
 adds no other way of reaching a right side.
 
 ## Terminology

@@ -87,7 +87,7 @@ record, in any field typed as `variable`:
 ```
 
 The named column must exist in the selection's dataset, and the value carries
-the type R013 gives that field.
+the type R014 gives that field.
 
 A selection is not evaluated ahead of the columns that read it. It resolves
 where they do, so a column reading one depends on the selection's own `source`

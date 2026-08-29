@@ -52,7 +52,7 @@ declaration order. Recursively traverse each expression and collect:
 
 - every unqualified output variable referenced by `source`;
 - the `source` variables of a selection a qualified variable names, which
-  R014 defines;
+  R015 defines;
 - variables in `group_by`, `order_by`, and other fields typed as `variable`;
 - variables referenced by fields whose type contains nested `expression`;
 - current-output identifiers used by an `sql` predicate;
