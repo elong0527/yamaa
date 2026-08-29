@@ -1,0 +1,60 @@
+schema_version: "1.0"
+domain: ADRS
+datasets:
+  RS: input/rs.csv
+base: RS
+keys: [STUDYID, USUBJID, RSSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: RS.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: RS.USUBJID
+
+  - name: RSSEQ
+    type: int
+    derivation:
+      source: RS.RSSEQ
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      literal: OVR
+
+  - name: ADT
+    type: date
+    derivation:
+      source: RS.RSDTC
+
+  - name: AVALC
+    type: str
+    derivation:
+      source: RS.RSSTRESC
+    verifications:
+      allowed_values:
+        values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]
+
+  - name: PREVAVALC
+    type: str
+    output: false
+    derivation:
+      row_value:
+        source: AVALC
+        offset: -1
+        group_by: [STUDYID, USUBJID]
+        order_by: [ADT, RSSEQ]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, RSSEQ]
+  - row_count:
+      min: 6
+      max: 6
+  - predicate:
+      id: response-does-not-fall-back-after-a-complete-response
+      assert: "NOT (AVALC = 'PR' AND PREVAVALC IS NOT NULL AND PREVAVALC = 'CR')"

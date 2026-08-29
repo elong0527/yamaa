@@ -2,10 +2,12 @@
 
 ## Purpose
 
-The suite holds 48 examples: 42 successful golden outputs and six expected
-failures. One failure example also commits the completed dataset beside the
-structured error. This file records the design gaps they expose,
-grouped by root cause, and tracks the schema work those findings justify.
+The suite holds 55 examples: 47 successful golden outputs and eight expected
+failures. Three failure examples also commit a CSV beside the structured
+error: two record the completed dataset presented to a failing check, and one
+records the artifact a blocked derivation would produce. This file records
+the design gaps they expose, grouped by root cause, and tracks the schema work
+those findings justify.
 [`README.md`](README.md) is the reader-facing index of the examples
 themselves.
 
@@ -127,6 +129,17 @@ the vocabulary.
    boundaries share no structure to compute against. `sdtm-vs-visit-study-day`
    leaves `EPOCH` empty for an unscheduled visit for this reason.
 
+   The interval is one case of a wider one: a right-side `filter` is a
+   predicate over right-side records only, so no match can be narrowed by a
+   value belonging to the output row being derived.
+   `negative-adrs-response-before-progression` fails for exactly that reason,
+   because which assessments are eligible depends on the subject's own
+   progression date. The same shape blocks a running extreme, where each row
+   reduces the rows before it: with `adam-adtr-sum-of-target-diameters`
+   summing lesions to the assessment grain, taking the lowest of the earlier
+   sums still has nowhere to say `earlier`, which is also the two-level
+   reduction issue #30 records as having no example.
+
 ### C. Aggregates and selection operate on values, not rows
 
 5. An extreme value and the values associated with it come from two independent
@@ -138,7 +151,10 @@ the vocabulary.
    `adam-adtte-progression-free-survival` makes the consequence submission-
    facing: its event date and `SRCDOM`/`SRCVAR`/`SRCSEQ` traceability are
    independently selected, so nothing guarantees that the value and identity
-   came from one record.
+   came from one record. `adam-adrs-best-overall-response` and
+   `adam-adtte-duration-of-response` repeat it: each derives a date and the
+   record identity beside it from separate reductions that agree only because
+   they are ordered the same way.
 6. A missing aggregate result cannot distinguish no matching record from
    matching records whose values are all missing. In
    `sdtm-dm-reference-dates` a subject who was never exposed and one whose
@@ -157,7 +173,11 @@ the vocabulary.
    supplied, so the cost is visible in `TRTEMFL` and nowhere in the artifact.
    The suite also covers only trailing precision loss,
    because the SDTM form for a known day in an unknown month needs an agreed
-   representation before an example can assert it.
+   representation before an example can assert it. The imputed components are
+   also literals, so a rule stated against the period rather than a fixed
+   number, such as the last day of whichever month was collected, cannot be
+   written at all; `adam-adrs-overall-response-records` takes the first day of
+   the period instead.
 9. Imputed and collected dates compare identically. Nothing marks a comparison
    made under uncertainty, so an imputed day silently decides classifications
    such as treatment emergence.
@@ -174,7 +194,11 @@ the vocabulary.
     sort order, and referential integrity between a SUPPQUAL record and its
     parent domain cannot be asserted. Nothing counts rows within a group
     either, so `sdtm-lb-conditional-compartments` cannot assert that every
-    subject in an applicable cohort has both of its compartments.
+    subject in an applicable cohort has both of its compartments. An assertion
+    over an ordered series reaches one neighbour and no further:
+    `negative-adrs-partial-response-after-complete-response` rejects a partial
+    response directly after a complete one, and the same fault with an
+    intervening assessment passes.
 
 ### F. Structure that the data has cannot be declared
 
@@ -199,6 +223,10 @@ the vocabulary.
     not evaluable or non-response is carried only by where a branch sits in the
     list, so no declaration states the policy and two studies cannot be
     compared without reading their branch order.
+    `adam-adrs-best-overall-response` shows the cost in a published
+    definition: which response wins, and whether an assessment that came too
+    early leaves the subject progressive or not evaluable, is carried by the
+    order of the branches and by nothing a reader can check.
 15. Metadata is an ungoverned string map. Labels are first class, but origin,
     length, and controlled terminology are free-form text that no
     implementation can validate, and no expected metadata artifact exists to
@@ -411,10 +439,12 @@ record which of those it actually closed.
 ## Negative examples this plan requires
 
 The acceptance rule needs failure behavior fixed before a feature is added.
-Six expected-failure examples now establish a self-referential ordered window,
-duplicate implicit-join matches, unmapped dictionary values, malformed string
-templates, dataset-predicate reporting, and a reducer expression reading a
-value that varies within its group. The table below lists the remaining
+Eight expected-failure examples now establish a self-referential ordered
+window, duplicate implicit-join matches, unmapped dictionary values, malformed
+string templates, dataset-predicate reporting, a reducer expression reading a
+value that varies within its group, an ordered-series predicate over one
+neighbour, and a right-side filter reaching for the current output row. The
+table below lists the remaining
 contracts. ODM form scoping is a positive example backed by normative rule
 text.
 
@@ -427,6 +457,7 @@ text.
 | `direction: desc` on a column of mixed types | order-term comparability | already landed, untested |
 | a `multiple_matches` filter that empties the right side | R003 treats it as an absent match, not a handled condition | already landed, untested |
 | a cross-dataset `source` with duplicate applicable keys | R003 right-side uniqueness | `negative-source-duplicate-right-key` |
+| a right-side `filter` naming a current-output column | R003's right-side-only predicate scope | `negative-adrs-response-before-progression` |
 | ranking on a column whose ordering is not total | tie semantics | T2 |
 | a column reading its own value from an earlier row of its partition | R001 reports a cycle rather than iterating | `negative-row-value-self-reference` |
 | `row_value` with `offset: 0` | R007 keeps `source` the only spelling of the current row | already landed, untested |
