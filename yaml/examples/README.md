@@ -216,7 +216,8 @@ the vocabulary.
    `FLOOR((ADY - 1) / 21) + 1` and its day is `MOD(ADY - 1, 21) + 1`, and a
    three-epoch design is a `case` chain over subject-level start and end dates
    that `mapping_from` supplies. The gap is the irregular table, where the
-   boundaries share no structure to compute against.
+   boundaries share no structure to compute against. `sdtm-vs-visit-study-day`
+   leaves `EPOCH` empty for an unscheduled visit for this reason.
 
 ### C. Aggregates and selection operate on values, not rows
 
@@ -259,7 +260,9 @@ the vocabulary.
 11. Nothing controls output row order, and verifications are row-wise over the
     completed output. Rows leave in row-template order rather than a submission
     sort order, and referential integrity between a SUPPQUAL record and its
-    parent domain cannot be asserted.
+    parent domain cannot be asserted. Nothing counts rows within a group
+    either, so `sdtm-lb-conditional-compartments` cannot assert that every
+    subject in an applicable cohort has both of its compartments.
 
 ### F. Structure that the data has cannot be declared
 
@@ -280,6 +283,10 @@ the vocabulary.
 14. A derivation cannot carry both a value and the reason for it.
     `adam-adrs-composite-response` writes the same four predicates twice, once
     for the endpoint and once for its audit trail, with nothing linking them.
+    The same fixture shows the related loss: whether a missing component means
+    not evaluable or non-response is carried only by where a branch sits in the
+    list, so no declaration states the policy and two studies cannot be
+    compared without reading their branch order.
 15. Metadata is an ungoverned string map. Labels are first class, but origin,
     length, and controlled terminology are free-form text that no
     implementation can validate, and no expected metadata artifact exists to

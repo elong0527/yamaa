@@ -1,26 +1,16 @@
-# ADaM ADAE treatment-emergent classification
+# ADaM ADAE: classify an event as treatment-emergent
 
-This SDTM-to-ADaM fixture answers one question: is an adverse event start date
-inside the subject's treatment interval?
+This example uses sample AE and ADSL data and a `yamaa` specification to derive
+one row per adverse event:
 
-## Rule and record grain
+- `TRTA`, `TRTSDT`, and `TRTEDT` are the subject's treatment and the dates it
+  ran between, carried across from ADSL. A subject with no ADSL record keeps
+  their events and leaves all three empty;
+- `ASTDT` is the event start date;
+- `TRTEMFL` marks an event as treatment-emergent when its start date falls
+  within the treatment period, counting both the first and the last day. An
+  event before treatment started, one after it ended, and one belonging to a
+  subject with no treatment dates are all left unflagged.
 
-AE is the base, so each source event produces one ADAE row. ADSL contributes
-`TRTSDT`, `TRTEDT`, and `TRTA` by `STUDYID` and `USUBJID`. The fixture's
-sponsor-defined rule sets `TRTEMFL = Y` when `ASTDT` is within the inclusive
-`[TRTSDT, TRTEDT]` interval.
-
-The six events cover the day before treatment, both interval boundaries, the
-day after treatment, an event strictly inside placebo treatment, and a subject
-with no matching ADSL row. The unmatched subject remains in the output with
-missing treatment values and no flag, demonstrating R003 left-join behavior.
-
-## Contract
-
-Rows remain in AE source order. The exact key is `[STUDYID, USUBJID, AESEQ]`,
-and exactly six rows are expected. Dataset verifications require both treatment
-dates or neither and require every flagged event to lie inside the interval.
-
-Date conversion and SQL comparison remain draft under R004 and R005, so this
-fixture is not yet portable. The treatment-emergence definition is local to this
-fixture, not a universal ADaM rule. No handler path is declared.
+Treating both boundaries as inside the period is this study's rule rather than
+a universal one.
