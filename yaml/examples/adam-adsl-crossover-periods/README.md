@@ -45,7 +45,9 @@ Expected `TRT01A.source.multiple_matches` and `TRT02A.source.multiple_matches`
 counts are both one: `CATH-UCSD-0001` has two period-one administrations and
 `CATH-UCSD-0002` has two in period two. `CATH-UCSD-0003` has no period-two
 record at all, which is an absent match under R003 rather than a handler path.
-`WASH0` declares `output: false`.
+`WASHDUR` counts the days strictly between the two periods with
+`bounds: between`, so it needs no intermediate and the fixture declares no
+internal column at all.
 
 Rows remain in DM order; the key is `[STUDYID, USUBJID]`; exactly three rows
 are expected. Every period-two variable must be present or absent together,

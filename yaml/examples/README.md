@@ -78,8 +78,8 @@ be written portably.
 17. `adam-adae-severity-override` — applies one approved final correction and
     demonstrates that a dependent numeric severity sees the corrected value.
 18. `sdtm-vs-visit-study-day` — looks up visit metadata by an explicit key and
-    derives study day under the SDTM no-Day-0 rule, including an unscheduled
-    visit, a missing date, and a subject with no reference date.
+    derives study day with `study_day`, including an unscheduled visit, a
+    missing date, and a subject with no reference date.
 19. `adam-advs-analysis-visit` — assigns records to analysis windows by study
     day, separates `AVISIT`/`AVISITN` from collected `VISIT`/`VISITNUM`, and
     flags one analysis record per window.
@@ -121,7 +121,7 @@ be written portably.
 
 ## Coverage
 
-Nineteen of the 20 registered non-leaf expressions and all nine verification
+Twenty of the 21 registered non-leaf expressions and all nine verification
 keywords are exercised by at least one fixture; `least` is the one with no
 fixture. A few fixtures are the only
 coverage of something and should not be deleted without a replacement:

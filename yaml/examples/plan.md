@@ -24,6 +24,8 @@ fixture the acceptance rule requires.
 | `filter` on `row_number`, R001 and R003 and R007 | a window states its eligibility once; two `TEORD` sort columns and six duplicated flag predicates deleted |
 | float-to-text, R005 and R011 | one form for the declared conversion and the artifact; the schema fixes no precision, the project does, and this suite declares four decimal places |
 | `date_impute`, R007 and R008 and R011 | the completion rule for a truncated ISO 8601 date is declared rather than spelled out; five internal columns and three regular expressions deleted from `adam-adae-partial-dates` |
+| `study_day`, R007 | the SDTM no-Day-0 rule is one expression instead of a guarded `date_diff`, a `compute`, and a conditional; one internal column deleted from `sdtm-vs-visit-study-day` |
+| `date_diff.bounds`, and a stated missing-operand result | an inclusive or strictly-between count is declared rather than adjusted afterwards; two internal columns, two `compute` calls, and three guarding predicates deleted |
 | `greatest` and `least`, R007 | a row-wise extreme over any comparable type; `sdtm-dm-reference-dates` replaced a three-way null-guarded `case` chain with one expression, and R010's numeric functions stay where they are |
 
 Eleven gaps closed and were removed from the catalogue in

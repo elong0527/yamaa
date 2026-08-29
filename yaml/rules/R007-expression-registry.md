@@ -89,7 +89,7 @@ runtime types:
 - `cut` requires a numeric source;
 - `compute` requires every identifier in its expression to be numeric;
 - `str_extract`, `str_concat`, `str_upper`, and `str_lower` require string sources;
-- `date_diff` requires `date` inputs; R011 declares no datetime type;
+- `date_diff` and `study_day` require `date` inputs; R011 declares no datetime type;
 - `date_impute` requires a string source, because a partial date is text under
   R011 until it is completed, and integer `month` and `day` within the calendar
   ranges its registration states;
@@ -102,7 +102,8 @@ runtime types:
 `source` retains its source type and `literal` retains its YAML scalar type.
 `cut`, `str_extract`, `str_concat`, `str_upper`, and `str_lower` return strings.
 `compute` returns the numeric type its expression promotes to under R010.
-`date_diff` and `row_number` return integers. `date_impute` returns a `date`.
+`date_diff`, `study_day`, and `row_number` return integers. `study_day` never
+returns zero. `date_impute` returns a `date`.
 `baseline_flag` returns a string. Mapping, conditional, coalescing, extreme,
 baseline value, and aggregate expressions retain the selected or aggregated
 value type.

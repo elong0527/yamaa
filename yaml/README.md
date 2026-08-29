@@ -50,7 +50,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `str_concat` | An ordered list of expressions, because concatenating requires literals beside sources |
 | `mapping_from` | One or more named sources paired by position with declared right-side key columns; exceptional results are literals |
 | `compute` | One closed numeric expression over named output columns (R010) |
-| `date_diff` | Named variable operands |
+| `date_diff`, `study_day` | Named variable operands; `date_diff` declares which endpoints it counts |
 | `date_impute` | One named source plus integer literals for the imputed components; exceptional results are literals |
 | `coalesce` | Ordered named variables plus an optional literal default |
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |

@@ -1,7 +1,10 @@
 version: "1.0"
 
 expressions:
-    date_diff: # Counts whole calendar units from start to end, excluding start.
+    date_diff: # Counts whole calendar units between two dates.
+        # Which endpoints the count includes is declared by bounds. A missing
+        # start or end yields a missing result, so no guarding predicate is
+        # needed.
         - start:
             type: variable
             required: true
@@ -15,6 +18,14 @@ expressions:
             required: true
             values: [day, week, month, year]
             description: Calendar unit counted between the dates.
+        - bounds:
+            type: str
+            default: exclusive
+            values: [exclusive, inclusive, between]
+            description: >-
+              Endpoints counted. exclusive counts from start to end excluding
+              start; inclusive counts both endpoints and is one greater;
+              between counts neither and is one smaller.
     date_impute: # Completes a truncated ISO 8601 date and returns a date.
         # A complete source date is returned unchanged; a source carrying only a
         # year, or a year and month, is completed from month and day.
@@ -39,3 +50,15 @@ expressions:
         - invalid:
             type: literal_value
             description: Result when the source is not an ISO 8601 date or date prefix.
+    study_day: # Returns the CDISC study day of a date against a reference date.
+        # The reference date is day 1 and there is no day zero: a date on or
+        # after the reference counts forward from 1, and an earlier date counts
+        # back from -1. A missing date or reference yields a missing result.
+        - date:
+            type: variable
+            required: true
+            description: Date whose study day is returned.
+        - reference:
+            type: variable
+            required: true
+            description: Reference start date, which is study day 1.
