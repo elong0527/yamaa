@@ -20,8 +20,8 @@ columns:
   - name: EOSDT
     type: date
     derivation:
-      max:
-        source: DS.DSSTDTC
+      aggregate:
+        expr: "MAX(DS.DSSTDTC)"
         filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
 
   - name: EOSDECOD

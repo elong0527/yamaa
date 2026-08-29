@@ -1,66 +1,24 @@
 version: "1.0"
 
+# R013 defines the reducer grammar, the results it pins, and its failures.
+
 expressions:
-    min: # Returns the smallest non-missing value, or missing when none exist.
-        - source:
-            type: variable
-            required: true
-            description: Variable to reduce.
-        - filter:
-            type: sql
-            description: Predicate selecting records before reduction.
-        - missing:
-            type: literal_value
-            description: Value used when the source variable is absent.
-        - group_by:
-            type: "list[variable]"
-            description: Current-output partition for a broadcast aggregate.
-    max: # Returns the largest non-missing value, or missing when none exist.
-        - source:
-            type: variable
-            required: true
-            description: Variable to reduce.
-        - filter:
-            type: sql
-            description: Predicate selecting records before reduction.
-        - missing:
-            type: literal_value
-            description: Value used when the source variable is absent.
-        - group_by:
-            type: "list[variable]"
-            description: Current-output partition for a broadcast aggregate.
-    sum: # Returns the total of the non-missing values, or missing when none exist.
-        # A group whose values are every one missing totals to missing rather
-        # than to zero, so an uncollected quantity is never reported as a
-        # measured zero.
-        - source:
-            type: variable
-            required: true
-            description: Numeric variable to total.
-        - filter:
-            type: sql
-            description: Predicate selecting records before reduction.
-        - missing:
-            type: literal_value
-            description: Value used when the source variable is absent.
-        - group_by:
-            type: "list[variable]"
-            description: Current-output partition for a broadcast aggregate.
-    count: # Returns how many values of the source are non-missing.
-        # A group whose values are every one missing counts zero, because the
-        # records exist. A left row with no matching record receives missing
-        # under R003 instead, so absent records and uncollected values differ.
-        # Counting records rather than values is this expression over a key.
-        - source:
-            type: variable
-            required: true
-            description: Variable whose non-missing values are counted.
-        - filter:
-            type: sql
-            description: Predicate selecting records before reduction.
-        - missing:
-            type: literal_value
-            description: Value used when the source variable is absent.
-        - group_by:
-            type: "list[variable]"
-            description: Current-output partition for a broadcast aggregate.
+    aggregate: # Reduces the records of one relation to one value under R013.
+        type: [aggregate_expression, aggregate_class]
+
+aggregate_class:
+    - expr:
+        type: aggregate_expression
+        required: true
+        description: Closed reducer expression over the records of one relation.
+    - group_by:
+        type: "list[variable]"
+        description: Grain of the reduction; right-side columns for a qualified expression and current-output columns for an unqualified one.
+    - filter:
+        type: sql
+        description: Predicate selecting records before reduction.
+
+aggregate_expression:
+    type: str
+    min_length: 1
+    description: Reducer expression in the portable grammar defined by R013.

@@ -3,7 +3,7 @@ id: R003
 title: Cross-Dataset Left Join
 status: normative
 applies_to: [expression.source, expression.aggregate]
-depends_on: [R002, R004, R005, R007, R008]
+depends_on: [R002, R004, R005, R007, R008, R013]
 ---
 
 # Cross-dataset left join
@@ -55,16 +55,20 @@ semantics.
 
 ## Right-side reduction
 
-An aggregate expression whose `source` is a qualified cross-dataset source
-reduces the right side by applicable keys before joining. R007 registers which
-expressions are aggregates. Its optional `filter` selects which right-side
-records enter that reduction:
+An aggregate expression whose identifiers are qualified to another dataset
+reduces that right side by applicable keys before joining. R007 registers the
+expression and R013 defines what it computes. Its optional `filter` selects
+which right-side records enter that reduction:
 
 ```yaml
-min:
-  source: EX.EXSTDTC
+aggregate:
+  expr: "MIN(EX.EXSTDTC)"
   filter: "EX.EXDOSE > 0"
 ```
+
+A reduction may declare a `group_by` coarser than the applicable keys. The
+join then matches on those columns instead, which R013 requires to be output
+keys for exactly that reason.
 
 A structured `source` declaring `multiple_matches` may also declare `filter`.
 It selects which right-side records are eligible before ordering, using the
@@ -93,8 +97,8 @@ By default, multiple right-side matches fail. A structured source may declare
 `order_by` uses the order terms defined by R007, so a right-side selection
 declares direction and null placement the same way a window does.
 
-Reduction already yields at most one right-side record per applicable key, so
-an aggregate cannot encounter multiple matches and does not declare
+Reduction already yields at most one right-side record per key it groups on,
+so an aggregate cannot encounter multiple matches and does not declare
 `multiple_matches`.
 
 ## Errors

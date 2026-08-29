@@ -22,7 +22,10 @@ Strings, dates, comparison, conditional selection, and row-wise extremes over
 non-numeric types keep their registered expressions under R007, so a general
 expression string cannot displace the typed registry. The Boolean-valued `sql`
 primitive is R004; the two share notation and identifier resolution but not
-their type or their permitted vocabulary.
+their type or their permitted vocabulary. Reduction over many records is
+R013's `aggregate_expression`, which reuses this grammar's operators,
+functions, numeric types, and failure conditions; this rule stays per-row and
+admits no reduction.
 
 ## Scope
 
