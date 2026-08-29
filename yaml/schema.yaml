@@ -29,7 +29,7 @@ selection_class:
     - source:
         type: [variable, "list[variable]"]
         required: false
-        description: Current-row values matched by position with key; output keys are used when absent.
+        description: Current-row values paired by position with key; omit both source and key to match on output keys.
     - key:
         type: [dataset_column, "list[dataset_column]"]
         required: false
