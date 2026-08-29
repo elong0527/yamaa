@@ -1,0 +1,81 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  ADSL_RAW: input/adsl.csv
+  CM: input/cm.csv
+  PR: input/pr.csv
+base: ADSL_RAW
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADSL_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADSL_RAW.USUBJID
+
+  - name: TRTSDT
+    type: date
+    derivation:
+      source: ADSL_RAW.TRTSDT
+    verifications:
+      not_missing: {}
+
+  - name: NACTDT
+    type: date
+    derivation:
+      least:
+        sources: [CMNACTDT, PRNACTDT]
+
+  - name: NACTDY
+    type: int
+    derivation:
+      study_day:
+        date: NACTDT
+        reference: TRTSDT
+
+  - name: NACTFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "NACTDT IS NOT NULL"
+            then:
+              literal: Y
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  - name: CMNACTDT
+    type: date
+    output: false
+    derivation:
+      min:
+        source: CM.CMSTDTC
+        filter: "CM.CMCAT = 'ON TREATMENT' AND CM.CMSTDTC IS NOT NULL"
+
+  - name: PRNACTDT
+    type: date
+    output: false
+    derivation:
+      min:
+        source: PR.PRSTDTC
+        filter: "PR.PRCAT = 'CANCER RELATED' AND PR.PRSCAT = 'ON TREATMENT' AND PR.PRSTDTC IS NOT NULL"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 5
+      max: 5
+  - all_or_none:
+      id: therapy-date-day-and-flag-agree
+      columns: [NACTDT, NACTDY, NACTFL]
+  - implies:
+      id: new-therapy-starts-on-or-after-treatment-start
+      when: "NACTFL = 'Y'"
+      then: "NACTDT >= TRTSDT"

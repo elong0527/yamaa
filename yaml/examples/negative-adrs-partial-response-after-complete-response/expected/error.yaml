@@ -1,0 +1,11 @@
+phase: verification
+condition: predicate_failed
+spec_paths:
+  - verifications[2].predicate
+context:
+  verification_id: response-does-not-fall-back-after-a-complete-response
+  failure_count: 1
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-962
+      RSSEQ: 2

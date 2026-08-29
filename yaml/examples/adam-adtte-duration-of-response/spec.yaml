@@ -1,0 +1,251 @@
+schema_version: "1.0"
+domain: ADTTE
+datasets:
+  ADSL: input/adsl.csv
+  ADRSPRE: input/adrs_pre.csv
+  DS: input/ds.csv
+base: ADSL
+keys: [STUDYID, USUBJID, PARAMCD]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADSL.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADSL.USUBJID
+
+  - name: PARAMCD
+    type: str
+
+  - name: PARAM
+    type: str
+    derivation:
+      literal: Duration of Response
+
+  - name: STARTDT
+    type: date
+    derivation:
+      source: ADSL.RESPDT
+    verifications:
+      not_missing: {}
+
+  - name: ADT
+    type: date
+    derivation:
+      coalesce:
+        sources: [EVENTDT, CENSORDT]
+    verifications:
+      not_missing: {}
+
+  - name: AVAL
+    type: int
+    derivation:
+      date_diff:
+        start: STARTDT
+        end: ADT
+        unit: day
+        bounds: inclusive
+
+  - name: CNSR
+    type: int
+    derivation:
+      case:
+        branches:
+          - when: "EVENTDT IS NOT NULL"
+            then:
+              literal: 0
+        otherwise:
+          literal: 1
+
+  - name: EVNTDESC
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "EVENTDT IS NULL"
+            then:
+              literal: CENSORED
+          - when: "EVENTDT = PDDT"
+            then:
+              literal: DISEASE PROGRESSION
+        otherwise:
+          literal: DEATH
+
+  - name: CNSDTDSC
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "EVENTDT IS NOT NULL"
+            then:
+              literal: null
+          - when: "CENSORDT = LASTVLDT"
+            then:
+              literal: LAST TUMOUR ASSESSMENT
+        otherwise:
+          literal: START OF NEW ANTI-CANCER THERAPY
+
+  - name: SRCDOM
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "EVNTDESC = 'DEATH'"
+            then:
+              literal: DS
+          - when: "EVNTDESC = 'DISEASE PROGRESSION'"
+            then:
+              literal: ADRS
+          - when: "CNSDTDSC = 'LAST TUMOUR ASSESSMENT'"
+            then:
+              literal: ADRS
+        otherwise:
+          literal: ADSL
+
+  - name: SRCVAR
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "SRCDOM = 'DS'"
+            then:
+              literal: DSSTDTC
+          - when: "SRCDOM = 'ADRS'"
+            then:
+              literal: ADT
+        otherwise:
+          literal: NACTDT
+
+  - name: SRCSEQ
+    type: int
+    derivation:
+      case:
+        branches:
+          - when: "EVNTDESC = 'DISEASE PROGRESSION'"
+            then:
+              source: PDSEQ
+          - when: "EVNTDESC = 'DEATH'"
+            then:
+              source: DEATHSEQ
+          - when: "CNSDTDSC = 'LAST TUMOUR ASSESSMENT'"
+            then:
+              source: LASTVLSEQ
+
+  - name: NACTDT
+    type: date
+    output: false
+    derivation:
+      source: ADSL.NACTDT
+
+  - name: PDDT
+    type: date
+    output: false
+    derivation:
+      min:
+        source: ADRSPRE.ADT
+        filter: "ADRSPRE.AVALC = 'PD'"
+
+  - name: PDSEQ
+    type: int
+    output: false
+    derivation:
+      source:
+        variable: ADRSPRE.ASEQ
+        multiple_matches:
+          order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
+          keep: first
+          filter: "ADRSPRE.AVALC = 'PD'"
+
+  - name: DEATHDT
+    type: date
+    output: false
+    derivation:
+      min:
+        source: DS.DSSTDTC
+        filter: "DS.DSDECOD = 'DEATH'"
+
+  - name: DEATHSEQ
+    type: int
+    output: false
+    derivation:
+      source:
+        variable: DS.DSSEQ
+        multiple_matches:
+          order_by: [DS.DSSTDTC, DS.DSSEQ]
+          keep: first
+          filter: "DS.DSDECOD = 'DEATH'"
+
+  - name: LASTVLDT
+    type: date
+    output: false
+    derivation:
+      max:
+        source: ADRSPRE.ADT
+        filter: "ADRSPRE.AVALC <> 'NE'"
+
+  - name: LASTVLSEQ
+    type: int
+    output: false
+    derivation:
+      source:
+        variable: ADRSPRE.ASEQ
+        multiple_matches:
+          order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
+          keep: last
+          filter: "ADRSPRE.AVALC <> 'NE'"
+
+  - name: EVENTALLDT
+    type: date
+    output: false
+    derivation:
+      least:
+        sources: [PDDT, DEATHDT]
+
+  - name: EVENTDT
+    type: date
+    output: false
+    derivation:
+      case:
+        branches:
+          - when: "EVENTALLDT IS NOT NULL AND (NACTDT IS NULL OR EVENTALLDT <= NACTDT)"
+            then:
+              source: EVENTALLDT
+
+  - name: CENSORDT
+    type: date
+    output: false
+    derivation:
+      least:
+        sources: [LASTVLDT, NACTDT]
+
+rows:
+  - id: responder
+    filter: "ADSL.RESPDT IS NOT NULL"
+    derivations:
+      PARAMCD:
+        literal: DOR
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD]
+  - row_count:
+      min: 5
+      max: 5
+  - all_or_none:
+      id: traceability-source-is-complete
+      columns: [SRCDOM, SRCVAR]
+  - implies:
+      id: record-level-source-carries-a-sequence-number
+      when: "SRCDOM <> 'ADSL'"
+      then: "SRCSEQ IS NOT NULL"
+  - implies:
+      id: censored-record-states-why
+      when: "CNSR = 1"
+      then: "CNSDTDSC IS NOT NULL"
+  - predicate:
+      id: response-duration-is-at-least-one-day
+      assert: "AVAL >= 1"

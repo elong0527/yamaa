@@ -1,0 +1,11 @@
+STUDYID,USUBJID,RSSEQ,PARAMCD,PARAM,RSDTC,ADT,ADY,AVALC,AVAL,ANL01FL
+PILOT7,P7-911,1,OVR,Overall Response by Investigator,2025-02-03,2025-02-03,29,PR,2,Y
+PILOT7,P7-911,2,OVR,Overall Response by Investigator,2025-03-17,2025-03-17,71,CR,1,Y
+PILOT7,P7-911,3,OVR,Overall Response by Investigator,2025-04-28,2025-04-28,113,PD,5,Y
+PILOT7,P7-912,1,OVR,Overall Response by Investigator,2025-02-10,2025-02-10,29,SD,3,
+PILOT7,P7-912,2,OVR,Overall Response by Investigator,2025-02-10,2025-02-10,29,PD,5,Y
+PILOT7,P7-912,3,OVR,Overall Response by Investigator,2025-03-24,2025-03-24,71,NE,6,Y
+PILOT7,P7-913,1,OVR,Overall Response by Investigator,2025-03,2025-03-01,41,NON-CR/NON-PD,4,Y
+PILOT7,P7-914,1,OVR,Overall Response by Investigator,2025-02-17,2025-02-17,22,SD,3,Y
+PILOT7,P7-914,2,OVR,Overall Response by Investigator,2025-02-17,2025-02-17,22,SD,3,
+PILOT7,P7-915,3,OVR,Overall Response by Investigator,2025-05-05,2025-05-05,92,CR,1,Y
