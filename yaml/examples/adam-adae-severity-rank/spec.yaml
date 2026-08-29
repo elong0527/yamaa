@@ -53,7 +53,8 @@ columns:
   - name: SEVLVL
     type: int
     derivation:
-      dense_rank:
+      rank:
+        method: dense
         group_by: [STUDYID, USUBJID]
         order_by:
           - variable: ASEVN

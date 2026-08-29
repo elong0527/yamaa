@@ -83,7 +83,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `date_precision` | One named source; exceptional results are literals |
 | `coalesce` | Ordered named variables plus an optional literal default |
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
-| `row_number`, `rank`, `dense_rank`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
+| `row_number`, `rank`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
 | `row_value` | One named source with named grouping and ordering variables, plus a signed integer literal offset along the declared order |
 | `aggregate` | One closed reducer expression over the records of one relation (R013) |
 | `case` | Nested result expressions retained because selecting expressions is its purpose |

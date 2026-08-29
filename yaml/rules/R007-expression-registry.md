@@ -106,10 +106,12 @@ neighbours are determined.
 
 That tie-break settles positions, not equality. `row_number`, `row_value`, and
 right-side selection read the positions themselves, so a tie changes which row
-they reach. `rank` and `dense_rank` compare only the declared terms, so records
-equal on every one of them receive a single number rather than the distinct
-numbers their positions would give. A specification that wants a tie broken
-declares the term that breaks it, which is the same statement in both cases.
+they reach. `rank` compares only the declared terms, so records equal on every
+one of them receive a single number rather than the distinct numbers their
+positions would give. Its `competition` method leaves the positions occupied by
+a tie out of the subsequent numbers; its `dense` method numbers distinct values
+consecutively. A specification that wants a tie broken declares the term that
+breaks it, whichever method it uses.
 
 ## Type behavior
 
@@ -146,8 +148,7 @@ its YAML scalar type.
 `cut`, `str_extract`, `str_concat`, `str_template`, `str_upper`, and
 `str_lower` return strings. `compute` returns the numeric type its expression
 promotes to under R010.
-`date_diff`, `study_day`, `row_number`, `rank`, and `dense_rank` return
-integers.
+`date_diff`, `study_day`, `row_number`, and `rank` return integers.
 `study_day` never returns zero. `date_impute` returns a `date`.
 `baseline_flag` and `date_precision` return strings. Mapping, conditional,
 coalescing, extreme, baseline value, and offset row expressions retain the

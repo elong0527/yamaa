@@ -15,27 +15,18 @@ expressions:
             type: sql
             description: Predicate selecting rows to number.
     rank: # Numbers eligible rows from 1 within each partition, sharing a number across ties.
-        # Rows equal on every order term take the lowest number they could take,
-        # so the next distinct value takes its own position and the numbers
-        # between are skipped. A row's number is therefore the count of rows
-        # ordered strictly before it, plus one. Two missing values are equal for
-        # this purpose, whatever nulls places them among.
-        # Filtering happens before partitioning; excluded rows receive missing.
-        - group_by:
-            type: "list[variable]"
-            description: Variables defining partitions; omission uses one partition.
-        - order_by:
-            type: "list[order_by_term]"
-            required: true
-            description: Terms ordering eligible rows within each partition.
-        - filter:
-            type: sql
-            description: Predicate selecting rows to number.
-    dense_rank: # Numbers the distinct ordered values from 1 within each partition.
-        # Rows equal on every order term take one number and the next distinct
-        # value takes the following one, so no number is skipped and the largest
-        # number in a partition is how many distinct values it holds. Ties and
-        # filtering behave as they do for rank.
+        # Rows equal on every order term take one number. With competition, they
+        # take the lowest position they occupy and the next distinct value takes
+        # its own position, so intervening numbers are skipped. With dense, the
+        # next distinct value takes the following number and no number is
+        # skipped. Two missing values are equal for this purpose, whatever nulls
+        # places them among. Filtering happens before partitioning; excluded rows
+        # receive missing.
+        - method:
+            type: str
+            default: competition
+            values: [competition, dense]
+            description: Tie numbering; competition leaves position gaps and dense does not.
         - group_by:
             type: "list[variable]"
             description: Variables defining partitions; omission uses one partition.
