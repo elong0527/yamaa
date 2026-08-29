@@ -1,0 +1,63 @@
+schema_version: "1.0"
+domain: ADEX
+datasets:
+  TRT: input/subject_treatment.csv
+  EX: input/ex.csv
+base: TRT
+keys: [STUDYID, USUBJID, EXTRT]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: TRT.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: TRT.USUBJID
+
+  - name: EXTRT
+    type: str
+    derivation:
+      source: TRT.EXTRT
+
+  - name: EXDOSU
+    type: str
+    derivation:
+      source: TRT.EXDOSU
+
+  - name: DOSECUM
+    type: float
+    derivation:
+      sum:
+        source: EX.EXDOSE
+
+  - name: NCYCLES
+    type: int
+    derivation:
+      count:
+        source: EX.EXSEQ
+
+  - name: PLANDOSE
+    type: float
+    output: false
+    derivation:
+      source: TRT.PLANDOSE
+
+  - name: PLANCYC
+    type: int
+    output: false
+    derivation:
+      source: TRT.PLANCYC
+
+  - name: RDI
+    type: float
+    derivation:
+      compute:
+        expr: "100 * DOSECUM / NULLIF(PLANDOSE * PLANCYC, 0)"
+
+verifications:
+  - row_count:
+      min: 3
+      max: 3

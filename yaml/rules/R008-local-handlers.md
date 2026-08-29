@@ -49,7 +49,7 @@ Omitting an applicable handler field makes its condition fatal.
 
 `missing` names two related conditions, distinguished by where it is declared:
 
-- On a `source` binding, and on `min` and `max`, it applies when the variable
+- On a `source` binding, and on an aggregate, it applies when the variable
   or ODM item **does not exist in context**. It does not apply when the
   variable exists and holds a missing value.
 - On every other expression, it applies when the named **input value is
@@ -92,9 +92,11 @@ empty the right side silently produces missing rather than firing this handler.
 The handler count reports only the records where more than one match survived
 the filter.
 
-The same boundary applies to `min` and `max`: their `missing` handler covers an
+The same boundary applies to an aggregate: its `missing` handler covers an
 absent source variable, while a right side that reduces to no matching record
-is R003's absent match.
+is R003's absent match. A group whose records all hold missing values is
+neither condition; each aggregate's registration states what it returns
+there.
 
 ## Result handlers
 

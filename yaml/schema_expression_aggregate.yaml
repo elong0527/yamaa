@@ -29,3 +29,38 @@ expressions:
         - group_by:
             type: "list[variable]"
             description: Current-output partition for a broadcast aggregate.
+    sum: # Returns the total of the non-missing values, or missing when none exist.
+        # A group whose values are every one missing totals to missing rather
+        # than to zero, so an uncollected quantity is never reported as a
+        # measured zero.
+        - source:
+            type: variable
+            required: true
+            description: Numeric variable to total.
+        - filter:
+            type: sql
+            description: Predicate selecting records before reduction.
+        - missing:
+            type: literal_value
+            description: Value used when the source variable is absent.
+        - group_by:
+            type: "list[variable]"
+            description: Current-output partition for a broadcast aggregate.
+    count: # Returns how many values of the source are non-missing.
+        # A group whose values are every one missing counts zero, because the
+        # records exist. A left row with no matching record receives missing
+        # under R003 instead, so absent records and uncollected values differ.
+        # Counting records rather than values is this expression over a key.
+        - source:
+            type: variable
+            required: true
+            description: Variable whose non-missing values are counted.
+        - filter:
+            type: sql
+            description: Predicate selecting records before reduction.
+        - missing:
+            type: literal_value
+            description: Value used when the source variable is absent.
+        - group_by:
+            type: "list[variable]"
+            description: Current-output partition for a broadcast aggregate.

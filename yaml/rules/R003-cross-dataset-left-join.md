@@ -2,7 +2,7 @@
 id: R003
 title: Cross-Dataset Left Join
 status: normative
-applies_to: [expression.source, expression.min, expression.max]
+applies_to: [expression.source, expression.aggregate]
 depends_on: [R002, R004, R005, R007, R008]
 ---
 
@@ -55,9 +55,10 @@ semantics.
 
 ## Right-side reduction
 
-A `min` or `max` expression whose `source` is a qualified cross-dataset source
-reduces the right side by applicable keys before joining. Its optional
-`filter` selects which right-side records enter that reduction:
+An aggregate expression whose `source` is a qualified cross-dataset source
+reduces the right side by applicable keys before joining. R007 registers which
+expressions are aggregates. Its optional `filter` selects which right-side
+records enter that reduction:
 
 ```yaml
 min:
@@ -93,7 +94,7 @@ By default, multiple right-side matches fail. A structured source may declare
 declares direction and null placement the same way a window does.
 
 Reduction already yields at most one right-side record per applicable key, so
-`min` and `max` cannot encounter multiple matches and do not declare
+an aggregate cannot encounter multiple matches and does not declare
 `multiple_matches`.
 
 ## Errors

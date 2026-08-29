@@ -68,7 +68,8 @@ dropped. A window that reads another row of its partition returns missing when
 that row does not exist, which is the same result as a neighbouring row whose
 value is missing.
 
-`min` and `max` are aggregates. They are valid in exactly two contexts:
+`min`, `max`, `sum`, and `count` are aggregates. They are valid in exactly two
+contexts:
 
 1. Their `source` is a qualified cross-dataset source. They then reduce the
    right side before the R003 join, which R003 defines.
@@ -120,6 +121,7 @@ runtime types:
   ranges its registration states;
 - `greatest` and `least` require mutually comparable `sources`;
 - `row_value` requires an integer `offset` and accepts any `source` type;
+- `sum` requires a numeric source; `count` accepts any source type;
 - `min`, `max`, and window ordering require mutually comparable values. Every
   record's value for one order term must be comparable with every other, so a
   term whose column mixes incomparable types is an error rather than an
@@ -129,11 +131,13 @@ runtime types:
 `cut`, `str_extract`, `str_concat`, `str_template`, `str_upper`, and
 `str_lower` return strings. `compute` returns the numeric type its expression
 promotes to under R010.
-`date_diff`, `study_day`, and `row_number` return integers. `study_day` never
-returns zero. `date_impute` returns a `date`. `baseline_flag` returns a string.
-Mapping, conditional, coalescing, extreme, baseline value, offset row, and
-aggregate expressions retain the selected or aggregated value type. The
-`function` expression retains the type returned by the project function.
+`date_diff`, `study_day`, `row_number`, and `count` return integers.
+`study_day` never returns zero. `date_impute` returns a `date`.
+`baseline_flag` returns a string. Mapping, conditional, coalescing, extreme,
+baseline value, offset row, and aggregate expressions retain the selected or
+aggregated value type; `sum` retains the numeric type of its source and fails
+on integer overflow, as R010 does. The `function` expression retains the type
+returned by the project function.
 
 ## Operation definitions
 

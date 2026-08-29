@@ -2,9 +2,9 @@
 
 ## Purpose
 
-The suite holds 44 examples: 39 successful golden outputs and five expected
-failures. Three failure examples also commit the intended or completed dataset
-beside the structured error. This file records the design gaps they expose,
+The suite holds 47 examples: 42 successful golden outputs and five expected
+failures. One failure example also commits the completed dataset beside the
+structured error. This file records the design gaps they expose,
 grouped by root cause, and tracks the schema work those findings justify.
 [`README.md`](README.md) is the reader-facing index of the examples
 themselves.
@@ -31,10 +31,13 @@ example the acceptance rule requires.
 | `date_diff.bounds`, and a stated missing-operand result | an inclusive or strictly-between count is declared rather than adjusted afterwards; two internal columns, two `compute` calls, and three guarding predicates deleted |
 | `greatest` and `least`, R007 | a row-wise extreme over any comparable type; `sdtm-dm-reference-dates` replaced a three-way null-guarded `case` chain with one expression, and R010's numeric functions stay where they are |
 | Form-scoped ODM context, R002 | contextual item lookup now includes every available collection level, including `FormOID`, and fixes zero-match and multiple-match behavior |
+| `str_template` and R012 | a closed interpolation grammar makes composite strings concise while keeping dependencies visible and host-language code out |
+| `row_value`, R001 and R007 | one window reads any row of an ordered partition, so `adam-adrs-confirmed-response` became a golden output; a signed offset carries the direction rather than a `lead` and `lag` pair whose field lists would be identical, and reading a column's own earlier value stays a cycle rather than an iteration |
+| `sum` and `count`, R003 and R007 and R008 | the aggregate registry covers ordinary reductions, so `adam-adex-cumulative-dose` became a golden output; `count` counts non-missing values, an all-missing group totals to missing rather than zero, and four rules stopped naming `min` and `max` by hand. Replacing the entries with one grouping expression over a reducer grammar was deferred to issue #30 |
 
-Eleven gaps closed and were removed from the catalogue in
-[`README.md`](README.md); seventeen remain, and the numbering below refers to
-that renumbered list. Three of the seventeen were reworded rather than closed:
+Thirteen gaps closed and were removed from the catalogue in
+[`README.md`](README.md); fifteen remain, and the numbering below refers to
+that renumbered list. Three of the fifteen were reworded rather than closed:
 gaps 1, 2, and 4 each stated a limitation broader than the evidence supported,
 and each now names only the case that is actually blocked.
 
@@ -62,7 +65,7 @@ that removes a workaround also removes the columns that documented it.
 
 ## Open design gaps
 
-Seventeen gaps are open across the suite, grouped by root cause rather than by
+Fifteen gaps are open across the suite, grouped by root cause rather than by
 the example that found them, because most are consequences of a few underlying
 decisions rather than independent omissions. Closed gaps are removed from this
 list rather than marked; `plan.md` records what was closed and how.
@@ -198,21 +201,6 @@ the vocabulary.
     length, and controlled terminology are free-form text that no
     implementation can validate, and no expected metadata artifact exists to
     assert them, as `sdtm-dm-metadata-contract` records.
-
-### G. Ordered series and ordinary reductions are absent
-
-16. No expression reads a neighbouring row from an ordered series.
-    `adam-adrs-confirmed-response` needs the next response and its date to
-    confirm a response at least 28 days later. The same boundary blocks the
-    interval between consecutive assessments, cycle-to-cycle dose comparison,
-    and duration of response. `row_number` assigns a position but cannot read
-    the value at another position.
-17. The aggregate registry contains only `min` and `max`; `sum`, `count`, and
-    `mean` are not registered. `adam-adex-cumulative-dose` therefore cannot
-    total dose or count administrations. The same omission blocks subject and
-    event counts and questionnaire totals. Questionnaire completeness also
-    needs a count of non-missing values across columns, a separate input shape
-    that the pilot source does not provide at item level.
 
 ## Open work
 
@@ -358,29 +346,11 @@ Group F, gaps 12 to 14, and the largest open area.
 Also here: gap 4, the absent interval join, which is what an analysis window or
 an `EPOCH` assignment actually needs.
 
-### T11. Ordered access and ordinary aggregates
-
-Evidence: gaps 16 and 17. `adam-adrs-confirmed-response` fixes the minimum
-ordered-access requirement as the next value within a declared partition and
-order. `adam-adex-cumulative-dose` fixes the minimum reductions as `sum` and
-`count`; `mean` belongs to the same family but needs its missing-value rule
-fixed before registration.
-
-These are separate evaluation kinds. `lead` and `lag` are windows that preserve
-row count, while `sum`, `count`, and `mean` are aggregates that reduce a right
-side or broadcast within a current-output partition. Their fields should follow
-the existing window and aggregate shapes rather than enter R010's scalar
-grammar.
-
-Decision it forces: whether `count` counts rows, non-missing values, or exposes
-two explicitly named forms. Negative examples must cover an empty partition,
-all-missing values, and the first or last row of an ordered series.
-
 ## Sequencing
 
-1. **T2 and T11**, with their negative examples. They are registry work with
-   committed evidence and bounded semantics. T3 landed as a widened
-   `mapping_from` and still owes the four negative examples listed below.
+1. **T2**, with its negative example. It is registry work with committed
+   evidence and bounded semantics. T3 landed as a widened `mapping_from` and
+   still owes the four negative examples listed below.
 2. **T7**, which is rule text rather than schema. Its conversion half landed
    with float-to-text; what remains is source-format recognition, still
    required before any implementation can claim R and Python parity.
@@ -392,17 +362,17 @@ all-missing values, and the first or last row of an ordered series.
 
 Expected catalogue edits: T2 retires gap 2, T5 retires gaps 3, 5, and 6, T6
 retires gaps 8 and 9, T7 retires gap 7, T8 retires gaps 10 and 11, T9 retires
-gap 15, T10 retires gaps 4, 12, 13, and 14 along with whatever remains of gap
-1, and T11 retires gaps 16 and 17.
+gap 15, and T10 retires gaps 4, 12, 13, and 14 along with whatever remains of
+gap 1.
 
 ## Negative examples this plan requires
 
 The acceptance rule needs failure behavior fixed before a feature is added.
-Five expected-failure examples now establish an unregistered ordered
-operation, unregistered ordinary aggregates, duplicate implicit-join matches,
-unmapped dictionary values, and dataset-predicate reporting. The table below
-lists the remaining contracts. ODM form scoping is a positive example backed
-by normative rule text.
+Five expected-failure examples now establish a self-referential ordered window,
+duplicate implicit-join matches, unmapped dictionary values, malformed string
+templates, and dataset-predicate reporting. The table below lists the remaining
+contracts. ODM form scoping is a positive example backed by normative rule
+text.
 
 | Example | Provokes | Gates |
 |---|---|---|
@@ -414,6 +384,9 @@ by normative rule text.
 | a `multiple_matches` filter that empties the right side | R003 treats it as an absent match, not a handled condition | already landed, untested |
 | a cross-dataset `source` with duplicate applicable keys | R003 right-side uniqueness | `negative-source-duplicate-right-key` |
 | ranking on a column whose ordering is not total | tie semantics | T2 |
+| a column reading its own value from an earlier row of its partition | R001 reports a cycle rather than iterating | `negative-row-value-self-reference` |
+| `row_value` with `offset: 0` | R007 keeps `source` the only spelling of the current row | already landed, untested |
+| `sum` over a non-numeric source | R007's aggregate input type | already landed, untested |
 | `mapping_from` with a duplicate right-side key on the `key` columns | R007 dictionary uniqueness | already landed, untested |
 | `mapping_from` with no match and no `unmapped` handler | join failure behavior | already landed, untested |
 | `mapping_from` with one of two sources missing and no `missing` handler | R008 partial-key semantics | already landed, untested |
@@ -428,7 +401,8 @@ by normative rule text.
 | `greatest` whose `sources` mix incomparable types | R007 comparability | already landed, untested |
 | duplicate output keys | R005 key uniqueness | already landed, untested |
 | a failed column verification | R009 reporting | already landed, untested |
-| a failed dataset predicate | R009 reporting | `adam-adsl-stratification-reconciliation` |
+| a failed dataset predicate | R009 reporting | `negative-adam-adsl-stratification-reconciliation` |
+| an operator inside a string-template placeholder | R012's closed grammar | `negative-adsl-subject-reference` |
 | a nested expression in a field typed as `variable` | the version 1.0 input-shape boundary | already landed, untested |
 
 Most gate nothing new because the features already landed. They remain urgent:
@@ -455,8 +429,8 @@ Ideas that did not become separate directories are covered as follows:
 | metastatic-site count across columns | R010 `compute` accepts columns on both sides of `+`; no language boundary remains |
 | Fridericia QT correction | R010 `compute` supports data divisors and fractional `POWER`; `adam-adsl-bmi-compute` already fixes both operation families |
 | irregular `EPOCH` interval join | gap 4 is already evidenced by `sdtm-vs-visit-study-day` and `adam-adsl-crossover-periods` |
-| questionnaire scale score | gap 17 records the missing reductions; a separate example would require constructed item-level input absent from the pilot source |
-| invalid endpoint date | `adam-adsl-stratification-reconciliation` fixes the same dataset-predicate failure contract without duplicating a PFS example |
+| questionnaire scale score | `sum` and `count` are registered, but a total across item columns is a row-wise reduction over columns rather than a partition, and the pilot source has no item-level input to demonstrate it |
+| invalid endpoint date | `negative-adam-adsl-stratification-reconciliation` fixes the same dataset-predicate failure contract without duplicating a PFS example |
 
 ## Acceptance rule for adding a schema feature
 
