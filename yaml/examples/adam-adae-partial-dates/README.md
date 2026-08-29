@@ -1,14 +1,12 @@
-# ADaM ADAE: impute partial dates and flag the imputation
+# ADaM ADAE: impute partial dates
 
 This example uses sample AE and ADSL data and a `yamaa` specification to:
 
-- extract the year, month, and day of `AESTDTC` as `YR0`, `MO0`, and `DA0`,
-  which stay internal to the derivation;
-- default a missing month or day to `01` as `MOI` and `DAI`;
-- rebuild an ISO date as `ASTDTC` and convert it to a date as `ASTDT`. A value
-  with no four-digit year, such as `UNKNOWN`, and an uncollected value both
+- complete `AESTDTC` into the analysis date `ASTDT` with `date_impute`, using
+  month `6` and day `15` for the components the collected value does not carry.
+  `UNKNOWN` is an invalid date and an uncollected value is a missing one; both
   yield no analysis date;
-- record the imputed component as `ASTDTF`, using `M` when the month was
-  imputed and `D` when only the day was imputed, and verify its allowed values;
+- render `ASTDT` back as the character date `ASTDTC`, which R011 writes as
+  ISO 8601;
 - flag an event starting on or after `ADSL.TRTSDT` as `TRTEMFL`. An imputed day
   decides the flag by the same rule as a collected one.

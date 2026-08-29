@@ -29,6 +29,8 @@ Handlers occur in this fixed lifecycle:
 | cut | `missing` | Use a literal for a missing numeric input |
 | extract | `missing` | Use a literal for a missing string input |
 | extract | `no_match` | Use a literal when a non-missing string does not match |
+| impute | `missing` | Use a literal for a missing date source |
+| impute | `invalid` | Use a literal when a non-missing source is not ISO 8601 date text |
 | convert | `conversion_failure` | Use a literal after failed output conversion |
 | final | `override` | Apply the first matching final expression |
 
@@ -71,7 +73,10 @@ source with no dictionary entry through `missing` and `unmapped`. When
 missing, and `unmapped` fires only when every one is present and no record
 matches, so the two conditions stay disjoint and neither is reachable by an
 incomplete key. `cut`, `str_concat`, `str_upper`, and `str_lower` use `missing`.
-`str_extract` distinguishes `missing` and `no_match`. `min` and `max` use
+`str_extract` distinguishes `missing` and `no_match`, and `date_impute`
+distinguishes `missing` from `invalid` on the same principle: an uncollected
+date and a value that is not ISO 8601 date text are different defects and a
+specification may answer them differently. `min` and `max` use
 `missing` for an absent source variable; a right side that reduces to no
 matching record is governed by R003, not by this handler. Each field is a
 literal replacement. Omitting the applicable field makes the condition fatal.

@@ -46,10 +46,12 @@ The version 1.0 input-shape audit covers every registered expression:
 | Expressions | Input policy |
 |---|---|
 | `source`, `literal` | Leaf expressions; unchanged |
-| `mapping`, `cut`, `str_extract` | One named source; exceptional results are literals |
+| `mapping`, `cut`, `str_extract`, `str_upper`, `str_lower` | One named source; exceptional results are literals |
+| `str_concat` | An ordered list of expressions, because concatenating requires literals beside sources |
 | `mapping_from` | One or more named sources paired by position with declared right-side key columns; exceptional results are literals |
 | `compute` | One closed numeric expression over named output columns (R010) |
 | `date_diff` | Named variable operands |
+| `date_impute` | One named source plus integer literals for the imputed components; exceptional results are literals |
 | `coalesce` | Ordered named variables plus an optional literal default |
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
 | `row_number`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |

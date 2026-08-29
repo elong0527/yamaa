@@ -54,8 +54,10 @@ values. `date` is a column type and not a schema type. `bool`, `"null"`,
 Every type additionally admits the missing value.
 
 A `date` is a complete date. There is no month or year precision, so a partial
-collected date is recovered, imputed, and reassembled as text before a `date`
-column converts it. There is no `datetime` type: a value carrying a time of day
+collected date is carried as text and completed before it becomes a `date`.
+`date_impute` performs that completion as a declared rule rather than as string
+surgery; its result is a `date` like any other, and nothing distinguishes it
+from a fully collected one. There is no `datetime` type: a value carrying a time of day
 is declared `str`, and ISO 8601 text orders chronologically under R007
 comparison. There is no Boolean column type; a flag is a `str` column with an
 `allowed_values` verification, as the fixtures write it.

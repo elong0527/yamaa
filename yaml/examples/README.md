@@ -91,9 +91,9 @@ be written portably.
 22. `sdtm-dm-reference-dates` — reduces EX, DS, and AE into the DM reference
     dates, including a three-way latest-participation date, a screen failure
     with no exposure, and an adverse event ending after the last dose.
-23. `adam-adae-partial-dates` — rebuilds analysis dates from year-only,
-    year-month, complete, unparseable, and uncollected values, with an
-    imputation flag and its effect on treatment emergence.
+23. `adam-adae-partial-dates` — completes year-only, year-month, complete,
+    unparseable, and uncollected values into an analysis date with
+    `date_impute`, and shows the imputation deciding treatment emergence.
 24. `adam-adlb-closest-visit` — selects the record nearest a target study day,
     including a tie broken toward the later record and a record outside the
     window.
@@ -121,8 +121,9 @@ be written portably.
 
 ## Coverage
 
-Eighteen of the 19 registered non-leaf expressions and all nine verification
-keywords are exercised by at least one fixture. A few fixtures are the only
+Nineteen of the 20 registered non-leaf expressions and all nine verification
+keywords are exercised by at least one fixture; `least` is the one with no
+fixture. A few fixtures are the only
 coverage of something and should not be deleted without a replacement:
 
 - `adam-adsl-bmi-function` is the only use of the `function` extension point.
@@ -222,12 +223,15 @@ the vocabulary.
 7. Source-format missing values and type inference have no normative rule.
    Every fixture assumes an empty CSV field is missing and distinguishes it
    from a nonempty malformed value.
-8. Partial dates have no precision. R011 fixes that a declared `date` is
-   complete or nothing, so imputation is written as regular-expression
-   extraction, string defaults, and reassembly, and the rule itself is
-   invisible to the schema. `adam-adae-partial-dates` covers only trailing
-   precision loss, because the SDTM form for a known day in an unknown month
-   needs an agreed representation before a fixture can assert it.
+8. Partial dates have no precision. `date_impute` declares the completion
+   rule, so it is no longer string surgery, but the resulting `date` is
+   indistinguishable from a collected one and a partial value still cannot be
+   carried, compared, or verified as such. No fixture demonstrates this:
+   `adam-adae-partial-dates` imputes without recording which component it
+   supplied, so the cost is visible in `TRTEMFL` and nowhere in the artifact.
+   The suite also covers only trailing precision loss,
+   because the SDTM form for a known day in an unknown month needs an agreed
+   representation before a fixture can assert it.
 9. Imputed and collected dates compare identically. Nothing marks a comparison
    made under uncertainty, so an imputed day silently decides classifications
    such as treatment emergence.

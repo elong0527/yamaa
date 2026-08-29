@@ -23,6 +23,7 @@ fixture the acceptance rule requires.
 | `mapping_from.source` and `mapping_from.key` as lists, R003 and R007 and R008 | a lookup declares a compound key and pairs it by position |
 | `filter` on `row_number`, R001 and R003 and R007 | a window states its eligibility once; two `TEORD` sort columns and six duplicated flag predicates deleted |
 | float-to-text, R005 and R011 | one form for the declared conversion and the artifact; the schema fixes no precision, the project does, and this suite declares four decimal places |
+| `date_impute`, R007 and R008 and R011 | the completion rule for a truncated ISO 8601 date is declared rather than spelled out; five internal columns and three regular expressions deleted from `adam-adae-partial-dates` |
 | `greatest` and `least`, R007 | a row-wise extreme over any comparable type; `sdtm-dm-reference-dates` replaced a three-way null-guarded `case` chain with one expression, and R010's numeric functions stay where they are |
 
 Eleven gaps closed and were removed from the catalogue in
@@ -113,17 +114,25 @@ which rows a window sees is separable from returning a record, and it landed as
 
 ### T6. Dates and times
 
-Evidence: gaps 8 and 9. `adam-adae-partial-dates` rebuilds dates with
-regular expressions and string defaults because a declared `date` is complete
-or nothing. `sdtm-ae-effective-transaction` carries an audit timestamp as `str`
-and orders it correctly only because ISO 8601 text sorts chronologically.
+Evidence: gaps 8 and 9. `sdtm-ae-effective-transaction` carries an audit
+timestamp as `str` and orders it correctly only because ISO 8601 text sorts
+chronologically.
 
-R011 settled the vocabulary half: `column_type` is closed, a declared `date` is
-complete or nothing, and there is no datetime type, so the type split is a
-decision already recorded rather than an open question. What remains is the
-harder half: a precision concept, a declared imputation rule with its flag, and
-a statement about comparison when an operand is imputed. Gap 9 is untouched
-by R011.
+Two of the three parts are settled. R011 closed the vocabulary: `column_type`
+is closed, a declared `date` is complete or nothing, and there is no datetime
+type. `date_impute` closed the declared imputation rule, so completion is a
+statement in the specification rather than regular expressions and string
+defaults.
+
+What remains is the part neither addressed. A `date` produced by imputation is
+indistinguishable from a collected one, so precision can only be recovered from
+the source text, and nothing marks a comparison made against an imputed
+operand. A precision concept would close both at once, and a `date_precision`
+expression would close the first alone. Gap 9 is untouched.
+
+No fixture now carries an imputation flag, so both halves are argued from the
+rules rather than shown in golden output. A fixture that records which
+component was supplied is the first thing this item needs.
 
 `greatest` and `least` compare dates as ordinary comparable values. If a
 precision concept lands here, a row-wise extreme over dates has to say whether
@@ -224,6 +233,8 @@ item above and not a separate workstream.
 | `mapping_from` with one of two sources missing and no `missing` handler | R008 partial-key semantics | already landed, untested |
 | `mapping_from` whose `source` and `key` lists differ in length | R007's new error | already landed, untested |
 | a `row_number` partition in which every row fails the window `filter` | R007: no rank rather than a spurious rank of one | already landed, untested |
+| `date_impute` with `month: 15`, and with a `day` the imputed month does not have | R007's calendar-range error | already landed, untested |
+| `date_impute` over an invalid source with no `invalid` handler | fail rather than yield missing | already landed, untested |
 
 All but one gate nothing new, because the features already landed. They are
 the more urgent set: every fail-closed claim in the fixture READMEs and in

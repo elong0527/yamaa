@@ -15,3 +15,27 @@ expressions:
             required: true
             values: [day, week, month, year]
             description: Calendar unit counted between the dates.
+    date_impute: # Completes a truncated ISO 8601 date and returns a date.
+        # A complete source date is returned unchanged; a source carrying only a
+        # year, or a year and month, is completed from month and day.
+        # A source that is not an ISO 8601 date or an ISO 8601 date prefix is an
+        # invalid value, distinct from a missing one; both yield no date unless
+        # a handler is declared. R011 governs the resulting date.
+        - source:
+            type: variable
+            required: true
+            description: ISO 8601 date text, complete or truncated to year or month.
+        - month:
+            type: int
+            required: true
+            description: Month used when the source carries only a year, 1 to 12.
+        - day:
+            type: int
+            required: true
+            description: Day used when the source carries no day, 1 to 31.
+        - missing:
+            type: literal_value
+            description: Result when the source value is missing.
+        - invalid:
+            type: literal_value
+            description: Result when the source is not an ISO 8601 date or date prefix.
