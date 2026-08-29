@@ -33,7 +33,7 @@ example the acceptance rule requires.
 | Form-scoped ODM context, R002 | contextual item lookup now includes every available collection level, including `FormOID`, and fixes zero-match and multiple-match behavior |
 | `str_template` and R012 | a closed interpolation grammar makes composite strings concise while keeping dependencies visible and host-language code out |
 | `row_value`, R001 and R007 | one window reads any row of an ordered partition, so `adam-adrs-confirmed-response` became a golden output; a signed offset carries the direction rather than a `lead` and `lag` pair whose field lists would be identical, and reading a column's own earlier value stays a cycle rather than an iteration |
-| `sum` and `count`, R003 and R007 and R008 | the aggregate registry covers ordinary reductions, so `adam-adex-cumulative-dose` became a golden output; `count` counts non-missing values, an all-missing group totals to missing rather than zero, and four rules stopped naming `min` and `max` by hand. Replacing the entries with one grouping expression over a reducer grammar was deferred to issue #30 and assessed in [`../design/grouping-pipeline.md`](../design/grouping-pipeline.md), which retargets it as T11 |
+| `sum` and `count`, R003 and R007 and R008 | the aggregate registry covers ordinary reductions, so `adam-adex-cumulative-dose` became a golden output; `count` counts non-missing values, an all-missing group totals to missing rather than zero, and four rules stopped naming `min` and `max` by hand. Replacing the entries with one grouping expression over a reducer grammar was deferred to issue #30, and [`../design/grouping-pipeline.md`](../design/grouping-pipeline.md) since reversed that deferral as T12 |
 
 Thirteen gaps closed and were removed from the catalogue in
 [`README.md`](README.md); fifteen remain, and the numbering below refers to
@@ -346,27 +346,52 @@ Group F, gaps 12 to 14, and the largest open area.
 Also here: gap 4, the absent interval join, which is what an analysis window or
 an `EPOCH` assignment actually needs.
 
-### T11. The grouping pipeline and dataset grain
+### T11. The fold: rows at a derived grain
 
 A specification can name one grain, its own output, plus one implicit grain,
-the right side of an R003 join reduced at exactly the applicable keys. Row
-construction can fan out and never fold, so a `filter` → `group_by` →
-expression pipeline stops at the grouped mutate R007 already provides.
+the right side of an R003 join. Row construction can fan out and never fold, so
+`summarise()` has no spelling: a grouped grain can only be bought as an input
+file. `adam-adex-cumulative-dose` buys its subject-treatment grain from
+`input/subject_treatment.csv` although `EX` already contains those pairs, and
+four examples start from a `*_pre.csv` whose provenance no specification
+states.
 
-Evidence: issue #30's two limitations, gaps 5, 6, 10, 11, and 13, and the suite
-itself. `adam-adex-cumulative-dose` buys its subject-treatment grain from
-`input/subject_treatment.csv`, and four examples start from a `*_pre.csv` whose
-provenance no specification states.
+T12 closes the reducer half of this and explicitly leaves the fold open. What
+remains: issue #30's two-level reduction, output rows at a derived grain, and,
+through them, gaps 5, 11, and 13.
 
-[`../design/grouping-pipeline.md`](../design/grouping-pipeline.md) assesses four
-shapes and recommends a declared view — a named, filtered, grouped derived
-relation that adds no expression semantics and reuses R003, R005, R007, and
-R011. It prices the eight semantics that must be pinned first and lists the
-positive and negative examples the acceptance rule requires. No schema change
-is proposed yet.
+[`../design/grouping-pipeline.md`](../design/grouping-pipeline.md) records the
+three shapes considered — `group_by` on `row_class`, a summarise-only view, and
+a full view that also maps at record grain — and why none was taken with the
+reducer work. Per the acceptance rule, a second example needing an intermediate
+grain is the trigger.
 
-Decision it forces: whether a view may select a record as well as reduce one,
-which is T5's question seen from here.
+Decision it forces: whether a fold produces the output grain itself or a named
+relation beside it, and whether that relation may select a record as well as
+reduce one, which is T5's question seen from here.
+
+### T12. One `aggregate` expression over a closed reducer grammar
+
+Decided in
+[`../design/grouping-pipeline.md`](../design/grouping-pipeline.md); the schema
+change is not yet written. One `aggregate` expression replaces `min`, `max`,
+`sum`, and `count`, with a new rule modelled on R010 closing the grammar, the
+reducer table, and the pinned results for an empty group and an all-missing
+group. A fifth reducer becomes a table row rather than an entry, and
+`SUM(EX.EXDOSE * EX.EXDUR)` — arithmetic over right-side records, which issue
+#30 names as the real motivation — becomes expressible.
+
+Evidence: issue #30. Twenty call sites across eight examples migrate
+mechanically, all of them using only `source` and `filter`, so no golden output
+is expected to move.
+
+Decisions it forces, all resolved in the design document: the closed reducer
+table, no nested reducers with arithmetic only outside them, the grain rule
+that every identifier sits inside a reducer call unless it is grouped on, one
+relation per expression, and the removal of the aggregate `missing:` handler,
+which no example uses.
+
+Negative examples: the eight listed in the design document.
 
 ## Sequencing
 
@@ -376,19 +401,21 @@ which is T5's question seen from here.
 2. **T7**, which is rule text rather than schema. Its conversion half landed
    with float-to-text; what remains is source-format recognition, still
    required before any implementation can claim R and Python parity.
-3. **T5, T6, T8, T9, T10, T11** are design documents. Write the document before
+3. **T12** is decided and is schema work: one registry entry, one rule, and
+   twenty mechanical call-site rewrites.
+4. **T5, T6, T8, T9, T10, T11** are design documents. Write the document before
    the schema change, and expect each to retire several gaps at once, as
-   `compute` did. T11's is written; T5 and T8 overlap it enough that the three
-   should be decided together rather than in sequence.
-4. **T1** last, because its answer probably lies inside T10 rather than in a
+   `compute` did. T5, T8, and T11 overlap enough that the three should be
+   decided together rather than in sequence.
+5. **T1** last, because its answer probably lies inside T10 rather than in a
    widened field.
 
 Expected catalogue edits: T2 retires gap 2, T5 retires gaps 3, 5, and 6, T6
 retires gaps 8 and 9, T7 retires gap 7, T8 retires gaps 10 and 11, T9 retires
 gap 15, and T10 retires gaps 4, 12, 13, and 14 along with whatever remains of
-gap 1. T11 claims no gap of its own: it reaches gaps 5, 6, 10, 11, and 13 from
-a different direction, so whichever of T5, T8, and T11 is decided first should
-record which of those it actually closed.
+gap 1. T11 and T12 claim no gap of their own: T12 closes issue #30 alone, and
+T11 reaches gaps 5, 11, and 13 from a different direction, so whichever of T5,
+T8, and T11 is decided first should record which of those it actually closed.
 
 ## Negative examples this plan requires
 
