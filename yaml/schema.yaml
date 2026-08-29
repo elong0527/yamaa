@@ -112,7 +112,7 @@ dataset_id:
 selection_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Identifier of a selected record, unique among dataset identifiers.
+    description: Identifier of a selected record, unique among dataset identifiers, other selections, and the output domain.
 
 dataset_column:
     type: str
