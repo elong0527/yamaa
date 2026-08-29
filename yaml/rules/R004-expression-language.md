@@ -3,7 +3,7 @@ id: R004
 title: Predicate Language
 status: draft
 applies_to: [row.filter, sql]
-depends_on: [R002, R006]
+depends_on: [R001, R002, R006]
 ---
 
 # Predicate language

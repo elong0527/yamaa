@@ -3,7 +3,7 @@ id: R007
 title: Expression Registry
 status: normative
 applies_to: [expression, expressions, schema_expression]
-depends_on: [R003, R004, R005, R006, R008, R010, R011]
+depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011]
 ---
 
 # Expression registry
@@ -36,19 +36,18 @@ registry entry. Unknown keywords and unknown payload fields fail validation.
 ## Nesting policy
 
 `source` and `literal` are expression leaves. Every other expression names its
-input variables directly, except in a field explicitly typed as `expression`,
-which is evaluated recursively. Exactly four operation fields nest an
-expression, and each one nests because selecting or composing expressions is
-the operation's purpose:
+input variables directly, except in the following fields whose declared type
+contains `expression`. Each is evaluated recursively and nests because
+selecting or composing expressions is the field's purpose:
 
 | Field | Why it nests |
 |---|---|
-| `case.branches[].then` and `case.else` | Selecting among expressions is what `case` does |
+| `case.branches[].then` and `case.otherwise` | Selecting among expressions is what `case` does |
 | `str_concat.sources` | Concatenation places literals beside sources |
 | `function.args` entries | A call site may pass a computed argument |
 | `override[].value` | A final correction may select any expression |
 
-`derivation` and `handled_expression_class.value` are also typed `expression`,
+`derivation` and `handled_expression_class.value` also contain `expression`,
 but they hold a derivation's own top-level expression rather than nest one
 inside an operation, so this policy does not restrict them.
 

@@ -3,7 +3,7 @@ id: R008
 title: Local Error Handlers
 status: normative
 applies_to: [source.missing, source.multiple_matches, expression, derivation]
-depends_on: [R002, R003, R005, R006, R007]
+depends_on: [R001, R002, R003, R005, R006, R007, R011]
 ---
 
 # Local error handlers
@@ -101,9 +101,9 @@ A derivation with conversion or final handling uses `value` to hold its normal
 expression. A bare expression is the R006 shorthand for that wrapper, so every
 derivation carries its expression in `value` once expanded.
 `conversion_failure` supplies a literal replacement only when conversion to the
-declared column type fails. R011 defines which conversions
-fail, and states that a missing input is not converted at all, so
-`conversion_failure` never fires for one.
+declared column type fails. R011 defines which conversions fail and states that
+a missing input is not converted at all, so `conversion_failure` never fires
+for one.
 
 After successful conversion, evaluate `override` predicates in list order
 against the converted output row. Evaluate the first matching `value`, convert

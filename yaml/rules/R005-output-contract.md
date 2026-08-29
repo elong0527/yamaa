@@ -3,7 +3,7 @@ id: R005
 title: Output Contract
 status: normative
 applies_to: [root.keys, root.columns, column.output, column.type, row.derivations, derivation]
-depends_on: [R001, R003, R008, R009, R011]
+depends_on: [R001, R002, R003, R007, R008, R009, R011]
 ---
 
 # Output contract
@@ -30,9 +30,10 @@ and its rows are the rows R001 constructs.
 
 Its serialization is only partly defined. The text form of a value is settled:
 R011 fixes it for every column type, and states that a `float` renders the same
-way here as it does when converted to `str`. The file around those values is
-not settled. How a missing value is represented, and what row order the file
-carries, are open questions recorded in `examples/plan.md`.
+way here as it does when converted to `str`. The file format around those
+values and the representation of a missing value are not settled. Row sequence
+follows R001, but the language has no separate submission-sort control; the
+open questions are recorded in `examples/plan.md`.
 
 Everything below concerns the values themselves, which are fully defined, and
 none of it depends on the unsettled part.

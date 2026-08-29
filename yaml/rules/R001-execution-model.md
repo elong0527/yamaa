@@ -37,9 +37,9 @@ row per `base` record, in base-record order. `base` is required in that case.
 
 An expression contains exactly one keyword registered by R007. Most keywords
 name their input variables directly. Resolve those variable dependencies, then
-evaluate the keyword. Fields explicitly typed as `expression` are evaluated
-recursively. A `source` or `literal` expression is a leaf. YAML mapping order
-has no execution meaning.
+evaluate the keyword. Fields whose declared type contains `expression` are
+evaluated recursively. A `source` or `literal` expression is a leaf. YAML
+mapping order has no execution meaning.
 
 Window expressions evaluate over the partitions declared by their own
 `group_by`. Aggregate expressions evaluate in the two contexts R007 permits.
@@ -52,7 +52,7 @@ declaration order. Recursively traverse each expression and collect:
 
 - every unqualified output variable referenced by `source`;
 - variables in `group_by`, `order_by`, and other fields typed as `variable`;
-- variables referenced by fields typed as nested `expression`;
+- variables referenced by fields whose type contains nested `expression`;
 - current-output identifiers used by an `sql` predicate;
 - current-output identifiers used by a `numeric_expression`.
 

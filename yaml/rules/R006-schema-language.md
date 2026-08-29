@@ -144,10 +144,11 @@ canonical form and two implementations agree on what they validated.
 A union of `T` and `list[T]` accepts either. A bare `T` expands to a
 one-element list, and the list is canonical.
 
-A union of a value type `V` and a class declaring exactly one required field
-whose type is `V` accepts either. A bare `V` expands to that class with the
-field set to it, and the class is canonical. The remaining fields take their
-declared defaults.
+A union of a non-class type `V` and a class declaring exactly one required
+field whose type is `V` accepts either. A bare `V` expands to that class with
+the field set to it, and the class is canonical. Declared defaults are applied
+to the remaining fields; other optional fields remain absent. This form also
+applies when `V` is registry-backed, as `expression` is in `derivation`.
 
 Expansion happens after the written value has been validated against the union
 member it matched, so a constraint on the written form is checked before the

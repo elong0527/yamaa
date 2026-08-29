@@ -3,7 +3,7 @@ id: R011
 title: Column Type Vocabulary and Conversion
 status: normative
 applies_to: [column.type, column_type, derivation, conversion_failure]
-depends_on: [R005, R006, R007, R010]
+depends_on: [R005, R006, R007, R008, R010]
 ---
 
 # Column type vocabulary and conversion
