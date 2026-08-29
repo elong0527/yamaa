@@ -65,7 +65,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `date_impute` | One named source plus integer literals for the imputed components; exceptional results are literals |
 | `coalesce` | Ordered named variables plus an optional literal default |
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
-| `row_number`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
+| `row_number`, `rank`, `dense_rank`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
 | `row_value` | One named source with named grouping and ordering variables, plus a signed integer literal offset along the declared order |
 | `min`, `max`, `sum`, `count` | One named variable or structured source binding |
 | `case` | Nested result expressions retained because selecting expressions is its purpose |

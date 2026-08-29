@@ -1,0 +1,66 @@
+schema_version: "1.0"
+domain: ADAE
+datasets:
+  AE: input/ae.csv
+base: AE
+keys: [STUDYID, USUBJID, AESEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    derivation:
+      source: AE.AESEQ
+
+  - name: ASEV
+    type: str
+    derivation:
+      source: AE.AESEV
+    verifications:
+      - allowed_values:
+          values: [MILD, MODERATE, SEVERE]
+
+  - name: ASEVN
+    type: int
+    derivation:
+      mapping:
+        source: ASEV
+        missing: null
+        dict:
+          MILD: 1
+          MODERATE: 2
+          SEVERE: 3
+
+  - name: SEVRANK
+    type: int
+    derivation:
+      rank:
+        group_by: [STUDYID, USUBJID]
+        order_by:
+          - variable: ASEVN
+            direction: desc
+            nulls: last
+
+  - name: SEVLVL
+    type: int
+    derivation:
+      dense_rank:
+        group_by: [STUDYID, USUBJID]
+        order_by:
+          - variable: ASEVN
+            direction: desc
+            nulls: last
+
+verifications:
+  - row_count:
+      min: 9
+      max: 9

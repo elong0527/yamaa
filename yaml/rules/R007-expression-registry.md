@@ -101,6 +101,13 @@ on every term preserve row-template order and then base-record order, which
 makes the result total, so ordering has no undefined case and a row's
 neighbours are determined.
 
+That tie-break settles positions, not equality. `row_number`, `row_value`, and
+right-side selection read the positions themselves, so a tie changes which row
+they reach. `rank` and `dense_rank` compare only the declared terms, so records
+equal on every one of them receive a single number rather than the distinct
+numbers their positions would give. A specification that wants a tie broken
+declares the term that breaks it, which is the same statement in both cases.
+
 ## Type behavior
 
 No implicit conversion occurs between named operation inputs. R005 converts
@@ -131,7 +138,8 @@ runtime types:
 `cut`, `str_extract`, `str_concat`, `str_template`, `str_upper`, and
 `str_lower` return strings. `compute` returns the numeric type its expression
 promotes to under R010.
-`date_diff`, `study_day`, `row_number`, and `count` return integers.
+`date_diff`, `study_day`, `row_number`, `rank`, `dense_rank`, and `count`
+return integers.
 `study_day` never returns zero. `date_impute` returns a `date`.
 `baseline_flag` returns a string. Mapping, conditional, coalescing, extreme,
 baseline value, offset row, and aggregate expressions retain the selected or
@@ -156,7 +164,7 @@ behavior and do not affect schema validation.
 - A scalar or window expression that changes row count: fail under R001, which
   owns the phase invariant.
 - A window expression used during row construction: fail.
-- A `row_number` filter that is not a Boolean predicate over current-output
+- A window `filter` that is not a Boolean predicate over current-output
   columns: fail.
 - A `row_value` whose `offset` is zero: fail. The current row's own value is
   `source`, and a window must not be a second spelling of it.

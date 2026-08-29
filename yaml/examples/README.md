@@ -36,6 +36,7 @@ CSV records the intended artifact once that capability exists.
 | [`adam-adae-partial-dates`](adam-adae-partial-dates/) | impute partial dates |
 | [`adam-adae-serious-event-sequence`](adam-adae-serious-event-sequence/) | number a subject's serious events in onset order |
 | [`adam-adae-severity-override`](adam-adae-severity-override/) | apply an approved severity correction |
+| [`adam-adae-severity-rank`](adam-adae-severity-rank/) | rank a subject's events by severity |
 | [`adam-adae-string-handlers`](adam-adae-string-handlers/) | clean text and handle invalid IDs |
 | [`adam-adae-treatment-emergent`](adam-adae-treatment-emergent/) | classify an event as treatment-emergent |
 | [`adam-adae-worst-severity`](adam-adae-worst-severity/) | flag the worst-severity event per preferred term |
