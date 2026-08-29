@@ -112,9 +112,7 @@ reduction, so `MAX(SUM(EX.EXDOSE))` is an error. Reducing at one grain and
 reducing that result at another needs an intermediate grain the language cannot
 name, which `examples/plan.md` records as T11.
 
-`COUNT(D.*)` takes no other argument and its `D` must be the expression's
-dataset. It is the one reducer that names no column, and it counts records
-where `COUNT(x)` counts values.
+`COUNT(D.*)` takes no other argument; in this rule, `D` is a placeholder for the dataset named by the expression's qualified identifiers (for example, `COUNT(EX.*)`). It is the one reducer that names no column, and it counts records where `COUNT(x)` counts values.
 
 ## The grain rule
 
