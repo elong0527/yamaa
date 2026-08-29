@@ -9,7 +9,7 @@ design intent but are not complete enough for portable implementation.
 | ID | Rule | Status | Owns | Depends on |
 |---|---|---|---|---|
 | R001 | [Execution model](R001-execution-model.md) | normative | Phases, dependency inference, evaluation order | R002, R003, R004, R005, R007, R008, R010 |
-| R002 | [Source binding](R002-source-binding.md) | draft | Dataset declaration, name resolution | R003, R006, R008 |
+| R002 | [Source binding](R002-source-binding.md) | normative | Dataset declaration, name resolution | R003, R006, R008 |
 | R003 | [Cross-dataset left join](R003-cross-dataset-left-join.md) | normative | The implicit join and its right-side reduction | R002, R004, R005, R007, R008 |
 | R004 | [Predicate language](R004-expression-language.md) | draft | The Boolean `sql` primitive | R001, R002, R006 |
 | R005 | [Output contract](R005-output-contract.md) | normative | Column coverage, output membership, the value lifecycle, output identity | R001, R002, R003, R007, R008, R009, R011 |
@@ -22,15 +22,13 @@ design intent but are not complete enough for portable implementation.
 
 ## Draft surface
 
-Two open questions account for every draft in the set:
+One open question accounts for every draft in the set:
 
-- **R002** does not fix the ODM context keys, or the behavior when a contextual
-  reference matches zero or several items.
 - **R004** does not close the predicate grammar, coercion, collation, or the
   literal grammar. R009 is draft only because of this.
 
 R006 is the only rule that depends on nothing. Every other rule reaches R002 or
-R004 transitively, so closing those two questions closes the draft surface.
+R004 transitively, so closing R004 closes the remaining draft surface.
 
 ## Rule requirements
 

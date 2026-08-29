@@ -1,7 +1,7 @@
 ---
 id: R002
 title: Source Binding
-status: draft
+status: normative
 applies_to: [root.datasets, root.base, row.dataset, expression.source]
 depends_on: [R003, R006, R008]
 ---
@@ -88,8 +88,31 @@ defines the join uniqueness that `multiple_matches` relaxes.
 ODM item identifiers may contain periods. `ODM.IT.LB.LBDTC` means the `Value`
 whose `ItemOID` is `IT.LB.LBDTC`, resolved within the current ODM context.
 
-The exact context keys and zero-match or multiple-match behavior remain
-unresolved, so this rule remains draft.
+An ODM context is the current row's values for the following columns, in this
+order, when those columns exist in the declared ODM projection:
+
+1. `StudyOID`;
+2. `MetaDataVersionOID`;
+3. `SubjectKey`;
+4. `StudyEventOID`;
+5. `StudyEventRepeatKey`;
+6. `FormOID`;
+7. `FormRepeatKey`;
+8. `ItemGroupOID`;
+9. `ItemGroupRepeatKey`.
+
+Resolution first matches every available context column and then matches the
+complete `ItemOID`. A projection may omit a context column only when its source
+does not carry that level. In particular, a projection that carries `FormOID`
+must use it: identical item identifiers in two forms are different contextual
+values and must not be collapsed.
+
+No contextual match is an absent item. It fails unless a structured source
+declares `missing`, under R008. More than one match after applying every
+available context column is a multiple right-side match. It fails unless a
+structured source declares `multiple_matches`, also under R008. A present
+matched row whose `Value` is missing returns missing and does not invoke the
+absent-item handler.
 
 ## Errors
 
@@ -97,3 +120,6 @@ unresolved, so this rule remains draft.
 - A dataset identifier equal to the output `domain`: fail.
 - A source path that cannot be resolved: fail.
 - An unresolved unqualified reference: fail.
+- An ODM contextual reference with no available context column: fail.
+- More than one ODM contextual match: fail unless locally handled.
+- No ODM contextual match: fail unless locally handled.

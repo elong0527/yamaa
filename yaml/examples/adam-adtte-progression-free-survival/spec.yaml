@@ -1,0 +1,185 @@
+schema_version: "1.0"
+domain: ADTTE
+datasets:
+  ADSL: input/adsl.csv
+  RS: input/rs.csv
+  DS: input/ds.csv
+base: ADSL
+keys: [STUDYID, USUBJID, PARAMCD]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADSL.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADSL.USUBJID
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      literal: PFS
+
+  - name: PARAM
+    type: str
+    derivation:
+      literal: Progression-Free Survival
+
+  - name: STARTDT
+    type: date
+    derivation:
+      source: ADSL.RANDDT
+
+  - name: ADT
+    type: date
+    derivation:
+      coalesce:
+        sources: [EVENTDT, CENSORDT]
+
+  - name: AVAL
+    type: int
+    derivation:
+      date_diff:
+        start: STARTDT
+        end: ADT
+        unit: day
+        bounds: inclusive
+
+  - name: CNSR
+    type: int
+    derivation:
+      case:
+        branches:
+          - when: "EVENTDT IS NOT NULL"
+            then:
+              literal: 0
+        otherwise:
+          literal: 1
+
+  - name: EVNTDESC
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "EVENTDT IS NULL"
+            then:
+              literal: CENSORED
+          - when: "PDDT IS NOT NULL AND (DEATHDT IS NULL OR PDDT <= DEATHDT)"
+            then:
+              literal: DISEASE PROGRESSION
+        otherwise:
+          literal: DEATH
+
+  - name: SRCDOM
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "EVNTDESC = 'DEATH'"
+            then:
+              literal: DS
+        otherwise:
+          literal: RS
+
+  - name: SRCVAR
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "EVNTDESC = 'DEATH'"
+            then:
+              literal: DSDTC
+        otherwise:
+          literal: RSDTC
+
+  - name: SRCSEQ
+    type: int
+    derivation:
+      case:
+        branches:
+          - when: "EVNTDESC = 'DISEASE PROGRESSION'"
+            then:
+              source: PDSEQ
+          - when: "EVNTDESC = 'DEATH'"
+            then:
+              source: DEATHSEQ
+        otherwise:
+          source: CENSORSEQ
+
+  - name: PDDT
+    type: date
+    output: false
+    derivation:
+      min:
+        source: RS.RSDTC
+        filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y'"
+
+  - name: PDSEQ
+    type: int
+    output: false
+    derivation:
+      source:
+        variable: RS.RSSEQ
+        multiple_matches:
+          order_by: [RS.RSDTC, RS.RSSEQ]
+          keep: first
+          filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y'"
+
+  - name: DEATHDT
+    type: date
+    output: false
+    derivation:
+      min:
+        source: DS.DSDTC
+        filter: "DS.DSDECOD = 'DEATH'"
+
+  - name: DEATHSEQ
+    type: int
+    output: false
+    derivation:
+      source:
+        variable: DS.DSSEQ
+        multiple_matches:
+          order_by: [DS.DSDTC, DS.DSSEQ]
+          keep: first
+          filter: "DS.DSDECOD = 'DEATH'"
+
+  - name: CENSORDT
+    type: date
+    output: false
+    derivation:
+      max:
+        source: RS.RSDTC
+        filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y'"
+
+  - name: CENSORSEQ
+    type: int
+    output: false
+    derivation:
+      source:
+        variable: RS.RSSEQ
+        multiple_matches:
+          order_by: [RS.RSDTC, RS.RSSEQ]
+          keep: last
+          filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y'"
+
+  - name: EVENTDT
+    type: date
+    output: false
+    derivation:
+      least:
+        sources: [PDDT, DEATHDT]
+
+verifications:
+  - row_count:
+      min: 5
+      max: 5
+  - all_or_none:
+      id: traceability-triplet-is-complete
+      columns: [SRCDOM, SRCVAR, SRCSEQ]
+  - predicate:
+      id: endpoint-is-not-before-randomization
+      assert: "ADT >= STARTDT"

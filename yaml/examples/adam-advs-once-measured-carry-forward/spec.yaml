@@ -1,0 +1,79 @@
+schema_version: "1.0"
+domain: ADVS
+datasets:
+  VS: input/vs.csv
+  ADSL: input/adsl.csv
+base: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: VS.USUBJID
+
+  - name: VSSEQ
+    type: int
+    derivation:
+      source: VS.VSSEQ
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      source: VS.VSTESTCD
+
+  - name: ADT
+    type: date
+    derivation:
+      source: VS.VSDTC
+
+  - name: AVAL
+    type: float
+    derivation:
+      source: VS.VSSTRESN
+
+  - name: TRTSDT
+    type: date
+    derivation:
+      source: ADSL.TRTSDT
+
+  - name: HEIGHTBL
+    type: float
+    derivation:
+      baseline_value:
+        group_by: [STUDYID, USUBJID]
+        value: AVAL
+        flag: HGTBLFL
+
+  - name: HGTDT
+    type: date
+    output: false
+    derivation:
+      case:
+        branches:
+          - when: "PARAMCD = 'HEIGHT'"
+            then:
+              source: ADT
+
+  - name: HGTBLFL
+    type: str
+    output: false
+    derivation:
+      baseline_flag:
+        group_by: [STUDYID, USUBJID]
+        date: HGTDT
+        reference_date: TRTSDT
+
+verifications:
+  - row_count:
+      min: 7
+      max: 7
+  - implies:
+      id: height-record-supplies-subject-height
+      when: "PARAMCD = 'HEIGHT' AND HGTBLFL = 'Y'"
+      then: "AVAL = HEIGHTBL"

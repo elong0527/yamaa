@@ -28,12 +28,12 @@ The **artifact** is the single dataset this specification produces. Its columns
 are the declared columns that do not set `output: false`, in declaration order,
 and its rows are the rows R001 constructs.
 
-Its serialization is only partly defined. The text form of a value is settled:
-R011 fixes it for every column type, and states that a `float` renders the same
-way here as it does when converted to `str`. The file format around those
-values and the representation of a missing value are not settled. Row sequence
-follows R001, but the language has no separate submission-sort control; the
-open questions are recorded in `examples/plan.md`.
+Its serialization is only partly defined. R011 fixes the text form of each
+non-missing value and states that a `float` renders the same way here as it does
+when converted to `str`; the schema does not select a file container. The
+example suite uses CSV and represents a missing value with an empty field. Row
+sequence follows R001, but the language has no separate submission-sort
+control, as gap 11 in `examples/plan.md` records.
 
 Everything below concerns the values themselves, which are fully defined, and
 none of it depends on the unsettled part.

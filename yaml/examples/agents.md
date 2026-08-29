@@ -18,6 +18,11 @@ exercises. Then read `README.md` here for the example index and
         input/*.csv
         expected/<domain>.csv
 
+An expected failure before a dataset is completed replaces the CSV with
+`expected/error.yaml`, unless the intended artifact is useful as a forward
+contract. A failure over a completed dataset carries both the expected CSV and
+`expected/error.yaml`.
+
 Name the directory for what it derives, not for the construct it uses:
 `sdtm-vs-visit-study-day`, not `sdtm-vs-mapping-from`.
 
@@ -65,8 +70,9 @@ in the `Open design gaps` section of `plan.md`, grouped by root cause, so that
 one limitation is stated once and names the examples that show it.
 
 Before removing a finding from an example README, confirm the catalogue in
-`plan.md` records it and names the example. If it does not, migrate it first. Deleting the only
-statement of a limitation is the most common way this suite loses information.
+`plan.md` records it and names the example. If it does not, migrate it first.
+Deleting the only statement of a limitation is the most common way this suite
+loses information.
 
 When a gap closes, delete its entry and renumber rather than marking it closed,
 and update the references elsewhere in `plan.md`.
@@ -87,11 +93,34 @@ and update the references elsewhere in `plan.md`.
 ## Golden output
 
 The expected file is a contract. Before committing a change to one, reproduce
-it independently — read the input, apply the rule by hand or in a short script,
-and compare — rather than accepting whatever the change produced.
+it independently — read the input, apply the rule by hand or in a short
+script, and compare — rather than accepting whatever the change produced.
 
 Changing a golden file is a decision. Say in the pull request which values
 moved and why, and confirm that every other example's output is untouched.
+
+## Expected failures and blocked examples
+
+An example whose purpose is to fix failure behavior has
+`expected/error.yaml`. It is a partial structured assertion over the failure
+and has these fields:
+
+- `phase`: the evaluation phase that rejects the run;
+- `condition`: a stable snake-case name for the failed condition;
+- `spec_paths`: one or more specification locations implicated in the failure;
+- `context`: optional structured facts such as the dataset, offending keys,
+  value, match count, or verification ID.
+
+An implementation may report additional context and may word its human-readable
+message differently. The expected fields and values must match. Stack traces
+and implementation-specific exception classes do not belong in this artifact.
+
+An expected CSV may be committed beside `error.yaml`. For a failure after the
+dataset is completed, it is the dataset presented to the failing check. For an
+earlier expressiveness failure, it is the intended artifact once the missing
+capability exists. Neither is an accepted artifact from the current failed
+run. Its README still describes the expected variables under the same data-only
+contract as a positive example.
 
 ## Checks to run before finishing
 
@@ -102,7 +131,7 @@ moved and why, and confirm that every other example's output is untouched.
     python3 - <<'PY'
     import glob, os
     KEYS = {"STUDYID", "USUBJID", "DOMAIN", "SUBJID", "AESEQ", "VSSEQ",
-            "LBSEQ", "ASEQ", "PARAMCD", "PARAM", "AVISIT", "VISIT",
+            "LBSEQ", "RSSEQ", "ASEQ", "PARAMCD", "PARAM", "AVISIT", "VISIT",
             "RDOMAIN", "IDVAR", "QNAM"}
     for f in sorted(glob.glob("*/expected/*.csv")):
         d = os.path.dirname(os.path.dirname(f))
@@ -119,7 +148,9 @@ reports is a variable the README does not explain.
 
 ## Adding an example
 
-1. Write `spec.yaml`, the input data, and the expected output.
+1. Write `spec.yaml`, the input data, and either the expected output or the
+   expected error. Add an expected CSV beside an error when it makes a blocked
+   or rejected result concrete.
 2. Write the README to the contract above.
 3. Add a row to the index table in `README.md`. Its `Derives` column is the
    README title with the standard and domain prefix removed, so the two cannot

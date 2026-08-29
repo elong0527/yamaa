@@ -1,0 +1,10 @@
+phase: join
+condition: multiple_matches
+spec_paths:
+  - columns.TRT01A.derivation.source
+context:
+  dataset: ADSL_RAW
+  match_count: 2
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-701

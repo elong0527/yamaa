@@ -1,0 +1,100 @@
+schema_version: "1.0"
+domain: LB
+datasets:
+  ODM: input/odm.csv
+base: ODM
+keys: [STUDYID, USUBJID, LBSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ODM.StudyOID
+
+  - name: DOMAIN
+    type: str
+    derivation:
+      literal: LB
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ODM.SubjectKey
+
+  - name: LBSEQ
+    type: int
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [FORMORD]
+
+  - name: LBTESTCD
+    type: str
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.LB_CHEM: ALT
+          FO.LB_HEM: HGB
+          FO.LB_THY: TSH
+          FO.LB_UA: URPROT
+          FO.LB_EXTRA: OTHER
+
+  - name: LBTEST
+    type: str
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.LB_CHEM: Alanine Aminotransferase
+          FO.LB_HEM: Hemoglobin
+          FO.LB_THY: Thyrotropin
+          FO.LB_UA: Urine Protein
+          FO.LB_EXTRA: Other Laboratory Test
+
+  - name: LBCAT
+    type: str
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.LB_CHEM: CHEMISTRY
+          FO.LB_HEM: HEMATOLOGY
+          FO.LB_THY: THYROID
+          FO.LB_UA: URINALYSIS
+          FO.LB_EXTRA: OTHER
+
+  - name: LBORRES
+    type: str
+    derivation:
+      source: ODM.Value
+
+  - name: LBDTC
+    type: date
+    derivation:
+      source:
+        variable: ODM.IT.LB.LBDTC
+        missing: null
+
+  - name: FORMORD
+    type: int
+    output: false
+    derivation:
+      mapping:
+        source: ODM.FormOID
+        dict:
+          FO.LB_CHEM: 1
+          FO.LB_HEM: 2
+          FO.LB_THY: 3
+          FO.LB_UA: 4
+          FO.LB_EXTRA: 5
+
+rows:
+  - id: reported-result
+    filter: "ODM.ItemOID = 'IT.LB.RESULT' AND ODM.Value IS NOT NULL"
+    derivations: {}
+
+verifications:
+  - row_count:
+      min: 5
+      max: 5

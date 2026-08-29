@@ -1,0 +1,11 @@
+phase: mapping
+condition: unmapped_value
+spec_paths:
+  - columns.AVALC.derivation.mapping
+context:
+  source: RS.OVRLRESP
+  value: NE
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-702
+      RSSEQ: 1

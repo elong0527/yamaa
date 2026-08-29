@@ -2,8 +2,9 @@
 
 ## Purpose
 
-The suite holds 33 examples, each covering one derivation boundary with
-committed golden output. This file records the design gaps they expose,
+The suite holds 44 examples: 39 successful golden outputs and five expected
+failures. Three failure examples also commit the intended or completed dataset
+beside the structured error. This file records the design gaps they expose,
 grouped by root cause, and tracks the schema work those findings justify.
 [`README.md`](README.md) is the reader-facing index of the examples
 themselves.
@@ -29,10 +30,11 @@ example the acceptance rule requires.
 | `study_day`, R007 | the SDTM no-Day-0 rule is one expression instead of a guarded `date_diff`, a `compute`, and a conditional; one internal column deleted from `sdtm-vs-visit-study-day` |
 | `date_diff.bounds`, and a stated missing-operand result | an inclusive or strictly-between count is declared rather than adjusted afterwards; two internal columns, two `compute` calls, and three guarding predicates deleted |
 | `greatest` and `least`, R007 | a row-wise extreme over any comparable type; `sdtm-dm-reference-dates` replaced a three-way null-guarded `case` chain with one expression, and R010's numeric functions stay where they are |
+| Form-scoped ODM context, R002 | contextual item lookup now includes every available collection level, including `FormOID`, and fixes zero-match and multiple-match behavior |
 
 Eleven gaps closed and were removed from the catalogue in
-[`README.md`](README.md); fifteen remain, and the numbering below refers to
-that renumbered list. Three of the fifteen were reworded rather than closed:
+[`README.md`](README.md); seventeen remain, and the numbering below refers to
+that renumbered list. Three of the seventeen were reworded rather than closed:
 gaps 1, 2, and 4 each stated a limitation broader than the evidence supported,
 and each now names only the case that is actually blocked.
 
@@ -60,7 +62,7 @@ that removes a workaround also removes the columns that documented it.
 
 ## Open design gaps
 
-Sixteen gaps are open across the suite, grouped by root cause rather than by
+Seventeen gaps are open across the suite, grouped by root cause rather than by
 the example that found them, because most are consequences of a few underlying
 decisions rather than independent omissions. Closed gaps are removed from this
 list rather than marked; `plan.md` records what was closed and how.
@@ -87,6 +89,8 @@ list rather than marked; `plan.md` records what was closed and how.
    selects an expression from data. A row template per test is the workaround
    the example uses: it puts each formula beside the test it belongs to, at the
    cost of leaving rows grouped by test rather than in collection order.
+   `sdtm-lb-ctcae-grading` shows the same growth for absolute haemoglobin
+   thresholds that vary by sex.
 2. Only `row_number` is registered. Without `rank` and `dense_rank` a tie
    cannot carry a rank number, so distinct-level counts, and any rule whose
    output is the rank itself, cannot be expressed.
@@ -105,8 +109,9 @@ the vocabulary.
 
 3. `mapping_from` returns one column per call, so reading several columns from
    one matched record repeats the match. `sdtm-vs-visit-study-day` calls it
-   twice against one `TV` row. A multi-column return conflicts with one
-   expression producing one value and belongs with gaps 5 and 6.
+   twice against one `TV` row, and `sdtm-lb-reference-range-indicator` calls it
+   three times for the unit and two bounds. A multi-column return conflicts
+   with one expression producing one value and belongs with gaps 5 and 6.
 4. There is no interval join, so a record cannot be matched against a table of
    per-subject intervals of irregular count and length, which is what an
    `EPOCH` derived from collected subject elements needs. Regular structure is
@@ -125,6 +130,10 @@ the vocabulary.
    `sdtm-dm-reference-dates` takes the last exposure end date and the dose
    given at it as two separate selections, and keeps the second as an internal
    column solely to show that they agree only because both order the same way.
+   `adam-adtte-progression-free-survival` makes the consequence submission-
+   facing: its event date and `SRCDOM`/`SRCVAR`/`SRCSEQ` traceability are
+   independently selected, so nothing guarantees that the value and identity
+   came from one record.
 6. A missing aggregate result cannot distinguish no matching record from
    matching records whose values are all missing. In
    `sdtm-dm-reference-dates` a subject who was never exposed and one whose
@@ -190,6 +199,21 @@ the vocabulary.
     implementation can validate, and no expected metadata artifact exists to
     assert them, as `sdtm-dm-metadata-contract` records.
 
+### G. Ordered series and ordinary reductions are absent
+
+16. No expression reads a neighbouring row from an ordered series.
+    `adam-adrs-confirmed-response` needs the next response and its date to
+    confirm a response at least 28 days later. The same boundary blocks the
+    interval between consecutive assessments, cycle-to-cycle dose comparison,
+    and duration of response. `row_number` assigns a position but cannot read
+    the value at another position.
+17. The aggregate registry contains only `min` and `max`; `sum`, `count`, and
+    `mean` are not registered. `adam-adex-cumulative-dose` therefore cannot
+    total dose or count administrations. The same omission blocks subject and
+    event counts and questionnaire totals. Questionnaire completeness also
+    needs a count of non-missing values across columns, a separate input shape
+    that the pilot source does not provide at item level.
+
 ## Open work
 
 ### T1. Banding criteria that are not proportional
@@ -205,10 +229,12 @@ specification carries the rule. Predicate bounds were never restricted.
 A `cut_from` reading bands from a keyed dataset was drafted and rejected. It
 worked, but it moved the medical rule out of the specification and into a
 reference table, so a reviewer had to open a CSV to learn what the criteria
-were. Normalizing splits the two correctly. The remaining case is rare enough
-that `function` is the honest answer until an example proves otherwise.
+were. Normalizing splits the two correctly. The remaining case is now concrete
+in `sdtm-lb-ctcae-grading`: absolute haemoglobin limits differ by sex, so the
+example repeats the bands for each sex.
 
-Evidence: gap 1. No action until an example needs it.
+Evidence: gap 1. No action until a second use shows that the repeated bands
+justify a portable construct rather than a study-specific function.
 
 ### T2. `rank` and `dense_rank`
 
@@ -236,6 +262,9 @@ Two gaps have the same cause: an expression selects a value, never a row.
   associated dose with an ordered `source`, and nothing ties them to the same
   EX record. `sdtm-ae-effective-transaction` runs four independent selections
   that agree only because all four declare the same ordering.
+  `adam-adtte-progression-free-survival` independently selects its endpoint
+  date and traceability sequence, even though ADaM requires them to identify
+  one source record.
 - Gap 6: a missing aggregate cannot distinguish no matching record from
   matching records whose values are all missing.
 
@@ -329,11 +358,29 @@ Group F, gaps 12 to 14, and the largest open area.
 Also here: gap 4, the absent interval join, which is what an analysis window or
 an `EPOCH` assignment actually needs.
 
+### T11. Ordered access and ordinary aggregates
+
+Evidence: gaps 16 and 17. `adam-adrs-confirmed-response` fixes the minimum
+ordered-access requirement as the next value within a declared partition and
+order. `adam-adex-cumulative-dose` fixes the minimum reductions as `sum` and
+`count`; `mean` belongs to the same family but needs its missing-value rule
+fixed before registration.
+
+These are separate evaluation kinds. `lead` and `lag` are windows that preserve
+row count, while `sum`, `count`, and `mean` are aggregates that reduce a right
+side or broadcast within a current-output partition. Their fields should follow
+the existing window and aggregate shapes rather than enter R010's scalar
+grammar.
+
+Decision it forces: whether `count` counts rows, non-missing values, or exposes
+two explicitly named forms. Negative examples must cover an empty partition,
+all-missing values, and the first or last row of an ordered series.
+
 ## Sequencing
 
-1. **T2**, with its negative examples. It is a registry entry with committed
-   evidence and bounded semantics. T3 landed as a widened `mapping_from` and
-   still owes the four negative examples listed below.
+1. **T2 and T11**, with their negative examples. They are registry work with
+   committed evidence and bounded semantics. T3 landed as a widened
+   `mapping_from` and still owes the four negative examples listed below.
 2. **T7**, which is rule text rather than schema. Its conversion half landed
    with float-to-text; what remains is source-format recognition, still
    required before any implementation can claim R and Python parity.
@@ -345,15 +392,17 @@ an `EPOCH` assignment actually needs.
 
 Expected catalogue edits: T2 retires gap 2, T5 retires gaps 3, 5, and 6, T6
 retires gaps 8 and 9, T7 retires gap 7, T8 retires gaps 10 and 11, T9 retires
-gap 15, and T10 retires gaps 4, 12, 13, and 14, along with whatever remains of
-gap 1.
+gap 15, T10 retires gaps 4, 12, 13, and 14 along with whatever remains of gap
+1, and T11 retires gaps 16 and 17.
 
 ## Negative examples this plan requires
 
 The acceptance rule needs failure behavior fixed before a feature is added.
-**None of these exist.** The N-series of the earlier assessment plan is
-entirely unimplemented, which makes this the binding constraint on every open
-item above and not a separate workstream.
+Five expected-failure examples now establish an unregistered ordered
+operation, unregistered ordinary aggregates, duplicate implicit-join matches,
+unmapped dictionary values, and dataset-predicate reporting. The table below
+lists the remaining contracts. ODM form scoping is a positive example backed
+by normative rule text.
 
 | Example | Provokes | Gates |
 |---|---|---|
@@ -363,6 +412,7 @@ item above and not a separate workstream.
 | an expression using `SUM`, `LAG`, a comparison, or a qualified identifier in the column phase | R010's closed grammar | already landed, untested |
 | `direction: desc` on a column of mixed types | order-term comparability | already landed, untested |
 | a `multiple_matches` filter that empties the right side | R003 treats it as an absent match, not a handled condition | already landed, untested |
+| a cross-dataset `source` with duplicate applicable keys | R003 right-side uniqueness | `negative-source-duplicate-right-key` |
 | ranking on a column whose ordering is not total | tie semantics | T2 |
 | `mapping_from` with a duplicate right-side key on the `key` columns | R007 dictionary uniqueness | already landed, untested |
 | `mapping_from` with no match and no `unmapped` handler | join failure behavior | already landed, untested |
@@ -372,19 +422,41 @@ item above and not a separate workstream.
 | `date_impute` with `month: 15`, and with a `day` the imputed month does not have | R007's calendar-range error | already landed, untested |
 | `date_impute` over an invalid source with no `invalid` handler | fail rather than yield missing | already landed, untested |
 | a `mapping` whose `dict` keys collide once folded under `case_sensitive: false` | R007 rejects the dictionary rather than picking one | already landed, untested |
-| a non-missing value absent from `dict` with no `unmapped` handler | R008 makes the condition fatal | already landed, untested |
+| a non-missing value absent from `dict` with no `unmapped` handler | R008 makes the condition fatal | `negative-mapping-unmapped-value` |
 | a column type outside `column_type` | R011's closed vocabulary | already landed, untested |
 | unparseable numeric text, an incomplete date, and a non-integral value converted to `int` | R011's conversion failures | already landed, untested |
 | `greatest` whose `sources` mix incomparable types | R007 comparability | already landed, untested |
-| duplicate output keys, and a failed column or dataset verification | R005 key uniqueness and R009 reporting | already landed, untested |
+| duplicate output keys | R005 key uniqueness | already landed, untested |
+| a failed column verification | R009 reporting | already landed, untested |
+| a failed dataset predicate | R009 reporting | `adam-adsl-stratification-reconciliation` |
 | a nested expression in a field typed as `variable` | the version 1.0 input-shape boundary | already landed, untested |
 
-All but one gate nothing new, because the features already landed. They are
-the more urgent set: every fail-closed claim in the example READMEs and in
-R003, R005, R007, R008, and R010 is currently an assertion rather than a tested
-behavior. `sdtm-suppmh-parent-linkage` states plainly that its own
-`not_missing` verification is meaningful only if the lookup fails closed, which
-is exactly the claim no example tests.
+Most gate nothing new because the features already landed. They remain urgent:
+many fail-closed claims in R003, R005, R007, R008, and R010 are still rule text
+rather than tested behavior. `sdtm-suppmh-parent-linkage` states plainly that
+its own `not_missing` check is meaningful only if the lookup fails closed,
+which is exactly the claim no example tests.
+
+## Pilot 7 coverage audit
+
+The live examples retain every actionable finding from the
+[RConsortium pilot 7 synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
+survey. Endpoint values in its `RE` form are simulated, so
+`adam-adtte-progression-free-survival` computes its own target from `RS` and
+`DS`. ODM form context is normative in R002 and exercised by
+`odm-form-scoped-item-resolution`. Fields that the source declares but never
+varies are not used as evidence for a rule.
+
+Ideas that did not become separate directories are covered as follows:
+
+| Survey idea | Current coverage |
+|---|---|
+| multi-parameter ADTTE row templates | `adam-adlb-bds` already shows one template per parameter; gap 12 records the structural growth |
+| metastatic-site count across columns | R010 `compute` accepts columns on both sides of `+`; no language boundary remains |
+| Fridericia QT correction | R010 `compute` supports data divisors and fractional `POWER`; `adam-adsl-bmi-compute` already fixes both operation families |
+| irregular `EPOCH` interval join | gap 4 is already evidenced by `sdtm-vs-visit-study-day` and `adam-adsl-crossover-periods` |
+| questionnaire scale score | gap 17 records the missing reductions; a separate example would require constructed item-level input absent from the pilot source |
+| invalid endpoint date | `adam-adsl-stratification-reconciliation` fixes the same dataset-predicate failure contract without duplicating a PFS example |
 
 ## Acceptance rule for adding a schema feature
 

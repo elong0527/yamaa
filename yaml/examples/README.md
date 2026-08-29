@@ -3,7 +3,7 @@
 These examples exercise `yaml/schema.yaml` with small inputs and exact expected
 outputs. They are intended for human review, automated tests, and AI-assisted
 implementation. Each holds a specification, its source CSVs, the exact expected
-CSV, and a README describing what the output means.
+CSV or error, and a README describing what the result means.
 
 Execution behavior is defined by the schema's adjacent operation descriptions
 and the shared normative rules in [`../rules/README.md`](../rules/README.md);
@@ -21,9 +21,14 @@ New to the suite? Read [`sdtm-dm-basic`](sdtm-dm-basic/) for direct mapping,
 
 ## Index
 
-An example that cannot express something is recording a design finding, not
-failing. Those findings are collected in [`plan.md`](plan.md), which also
-tracks the schema work they justify.
+An example that cannot express something records a design finding. The suite
+passes when its declared error occurs. Those findings are collected in
+[`plan.md`](plan.md), which also tracks the schema work they justify.
+
+Expected-failure examples carry `expected/error.yaml`. When rejection happens
+after the dataset is completed, an expected CSV records the rows presented to
+the failing check. When a missing capability prevents execution, an expected
+CSV records the intended artifact once that capability exists.
 
 | Example | Derives |
 |---|---|
@@ -33,8 +38,10 @@ tracks the schema work they justify.
 | [`adam-adae-string-handlers`](adam-adae-string-handlers/) | clean text and handle invalid IDs |
 | [`adam-adae-treatment-emergent`](adam-adae-treatment-emergent/) | classify an event as treatment-emergent |
 | [`adam-adae-worst-severity`](adam-adae-worst-severity/) | flag the worst-severity event per preferred term |
+| [`adam-adex-cumulative-dose`](adam-adex-cumulative-dose/) | summarize cumulative exposure |
 | [`adam-adlb-bds`](adam-adlb-bds/) | build a BDS dataset with baseline and change |
 | [`adam-adlb-closest-visit`](adam-adlb-closest-visit/) | select the record closest to a window's target day |
+| [`adam-adrs-confirmed-response`](adam-adrs-confirmed-response/) | confirm an objective response |
 | [`adam-adrs-composite-response`](adam-adrs-composite-response/) | combine efficacy, safety, and discontinuation into one response |
 | [`adam-adsl-bmi-compute`](adam-adsl-bmi-compute/) | compute BMI from height and weight |
 | [`adam-adsl-bmi-function`](adam-adsl-bmi-function/) | compute BMI by calling a routine the project supplies |
@@ -45,16 +52,25 @@ tracks the schema work they justify.
 | [`adam-adsl-identifier-parsing`](adam-adsl-identifier-parsing/) | parse the site from USUBJID with a collected fallback |
 | [`adam-adsl-mapping`](adam-adsl-mapping/) | translate collected values into a standard vocabulary |
 | [`adam-adsl-population-flags`](adam-adsl-population-flags/) | derive the safety and intent-to-treat flags |
+| [`adam-adsl-stratification-reconciliation`](adam-adsl-stratification-reconciliation/) | reconcile randomization strata |
 | [`adam-adsl-treatment-selection`](adam-adsl-treatment-selection/) | select actual treatment and its duration from EX |
+| [`adam-adtte-progression-free-survival`](adam-adtte-progression-free-survival/) | derive progression-free survival |
 | [`adam-advs-analysis-visit`](adam-advs-analysis-visit/) | assign records to analysis windows |
+| [`adam-advs-once-measured-carry-forward`](adam-advs-once-measured-carry-forward/) | carry forward a once-measured characteristic |
+| [`negative-mapping-unmapped-value`](negative-mapping-unmapped-value/) | reject an unmapped response |
+| [`negative-source-duplicate-right-key`](negative-source-duplicate-right-key/) | reject duplicate subject enrichment |
+| [`odm-form-scoped-item-resolution`](odm-form-scoped-item-resolution/) | resolve items within their collection form |
 | [`sdtm-ae-dictionary-coding`](sdtm-ae-dictionary-coding/) | code reported terms against a medical dictionary |
 | [`sdtm-ae-effective-transaction`](sdtm-ae-effective-transaction/) | take the effective state of a record from a transaction log |
 | [`sdtm-dm-basic`](sdtm-dm-basic/) | build one subject record from collected data |
 | [`sdtm-dm-metadata-contract`](sdtm-dm-metadata-contract/) | declare the metadata a submission needs |
 | [`sdtm-dm-reference-dates`](sdtm-dm-reference-dates/) | derive the reference dates from EX, DS, and AE |
+| [`sdtm-ex-combination-regimen`](sdtm-ex-combination-regimen/) | represent a combination regimen |
 | [`sdtm-lb-conditional-compartments`](sdtm-lb-conditional-compartments/) | tell an inapplicable compartment from an uncollected sample |
+| [`sdtm-lb-ctcae-grading`](sdtm-lb-ctcae-grading/) | assign toxicity grades |
 | [`sdtm-lb-findings`](sdtm-lb-findings/) | build one record per collected lab result |
 | [`sdtm-lb-multiform`](sdtm-lb-multiform/) | consolidate four collection forms into one dataset |
+| [`sdtm-lb-reference-range-indicator`](sdtm-lb-reference-range-indicator/) | apply external reference ranges |
 | [`sdtm-relrec-many-to-many`](sdtm-relrec-many-to-many/) | record relationships between events and medications |
 | [`sdtm-suppmh-parent-linkage`](sdtm-suppmh-parent-linkage/) | link qualifiers collected on their own form to a parent record |
 | [`sdtm-suppmh-qualifiers`](sdtm-suppmh-qualifiers/) | reshape extra qualifiers into supplemental records |

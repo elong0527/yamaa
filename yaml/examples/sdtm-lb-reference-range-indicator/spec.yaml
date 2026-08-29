@@ -1,0 +1,95 @@
+schema_version: "1.0"
+domain: LB
+datasets:
+  LB_RAW: input/lb_raw.csv
+  LBRANGE: input/lbrange.csv
+base: LB_RAW
+keys: [STUDYID, USUBJID, LBSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: LB_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    derivation:
+      literal: LB
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: LB_RAW.USUBJID
+
+  - name: LBSEQ
+    type: int
+    derivation:
+      source: LB_RAW.LBSEQ
+
+  - name: LBTESTCD
+    type: str
+    derivation:
+      source: LB_RAW.LBTESTCD
+
+  - name: SEX
+    type: str
+    derivation:
+      source: LB_RAW.SEX
+
+  - name: LBSTRESN
+    type: float
+    derivation:
+      source: LB_RAW.LBSTRESN
+
+  - name: LBORRESU
+    type: str
+    derivation:
+      mapping_from:
+        source: [LBTESTCD, SEX]
+        dataset: LBRANGE
+        key: [LBTESTCD, SEX]
+        value: UNIT
+
+  - name: LBSTNRLO
+    type: float
+    derivation:
+      mapping_from:
+        source: [LBTESTCD, SEX]
+        dataset: LBRANGE
+        key: [LBTESTCD, SEX]
+        value: NRLO
+
+  - name: LBSTNRHI
+    type: float
+    derivation:
+      mapping_from:
+        source: [LBTESTCD, SEX]
+        dataset: LBRANGE
+        key: [LBTESTCD, SEX]
+        value: NRHI
+
+  - name: LBNRIND
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "LBSTRESN IS NULL"
+            then:
+              literal: null
+          - when: "LBSTRESN < LBSTNRLO"
+            then:
+              literal: LOW
+          - when: "LBSTRESN > LBSTNRHI"
+            then:
+              literal: HIGH
+        otherwise:
+          literal: NORMAL
+
+verifications:
+  - row_count:
+      min: 6
+      max: 6
+  - all_or_none:
+      id: reference-dictionary-entry-is-complete
+      columns: [LBORRESU, LBSTNRLO, LBSTNRHI]

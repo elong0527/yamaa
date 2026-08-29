@@ -1,0 +1,67 @@
+schema_version: "1.0"
+domain: EX
+datasets:
+  EX_RAW: input/ex_raw.csv
+base: EX_RAW
+keys: [STUDYID, USUBJID, EXSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: EX_RAW.STUDYID
+
+  - name: DOMAIN
+    type: str
+    derivation:
+      literal: EX
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: EX_RAW.USUBJID
+
+  - name: EXSEQ
+    type: int
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [EXSTDTC, EXTRT]
+
+  - name: EXTRT
+    type: str
+    derivation:
+      source: EX_RAW.EXTRT
+
+  - name: EXDOSE
+    type: float
+    derivation:
+      source: EX_RAW.EXDOSE
+
+  - name: EXDOSU
+    type: str
+    derivation:
+      source: EX_RAW.EXDOSU
+
+  - name: EXSTDTC
+    type: date
+    derivation:
+      source: EX_RAW.EXSTDTC
+
+  - name: EXENDTC
+    type: date
+    derivation:
+      source: EX_RAW.EXENDTC
+
+  - name: EXADJ
+    type: str
+    derivation:
+      source: EX_RAW.EXADJ
+
+verifications:
+  - row_count:
+      min: 9
+      max: 9
+  - predicate:
+      id: every-administration-has-dose-and-unit
+      assert: "EXDOSE IS NOT NULL AND EXDOSU IS NOT NULL"
