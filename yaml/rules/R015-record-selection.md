@@ -3,7 +3,7 @@ id: R015
 title: Record Selection
 status: normative
 applies_to: [root.selections, selection_class, expression.source]
-depends_on: [R001, R002, R003, R004, R006, R007, R008]
+depends_on: [R001, R002, R003, R004, R005, R006, R007, R008, R014]
 ---
 
 # Record selection
@@ -93,8 +93,9 @@ A selection is not evaluated ahead of the columns that read it. It resolves
 where they do, so a column reading one depends on the selection's own `source`
 variables under R001, exactly as a column using `mapping_from` depends on its
 source variables. A selection's `filter` and `order_by` name records of its own
-dataset and contribute no output-column dependency, so a selection can never
-take part in a cycle.
+dataset and contribute no output-column dependency. Its `source` variables do
+contribute dependencies, so R001 detects a cycle when a column reads a
+selection whose match depends directly or indirectly on that column.
 
 ## When no record is selected
 

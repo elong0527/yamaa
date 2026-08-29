@@ -97,12 +97,13 @@ CSV records the intended artifact once that capability exists.
 | [`negative-output-duplicate-subject`](negative-output-duplicate-subject/) | reject a repeated demographics record |
 | [`negative-row-value-self-reference`](negative-row-value-self-reference/) | reject a weight carried forward from a carried-forward weight |
 | [`negative-row-value-zero-offset`](negative-row-value-zero-offset/) | reject a previous weight that names no earlier visit |
+| [`negative-selection-id-collision`](negative-selection-id-collision/) | reject a first treatment named after its own source |
 | [`negative-selection-incomplete-key`](negative-selection-incomplete-key/) | reject a reference limit chosen without a sex |
+| [`negative-selection-unmatched-key`](negative-selection-unmatched-key/) | reject a result with no reference range |
+| [`negative-selection-unordered-choice`](negative-selection-unordered-choice/) | reject a treatment and dose taken from an unchosen record |
 | [`negative-selection-unordered-keep`](negative-selection-unordered-keep/) | reject a treatment ordered but not chosen |
 | [`negative-selection-unpaired-key`](negative-selection-unpaired-key/) | reject a reference limit matched against nothing |
 | [`negative-source-duplicate-right-key`](negative-source-duplicate-right-key/) | reject duplicate subject enrichment |
-| [`negative-selection-id-collision`](negative-selection-id-collision/) | reject a first treatment named after its own source |
-| [`negative-selection-unordered-choice`](negative-selection-unordered-choice/) | reject a treatment and dose taken from an unchosen record |
 | [`negative-sum-non-numeric-source`](negative-sum-non-numeric-source/) | reject a severity burden totalled from severity words |
 | [`negative-types-unknown-field`](negative-types-unknown-field/) | reject a total over a field the source does not have |
 | [`negative-variable-nested-expression`](negative-variable-nested-expression/) | reject an uppercased country chosen inside the same step |

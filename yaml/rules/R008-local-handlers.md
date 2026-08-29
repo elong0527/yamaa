@@ -36,8 +36,8 @@ Handlers occur in this fixed lifecycle:
 | extract | `missing` | Use a literal for a missing string input |
 | extract | `no_match` | Use a literal when a non-missing string does not match |
 | template | `missing` | Use a literal when any placeholder value is missing |
-| impute | `missing` | Use a literal for a missing date source |
-| impute | `invalid` | Use a literal when a non-missing source is not ISO 8601 date text |
+| impute | `date_impute.missing`, `date_precision.missing` | Use a literal for a missing date source |
+| impute | `date_impute.invalid`, `date_precision.invalid` | Use a literal when a non-missing source is not ISO 8601 date text |
 | convert | `conversion_failure` | Use a literal after failed output conversion |
 | final | `override` | Apply the first matching final expression |
 
@@ -61,6 +61,11 @@ Omitting an applicable handler field makes its condition fatal.
 value with no dictionary entry, a string the pattern does not match, and text
 that is not an ISO 8601 date are each a different defect from an uncollected
 value, and a specification may answer them differently.
+
+The `impute` stage name covers both date operations that inspect possibly
+partial date text. `date_impute` returns a completed date and `date_precision`
+returns the precision of the collected text, but their `missing` and `invalid`
+conditions are identical and use the same stage in structured errors.
 
 Where an operation takes several inputs, as `mapping_from` does, `missing`
 fires when any one of them is missing and the present-but-unusable handler

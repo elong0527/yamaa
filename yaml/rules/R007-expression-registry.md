@@ -3,7 +3,7 @@ id: R007
 title: Expression Registry
 status: normative
 applies_to: [expression, expressions, schema_expression]
-depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013]
+depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014]
 ---
 
 # Expression registry
@@ -22,7 +22,8 @@ terms, and cross-operation type compatibility. Behavior specific to one
 operation is documented beside its registry entry. Cross-cutting behavior stays
 in its owning rule: R002 and R003 for source binding and joins, R008 for local
 handlers, R010 for `compute`, R011 for column types, R012 for string templates,
-R013 for aggregate reduction, R014 for the type a source field carries, R015 for a record selected once and read by several columns, and R004 for predicates.
+R013 for aggregate reduction, R014 for the type a source field carries, R015
+for a record selected once and read by several columns, and R004 for predicates.
 
 ## Registration
 
@@ -131,8 +132,8 @@ runtime types:
   states;
 - `greatest` and `least` require mutually comparable `sources`;
 - `row_value` requires an integer `offset` and accepts any `source` type;
-- window ordering requires mutually comparable values. One
-  order term names one variable, and a variable has exactly one type — R014
+- window ordering requires mutually comparable values. One order term names one
+  variable, and a variable has exactly one type — R014
   gives it to a source field and R011 to a declared column — so the values a
   term compares are of one type by construction and ordering has no
   incomparable case. An expression naming several variables, as `greatest` and
@@ -145,10 +146,12 @@ its YAML scalar type.
 `cut`, `str_extract`, `str_concat`, `str_template`, `str_upper`, and
 `str_lower` return strings. `compute` returns the numeric type its expression
 promotes to under R010.
-`date_diff`, `study_day`, `row_number`, `rank`, and `dense_rank` return integers.
+`date_diff`, `study_day`, `row_number`, `rank`, and `dense_rank` return
+integers.
 `study_day` never returns zero. `date_impute` returns a `date`.
-`baseline_flag` and `date_precision` return strings. Mapping, conditional, coalescing, extreme,
-baseline value, and offset row expressions retain the selected value type.
+`baseline_flag` and `date_precision` return strings. Mapping, conditional,
+coalescing, extreme, baseline value, and offset row expressions retain the
+selected value type.
 `aggregate` returns the type R013 gives its expression. The `function`
 expression retains the type returned by the project function.
 

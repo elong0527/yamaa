@@ -66,7 +66,7 @@ columns can read it, which no expression can do while each returns one value.
 It is not an expression and adds no nesting: its matching, filtering, and
 ordering fields are the ones `mapping_from` and `multiple_matches` already
 declare, and a column reads it through the qualified variable form it already
-uses for a dataset. R014 defines it.
+uses for a dataset. R015 defines it.
 
 The version 1.0 input-shape audit covers every registered expression:
 

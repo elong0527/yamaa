@@ -64,10 +64,11 @@ collected date is carried as text and completed before it becomes a `date`.
 surgery; its result is a `date` like any other, and nothing distinguishes it
 from a fully collected one. `date_precision` reads how much of a date the
 collected text carried, so a specification can record beside the date what it
-supplied; the date value itself still carries no precision. There is no `datetime` type: a value carrying a time of day
-is declared `str`, and ISO 8601 text orders chronologically under R007
-comparison. There is no Boolean column type; a flag is a `str` column with an
-`allowed_values` verification, as the examples write it.
+supplied; the date value itself still carries no precision. There is no
+`datetime` type: a value carrying a time of day is declared `str`, and ISO 8601
+text orders chronologically under R007 comparison. There is no Boolean column
+type; a flag is a `str` column with an `allowed_values` verification, as the
+examples write it.
 
 Extending this vocabulary is a rule change, not an implementation choice.
 

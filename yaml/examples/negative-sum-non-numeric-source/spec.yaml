@@ -29,6 +29,6 @@ columns:
   - name: SEVTOT
     type: float
     derivation:
-      sum:
-        source: ASEV
+      aggregate:
         group_by: [STUDYID, USUBJID]
+        expr: "SUM(ASEV)"

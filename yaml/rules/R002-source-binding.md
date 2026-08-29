@@ -3,7 +3,7 @@ id: R002
 title: Source Binding
 status: normative
 applies_to: [root.datasets, root.base, row.dataset, expression.source, string_template]
-depends_on: [R003, R006, R008]
+depends_on: [R003, R006, R008, R014, R015]
 ---
 
 # Source binding

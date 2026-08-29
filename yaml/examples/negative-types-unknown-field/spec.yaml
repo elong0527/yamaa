@@ -25,5 +25,4 @@ columns:
   - name: DOSECUM
     type: float
     derivation:
-      sum:
-        source: EX.EXDOSE
+      aggregate: "SUM(EX.EXDOSE)"

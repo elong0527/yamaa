@@ -1,0 +1,44 @@
+schema_version: "1.0"
+domain: LB
+datasets:
+  LB_RAW: input/lb_raw.csv
+  LBRANGE: input/lbrange.csv
+base: LB_RAW
+keys: [STUDYID, USUBJID, LBSEQ]
+
+selections:
+  - id: REFRANGE
+    dataset: LBRANGE
+    source: [LBTESTCD, SEX]
+    key: [LBTESTCD, SEX]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: LB_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: LB_RAW.USUBJID
+
+  - name: LBSEQ
+    type: int
+    derivation:
+      source: LB_RAW.LBSEQ
+
+  - name: LBTESTCD
+    type: str
+    derivation:
+      source: LB_RAW.LBTESTCD
+
+  - name: SEX
+    type: str
+    derivation:
+      source: LB_RAW.SEX
+
+  - name: LBSTNRHI
+    type: float
+    derivation:
+      source: REFRANGE.NRHI

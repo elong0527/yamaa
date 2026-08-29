@@ -41,9 +41,9 @@ columns:
   - name: RFXSTDTC
     type: date
     derivation:
-      min:
-        source: EX.EXSTDTC
+      aggregate:
         filter: "EX.EXSTDTC IS NOT NULL"
+        expr: "MIN(EX.EXSTDTC)"
 
   - name: RFXENDTC
     type: date
@@ -65,17 +65,17 @@ columns:
     type: date
     output: false
     derivation:
-      max:
-        source: DS.DSSTDTC
+      aggregate:
         filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
+        expr: "MAX(DS.DSSTDTC)"
 
   - name: AEDT0
     type: date
     output: false
     derivation:
-      max:
-        source: AE.AEENDTC
+      aggregate:
         filter: "AE.AEENDTC IS NOT NULL"
+        expr: "MAX(AE.AEENDTC)"
 
   - name: RFENDTC
     type: date
