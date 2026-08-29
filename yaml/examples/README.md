@@ -214,8 +214,13 @@ the vocabulary.
 5. An extreme value and the values associated with it come from two independent
    reductions that nothing ties to the same right-side record. A shared
    `filter` can make them see the same records, not the same one.
+   `sdtm-dm-reference-dates` takes the last exposure end date and the dose
+   given at it as two separate selections, and keeps the second as an internal
+   column solely to show that they agree only because both order the same way.
 6. A missing aggregate result cannot distinguish no matching record from
-   matching records whose values are all missing.
+   matching records whose values are all missing. In
+   `sdtm-dm-reference-dates` a subject who was never exposed and one whose
+   exposure dates were never collected produce the same empty reference dates.
 
 ### D. Types, conversion, and missing-value semantics
 
