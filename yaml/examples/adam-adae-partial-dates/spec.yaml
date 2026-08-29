@@ -68,7 +68,7 @@ columns:
           Y: "M"
     verifications:
       allowed_values:
-        values: ["D", "M", "Y"]
+        values: ["D", "M"]
 
   - name: TRTSDT
     type: date
