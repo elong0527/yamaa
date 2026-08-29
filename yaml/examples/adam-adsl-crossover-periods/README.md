@@ -1,55 +1,19 @@
-# ADaM ADSL crossover periods
+# ADaM ADSL: derive period-scoped treatments and dates across a washout
 
-This SDTM-to-ADaM fixture answers one question: can period-scoped treatment and
-dates be derived without a subject-level join collapsing the periods?
+This example uses sample DM and EX data and a `yamaa` specification to derive
+one row per subject in a two-period crossover:
 
-## Rule and record grain
+- `TR01SDT` and `TR01EDT` are the first start date and the last end date of the
+  subject's exposure in period one; `TR02SDT` and `TR02EDT` are the same two
+  dates for period two;
+- `TRT01A` and `TRT02A` are the treatments given in each period, each taken
+  from the subject's earliest exposure record within that period; when two
+  records start on the same day the lower sequence number wins;
+- `WASHDUR` is the length of the washout, the number of days strictly between
+  `TR01EDT` and `TR02SDT`, counting neither the last day of period one nor the
+  first day of period two, so consecutive periods give zero.
 
-DM is the base, so each subject produces one ADSL row. Two treatment periods
-are separated by a washout. `TR01SDT` through `TR02EDT` reduce EX inside each
-period, and `TRT01A` and `TRT02A` name the treatment given in each. `WASHDUR`
-is the number of days strictly between the end of period one and the start of
-period two.
-
-Two subjects cross over in opposite orders. A third completes only period one,
-so every period-two variable must stay missing.
-
-## The aggregate filter is what keeps the periods apart
-
-`min` and `max` narrow EX to one period before the R003 join, so a
-subject-level join never collapses period records and each period gets its own
-dates. `source.multiple_matches` declares the same `filter`, so `TRT01A` and
-`TRT02A` narrow EX to their own period and then order within it. Two subjects
-have two administrations inside one of their periods, so the ordering is doing
-real work rather than picking the only candidate.
-
-`CATH-UCSD-0003` never crossed over. Its period-two right side is empty after
-filtering, which R003 treats as an absent match, so `TRT02A` is missing because
-the selection found nothing. Nothing guards it and nothing has to agree with
-anything else.
-
-## Two gaps this fixture names
-
-**Period is not a concept.** `APERIOD` is an ordinary column matched by a
-literal in four separate predicates. Adding a period means editing every
-predicate and adding another pair of columns, so the specification grows with
-the design rather than describing it.
-
-**`TRTxxA` variables are positional.** Nothing links `TRT02A` to
-`TR02SDT`/`TR02EDT` except naming. A period-aware structure would make the
-grouping checkable.
-
-## Diagnostics and verifications
-
-Expected `TRT01A.source.multiple_matches` and `TRT02A.source.multiple_matches`
-counts are both one: `CATH-UCSD-0001` has two period-one administrations and
-`CATH-UCSD-0002` has two in period two. `CATH-UCSD-0003` has no period-two
-record at all, which is an absent match under R003 rather than a handler path.
-`WASHDUR` counts the days strictly between the two periods with
-`bounds: between`, so it needs no intermediate and the fixture declares no
-internal column at all.
-
-Rows remain in DM order; the key is `[STUDYID, USUBJID]`; exactly three rows
-are expected. Every period-two variable must be present or absent together,
-period two must start after period one ends, and a crossover must change
-treatment.
+Every value is read only from the exposure records belonging to its own period,
+so one period's dates and treatment never mix with the other's. A subject who
+never entered period two has no exposure records there, and every period-two
+variable is empty for them.

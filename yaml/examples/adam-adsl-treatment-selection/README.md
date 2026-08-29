@@ -1,24 +1,17 @@
-# ADaM ADSL treatment selection and duration
+# ADaM ADSL: select actual treatment and its duration from EX
 
-This SDTM-to-ADaM fixture answers one question: how are a subject's actual
-treatment and inclusive treatment interval selected from EX?
+This example uses sample DM and EX data and a `yamaa` specification to derive
+one row per subject:
 
-The two treated subjects each have two EX rows stored out of chronological
-order. `TRT01RAW` selects the first treatment by date and sequence; `TRTSDT`
-and `TRTEDT` reduce the qualifying start and end dates; and `TRTDURD` counts
-both endpoints. Placebo administrations have `EXDOSE = 0` but remain
-real treatment records. Two subjects have no EX: one falls back to planned
-treatment and one to `NOT TREATED`.
-
-Expected `TRT01RAW.source.multiple_matches` count is two. `TRT01RAW` declares
-the same `filter` as `TRTSDT` and `TRTEDT`, so all three agree on which
-exposure records qualify; every EX row in this positive fixture is
-treatment-relevant, so the filter changes no value here and exists to keep the
-three derivations from drifting apart. `TRTDURD` counts both endpoints with
-`bounds: inclusive`, so the inclusive duration needs no intermediate.
-`TRT01RAW` and `TRT01SRC` declare `output: false` and stay out of the
-artifact.
-
-Rows remain in DM order; the key is `[STUDYID, USUBJID]`; exactly four rows are
-expected. Treatment dates and durations must be all present or all missing,
-and placebo must imply `SAFFL = Y`.
+- `TRT01A` is the treatment the subject actually received, taken from their
+  earliest exposure record; when two records start on the same day the lower
+  sequence number wins. A subject with no exposure takes their planned arm from
+  DM instead, and a subject with neither is `NOT TREATED`. The value is
+  uppercased;
+- `TRTSDT` is the subject's first exposure start date and `TRTEDT` is their
+  last exposure end date;
+- `TRTDURD` is the number of days from `TRTSDT` to `TRTEDT`, counting both the
+  first and the last day, so a subject treated on a single day has a duration
+  of one;
+- `SAFFL` is `Y` for a subject who has a treatment start date and `N`
+  otherwise.

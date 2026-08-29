@@ -122,8 +122,7 @@ be written portably.
 ## Coverage
 
 Twenty of the 21 registered non-leaf expressions and all nine verification
-keywords are exercised by at least one fixture; `least` is the one with no
-fixture. A few fixtures are the only
+keywords are exercised by at least one fixture. A few fixtures are the only
 coverage of something and should not be deleted without a replacement:
 
 - `adam-adsl-bmi-function` is the only use of the `function` extension point.
@@ -256,7 +255,9 @@ the vocabulary.
     or one row template per slot, so the specification grows with the data
     rather than describing the design. `sdtm-lb-conditional-compartments`,
     `adam-adsl-crossover-periods`, and `sdtm-relrec-many-to-many` each show a
-    different face of this.
+    different face of this. The naming carries the structure instead: nothing
+    links `adam-adsl-crossover-periods`'s `TRT02A` to its `TR02SDT` and
+    `TR02EDT` except the `02`, so no implementation can check the grouping.
 13. Row construction cannot consume values resolved during column derivation.
     A logically removed record cannot be dropped, because `row.filter` sees
     only the row driver and nothing deletes a row afterwards, as
