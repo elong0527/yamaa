@@ -33,7 +33,7 @@ non-missing value and states that a `float` renders the same way here as it does
 when converted to `str`; the schema does not select a file container. The
 example suite uses CSV and represents a missing value with an empty field. Row
 sequence follows R001, but the language has no separate submission-sort
-control, as gap 11 in `examples/plan.md` records.
+control, as gap 6 in `examples/plan.md` records.
 
 Everything below concerns the values themselves, which are fully defined, and
 none of it depends on the unsettled part.
