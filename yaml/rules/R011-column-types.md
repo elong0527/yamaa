@@ -60,7 +60,7 @@ surgery; its result is a `date` like any other, and nothing distinguishes it
 from a fully collected one. There is no `datetime` type: a value carrying a time of day
 is declared `str`, and ISO 8601 text orders chronologically under R007
 comparison. There is no Boolean column type; a flag is a `str` column with an
-`allowed_values` verification, as the fixtures write it.
+`allowed_values` verification, as the examples write it.
 
 Extending this vocabulary is a rule change, not an implementation choice.
 
@@ -108,7 +108,7 @@ otherwise the nearest binary64 value.
 
 A `bool` never converts. No column type is Boolean, but `literal_value` admits
 `true` and `false`, so a Boolean value can reach conversion. Failing is the
-conservative reading: it is deterministic, no fixture depends on any other
+conservative reading: it is deterministic, no example depends on any other
 outcome, and a later rule may define a mapping without invalidating a
 specification written under this one.
 
@@ -143,7 +143,7 @@ expected outputs record.
 ## Unresolved
 
 Source-format value recognition remains open under gap 7 of
-`examples/README.md`. This rule governs conversion of a value that evaluation
+`examples/plan.md`. This rule governs conversion of a value that evaluation
 already produced; it does not say how a reader decides that a source field is
 missing rather than empty text.
 

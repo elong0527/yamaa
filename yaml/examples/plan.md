@@ -2,20 +2,22 @@
 
 ## Purpose
 
-The suite holds 33 fixtures, each covering one derivation boundary with
-committed golden output. Their READMEs record the design gaps, grouped by root
-cause in [`README.md`](README.md).
+The suite holds 33 examples, each covering one derivation boundary with
+committed golden output. This file records the design gaps they expose,
+grouped by root cause, and tracks the schema work those findings justify.
+[`README.md`](README.md) is the reader-facing index of the examples
+themselves.
 
 This file tracks the schema and rule work those findings justify. It lists what
 has landed in one table and then only the work that remains. Every open item
 names the gap it closes, the evidence that justifies it, and the negative
-fixture the acceptance rule requires.
+example the acceptance rule requires.
 
 ## Landed
 
 | Change | Effect |
 |---|---|
-| `output: false` on a column, R005 | 28 columns across 11 fixtures became internal, so named intermediates no longer pollute the artifact |
+| `output: false` on a column, R005 | 28 columns across 11 examples became internal, so named intermediates no longer pollute the artifact |
 | `compute` and R010, replacing `add`, `subtract`, `multiply`, `percent_change` | one closed numeric grammar with columns in every operand position, a defined missing policy, and row-wise numeric extremes |
 | `order_by_term` with `direction` and `nulls` | descending and null placement are declared, and two negated companion columns were deleted |
 | `filter` on `multiple_matches`, R003 and R008 | ordered selection narrows its right side before ordering |
@@ -46,15 +48,147 @@ operators is proposed.
 `lookup` expression with a `dataset`/`on`/`value` payload. Under the design's
 own constraint — left join only, one column added per call — that entry was a
 second spelling of `mapping_from`, and its only new capability was the compound
-key. Widening `source` and `key` to lists bought exactly that, left the registry
-unchanged, and rewrote no existing call site. Ask what a proposed entry does
-that an existing one could not be widened to do.
+key. Widening `source` and `key` to lists bought exactly that, left the
+registry unchanged, and rewrote no existing call site. Ask what a proposed
+entry does that an existing one could not be widened to do.
 
 **Predictions about golden output were wrong twice.** `compute` was expected to
 move nothing and moved nothing, but the `multiple_matches` filter was also
 expected to move nothing and changed `adam-adsl-crossover-periods`, because two
 columns existed only to expose the workaround it removed. Assume any change
-that removes a workaround also removes the fixture columns that documented it.
+that removes a workaround also removes the columns that documented it.
+
+## Open design gaps
+
+Sixteen gaps are open across the suite, grouped by root cause rather than by
+the example that found them, because most are consequences of a few underlying
+decisions rather than independent omissions. Closed gaps are removed from this
+list rather than marked; `plan.md` records what was closed and how.
+
+### A. Literal operands and ordering
+
+1. `cut.breaks` is a literal list, so banding criteria that are not
+   proportional to a single reference cannot be written as one `cut`. The
+   common case is not blocked. Criteria stated as multiples, as CTCAE states
+   liver enzymes and creatinine, are `mapping_from` for the reference limit,
+   `compute` for the ratio, and `cut` with literal breaks and `right: true`,
+   which puts the varying fact in data and the medical rule in the
+   specification. Predicate bounds are not blocked either: `sql` compares one
+   column with another, as `ASTDT >= TRTSDT` does in
+   `adam-adae-treatment-emergent`. What remains is a criterion with no such
+   reference, such as an absolute electrolyte threshold that differs per
+   parameter, where each parameter needs its own break list.
+
+   The same root cause appears where the formula varies rather than a bound.
+   `sdtm-vs-unit-standardization` converts pounds by multiplication and
+   Fahrenheit by an affine formula, so what differs per test is the shape of
+   the expression, not an operand in it. `compute` takes a column in any
+   operand position, so a multiplicative factor could be looked up, but nothing
+   selects an expression from data. A row template per test is the workaround
+   the example uses: it puts each formula beside the test it belongs to, at the
+   cost of leaving rows grouped by test rather than in collection order.
+2. Only `row_number` is registered. Without `rank` and `dense_rank` a tie
+   cannot carry a rank number, so distinct-level counts, and any rule whose
+   output is the rank itself, cannot be expressed.
+   `adam-adae-worst-severity` has two events tied on severity and date and
+   numbers them 1 and 2. Flagging every record tied at a worst value is a
+   separate question and is not blocked: R007 lets `max` declare `group_by`,
+   reduce constructed output rows within each partition, and broadcast the
+   result, so a predicate comparing each row with that value flags the whole
+   tied set. That example flags one record because that is the rule it models.
+
+A controlled vocabulary also still needs a `mapping` to give it a numeric proxy
+before anything can order it. The order lives in a dictionary rather than in
+the vocabulary.
+
+### B. Joins
+
+3. `mapping_from` returns one column per call, so reading several columns from
+   one matched record repeats the match. `sdtm-vs-visit-study-day` calls it
+   twice against one `TV` row. A multi-column return conflicts with one
+   expression producing one value and belongs with gaps 5 and 6.
+4. There is no interval join, so a record cannot be matched against a table of
+   per-subject intervals of irregular count and length, which is what an
+   `EPOCH` derived from collected subject elements needs. Regular structure is
+   not blocked: repeating intervals are arithmetic, so a treatment cycle is
+   `FLOOR((ADY - 1) / 21) + 1` and its day is `MOD(ADY - 1, 21) + 1`, and a
+   three-epoch design is a `case` chain over subject-level start and end dates
+   that `mapping_from` supplies. The gap is the irregular table, where the
+   boundaries share no structure to compute against. `sdtm-vs-visit-study-day`
+   leaves `EPOCH` empty for an unscheduled visit for this reason.
+
+### C. Aggregates and selection operate on values, not rows
+
+5. An extreme value and the values associated with it come from two independent
+   reductions that nothing ties to the same right-side record. A shared
+   `filter` can make them see the same records, not the same one.
+   `sdtm-dm-reference-dates` takes the last exposure end date and the dose
+   given at it as two separate selections, and keeps the second as an internal
+   column solely to show that they agree only because both order the same way.
+6. A missing aggregate result cannot distinguish no matching record from
+   matching records whose values are all missing. In
+   `sdtm-dm-reference-dates` a subject who was never exposed and one whose
+   exposure dates were never collected produce the same empty reference dates.
+
+### D. Types, conversion, and missing-value semantics
+
+7. Source-format missing values and type inference have no normative rule.
+   Every example assumes an empty CSV field is missing and distinguishes it
+   from a nonempty malformed value.
+8. Partial dates have no precision. `date_impute` declares the completion
+   rule, so it is no longer string surgery, but the resulting `date` is
+   indistinguishable from a collected one and a partial value still cannot be
+   carried, compared, or verified as such. No example demonstrates this:
+   `adam-adae-partial-dates` imputes without recording which component it
+   supplied, so the cost is visible in `TRTEMFL` and nowhere in the artifact.
+   The suite also covers only trailing precision loss,
+   because the SDTM form for a known day in an unknown month needs an agreed
+   representation before an example can assert it.
+9. Imputed and collected dates compare identically. Nothing marks a comparison
+   made under uncertainty, so an imputed day silently decides classifications
+   such as treatment emergence.
+
+### E. The output and pipeline contract stops at one dataset
+
+10. One specification derives one dataset. `sdtm-suppmh-qualifiers` cannot
+    assign a parent sequence and consume it in the same run, and
+    `sdtm-dm-reference-dates` depends on DM being derived before the domains
+    that reference it without being able to say so. R001 cycle detection is per
+    specification, so a cross-dataset cycle cannot be reported either.
+11. Nothing controls output row order, and verifications are row-wise over the
+    completed output. Rows leave in row-template order rather than a submission
+    sort order, and referential integrity between a SUPPQUAL record and its
+    parent domain cannot be asserted. Nothing counts rows within a group
+    either, so `sdtm-lb-conditional-compartments` cannot assert that every
+    subject in an applicable cohort has both of its compartments.
+
+### F. Structure that the data has cannot be declared
+
+12. Conditional applicability, treatment period, relationship degree, and
+    analysis window are all real structure in a protocol and none is a concept
+    in the schema. Each is re-expressed as a filter, a literal in a predicate,
+    or one row template per slot, so the specification grows with the data
+    rather than describing the design. `sdtm-lb-conditional-compartments`,
+    `adam-adsl-crossover-periods`, and `sdtm-relrec-many-to-many` each show a
+    different face of this. The naming carries the structure instead: nothing
+    links `adam-adsl-crossover-periods`'s `TRT02A` to its `TR02SDT` and
+    `TR02EDT` except the `02`, so no implementation can check the grouping.
+13. Row construction cannot consume values resolved during column derivation.
+    A logically removed record cannot be dropped, because `row.filter` sees
+    only the row driver and nothing deletes a row afterwards, as
+    `sdtm-ae-effective-transaction` shows by committing a record that must not
+    exist.
+14. A derivation cannot carry both a value and the reason for it.
+    `adam-adrs-composite-response` writes the same four predicates twice, once
+    for the endpoint and once for its audit trail, with nothing linking them.
+    The same example shows the related loss: whether a missing component means
+    not evaluable or non-response is carried only by where a branch sits in the
+    list, so no declaration states the policy and two studies cannot be
+    compared without reading their branch order.
+15. Metadata is an ungoverned string map. Labels are first class, but origin,
+    length, and controlled terminology are free-form text that no
+    implementation can validate, and no expected metadata artifact exists to
+    assert them, as `sdtm-dm-metadata-contract` records.
 
 ## Open work
 
@@ -72,9 +206,9 @@ A `cut_from` reading bands from a keyed dataset was drafted and rejected. It
 worked, but it moved the medical rule out of the specification and into a
 reference table, so a reviewer had to open a CSV to learn what the criteria
 were. Normalizing splits the two correctly. The remaining case is rare enough
-that `function` is the honest answer until a fixture proves otherwise.
+that `function` is the honest answer until an example proves otherwise.
 
-Evidence: gap 1. No action until a fixture needs it.
+Evidence: gap 1. No action until an example needs it.
 
 ### T2. `rank` and `dense_rank`
 
@@ -92,7 +226,7 @@ tied set without a new expression.
 
 Decision it forces: tie semantics for a rank number.
 
-Negative fixture: ranking on a column whose ordering is not total.
+Negative example: ranking on a column whose ordering is not total.
 
 ### T5. Selection that returns a record
 
@@ -132,8 +266,8 @@ the source text, and nothing marks a comparison made against an imputed
 operand. A precision concept would close both at once, and a `date_precision`
 expression would close the first alone. Gap 9 is untouched.
 
-No fixture now carries an imputation flag, so both halves are argued from the
-rules rather than shown in golden output. A fixture that records which
+No example now carries an imputation flag, so both halves are argued from the
+rules rather than shown in golden output. An example that records which
 component was supplied is the first thing this item needs.
 
 `greatest` and `least` compare dates as ordinary comparable values. If a
@@ -143,7 +277,7 @@ an imputed operand can win, so this item owns that decision rather than R007.
 ### T7. Source-format ingestion
 
 Gap 7: source-format missing values and type inference have no normative rule.
-Every fixture assumes an empty CSV field is missing and distinguishes it from a
+Every example assumes an empty CSV field is missing and distinguishes it from a
 nonempty malformed value, and nothing says so.
 
 The conversion half of this item has landed. Float-to-text was the last
@@ -176,7 +310,7 @@ unrelated `allowed_values` list.
 
 Needs a vocabulary, a link between a declared codelist and its enforced values,
 a length concept connected to the declared type, and an expected metadata
-artifact. Until that artifact is defined, fixtures must not invent its shape.
+artifact. Until that artifact is defined, examples must not invent its shape.
 
 ### T10. Declarable study structure
 
@@ -197,9 +331,9 @@ an `EPOCH` assignment actually needs.
 
 ## Sequencing
 
-1. **T2**, with its negative fixtures. It is a registry entry with committed
+1. **T2**, with its negative examples. It is a registry entry with committed
    evidence and bounded semantics. T3 landed as a widened `mapping_from` and
-   still owes the four negative fixtures listed below.
+   still owes the four negative examples listed below.
 2. **T7**, which is rule text rather than schema. Its conversion half landed
    with float-to-text; what remains is source-format recognition, still
    required before any implementation can claim R and Python parity.
@@ -209,19 +343,19 @@ an `EPOCH` assignment actually needs.
 4. **T1** last, because its answer probably lies inside T10 rather than in a
    widened field.
 
-Expected README edits: T2 retires gap 2, T5 retires gaps 3, 5, and 6, T6
+Expected catalogue edits: T2 retires gap 2, T5 retires gaps 3, 5, and 6, T6
 retires gaps 8 and 9, T7 retires gap 7, T8 retires gaps 10 and 11, T9 retires
 gap 15, and T10 retires gaps 4, 12, 13, and 14, along with whatever remains of
 gap 1.
 
-## Negative fixtures this plan requires
+## Negative examples this plan requires
 
 The acceptance rule needs failure behavior fixed before a feature is added.
 **None of these exist.** The N-series of the earlier assessment plan is
 entirely unimplemented, which makes this the binding constraint on every open
 item above and not a separate workstream.
 
-| Fixture | Provokes | Gates |
+| Example | Provokes | Gates |
 |---|---|---|
 | non-output column named in `keys` | S1's only new error | already landed, untested |
 | unguarded division by zero, and the same expression guarded by `NULLIF` | R010's failure conditions | already landed, untested |
@@ -237,18 +371,25 @@ item above and not a separate workstream.
 | a `row_number` partition in which every row fails the window `filter` | R007: no rank rather than a spurious rank of one | already landed, untested |
 | `date_impute` with `month: 15`, and with a `day` the imputed month does not have | R007's calendar-range error | already landed, untested |
 | `date_impute` over an invalid source with no `invalid` handler | fail rather than yield missing | already landed, untested |
+| a `mapping` whose `dict` keys collide once folded under `case_sensitive: false` | R007 rejects the dictionary rather than picking one | already landed, untested |
+| a non-missing value absent from `dict` with no `unmapped` handler | R008 makes the condition fatal | already landed, untested |
+| a column type outside `column_type` | R011's closed vocabulary | already landed, untested |
+| unparseable numeric text, an incomplete date, and a non-integral value converted to `int` | R011's conversion failures | already landed, untested |
+| `greatest` whose `sources` mix incomparable types | R007 comparability | already landed, untested |
+| duplicate output keys, and a failed column or dataset verification | R005 key uniqueness and R009 reporting | already landed, untested |
+| a nested expression in a field typed as `variable` | the version 1.0 input-shape boundary | already landed, untested |
 
 All but one gate nothing new, because the features already landed. They are
-the more urgent set: every fail-closed claim in the fixture READMEs and in
+the more urgent set: every fail-closed claim in the example READMEs and in
 R003, R005, R007, R008, and R010 is currently an assertion rather than a tested
 behavior. `sdtm-suppmh-parent-linkage` states plainly that its own
 `not_missing` verification is meaningful only if the lookup fails closed, which
-is exactly the claim no fixture tests.
+is exactly the claim no example tests.
 
 ## Acceptance rule for adding a schema feature
 
 A feature should enter the portable vocabulary only when at least one positive
-fixture needs it, a negative or edge fixture fixes its failure behavior, and R
+example needs it, a negative or edge example fixes its failure behavior, and R
 and Python can implement the same semantics. Sponsor-specific algorithms should
 remain behind `function`; common CDISC operations demonstrated by multiple
-fixtures should become closed, documented expressions instead.
+examples should become closed, documented expressions instead.

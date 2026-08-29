@@ -71,10 +71,10 @@ repeated at each call site.
 
 1. Review the root field in `schema.yaml` and its included schema module.
 2. Review every applicable rule listed in `rules/README.md`.
-3. Review at least one positive fixture and its expected output.
-4. Add a negative fixture when the rule defines an error condition.
+3. Review at least one positive example and its expected output.
+4. Add a negative example when the rule defines an error condition.
 5. Require R and Python implementations to produce equivalent outputs and
-   errors from the same fixtures.
+   errors from the same examples.
 
 Behavior not defined by a normative rule must not be inferred by an
 implementation. It should be proposed as a new rule or marked as an unresolved
