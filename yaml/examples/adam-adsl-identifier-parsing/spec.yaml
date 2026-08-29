@@ -43,11 +43,8 @@ columns:
   - name: SUBJREF
     type: str
     derivation:
-      str_concat:
-        sources:
-          - source: SITEID
-          - literal: ':'
-          - source: SUBJID
+      str_template:
+        template: "{SITEID}:{SUBJID}"
         missing: UNKNOWN
     verifications:
       not_missing: {}

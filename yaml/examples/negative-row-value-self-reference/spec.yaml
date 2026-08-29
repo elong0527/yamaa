@@ -1,0 +1,53 @@
+schema_version: "1.0"
+domain: ADVS
+datasets:
+  VS: input/vs.csv
+base: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: VS.USUBJID
+
+  - name: VSSEQ
+    type: int
+    derivation:
+      source: VS.VSSEQ
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      source: VS.VSTESTCD
+
+  - name: ADT
+    type: date
+    derivation:
+      source: VS.VSDTC
+
+  - name: AVAL
+    type: float
+    derivation:
+      source: VS.VSSTRESN
+
+  - name: AVALF
+    type: float
+    derivation:
+      coalesce:
+        sources: [AVAL, PRIORF]
+
+  - name: PRIORF
+    type: float
+    output: false
+    derivation:
+      row_value:
+        source: AVALF
+        offset: -1
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        order_by: [ADT, VSSEQ]

@@ -3,7 +3,7 @@ id: R001
 title: Execution Model
 status: normative
 applies_to: [root.base, root.rows, row.dataset, root.columns, derivation]
-depends_on: [R002, R003, R004, R005, R007, R008, R010]
+depends_on: [R002, R003, R004, R005, R007, R008, R010, R012]
 ---
 
 # Execution model
@@ -54,12 +54,14 @@ declaration order. Recursively traverse each expression and collect:
 - variables in `group_by`, `order_by`, and other fields typed as `variable`;
 - variables referenced by fields whose type contains nested `expression`;
 - current-output identifiers used by an `sql` predicate;
-- current-output identifiers used by a `numeric_expression`.
+- current-output identifiers used by a `numeric_expression`;
+- variables used as placeholders in a `string_template`.
 
 Predicates include `case.branches[].when`, `override[].when`, `row.filter`,
 aggregate `filter`, and window `filter`. Identifier extraction requires parsing
-the predicate under the R004 grammar and the numeric expression under the R010
-grammar; an implementation must not treat either as dependency-free.
+the predicate under the R004 grammar, the numeric expression under the R010
+grammar, and the string template under the R012 grammar; an implementation
+must not treat any of them as dependency-free.
 
 For each row definition, evaluate row derivations using a dependency graph.
 Row derivations cannot depend on values produced only during the column phase.
@@ -67,6 +69,12 @@ Row derivations cannot depend on values produced only during the column phase.
 After row construction, build the column dependency graph and evaluate it in
 topological order. When several columns are ready, declaration order is the
 deterministic tie-breaker.
+
+The graph is over columns, not over rows. A column that reads another row of
+its own partition therefore depends on the whole column it names, so a column
+that reaches its own value that way is a cycle rather than an iteration. A
+value carried forward from a row that was itself carried forward is outside
+this model.
 
 In both phases, a completed derivation runs the R005 lifecycle before anything
 depends on it, so a dependent always reads a value of the declared type.

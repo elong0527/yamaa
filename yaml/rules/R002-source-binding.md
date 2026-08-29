@@ -2,7 +2,7 @@
 id: R002
 title: Source Binding
 status: normative
-applies_to: [root.datasets, root.base, row.dataset, expression.source]
+applies_to: [root.datasets, root.base, row.dataset, expression.source, string_template]
 depends_on: [R003, R006, R008]
 ---
 
@@ -64,6 +64,11 @@ output variable. Compose operations through an explicitly named derived column:
 
 An operation cannot place an arbitrary nested expression in a variable field.
 This keeps each operation self-contained and makes dependencies visible.
+
+A placeholder in a `string_template` is also a variable reference. R012 owns
+the braces and escaping; the placeholder's complete name binds here exactly as
+if it appeared in a field typed as `variable`. Text outside placeholders is
+literal text.
 
 Plain strings outside fields typed as `variable` are literal strings.
 Implementations must not infer same-named source variables when an output

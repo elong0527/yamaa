@@ -1,0 +1,10 @@
+phase: verification
+condition: predicate_failed
+spec_paths:
+  - verifications[1].predicate
+context:
+  verification_id: randomized-strata-agree
+  failure_count: 1
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-103

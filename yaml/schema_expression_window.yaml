@@ -14,6 +14,28 @@ expressions:
         - filter:
             type: sql
             description: Predicate selecting rows to number.
+    row_value: # Returns the source value from another row of the ordered partition.
+        # offset counts along the declared order: positive moves toward later
+        # rows and negative toward earlier ones, so reversing every order_by
+        # direction and negating offset gives the same result.
+        # A row with fewer than |offset| rows on that side of it within its
+        # partition yields missing, which does not distinguish an absent row
+        # from a present row whose value is missing.
+        - source:
+            type: variable
+            required: true
+            description: Variable read from the offset row.
+        - offset:
+            type: int
+            required: true
+            description: Rows to move along the declared order; nonzero.
+        - group_by:
+            type: "list[variable]"
+            description: Variables defining partitions; omission uses one partition.
+        - order_by:
+            type: "list[order_by_term]"
+            required: true
+            description: Terms ordering rows within each partition.
     baseline_flag: # Returns Y for the unique latest eligible row, missing elsewhere.
         # An eligible row has a non-missing date at or before reference_date.
         # A tie for the latest eligible date is an error.

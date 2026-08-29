@@ -1,0 +1,7 @@
+phase: validation
+condition: invalid_string_template
+spec_paths:
+  - columns.SUBJREF.derivation.str_template
+context:
+  reason: invalid_placeholder
+  placeholder: "SITEID + ':' + SUBJID"

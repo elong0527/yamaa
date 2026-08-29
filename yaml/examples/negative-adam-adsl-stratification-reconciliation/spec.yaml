@@ -1,0 +1,67 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+  MH: input/mh.csv
+  RE: input/re.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: DM.USUBJID
+
+  - name: METSTATR
+    type: str
+    derivation:
+      source: RE.METSTAT
+
+  - name: ECOG0R
+    type: str
+    derivation:
+      source: RE.ECOG0
+
+  - name: REGIONUSR
+    type: str
+    derivation:
+      source: RE.REGIONUS
+
+  - name: METSTAT
+    type: str
+    derivation:
+      source: MH.METSTAT
+
+  - name: ECOG0
+    type: str
+    derivation:
+      source: DM.ECOG0
+
+  - name: REGIONUS
+    type: str
+    derivation:
+      source: DM.REGIONUS
+
+  - name: STRAT1R
+    type: str
+    derivation:
+      str_template: "{METSTATR}|{ECOG0R}|{REGIONUSR}"
+
+  - name: STRAT1
+    type: str
+    derivation:
+      str_template: "{METSTAT}|{ECOG0}|{REGIONUS}"
+
+verifications:
+  - row_count:
+      min: 3
+      max: 3
+  - predicate:
+      id: randomized-strata-agree
+      assert: "STRAT1R = STRAT1"

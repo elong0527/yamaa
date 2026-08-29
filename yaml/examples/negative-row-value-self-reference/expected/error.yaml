@@ -1,0 +1,7 @@
+phase: validation
+condition: dependency_cycle
+spec_paths:
+  - columns.AVALF.derivation.coalesce
+  - columns.PRIORF.derivation.row_value
+context:
+  cycle: [AVALF, PRIORF, AVALF]

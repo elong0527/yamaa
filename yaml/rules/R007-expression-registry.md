@@ -3,7 +3,7 @@ id: R007
 title: Expression Registry
 status: normative
 applies_to: [expression, expressions, schema_expression]
-depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011]
+depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012]
 ---
 
 # Expression registry
@@ -21,7 +21,8 @@ This rule owns registration, the nesting policy, evaluation kinds, ordering
 terms, and cross-operation type compatibility. Behavior specific to one
 operation is documented beside its registry entry. Cross-cutting behavior stays
 in its owning rule: R002 and R003 for source binding and joins, R008 for local
-handlers, R010 for `compute`, R011 for column types, R004 for predicates.
+handlers, R010 for `compute`, R011 for column types, R012 for string templates,
+and R004 for predicates.
 
 ## Registration
 
@@ -51,10 +52,11 @@ selecting or composing expressions is the field's purpose:
 but they hold a derivation's own top-level expression rather than nest one
 inside an operation, so this policy does not restrict them.
 
-A field typed `numeric_expression` is a leaf whose identifiers R010 resolves
-against current-output columns. Plain strings are values unless their schema
-field is typed as `variable`, `function_arg`, or `sql`. A string in
-`function_arg` is a variable; a string literal uses the `literal` expression.
+Fields typed `numeric_expression` and `string_template` are leaves whose
+identifiers R010 and R012 resolve. Plain strings are values unless their schema
+field is typed as `variable`, `function_arg`, `sql`, or `string_template`. A
+string in `function_arg` is a variable; a string literal uses the `literal`
+expression.
 
 ## Evaluation kinds
 
@@ -62,7 +64,9 @@ Scalar expressions return one value per row. Window expressions partition
 constructed output rows by their local `group_by` and preserve row count.
 Omitting `group_by` creates one partition. A window that declares `filter`
 still preserves row count: an excluded row receives missing rather than being
-dropped.
+dropped. A window that reads another row of its partition returns missing when
+that row does not exist, which is the same result as a neighbouring row whose
+value is missing.
 
 `min` and `max` are aggregates. They are valid in exactly two contexts:
 
@@ -77,10 +81,11 @@ constructed output rows for a window or for context 2.
 
 ## Ordering
 
-`row_number.order_by` and `multiple_matches.order_by` are lists of order terms.
-An order term is either a bare variable or a mapping declaring `variable`,
-`direction`, and `nulls`. The bare form is an R006 shorthand union, so a bare
-variable means `{variable: X, direction: asc, nulls: last}`.
+Every field typed `list[order_by_term]` is a list of order terms, whichever
+operation declares it. An order term is either a bare variable or a mapping
+declaring `variable`, `direction`, and `nulls`. The bare form is an R006
+shorthand union, so a bare variable means
+`{variable: X, direction: asc, nulls: last}`.
 
 - `direction` is `asc` or `desc` and defaults to `asc`.
 - `nulls` is `last` or `first` and defaults to `last`. It states where missing
@@ -92,7 +97,8 @@ must apply the declared placement rather than inherit its engine's.
 
 Terms apply in order, each with its own direction and placement. Records equal
 on every term preserve row-template order and then base-record order, which
-makes the result total, so ordering has no undefined case.
+makes the result total, so ordering has no undefined case and a row's
+neighbours are determined.
 
 ## Type behavior
 
@@ -105,27 +111,29 @@ runtime types:
   dictionary key column to have the same comparable type;
 - `cut` requires a numeric source;
 - `compute` requires every identifier in its expression to be numeric;
-- `str_extract`, `str_concat`, `str_upper`, and `str_lower` require string
-  sources;
+- `str_extract`, `str_concat`, `str_template`, `str_upper`, and `str_lower`
+  require string sources;
 - `date_diff` and `study_day` require `date` inputs; R011 declares no datetime
   type;
 - `date_impute` requires a string source, because a partial date is text under
   R011 until it is completed, and integer `month` and `day` within the calendar
   ranges its registration states;
 - `greatest` and `least` require mutually comparable `sources`;
+- `row_value` requires an integer `offset` and accepts any `source` type;
 - `min`, `max`, and window ordering require mutually comparable values. Every
   record's value for one order term must be comparable with every other, so a
   term whose column mixes incomparable types is an error rather than an
   implementation-defined order.
 
 `source` retains its source type and `literal` retains its YAML scalar type.
-`cut`, `str_extract`, `str_concat`, `str_upper`, and `str_lower` return strings.
-`compute` returns the numeric type its expression promotes to under R010.
+`cut`, `str_extract`, `str_concat`, `str_template`, `str_upper`, and
+`str_lower` return strings. `compute` returns the numeric type its expression
+promotes to under R010.
 `date_diff`, `study_day`, and `row_number` return integers. `study_day` never
 returns zero. `date_impute` returns a `date`. `baseline_flag` returns a string.
-Mapping, conditional, coalescing, extreme, baseline value, and aggregate
-expressions retain the selected or aggregated value type. The `function`
-expression retains the type returned by the project function.
+Mapping, conditional, coalescing, extreme, baseline value, offset row, and
+aggregate expressions retain the selected or aggregated value type. The
+`function` expression retains the type returned by the project function.
 
 ## Operation definitions
 
@@ -146,6 +154,8 @@ behavior and do not affect schema validation.
 - A window expression used during row construction: fail.
 - A `row_number` filter that is not a Boolean predicate over current-output
   columns: fail.
+- A `row_value` whose `offset` is zero: fail. The current row's own value is
+  `source`, and a window must not be a second spelling of it.
 - An aggregate outside its two permitted contexts: fail.
 - `mapping_from` whose `source` and `key` lists differ in length: fail.
 - `date_impute` whose `month` or `day` is outside the calendar range, or whose
@@ -153,5 +163,6 @@ behavior and do not affect schema validation.
 - An unhandled local missing, mapping, or extraction condition: fail under
   R008.
 - A `compute` expression that violates R010: fail.
+- A `str_template` expression that violates R012: fail.
 - An unresolved function, failed function call, or non-scalar function result:
   fail with the function name and original runtime context.

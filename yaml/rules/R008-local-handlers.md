@@ -3,7 +3,7 @@ id: R008
 title: Local Error Handlers
 status: normative
 applies_to: [source.missing, source.multiple_matches, expression, derivation]
-depends_on: [R001, R002, R003, R005, R006, R007, R011]
+depends_on: [R001, R002, R003, R005, R006, R007, R011, R012]
 ---
 
 # Local error handlers
@@ -35,6 +35,7 @@ Handlers occur in this fixed lifecycle:
 | cut | `missing` | Use a literal for a missing numeric input |
 | extract | `missing` | Use a literal for a missing string input |
 | extract | `no_match` | Use a literal when a non-missing string does not match |
+| template | `missing` | Use a literal when any placeholder value is missing |
 | impute | `missing` | Use a literal for a missing date source |
 | impute | `invalid` | Use a literal when a non-missing source is not ISO 8601 date text |
 | convert | `conversion_failure` | Use a literal after failed output conversion |
