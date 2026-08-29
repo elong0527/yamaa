@@ -1,0 +1,29 @@
+schema_version: "1.0"
+domain: ADEX
+datasets:
+  TRT: input/subject_treatment.csv
+  EX: {path: input/ex.csv, types: {EXDOSEN: float}}
+base: TRT
+keys: [STUDYID, USUBJID, EXTRT]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: TRT.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: TRT.USUBJID
+
+  - name: EXTRT
+    type: str
+    derivation:
+      source: TRT.EXTRT
+
+  - name: DOSECUM
+    type: float
+    derivation:
+      sum:
+        source: EX.EXDOSE

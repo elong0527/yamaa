@@ -130,10 +130,13 @@ runtime types:
 - `greatest` and `least` require mutually comparable `sources`;
 - `row_value` requires an integer `offset` and accepts any `source` type;
 - `sum` requires a numeric source; `count` accepts any source type;
-- `min`, `max`, and window ordering require mutually comparable values. Every
-  record's value for one order term must be comparable with every other, so a
-  term whose column mixes incomparable types is an error rather than an
-  implementation-defined order.
+- `min`, `max`, and window ordering require mutually comparable values. One
+  order term names one variable, and a variable has exactly one type — R013
+  gives it to a source field and R011 to a declared column — so the values a
+  term compares are of one type by construction and ordering has no
+  incomparable case. An expression naming several variables, as `greatest` and
+  `least` do, is where comparability is a requirement rather than a
+  consequence.
 
 `source` retains its source type, which R013 defines, and `literal` retains
 its YAML scalar type.

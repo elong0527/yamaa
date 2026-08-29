@@ -1,0 +1,8 @@
+phase: validation
+condition: unpaired_fields
+spec_paths:
+  - selections[0]
+context:
+  selection: DOSING
+  declared: [order_by]
+  missing: [keep]

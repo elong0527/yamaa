@@ -1,0 +1,11 @@
+phase: join
+condition: incomplete_match_value
+spec_paths:
+  - selections[0].source
+context:
+  selection: REFRANGE
+  missing_source: SEX
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-522
+      LBSEQ: 1
