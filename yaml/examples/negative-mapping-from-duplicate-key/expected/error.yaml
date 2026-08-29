@@ -1,0 +1,11 @@
+phase: join
+condition: duplicate_lookup_key
+spec_paths:
+  - columns.ANRHI.derivation.mapping_from
+context:
+  dataset: LBREF
+  key: [LBTESTCD, SEX]
+  lookup_key:
+    LBTESTCD: ALT
+    SEX: F
+  match_count: 2

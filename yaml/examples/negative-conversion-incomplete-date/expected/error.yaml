@@ -1,0 +1,12 @@
+phase: convert
+condition: conversion_failed
+spec_paths:
+  - columns.ASTDT
+context:
+  from: str
+  to: date
+  value: "2023-06"
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-951
+      AESEQ: 2

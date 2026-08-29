@@ -1,0 +1,35 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: DM.USUBJID
+
+  - name: HEIGHTCM
+    type: float
+    output: false
+    derivation:
+      source: DM.HEIGHTCM
+
+  - name: WEIGHTKG
+    type: float
+    output: false
+    derivation:
+      source: DM.WEIGHTKG
+
+  - name: BSA
+    type: float
+    derivation:
+      compute:
+        expr: "SQRT(HEIGHTCM * WEIGHTKG / 3600)"

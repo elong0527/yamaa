@@ -1,0 +1,33 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+  CM: input/cm.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: DM.USUBJID
+
+  - name: RESCTRT
+    type: str
+    derivation:
+      source:
+        variable: CM.CMTRT
+        multiple_matches:
+          order_by: [CM.CMSTDTC, CM.CMSEQ]
+          keep: first
+          filter: "CM.CMCAT = 'RESCUE MEDICATION'"
+
+verifications:
+  - row_count:
+      min: 2
+      max: 2

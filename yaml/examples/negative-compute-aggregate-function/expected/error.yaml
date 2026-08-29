@@ -1,0 +1,7 @@
+phase: validation
+condition: prohibited_function
+spec_paths:
+  - columns.AVALTOT.derivation.compute.expr
+context:
+  expr: "SUM(AVAL)"
+  function: SUM

@@ -1,0 +1,11 @@
+phase: impute
+condition: invalid_date_text
+spec_paths:
+  - columns.ASTDT.derivation.date_impute
+context:
+  source: AE.AESTDTC
+  value: UNKNOWN
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-901
+      AESEQ: 2

@@ -1,0 +1,7 @@
+phase: validation
+condition: value_not_permitted
+spec_paths:
+  - columns.ASTDTM.type
+context:
+  value: datetime
+  permitted: [str, int, float, date]

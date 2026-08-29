@@ -1,0 +1,12 @@
+phase: mapping
+condition: missing_input
+spec_paths:
+  - columns.ANRHI.derivation.mapping_from
+context:
+  dataset: LBREF
+  source: [PARAMCD, SEX]
+  missing_source: SEX
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-852
+      PARAMCD: ALT

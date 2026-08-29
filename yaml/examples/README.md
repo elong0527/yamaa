@@ -34,6 +34,7 @@ CSV records the intended artifact once that capability exists.
 |---|---|
 | [`adam-adae-occurrence-flags`](adam-adae-occurrence-flags/) | flag the first occurrence at three levels |
 | [`adam-adae-partial-dates`](adam-adae-partial-dates/) | impute partial dates |
+| [`adam-adae-serious-event-sequence`](adam-adae-serious-event-sequence/) | number a subject's serious events in onset order |
 | [`adam-adae-severity-override`](adam-adae-severity-override/) | apply an approved severity correction |
 | [`adam-adae-string-handlers`](adam-adae-string-handlers/) | clean text and handle invalid IDs |
 | [`adam-adae-treatment-emergent`](adam-adae-treatment-emergent/) | classify an event as treatment-emergent |
@@ -53,15 +54,42 @@ CSV records the intended artifact once that capability exists.
 | [`adam-adsl-identifier-parsing`](adam-adsl-identifier-parsing/) | parse the site from USUBJID with a collected fallback |
 | [`adam-adsl-mapping`](adam-adsl-mapping/) | translate collected values into a standard vocabulary |
 | [`adam-adsl-population-flags`](adam-adsl-population-flags/) | derive the safety and intent-to-treat flags |
+| [`adam-adsl-rescue-medication`](adam-adsl-rescue-medication/) | select the first rescue medication |
 | [`adam-adsl-treatment-selection`](adam-adsl-treatment-selection/) | select actual treatment and its duration from EX |
 | [`adam-adtte-progression-free-survival`](adam-adtte-progression-free-survival/) | derive progression-free survival |
 | [`adam-advs-analysis-visit`](adam-advs-analysis-visit/) | assign records to analysis windows |
 | [`adam-advs-once-measured-carry-forward`](adam-advs-once-measured-carry-forward/) | carry forward a once-measured characteristic |
 | [`negative-adam-adsl-stratification-reconciliation`](negative-adam-adsl-stratification-reconciliation/) | reconcile randomization strata |
 | [`negative-adsl-subject-reference`](negative-adsl-subject-reference/) | reject a malformed subject reference |
+| [`negative-column-type-unknown`](negative-column-type-unknown/) | reject an event start recorded as a moment in time |
+| [`negative-compute-aggregate-function`](negative-compute-aggregate-function/) | reject a total written as a formula |
+| [`negative-compute-comparison-operator`](negative-compute-comparison-operator/) | reject an above-range flag written as a formula |
+| [`negative-compute-division-by-zero`](negative-compute-division-by-zero/) | reject a percent change from a zero baseline |
+| [`negative-compute-integer-overflow`](negative-compute-integer-overflow/) | reject a cell total larger than the counter can hold |
+| [`negative-compute-ln-of-zero`](negative-compute-ln-of-zero/) | reject a log result from an undetectable value |
+| [`negative-compute-qualified-identifier`](negative-compute-qualified-identifier/) | reject a doubled dose read straight from exposure |
+| [`negative-compute-sqrt-of-negative`](negative-compute-sqrt-of-negative/) | reject a body surface area from a negative weight |
+| [`negative-conversion-incomplete-date`](negative-conversion-incomplete-date/) | reject an event start date that names no day |
+| [`negative-conversion-non-integral`](negative-conversion-non-integral/) | reject a pulse rate recorded between whole beats |
+| [`negative-conversion-unparseable-number`](negative-conversion-unparseable-number/) | reject a viral load reported below the assay limit |
+| [`negative-date-impute-invalid-source`](negative-date-impute-invalid-source/) | reject a start date completed from text that is not a date |
+| [`negative-date-impute-month-out-of-range`](negative-date-impute-month-out-of-range/) | reject a start date completed with no month of the year |
+| [`negative-date-impute-nonexistent-day`](negative-date-impute-nonexistent-day/) | reject an end date completed past the end of its month |
+| [`negative-greatest-incomparable-sources`](negative-greatest-incomparable-sources/) | reject a last-known-alive date taken from a day number |
+| [`negative-keys-internal-column`](negative-keys-internal-column/) | reject a site-scoped subject identity |
+| [`negative-mapping-case-fold-collision`](negative-mapping-case-fold-collision/) | reject a smoking flag whose dictionary answers twice |
+| [`negative-mapping-from-duplicate-key`](negative-mapping-from-duplicate-key/) | reject a reference range stated twice |
+| [`negative-mapping-from-key-length-mismatch`](negative-mapping-from-key-length-mismatch/) | reject a reference range chosen by an unpaired key |
+| [`negative-mapping-from-partial-key`](negative-mapping-from-partial-key/) | reject a reference range chosen without a sex |
+| [`negative-mapping-from-unmapped-key`](negative-mapping-from-unmapped-key/) | reject a result with no reference range |
 | [`negative-mapping-unmapped-value`](negative-mapping-unmapped-value/) | reject an unmapped response |
+| [`negative-output-duplicate-subject`](negative-output-duplicate-subject/) | reject a repeated demographics record |
 | [`negative-row-value-self-reference`](negative-row-value-self-reference/) | reject a weight carried forward from a carried-forward weight |
+| [`negative-row-value-zero-offset`](negative-row-value-zero-offset/) | reject a previous weight that names no earlier visit |
 | [`negative-source-duplicate-right-key`](negative-source-duplicate-right-key/) | reject duplicate subject enrichment |
+| [`negative-sum-non-numeric-source`](negative-sum-non-numeric-source/) | reject a severity burden totalled from severity words |
+| [`negative-variable-nested-expression`](negative-variable-nested-expression/) | reject an uppercased country chosen inside the same step |
+| [`negative-verification-implausible-age`](negative-verification-implausible-age/) | reject an implausible age |
 | [`odm-form-scoped-item-resolution`](odm-form-scoped-item-resolution/) | resolve items within their collection form |
 | [`sdtm-ae-dictionary-coding`](sdtm-ae-dictionary-coding/) | code reported terms against a medical dictionary |
 | [`sdtm-ae-effective-transaction`](sdtm-ae-effective-transaction/) | take the effective state of a record from a transaction log |

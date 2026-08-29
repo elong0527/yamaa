@@ -115,6 +115,26 @@ An implementation may report additional context and may word its human-readable
 message differently. The expected fields and values must match. Stack traces
 and implementation-specific exception classes do not belong in this artifact.
 
+`phase` comes from a closed list, so two examples that stop at the same point
+say so the same way:
+
+| Phase | Rejects |
+|---|---|
+| `validation` | the specification itself, before any data is read |
+| `row_construction` | evaluating a row template |
+| `derivation` | evaluating a column's expression over a row |
+| `output` | output identity, once every column holds its final value |
+| `verification` | a declared assertion |
+
+A condition that an operation could have answered locally instead names the
+stage R008 gives it: `bind`, `join`, `mapping`, `cut`, `extract`, `template`,
+`impute`, `convert`, or `final`. Declaring the corresponding handler is then
+exactly what turns the failure into a value, which is what makes the pairing
+worth keeping.
+
+`condition` names what failed rather than what the implementation raised, and
+one condition keeps one name across every example that provokes it.
+
 An expected CSV may be committed beside `error.yaml`. For a failure after the
 dataset is completed, it is the dataset presented to the failing check. For an
 earlier expressiveness failure, it is the intended artifact once the missing

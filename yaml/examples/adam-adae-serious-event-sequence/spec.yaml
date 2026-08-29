@@ -1,0 +1,43 @@
+schema_version: "1.0"
+domain: ADAE
+datasets:
+  AE: input/ae.csv
+base: AE
+keys: [STUDYID, USUBJID, AESEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    derivation:
+      source: AE.AESEQ
+
+  - name: AESER
+    type: str
+    derivation:
+      source: AE.AESER
+    verifications:
+      - allowed_values:
+          values: ["Y", "N"]
+
+  - name: ASTDT
+    type: date
+    derivation:
+      source: AE.AESTDTC
+
+  - name: SERSEQ
+    type: int
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [ASTDT, AESEQ]
+        filter: "AESER = 'Y'"
