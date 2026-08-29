@@ -6,9 +6,11 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
-selections:
-  - id: DOSING
+record_lookups:
+  - id: EX
     dataset: EX
+    order_by: [EX.EXSTDTC, EX.EXSEQ]
+    keep: first
 
 columns:
   - name: STUDYID
@@ -24,9 +26,4 @@ columns:
   - name: TRT01A
     type: str
     derivation:
-      source: DOSING.EXTRT
-
-  - name: TRT01DOSE
-    type: float
-    derivation:
-      source: DOSING.EXDOSE
+      source: EX.EXTRT

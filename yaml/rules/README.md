@@ -22,7 +22,7 @@ design intent but are not complete enough for portable implementation.
 | R012 | [String templates](R012-string-templates.md) | normative | Interpolation grammar, escaping, and evaluation | R001, R002, R006, R007, R008 |
 | R013 | [Aggregate reduction](R013-aggregate-reduction.md) | normative | The `aggregate_expression` primitive: reducers, grain, and empty-group results | R001, R002, R003, R004, R006, R007, R010, R011 |
 | R014 | [Source-format ingestion](R014-source-ingestion.md) | normative | Missing recognition and field typing at the source | R002, R006, R011 |
-| R015 | [Record selection](R015-record-selection.md) | normative | Selecting one record of another dataset and reading it by name | R001, R002, R003, R004, R005, R006, R007, R008, R014 |
+| R015 | [Record lookup](R015-record-lookup.md) | normative | Looking up one record of another dataset and reading it by name | R001, R002, R003, R004, R005, R006, R007, R008, R014 |
 
 ## Draft surface
 

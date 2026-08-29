@@ -7,7 +7,7 @@ datasets:
 base: ADSL
 keys: [STUDYID, USUBJID, PARAMCD]
 
-selections:
+record_lookups:
   - id: PROGRESSION
     dataset: RS
     filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y'"

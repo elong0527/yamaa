@@ -6,11 +6,10 @@ datasets:
 base: LB_RAW
 keys: [STUDYID, USUBJID, LBSEQ]
 
-selections:
+record_lookups:
   - id: REFRANGE
     dataset: LBRANGE
     source: [LBTESTCD, SEX]
-    key: [LBTESTCD, SEX]
 
 columns:
   - name: STUDYID

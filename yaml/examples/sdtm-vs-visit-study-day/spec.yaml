@@ -7,7 +7,7 @@ datasets:
 base: VS_RAW
 keys: [STUDYID, USUBJID, VSSEQ]
 
-selections:
+record_lookups:
   - id: PLANNEDVISIT
     dataset: TV
     source: VISIT

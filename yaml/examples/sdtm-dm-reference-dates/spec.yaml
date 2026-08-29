@@ -8,7 +8,7 @@ datasets:
 base: DM_RAW
 keys: [STUDYID, USUBJID]
 
-selections:
+record_lookups:
   - id: LASTEX
     dataset: EX
     filter: "EX.EXENDTC IS NOT NULL"

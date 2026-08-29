@@ -6,7 +6,7 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
-selections:
+record_lookups:
   - id: DOSING
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]

@@ -1,8 +1,8 @@
 phase: validation
 condition: unpaired_fields
 spec_paths:
-  - selections[0]
+  - record_lookups[0]
 context:
-  selection: DOSING
+  record_lookup: DOSING
   declared: [order_by]
   missing: [keep]

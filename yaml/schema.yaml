@@ -10,18 +10,18 @@ root_class:
     - datasets: {type: "dict[dataset_id, dataset_source]", required: true}
     - base: {type: dataset_id, required: false}
     - parents: {type: [path, "list[path]"], required: false}
-    - selections: {type: "list[selection_class]", required: false}
+    - record_lookups: {type: "list[record_lookup_class]", required: false}
     - keys: {type: "list[column_name]", required: true}
     - columns: {type: "list[column_class]", required: true}
     - rows: {type: "list[row_class]", required: false}
     - verifications: {type: [dataset_verification, "list[dataset_verification]"], required: false}
     - metadata: {type: "dict[str, str]", required: false}
 
-selection_class:
+record_lookup_class:
     - id:
-        type: selection_id
+        type: record_lookup_id
         required: true
-        description: Name the selected record is read through.
+        description: Name through which the looked-up record is read.
     - dataset:
         type: dataset_id
         required: true
@@ -109,10 +109,10 @@ dataset_id:
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
     description: Identifier of a dataset declared in datasets.
 
-selection_id:
+record_lookup_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Identifier of a selected record, unique among dataset identifiers, other selections, and the output domain.
+    description: Identifier of a record lookup, unique among dataset identifiers, other record lookups, and the output domain.
 
 dataset_column:
     type: str

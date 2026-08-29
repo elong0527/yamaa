@@ -148,7 +148,7 @@ and by nothing a reader can check.
 
 **Action.** The largest open area. Write a design document before the schema
 change, and expect it to retire several gaps at once, as `compute` and
-`selections` did. The interval join (gap 2) is what an analysis window or
+`record_lookups` did. The interval join (gap 2) is what an analysis window or
 `EPOCH` assignment actually needs.
 
 ## Sequencing

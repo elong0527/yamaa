@@ -61,7 +61,7 @@ R003.
 
 `column.output` keeps any binding column it needs out of the final dataset.
 
-A `selections` entry names one record of another dataset so that several
+A `record_lookups` entry names one record of another dataset so that several
 columns can read it, which no expression can do while each returns one value.
 It is not an expression and adds no nesting: its matching, filtering, and
 ordering fields are the ones `mapping_from` and `multiple_matches` already

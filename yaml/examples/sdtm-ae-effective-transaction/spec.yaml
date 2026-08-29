@@ -6,7 +6,7 @@ datasets:
 base: AE_REC
 keys: [STUDYID, USUBJID, AESEQ]
 
-selections:
+record_lookups:
   - id: EFFECTIVE
     dataset: AE_TXN
     order_by: [AE_TXN.AUDITDTC, AE_TXN.TXNSEQ]
