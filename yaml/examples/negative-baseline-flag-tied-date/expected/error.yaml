@@ -1,0 +1,11 @@
+phase: derivation
+condition: ambiguous_baseline
+spec_paths:
+  - columns.ABLFL.derivation.baseline_flag
+context:
+  date: "2025-01-06"
+  match_count: 2
+  keys:
+    - STUDYID: CATH
+      USUBJID: CATH-UCSD-0001
+      PARAMCD: ALT

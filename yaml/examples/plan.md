@@ -10,8 +10,8 @@ Only open work appears here. A change that lands is deleted rather than marked,
 so the git history of this file and of [`../rules/`](../rules/) is the record
 of what closed and how.
 
-The suite currently holds 95 examples: 51 successful golden outputs and 44
-expected failures. Three failure examples also commit the completed dataset
+The suite currently holds 97 examples: 51 successful golden outputs and 46
+expected failures. Four failure examples also commit the completed dataset
 beside the structured error.
 
 ## Open work
