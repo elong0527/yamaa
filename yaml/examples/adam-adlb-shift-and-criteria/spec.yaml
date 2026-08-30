@@ -58,7 +58,7 @@ columns:
     derivation:
       case:
         branches:
-          - when: "AVAL IS NULL"
+          - when: "AVAL IS NULL OR ANRLO IS NULL OR ANRHI IS NULL"
             then:
               literal: null
           - when: "AVAL < ANRLO"
@@ -150,8 +150,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD, ASEQ]
   - row_count:
-      min: 8
-      max: 8
+      min: 10
+      max: 10
   - all_or_none:
       id: criterion-text-accompanies-its-flag
       columns: [CRIT1, CRIT1FL]
@@ -162,6 +162,10 @@ verifications:
       id: a-baseline-record-is-its-own-reference
       when: "ABLFL = 'Y' AND R2BASE IS NOT NULL"
       then: "R2BASE = 1"
+  - implies:
+      id: a-classification-rests-on-both-of-its-limits
+      when: "ANRIND IS NOT NULL"
+      then: "ANRLO IS NOT NULL AND ANRHI IS NOT NULL"
   - implies:
       id: criterion-is-met-only-above-its-limit
       when: "CRIT1FL = 'Y'"

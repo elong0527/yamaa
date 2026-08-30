@@ -5,7 +5,8 @@ derive one row per subject, parameter, and record:
 
 - `AVAL` is the analysis value, and `ANRLO` and `ANRHI` the normal limits the
   parameter is read against. `ANRIND` places the value between them as `LOW`,
-  `NORMAL`, or `HIGH`, and is empty when nothing was measured;
+  `NORMAL`, or `HIGH`, and is empty without a value, or without limits to read
+  it against;
 - `ABLFL` marks the record taken as the subject's baseline for the parameter.
   `BASE` repeats that record's value on every record of the parameter and
   `BNRIND` repeats its classification;
@@ -20,6 +21,8 @@ derive one row per subject, parameter, and record:
   record met it, `Y` or `N`. Both are empty on a record the criterion could not
   be assessed on, which differs from one assessed and not met.
 
-Every classification, shift, and ratio on a record is read from the one record
-the parameter's baseline flag marks, so a parameter with no marked baseline has
-none of them.
+`BASE` and `BNRIND` are read from the one record the parameter's baseline flag
+marks, so the shift and the ratio that rest on them are empty for a parameter
+with no marked baseline. The classification and the criterion are read from the
+record's own value and limits instead, and are empty for a parameter the limits
+do not cover.
