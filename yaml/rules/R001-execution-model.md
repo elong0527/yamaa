@@ -33,6 +33,15 @@ dataset. Constructed rows are appended in specification order.
 When `rows` is absent or empty, row construction produces exactly one output
 row per `base` record, in base-record order. `base` is required in that case.
 
+A `derived` entry builds a second dataset the specification reads before the
+artifact. Each derived dataset runs the same two phases over its own driver,
+and is built before any column, `rows` filter, or further derived dataset that
+reads it, in dependency order. It is never serialized. Reading a derived
+dataset adds a dependency from its reader to the whole derived dataset, so a
+derived dataset that reads itself directly or indirectly is a cycle. A derived
+dataset's own columns and rows answer to the same rules as the artifact's;
+what its readers see is a finished dataset.
+
 ## Expression evaluation
 
 An expression contains exactly one keyword registered by R007. Most keywords

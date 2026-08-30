@@ -89,6 +89,17 @@ In both places `filter` is a predicate over right-side records only. A left row
 whose right side is empty after filtering has no match and receives missing,
 exactly as if no record had existed.
 
+A right-side reduction or selection may also be narrowed by the current left
+row. An `aggregate` or a structured `source` may declare `between`: one
+`value` the current row reads and one `lower` or `upper` column on the right.
+A right-side record is eligible only when the row's value falls within the
+declared bounds, inclusively, so a subject-specific cutoff or a record's own
+study day can restrict the records being summarized or selected. A missing
+value or bound makes the record ineligible for that row. R015 defines the same
+pairs for a record lookup. This is a declared range match, not a predicate over
+both sides: the comparison is fixed, and the bounds name right-side columns
+while the value names one left-side variable.
+
 This is not `row.filter`, which selects row-driver records during row
 construction, before any column is derived.
 

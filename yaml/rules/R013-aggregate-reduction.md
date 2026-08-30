@@ -109,8 +109,11 @@ registered by default.
 
 **Reductions do not nest.** The argument of a reduction must contain no
 reduction, so `MAX(SUM(EX.EXDOSE))` is an error. Reducing at one grain and
-reducing that result at another needs an intermediate grain the language cannot
-name. Naming one is open work.
+reducing that result at another needs an intermediate grain, and the language
+names it with a derived dataset: a dataset the specification builds at the
+first grain and then reduces at the second, as the T5 design defines. A
+derived dataset is read like any declared dataset, so the second reduction is
+an ordinary right-side reduction over it rather than a nested expression.
 
 `COUNT(D.*)` takes no other argument; in this rule, `D` is a placeholder for the dataset named by the expression's qualified identifiers (for example, `COUNT(EX.*)`). It is the one reducer that names no column, and it counts records where `COUNT(x)` counts values.
 
