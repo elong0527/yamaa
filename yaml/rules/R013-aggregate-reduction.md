@@ -96,6 +96,7 @@ Permitted reducers are exactly:
 | `COUNT(D.*)` | how many records the group contains |
 | `MIN(x)` | smallest non-missing value |
 | `MAX(x)` | largest non-missing value |
+| `MEAN(x)` | arithmetic mean of the non-missing numeric values |
 
 Any other reducer name, any window function or `OVER`, any subquery, any
 `CASE`, any comparison or Boolean operator, any string literal, and any
@@ -103,9 +104,14 @@ host-language call are validation errors. Closing the vocabulary is what makes
 portability checkable; widening it requires amending this table, and that
 amendment is the whole cost of a new reduction.
 
-`AVG` is absent because no example needs it. A median would additionally have
-to fix its interpolation rule before two runtimes could agree, so neither is
-registered by default.
+For a group with at least one non-missing value, `MEAN(x)` is evaluated as
+`SUM(x) / COUNT(x)` under this rule's `SUM` semantics and R010's `/` semantics.
+This fixes its result and failure behavior across runtimes instead of inheriting
+a host language's mean implementation.
+
+`AVG` is not an alias; the portable reducer name is `MEAN`. A median would
+additionally have to fix its interpolation rule before two runtimes could
+agree, so it is not registered by default.
 
 **Reductions do not nest.** The argument of a reduction must contain no
 reduction, so `MAX(SUM(EX.EXDOSE))` is an error. Reducing at one grain and
@@ -129,12 +135,13 @@ is declared in `group_by`.
 ## Types
 
 - An expression that is a single reduction retains that reduction's result
-  type. `COUNT` returns `int`. `SUM` retains the numeric type of its argument.
-  `MIN` and `MAX` retain the type they reduce, whatever that type is.
+  type. `COUNT` returns `int`; `MEAN` returns `float`. `SUM` retains the numeric
+  type of its argument. `MIN` and `MAX` retain the type they reduce, whatever
+  that type is.
 - An expression using any operator or R010 function is numeric. Every
   reduction and every grouped identifier in it must be numeric, and R010's
   promotion rules give the result type.
-- `SUM` requires a numeric argument. `MIN` and `MAX` require mutually
+- `SUM` and `MEAN` require a numeric argument. `MIN` and `MAX` require mutually
   comparable values; a column mixing incomparable types is an error rather
   than an implementation-defined order. `COUNT` accepts any type.
 
@@ -153,13 +160,15 @@ the three runtimes this design targets disagree:
 | Condition | Result |
 |---|---|
 | No record in the group after `filter` | missing, as R003's absent match |
-| Every value missing -- `SUM`, `MIN`, `MAX` | missing, never zero |
+| Every value missing -- `SUM`, `MIN`, `MAX`, `MEAN` | missing, never zero |
 | Every value missing -- `COUNT(x)` | `0`, because the records exist |
 | No record in the group -- `COUNT(x)`, `COUNT(D.*)` | missing |
 
 An uncollected quantity is therefore never reported as a measured zero, and an
 absent record stays distinguishable from a collected missing value.
 
+`MEAN` answers missing before applying its defined division when no non-missing
+value remains, so an all-missing group does not fail with division by zero.
 Arithmetic over reduction results follows R010: a missing reduction propagates
 through an operator, and a formula that must yield missing rather than fail
 says so with `NULLIF`.
@@ -169,7 +178,9 @@ says so with `NULLIF`.
 R010's failure conditions apply to the arithmetic unchanged: division by zero,
 `SQRT` of a negative argument, `LN` of a non-positive argument, invalid
 `POWER`, integer overflow, and a non-finite float result each fail the run.
-`SUM` fails on integer overflow for the same reason.
+`SUM` fails on integer overflow for the same reason. Because `MEAN` is defined
+through `SUM`, the same intermediate overflow fails even when the mathematical
+mean would fit.
 
 ## Determinism
 
@@ -197,7 +208,7 @@ a rule that needs a record chosen by order uses a window or
 - An ODM contextual reference: fail.
 - A qualified `group_by` column that is not an output key, or an unqualified
   expression with no `group_by`: fail.
-- `SUM` over a non-numeric argument, or arithmetic over a non-numeric
+- `SUM` or `MEAN` over a non-numeric argument, or arithmetic over a non-numeric
   reduction or grouped identifier: fail.
 - `MIN` or `MAX` over values that are not mutually comparable: fail.
 - A window, `CASE`, comparison, Boolean, string, subquery, or host-language

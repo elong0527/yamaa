@@ -51,6 +51,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adex-uncollected-exposure`](adam-adex-uncollected-exposure/) | tell an uncollected dose from an absent administration |
 | [`adam-adlb-bds`](adam-adlb-bds/) | build a BDS dataset with baseline and change |
 | [`adam-adlb-closest-visit`](adam-adlb-closest-visit/) | select the record closest to a window's target day |
+| [`adam-adlb-mean`](adam-adlb-mean/) | calculate each subject's mean result |
 | [`adam-adlb-shift-and-criteria`](adam-adlb-shift-and-criteria/) | classify a result, its shift from baseline, and one criterion |
 | [`adam-adoe-study-eye`](adam-adoe-study-eye/) | tell the study eye from the fellow eye |
 | [`adam-adqs-subscale-score`](adam-adqs-subscale-score/) | score a questionnaire subscale from its item records |
@@ -93,7 +94,6 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-compute-ln-of-zero`](negative-compute-ln-of-zero/) | reject a log result from an undetectable value |
 | [`negative-compute-qualified-identifier`](negative-compute-qualified-identifier/) | reject a doubled dose read straight from exposure |
 | [`negative-compute-sqrt-of-negative`](negative-compute-sqrt-of-negative/) | reject a body surface area from a negative weight |
-| [`negative-compute-unregistered-mean`](negative-compute-unregistered-mean/) | reject an average written as a formula |
 | [`negative-conversion-incomplete-date`](negative-conversion-incomplete-date/) | reject an event start date that names no day |
 | [`negative-conversion-non-integral`](negative-conversion-non-integral/) | reject a pulse rate recorded between whole beats |
 | [`negative-conversion-unparseable-number`](negative-conversion-unparseable-number/) | reject a viral load reported below the assay limit |
