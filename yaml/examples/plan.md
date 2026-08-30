@@ -16,7 +16,7 @@ beside the structured error.
 
 ## Open work
 
-Eleven design gaps remain, grouped under five work items. Each item states the
+Twelve design gaps remain, grouped under five work items. Each item states the
 gap, the evidence from the suite, and what a solution requires.
 
 ### T1. Literal operands (gap 1)
@@ -62,6 +62,10 @@ silently decides classifications such as treatment emergence.
 
 - `adam-adae-partial-dates` derives `ASTDTF` from the same source it imputes
   from, but nothing prevents the flag and the date from drifting apart.
+- `adam-adrs-overall-response-records` completes an assessment date collected
+  without a day and carries no flag at all, so the completed `ADT` is a date
+  like any other. Every later comparison — study day, an eligibility window,
+  which assessment came first — treats a chosen day as a collected one.
 
 **Action.** A precision attached to the value would close both gaps. This is a
 change to the type vocabulary rather than a registry entry. If a precision
@@ -126,7 +130,7 @@ enforced values, a length concept connected to the declared type, and an
 expected metadata artifact. Until that artifact is defined, examples must not
 invent its shape.
 
-### T5. Declarable study structure (gaps 2, 7–9, 11)
+### T5. Declarable study structure (gaps 2, 7–9, 11–12)
 
 **Gap 2.** There is no interval join, so a record cannot be matched against a
 table of per-subject intervals of irregular count and length. Regular structure
@@ -160,7 +164,12 @@ cannot be compared without reading their branch order.
 `adam-adrs-best-overall-response` shows the cost in a published definition:
 which response wins, and whether an assessment that came too early leaves the
 subject progressive or not evaluable, is carried by the order of the branches
-and by nothing a reader can check.
+and by nothing a reader can check. `adam-adtte-duration-of-response` shows it
+against a submission requirement: selection returns the winning date and not
+the record that supplied it, so `EVNTDESC`, `CNSDTDSC`, and the `SRCDOM`,
+`SRCVAR`, and `SRCSEQ` triplet are each rebuilt by a parallel `case` chain
+over the value that won, and nothing ties the triplet to the date it claims to
+trace.
 
 **Gap 11.** A right-side match or reduction cannot be narrowed by a value from
 the current output row. Its filter sees only right-side records, so a
@@ -168,6 +177,15 @@ subject-specific cutoff derived on the left cannot restrict the records being
 summarized. The deferred `negative-adrs-response-before-progression` case
 therefore cannot limit response assessments to those on or before that
 subject's first progression.
+
+**Gap 12.** Reducing a reduction has no intermediate grain to name. R013
+closes the reducer vocabulary but forbids nesting, so a quantity defined as
+one reduction over the results of another cannot be stated.
+`adam-adtr-sum-of-target-diameters` lands the first level, summing the target
+lesion diameters at each assessment. The second — the lowest of a subject's
+earlier sums, which is the RECIST nadir every percentage change is measured
+from — needs both a name for the per-assessment grain and, because *earlier*
+is relative to the row being derived, gap 11.
 
 **Action.** The largest open area. Write a design document before the schema
 change, and expect it to retire several gaps at once, as `compute` and
@@ -183,8 +201,8 @@ subject-specific cutoffs need.
    widened field.
 
 Expected catalogue edits: T2 retires gaps 3 and 4, T3 retires gaps 5 and 6,
-T4 retires gap 10, and T5 retires gaps 2, 7, 8, 9, and 11 along with whatever
-remains of gap 1.
+T4 retires gap 10, and T5 retires gaps 2, 7, 8, 9, 11, and 12 along with
+whatever remains of gap 1.
 
 ## Untested rule text
 

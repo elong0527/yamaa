@@ -20,6 +20,17 @@ is reported. R005 owns key uniqueness, which is checked by the output contract
 rather than declared as a verification, and R004 owns the predicates that
 `implies` and `predicate` evaluate.
 
+Every verification here evaluates one completed output row, deliberately. An
+assertion over an ordered series — that no partial response ever follows a
+complete response for a subject — is therefore not a verification shape but a
+derivation followed by a row-wise assertion: `row_value` under R007 places the
+neighbouring row's value on the row, and `predicate` compares the two.
+`negative-adrs-partial-response-after-complete-response` is that pairing, and
+its reach is one row at a declared offset, so the same fault with an
+intervening record passes. Whether the vocabulary should gain an assertion
+over a frame of rows is gap 6 in `examples/plan.md`, not a question this rule
+answers.
+
 ## Registration and timing
 
 `schema_verification.yaml` registers column checks in `column_verifications`

@@ -110,7 +110,7 @@ registered by default.
 **Reductions do not nest.** The argument of a reduction must contain no
 reduction, so `MAX(SUM(EX.EXDOSE))` is an error. Reducing at one grain and
 reducing that result at another needs an intermediate grain the language cannot
-name, which `examples/plan.md` records as T11.
+name, which `examples/plan.md` records as gap 12.
 
 `COUNT(D.*)` takes no other argument; in this rule, `D` is a placeholder for the dataset named by the expression's qualified identifiers (for example, `COUNT(EX.*)`). It is the one reducer that names no column, and it counts records where `COUNT(x)` counts values.
 
