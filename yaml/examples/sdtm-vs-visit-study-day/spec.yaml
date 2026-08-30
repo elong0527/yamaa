@@ -7,6 +7,13 @@ datasets:
 base: VS_RAW
 keys: [STUDYID, USUBJID, VSSEQ]
 
+record_lookups:
+  - id: PLANNEDVISIT
+    dataset: TV
+    source: VISIT
+    key: VISIT
+    unmatched: missing
+
 columns:
   - name: STUDYID
     type: str
@@ -53,22 +60,12 @@ columns:
   - name: VISITNUM
     type: float
     derivation:
-      mapping_from:
-        source: VISIT
-        dataset: TV
-        key: VISIT
-        value: VISITNUM
-        unmapped: null
+      source: PLANNEDVISIT.VISITNUM
 
   - name: EPOCH
     type: str
     derivation:
-      mapping_from:
-        source: VISIT
-        dataset: TV
-        key: VISIT
-        value: EPOCH
-        unmapped: null
+      source: PLANNEDVISIT.EPOCH
     verifications:
       allowed_values:
         values: [SCREENING, TREATMENT, FOLLOW-UP]

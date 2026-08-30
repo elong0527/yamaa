@@ -11,7 +11,11 @@ one row per adverse event:
   as well is placed in June. A collected value that is not a date and an
   uncollected value both give no analysis date;
 - `ASTDTC` is the same analysis date written as text;
+- `ASTDTF` says which part of the analysis date was supplied rather than
+  collected: `D` when the day was, `M` when the month and the day were. It is
+  empty when the date was collected in full, and also when no analysis date
+  could be formed, because nothing was supplied there either;
 - `TRTSDT` is the subject's treatment start date, and `TRTEMFL` marks an event
-  as treatment-emergent when it starts on or after it. An imputed day decides
-  this exactly as a collected one would, and nothing in the output says which
-  events rested on an imputed component.
+  as treatment-emergent when it starts on or after it. A supplied day decides
+  this exactly as a collected one would, so `ASTDTF` is what tells a reader
+  which of these events rested on one.

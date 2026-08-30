@@ -14,6 +14,29 @@ expressions:
         - filter:
             type: sql
             description: Predicate selecting rows to number.
+    rank: # Numbers eligible rows from 1 within each partition, sharing a number across ties.
+        # Rows equal on every order term take one number. With competition, they
+        # take the lowest position they occupy and the next distinct value takes
+        # its own position, so intervening numbers are skipped. With dense, the
+        # next distinct value takes the following number and no number is
+        # skipped. Two missing values are equal for this purpose, whatever nulls
+        # places them among. Filtering happens before partitioning; excluded rows
+        # receive missing.
+        - method:
+            type: str
+            default: competition
+            values: [competition, dense]
+            description: Tie numbering; competition leaves position gaps and dense does not.
+        - group_by:
+            type: "list[variable]"
+            description: Variables defining partitions; omission uses one partition.
+        - order_by:
+            type: "list[order_by_term]"
+            required: true
+            description: Terms ordering eligible rows within each partition.
+        - filter:
+            type: sql
+            description: Predicate selecting rows to number.
     row_value: # Returns the source value from another row of the ordered partition.
         # offset counts along the declared order: positive moves toward later
         # rows and negative toward earlier ones, so reversing every order_by

@@ -1,7 +1,7 @@
 schema_version: "1.0"
 domain: LB
 datasets:
-  LB_RAW: input/lb_raw.csv
+  LB_RAW: {path: input/lb_raw.csv, types: {LBSTRESN: float}}
 base: LB_RAW
 keys: [STUDYID, USUBJID, LBSEQ]
 

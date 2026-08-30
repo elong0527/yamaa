@@ -3,7 +3,7 @@ id: R001
 title: Execution Model
 status: normative
 applies_to: [root.base, root.rows, row.dataset, root.columns, derivation]
-depends_on: [R002, R003, R004, R005, R007, R008, R010, R012, R013]
+depends_on: [R002, R003, R004, R005, R007, R008, R010, R012, R013, R015]
 ---
 
 # Execution model
@@ -51,6 +51,8 @@ Implementations must infer dependencies rather than evaluate columns in YAML
 declaration order. Recursively traverse each expression and collect:
 
 - every unqualified output variable referenced by `source`;
+- the `source` variables of a record lookup a qualified variable names, which
+  R015 defines;
 - variables in `group_by`, `order_by`, and other fields typed as `variable`;
 - variables referenced by fields whose type contains nested `expression`;
 - current-output identifiers used by an `sql` predicate;

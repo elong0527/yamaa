@@ -7,14 +7,56 @@ includes:
 root_class:
     - schema_version: {type: str, required: true}
     - domain: {type: domain_name, required: true}
-    - datasets: {type: "dict[dataset_id, path]", required: true}
+    - datasets: {type: "dict[dataset_id, dataset_source]", required: true}
     - base: {type: dataset_id, required: false}
     - parents: {type: [path, "list[path]"], required: false}
+    - record_lookups: {type: "list[record_lookup_class]", required: false}
     - keys: {type: "list[column_name]", required: true}
     - columns: {type: "list[column_class]", required: true}
     - rows: {type: "list[row_class]", required: false}
     - verifications: {type: [dataset_verification, "list[dataset_verification]"], required: false}
     - metadata: {type: "dict[str, str]", required: false}
+
+record_lookup_class:
+    - id:
+        type: record_lookup_id
+        required: true
+        description: Name through which the looked-up record is read.
+    - dataset:
+        type: dataset_id
+        required: true
+        description: Declared dataset the record is selected from.
+    - source:
+        type: [variable, "list[variable]"]
+        required: false
+        description: Current-row values paired by position with key; omit both source and key to match on output keys.
+    - key:
+        type: [dataset_column, "list[dataset_column]"]
+        required: false
+        description: Dataset columns paired by position with source.
+    - filter:
+        type: sql
+        required: false
+        description: Predicate selecting eligible records before matching.
+    - order_by:
+        type: "list[order_by_term]"
+        required: false
+        description: Terms ordering eligible records; declared with keep.
+    - keep:
+        type: str
+        required: false
+        values: [first, last]
+        description: Ordered record to retain; declared with order_by.
+    - unmatched:
+        type: str
+        required: false
+        values: [missing, fail]
+        description: Result when no record matches; R015 states the default.
+    - incomplete:
+        type: str
+        required: false
+        values: [missing, fail]
+        description: Result when a declared source value is missing; defaults to fail.
 
 column_class:
     - name: {type: column_name, required: true}
@@ -48,10 +90,29 @@ domain_name:
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
     description: Name of the dataset this specification derives.
 
+dataset_source:
+    type: [path, dataset_class]
+    description: Path to the dataset, or a path with the types its fields carry.
+
+dataset_class:
+    - path:
+        type: path
+        required: true
+        description: Source data path, resolved relative to the specification.
+    - types:
+        type: "dict[dataset_column, column_type]"
+        required: false
+        description: Type each named field carries; R014 types the rest.
+
 dataset_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
     description: Identifier of a dataset declared in datasets.
+
+record_lookup_id:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: Identifier of a record lookup, unique among dataset identifiers, other record lookups, and the output domain.
 
 dataset_column:
     type: str
