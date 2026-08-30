@@ -1,0 +1,52 @@
+schema_version: "1.0"
+domain: ADVS
+datasets:
+  ADVSPRE: input/advs_pre.csv
+base: ADVSPRE
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADVSPRE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADVSPRE.USUBJID
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      source: ADVSPRE.PARAMCD
+
+  - name: VSSEQ
+    type: int
+    derivation:
+      source: ADVSPRE.VSSEQ
+
+  - name: ADT
+    type: date
+    derivation:
+      source: ADVSPRE.ADT
+
+  - name: ADY
+    type: int
+    derivation:
+      source: ADVSPRE.ADY
+
+  - name: AVAL
+    type: float
+    derivation:
+      source: ADVSPRE.AVAL
+
+  - name: AVISIT
+    type: str
+    derivation:
+      cut:
+        source: ADY
+        breaks: [0, 2, 22, 43]
+        labels: [SCREENING, BASELINE, WEEK 2, WEEK 4, POST-TREATMENT]
+        right: false
+        missing: null
