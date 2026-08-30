@@ -63,7 +63,10 @@ field name to a descriptor:
 
 ```yaml
 example_class:
-    - name: {type: str, required: true, description: Name of the example.}
+    - name:
+        type: str
+        required: true
+        description: Name of the example.
     - values: {type: "list[str]", required: false}
 ```
 
@@ -135,6 +138,25 @@ Whitespace around nested expressions and the comma is ignored. A YAML sequence
 of type expressions is a union. The quoted string `"null"` is a type name; an
 unquoted YAML null is a value.
 
+`[` and `,` are structural characters inside a YAML flow mapping or flow
+sequence, so a type expression containing either must be quoted wherever it is
+written inside one. Block form imposes no such requirement, but the bundle
+quotes a bracketed type expression in both, so that a type reads the same way
+everywhere it appears:
+
+```yaml
+- keys: {type: "list[column_name]", required: true}
+- parents: {type: [path, "list[path]"], required: false}
+- order_by:
+    type: "list[order_by_term]"
+    required: false
+    description: Terms ordering eligible records; declared with keep.
+```
+
+The quotes are YAML syntax and are not part of the type expression. Quoting
+where YAML does not require it is a convention of the bundle; omitting it
+where YAML does require it is a parse error.
+
 ## Shorthand unions
 
 Two union shapes are shorthand for a canonical form. An implementation expands
@@ -177,6 +199,27 @@ Only these descriptor keywords are supported:
 
 When several constraints are present, all must pass. Defaults belong in the
 schema, not only in prose.
+
+## Descriptor style
+
+A descriptor may be written as a YAML flow mapping or in block form. The two
+parse to the same mapping, and nothing in this rule distinguishes them.
+
+The bundle writes a descriptor in flow form when it carries no `description`,
+so that a class reads as a table of field name, type, and required, and in
+block form when it carries one:
+
+```yaml
+example_class:
+    - id: {type: str, required: true}
+    - source:
+        type: variable
+        required: true
+        description: Current-row value the record is matched on.
+```
+
+This is a convention of how the bundle is written, not a validation
+requirement. A document that mixes the forms differently is still valid.
 
 ## Validation errors
 
