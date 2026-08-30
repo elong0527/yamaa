@@ -7,9 +7,9 @@ example derives.
 ## Required reading
 
 Read `../agents.md` first; it governs the schema and rules this directory
-exercises. Then read `README.md` here for the example index, and the
-[open design gaps](https://github.com/elong0527/yamaa/issues/49) issue and its
-sub-issues for the schema work the examples justify.
+exercises. Then read `README.md` here for the example index. The open design
+gaps and the schema work they justify are tracked in this repository's issue
+tracker, one work item per root cause.
 
 ## Example layout
 
@@ -78,20 +78,23 @@ tutorial.
 Wrap prose and code at 79 columns. Most positive examples fit in under 25
 lines; negative examples may be longer because they carry remediation.
 
-## Design findings belong in the issue catalogue
+## Design findings belong in the issue tracker
 
 An example that cannot express something is a design finding, and findings live
-in the [open design gaps](https://github.com/elong0527/yamaa/issues/49) issue
-and its sub-issues, grouped by root cause under one work item each, so that
-one limitation is stated once and names the examples that show it.
+in this repository's issue tracker, grouped by root cause under one work
+item each, so that one limitation is stated once and names the examples
+that show it.
 
 Before removing a finding from an example README, confirm the work item records
 it and names the example. If it does not, migrate it first. Deleting the only
 statement of a limitation is the most common way this suite loses information.
 
-When a gap closes, delete its statement from the work item and update the rules
-that cite it, rather than marking it closed in place. Close the work item when
-its last gap closes.
+When a gap closes, delete its statement from the work item rather than marking
+it closed in place, and close the work item when its last gap closes.
+
+**Rules and schema files never cite an issue.** A rule states the limitation
+itself, so closing a gap means editing the rule text that states it, not
+following a link out of the repository.
 
 ## The specification
 
@@ -212,9 +215,8 @@ check reports is a variable the README does not explain.
 3. Add a row to the index table in `README.md`. Its `Derives` column is the
    README title with the standard and domain prefix removed, so the two cannot
    drift apart.
-4. Record any finding it exposes as a gap on the matching work item under the
-   [open design gaps](https://github.com/elong0527/yamaa/issues/49) issue, or
-   add the example's name to the gap that already states it.
+4. Record any finding it exposes as a gap on the matching work item in the
+   issue tracker, or add the example's name to the gap that already states it.
 
 ## Before deleting an example
 
@@ -239,6 +241,5 @@ zero, and folding it into `date_diff` would have allowed `unit: week` with it.
 
 After registering one, update every place that enumerates the vocabulary: the
 input-shape audit in `../README.md`, R007's type behavior, and R008 if it
-declares handlers. Then delete the gap it closed from its work item under the
-[open design gaps](https://github.com/elong0527/yamaa/issues/49) issue, and
-close the work item when its last gap closes.
+declares handlers. Then delete the gap it closed from its work item in the
+issue tracker, and close the work item when its last gap closes.

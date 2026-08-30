@@ -37,8 +37,7 @@ A finished dataset an earlier run produced is an ordinary source and is
 declared under a name of its own. Reaching a sibling record of the dataset this
 run is building is a different thing, and no keyed construct reaches it; R001
 owns what happens when a column reaches its own value through the rows of its
-partition, and gap 14 under T3 records the gap
-([#52](https://github.com/elong0527/yamaa/issues/52)).
+partition. Addressing a sibling record by key is open work.
 
 ## Source expressions
 

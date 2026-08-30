@@ -33,8 +33,7 @@ non-missing value and states that a `float` renders the same way here as it does
 when converted to `str`; the schema does not select a file container. The
 example suite uses CSV and represents a missing value with an empty field. Row
 sequence follows R001, but the language has no separate submission-sort
-control, as gap 6 under T3 records
-([#52](https://github.com/elong0527/yamaa/issues/52)).
+control, which is open work rather than a decision this rule makes.
 
 Everything below concerns the values themselves, which are fully defined, and
 none of it depends on the unsettled part.
@@ -54,8 +53,7 @@ study whose reference data outgrows that count is re-read against the data
 rather than left to fill the places it already has, and a second value
 competing for one declared place is the ordinary multiple-match failure R003
 defines rather than a new place. Whether a family's members may instead come
-from data is open, and gap 7 under T5 records it
-([#50](https://github.com/elong0527/yamaa/issues/50)).
+from data is open.
 
 ## Column coverage
 
