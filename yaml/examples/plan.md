@@ -129,8 +129,8 @@ codelist as free-form strings, marks `USUBJID` as `Derived` by hand although
 unrelated `allowed_values` list. Its `USUBJID` now carries both a declared
 length and a `max_length` check, and nothing requires the two to agree. No
 example declares a core designation or a display format, and the superseded
-`cdiscbuildeR/inst/specs/adam/schema.yaml` governed `core` with a closed value
-list, so this vocabulary is narrower than the one it replaced.
+`R/cdiscbuilder/inst/specs/adam/schema.yaml` governed `core` with a closed
+value list, so this vocabulary is narrower than the one it replaced.
 
 **Action.** Needs a vocabulary naming the attributes it governs — at least
 origin, length, codelist, display format, core, and the dataset's own
@@ -217,7 +217,7 @@ would have to invent all of it.
 
 **Evidence.** No rule mentions `parents` and no example declares it; R006
 quotes the field only as an illustration of quoting a bracketed type
-expression. The superseded `cdiscbuildeR/inst/specs/adam/schema.yaml` carried
+expression. The superseded `R/cdiscbuilder/inst/specs/adam/schema.yaml` carried
 the same field beside a per-column `drop` flag for removing an inherited
 column, so the merge it implies was once partly written down. The design
 picture in the repository README rests on it: organization, compound, and

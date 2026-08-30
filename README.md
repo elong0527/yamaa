@@ -13,7 +13,7 @@ Reusable templates flow from the organization level through the compound and stu
 ## Repository
 
 - [`yaml/`](yaml/) - schemas, execution rules, and examples
-- [`cdiscbuildeR/`](cdiscbuildeR/) and [`R/`](R/) - R implementation and workflows
+- [`R/`](R/) - R implementation and workflows, including [`R/cdiscbuilder/`](R/cdiscbuilder/)
 - [`python/`](python/) - Python implementation
 - [`docs/`](docs/) - diagrams and assets
 
