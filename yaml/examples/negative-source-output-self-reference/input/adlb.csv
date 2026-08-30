@@ -1,0 +1,5 @@
+STUDYID,USUBJID,ADT,PARAMCD,PARAM,AVAL
+PILOT7,P7-701,2025-05-06,ALT,Alanine Aminotransferase,40
+PILOT7,P7-701,2025-05-06,AST,Aspartate Aminotransferase,60
+PILOT7,P7-702,2025-05-07,ALT,Alanine Aminotransferase,25
+PILOT7,P7-702,2025-05-07,AST,Aspartate Aminotransferase,20

@@ -1,0 +1,114 @@
+schema_version: "1.0"
+domain: ADLB
+datasets:
+  LB: {path: input/lb.csv, types: {LBSTRESN: float}}
+  ADLB: {path: input/adlb.csv, types: {AVAL: float}}
+base: LB
+keys: [STUDYID, USUBJID, ADT, PARAMCD]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: LB.USUBJID
+
+  - name: ADT
+    type: date
+    derivation:
+      source: LB.LBDTC
+
+  - name: PARAMCD
+    type: str
+    verifications:
+      allowed_values:
+        values: [ALT, AST, ASTALT]
+
+  - name: PARAM
+    type: str
+
+  - name: LBRESN
+    type: float
+    output: false
+
+  - name: ALTDEN
+    type: float
+    output: false
+
+  - name: ASTCODE
+    type: str
+    output: false
+    derivation:
+      literal: AST
+
+  - name: ASTVAL
+    type: float
+    output: false
+    derivation:
+      mapping_from:
+        source: [USUBJID, ADT, ASTCODE]
+        dataset: ADLB
+        key: [USUBJID, ADT, PARAMCD]
+        value: AVAL
+        missing: null
+        unmapped: null
+
+  - name: AVAL
+    type: float
+    derivation:
+      case:
+        branches:
+          - when: "PARAMCD = 'ASTALT'"
+            then:
+              compute:
+                expr: "ASTVAL / NULLIF(ALTDEN, 0)"
+        otherwise:
+          source: LBRESN
+
+rows:
+  - id: alt
+    filter: "LB.LBTESTCD = 'ALT'"
+    derivations:
+      PARAMCD:
+        literal: ALT
+      PARAM:
+        literal: Alanine Aminotransferase
+      LBRESN:
+        source: LB.LBSTRESN
+      ALTDEN:
+        literal: null
+
+  - id: ast
+    filter: "LB.LBTESTCD = 'AST'"
+    derivations:
+      PARAMCD:
+        literal: AST
+      PARAM:
+        literal: Aspartate Aminotransferase
+      LBRESN:
+        source: LB.LBSTRESN
+      ALTDEN:
+        literal: null
+
+  - id: ast_alt_ratio
+    filter: "LB.LBTESTCD = 'ALT'"
+    derivations:
+      PARAMCD:
+        literal: ASTALT
+      PARAM:
+        literal: Aspartate to Alanine Aminotransferase Ratio
+      LBRESN:
+        literal: null
+      ALTDEN:
+        source: LB.LBSTRESN
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, ADT, PARAMCD]
+  - row_count:
+      min: 6
+      max: 6

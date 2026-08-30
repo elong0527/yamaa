@@ -1,0 +1,106 @@
+schema_version: "1.0"
+domain: ADQS
+datasets:
+  QS: {path: input/qs.csv, types: {QSSTRESN: float}}
+base: QS
+keys: [STUDYID, USUBJID, VISIT, PARAMCD]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: QS.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: QS.USUBJID
+
+  - name: VISIT
+    type: str
+    derivation:
+      source: QS.VISIT
+
+  - name: PARAMCD
+    type: str
+    verifications:
+      allowed_values:
+        values: [PF01, PF02, PF03, PF04, PFSCORE]
+
+  - name: PARAM
+    type: str
+
+  - name: ITEMRESN
+    type: float
+    output: false
+
+  - name: ITEMSUM
+    type: float
+    output: false
+    derivation:
+      aggregate:
+        expr: "SUM(ITEMRESN)"
+        group_by: [STUDYID, USUBJID, VISIT]
+
+  - name: ITEMANS
+    type: int
+    output: false
+    derivation:
+      aggregate:
+        expr: "COUNT(ITEMRESN)"
+        group_by: [STUDYID, USUBJID, VISIT]
+
+  - name: AVAL
+    type: float
+    derivation:
+      case:
+        branches:
+          - when: "PARAMCD = 'PFSCORE' AND ITEMANS >= 3"
+            then:
+              compute:
+                expr: "100 * (ITEMSUM / ITEMANS) / 4"
+          - when: "PARAMCD = 'PFSCORE'"
+            then:
+              literal: null
+        otherwise:
+          source: ITEMRESN
+    verifications:
+      range:
+        min: 0
+        max: 100
+
+rows:
+  - id: item
+    filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE'"
+    derivations:
+      PARAMCD:
+        source: QS.QSTESTCD
+      PARAM:
+        source: QS.QSTEST
+      ITEMRESN:
+        source: QS.QSSTRESN
+
+  - id: subscale
+    filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE' AND QS.QSTESTCD = 'PF01'"
+    derivations:
+      PARAMCD:
+        literal: PFSCORE
+      PARAM:
+        literal: Physical Functioning Subscale Score
+      ITEMRESN:
+        literal: null
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VISIT, PARAMCD]
+  - row_count:
+      min: 25
+      max: 25
+  - implies:
+      id: subscale-score-rests-on-three-answered-items
+      when: "PARAMCD = 'PFSCORE' AND AVAL IS NOT NULL"
+      then: "ITEMANS >= 3"
+  - implies:
+      id: an-item-response-stays-within-the-answer-range
+      when: "PARAMCD IN ('PF01', 'PF02', 'PF03', 'PF04')"
+      then: "AVAL IS NULL OR (AVAL >= 0 AND AVAL <= 4)"

@@ -1,0 +1,7 @@
+phase: validation
+condition: duplicate_identifier
+spec_paths:
+  - datasets.ADLB
+  - domain
+context:
+  identifier: ADLB

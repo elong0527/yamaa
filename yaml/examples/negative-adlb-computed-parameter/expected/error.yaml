@@ -1,0 +1,7 @@
+phase: validation
+condition: dependency_cycle
+spec_paths:
+  - columns.AVAL.derivation.case
+  - columns.ALTVAL.derivation.aggregate
+context:
+  cycle: [AVAL, ALTVAL, AVAL]

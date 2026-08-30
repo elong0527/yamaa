@@ -1,0 +1,168 @@
+schema_version: "1.0"
+domain: ADLB
+datasets:
+  ADLBPRE:
+    path: input/adlb_pre.csv
+    types: {ASEQ: int, AVAL: float, ANRLO: float, ANRHI: float}
+base: ADLBPRE
+keys: [STUDYID, USUBJID, PARAMCD, ASEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADLBPRE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADLBPRE.USUBJID
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      source: ADLBPRE.PARAMCD
+
+  - name: PARAM
+    type: str
+    derivation:
+      source: ADLBPRE.PARAM
+
+  - name: ASEQ
+    type: int
+    derivation:
+      source: ADLBPRE.ASEQ
+
+  - name: AVISIT
+    type: str
+    derivation:
+      source: ADLBPRE.AVISIT
+
+  - name: AVAL
+    type: float
+    derivation:
+      source: ADLBPRE.AVAL
+
+  - name: ANRLO
+    type: float
+    derivation:
+      source: ADLBPRE.ANRLO
+
+  - name: ANRHI
+    type: float
+    derivation:
+      source: ADLBPRE.ANRHI
+
+  - name: ANRIND
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "AVAL IS NULL"
+            then:
+              literal: null
+          - when: "AVAL < ANRLO"
+            then:
+              literal: LOW
+          - when: "AVAL > ANRHI"
+            then:
+              literal: HIGH
+        otherwise:
+          literal: NORMAL
+    verifications:
+      allowed_values:
+        values: [LOW, NORMAL, HIGH]
+
+  - name: ABLFL
+    type: str
+    derivation:
+      source: ADLBPRE.ABLFL
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  - name: BASE
+    type: float
+    derivation:
+      baseline_value:
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        value: AVAL
+        flag: ABLFL
+
+  - name: BNRIND
+    type: str
+    derivation:
+      baseline_value:
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        value: ANRIND
+        flag: ABLFL
+    verifications:
+      allowed_values:
+        values: [LOW, NORMAL, HIGH]
+
+  - name: SHIFT1
+    type: str
+    derivation:
+      str_template:
+        template: "{BNRIND} to {ANRIND}"
+        missing: null
+
+  - name: R2BASE
+    type: float
+    derivation:
+      compute:
+        expr: "AVAL / NULLIF(BASE, 0)"
+
+  - name: CRITLIM
+    type: float
+    output: false
+    derivation:
+      compute:
+        expr: "3 * ANRHI"
+
+  - name: CRIT1
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "AVAL IS NOT NULL AND CRITLIM IS NOT NULL"
+            then:
+              literal: Result greater than 3 x ULN
+
+  - name: CRIT1FL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "AVAL IS NULL OR CRITLIM IS NULL"
+            then:
+              literal: null
+          - when: "AVAL > CRITLIM"
+            then:
+              literal: Y
+        otherwise:
+          literal: N
+    verifications:
+      allowed_values:
+        values: [Y, N]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, ASEQ]
+  - row_count:
+      min: 8
+      max: 8
+  - all_or_none:
+      id: criterion-text-accompanies-its-flag
+      columns: [CRIT1, CRIT1FL]
+  - all_or_none:
+      id: shift-needs-both-of-its-classifications
+      columns: [ANRIND, SHIFT1]
+  - implies:
+      id: a-baseline-record-is-its-own-reference
+      when: "ABLFL = 'Y' AND R2BASE IS NOT NULL"
+      then: "R2BASE = 1"
+  - implies:
+      id: criterion-is-met-only-above-its-limit
+      when: "CRIT1FL = 'Y'"
+      then: "AVAL > CRITLIM"

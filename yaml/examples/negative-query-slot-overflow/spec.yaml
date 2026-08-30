@@ -1,0 +1,77 @@
+schema_version: "1.0"
+domain: ADAE
+datasets:
+  AE: input/ae.csv
+  QUERY: {path: input/queries.csv, types: {GRPID: int}}
+base: AE
+keys: [STUDYID, USUBJID, AESEQ]
+
+record_lookups:
+  - id: SMQ1
+    dataset: QUERY
+    source: [AEDECOD]
+    key: [TERM]
+    filter: "QUERY.PREFIX = 'SMQ01'"
+    incomplete: missing
+    unmatched: missing
+
+  - id: SMQ2
+    dataset: QUERY
+    source: [AEDECOD]
+    key: [TERM]
+    filter: "QUERY.PREFIX = 'SMQ02'"
+    incomplete: missing
+    unmatched: missing
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    derivation:
+      source: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    derivation:
+      source: AE.AETERM
+
+  - name: AEDECOD
+    type: str
+    derivation:
+      source: AE.AEDECOD
+
+  - name: SMQ01NAM
+    type: str
+    derivation:
+      source: SMQ1.GRPNAME
+
+  - name: SMQ01CD
+    type: int
+    derivation:
+      source: SMQ1.GRPID
+
+  - name: SMQ02NAM
+    type: str
+    derivation:
+      source: SMQ2.GRPNAME
+
+  - name: SMQ02CD
+    type: int
+    derivation:
+      source: SMQ2.GRPID
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 3
+      max: 3

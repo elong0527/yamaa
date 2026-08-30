@@ -1,0 +1,7 @@
+phase: validation
+condition: unresolved_reference
+spec_paths:
+  - record_lookups[0].filter
+context:
+  dataset: AWINDOW
+  identifier: ADY

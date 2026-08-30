@@ -1,0 +1,9 @@
+STUDYID,USUBJID,PARAMCD,PARAM,ASEQ,AVISIT,AVAL,ANRLO,ANRHI,ANRIND,ABLFL,BASE,BNRIND,SHIFT1,R2BASE,CRIT1,CRIT1FL
+PILOT7,P7-201,ALT,Alanine Aminotransferase (U/L),1,BASELINE,30,0,40,NORMAL,Y,30,NORMAL,NORMAL to NORMAL,1,Result greater than 3 x ULN,N
+PILOT7,P7-201,ALT,Alanine Aminotransferase (U/L),2,WEEK 2,60,0,40,HIGH,,30,NORMAL,NORMAL to HIGH,2,Result greater than 3 x ULN,N
+PILOT7,P7-201,ALT,Alanine Aminotransferase (U/L),3,WEEK 4,150,0,40,HIGH,,30,NORMAL,NORMAL to HIGH,5,Result greater than 3 x ULN,Y
+PILOT7,P7-202,ALT,Alanine Aminotransferase (U/L),1,BASELINE,45,0,40,HIGH,Y,45,HIGH,HIGH to HIGH,1,Result greater than 3 x ULN,N
+PILOT7,P7-202,ALT,Alanine Aminotransferase (U/L),2,WEEK 2,18,0,40,NORMAL,,45,HIGH,HIGH to NORMAL,0.4,Result greater than 3 x ULN,N
+PILOT7,P7-202,ALT,Alanine Aminotransferase (U/L),3,WEEK 4,,0,40,,,45,HIGH,,,,
+PILOT7,P7-203,EOS,Eosinophils (%),1,BASELINE,0,1,6,LOW,Y,0,LOW,LOW to LOW,,Result greater than 3 x ULN,N
+PILOT7,P7-203,EOS,Eosinophils (%),2,WEEK 2,4,1,6,NORMAL,,0,LOW,LOW to NORMAL,,Result greater than 3 x ULN,N
