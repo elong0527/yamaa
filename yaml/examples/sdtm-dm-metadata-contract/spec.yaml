@@ -47,7 +47,9 @@ columns:
       origin: Derived
       length: "30"
     verifications:
-      not_missing: {}
+      - not_missing: {}
+      - max_length:
+          max: 30
 
   - name: SUBJID
     type: str

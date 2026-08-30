@@ -1,0 +1,36 @@
+schema_version: "1.0"
+domain: DM
+datasets:
+  DM_RAW: input/dm_raw.csv
+base: DM_RAW
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: DM_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      str_concat:
+        sources:
+          - source: DM_RAW.STUDYID
+          - literal: '-'
+          - source: DM_RAW.SITEID
+          - literal: '-'
+          - source: DM_RAW.SUBJID
+    verifications:
+      - max_length:
+          max: 20
+
+  - name: SUBJID
+    type: str
+    derivation:
+      source: DM_RAW.SUBJID
+
+  - name: SITEID
+    type: str
+    derivation:
+      source: DM_RAW.SITEID
