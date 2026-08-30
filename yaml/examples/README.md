@@ -68,7 +68,6 @@ CSV records the intended artifact once that capability exists.
 | [`negative-adam-adsl-stratification-reconciliation`](negative-adam-adsl-stratification-reconciliation/) | reconcile randomization strata |
 | [`negative-adex-relative-dose-intensity`](negative-adex-relative-dose-intensity/) | reject a dose intensity measured against a per-record plan |
 | [`negative-adrs-partial-response-after-complete-response`](negative-adrs-partial-response-after-complete-response/) | reject a partial response recorded after a complete response |
-| [`negative-adrs-response-before-progression`](negative-adrs-response-before-progression/) | reject a best response restricted to pre-progression assessments |
 | [`negative-adsl-subject-reference`](negative-adsl-subject-reference/) | reject a malformed subject reference |
 | [`negative-column-type-unknown`](negative-column-type-unknown/) | reject an analysis value with an ambiguous numeric type |
 | [`negative-compute-aggregate-function`](negative-compute-aggregate-function/) | reject a total written as a formula |
