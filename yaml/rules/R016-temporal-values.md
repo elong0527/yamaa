@@ -153,9 +153,11 @@ Two consequences are worth stating, because both are failure modes this type
 does not have:
 
 - **No civil time is nonexistent or ambiguous.** A daylight-saving gap or
-  repetition is a property of a zone. Without one, every value in the field
-  ranges above names exactly one moment, so there is nothing to reject as
-  unrepresentable and nothing to disambiguate.
+  repetition arises only in mapping a wall-clock reading onto a timeline, and
+  that mapping is what a zone supplies. Without one, every combination of
+  fields in the ranges above is a value of the type and denotes the reading it
+  spells, so there is nothing to reject as unrepresentable and nothing to
+  disambiguate.
 - **A datetime is never shifted.** Nothing normalizes it into another zone, so
   the value an implementation holds carries the fields the text it parsed
   carried.
