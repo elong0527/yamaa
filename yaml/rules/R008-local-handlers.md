@@ -3,7 +3,7 @@ id: R008
 title: Local Error Handlers
 status: normative
 applies_to: [source.missing, source.multiple_matches, expression, derivation]
-depends_on: [R001, R002, R003, R005, R006, R007, R011, R012]
+depends_on: [R001, R002, R003, R005, R006, R007, R011, R012, R016]
 ---
 
 # Local error handlers
@@ -36,8 +36,8 @@ Handlers occur in this fixed lifecycle:
 | extract | `missing` | Use a literal for a missing string input |
 | extract | `no_match` | Use a literal when a non-missing string does not match |
 | template | `missing` | Use a literal when any placeholder value is missing |
-| impute | `date_impute.missing`, `date_precision.missing` | Use a literal for a missing date source |
-| impute | `date_impute.invalid`, `date_precision.invalid` | Use a literal when a non-missing source is not ISO 8601 date text |
+| impute | `date_impute.missing`, `date_precision.missing` | Use a literal for a missing source, as R016 defines |
+| impute | `date_impute.invalid`, `date_precision.invalid` | Use a literal for an unusable source, as R016 defines |
 | convert | `conversion_failure` | Use a literal after failed output conversion |
 | final | `override` | Apply the first matching final expression |
 
@@ -58,14 +58,15 @@ Omitting an applicable handler field makes its condition fatal.
 ## Present but unusable
 
 `unmapped`, `no_match`, and `invalid` fire only when every input is present: a
-value with no dictionary entry, a string the pattern does not match, and text
-that is not an ISO 8601 date are each a different defect from an uncollected
-value, and a specification may answer them differently.
+value with no dictionary entry, a string the pattern does not match, and a
+source an operation cannot use are each a different defect from an uncollected
+value, and a specification may answer them differently. Which values an
+operation cannot use is its owning rule's to state; R016 states it for the two
+operations on the `impute` stage.
 
-The `impute` stage name covers both date operations that inspect possibly
-partial date text. `date_impute` returns a completed date and `date_precision`
-returns the precision of the collected text, but their `missing` and `invalid`
-conditions are identical and use the same stage in structured errors.
+One stage name serves several operations when their conditions coincide.
+`date_impute` and `date_precision` read the same source and answer the same
+two conditions about it, so both use `impute` in structured errors.
 
 Where an operation takes several inputs, as `mapping_from` does, `missing`
 fires when any one of them is missing and the present-but-unusable handler

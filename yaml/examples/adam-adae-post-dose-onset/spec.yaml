@@ -1,0 +1,86 @@
+schema_version: "1.0"
+domain: ADAE
+datasets:
+  AE: input/ae.csv
+  ADSL: input/adsl.csv
+base: AE
+keys: [STUDYID, USUBJID, AESEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    derivation:
+      source: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    derivation:
+      source: AE.AETERM
+
+  - name: ASTDTM
+    type: datetime
+    derivation:
+      source: AE.AESTDTC
+
+  - name: TRTSDTM
+    type: datetime
+    derivation:
+      source: ADSL.TRTSDTM
+
+  - name: TRTEMFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "ASTDTM IS NOT NULL AND TRTSDTM IS NOT NULL AND ASTDTM >= TRTSDTM"
+            then:
+              literal: Y
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  - name: AOCCSEQ
+    type: int
+    output: false
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [ASTDTM, AESEQ]
+        filter: "TRTEMFL = 'Y'"
+
+  - name: AOCCFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "AOCCSEQ = 1"
+            then:
+              literal: Y
+    verifications:
+      allowed_values:
+        values: [Y]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 7
+      max: 7
+  - implies:
+      id: treatment-emergent-onset-is-not-before-first-dose
+      when: "TRTEMFL = 'Y'"
+      then: "ASTDTM >= TRTSDTM"
+  - implies:
+      id: occurrence-flag-requires-treatment-emergence
+      when: "AOCCFL = 'Y'"
+      then: "TRTEMFL = 'Y'"

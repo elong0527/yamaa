@@ -3,7 +3,7 @@ id: R011
 title: Column Type Vocabulary and Conversion
 status: normative
 applies_to: [column.type, column_type, derivation, conversion_failure]
-depends_on: [R005, R006, R007, R008, R010]
+depends_on: [R005, R006, R007, R008, R010, R016]
 ---
 
 # Column type vocabulary and conversion
@@ -21,7 +21,11 @@ failure does to the run. R008 owns `conversion_failure`. R010 owns the
 arithmetic that produces a numeric value in the first place. R014 owns the
 other end: which stored fields are missing and what type a bound value carries
 before any conversion is reached. It applies this rule's `str` row to a field's
-declared type, so text is parsed the same way wherever it is read.
+declared type, so text is parsed the same way wherever it is read. R016 owns
+both temporal types. What a `date` and a `datetime` denote, the text each is
+read from and written back to, how two of them order, and which operations
+read them are stated there; the temporal cells below apply that rule rather
+than restating it.
 
 ## Three type namespaces
 
@@ -42,8 +46,8 @@ R006 resolves the two without ambiguity.
 
 The schema vocabulary and the column vocabulary are not the same set. `str`,
 `int`, and `float` are spelled the same in both and mean the same runtime
-values. `date` is a column type and not a schema type. `bool`, `"null"`,
-`list`, and `dict` are schema types and not column types.
+values. `date` and `datetime` are column types and not schema types. `bool`,
+`"null"`, `list`, and `dict` are schema types and not column types.
 
 ## Closed column vocabulary
 
@@ -54,21 +58,19 @@ values. `date` is a column type and not a schema type. `bool`, `"null"`,
 | `str` | A sequence of Unicode code points |
 | `int` | A 64-bit signed integer, as defined by R010 |
 | `float` | An IEEE 754 binary64 value, as defined by R010 |
-| `date` | A complete proleptic Gregorian calendar date |
+| `date` | A calendar date, as defined by R016 |
+| `datetime` | A local civil datetime, as defined by R016 |
 
 Every type additionally admits the missing value.
 
-A `date` is a complete date. There is no month or year precision, so a partial
-collected date is carried as text and completed before it becomes a `date`.
-`date_impute` performs that completion as a declared rule rather than as string
-surgery; its result is a `date` like any other, and nothing distinguishes it
-from a fully collected one. `date_precision` reads how much of a date the
-collected text carried, so a specification can record beside the date what it
-supplied; the date value itself still carries no precision. There is no
-`datetime` type: a value carrying a time of day is declared `str`, and ISO 8601
-text orders chronologically under R007 comparison. There is no Boolean column
-type; a flag is a `str` column with an `allowed_values` verification, as the
-examples write it.
+`date` and `datetime` are the two temporal types, and R016 defines both: what
+each admits, the text it is read from and written back to, how two of them
+order, and which operations read them. This rule adds nothing to that
+definition. A value neither type admits is a `str` like any other, and ISO
+8601 text orders chronologically under R007 comparison.
+
+There is no Boolean column type; a flag is a `str` column with an
+`allowed_values` verification, as the examples write it.
 
 Extending this vocabulary is a rule change, not an implementation choice.
 
@@ -81,14 +83,15 @@ is not defined below fails rather than producing a substitute value.
 A table row is the runtime type of the value being converted and a table
 column is the declared type:
 
-| From | to `str` | to `int` | to `float` | to `date` |
-|---|---|---|---|---|
-| missing | missing | missing | missing | missing |
-| `str` | identity | parse, then numeric to `int` | parse | parse ISO 8601 |
-| `int` | decimal text | identity | widen | fail |
-| `float` | decimal text, see below | integral only | identity | fail |
-| `date` | ISO 8601 text | fail | fail | identity |
-| `bool` | fail | fail | fail | fail |
+| From | to `str` | to `int` | to `float` | to `date` | to `datetime` |
+|---|---|---|---|---|---|
+| missing | missing | missing | missing | missing | missing |
+| `str` | identity | parse, then numeric to `int` | parse | R016 | R016 |
+| `int` | decimal text | identity | widen | fail | fail |
+| `float` | decimal text, see below | integral only | identity | fail | fail |
+| `date` | R016 | fail | fail | identity | fail |
+| `datetime` | R016 | fail | fail | fail | identity |
+| `bool` | fail | fail | fail | fail | fail |
 
 A missing value converts to missing in every type. Conversion is not attempted,
 so `conversion_failure` does not fire for a missing input and a missing result
@@ -98,9 +101,11 @@ Parsing a `str` to a number accepts exactly R010's `number` production with an
 optional leading `+` or `-` and no surrounding whitespace. Any other text
 fails.
 
-Parsing a `str` to a `date` accepts exactly a complete ISO 8601 calendar date
-written `YYYY-MM-DD`. A partial date, a date with a time component, and a
-non-date string all fail.
+A cell reading **R016** applies that rule: the text a temporal value is parsed
+from, the canonical text it is written back to, and the conversions it does
+not permit are all stated there. Naming the rule rather than repeating its
+grammar is what keeps the form a column conversion applies and the form any
+other reader applies from drifting apart.
 
 Converting a numeric value to `int` succeeds only when the value is exactly
 integral and within the 64-bit signed range. A non-integral value fails; it is

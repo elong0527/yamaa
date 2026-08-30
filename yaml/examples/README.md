@@ -37,6 +37,7 @@ the safest correction and shows the smallest useful YAML change.
 |---|---|
 | [`adam-adae-occurrence-flags`](adam-adae-occurrence-flags/) | flag the first occurrence at three levels |
 | [`adam-adae-partial-dates`](adam-adae-partial-dates/) | impute partial dates |
+| [`adam-adae-post-dose-onset`](adam-adae-post-dose-onset/) | classify an event by the moment it started |
 | [`adam-adae-serious-event-sequence`](adam-adae-serious-event-sequence/) | number a subject's serious events in onset order |
 | [`adam-adae-severity-override`](adam-adae-severity-override/) | apply an approved severity correction |
 | [`adam-adae-severity-rank`](adam-adae-severity-rank/) | rank a subject's events by severity |
@@ -87,6 +88,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-date-impute-month-out-of-range`](negative-date-impute-month-out-of-range/) | reject a start date completed with no month of the year |
 | [`negative-date-impute-nonexistent-day`](negative-date-impute-nonexistent-day/) | reject an end date completed past the end of its month |
 | [`negative-date-precision-invalid-source`](negative-date-precision-invalid-source/) | reject a completeness flag read from text that is not a date |
+| [`negative-datetime-zone-offset`](negative-datetime-zone-offset/) | reject an event start recorded against another clock |
 | [`negative-greatest-incomparable-sources`](negative-greatest-incomparable-sources/) | reject a last-known-alive date taken from a day number |
 | [`negative-ingest-unparseable-field`](negative-ingest-unparseable-field/) | reject a dose recorded with its unit |
 | [`negative-keys-internal-column`](negative-keys-internal-column/) | reject a site-scoped subject identity |

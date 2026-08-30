@@ -75,7 +75,7 @@ row_class:
 
 column_type:
     type: str
-    values: [str, int, float, date]
+    values: [str, int, float, date, datetime]
 
 literal_value:
     type: [str, int, float, bool, "null"]

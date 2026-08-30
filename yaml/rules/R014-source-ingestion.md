@@ -3,7 +3,7 @@ id: R014
 title: Source-Format Ingestion
 status: normative
 applies_to: [root.datasets, dataset_source, dataset_class, expression.source]
-depends_on: [R002, R006, R011]
+depends_on: [R002, R006, R011, R016]
 ---
 
 # Source-format ingestion
@@ -74,8 +74,8 @@ extract.
 A declared field type is applied to the stored text by the `str` row of R011's
 conversion table, which is the same parsing a `str` column uses when it reaches
 a declared type. `int` and `float` accept exactly R010's `number` production
-with an optional sign; `date` accepts exactly a complete ISO 8601 calendar
-date. A value that does not parse fails the run.
+with an optional sign; `date` and `datetime` accept exactly the lexical forms
+R016 fixes. A value that does not parse fails the run.
 
 An ingestion failure is not a conversion failure. `conversion_failure` is
 declared on a column and answers for a value the derivation produced, as R005
@@ -101,7 +101,7 @@ recorded answer, and it does so before any rule in this design can see the
 value. A study that records absence with a code maps that code to a result
 where the specification can be read.
 
-An empty field of a declared numeric or date type is missing rather than a
+An empty field of any declared type other than `str` is missing rather than a
 parse failure, because it holds no text to parse.
 
 ## Errors

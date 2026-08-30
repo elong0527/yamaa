@@ -4,4 +4,4 @@ spec_paths:
   - columns.AVAL.type
 context:
   value: number
-  permitted: [str, int, float, date]
+  permitted: [str, int, float, date, datetime]

@@ -10,7 +10,7 @@ Only open work appears here. A change that lands is deleted rather than marked,
 so the git history of this file and of [`../rules/`](../rules/) is the record
 of what closed and how.
 
-The suite currently holds 92 examples: 50 successful golden outputs and 42
+The suite currently holds 94 examples: 51 successful golden outputs and 43
 expected failures. Three failure examples also commit the completed dataset
 beside the structured error.
 
@@ -60,8 +60,6 @@ silently decides classifications such as treatment emergence.
 
 **Evidence.**
 
-- `sdtm-ae-effective-transaction` carries an audit timestamp as `str` and
-  orders it correctly only because ISO 8601 text sorts chronologically.
 - `adam-adae-partial-dates` derives `ASTDTF` from the same source it imputes
   from, but nothing prevents the flag and the date from drifting apart.
 
@@ -69,6 +67,24 @@ silently decides classifications such as treatment emergence.
 change to the type vocabulary rather than a registry entry. If a precision
 concept lands here, `greatest` and `least` must say whether an imputed operand
 can win, so this item owns that decision rather than R007.
+
+**Also open here, from the datetime type.** R016 closed the time of day, and
+three consequences of how it closed it stay with this item. Each is a question
+the type raises rather than a limitation an example has hit, so none is a gap
+of its own:
+
+- Nothing converts between a `date` and a `datetime`. R016 fails in both
+  directions rather than inventing a time of day or discarding a collected
+  one, so a specification holding a moment and needing a day has no expression
+  to ask for it.
+- Nothing measures between two moments. `date_diff` counts whole calendar
+  units and its `bounds` counts endpoints of a day range, and neither has a
+  meaning between two instants, so R016 keeps both operations on `date`.
+- A time of day alone is still not a value. R016 requires a complete date
+  beside the time, so the `--TM` family stays text.
+
+Each enters the vocabulary when an example needs it, under the acceptance rule
+below.
 
 ### T3. Output and pipeline contract (gaps 5–6)
 
@@ -173,11 +189,19 @@ remains of gap 1.
 ## Untested rule text
 
 Every fail-closed contract targeted by the completed negative-example audit is
-now provoked by an example, with one exception: R014 rejects a `types` entry
-for a field whose container already supplies a type, and every source in this
-suite is a delimited file that supplies none. That claim stays rule text until
-the suite reads a container carrying its own types, which is also what would
-let a dataset state its types once for every specification that reads it.
+now provoked by an example, with two exceptions.
+
+R014 rejects a `types` entry for a field whose container already supplies a
+type, and every source in this suite is a delimited file that supplies none.
+That claim stays rule text until the suite reads a container carrying its own
+types, which is also what would let a dataset state its types once for every
+specification that reads it.
+
+R016's rejection table has fourteen rows and the suite provokes two of them:
+`negative-datetime-zone-offset` rejects an offset, which is the row the type
+turns on, and `negative-conversion-incomplete-date` rejects a truncated date.
+The remaining rows are one grammar failing one way each, so they stay rule
+text rather than becoming twelve examples of the same rejection.
 
 ## Pilot 7 coverage
 
