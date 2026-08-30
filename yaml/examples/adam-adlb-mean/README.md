@@ -7,14 +7,5 @@ derive one row per result:
 - `AVALMEAN` is the arithmetic mean of the subject's non-missing results for
   the parameter, carried onto each of those result records.
 
-The `aggregate` declaration makes that subject-and-parameter grain explicit:
-
-```yaml
-derivation:
-  aggregate:
-    group_by: [STUDYID, USUBJID, PARAMCD]
-    expr: "MEAN(AVAL)"
-```
-
 Missing results do not contribute to the mean. A subject with records but no
 collected result has a missing mean rather than a measured zero.
