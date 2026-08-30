@@ -40,29 +40,6 @@ columns:
     derivation:
       source: AE.ASTDT
 
-  - name: DTHFL
-    type: str
-    derivation:
-      case:
-        branches:
-          - when: "DTHDT IS NOT NULL"
-            then:
-              literal: Y
-    verifications:
-      allowed_values:
-        values: [Y]
-
-  - name: DTHCAUS
-    type: str
-    derivation:
-      source: DEATHEV.AEDECOD
-
-  - name: DTHDT
-    type: date
-    derivation:
-      coalesce:
-        sources: [EVDTHDT, DMDTHDT]
-
   - name: EVDTHDT
     type: date
     output: false
@@ -84,6 +61,29 @@ columns:
           - when: "AE.AEOUT = 'FATAL'"
             then:
               literal: Y
+
+  - name: DTHFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "EVDTHDT IS NOT NULL OR DMDTHDT IS NOT NULL"
+            then:
+              literal: Y
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  - name: DTHCAUS
+    type: str
+    derivation:
+      source: DEATHEV.AEDECOD
+
+  - name: DTHDT
+    type: date
+    derivation:
+      coalesce:
+        sources: [EVDTHDT, DMDTHDT]
 
 verifications:
   - unique:
