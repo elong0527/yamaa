@@ -35,6 +35,7 @@ the safest correction and shows the smallest useful YAML change.
 
 | Example | Derives |
 |---|---|
+| [`adam-adae-death-outcome`](adam-adae-death-outcome/) | carry each subject's death onto every event |
 | [`adam-adae-occurrence-flags`](adam-adae-occurrence-flags/) | flag the first occurrence at three levels |
 | [`adam-adae-partial-dates`](adam-adae-partial-dates/) | impute partial dates |
 | [`adam-adae-post-dose-onset`](adam-adae-post-dose-onset/) | classify an event by the moment it started |
@@ -45,7 +46,6 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adae-string-handlers`](adam-adae-string-handlers/) | clean text and handle invalid IDs |
 | [`adam-adae-treatment-emergent`](adam-adae-treatment-emergent/) | classify an event as treatment-emergent |
 | [`adam-adae-worst-severity`](adam-adae-worst-severity/) | flag the worst-severity event per preferred term |
-| [`adam-adae-death-outcome`](adam-adae-death-outcome/) | carry each subject's death onto every event |
 | [`adam-adce-worst-toxicity-grade`](adam-adce-worst-toxicity-grade/) | flag the subject's worst-grade event |
 | [`adam-adex-cumulative-dose`](adam-adex-cumulative-dose/) | summarize cumulative exposure |
 | [`adam-adex-uncollected-exposure`](adam-adex-uncollected-exposure/) | tell an uncollected dose from an absent administration |

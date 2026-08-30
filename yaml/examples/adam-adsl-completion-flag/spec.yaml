@@ -33,7 +33,7 @@ columns:
     derivation:
       case:
         branches:
-          - when: "COMPDT IS NOT NULL"
+          - when: "COMPREC IS NOT NULL"
             then:
               literal: Y
         otherwise:
@@ -42,11 +42,11 @@ columns:
       allowed_values:
         values: [Y, N]
 
-  - name: COMPDT
-    type: date
+  - name: COMPREC
+    type: str
     output: false
     derivation:
-      source: COMPLT.DSDTC
+      source: COMPLT.DSDECOD
 
 verifications:
   - unique:

@@ -1,7 +1,6 @@
 # ADaM ADLB: reject an average written as a formula
 
-This example uses collected neutrophil results to attempt one record per
-subject and parameter:
+This example uses collected neutrophil results to attempt one row per result:
 
 - `AVAL` is the collected result;
 - `AVALMEAN` is meant to hold the subject's average result.
@@ -19,9 +18,8 @@ state the subject-level grain explicitly:
 derivation:
   aggregate:
     group_by: [STUDYID, USUBJID, PARAMCD]
-    expr: "SUM(AVAL) / COUNT(AVAL)"
+    expr: "SUM(AVAL) / NULLIF(COUNT(AVAL), 0)"
 ```
 
-A result whose group contains no non-missing values is a division by zero and
-fails at evaluation; a group of a fixed minimum size should be confirmed with
-a row-count check instead of assumed.
+The zero-count guard leaves the average empty when a group has no non-missing
+results. It does not confuse an uncollected value with a measured zero.

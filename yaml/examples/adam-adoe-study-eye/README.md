@@ -11,8 +11,10 @@ measurement:
   value left empty;
 - `AFEYE` is the eye's role in the study: the measurement belongs to the
   study eye when its laterality matches the laterality the study assigned to
-  the subject, and to the fellow eye when it does not. A subject with no
-  assigned eye has no role for either eye.
+  the subject, to both eyes when the measurement is bilateral, and to the
+  fellow eye when it is the opposite unilateral eye. Either unilateral eye is
+  a study eye for a bilateral assignment. A subject with no assigned eye has
+  no role for either eye.
 
 The assignment is a property of the subject, not of the measurement, so the
 same eye is the study eye at every visit; only the collected laterality moves

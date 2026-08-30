@@ -50,14 +50,11 @@ columns:
           - when: "DSDECOD = 'RANDOMIZED'"
             then:
               literal: PROTOCOL MILESTONE
-          - when: "DSDECOD = 'SCREEN FAILURE'"
-            then:
-              literal: DISPOSITION EVENT
         otherwise:
-          literal: STUDY COMPLETION
+          literal: DISPOSITION EVENT
     verifications:
       allowed_values:
-        values: [PROTOCOL MILESTONE, DISPOSITION EVENT, STUDY COMPLETION]
+        values: [PROTOCOL MILESTONE, DISPOSITION EVENT]
 
   - name: DSDTC
     type: date
@@ -70,13 +67,13 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, DSSEQ]
   - row_count:
-      min: 6
-      max: 6
+      min: 7
+      max: 7
   - implies:
       id: randomized-record-is-a-milestone
       when: "DSDECOD = 'RANDOMIZED'"
       then: "DSCAT = 'PROTOCOL MILESTONE'"
   - implies:
-      id: completion-record-is-a-completion
+      id: completion-record-is-a-disposition-event
       when: "DSDECOD = 'COMPLETED'"
-      then: "DSCAT = 'STUDY COMPLETION'"
+      then: "DSCAT = 'DISPOSITION EVENT'"

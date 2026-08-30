@@ -10,7 +10,6 @@ This example uses a subject-level dataset and the disposition dataset with a
   record reports a discontinuation reason, and a subject with no disposition
   record at all, are both `N`.
 
-A completion later withdrawn by a newer record does not qualify a subject: the
-disposition record must still stand. The flag answers whether the record
-exists, not how the study ended, so a subject who both completed and later
-discontinued from a follow-up period keeps `Y` for the completion.
+The flag answers whether a completion record exists, not whether that record's
+date was collected or how a later follow-up period ended. A subject who both
+completed and later discontinued therefore keeps `Y` for the completion.

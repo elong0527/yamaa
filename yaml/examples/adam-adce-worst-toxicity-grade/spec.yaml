@@ -45,6 +45,7 @@ columns:
       mapping:
         source: ASEV
         dict: {MILD: 1, MODERATE: 2, SEVERE: 3}
+        missing: null
     verifications:
       allowed_values:
         values: [1, 2, 3]

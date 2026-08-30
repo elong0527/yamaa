@@ -9,6 +9,8 @@ keys: [STUDYID, USUBJID, AESEQ]
 record_lookups:
   - id: DEATHEV
     dataset: AE
+    source: [STUDYID, USUBJID]
+    key: [STUDYID, USUBJID]
     filter: "AE.AEOUT = 'FATAL'"
     unmatched: missing
 
@@ -43,7 +45,7 @@ columns:
     derivation:
       case:
         branches:
-          - when: "AE.AEOUT = 'FATAL'"
+          - when: "DTHDT IS NOT NULL"
             then:
               literal: Y
     verifications:
@@ -73,17 +75,31 @@ columns:
     derivation:
       source: DM.DTHDT
 
+  - name: FATALFL
+    type: str
+    output: false
+    derivation:
+      case:
+        branches:
+          - when: "AE.AEOUT = 'FATAL'"
+            then:
+              literal: Y
+
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 4
-      max: 4
+      min: 5
+      max: 5
   - implies:
       id: fatal-event-carries-its-own-cause
-      when: "DTHFL = 'Y'"
+      when: "FATALFL = 'Y'"
       then: "DTHCAUS = AEDECOD AND DTHDT = ASTDT"
   - implies:
       id: no-cause-without-a-fatal-event
       when: "DTHCAUS IS NOT NULL"
       then: "DTHDT IS NOT NULL"
+  - implies:
+      id: death-date-marks-the-subject
+      when: "DTHDT IS NOT NULL"
+      then: "DTHFL = 'Y'"

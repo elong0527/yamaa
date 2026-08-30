@@ -3,7 +3,7 @@ domain: ADLB
 datasets:
   LB: input/lb.csv
 base: LB
-keys: [STUDYID, USUBJID, PARAMCD]
+keys: [STUDYID, USUBJID, LBSEQ]
 
 columns:
   - name: STUDYID
@@ -15,6 +15,11 @@ columns:
     type: str
     derivation:
       source: LB.USUBJID
+
+  - name: LBSEQ
+    type: int
+    derivation:
+      source: LB.LBSEQ
 
   - name: PARAMCD
     type: str

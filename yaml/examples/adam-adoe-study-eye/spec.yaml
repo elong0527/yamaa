@@ -33,7 +33,7 @@ columns:
       source: OE.OELAT
     verifications:
       allowed_values:
-        values: [LEFT, RIGHT]
+        values: [LEFT, RIGHT, BILATERAL]
 
   - name: AVAL
     type: float
@@ -45,29 +45,42 @@ columns:
     output: false
     derivation:
       source: ADSL.STUDYEYE
+    verifications:
+      allowed_values:
+        values: [LEFT, RIGHT, BILATERAL]
 
   - name: AFEYE
     type: str
     derivation:
       case:
         branches:
+          - when: "OELAT = 'BILATERAL' AND STUDYEYE IS NOT NULL"
+            then:
+              literal: Both Eyes
+          - when: "STUDYEYE = 'BILATERAL' AND OELAT IS NOT NULL"
+            then:
+              literal: Study Eye
           - when: "OELAT = STUDYEYE"
             then:
-              literal: STUDY EYE
-          - when: "STUDYEYE IS NOT NULL"
+              literal: Study Eye
+          - when: "STUDYEYE IS NOT NULL AND OELAT IS NOT NULL"
             then:
-              literal: FELLOW EYE
+              literal: Fellow Eye
     verifications:
       allowed_values:
-        values: [STUDY EYE, FELLOW EYE]
+        values: [Study Eye, Fellow Eye, Both Eyes]
 
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, OESEQ]
   - row_count:
-      min: 6
-      max: 6
+      min: 7
+      max: 7
   - implies:
       id: study-eye-record-carries-the-study-laterality
-      when: "AFEYE = 'STUDY EYE'"
-      then: "OELAT = STUDYEYE"
+      when: "AFEYE = 'Study Eye'"
+      then: "OELAT = STUDYEYE OR STUDYEYE = 'BILATERAL'"
+  - implies:
+      id: both-eyes-record-is-bilateral
+      when: "AFEYE = 'Both Eyes'"
+      then: "OELAT = 'BILATERAL'"
