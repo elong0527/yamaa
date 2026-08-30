@@ -32,7 +32,13 @@ that package's reference pages.
 
 ## Tier 1: extract from these first
 
-### `pharmaverse/admiral`
+### [`pharmaverse/admiral`](https://github.com/pharmaverse/admiral)
+
+Documentation: <https://pharmaverse.github.io/admiral/>.
+Extraction seams:
+[`tests/testthat/`](https://github.com/pharmaverse/admiral/tree/main/tests/testthat),
+[`inst/templates/`](https://github.com/pharmaverse/admiral/tree/main/inst/templates),
+[`vignettes/`](https://github.com/pharmaverse/admiral/tree/main/vignettes).
 
 The reference implementation of ADaM derivations and already this suite's
 benchmark. Apache-2.0, 148 exported functions.
@@ -76,7 +82,11 @@ would supply evidence for:
 - **gap 2, the irregular interval join.** `create_period_dataset`,
   `derive_vars_period`, `derive_var_ontrtfl`.
 
-### `pharmaverse/admiraldiscovery`
+### [`pharmaverse/admiraldiscovery`](https://github.com/pharmaverse/admiraldiscovery)
+
+Documentation: <https://pharmaverse.github.io/admiraldiscovery/>.
+The ledger itself:
+[`inst/admiral-lookup-book.csv`](https://github.com/pharmaverse/admiraldiscovery/blob/main/inst/admiral-lookup-book.csv).
 
 MIT. Not example material: a coverage ledger. `inst/admiral-lookup-book.csv`
 holds 480 rows of dataset, variable, and the function that derives it, with a
@@ -87,7 +97,13 @@ them this suite has never stated.
 By that reading the largest uncovered areas are ADPC (43 rows), ADPPK (34),
 ADMH (25), ADEG (23), and ADCM (19), none of which this suite touches at all.
 
-### `pharmaverse/sdtm.oak`
+### [`pharmaverse/sdtm.oak`](https://github.com/pharmaverse/sdtm.oak)
+
+Documentation: <https://pharmaverse.github.io/sdtm.oak/>.
+The specifications to read against `schema.yaml`:
+[`cm_sdtm_oak_spec.csv`](https://github.com/pharmaverse/sdtm.oak/blob/main/inst/raw_data/cm_sdtm_oak_spec.csv),
+[`ct-01-cm.csv`](https://github.com/pharmaverse/sdtm.oak/blob/main/inst/ct/ct-01-cm.csv),
+[`suppqual_spec.csv`](https://github.com/pharmaverse/sdtm.oak/blob/main/inst/spec/suppqual_spec.csv).
 
 Apache-2.0. A raw-to-SDTM transformation engine, and the only pharmaverse
 source that covers the half of the pipeline this suite exercises with 15
@@ -110,7 +126,9 @@ not parse, which is gaps 3 and 4 stated as an implementation.
 
 ## Tier 2: data and pipeline shape
 
-### `pharmaverse/pharmaversesdtm`
+### [`pharmaverse/pharmaversesdtm`](https://github.com/pharmaverse/pharmaversesdtm)
+
+Per-dataset provenance: <https://pharmaverse.github.io/pharmaversesdtm/>.
 
 Apache-2.0, 64 datasets, no code. The input side for domains this suite has
 never read: `rs_onco*` in six flavors, `tr_onco`, `tu_onco`, `qs*`, `pc`,
@@ -118,21 +136,28 @@ never read: `rs_onco*` in six flavors, `tr_onco`, `tu_onco`, `qs*`, `pc`,
 eleven `supp*` datasets. Realistic rather than minimal, so a dataset trims
 into an example input rather than becoming one.
 
-### `pharmaverse/pharmaverseadam`
+### [`pharmaverse/pharmaverseadam`](https://github.com/pharmaverse/pharmaverseadam)
+
+Documentation: <https://pharmaverse.github.io/pharmaverseadam/>.
 
 Apache-2.0, 30 datasets, no code. The admiral-produced ADaM outputs for those
 SDTM inputs. Useful for cross-checking a value derived by hand; poor as golden
 output, because each is a whole study rather than the few rows an example
 asserts.
 
-### `pharmaverse/pharmaverseraw`
+### [`pharmaverse/pharmaverseraw`](https://github.com/pharmaverse/pharmaverseraw)
+
+Documentation: <https://pharmaverse.github.io/pharmaverseraw/>.
 
 Apache-2.0, five datasets (`ae_raw`, `dm_raw`, `ds_raw`, `ec_raw`, `vs_raw`)
 in collected EDC shape. This is the shape `odm.csv` projects and the suite has
 one example reading it, so this is the thinnest covered area against an
 available source.
 
-### `pharmaverse/examples`
+### [`pharmaverse/examples`](https://github.com/pharmaverse/examples)
+
+Rendered workflows: <https://pharmaverse.github.io/examples/>. Specifications:
+[`metadata/`](https://github.com/pharmaverse/examples/tree/main/metadata).
 
 Apache-2.0. End-to-end Quarto workflows: SDTM `dm`, `vs`, `ae`; ADaM `adsl`,
 `advs`, `adae`, `adtte`, `adrs`, `adpc`, `adppk`, `ader`. Its
@@ -149,16 +174,19 @@ Each is Apache-2.0 and follows admiral's testing conventions, so the same
 
 | Repository | Exports / tests | Why it is worth reading |
 |---|---|---|
-| `admiralonco` | 30 / 34 | Eleven vignettes covering RECIST, iRECIST, PCWG3, IMWG, GCIG, and lymphoma. Confirmed response, clinical benefit, and progression carry the source-record traceability of gap 9, and the nadir comparison is gap 12 |
-| `admiralvaccine` | 11 / 35 | ADCE, ADFACE, ADIS. Severity graded from a measured diameter and fever records built where none were collected, which is the row-creation half of gap 16 |
-| `admiralophtha` | 5 / 8 | Study eye and affected eye, ETDRS-to-logMAR conversion, criterion flags. Small and clean; laterality is a grain this suite has never carried |
-| `admiralpeds` | 3 / 39 | Growth parameters interpolated against 14 WHO and CDC reference tables. The keyed reference table T1 rejected as `cut_from`, at a scale that tests whether the rejection holds |
-| `admiralneuro` | 2 / 30 | Centiloid and percentile computations. Two exports; low yield |
-| `admiralmetabolic` | 2 / 13 | Waist-to-hip and waist-to-height ratios. Two exports; low yield |
+| [`admiralonco`](https://github.com/pharmaverse/admiralonco) | 30 / 34 | Eleven vignettes covering RECIST, iRECIST, PCWG3, IMWG, GCIG, and lymphoma. Confirmed response, clinical benefit, and progression carry the source-record traceability of gap 9, and the nadir comparison is gap 12 |
+| [`admiralvaccine`](https://github.com/pharmaverse/admiralvaccine) | 11 / 35 | ADCE, ADFACE, ADIS. Severity graded from a measured diameter and fever records built where none were collected, which is the row-creation half of gap 16 |
+| [`admiralophtha`](https://github.com/pharmaverse/admiralophtha) | 5 / 8 | Study eye and affected eye, ETDRS-to-logMAR conversion, criterion flags. Small and clean; laterality is a grain this suite has never carried |
+| [`admiralpeds`](https://github.com/pharmaverse/admiralpeds) | 3 / 39 | Growth parameters interpolated against 14 WHO and CDC reference tables. The keyed reference table T1 rejected as `cut_from`, at a scale that tests whether the rejection holds |
+| [`admiralneuro`](https://github.com/pharmaverse/admiralneuro) | 2 / 30 | Centiloid and percentile computations. Two exports; low yield |
+| [`admiralmetabolic`](https://github.com/pharmaverse/admiralmetabolic) | 2 / 13 | Waist-to-hip and waist-to-height ratios. Two exports; low yield |
 
 ## Tier 4: rules, metadata, and record selection
 
-### `pharmaverse/sdtmchecks`
+### [`pharmaverse/sdtmchecks`](https://github.com/pharmaverse/sdtmchecks)
+
+Documentation: <https://pharmaverse.github.io/sdtmchecks/>. The checks:
+[`R/`](https://github.com/pharmaverse/sdtmchecks/tree/devel/R).
 
 Apache-2.0, default branch `devel`. 109 `check_*` functions, each a
 cross-domain SDTM consistency rule stated over real variables: a death date
@@ -167,7 +195,9 @@ disposition that no adverse event supports. This is the densest available
 source for the `verifications` vocabulary and for negative examples, because
 each check names a condition and the rows that violate it.
 
-### `pharmaverse/metatools`
+### [`pharmaverse/metatools`](https://github.com/pharmaverse/metatools)
+
+Documentation: <https://pharmaverse.github.io/metatools/>.
 
 MIT, 22 exports. Two seams. `build_qnam`, `make_supp_qual`, and
 `combine_supp` are the supplemental-qualifier round trip that gap 15 leaves
@@ -176,14 +206,19 @@ performs. `check_ct_col`, `check_variables`, `check_unique_keys`, and
 `drop_unspec_vars` check a dataset against a declared specification, which is
 the conformance half of T4.
 
-### `pharmaverse/datacutr`
+### [`pharmaverse/datacutr`](https://github.com/pharmaverse/datacutr)
+
+Documentation: <https://pharmaverse.github.io/datacutr/>.
 
 Apache-2.0, 10 exports, seven test datasets. Applies a cut date across a
 study: date cuts, patient cuts, a special case for DM, and imputation of a
 partial `DCUTDTC` bounded by the cut. The bound is gap 17's third item, and
 removing records that fall after the cut is gap 8.
 
-### `pharmaverse/admiral-adamig-wg`
+### [`pharmaverse/admiral-adamig-wg`](https://github.com/pharmaverse/admiral-adamig-wg)
+
+The open questions:
+<https://github.com/pharmaverse/admiral-adamig-wg/issues>.
 
 No code; an issue tracker of ADaM Implementation Guide ambiguities, such as
 traceability under multiple imputation, criterion variables with more than
@@ -193,7 +228,9 @@ states when it asks for an explicit policy rather than a correction.
 
 ## Adjacent, outside the pharmaverse organization
 
-`metacore` and `xportr` (both `atorus-research`, MIT) are the pharmaverse
+[`metacore`](https://github.com/atorus-research/metacore) and
+[`xportr`](https://github.com/atorus-research/xportr) (both
+`atorus-research`, MIT) are the pharmaverse
 metadata stack: `metacore` reads a define.xml or a specification workbook into
 a governed object carrying origin, length, codelist, core, and display format,
 and `xportr` applies and enforces them on the way to a transport file. That is
