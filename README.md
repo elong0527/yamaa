@@ -1,12 +1,12 @@
 # yamaa <img src="docs/assets/logo.jpeg" align="right" width="120" alt="YAMAA logo" />
 
-YAMAA is a language-neutral YAML specification for reproducible clinical trial data pipelines that transform ODM data into SDTM, ADaM, and TLF deliverables.
+YAMAA is a language-neutral YAML specification for reproducible clinical trial data pipelines that transform ODM data into SDTM, ADaM datasets following CDISC standards.
 
 YAMAA is designed for AI-first workflows while keeping derivations reviewable, version-controlled, and consistent across implementations.
 
 ## Design
 
-![YAMAA design: inherited templates become study specifications that drive validated SDTM, ADaM, and TLF builds](docs/diagrams/design.svg)
+![YAMAA design: inherited templates become study specifications that drive validated SDTM, ADaM](docs/diagrams/design.svg)
 
 Reusable templates flow from the organization level through the compound and study levels. Approved study specifications then drive deterministic, validated builds while preserving metadata lineage.
 
