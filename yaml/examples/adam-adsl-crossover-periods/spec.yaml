@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADSL
 datasets:
   DM: input/dm.csv
-  EX: input/ex.csv
+  EX: {path: input/ex.csv, types: {EXSEQ: int, APERIOD: int}}
 base: DM
 keys: [STUDYID, USUBJID]
 

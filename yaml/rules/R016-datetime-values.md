@@ -1,5 +1,5 @@
 ---
-id: R014
+id: R016
 title: Datetime Values
 status: normative
 applies_to: [column_type, column.type, derivation]
@@ -20,9 +20,11 @@ and the same failures from the same input.
 This rule owns the datetime value itself. R011 owns the `column_type`
 vocabulary that admits `datetime` and the conversion table that reaches it, and
 names this rule for the grammar and the canonical text those cells use, exactly
-as it names R010 for the `number` production its numeric cells use. R007 owns
-which expression accepts which input type, R008 owns `conversion_failure`, and
-R005 owns when conversion happens.
+as it names R010 for the `number` production its numeric cells use. R014 owns
+what a stored field carries before any expression reads it, and reaches this
+grammar through R011's `str` row. R007 owns which expression accepts which
+input type, R008 owns `conversion_failure`, and R005 owns when conversion
+happens.
 
 R004 owns the predicate grammar and is draft. A predicate comparing two
 datetimes orders them as this rule defines; what else a predicate may write is
@@ -223,16 +225,18 @@ requires. `examples/plan.md` records them as open.
 ## Ingestion
 
 This rule defines the text form once, so every place text becomes a datetime
-uses it. R011's `str` row is that place today, and the source-format ingestion
-rule that gap 7 of `examples/plan.md` still owes applies R011's `str` row to a
-field's declared type. A field declared `datetime` in a typeless container will
-therefore parse by the grammar above with nothing further to state, and a
-container that describes its own types supplies `datetime` only for a field
-whose values meet it.
+uses it, and R014 needs no clause of its own. R014 applies R011's `str` row to
+a field's declared type, and that row reaches the grammar above, so a field
+named `datetime` in a `types` declaration parses exactly as a column conversion
+parses. `sdtm-ae-effective-transaction` declares its audit field that way and
+orders the transaction log by the value rather than by the text.
 
-Until that rule lands, a specification reaches a `datetime` column by declaring
-the type and letting R011 convert the bound text, which is what the datetime
-examples do.
+The two paths differ only in what answers a bad value, which R014 fixes rather
+than this rule: an ingested value that does not parse is rejected before any
+derivation runs and no handler applies, while a `str` field converted at the
+column that declares `datetime` fails there, where `conversion_failure` can
+answer. A specification that wants to see a malformed moment therefore leaves
+the field `str`, which is what `negative-datetime-zone-offset` does.
 
 ## Errors
 

@@ -2,11 +2,18 @@ schema_version: "1.0"
 domain: DM
 datasets:
   DM_RAW: input/dm_raw.csv
-  EX: input/ex.csv
+  EX: {path: input/ex.csv, types: {EXSEQ: int}}
   DS: input/ds.csv
   AE: input/ae.csv
 base: DM_RAW
 keys: [STUDYID, USUBJID]
+
+record_lookups:
+  - id: LASTEX
+    dataset: EX
+    filter: "EX.EXENDTC IS NOT NULL"
+    order_by: [EX.EXENDTC, EX.EXSEQ]
+    keep: last
 
 columns:
   - name: STUDYID
@@ -41,9 +48,7 @@ columns:
   - name: RFXENDTC
     type: date
     derivation:
-      aggregate:
-        filter: "EX.EXENDTC IS NOT NULL"
-        expr: "MAX(EX.EXENDTC)"
+      source: LASTEX.EXENDTC
 
   - name: RFSTDTC
     type: date
@@ -54,11 +59,7 @@ columns:
     type: float
     output: false
     derivation:
-      source:
-        variable: EX.EXDOSE
-        multiple_matches:
-          order_by: [EX.EXENDTC, EX.EXSEQ]
-          keep: last
+      source: LASTEX.EXDOSE
 
   - name: DSDT0
     type: date

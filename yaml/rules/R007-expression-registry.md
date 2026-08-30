@@ -3,7 +3,7 @@ id: R007
 title: Expression Registry
 status: normative
 applies_to: [expression, expressions, schema_expression]
-depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014]
+depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014, R015, R016]
 ---
 
 # Expression registry
@@ -22,8 +22,9 @@ terms, and cross-operation type compatibility. Behavior specific to one
 operation is documented beside its registry entry. Cross-cutting behavior stays
 in its owning rule: R002 and R003 for source binding and joins, R008 for local
 handlers, R010 for `compute`, R011 for column types, R012 for string templates,
-R013 for aggregate reduction, R014 for datetime values, and R004 for
-predicates.
+R013 for aggregate reduction, R014 for the type a source field carries, R015
+for a record selected once and read by several columns, R016 for datetime
+values, and R004 for predicates.
 
 ## Registration
 
@@ -104,6 +105,15 @@ on every term preserve row-template order and then base-record order, which
 makes the result total, so ordering has no undefined case and a row's
 neighbours are determined.
 
+That tie-break settles positions, not equality. `row_number`, `row_value`, and
+right-side selection read the positions themselves, so a tie changes which row
+they reach. `rank` compares only the declared terms, so records equal on every
+one of them receive a single number rather than the distinct numbers their
+positions would give. Its `competition` method leaves the positions occupied by
+a tie out of the subsequent numbers; its `dense` method numbers distinct values
+consecutively. A specification that wants a tie broken declares the term that
+breaks it, whichever method it uses.
+
 ## Type behavior
 
 No implicit conversion occurs between named operation inputs. R005 converts
@@ -118,17 +128,21 @@ runtime types:
 - `str_extract`, `str_concat`, `str_template`, `str_upper`, and `str_lower`
   require string sources;
 - `date_diff` and `study_day` require `date` inputs. A `datetime` operand is
-  an error rather than a widened one, and R014 states why neither operation
+  an error rather than a widened one, and R016 states why neither operation
   reaches a moment;
-- `date_impute` requires a string source, because a partial date is text under
-  R011 until it is completed, and integer `month` and `day` within the calendar
-  ranges its registration states. It completes a date and never a datetime;
+- `date_impute` and `date_precision` require a string source, because a partial
+  date is text under R011 until it is completed, and `date_impute` requires
+  integer `month` and `day` within the calendar ranges its registration
+  states. Each answers about a date and never about a datetime;
 - `greatest` and `least` require mutually comparable `sources`;
 - `row_value` requires an integer `offset` and accepts any `source` type;
-- window ordering requires mutually comparable values. Every record's value
-  for one order term must be comparable with every other, so a term whose
-  column mixes incomparable types is an error rather than an
-  implementation-defined order;
+- window ordering requires mutually comparable values. One order term names one
+  variable, and a variable has exactly one type — R014
+  gives it to a source field and R011 to a declared column — so the values a
+  term compares are of one type by construction and ordering has no
+  incomparable case. An expression naming several variables, as `greatest` and
+  `least` do, is where comparability is a requirement rather than a
+  consequence;
 - `aggregate` states its own input types in R013.
 
 **Comparability is a property of the runtime type.** `int` and `float` are
@@ -139,17 +153,19 @@ values — `greatest` and `least`, `mapping_from` key pairing, an `order_by`
 term, and R013's `MIN` and `MAX` — while a `sources` list or one ordering
 term mixing it with a `date`, a number, or a string is the
 incompatible-input error below rather than a comparison over a coerced
-operand. R014 defines the order two datetimes take, and R011 states that a
+operand. R016 defines the order two datetimes take, and R011 states that a
 `date` and a `datetime` do not convert into each other.
 
-`source` retains its source type and `literal` retains its YAML scalar type.
+`source` retains its source type, which R014 defines, and `literal` retains
+its YAML scalar type.
 `cut`, `str_extract`, `str_concat`, `str_template`, `str_upper`, and
 `str_lower` return strings. `compute` returns the numeric type its expression
 promotes to under R010.
-`date_diff`, `study_day`, and `row_number` return integers.
+`date_diff`, `study_day`, `row_number`, and `rank` return integers.
 `study_day` never returns zero. `date_impute` returns a `date`.
-`baseline_flag` returns a string. Mapping, conditional, coalescing, extreme,
-baseline value, and offset row expressions retain the selected value type.
+`baseline_flag` and `date_precision` return strings. Mapping, conditional,
+coalescing, extreme, baseline value, and offset row expressions retain the
+selected value type.
 `aggregate` returns the type R013 gives its expression. The `function`
 expression retains the type returned by the project function.
 
@@ -173,7 +189,7 @@ behavior and do not affect schema validation.
 - A scalar or window expression that changes row count: fail under R001, which
   owns the phase invariant.
 - A window expression used during row construction: fail.
-- A `row_number` filter that is not a Boolean predicate over current-output
+- A window `filter` that is not a Boolean predicate over current-output
   columns: fail.
 - A `row_value` whose `offset` is zero: fail. The current row's own value is
   `source`, and a window must not be a second spelling of it.

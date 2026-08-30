@@ -115,6 +115,27 @@ An implementation may report additional context and may word its human-readable
 message differently. The expected fields and values must match. Stack traces
 and implementation-specific exception classes do not belong in this artifact.
 
+`phase` comes from a closed list, so two examples that stop at the same point
+say so the same way:
+
+| Phase | Rejects |
+|---|---|
+| `validation` | the specification itself, before any data is read |
+| `ingest` | a stored value, against the type its field carries |
+| `row_construction` | evaluating a row template |
+| `derivation` | evaluating a column's expression over a row |
+| `output` | output identity, once every column holds its final value |
+| `verification` | a declared assertion |
+
+A condition that an operation could have answered locally instead names the
+stage R008 gives it: `bind`, `join`, `mapping`, `cut`, `extract`, `template`,
+`impute`, `convert`, or `final`. Declaring the corresponding handler is then
+exactly what turns the failure into a value, which is what makes the pairing
+worth keeping.
+
+`condition` names what failed rather than what the implementation raised, and
+one condition keeps one name across every example that provokes it.
+
 An expected CSV may be committed beside `error.yaml`. For a failure after the
 dataset is completed, it is the dataset presented to the failing check. For an
 earlier expressiveness failure, it is the intended artifact once the missing
@@ -170,6 +191,9 @@ An expression enters the vocabulary when an example needs it, a negative
 example fixes its failure behavior, and R and Python can implement it the same
 way. Sponsor-specific algorithms stay behind `function`.
 
+Prefer one closed grammar to an entry per operator: `compute` states the whole
+numeric grammar once rather than registering `add`, `subtract`, and `divide`.
+
 Prefer widening an existing entry to adding a new one — but the test is the
 kind of value, not the saving in YAML. Widen when the new behavior returns the
 same kind of value, as `date_diff`'s `bounds` still returns a count. Add an
@@ -177,5 +201,6 @@ entry when it does not: `study_day` returns an ordinal on a calendar with no
 zero, and folding it into `date_diff` would have allowed `unit: week` with it.
 
 After registering one, update every place that enumerates the vocabulary: the
-input-shape audit in `../README.md`, R007's type behavior, R008 if it declares
-handlers, and the landed table in `plan.md`.
+input-shape audit in `../README.md`, R007's type behavior, and R008 if it
+declares handlers. Then delete the gap it closed, and the open item that
+justified it, from `plan.md`, which carries only remaining work.

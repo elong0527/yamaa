@@ -61,6 +61,13 @@ R003.
 
 `column.output` keeps any binding column it needs out of the final dataset.
 
+A `record_lookups` entry names one record of another dataset so that several
+columns can read it, which no expression can do while each returns one value.
+It is not an expression and adds no nesting: its matching, filtering, and
+ordering fields are the ones `mapping_from` and `multiple_matches` already
+declare, and a column reads it through the qualified variable form it already
+uses for a dataset. R015 defines it.
+
 The version 1.0 input-shape audit covers every registered expression:
 
 | Expressions | Input policy |
@@ -73,9 +80,10 @@ The version 1.0 input-shape audit covers every registered expression:
 | `compute` | One closed numeric expression over named output columns (R010) |
 | `date_diff`, `study_day` | Named variable operands; `date_diff` declares which endpoints it counts |
 | `date_impute` | One named source plus integer literals for the imputed components; exceptional results are literals |
+| `date_precision` | One named source; exceptional results are literals |
 | `coalesce` | Ordered named variables plus an optional literal default |
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
-| `row_number`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
+| `row_number`, `rank`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
 | `row_value` | One named source with named grouping and ordering variables, plus a signed integer literal offset along the declared order |
 | `aggregate` | One closed reducer expression over the records of one relation (R013) |
 | `case` | Nested result expressions retained because selecting expressions is its purpose |

@@ -50,6 +50,21 @@ expressions:
         - invalid:
             type: literal_value
             description: Result when the source is not an ISO 8601 date or date prefix.
+    date_precision: # Returns how much of a date the collected text carries.
+        # D for a complete date, M for a year and month, and Y for a year alone.
+        # It describes the collected text rather than a completed date, so a
+        # specification records what date_impute supplied by reading the same
+        # source. Invalid text and a missing source behave as they do there.
+        - source:
+            type: variable
+            required: true
+            description: ISO 8601 date text, complete or truncated to year or month.
+        - missing:
+            type: literal_value
+            description: Result when the source value is missing.
+        - invalid:
+            type: literal_value
+            description: Result when the source is not an ISO 8601 date or date prefix.
     study_day: # Returns the CDISC study day of a date against a reference date.
         # The reference date is day 1 and there is no day zero: a date on or
         # after the reference counts forward from 1, and an earlier date counts

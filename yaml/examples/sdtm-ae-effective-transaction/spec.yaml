@@ -2,9 +2,15 @@ schema_version: "1.0"
 domain: AE
 datasets:
   AE_REC: input/ae_records.csv
-  AE_TXN: input/ae_txn.csv
+  AE_TXN: {path: input/ae_txn.csv, types: {TXNSEQ: int, AUDITDTC: datetime}}
 base: AE_REC
 keys: [STUDYID, USUBJID, AESEQ]
+
+record_lookups:
+  - id: EFFECTIVE
+    dataset: AE_TXN
+    order_by: [AE_TXN.AUDITDTC, AE_TXN.TXNSEQ]
+    keep: last
 
 columns:
   - name: STUDYID
@@ -30,29 +36,17 @@ columns:
   - name: AETERM
     type: str
     derivation:
-      source:
-        variable: AE_TXN.AETERM
-        multiple_matches:
-          order_by: [AE_TXN.AUDITDTC, AE_TXN.TXNSEQ]
-          keep: last
+      source: EFFECTIVE.AETERM
 
   - name: AESEV
     type: str
     derivation:
-      source:
-        variable: AE_TXN.AESEV
-        multiple_matches:
-          order_by: [AE_TXN.AUDITDTC, AE_TXN.TXNSEQ]
-          keep: last
+      source: EFFECTIVE.AESEV
 
   - name: TXNTYPE
     type: str
     derivation:
-      source:
-        variable: AE_TXN.TXNTYPE
-        multiple_matches:
-          order_by: [AE_TXN.AUDITDTC, AE_TXN.TXNSEQ]
-          keep: last
+      source: EFFECTIVE.TXNTYPE
     verifications:
       allowed_values:
         values: [INSERT, UPDATE, REMOVE]
@@ -60,11 +54,7 @@ columns:
   - name: AUDITDTC
     type: datetime
     derivation:
-      source:
-        variable: AE_TXN.AUDITDTC
-        multiple_matches:
-          order_by: [AE_TXN.AUDITDTC, AE_TXN.TXNSEQ]
-          keep: last
+      source: EFFECTIVE.AUDITDTC
 
 verifications:
   - unique:

@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADSL
 datasets:
   DM: input/dm.csv
-  DS: input/ds.csv
+  DS: {path: input/ds.csv, types: {DSSEQ: int}}
 base: DM
 keys: [STUDYID, USUBJID]
 
