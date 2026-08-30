@@ -16,7 +16,7 @@ beside the structured error.
 
 ## Open work
 
-Twelve design gaps remain, grouped under five work items. Each item states the
+Thirteen design gaps remain, grouped under six work items. Each item states the
 gap, the evidence from the suite, and what a solution requires.
 
 ### T1. Literal operands (gap 1)
@@ -114,19 +114,27 @@ the schema change.
 **Gap.** Metadata is an ungoverned string map. Labels are first class and a
 value's length is now enforceable, but origin, the declared lengths, and
 controlled terminology are free-form text that no implementation can validate,
-and no expected metadata artifact exists to assert them.
+and no expected metadata artifact exists to assert them. Two further
+attributes cannot be written at all: a variable's core designation and its
+display format have no field and no settled metadata key, and the dataset's
+own description sits in the same ungoverned map as its class and structure.
 
 **Evidence.** `sdtm-dm-metadata-contract` declares origin, length, and
 codelist as free-form strings, marks `USUBJID` as `Derived` by hand although
 `str_concat` already encodes that, and declares a codelist name next to an
 unrelated `allowed_values` list. Its `USUBJID` now carries both a declared
-length and a `max_length` check, and nothing requires the two to agree.
+length and a `max_length` check, and nothing requires the two to agree. No
+example declares a core designation or a display format, and the superseded
+`cdiscbuildeR/inst/specs/adam/schema.yaml` governed `core` with a closed value
+list, so this vocabulary is narrower than the one it replaced.
 
-**Action.** Needs a vocabulary, a link between a declared codelist and its
-enforced values, a link between a declared length and the `max_length` that
-enforces it, and an expected metadata artifact. `max_length` supplies the
-enforced half; what remains is binding the declared half to it. Until that
-artifact is defined, examples must not invent its shape.
+**Action.** Needs a vocabulary naming the attributes it governs — at least
+origin, length, codelist, display format, core, and the dataset's own
+description — a link between a declared codelist and its enforced values, a
+link between a declared length and the `max_length` that enforces it, and an
+expected metadata artifact. `max_length` supplies the enforced half; what
+remains is binding the declared half to it. Until that artifact is defined,
+examples must not invent its shape.
 
 ### T5. Declarable study structure (gaps 2, 7–9, 11–12)
 
@@ -184,16 +192,40 @@ change, and expect it to retire several gaps at once, as `compute` and
 analysis windows, `EPOCH` assignment, subject-specific cutoffs, and two-level
 reductions need.
 
+### T6. Specification inheritance (gap 13)
+
+**Gap.** `root.parents` names the specifications a specification inherits
+from, and no rule defines what inheriting does. Nothing states which fields
+merge, how a child overrides or removes an inherited column, or what a name
+declared by two parents resolves to, so an implementation reading the field
+would have to invent all of it.
+
+**Evidence.** No rule mentions `parents` and no example declares it; R006
+quotes the field only as an illustration of quoting a bracketed type
+expression. The superseded `cdiscbuildeR/inst/specs/adam/schema.yaml` carried
+the same field beside a per-column `drop` flag for removing an inherited
+column, so the merge it implies was once partly written down. The design
+picture in the repository README rests on it: organization, compound, and
+study templates reach a study specification by inheritance and by nothing
+else.
+
+**Action.** Either define the merge or remove the field. A validating
+implementation today accepts `parents` and can do nothing with it, so the
+field is structure that R006 validates and no rule interprets. Decide before
+an example declares it.
+
 ## Sequencing
 
-1. **T2, T3, T4, T5** are design documents. Write the document before the
+1. **T6** first, because it decides the fate of a field that already exists
+   rather than adding a capability, and either answer is small.
+2. **T2, T3, T4, T5** are design documents. Write the document before the
    schema change, and expect each to retire several gaps at once.
-2. **T1** last, because its answer probably lies inside T5 rather than in a
+3. **T1** last, because its answer probably lies inside T5 rather than in a
    widened field.
 
 Expected catalogue edits: T2 retires gaps 3 and 4, T3 retires gaps 5 and 6,
-T4 retires gap 10, and T5 retires gaps 2, 7, 8, 9, 11, and 12 along with whatever
-remains of gap 1.
+T4 retires gap 10, T5 retires gaps 2, 7, 8, 9, 11, and 12 along with whatever
+remains of gap 1, and T6 retires gap 13.
 
 ## Untested rule text
 
