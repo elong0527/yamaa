@@ -10,3 +10,12 @@ in the result, and keeping either record or merging the two would report an age
 the collected data does not support. The expected file records the completed
 rows presented to that check, but the repetition still rejects the run and no
 artifact is accepted.
+
+## How to fix
+
+Reconcile the two source records for `P7-722` and correct the governed
+demographics input so it contains one supported age for the subject. If
+multiple source records are legitimate, use a unique subject inventory as the
+row driver and declare an ordered record-selection rule for the demographics
+record; do not rely on source order to discard one. The completed output must
+contain exactly one row for each `[STUDYID, USUBJID]` key.
