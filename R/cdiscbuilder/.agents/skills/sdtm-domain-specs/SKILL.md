@@ -1,10 +1,10 @@
 ---
 name: sdtm-domain-specs
-description: Guidelines for generating SDTM domain YAML configurations in cdiscbuilderR
+description: Guidelines for generating SDTM domain YAML configurations in cdiscbuilder
 ---
 # SDTM Domain Generation Guidelines
 
-When generating a YAML configuration for `cdiscbuilderR`, you must use the appropriate `keys` depending on the SDTM domain class:
+When generating a YAML configuration for `cdiscbuilder`, you must use the appropriate `keys` depending on the SDTM domain class:
 
 ## 1. Special Purpose Domains (e.g., DM, CO, SV)
 - **Keys**: You MUST explicitly specify `keys: ["StudyOID", "SubjectKey"]` in the YAML configuration if it is a subject-level domain like DM.
@@ -57,7 +57,7 @@ LB:
 ```
 
 ## 4. Reference templates
-When asked to build a domain, you can refer to the templates located in `inst/templates/` within the `cdiscbuilderR` package:
+When asked to build a domain, you can refer to the templates located in `inst/templates/` within the `cdiscbuilder` package:
 - `inst/templates/special_purpose_domain_template.yaml`
 - `inst/templates/event_domain_template.yaml`
 - `inst/templates/finding_domain_template.yaml`
