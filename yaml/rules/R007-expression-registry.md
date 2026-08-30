@@ -23,8 +23,8 @@ operation is documented beside its registry entry. Cross-cutting behavior stays
 in its owning rule: R002 and R003 for source binding and joins, R008 for local
 handlers, R010 for `compute`, R011 for column types, R012 for string templates,
 R013 for aggregate reduction, R014 for the type a source field carries, R015
-for a record selected once and read by several columns, R016 for datetime
-values, and R004 for predicates.
+for a record selected once and read by several columns, R016 for dates and
+datetimes, and R004 for predicates.
 
 ## Registration
 
@@ -127,13 +127,8 @@ runtime types:
 - `compute` requires every identifier in its expression to be numeric;
 - `str_extract`, `str_concat`, `str_template`, `str_upper`, and `str_lower`
   require string sources;
-- `date_diff` and `study_day` require `date` inputs. A `datetime` operand is
-  an error rather than a widened one, and R016 states why neither operation
-  reaches a moment;
-- `date_impute` and `date_precision` require a string source, because a partial
-  date is text under R011 until it is completed, and `date_impute` requires
-  integer `month` and `day` within the calendar ranges its registration
-  states. Each answers about a date and never about a datetime;
+- `date_diff`, `study_day`, `date_impute`, and `date_precision` state their
+  own input types in R016;
 - `greatest` and `least` require mutually comparable `sources`;
 - `row_value` requires an integer `offset` and accepts any `source` type;
 - window ordering requires mutually comparable values. One order term names one
@@ -146,24 +141,21 @@ runtime types:
 - `aggregate` states its own input types in R013.
 
 **Comparability is a property of the runtime type.** `int` and `float` are
-mutually comparable, because R010 promotes them. Every other type is comparable
-only with itself, so a `datetime` compares with a `datetime` and with nothing
-else. A `datetime` therefore satisfies any input requiring mutually comparable
-values — `greatest` and `least`, `mapping_from` key pairing, an `order_by`
-term, and R013's `MIN` and `MAX` — while a `sources` list or one ordering
-term mixing it with a `date`, a number, or a string is the
+mutually comparable, because R010 promotes them. Every other type is
+comparable only with itself. A comparable type therefore satisfies any input
+requiring mutually comparable values — `greatest` and `least`, `mapping_from`
+key pairing, an `order_by` term, and R013's `MIN` and `MAX` — while a
+`sources` list or one ordering term mixing two types is the
 incompatible-input error below rather than a comparison over a coerced
-operand. R016 defines the order two datetimes take, and R011 states that a
-`date` and a `datetime` do not convert into each other.
+operand. Each owning rule defines the order its type takes.
 
 `source` retains its source type, which R014 defines, and `literal` retains
 its YAML scalar type.
 `cut`, `str_extract`, `str_concat`, `str_template`, `str_upper`, and
 `str_lower` return strings. `compute` returns the numeric type its expression
 promotes to under R010.
-`date_diff`, `study_day`, `row_number`, and `rank` return integers.
-`study_day` never returns zero. `date_impute` returns a `date`.
-`baseline_flag` and `date_precision` return strings. Mapping, conditional,
+`row_number` and `rank` return integers. The temporal operations return the
+types R016 gives them. `baseline_flag` returns a string. Mapping, conditional,
 coalescing, extreme, baseline value, and offset row expressions retain the
 selected value type.
 `aggregate` returns the type R013 gives its expression. The `function`
@@ -183,9 +175,8 @@ behavior and do not affect schema validation.
 - A semantic constraint in an operation definition or applicable rule that is
   not satisfied: fail.
 - An input with an incompatible runtime type: fail.
-- A `date`-only operation given a `datetime`, or a `sources` list or ordering
-  term mixing a `datetime` with another type: fail rather than convert an
-  operand.
+- A `sources` list or an ordering term mixing two runtime types that are not
+  mutually comparable: fail rather than convert an operand.
 - A scalar or window expression that changes row count: fail under R001, which
   owns the phase invariant.
 - A window expression used during row construction: fail.
@@ -196,11 +187,10 @@ behavior and do not affect schema validation.
 - An aggregate outside its two permitted contexts: fail.
 - An `aggregate` expression that violates R013: fail.
 - `mapping_from` whose `source` and `key` lists differ in length: fail.
-- `date_impute` whose `month` or `day` is outside the calendar range, or whose
-  completed value is not a real calendar date: fail.
 - An unhandled local missing, mapping, or extraction condition: fail under
   R008.
 - A `compute` expression that violates R010: fail.
 - A `str_template` expression that violates R012: fail.
+- A temporal value or operation that violates R016: fail.
 - An unresolved function, failed function call, or non-scalar function result:
   fail with the function name and original runtime context.

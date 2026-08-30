@@ -31,7 +31,7 @@ expressions:
         # year, or a year and month, is completed from month and day.
         # A source that is not an ISO 8601 date or an ISO 8601 date prefix is an
         # invalid value, distinct from a missing one; both yield no date unless
-        # a handler is declared. R011 governs the resulting date.
+        # a handler is declared. R016 governs the resulting date.
         - source:
             type: variable
             required: true

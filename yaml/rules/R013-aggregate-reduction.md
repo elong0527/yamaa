@@ -130,8 +130,7 @@ is declared in `group_by`.
 
 - An expression that is a single reduction retains that reduction's result
   type. `COUNT` returns `int`. `SUM` retains the numeric type of its argument.
-  `MIN` and `MAX` retain the type they reduce, so `MIN(EX.EXSTDTC)` returns a
-  `date`.
+  `MIN` and `MAX` retain the type they reduce, whatever that type is.
 - An expression using any operator or R010 function is numeric. Every
   reduction and every grouped identifier in it must be numeric, and R010's
   promotion rules give the result type.
