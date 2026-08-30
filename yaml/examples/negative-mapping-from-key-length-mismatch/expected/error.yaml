@@ -1,9 +1,0 @@
-phase: validation
-condition: source_key_length_mismatch
-spec_paths:
-  - columns.ANRHI.derivation.mapping_from
-context:
-  source: [PARAMCD, SEX]
-  key: [LBTESTCD]
-  source_count: 2
-  key_count: 1

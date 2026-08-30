@@ -1,6 +1,0 @@
-phase: validation
-condition: zero_offset
-spec_paths:
-  - columns.PREVAL.derivation.row_value.offset
-context:
-  offset: 0

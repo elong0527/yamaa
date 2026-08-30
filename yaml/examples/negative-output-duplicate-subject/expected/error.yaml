@@ -1,9 +1,0 @@
-phase: output
-condition: duplicate_key
-spec_paths:
-  - keys
-context:
-  duplicate_count: 1
-  keys:
-    - STUDYID: PILOT7
-      USUBJID: P7-722

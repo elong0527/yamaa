@@ -1,7 +1,0 @@
-phase: validation
-condition: internal_column_in_keys
-spec_paths:
-  - keys[2]
-  - columns.SITEID.output
-context:
-  column: SITEID

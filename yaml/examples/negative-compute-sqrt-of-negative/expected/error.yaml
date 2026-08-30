@@ -1,9 +1,0 @@
-phase: derivation
-condition: sqrt_of_negative
-spec_paths:
-  - columns.BSA.derivation.compute
-context:
-  expr: "SQRT(HEIGHTCM * WEIGHTKG / 3600)"
-  keys:
-    - STUDYID: PILOT7
-      USUBJID: P7-752

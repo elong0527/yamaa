@@ -1,8 +1,0 @@
-phase: validation
-condition: incompatible_input_type
-spec_paths:
-  - columns.SEVTOT.derivation.aggregate.expr
-context:
-  source: ASEV
-  expected: numeric
-  actual: str

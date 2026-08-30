@@ -1,7 +1,0 @@
-phase: validation
-condition: invalid_field_type
-spec_paths:
-  - columns.COUNTRY.derivation.str_upper.source
-context:
-  expected: variable
-  actual: mapping
