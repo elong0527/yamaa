@@ -1,0 +1,59 @@
+schema_version: "1.0"
+domain: ADLB
+datasets:
+  LB: input/lb.csv
+  ADSL: input/adsl.csv
+base: LB
+keys: [STUDYID, USUBJID, PARAMCD, LBSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      source: LB.LBTESTCD
+
+  - name: LBSEQ
+    type: int
+    derivation:
+      source: LB.LBSEQ
+
+  - name: ADT
+    type: date
+    derivation:
+      source: LB.LBDTC
+
+  - name: TRTSDT
+    type: date
+    derivation:
+      source: ADSL.TRTSDT
+
+  - name: AVAL
+    type: float
+    derivation:
+      source: LB.LBSTRESN
+
+  - name: ABLFL
+    type: str
+    derivation:
+      baseline_flag:
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        date: ADT
+        reference_date: TRTSDT
+
+  - name: BASE
+    type: float
+    derivation:
+      baseline_value:
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        value: AVAL
+        flag: ABLFL

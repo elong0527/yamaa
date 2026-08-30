@@ -1,0 +1,12 @@
+phase: output
+condition: missing_key
+spec_paths:
+  - keys[3]
+context:
+  column: AVISIT
+  missing_count: 1
+  keys:
+    - STUDYID: CATH
+      USUBJID: CATH-UCSD-0002
+      PARAMCD: SYSBP
+      AVISIT: null
