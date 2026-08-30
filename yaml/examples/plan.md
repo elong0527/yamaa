@@ -99,7 +99,9 @@ reference it without being able to say so. R001 cycle detection is per
 specification, so a cross-dataset cycle cannot be reported either.
 
 **Gap 6.** Nothing controls output row order, and verifications are row-wise
-over the completed output. Rows leave in row-template order rather than a
+over the completed output. `keys` states which variables identify a row and
+nothing states the order the rows leave in, so a domain contract can declare
+only half of itself here: rows leave in row-template order rather than a
 submission sort order, and referential integrity between a SUPPQUAL record and
 its parent domain cannot be asserted. Nothing counts rows within a group
 either, so `sdtm-lb-conditional-compartments` cannot assert that every subject
@@ -108,6 +110,13 @@ ordered series reaches one neighbour and no further:
 `negative-adrs-partial-response-after-complete-response` rejects a partial
 response directly after a complete one, and the same fault with an intervening
 assessment passes.
+
+**Evidence.** Ordering within an operation fails closed, and examples provoke
+it: `negative-record-lookup-unordered-keep` rejects records ordered but not
+chosen, and `negative-baseline-flag-tied-date` rejects a selection whose
+candidates no declared order separates. The artifact's own row order is the
+one ordering no example reaches, because no field declares it, so it is
+recorded here rather than shown.
 
 **Action.** Needs a manifest, cross-specification dependency inference, cycle
 reporting, and an output sort-order declaration. Write a design document before
