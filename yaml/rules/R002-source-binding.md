@@ -37,7 +37,7 @@ A finished dataset an earlier run produced is an ordinary source and is
 declared under a name of its own. Reaching a sibling record of the dataset this
 run is building is a different thing, and no keyed construct reaches it; R001
 owns what happens when a column reaches its own value through the rows of its
-partition, and `examples/plan.md` records the gap.
+partition. Addressing a sibling record by key is open work.
 
 ## Source expressions
 

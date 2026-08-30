@@ -22,8 +22,8 @@ New to the suite? Read [`sdtm-dm-basic`](sdtm-dm-basic/) for direct mapping,
 ## Index
 
 An example that cannot express something records a design finding. The suite
-passes when its declared error occurs. Those findings are collected in
-[`plan.md`](plan.md), which also tracks the schema work they justify.
+passes when its declared error occurs. Those findings are collected in this
+repository's issue tracker, which also carries the schema work they justify.
 
 Expected-failure examples carry `expected/error.yaml`. When rejection happens
 after the dataset is completed, an expected CSV records the rows presented to
