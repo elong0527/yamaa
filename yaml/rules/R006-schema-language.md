@@ -205,9 +205,9 @@ schema, not only in prose.
 A descriptor may be written as a YAML flow mapping or in block form. The two
 parse to the same mapping, and nothing in this rule distinguishes them.
 
-The bundle writes a descriptor in flow form when it carries no `description`,
-so that a class reads as a table of field name, type, and required, and in
-block form when it carries one:
+The bundle writes a class field descriptor in flow form when it carries no
+`description`, so that a class reads as a table of field name, type, and
+required, and in block form when it carries one:
 
 ```yaml
 example_class:
@@ -216,6 +216,15 @@ example_class:
         type: variable
         required: true
         description: Current-row value the record is matched on.
+```
+
+A value descriptor stands on its own rather than in a table, and is written in
+block form whether or not it carries a `description`:
+
+```yaml
+column_type:
+    type: str
+    values: [str, int, float, date, datetime]
 ```
 
 This is a convention of how the bundle is written, not a validation
