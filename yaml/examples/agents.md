@@ -112,8 +112,8 @@ following a link out of the repository.
 ## Golden output
 
 The expected file is a contract. Before committing a change to one, reproduce
-it independently — read the input, apply the rule by hand or in a short
-script, and compare — rather than accepting whatever the change produced.
+it independently -- read the input, apply the rule by hand or in a short
+script, and compare -- rather than accepting whatever the change produced.
 
 Changing a golden file is a decision. Say in the pull request which values
 moved and why, and confirm that every other example's output is untouched.
@@ -233,7 +233,7 @@ way. Sponsor-specific algorithms stay behind `function`.
 Prefer one closed grammar to an entry per operator: `compute` states the whole
 numeric grammar once rather than registering `add`, `subtract`, and `divide`.
 
-Prefer widening an existing entry to adding a new one — but the test is the
+Prefer widening an existing entry to adding a new one -- but the test is the
 kind of value, not the saving in YAML. Widen when the new behavior returns the
 same kind of value, as `date_diff`'s `bounds` still returns a count. Add an
 entry when it does not: `study_day` returns an ordinal on a calendar with no

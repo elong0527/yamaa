@@ -1,0 +1,34 @@
+name: ASCII-only check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  ascii-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for non-ASCII characters
+        run: |
+          # Find files changed in this PR, excluding known binary extensions.
+          NON_ASCII_FILES=$(
+            git diff --name-only origin/${{ github.base_ref }}...HEAD \
+              | grep -vE '\.(jpeg|jpg|png|gif|ico|bmp|tiff|webp|svg|pdf|woff|woff2|ttf|eot|otf|zip|tar|gz|bz2|xz|7z|rar|jar|war|ear|class|pyc|pyo|o|so|dylib|dll|exe|bin|dat|db|sqlite|rds|rda|RData|excalidraw|mp4|mp3|wav|avi|mov|flv|ogg|webm)$' \
+              | xargs grep -Prl '[^\x00-\x7F]' 2>/dev/null \
+            || true
+          )
+
+          if [ -n "$NON_ASCII_FILES" ]; then
+            echo "::error::Non-ASCII characters found in the following files:"
+            echo "$NON_ASCII_FILES"
+            echo ""
+            echo "Details (file:line:content):"
+            echo "$NON_ASCII_FILES" | xargs grep -Pn '[^\x00-\x7F]'
+            exit 1
+          fi
+
+          echo "All text files are ASCII-only."

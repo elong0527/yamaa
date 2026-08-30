@@ -28,7 +28,7 @@
 
   <rect width="1280" height="730" fill="#ffffff" />
   <text class="heading" x="640" y="38" text-anchor="middle">YAMAA design</text>
-  <text class="section" x="24" y="78">DESIGN TIME · INHERITANCE AND APPROVED SPECIFICATIONS</text>
+  <text class="section" x="24" y="78">DESIGN TIME  -  INHERITANCE AND APPROVED SPECIFICATIONS</text>
 
   <text class="scope" x="24" y="108">SCOPE</text>
   <text class="scope" x="24" y="160">ORGANIZATION</text>
@@ -41,20 +41,20 @@
   <!-- Organization scope -->
   <rect class="box profile" x="160" y="120" width="220" height="72" rx="9" />
   <text class="label" x="270" y="143">Standards &amp; schema profile</text>
-  <text class="detail" x="270" y="163">YAML schema · CDISC versions</text>
-  <text class="detail" x="270" y="179">controlled terminology · guides</text>
+  <text class="detail" x="270" y="163">YAML schema  -  CDISC versions</text>
+  <text class="detail" x="270" y="179">controlled terminology  -  guides</text>
 
   <rect class="box template" x="470" y="120" width="190" height="72" rx="9" />
   <text class="label" x="565" y="150">SDTM mapping</text>
-  <text class="detail" x="565" y="172">template · YAML</text>
+  <text class="detail" x="565" y="172">template  -  YAML</text>
 
   <rect class="box template" x="730" y="120" width="190" height="72" rx="9" />
   <text class="label" x="825" y="150">ADaM derivation</text>
-  <text class="detail" x="825" y="172">template · YAML</text>
+  <text class="detail" x="825" y="172">template  -  YAML</text>
 
   <rect class="box template" x="990" y="120" width="190" height="72" rx="9" />
   <text class="label" x="1085" y="150">TLF</text>
-  <text class="detail" x="1085" y="172">template · YAML</text>
+  <text class="detail" x="1085" y="172">template  -  YAML</text>
 
   <!-- Compound scope -->
   <text class="detail" x="270" y="261">Templates inherit downward;</text>
@@ -62,15 +62,15 @@
 
   <rect class="box template" x="470" y="228" width="190" height="72" rx="9" />
   <text class="label" x="565" y="258">SDTM mapping</text>
-  <text class="detail" x="565" y="280">template · YAML</text>
+  <text class="detail" x="565" y="280">template  -  YAML</text>
 
   <rect class="box template" x="730" y="228" width="190" height="72" rx="9" />
   <text class="label" x="825" y="258">ADaM derivation</text>
-  <text class="detail" x="825" y="280">template · YAML</text>
+  <text class="detail" x="825" y="280">template  -  YAML</text>
 
   <rect class="box template" x="990" y="228" width="190" height="72" rx="9" />
   <text class="label" x="1085" y="258">TLF</text>
-  <text class="detail" x="1085" y="280">template · YAML</text>
+  <text class="detail" x="1085" y="280">template  -  YAML</text>
 
   <!-- Template inheritance -->
   <path class="flow" d="M 565 192 L 565 226" />
@@ -91,15 +91,15 @@
 
   <rect class="box spec" x="470" y="336" width="190" height="72" rx="9" />
   <text class="label" x="565" y="366">SDTM mapping</text>
-  <text class="detail" x="565" y="388">study specification · YAML</text>
+  <text class="detail" x="565" y="388">study specification  -  YAML</text>
 
   <rect class="box spec" x="730" y="336" width="190" height="72" rx="9" />
   <text class="label" x="825" y="366">ADaM derivation</text>
-  <text class="detail" x="825" y="388">study specification · YAML</text>
+  <text class="detail" x="825" y="388">study specification  -  YAML</text>
 
   <rect class="box spec" x="990" y="336" width="190" height="72" rx="9" />
   <text class="label" x="1085" y="366">TLF</text>
-  <text class="detail" x="1085" y="388">study specification · YAML</text>
+  <text class="detail" x="1085" y="388">study specification  -  YAML</text>
 
   <path class="lineage" d="M 443 372 L 468 372" />
   <path class="lineage" d="M 660 372 L 728 372" />
@@ -110,7 +110,7 @@
 
   <!-- Runtime -->
   <line class="divider" x1="24" y1="446" x2="1248" y2="446" />
-  <text class="section" x="24" y="478">RUNTIME · DETERMINISTIC BUILD AND VALIDATION</text>
+  <text class="section" x="24" y="478">RUNTIME  -  DETERMINISTIC BUILD AND VALIDATION</text>
 
   <path class="flow" d="M 379 408 C 379 500, 430 576, 468 576" />
   <text class="detail" x="389" y="504">source data + metadata</text>

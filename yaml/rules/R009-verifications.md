@@ -23,8 +23,8 @@ rather than declared as a verification, and R004 owns the predicates that
 Verifications reach across rows only in fixed ways, deliberately. `unique` and
 `row_count` ask one question about the output as a whole; `all_or_none`,
 `implies`, and `predicate` see one completed output row at a time. None of
-them compares rows in an order, so an assertion over an ordered series — that
-no partial response ever follows a complete response for a subject — is not a
+them compares rows in an order, so an assertion over an ordered series -- that
+no partial response ever follows a complete response for a subject -- is not a
 shape this rule has. Stating one is a derivation followed by a row-wise
 assertion: `row_value` under R007 places another row's value on the row, and
 `predicate` compares the two.
