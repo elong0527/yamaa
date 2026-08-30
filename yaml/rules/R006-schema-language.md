@@ -205,9 +205,9 @@ schema, not only in prose.
 A descriptor may be written as a YAML flow mapping or in block form. The two
 parse to the same mapping, and nothing in this rule distinguishes them.
 
-The bundle writes a descriptor in flow form when it carries no `description`,
-so that a class reads as a table of field name, type, and required, and in
-block form when it carries one:
+The bundle writes a class field descriptor in flow form when it carries no
+`description`, so that a class reads as a table of field name, type, and
+required, and in block form when it carries one:
 
 ```yaml
 example_class:
