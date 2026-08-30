@@ -1,0 +1,9 @@
+PREFIX,GRPNAME,GRPID,SCOPE,TERM
+SMQ01,Severe Cutaneous Adverse Reactions,20000020,BROAD,RASH
+SMQ01,Severe Cutaneous Adverse Reactions,20000020,BROAD,ERYTHEMA MULTIFORME
+SMQ01,Severe Cutaneous Adverse Reactions,20000020,NARROW,STEVENS-JOHNSON SYNDROME
+SMQ02,Hepatic Disorders,20000006,NARROW,HEPATITIS
+SMQ02,Hepatic Disorders,20000006,NARROW,HEPATIC FAILURE
+CQ01,Sponsor Adverse Events of Special Interest,,,DIARRHOEA
+CQ01,Sponsor Adverse Events of Special Interest,,,NAUSEA
+CQ01,Sponsor Adverse Events of Special Interest,,,STEVENS-JOHNSON SYNDROME

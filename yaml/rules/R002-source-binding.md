@@ -33,6 +33,12 @@ Every referenced dataset identifier must exist in `datasets`. A dataset
 identifier must not equal the output `domain`; unqualified names address the
 dataset currently being derived, so reusing the domain would be ambiguous.
 
+A finished dataset an earlier run produced is an ordinary source and is
+declared under a name of its own. Reaching a sibling record of the dataset this
+run is building is a different thing, and no keyed construct reaches it; R001
+owns what happens when a column reaches its own value through the rows of its
+partition, and `examples/plan.md` records the gap.
+
 ## Source expressions
 
 The concise source form names one variable:

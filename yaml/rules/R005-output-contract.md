@@ -38,6 +38,23 @@ control, as gap 6 in `examples/plan.md` records.
 Everything below concerns the values themselves, which are fully defined, and
 none of it depends on the unsettled part.
 
+## The column list is declared
+
+The artifact's columns come from the specification and from nothing else. A
+source carrying more of something than the specification declares does not
+extend the artifact, and one carrying fewer does not shorten it.
+
+This is a decision rather than an omission, and it binds wherever a CDISC
+variable is one member of a numbered family: `SMQ01NAM`, `SMQ01CD`,
+`SMQ02NAM`, and onwards, or `CRIT1` beside `CRIT1FL`. How many members a study
+needs is a property of its reference data, but each member is a declared column
+like any other, so the count is fixed when the specification is written. A
+study whose reference data outgrows that count is re-read against the data
+rather than left to fill the places it already has, and a second value
+competing for one declared place is the ordinary multiple-match failure R003
+defines rather than a new place. Whether a family's members may instead come
+from data is open, and `examples/plan.md` records it.
+
 ## Column coverage
 
 Every declared column is derived in exactly one place. Five requirements make

@@ -1,0 +1,8 @@
+STUDYID,USUBJID,LBSEQ,LBDTC,LBTESTCD,LBTEST,LBSTRESN
+PILOT7,P7-401,1,2025-03-03,ALT,Alanine Aminotransferase,40
+PILOT7,P7-401,2,2025-03-03,AST,Aspartate Aminotransferase,60
+PILOT7,P7-401,3,2025-03-17,ALT,Alanine Aminotransferase,25
+PILOT7,P7-401,4,2025-03-17,AST,Aspartate Aminotransferase,20
+PILOT7,P7-402,1,2025-03-04,ALT,Alanine Aminotransferase,30
+PILOT7,P7-403,1,2025-03-05,ALT,Alanine Aminotransferase,50
+PILOT7,P7-403,2,2025-03-05,AST,Aspartate Aminotransferase,

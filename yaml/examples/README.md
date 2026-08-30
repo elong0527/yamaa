@@ -38,6 +38,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adae-occurrence-flags`](adam-adae-occurrence-flags/) | flag the first occurrence at three levels |
 | [`adam-adae-partial-dates`](adam-adae-partial-dates/) | impute partial dates |
 | [`adam-adae-post-dose-onset`](adam-adae-post-dose-onset/) | classify an event by the moment it started |
+| [`adam-adae-query-flags`](adam-adae-query-flags/) | record which queries a coded event belongs to |
 | [`adam-adae-serious-event-sequence`](adam-adae-serious-event-sequence/) | number a subject's serious events in onset order |
 | [`adam-adae-severity-override`](adam-adae-severity-override/) | apply an approved severity correction |
 | [`adam-adae-severity-rank`](adam-adae-severity-rank/) | rank a subject's events by severity |
@@ -48,6 +49,8 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adex-uncollected-exposure`](adam-adex-uncollected-exposure/) | tell an uncollected dose from an absent administration |
 | [`adam-adlb-bds`](adam-adlb-bds/) | build a BDS dataset with baseline and change |
 | [`adam-adlb-closest-visit`](adam-adlb-closest-visit/) | select the record closest to a window's target day |
+| [`adam-adlb-shift-and-criteria`](adam-adlb-shift-and-criteria/) | classify a result, its shift from baseline, and one criterion |
+| [`adam-adqs-subscale-score`](adam-adqs-subscale-score/) | score a questionnaire subscale from its item records |
 | [`adam-adrs-best-overall-response`](adam-adrs-best-overall-response/) | select the best overall response |
 | [`adam-adrs-composite-response`](adam-adrs-composite-response/) | combine efficacy, safety, and discontinuation into one response |
 | [`adam-adrs-confirmed-response`](adam-adrs-confirmed-response/) | confirm an objective response |
@@ -71,8 +74,11 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-advs-once-measured-carry-forward`](adam-advs-once-measured-carry-forward/) | carry forward a once-measured characteristic |
 | [`negative-adam-adsl-stratification-reconciliation`](negative-adam-adsl-stratification-reconciliation/) | reconcile randomization strata |
 | [`negative-adex-relative-dose-intensity`](negative-adex-relative-dose-intensity/) | reject a dose intensity measured against a per-record plan |
+| [`negative-adex-single-dose-expansion`](negative-adex-single-dose-expansion/) | reject one record per administration built from an aggregate dose |
+| [`negative-adlb-computed-parameter`](negative-adlb-computed-parameter/) | reject a parameter computed from the dataset being built |
 | [`negative-adrs-partial-response-after-complete-response`](negative-adrs-partial-response-after-complete-response/) | reject a partial response recorded after a complete response |
 | [`negative-adsl-subject-reference`](negative-adsl-subject-reference/) | reject a malformed subject reference |
+| [`negative-advs-analysis-window-table`](negative-advs-analysis-window-table/) | reject an analysis window read from the study's window table |
 | [`negative-baseline-flag-tied-date`](negative-baseline-flag-tied-date/) | reject a baseline chosen between two same-day results |
 | [`negative-column-type-unknown`](negative-column-type-unknown/) | reject an analysis value with an ambiguous numeric type |
 | [`negative-compute-aggregate-function`](negative-compute-aggregate-function/) | reject a total written as a formula |
@@ -101,6 +107,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-mapping-from-unmapped-key`](negative-mapping-from-unmapped-key/) | reject a result with no reference range |
 | [`negative-mapping-unmapped-value`](negative-mapping-unmapped-value/) | reject an unmapped response |
 | [`negative-output-duplicate-subject`](negative-output-duplicate-subject/) | reject a repeated demographics record |
+| [`negative-query-slot-overflow`](negative-query-slot-overflow/) | reject an event belonging to more queries than it has places |
 | [`negative-record-lookup-id-collision`](negative-record-lookup-id-collision/) | reject a first treatment named after its own source |
 | [`negative-record-lookup-incomplete-key`](negative-record-lookup-incomplete-key/) | reject a reference limit chosen without a sex |
 | [`negative-record-lookup-unmatched-key`](negative-record-lookup-unmatched-key/) | reject a result with no reference range |
@@ -110,6 +117,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-row-value-self-reference`](negative-row-value-self-reference/) | reject a weight carried forward from a carried-forward weight |
 | [`negative-row-value-zero-offset`](negative-row-value-zero-offset/) | reject a previous weight that names no earlier visit |
 | [`negative-source-duplicate-right-key`](negative-source-duplicate-right-key/) | reject duplicate subject enrichment |
+| [`negative-source-output-self-reference`](negative-source-output-self-reference/) | reject a parameter that reads the dataset it is part of |
 | [`negative-sum-non-numeric-source`](negative-sum-non-numeric-source/) | reject a severity burden totalled from severity words |
 | [`negative-types-unknown-field`](negative-types-unknown-field/) | reject a total over a field the source does not have |
 | [`negative-usubjid-exceeds-length`](negative-usubjid-exceeds-length/) | reject a subject identifier longer than the study permits |

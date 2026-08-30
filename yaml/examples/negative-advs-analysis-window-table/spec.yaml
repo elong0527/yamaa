@@ -1,0 +1,121 @@
+schema_version: "1.0"
+domain: ADVS
+datasets:
+  ADVSPRE: input/advs_pre.csv
+  AWINDOW:
+    path: input/awindow.csv
+    types: {AVISITN: int, AWLO: int, AWHI: int, AWTARGET: int}
+base: ADVSPRE
+keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
+
+record_lookups:
+  - id: AWIN
+    dataset: AWINDOW
+    source: [STUDYID]
+    key: [STUDYID]
+    filter: "AWINDOW.AWLO <= ADY AND ADY <= AWINDOW.AWHI"
+    unmatched: missing
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADVSPRE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADVSPRE.USUBJID
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      source: ADVSPRE.PARAMCD
+
+  - name: VSSEQ
+    type: int
+    derivation:
+      source: ADVSPRE.VSSEQ
+
+  - name: VISIT
+    type: str
+    derivation:
+      source: ADVSPRE.VISIT
+
+  - name: ADT
+    type: date
+    derivation:
+      source: ADVSPRE.ADT
+
+  - name: ADY
+    type: int
+    derivation:
+      source: ADVSPRE.ADY
+
+  - name: AVAL
+    type: float
+    derivation:
+      source: ADVSPRE.AVAL
+
+  - name: AVISIT
+    type: str
+    derivation:
+      source: AWIN.AVISIT
+
+  - name: AVISITN
+    type: int
+    derivation:
+      source: AWIN.AVISITN
+
+  - name: AWTARGET
+    type: int
+    derivation:
+      source: AWIN.AWTARGET
+
+  - name: AWTDIFF
+    type: int
+    derivation:
+      compute:
+        expr: "ADY - AWTARGET"
+
+  - name: AWTABS
+    type: int
+    output: false
+    derivation:
+      compute:
+        expr: "ABS(AWTDIFF)"
+
+  - name: AWRANK
+    type: int
+    output: false
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]
+        order_by: [AWTABS, VSSEQ]
+        filter: "AVISIT IS NOT NULL"
+
+  - name: ANL01FL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "AWRANK = 1"
+            then:
+              literal: Y
+    verifications:
+      allowed_values:
+        values: [Y]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]
+  - row_count:
+      min: 9
+      max: 9
+  - all_or_none:
+      id: an-assigned-window-carries-its-order-and-target
+      columns: [AVISIT, AVISITN, AWTARGET]
+  - implies:
+      id: analysis-record-has-an-analysis-window
+      when: "ANL01FL = 'Y'"
+      then: "AVISIT IS NOT NULL AND ADY IS NOT NULL"

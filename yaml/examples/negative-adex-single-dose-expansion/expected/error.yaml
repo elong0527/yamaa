@@ -1,0 +1,20 @@
+phase: verification
+condition: predicate_failed
+spec_paths:
+  - verifications[1].predicate
+context:
+  verification_id: a-record-is-expanded-into-every-administration-it-holds
+  failure_count: 3
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-502
+      EXSEQ: 1
+      ADOSEN: 1
+    - STUDYID: PILOT7
+      USUBJID: P7-502
+      EXSEQ: 1
+      ADOSEN: 2
+    - STUDYID: PILOT7
+      USUBJID: P7-502
+      EXSEQ: 1
+      ADOSEN: 3

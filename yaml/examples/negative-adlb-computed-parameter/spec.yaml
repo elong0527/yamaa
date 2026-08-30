@@ -1,0 +1,103 @@
+schema_version: "1.0"
+domain: ADLB
+datasets:
+  LB: {path: input/lb.csv, types: {LBSTRESN: float}}
+base: LB
+keys: [STUDYID, USUBJID, ADT, PARAMCD]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: LB.USUBJID
+
+  - name: ADT
+    type: date
+    derivation:
+      source: LB.LBDTC
+
+  - name: PARAMCD
+    type: str
+    verifications:
+      allowed_values:
+        values: [ALT, AST, ASTALT]
+
+  - name: PARAM
+    type: str
+
+  - name: LBRESN
+    type: float
+    output: false
+
+  - name: ALTVAL
+    type: float
+    output: false
+    derivation:
+      aggregate:
+        filter: "PARAMCD = 'ALT'"
+        group_by: [STUDYID, USUBJID, ADT]
+        expr: "MAX(AVAL)"
+
+  - name: ASTVAL
+    type: float
+    output: false
+    derivation:
+      aggregate:
+        filter: "PARAMCD = 'AST'"
+        group_by: [STUDYID, USUBJID, ADT]
+        expr: "MAX(AVAL)"
+
+  - name: AVAL
+    type: float
+    derivation:
+      case:
+        branches:
+          - when: "PARAMCD = 'ASTALT'"
+            then:
+              compute:
+                expr: "ASTVAL / NULLIF(ALTVAL, 0)"
+        otherwise:
+          source: LBRESN
+
+rows:
+  - id: alt
+    filter: "LB.LBTESTCD = 'ALT'"
+    derivations:
+      PARAMCD:
+        literal: ALT
+      PARAM:
+        literal: Alanine Aminotransferase
+      LBRESN:
+        source: LB.LBSTRESN
+
+  - id: ast
+    filter: "LB.LBTESTCD = 'AST'"
+    derivations:
+      PARAMCD:
+        literal: AST
+      PARAM:
+        literal: Aspartate Aminotransferase
+      LBRESN:
+        source: LB.LBSTRESN
+
+  - id: ast_alt_ratio
+    filter: "LB.LBTESTCD = 'ALT'"
+    derivations:
+      PARAMCD:
+        literal: ASTALT
+      PARAM:
+        literal: Aspartate to Alanine Aminotransferase Ratio
+      LBRESN:
+        literal: null
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, ADT, PARAMCD]
+  - row_count:
+      min: 11
+      max: 11

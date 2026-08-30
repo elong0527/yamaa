@@ -1,0 +1,9 @@
+STUDYID,USUBJID,PARAMCD,PARAM,ASEQ,AVISIT,AVAL,ANRLO,ANRHI,ABLFL
+PILOT7,P7-201,ALT,Alanine Aminotransferase (U/L),1,BASELINE,30,0,40,Y
+PILOT7,P7-201,ALT,Alanine Aminotransferase (U/L),2,WEEK 2,60,0,40,
+PILOT7,P7-201,ALT,Alanine Aminotransferase (U/L),3,WEEK 4,150,0,40,
+PILOT7,P7-202,ALT,Alanine Aminotransferase (U/L),1,BASELINE,45,0,40,Y
+PILOT7,P7-202,ALT,Alanine Aminotransferase (U/L),2,WEEK 2,18,0,40,
+PILOT7,P7-202,ALT,Alanine Aminotransferase (U/L),3,WEEK 4,,0,40,
+PILOT7,P7-203,EOS,Eosinophils (%),1,BASELINE,0,1,6,Y
+PILOT7,P7-203,EOS,Eosinophils (%),2,WEEK 2,4,1,6,

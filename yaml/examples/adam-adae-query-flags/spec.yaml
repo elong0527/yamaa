@@ -1,0 +1,116 @@
+schema_version: "1.0"
+domain: ADAE
+datasets:
+  AE: input/ae.csv
+  QUERY: {path: input/queries.csv, types: {GRPID: int}}
+base: AE
+keys: [STUDYID, USUBJID, AESEQ]
+
+record_lookups:
+  - id: SMQ1
+    dataset: QUERY
+    source: [AEDECOD]
+    key: [TERM]
+    filter: "QUERY.PREFIX = 'SMQ01'"
+    incomplete: missing
+    unmatched: missing
+
+  - id: SMQ2
+    dataset: QUERY
+    source: [AEDECOD]
+    key: [TERM]
+    filter: "QUERY.PREFIX = 'SMQ02'"
+    incomplete: missing
+    unmatched: missing
+
+  - id: CQ1
+    dataset: QUERY
+    source: [AEDECOD]
+    key: [TERM]
+    filter: "QUERY.PREFIX = 'CQ01'"
+    incomplete: missing
+    unmatched: missing
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    derivation:
+      source: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    derivation:
+      source: AE.AETERM
+
+  - name: AEDECOD
+    type: str
+    derivation:
+      source: AE.AEDECOD
+
+  - name: SMQ01NAM
+    type: str
+    derivation:
+      source: SMQ1.GRPNAME
+
+  - name: SMQ01CD
+    type: int
+    derivation:
+      source: SMQ1.GRPID
+
+  - name: SMQ01SC
+    type: str
+    derivation:
+      source: SMQ1.SCOPE
+    verifications:
+      allowed_values:
+        values: [BROAD, NARROW]
+
+  - name: SMQ02NAM
+    type: str
+    derivation:
+      source: SMQ2.GRPNAME
+
+  - name: SMQ02CD
+    type: int
+    derivation:
+      source: SMQ2.GRPID
+
+  - name: SMQ02SC
+    type: str
+    derivation:
+      source: SMQ2.SCOPE
+    verifications:
+      allowed_values:
+        values: [BROAD, NARROW]
+
+  - name: CQ01NAM
+    type: str
+    derivation:
+      source: CQ1.GRPNAME
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 7
+      max: 7
+  - all_or_none:
+      id: first-standardized-query-slot-is-filled-completely
+      columns: [SMQ01NAM, SMQ01CD, SMQ01SC]
+  - all_or_none:
+      id: second-standardized-query-slot-is-filled-completely
+      columns: [SMQ02NAM, SMQ02CD, SMQ02SC]
+  - implies:
+      id: an-uncoded-event-joins-no-query
+      when: "AEDECOD IS NULL"
+      then: "SMQ01NAM IS NULL AND SMQ02NAM IS NULL AND CQ01NAM IS NULL"

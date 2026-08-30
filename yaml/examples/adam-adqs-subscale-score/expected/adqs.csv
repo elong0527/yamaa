@@ -1,0 +1,26 @@
+STUDYID,USUBJID,VISIT,PARAMCD,PARAM,AVAL
+PILOT7,P7-101,BASELINE,PF01,Trouble with strenuous activity,2
+PILOT7,P7-101,BASELINE,PF02,Trouble with a long walk,1
+PILOT7,P7-101,BASELINE,PF03,Trouble with a short walk,2
+PILOT7,P7-101,BASELINE,PF04,Needs to stay in bed or a chair,1
+PILOT7,P7-101,WEEK 12,PF01,Trouble with strenuous activity,3
+PILOT7,P7-101,WEEK 12,PF02,Trouble with a long walk,3
+PILOT7,P7-101,WEEK 12,PF03,Trouble with a short walk,
+PILOT7,P7-101,WEEK 12,PF04,Needs to stay in bed or a chair,3
+PILOT7,P7-102,BASELINE,PF01,Trouble with strenuous activity,1
+PILOT7,P7-102,BASELINE,PF02,Trouble with a long walk,
+PILOT7,P7-102,BASELINE,PF03,Trouble with a short walk,
+PILOT7,P7-102,BASELINE,PF04,Needs to stay in bed or a chair,2
+PILOT7,P7-102,WEEK 12,PF01,Trouble with strenuous activity,
+PILOT7,P7-102,WEEK 12,PF02,Trouble with a long walk,
+PILOT7,P7-102,WEEK 12,PF03,Trouble with a short walk,
+PILOT7,P7-102,WEEK 12,PF04,Needs to stay in bed or a chair,
+PILOT7,P7-103,BASELINE,PF01,Trouble with strenuous activity,4
+PILOT7,P7-103,BASELINE,PF02,Trouble with a long walk,4
+PILOT7,P7-103,BASELINE,PF03,Trouble with a short walk,4
+PILOT7,P7-103,BASELINE,PF04,Needs to stay in bed or a chair,4
+PILOT7,P7-101,BASELINE,PFSCORE,Physical Functioning Subscale Score,37.5
+PILOT7,P7-101,WEEK 12,PFSCORE,Physical Functioning Subscale Score,75
+PILOT7,P7-102,BASELINE,PFSCORE,Physical Functioning Subscale Score,
+PILOT7,P7-102,WEEK 12,PFSCORE,Physical Functioning Subscale Score,
+PILOT7,P7-103,BASELINE,PFSCORE,Physical Functioning Subscale Score,100

@@ -1,0 +1,8 @@
+STUDYID,USUBJID,AESEQ,AETERM,AEDECOD,SMQ01NAM,SMQ01CD,SMQ01SC,SMQ02NAM,SMQ02CD,SMQ02SC,CQ01NAM
+PILOT7,P7-301,1,Rash all over,RASH,Severe Cutaneous Adverse Reactions,20000020,BROAD,,,,
+PILOT7,P7-301,2,Feeling sick,NAUSEA,,,,,,,Sponsor Adverse Events of Special Interest
+PILOT7,P7-302,1,Jaundice and dark urine,HEPATITIS,,,,Hepatic Disorders,20000006,NARROW,
+PILOT7,P7-302,2,Loose stools,DIARRHOEA,,,,,,,Sponsor Adverse Events of Special Interest
+PILOT7,P7-303,1,Headache,HEADACHE,,,,,,,
+PILOT7,P7-303,2,Odd sensation in the left arm,,,,,,,,
+PILOT7,P7-304,1,Severe skin blistering,STEVENS-JOHNSON SYNDROME,Severe Cutaneous Adverse Reactions,20000020,NARROW,,,,Sponsor Adverse Events of Special Interest
