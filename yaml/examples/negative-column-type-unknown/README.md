@@ -1,13 +1,25 @@
-# ADaM ADSL: reject a column with no stated kind of value
+# ADaM ADLB: reject an analysis value with an ambiguous numeric type
 
-This example uses one collected demographics record to attempt one subject
-record:
+This example uses collected laboratory results to attempt one record per
+result:
 
-- `AGE` is meant to be the subject's age in years.
+- `AVAL` is the numeric analysis value of the result.
 
-A result holds text, whole numbers, fractional numbers, calendar dates, or
-moments in time, and every specification says which. `number` names two of
-those at once and settles nothing: it leaves open whether a fractional age is
-kept or rejected, and it would leave the next reader to guess. Naming a kind
-outside the closed set must fail rather than resolve to whichever of the two a
-reader assumed, so the run must fail and no artifact is accepted.
+A result distinguishes whole numbers from fractional numbers, but the declared
+type says only that the value is a number. Choosing either representation would
+invent a precision decision the specification did not make, so the run must
+fail and no artifact is accepted.
+
+## How to fix
+
+Choose the type from the measurement contract. Use `int` only when fractions
+are impossible; otherwise use `float`:
+
+```yaml
+- name: AVAL
+  type: float
+  derivation:
+    source: LB.LBSTRESN
+```
+
+The allowed column types are `str`, `int`, `float`, `date`, and `datetime`.

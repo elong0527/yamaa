@@ -1,0 +1,15 @@
+phase: join
+condition: unmatched_key
+spec_paths:
+  - record_lookups[0]
+context:
+  record_lookup: REFRANGE
+  dataset: LBRANGE
+  key: [LBTESTCD, SEX]
+  lookup_key:
+    LBTESTCD: AST
+    SEX: M
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-542
+      LBSEQ: 1

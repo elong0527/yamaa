@@ -1,0 +1,12 @@
+phase: convert
+condition: conversion_failed
+spec_paths:
+  - columns.AVAL
+context:
+  from: str
+  to: float
+  value: "<50"
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-942
+      PARAMCD: HIVRNA

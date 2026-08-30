@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 730" role="img" aria-labelledby="title description">
+  <title id="title">YAMAA design</title>
+  <desc id="description">Organization and compound templates are inherited by approved study specifications. EDC data is extracted to ODM XML. Version-controlled builders use the specifications and source metadata to generate and validate SDTM datasets, ADaM datasets, and a TLF package.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" />
+    </marker>
+    <style>
+      .heading { font: 600 28px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #212529; }
+      .section { font: 600 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 1.2px; fill: #1971c2; }
+      .scope { font: 600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: .7px; fill: #495057; }
+      .label { font: 600 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #212529; text-anchor: middle; }
+      .detail { font: 400 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #495057; text-anchor: middle; }
+      .note { font: 400 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #495057; }
+      .box { stroke: #495057; stroke-width: 1.5; }
+      .external { fill: #e9ecef; }
+      .profile { fill: #f1f3f5; stroke-dasharray: 5 4; }
+      .template { fill: #b2f2bb; }
+      .spec { fill: #ffec99; }
+      .artifact { fill: #a5d8ff; }
+      .flow { fill: none; stroke: #495057; stroke-width: 2; marker-end: url(#arrow); }
+      .lineage { fill: none; stroke: #868e96; stroke-width: 1.8; stroke-dasharray: 6 5; marker-end: url(#arrow); }
+      .guide { stroke: #dee2e6; stroke-width: 1; }
+      .divider { stroke: #adb5bd; stroke-width: 1.5; stroke-dasharray: 7 6; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="730" fill="#ffffff" />
+  <text class="heading" x="640" y="38" text-anchor="middle">YAMAA design</text>
+  <text class="section" x="24" y="78">DESIGN TIME · INHERITANCE AND APPROVED SPECIFICATIONS</text>
+
+  <text class="scope" x="24" y="108">SCOPE</text>
+  <text class="scope" x="24" y="160">ORGANIZATION</text>
+  <text class="scope" x="24" y="268">COMPOUND</text>
+  <text class="scope" x="24" y="376">STUDY</text>
+  <line class="divider" x1="150" y1="96" x2="150" y2="425" />
+  <line class="guide" x1="24" y1="210" x2="1248" y2="210" />
+  <line class="guide" x1="24" y1="318" x2="1248" y2="318" />
+
+  <!-- Organization scope -->
+  <rect class="box profile" x="160" y="120" width="220" height="72" rx="9" />
+  <text class="label" x="270" y="143">Standards &amp; schema profile</text>
+  <text class="detail" x="270" y="163">YAML schema · CDISC versions</text>
+  <text class="detail" x="270" y="179">controlled terminology · guides</text>
+
+  <rect class="box template" x="470" y="120" width="190" height="72" rx="9" />
+  <text class="label" x="565" y="150">SDTM mapping</text>
+  <text class="detail" x="565" y="172">template · YAML</text>
+
+  <rect class="box template" x="730" y="120" width="190" height="72" rx="9" />
+  <text class="label" x="825" y="150">ADaM derivation</text>
+  <text class="detail" x="825" y="172">template · YAML</text>
+
+  <rect class="box template" x="990" y="120" width="190" height="72" rx="9" />
+  <text class="label" x="1085" y="150">TLF</text>
+  <text class="detail" x="1085" y="172">template · YAML</text>
+
+  <!-- Compound scope -->
+  <text class="detail" x="270" y="261">Templates inherit downward;</text>
+  <text class="detail" x="270" y="278">lower scopes override explicitly.</text>
+
+  <rect class="box template" x="470" y="228" width="190" height="72" rx="9" />
+  <text class="label" x="565" y="258">SDTM mapping</text>
+  <text class="detail" x="565" y="280">template · YAML</text>
+
+  <rect class="box template" x="730" y="228" width="190" height="72" rx="9" />
+  <text class="label" x="825" y="258">ADaM derivation</text>
+  <text class="detail" x="825" y="280">template · YAML</text>
+
+  <rect class="box template" x="990" y="228" width="190" height="72" rx="9" />
+  <text class="label" x="1085" y="258">TLF</text>
+  <text class="detail" x="1085" y="280">template · YAML</text>
+
+  <!-- Template inheritance -->
+  <path class="flow" d="M 565 192 L 565 226" />
+  <path class="flow" d="M 825 192 L 825 226" />
+  <path class="flow" d="M 1085 192 L 1085 226" />
+  <path class="flow" d="M 565 300 L 565 334" />
+  <path class="flow" d="M 825 300 L 825 334" />
+  <path class="flow" d="M 1085 300 L 1085 334" />
+
+  <!-- Study scope -->
+  <rect class="box external" x="160" y="336" width="128" height="72" rx="9" />
+  <text class="label" x="224" y="378">EDC system</text>
+
+  <rect class="box external" x="315" y="336" width="128" height="72" rx="9" />
+  <text class="label" x="379" y="378">ODM XML</text>
+  <path class="flow" d="M 288 372 L 313 372" />
+  <text class="detail" x="301" y="326">API extraction</text>
+
+  <rect class="box spec" x="470" y="336" width="190" height="72" rx="9" />
+  <text class="label" x="565" y="366">SDTM mapping</text>
+  <text class="detail" x="565" y="388">study specification · YAML</text>
+
+  <rect class="box spec" x="730" y="336" width="190" height="72" rx="9" />
+  <text class="label" x="825" y="366">ADaM derivation</text>
+  <text class="detail" x="825" y="388">study specification · YAML</text>
+
+  <rect class="box spec" x="990" y="336" width="190" height="72" rx="9" />
+  <text class="label" x="1085" y="366">TLF</text>
+  <text class="detail" x="1085" y="388">study specification · YAML</text>
+
+  <path class="lineage" d="M 443 372 L 468 372" />
+  <path class="lineage" d="M 660 372 L 728 372" />
+  <path class="lineage" d="M 920 372 L 988 372" />
+  <text class="detail" x="456" y="326">source metadata</text>
+  <text class="detail" x="695" y="326">metadata lineage</text>
+  <text class="detail" x="955" y="326">metadata lineage</text>
+
+  <!-- Runtime -->
+  <line class="divider" x1="24" y1="446" x2="1248" y2="446" />
+  <text class="section" x="24" y="478">RUNTIME · DETERMINISTIC BUILD AND VALIDATION</text>
+
+  <path class="flow" d="M 379 408 C 379 500, 430 576, 468 576" />
+  <text class="detail" x="389" y="504">source data + metadata</text>
+
+  <path class="flow" d="M 565 408 L 565 548" />
+  <path class="flow" d="M 825 408 L 825 548" />
+  <path class="flow" d="M 1085 408 L 1085 548" />
+  <text class="detail" x="625" y="520">build + validate</text>
+  <text class="detail" x="885" y="520">build + validate</text>
+  <text class="detail" x="1144" y="520">render + QC</text>
+
+  <rect class="box artifact" x="470" y="550" width="190" height="72" rx="9" />
+  <text class="label" x="565" y="592">SDTM datasets</text>
+
+  <rect class="box artifact" x="730" y="550" width="190" height="72" rx="9" />
+  <text class="label" x="825" y="592">ADaM datasets</text>
+
+  <rect class="box artifact" x="990" y="550" width="190" height="72" rx="9" />
+  <text class="label" x="1085" y="592">TLF package</text>
+
+  <path class="flow" d="M 660 586 L 728 586" />
+  <path class="flow" d="M 920 586 L 988 586" />
+  <text class="detail" x="695" y="574">data + lineage</text>
+  <text class="detail" x="955" y="574">data + lineage</text>
+
+  <!-- Legend and governance note -->
+  <rect class="box external" x="24" y="658" width="18" height="18" rx="3" />
+  <text class="note" x="50" y="672">external source</text>
+  <rect class="box template" x="173" y="658" width="18" height="18" rx="3" />
+  <text class="note" x="199" y="672">reusable template</text>
+  <rect class="box spec" x="344" y="658" width="18" height="18" rx="3" />
+  <text class="note" x="370" y="672">approved study specification</text>
+  <rect class="box artifact" x="594" y="658" width="18" height="18" rx="3" />
+  <text class="note" x="620" y="672">generated artifact</text>
+
+  <text class="note" x="24" y="709">Specifications and builders are version-controlled; every stage is validated and requires accountable human approval.</text>
+</svg>

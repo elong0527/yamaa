@@ -1,0 +1,9 @@
+phase: derivation
+condition: integer_overflow
+spec_paths:
+  - columns.CELLTOT.derivation.compute
+context:
+  expr: "CELLCNT * VOLUML"
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-772

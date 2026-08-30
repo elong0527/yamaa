@@ -1,0 +1,25 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: DM.USUBJID
+
+  - name: COUNTRY
+    type: str
+    derivation:
+      str_upper:
+        source:
+          coalesce:
+            sources: [DM.COUNTRY, DM.SITECNTY]

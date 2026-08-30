@@ -21,22 +21,42 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation:
+      source: ODM.SubjectKey
 
   - name: SUBJID
     type: str
     label: Subject Identifier for the Study
+    derivation:
+      source: ODM.SubjectKey
 
   - name: SEX
     type: str
     label: Sex
+    derivation:
+      mapping:
+        source: ODM.Value
+        dict:
+          Male: M
+          Female: F
+        missing: U
+        unmapped: U
 
   - name: AGE
     type: int
     label: Age
+    derivation:
+      source:
+        variable: ODM.IT.DM.AGE
+        missing: null
 
   - name: ARM
     type: str
     label: Description of Planned Arm
+    derivation:
+      source:
+        variable: ODM.IT.DM.ARM
+        missing: Unassigned
 
   - name: ACTARM
     type: str
@@ -46,25 +66,5 @@ columns:
 
 rows:
   - id: subject
-    filter: "ODM.ItemOID = 'IT.DM.SEX' AND ODM.Value IS NOT NULL"
-    derivations:
-      USUBJID:
-        source: ODM.SubjectKey
-      SUBJID:
-        source: ODM.SubjectKey
-      SEX:
-        mapping:
-          source: ODM.Value
-          dict:
-            Male: M
-            Female: F
-          missing: U
-          unmapped: U
-      AGE:
-        source:
-          variable: ODM.IT.DM.AGE
-          missing: null
-      ARM:
-        source:
-          variable: ODM.IT.DM.ARM
-          missing: Unassigned
+    filter: "ODM.ItemOID = 'IT.DM.SEX'"
+    derivations: {}

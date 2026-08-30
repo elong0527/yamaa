@@ -20,6 +20,8 @@ columns:
 
   - name: PARAMCD
     type: str
+    derivation:
+      literal: DOR
 
   - name: PARAM
     type: str
@@ -225,9 +227,7 @@ columns:
 rows:
   - id: responder
     filter: "ADSL.RESPDT IS NOT NULL"
-    derivations:
-      PARAMCD:
-        literal: DOR
+    derivations: {}
 
 verifications:
   - unique:

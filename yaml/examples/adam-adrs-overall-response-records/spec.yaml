@@ -56,6 +56,8 @@ columns:
 
   - name: AVALC
     type: str
+    derivation:
+      source: RS.RSSTRESC
     verifications:
       allowed_values:
         values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]
@@ -115,9 +117,7 @@ columns:
 rows:
   - id: overall_response
     filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSEVAL = 'INVESTIGATOR'"
-    derivations:
-      AVALC:
-        source: RS.RSSTRESC
+    derivations: {}
 
 verifications:
   - unique:

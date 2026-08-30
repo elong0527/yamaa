@@ -1,22 +1,27 @@
 schema_version: "1.0"
-domain: ADSL
+domain: ADLB
 datasets:
-  DM: input/dm.csv
-base: DM
-keys: [STUDYID, USUBJID]
+  LB: {path: input/lb.csv, types: {LBSEQ: int, LBSTRESN: float}}
+base: LB
+keys: [STUDYID, USUBJID, LBSEQ]
 
 columns:
   - name: STUDYID
     type: str
     derivation:
-      source: DM.STUDYID
+      source: LB.STUDYID
 
   - name: USUBJID
     type: str
     derivation:
-      source: DM.USUBJID
+      source: LB.USUBJID
 
-  - name: AGE
+  - name: LBSEQ
+    type: int
+    derivation:
+      source: LB.LBSEQ
+
+  - name: AVAL
     type: number
     derivation:
-      source: DM.AGE
+      source: LB.LBSTRESN

@@ -1,0 +1,12 @@
+phase: convert
+condition: conversion_failed
+spec_paths:
+  - columns.AVAL
+context:
+  from: float
+  to: int
+  value: 72.5
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-961
+      VSSEQ: 2

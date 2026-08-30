@@ -1,0 +1,33 @@
+schema_version: "1.0"
+domain: ADLB
+datasets:
+  LB: input/lb.csv
+base: LB
+keys: [STUDYID, USUBJID, PARAMCD]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      source: LB.LBTESTCD
+
+  - name: AVAL
+    type: float
+    derivation:
+      source: LB.LBSTRESN
+
+  - name: AVALTOT
+    type: float
+    derivation:
+      compute:
+        expr: "SUM(AVAL)"
