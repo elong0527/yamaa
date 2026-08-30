@@ -7,3 +7,5 @@ PILOT7,P7-202,ALT,Alanine Aminotransferase (U/L),2,WEEK 2,18,0,40,
 PILOT7,P7-202,ALT,Alanine Aminotransferase (U/L),3,WEEK 4,,0,40,
 PILOT7,P7-203,EOS,Eosinophils (%),1,BASELINE,0,1,6,Y
 PILOT7,P7-203,EOS,Eosinophils (%),2,WEEK 2,4,1,6,
+PILOT7,P7-203,LDH,Lactate Dehydrogenase (U/L),3,BASELINE,200,,,Y
+PILOT7,P7-203,LDH,Lactate Dehydrogenase (U/L),4,WEEK 2,260,,,

@@ -156,8 +156,8 @@ records the same run is building, and nothing addresses one by key. The output
 reducing the constructed rows instead reaches the very value being defined,
 which R001 reports as a cycle.
 `negative-source-output-self-reference` shows the naming prohibition and
-`negative-adlb-computed-parameter` shows the cycle; both commit the artifact
-the capability would produce.
+`negative-adlb-computed-parameter` shows the cycle and commits the artifact the
+capability would produce.
 
 **Gap 15.** Reshaping runs one way only. `rows` builds records out of one
 record's fields, and nothing goes the other way, so a keyed set of records

@@ -27,7 +27,15 @@ built for the dataset being built:
 ```yaml
 datasets:
   LB: input/lb.csv
-  ADLBIN: input/adlb.csv
+  ADLBIN: {path: input/adlb.csv, types: {AVAL: float, ADT: date}}
+```
+
+Renaming the declaration alone leaves the lookup pointing at a name that no
+longer exists, so change where it reads from as well:
+
+```yaml
+mapping_from:
+  dataset: ADLBIN
 ```
 
 The lookup then reads a completed dataset by its own name, which is an

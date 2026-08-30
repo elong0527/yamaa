@@ -19,20 +19,21 @@ therefore fail and no artifact is accepted.
 ## How to fix
 
 First decide how many queries the study reports. Every query the study
-analyses needs its own place before the run, and the dictionary is where that
-is decided, so give the second query a place of its own:
+analyses needs a place of its own before the run, and the dictionary is where
+that is decided, so move the second query to the next free place. The second is
+already taken by hepatic disorders here, so hypersensitivity takes the third:
 
 ```csv
 PREFIX,GRPNAME,GRPID,TERM
 SMQ01,Severe Cutaneous Adverse Reactions,20000020,STEVENS-JOHNSON SYNDROME
-SMQ02,Hypersensitivity,20000214,STEVENS-JOHNSON SYNDROME
+SMQ03,Hypersensitivity,20000214,STEVENS-JOHNSON SYNDROME
 ```
 
-Each new place also needs its own pair of variables, because how many an
-artifact carries is fixed when the specification is written and not when the
-dictionary is read. A study whose dictionary grows past what the specification
-declares must be re-read against it rather than left to fill the places it
-already has.
+A new place is not free: it needs its own lookup and its own `SMQ03NAM` and
+`SMQ03CD`, because how many an artifact carries is fixed when the
+specification is written and not when the dictionary is read. A study whose
+dictionary grows past what the specification declares must be re-read against
+it rather than left to fill the places it already has.
 
 Do not resolve the clash by keeping whichever query is stored first. It
 answers with a query the study did not choose, and it stops reporting the
