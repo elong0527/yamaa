@@ -14,3 +14,10 @@ The disagreement is reported against the assessment rather than corrected, and
 no artifact is accepted from this input. The expected output records the
 completed rows presented to that check. An improvement in the other direction
 is ordinary and passes: a partial response may later become complete.
+
+## How to fix
+
+Review the response sequence and correct the assessment that is inconsistent
+with the study definition. If the protocol genuinely permits a partial
+response after a complete response, revise the clinical rule and its check
+together; do not remove the check merely to accept an unexplained sequence.

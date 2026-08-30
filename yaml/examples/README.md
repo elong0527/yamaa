@@ -30,6 +30,9 @@ after the dataset is completed, an expected CSV records the rows presented to
 the failing check. When a missing capability prevents execution, an expected
 CSV records the intended artifact once that capability exists.
 
+Every expected-failure README ends with a `How to fix` section that recommends
+the safest correction and shows the smallest useful YAML change.
+
 | Example | Derives |
 |---|---|
 | [`adam-adae-occurrence-flags`](adam-adae-occurrence-flags/) | flag the first occurrence at three levels |

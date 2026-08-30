@@ -11,3 +11,19 @@ one, and the specification answers only for a date that was never collected.
 Reporting the text as fully collected, or as collected to no precision at all,
 would each describe a value nobody can read as a date, so the run must fail and
 no artifact is accepted.
+
+## How to fix
+
+Correct the source text when a date can be recovered. If invalid date text is
+intentionally represented by a missing precision flag, declare that separately
+from the existing missing-source behavior:
+
+```yaml
+date_precision:
+  source: AE.AESTDTC
+  missing: null
+  invalid: null
+```
+
+The `invalid` handler covers `ONGOING`; `missing` covers a source value that
+was not collected.

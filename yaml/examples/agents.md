@@ -36,14 +36,17 @@ A reader of an example README wants to know what the output means. Write:
 - one bullet per output variable, in output order, saying what its value means
   and what it holds when the inputs do not support it;
 - at most one closing paragraph, for a rule that governs several variables at
-  once.
+  once;
+- for every negative example, a final `## How to fix` section that recommends
+  the safest correction first and uses a short YAML snippet when it clarifies
+  the change.
 
 Keep bullets to the variables a reader must understand. Direct key copies and
 fixed values need no bullet.
 
-**Do not name anything from the schema.** No rule IDs, no expression or field
-names, no `output: false`, and none of the words *handler*, *verification*,
-*derivation*, or *schema*. State the effect instead:
+Before `## How to fix`, **do not name anything from the schema.** No rule IDs,
+no expression or field names, no `output: false`, and none of the words
+*handler*, *verification*, *derivation*, or *schema*. State the effect instead:
 
     - counting neither the last day of period one nor the first day of period
       two, so consecutive periods give zero
@@ -53,15 +56,26 @@ names, no `output: false`, and none of the words *handler*, *verification*,
     + Its period-two right side is empty after filtering, which R003 treats as
       an absent match
 
-**Do not describe intermediate columns.** A column declaring `output: false` is
-not in the artifact and does not belong in the README.
+**Do not describe intermediate columns in the data contract.** A column
+declaring `output: false` is not in the artifact and does not belong before the
+fix section. A concise fix may show one when a multi-step correction requires
+it.
 
-**Do not count the sample data.** "Two of the four subjects have no exposure"
-is a property of the input file; "a subject with no exposure falls back to the
-planned arm" is the rule. Write the rule. Row counts, keys, and expected
-handler counts are stated in `spec.yaml` and do not belong in prose.
+Before `## How to fix`, **do not count the sample data.** "Two of the four
+subjects have no exposure" is a property of the input file; "a subject with no
+exposure falls back to the planned arm" is the rule. Write the rule. Row
+counts, keys, and expected handler counts are stated in `spec.yaml` and do not
+belong in the data contract. A fix may name an offending sample value when that
+makes the correction concrete.
 
-Wrap at 79 columns. Most examples fit in under 25 lines.
+In `## How to fix`, lead with the clinical or data decision. Then show the
+smallest valid correction. Name exact fields and operations there when doing so
+makes the remedy easier to apply. Distinguish alternatives only when they
+represent genuinely different policies; do not turn the section into a general
+tutorial.
+
+Wrap prose and code at 79 columns. Most positive examples fit in under 25
+lines; negative examples may be longer because they carry remediation.
 
 ## Design findings belong in the catalogue
 
@@ -143,10 +157,29 @@ capability exists. Neither is an accepted artifact from the current failed
 run. Its README still describes the expected variables under the same data-only
 contract as a positive example.
 
+Every negative README ends with exactly one `## How to fix` section. It
+explains how to correct defective input and how to state an explicit policy
+when more than one valid outcome exists. It must not recommend weakening a
+check merely to make the sample pass.
+
 ## Checks to run before finishing
 
-    # no schema vocabulary reached the README
-    grep -nE "R0[01][0-9]|output: false|handler|verification" */README.md
+    # no schema vocabulary reached the data-contract portion of a README,
+    # and every negative example has exactly one remediation section
+    python3 - <<'PY'
+    import glob, re
+    pattern = re.compile(r"R0[01][0-9]|output: false|handler|verification")
+    for f in sorted(glob.glob("*/README.md")):
+        text = open(f).read()
+        contract = text.split("\n## How to fix\n", 1)[0]
+        for line_no, line in enumerate(contract.splitlines(), 1):
+            if pattern.search(line):
+                print(f, line_no, line)
+    for f in sorted(glob.glob("negative-*/README.md")):
+        count = open(f).read().count("\n## How to fix\n")
+        if count != 1:
+            print(f, "->", count, "How to fix sections")
+    PY
 
     # every column in the golden file is described
     python3 - <<'PY'
@@ -163,16 +196,17 @@ contract as a positive example.
             print(d, "->", missing)
     PY
 
-Both print nothing when the suite is clean. Key columns and fixed domain
-values are skipped because they carry no logic; anything the second check
-reports is a variable the README does not explain.
+Both scripts print nothing when the suite is clean. Key columns and fixed
+domain values are skipped because they carry no logic; anything the second
+check reports is a variable the README does not explain.
 
 ## Adding an example
 
 1. Write `spec.yaml`, the input data, and either the expected output or the
    expected error. Add an expected CSV beside an error when it makes a blocked
    or rejected result concrete.
-2. Write the README to the contract above.
+2. Write the README to the contract above. A negative example must include its
+   `## How to fix` section.
 3. Add a row to the index table in `README.md`. Its `Derives` column is the
    README title with the standard and domain prefix removed, so the two cannot
    drift apart.
