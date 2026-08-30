@@ -10,3 +10,18 @@ The subject has two administrations and nothing says which one the record
 describes. Naming the pair together guarantees that both come from one
 administration, and it cannot say which, so the run must fail and no artifact
 is accepted.
+
+## How to fix
+
+Declare a total ordering and which end of that order to retain. To choose the
+earliest administration:
+
+```yaml
+record_lookups:
+  - id: DOSING
+    dataset: EX
+    order_by: [EX.EXSTDTC, EX.EXSEQ]
+    keep: first
+```
+
+Both `TRT01A` and `TRT01DOSE` then come from that same selected record.

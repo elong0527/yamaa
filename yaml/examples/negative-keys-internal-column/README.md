@@ -22,5 +22,5 @@ record identity, expose it by removing `output: false`:
 ```
 
 If study and subject already form the intended unique identity, remove
-`SITEID` from `keys` instead. Choose the option that matches the output's actual
-grain.
+`SITEID` from `keys` instead. Choose the option that matches the output's
+actual grain.
