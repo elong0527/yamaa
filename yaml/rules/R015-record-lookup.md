@@ -26,9 +26,9 @@ differs only in being named once and read many times.
 ## Why a name
 
 An expression returns one value, so every expression that reads another
-dataset reaches its own record. Two columns that must describe one record —
+dataset reaches its own record. Two columns that must describe one record --
 a date and the sequence number identifying the record it came from, a value
-and the unit it was measured in — therefore state their match twice and agree
+and the unit it was measured in -- therefore state their match twice and agree
 only by construction. A reviewer cannot see the agreement, and an edit to one
 statement and not the other breaks it silently.
 

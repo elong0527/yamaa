@@ -153,9 +153,9 @@ the three runtimes this design targets disagree:
 | Condition | Result |
 |---|---|
 | No record in the group after `filter` | missing, as R003's absent match |
-| Every value missing — `SUM`, `MIN`, `MAX` | missing, never zero |
-| Every value missing — `COUNT(x)` | `0`, because the records exist |
-| No record in the group — `COUNT(x)`, `COUNT(D.*)` | missing |
+| Every value missing -- `SUM`, `MIN`, `MAX` | missing, never zero |
+| Every value missing -- `COUNT(x)` | `0`, because the records exist |
+| No record in the group -- `COUNT(x)`, `COUNT(D.*)` | missing |
 
 An uncollected quantity is therefore never reported as a measured zero, and an
 absent record stays distinguishable from a collected missing value.
