@@ -17,7 +17,7 @@ the artifact the missing capability would produce.
 
 ## Open work
 
-Fifteen design gaps remain, grouped under five work items. Each item states the
+Sixteen design gaps remain, grouped under five work items. Each item states the
 gap, the evidence from the suite, and what a solution requires.
 
 ### T1. Literal operands (gap 1)
@@ -60,7 +60,7 @@ table of declared bands, with the comparison still in the specification, and
 never a predicate carried as data, so the open question is whether a portable
 form exists at all rather than whether to adopt the benchmark's.
 
-### T2. Dates and times (gaps 3–4)
+### T2. Dates and times (gaps 3–4, 16)
 
 **Gap 3.** A `date` value carries no precision. `date_precision` now reports
 what was supplied, and `adam-adae-partial-dates` carries the flag ADaM expects,
@@ -99,6 +99,31 @@ of its own:
 
 Each enters the vocabulary when an example needs it, under the acceptance rule
 below.
+
+**Gap 16.** Imputation cannot be bounded, stated relatively, or held back.
+`date_impute` takes a literal `month` and a literal `day`, both required, and
+three things a partial date routinely needs have no form:
+
+- *how much may be supplied.* Both fields are required, so a source carrying
+  only a year is always completed. `adam-adae-partial-dates` cannot say
+  "supply a missing day and leave a year-only value missing", which is the
+  usual protocol rule for an event start.
+- *a rule that resolves against the month it lands in.* Placing a partial date
+  on the last day of its month is `day: 31` against a February source, which
+  `negative-date-impute-nonexistent-day` rejects as the calendar-range error it
+  is. End-of-month imputation is therefore one row template per month rather
+  than one statement.
+- *a bound.* Nothing keeps an imputed event start from preceding the treatment
+  start it will be classified against. The bound has to apply only within the
+  range the missing components could take, so collected information is never
+  overwritten, which is what makes it a rule rather than a comparison a
+  specification could write itself.
+
+**Action.** All three still return a `date` from a `date`, so each widens
+`date_impute` rather than adding an entry, as `date_diff.bounds` did. The
+calendar-range and ceiling counter-examples exist or are one edit away, so this
+is the smallest piece of open work here and does not wait on the precision
+decision above.
 
 ### T3. Output and pipeline contract (gaps 5–6, 13–14)
 
@@ -257,9 +282,9 @@ reductions need.
 2. **T1** last, because its answer probably lies inside T5 rather than in a
    widened field.
 
-Expected catalogue edits: T2 retires gaps 3 and 4, T3 retires gaps 5, 6, 13,
-and 14, T4 retires gap 10, and T5 retires gaps 2, 7, 8, 9, 11, 12, and 15 along
-with whatever remains of gap 1.
+Expected catalogue edits: T2 retires gaps 3, 4, and 16, T3 retires gaps 5, 6,
+13, and 14, T4 retires gap 10, and T5 retires gaps 2, 7, 8, 9, 11, 12, and 15
+along with whatever remains of gap 1.
 
 ## Untested rule text
 
