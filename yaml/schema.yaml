@@ -13,7 +13,10 @@ root_class:
         type: str
         required: true
         description: Schema bundle this specification is written against; R006 requires an exact match.
-    - domain: {type: domain_name, required: true}
+    - domain:
+        type: domain_name
+        required: true
+        description: Name of the output dataset this specification derives.
     - datasets:
         type: "dict[dataset_id, dataset_source]"
         required: true
@@ -93,8 +96,14 @@ record_lookup_class:
         description: Result when a declared source value is missing; defaults to fail.
 
 column_class:
-    - name: {type: column_name, required: true}
-    - type: {type: column_type, required: true}
+    - name:
+        type: column_name
+        required: true
+        description: Column name this specification declares.
+    - type:
+        type: column_type
+        required: true
+        description: Declared data type this column must carry in the completed dataset.
     - output:
         type: bool
         required: false
@@ -118,7 +127,10 @@ column_class:
         description: Free-form annotations carried with the column; nothing validates their content.
 
 row_class:
-    - id: {type: row_id, required: true}
+    - id:
+        type: row_id
+        required: true
+        description: Identifier of this row template, unique within rows.
     - dataset:
         type: dataset_id
         required: false
