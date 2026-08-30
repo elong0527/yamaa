@@ -10,7 +10,7 @@ Only open work appears here. A change that lands is deleted rather than marked,
 so the git history of this file and of [`../rules/`](../rules/) is the record
 of what closed and how.
 
-The suite currently holds 94 examples: 51 successful golden outputs and 43
+The suite currently holds 95 examples: 51 successful golden outputs and 44
 expected failures. Three failure examples also commit the completed dataset
 beside the structured error.
 
@@ -115,20 +115,22 @@ the schema change.
 
 ### T4. Governed metadata (gap 10)
 
-**Gap.** Metadata is an ungoverned string map. Labels are first class, but
-origin, length, and controlled terminology are free-form text that no
-implementation can validate, and no expected metadata artifact exists to assert
-them.
+**Gap.** Metadata is an ungoverned string map. Labels are first class and a
+value's length is now enforceable, but origin, the declared lengths, and
+controlled terminology are free-form text that no implementation can validate,
+and no expected metadata artifact exists to assert them.
 
 **Evidence.** `sdtm-dm-metadata-contract` declares origin, length, and
 codelist as free-form strings, marks `USUBJID` as `Derived` by hand although
 `str_concat` already encodes that, and declares a codelist name next to an
-unrelated `allowed_values` list.
+unrelated `allowed_values` list. Its `USUBJID` now carries both a declared
+length and a `max_length` check, and nothing requires the two to agree.
 
 **Action.** Needs a vocabulary, a link between a declared codelist and its
-enforced values, a length concept connected to the declared type, and an
-expected metadata artifact. Until that artifact is defined, examples must not
-invent its shape.
+enforced values, a link between a declared length and the `max_length` that
+enforces it, and an expected metadata artifact. `max_length` supplies the
+enforced half; what remains is binding the declared half to it. Until that
+artifact is defined, examples must not invent its shape.
 
 ### T5. Declarable study structure (gaps 2, 7–9, 11–12)
 
@@ -178,20 +180,24 @@ summarized. The deferred `negative-adrs-response-before-progression` case
 therefore cannot limit response assessments to those on or before that
 subject's first progression.
 
-**Gap 12.** Reducing a reduction has no intermediate grain to name. R013
-closes the reducer vocabulary but forbids nesting, so a quantity defined as
-one reduction over the results of another cannot be stated.
-`adam-adtr-sum-of-target-diameters` lands the first level, summing the target
-lesion diameters at each assessment. The second — the lowest of a subject's
-earlier sums, which is the RECIST nadir every percentage change is measured
-from — needs both a name for the per-assessment grain and, because *earlier*
-is relative to the row being derived, gap 11.
+**Gap 12.** A reduction cannot consume another reduction. R013 closes nesting
+rather than leaving it implementation-defined, so grouping `EX` by subject and
+cycle, totalling each, and then taking the largest across cycles needs an
+intermediate grain no expression can name. `adam-adtr-sum-of-target-diameters`
+is where the suite stops at that first level: it sums the target lesion
+diameters at each assessment and flags the assessments that measured every
+target lesion. The lowest of a subject's earlier flagged sums — the nadir
+RECIST measures progression against — needs the per-assessment grain named,
+and gap 11 besides, because *earlier* is relative to the row being derived. A
+design that gives a reduction a grain of its own would retire this with gap
+11.
 
 **Action.** The largest open area. Write a design document before the schema
 change, and expect it to retire several gaps at once, as `compute` and
-`record_lookups` did. The interval join (gap 2) and row-relative matching (gap
-11) are the comparison frames that analysis windows, `EPOCH` assignment, and
-subject-specific cutoffs need.
+`record_lookups` did. The interval join (gap 2), row-relative matching (gap
+11), and a nameable intermediate grain (gap 12) are the comparison frames that
+analysis windows, `EPOCH` assignment, subject-specific cutoffs, and two-level
+reductions need.
 
 ## Sequencing
 
