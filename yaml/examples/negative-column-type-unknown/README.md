@@ -1,12 +1,11 @@
-# ADaM ADAE: reject an event start recorded as a moment in time
+# ADaM ADLB: reject an analysis value with an ambiguous numeric type
 
-This example uses collected adverse events whose starts carry a time of day to
-attempt one record per event:
+This example uses collected laboratory results to attempt one record per
+result:
 
-- `ASTDTM` is meant to be the moment the event started.
+- `AVAL` is the numeric analysis value of the result.
 
-A result holds text, whole numbers, fractional numbers, and calendar dates, and
-a moment in time is none of them. Storing it as one of those without saying so
-would leave two results that disagree about what the value is, so the run must
-fail and no artifact is accepted. Text keeps the collected moment exactly and
-orders chronologically.
+A result distinguishes whole numbers from fractional numbers, but the declared
+type says only that the value is a number. Choosing either representation would
+invent a precision decision the specification did not make, so the run must
+fail and no artifact is accepted.

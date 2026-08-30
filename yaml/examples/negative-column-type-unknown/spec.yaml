@@ -1,27 +1,27 @@
 schema_version: "1.0"
-domain: ADAE
+domain: ADLB
 datasets:
-  AE: input/ae.csv
-base: AE
-keys: [STUDYID, USUBJID, AESEQ]
+  LB: {path: input/lb.csv, types: {LBSEQ: int, LBSTRESN: float}}
+base: LB
+keys: [STUDYID, USUBJID, LBSEQ]
 
 columns:
   - name: STUDYID
     type: str
     derivation:
-      source: AE.STUDYID
+      source: LB.STUDYID
 
   - name: USUBJID
     type: str
     derivation:
-      source: AE.USUBJID
+      source: LB.USUBJID
 
-  - name: AESEQ
+  - name: LBSEQ
     type: int
     derivation:
-      source: AE.AESEQ
+      source: LB.LBSEQ
 
-  - name: ASTDTM
-    type: datetime
+  - name: AVAL
+    type: number
     derivation:
-      source: AE.AESTDTC
+      source: LB.LBSTRESN

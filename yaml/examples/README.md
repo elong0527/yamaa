@@ -70,7 +70,7 @@ CSV records the intended artifact once that capability exists.
 | [`negative-adrs-partial-response-after-complete-response`](negative-adrs-partial-response-after-complete-response/) | reject a partial response recorded after a complete response |
 | [`negative-adrs-response-before-progression`](negative-adrs-response-before-progression/) | reject a best response restricted to pre-progression assessments |
 | [`negative-adsl-subject-reference`](negative-adsl-subject-reference/) | reject a malformed subject reference |
-| [`negative-column-type-unknown`](negative-column-type-unknown/) | reject an event start recorded as a moment in time |
+| [`negative-column-type-unknown`](negative-column-type-unknown/) | reject an analysis value with an ambiguous numeric type |
 | [`negative-compute-aggregate-function`](negative-compute-aggregate-function/) | reject a total written as a formula |
 | [`negative-compute-comparison-operator`](negative-compute-comparison-operator/) | reject an above-range flag written as a formula |
 | [`negative-compute-division-by-zero`](negative-compute-division-by-zero/) | reject a percent change from a zero baseline |
