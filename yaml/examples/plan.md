@@ -10,13 +10,14 @@ Only open work appears here. A change that lands is deleted rather than marked,
 so the git history of this file and of [`../rules/`](../rules/) is the record
 of what closed and how.
 
-The suite currently holds 95 examples: 51 successful golden outputs and 44
-expected failures. Three failure examples also commit the completed dataset
-beside the structured error.
+The suite currently holds 103 examples: 54 successful golden outputs and 49
+expected failures. Six failure examples also commit a CSV beside the structured
+error: four record the dataset presented to the failing check, and two record
+the artifact the missing capability would produce.
 
 ## Open work
 
-Twelve design gaps remain, grouped under five work items. Each item states the
+Fifteen design gaps remain, grouped under five work items. Each item states the
 gap, the evidence from the suite, and what a solution requires.
 
 ### T1. Literal operands (gap 1)
@@ -42,9 +43,22 @@ restricted (`sql` compares columns freely). A `cut_from` reading bands from a
 keyed dataset was drafted and rejected: it moved the medical rule out of the
 specification and into a reference table.
 
+**Also settled.** The obvious benchmark answer is unavailable here.
+`pharmaverse/admiral` grades laboratory results from a criteria dataset whose
+columns hold executable R, and varies a derivation's arguments by a filter the
+same way. Both put host-language code, or a choice of expression, into data,
+which is what `cut_from` was rejected for and what the version 1.0 boundary
+confines to `function`. What the benchmark does show is that the varying part
+is a criterion set keyed by a group rather than an operand in a formula, and
+that the published form of `sdtm-lb-ctcae-grading` runs to hundreds of rows and
+is unwritable by repetition.
+
 **Action.** No action until a second use shows that the repeated bands justify
 a portable construct rather than a study-specific function. The answer may lie
-inside T5 rather than in a widened field.
+inside T5 rather than in a widened field. Anything that does land is a keyed
+table of declared bands, with the comparison still in the specification, and
+never a predicate carried as data, so the open question is whether a portable
+form exists at all rather than whether to adopt the benchmark's.
 
 ### T2. Dates and times (gaps 3–4)
 
@@ -86,7 +100,7 @@ of its own:
 Each enters the vocabulary when an example needs it, under the acceptance rule
 below.
 
-### T3. Output and pipeline contract (gaps 5–6)
+### T3. Output and pipeline contract (gaps 5–6, 13–14)
 
 **Gap 5.** One specification derives one dataset. `sdtm-suppmh-qualifiers`
 cannot assign a parent sequence and consume it in the same run, and
@@ -105,9 +119,32 @@ ordered series reaches one neighbour and no further:
 response directly after a complete one, and the same fault with an intervening
 assessment passes.
 
+**Gap 13.** A run cannot read the dataset it is producing. A parameter derived
+from the analysis values of other parameters — a ratio between two
+transaminases, a mean arterial pressure from two blood pressures — reads
+records the same run is building, and nothing addresses one by key. The output
+`domain` cannot be a dataset identifier, so a keyed lookup cannot name it, and
+reducing the constructed rows instead reaches the very value being defined,
+which R001 reports as a cycle.
+`negative-source-output-self-reference` shows the naming prohibition and
+`negative-adlb-computed-parameter` shows the cycle; both commit the artifact
+the capability would produce.
+
+**Gap 14.** Reshaping runs one way only. `rows` builds records out of one
+record's fields, and nothing goes the other way, so a keyed set of records
+cannot become fields of one row. `sdtm-suppmh-qualifiers` and
+`sdtm-suppmh-parent-linkage` produce supplemental qualifiers and no example
+consumes them, which is half of a submission-standard round trip.
+`adam-adqs-subscale-score` scores a questionnaire held as one record per item;
+the same instrument held as one field per item cannot be scored at all, because
+nothing counts the answered ones across a row.
+
 **Action.** Needs a manifest, cross-specification dependency inference, cycle
-reporting, and an output sort-order declaration. Write a design document before
-the schema change.
+reporting, and an output sort-order declaration. It must also say what a run
+may read of itself (gap 13) and whether a keyed set of records can become
+fields (gap 14); a transpose is the first workaround a reviewer proposes for
+gap 13, so the two are decided together. Write a design document before the
+schema change.
 
 ### T4. Governed metadata (gap 10)
 
@@ -128,7 +165,7 @@ enforces it, and an expected metadata artifact. `max_length` supplies the
 enforced half; what remains is binding the declared half to it. Until that
 artifact is defined, examples must not invent its shape.
 
-### T5. Declarable study structure (gaps 2, 7–9, 11–12)
+### T5. Declarable study structure (gaps 2, 7–9, 11–12, 15)
 
 **Gap 2.** There is no interval join, so a record cannot be matched against a
 table of per-subject intervals of irregular count and length. Regular structure
@@ -136,7 +173,10 @@ is not blocked: repeating intervals are arithmetic (e.g.
 `FLOOR((ADY - 1) / 21) + 1` for a treatment cycle), and a three-epoch design
 is a `case` chain over subject-level dates. The gap is the irregular table.
 `sdtm-vs-visit-study-day` leaves `EPOCH` empty for an unscheduled visit for
-this reason.
+this reason, and `negative-advs-analysis-window-table` shows the study-level
+face of the same match: a table of analysis windows is one table for every
+subject and is still unreachable, because the bound compared against is a
+value of the record being classified.
 
 **Gap 7.** Conditional applicability, treatment period, relationship degree,
 and analysis window are all real structure in a protocol and none is a concept
@@ -147,6 +187,16 @@ describing the design. `sdtm-lb-conditional-compartments`,
 different face of this. Naming carries the structure instead: nothing links
 `adam-adsl-crossover-periods`'s `TRT02A` to its `TR02SDT` and `TR02EDT` except
 the `02`, so no implementation can check the grouping.
+
+The numbered families CDISC uses for the same purpose are the other half of
+this. `adam-adae-query-flags` declares one set of variables per query the study
+reports, and how many sets a study needs is a property of its query dictionary
+rather than of the specification; `negative-query-slot-overflow` shows what
+happens when the dictionary outgrows what the specification declared. R005 now
+states that the artifact's column list is declared, so a family's members are
+declared columns like any other and their count is fixed when the specification
+is written. Whether that stays true, or a declared family takes its members
+from data, is the fork this gap has to answer.
 
 **Gap 8.** Row construction cannot consume values resolved during column
 derivation. A logically removed record cannot be dropped, because `row.filter`
@@ -169,13 +219,29 @@ the current output row. Its filter sees only right-side records, so a
 subject-specific cutoff derived on the left cannot restrict the records being
 summarized. The deferred `negative-adrs-response-before-progression` case
 therefore cannot limit response assessments to those on or before that
-subject's first progression.
+subject's first progression. `negative-advs-analysis-window-table` is the
+committed case: a record's analysis window is the one whose day range contains
+that record's study day, and the day is a value of the left row, so the study's
+window table cannot be matched at all. Writing the boundaries as a literal
+list, as `adam-advs-analysis-visit` does, is what works today, and it puts the
+protocol's window table in the specification, where no implementation can check
+it against the study's own metadata.
 
 **Gap 12.** A reduction cannot consume another reduction. R013 closes nesting
 rather than leaving it implementation-defined, so grouping `EX` by subject and
 cycle, totalling each, and then taking the largest across cycles needs an
 intermediate grain no expression can name. A design that gives a reduction a
 grain of its own would retire this with gap 11.
+
+**Gap 15.** Row construction is append-only and its count is fixed by its
+driver. A `rows` entry appends one row per driver record, so a record standing
+for a data-dependent number of administrations cannot be expanded into them:
+`negative-adex-single-dose-expansion` writes one row template per
+administration and loses every administration past the last template it
+declares, which is what its committed error reports. The opposite motion is the
+same decision — adding a row only where an expected combination has none,
+which is what carrying a value forward to an unattended visit needs — and gap
+8 is its third face, so one design document answers all three.
 
 **Action.** The largest open area. Write a design document before the schema
 change, and expect it to retire several gaps at once, as `compute` and
@@ -191,9 +257,9 @@ reductions need.
 2. **T1** last, because its answer probably lies inside T5 rather than in a
    widened field.
 
-Expected catalogue edits: T2 retires gaps 3 and 4, T3 retires gaps 5 and 6,
-T4 retires gap 10, and T5 retires gaps 2, 7, 8, 9, 11, and 12 along with whatever
-remains of gap 1.
+Expected catalogue edits: T2 retires gaps 3 and 4, T3 retires gaps 5, 6, 13,
+and 14, T4 retires gap 10, and T5 retires gaps 2, 7, 8, 9, 11, 12, and 15 along
+with whatever remains of gap 1.
 
 ## Untested rule text
 
@@ -218,10 +284,11 @@ The live examples and open-gap catalogue retain every actionable finding
 from the
 [RConsortium pilot 7 synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
 survey, and fields that the source declares but never varies are not used as
-evidence for a rule. Two of its ideas remain undemonstrated: the irregular
-`EPOCH` interval join, which is gap 2, and a questionnaire scale score, which
-is a row-wise reduction over columns rather than over a partition and has no
-item-level input in the pilot source to demonstrate.
+evidence for a rule. One of its ideas remains undemonstrated: the irregular
+`EPOCH` interval join, which is gap 2. The questionnaire scale score is now
+shown by `adam-adqs-subscale-score`, which supplies the item-level input the
+pilot source lacks; scoring the same instrument from one field per item rather
+than one record per item stays with gap 14.
 
 ## Acceptance rule for adding a schema feature
 
