@@ -1,0 +1,7 @@
+phase: validation
+condition: qualified_identifier
+spec_paths:
+  - columns.DOSEDBL.derivation.compute.expr
+context:
+  expr: "EX.EXDOSE * 2"
+  identifier: EX.EXDOSE

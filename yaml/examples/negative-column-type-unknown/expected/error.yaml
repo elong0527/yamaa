@@ -1,0 +1,7 @@
+phase: validation
+condition: value_not_permitted
+spec_paths:
+  - columns.AVAL.type
+context:
+  value: number
+  permitted: [str, int, float, date]

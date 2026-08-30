@@ -1,0 +1,27 @@
+schema_version: "1.0"
+domain: ADVS
+datasets:
+  VS: {path: input/vs.csv, types: {VSSTRESN: float}}
+base: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: VS.USUBJID
+
+  - name: VSSEQ
+    type: int
+    derivation:
+      source: VS.VSSEQ
+
+  - name: AVAL
+    type: int
+    derivation:
+      source: VS.VSSTRESN

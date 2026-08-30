@@ -12,3 +12,29 @@ its value from a record that was itself filled in, and `AVALF` is stated in
 terms of its own earlier value. Filling one gap and stopping, or resolving the
 rule in an order nothing states, would each give a different answer from the
 same data, so the run must fail and no artifact is accepted.
+
+## How to fix
+
+For a one-record fallback, read the prior collected value rather than the prior
+filled value, then coalesce the two named columns:
+
+```yaml
+- name: PRIOR
+  type: float
+  output: false
+  derivation:
+    row_value:
+      source: AVAL
+      offset: -1
+      group_by: [STUDYID, USUBJID, PARAMCD]
+      order_by: [ADT, VSSEQ]
+- name: AVALF
+  type: float
+  derivation:
+    coalesce:
+      sources: [AVAL, PRIOR]
+```
+
+That deliberately does not cross two consecutive gaps. A true last-observation
+carry-forward needs a separately defined project function or an upstream step;
+it must not be expressed as a dependency cycle.

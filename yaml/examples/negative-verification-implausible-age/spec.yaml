@@ -1,0 +1,26 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: DM.USUBJID
+
+  - name: AGE
+    type: int
+    derivation:
+      source: DM.AGE
+    verifications:
+      - range:
+          min: 18
+          max: 100

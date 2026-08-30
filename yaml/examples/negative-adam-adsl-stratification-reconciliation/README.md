@@ -14,3 +14,10 @@ The two combined values must agree. A disagreement is reported against the
 subject rather than resolved in favour of either source. The expected CSV
 records the completed rows presented to that check, but the disagreement still
 rejects the run and no artifact is accepted from this input.
+
+## How to fix
+
+Query the disagreement and correct whichever source is wrong. If both values
+are valid but serve different purposes, document which one governs the analysis
+and replace the equality check with that reconciliation policy. Do not silently
+prefer the randomization value or the independently collected value.

@@ -1,0 +1,7 @@
+phase: validation
+condition: ambiguous_dictionary
+spec_paths:
+  - columns.SMOKEFL.derivation.mapping.dict
+context:
+  folded_key: "Y"
+  entries: ["Y", "y"]

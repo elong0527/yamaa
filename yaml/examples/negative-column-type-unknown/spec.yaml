@@ -1,0 +1,27 @@
+schema_version: "1.0"
+domain: ADLB
+datasets:
+  LB: {path: input/lb.csv, types: {LBSEQ: int, LBSTRESN: float}}
+base: LB
+keys: [STUDYID, USUBJID, LBSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: LB.USUBJID
+
+  - name: LBSEQ
+    type: int
+    derivation:
+      source: LB.LBSEQ
+
+  - name: AVAL
+    type: number
+    derivation:
+      source: LB.LBSTRESN
