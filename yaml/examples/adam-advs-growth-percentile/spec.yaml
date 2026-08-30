@@ -63,26 +63,12 @@ columns:
             then:
               literal: Weight-for-Age Percentile
 
-  - name: AVAL
+  - name: AVALSRC
     type: float
-    label: Analysis Value
-    derivation:
-      case:
-        branches:
-          - when: "ZNUM IS NOT NULL"
-            then:
-              function:
-                name: growth_percentile
-                args:
-                  z: ZNUM
-
-  - name: ZNUM
-    type: float
-    label: Growth Z-Score
+    label: Source Analysis Value
     output: false
     derivation:
-      compute:
-        expr: "(POWER(AVALSRC / LMS_M, LMS_L) - 1) / (LMS_L * LMS_S)"
+      source: ADVSPRE.AVAL
 
   - name: LMS_M
     type: float
@@ -105,12 +91,26 @@ columns:
     derivation:
       source: GROWTH.S
 
-  - name: AVALSRC
+  - name: ZNUM
     type: float
-    label: Source Analysis Value
+    label: Growth Z-Score
     output: false
     derivation:
-      source: ADVSPRE.AVAL
+      compute:
+        expr: "(POWER(AVALSRC / LMS_M, LMS_L) - 1) / (LMS_L * LMS_S)"
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      case:
+        branches:
+          - when: "ZNUM IS NOT NULL"
+            then:
+              function:
+                name: growth_percentile
+                args:
+                  z: ZNUM
 
 verifications:
   - unique:
