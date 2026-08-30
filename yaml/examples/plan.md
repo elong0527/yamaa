@@ -10,10 +10,9 @@ Only open work appears here. A change that lands is deleted rather than marked,
 so the git history of this file and of [`../rules/`](../rules/) is the record
 of what closed and how.
 
-The suite currently holds 58 examples: 50 successful golden outputs and eight
-expected failures. Three failure examples also commit a CSV beside the
-structured error: two record the completed dataset presented to a failing
-check, and one records the artifact a blocked derivation would produce.
+The suite currently holds 93 examples: 50 successful golden outputs and 43
+expected failures. Four failure examples also commit the completed dataset
+beside the structured error.
 
 ## Open work
 
@@ -165,13 +164,12 @@ remains of gap 1.
 
 ## Untested rule text
 
-The expanded fail-closed contract audit remains future work. Its 35 negative
-examples are maintained separately until they can be reviewed and introduced
-in bounded groups. R014 also rejects a `types` entry for a field whose container
-already supplies a type, and every source in this suite is a delimited file that
-supplies none. That claim stays rule text until the suite reads a container
-carrying its own types, which is also what would let a dataset state its types
-once for every specification that reads it.
+Every fail-closed contract targeted by the completed negative-example audit is
+now provoked by an example, with one exception: R014 rejects a `types` entry
+for a field whose container already supplies a type, and every source in this
+suite is a delimited file that supplies none. That claim stays rule text until
+the suite reads a container carrying its own types, which is also what would
+let a dataset state its types once for every specification that reads it.
 
 ## Pilot 7 coverage
 

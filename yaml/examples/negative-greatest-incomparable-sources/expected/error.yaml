@@ -1,0 +1,7 @@
+phase: validation
+condition: incomparable_sources
+spec_paths:
+  - columns.LSTALVDT.derivation.greatest
+context:
+  sources: [DTHDT, LSTVSDY]
+  types: [date, int]
