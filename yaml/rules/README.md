@@ -13,7 +13,7 @@ design intent but are not complete enough for portable implementation.
 | R003 | [Cross-dataset left join](R003-cross-dataset-left-join.md) | normative | The implicit join and its right-side reduction | R002, R004, R005, R007, R008, R013 |
 | R004 | [Predicate language](R004-expression-language.md) | draft | The Boolean `sql` primitive | R001, R002, R006 |
 | R005 | [Output contract](R005-output-contract.md) | normative | Column coverage, output membership, the value lifecycle, output identity | R001, R002, R003, R007, R008, R009, R011 |
-| R006 | [Compact schema language](R006-schema-language.md) | normative | Schema notation and structural validation | — |
+| R006 | [Compact schema language](R006-schema-language.md) | normative | Schema notation and structural validation | -- |
 | R007 | [Expression registry](R007-expression-registry.md) | normative | Registration, nesting, evaluation kinds, ordering, input types | R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014, R015, R016 |
 | R008 | [Local error handlers](R008-local-handlers.md) | normative | The handler lifecycle | R001, R002, R003, R005, R006, R007, R011, R012, R016 |
 | R009 | [Verifications](R009-verifications.md) | draft | What each assertion means and when it runs | R004, R005, R006, R011 |

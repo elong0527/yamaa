@@ -64,9 +64,9 @@ Their fields and ranges are exactly:
 | year | `0001` to `9999` | yes | yes |
 | month | `01` to `12` | yes | yes |
 | day | `01` to the length of that month in that year | yes | yes |
-| hour | `00` to `23` | — | yes |
-| minute | `00` to `59` | — | yes |
-| second | `00` to `59` | — | yes |
+| hour | `00` to `23` | -- | yes |
+| minute | `00` to `59` | -- | yes |
+| second | `00` to `59` | -- | yes |
 
 Like every column type, both additionally admit the missing value.
 
@@ -282,8 +282,8 @@ date is a different defect from an uncollected value, and a specification may
 answer them differently.
 
 Neither operation answers about a `datetime`. A truncated moment has no
-agreed completion — an unknown time of day is not the same claim as an unknown
-day — so the collected text stays `str`.
+agreed completion -- an unknown time of day is not the same claim as an unknown
+day -- so the collected text stays `str`.
 
 ## Operations
 

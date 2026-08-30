@@ -60,7 +60,7 @@ table of declared bands, with the comparison still in the specification, and
 never a predicate carried as data, so the open question is whether a portable
 form exists at all rather than whether to adopt the benchmark's.
 
-### T2. Dates and times (gaps 3–4, 17)
+### T2. Dates and times (gaps 3-4, 17)
 
 **Gap 3.** A `date` value carries no precision. `date_precision` now reports
 what was supplied, and `adam-adae-partial-dates` carries the flag ADaM expects,
@@ -78,8 +78,8 @@ silently decides classifications such as treatment emergence.
   from, but nothing prevents the flag and the date from drifting apart.
 - `adam-adrs-overall-response-records` completes an assessment date collected
   without a day and carries no flag at all, so the completed `ADT` is a date
-  like any other. Every later comparison — study day, an eligibility window,
-  which assessment came first — treats a chosen day as a collected one.
+  like any other. Every later comparison -- study day, an eligibility window,
+  which assessment came first -- treats a chosen day as a collected one.
 
 **Action.** A precision attached to the value would close both gaps. This is a
 change to the type vocabulary rather than a registry entry. If a precision
@@ -129,7 +129,7 @@ calendar-range and ceiling counter-examples exist or are one edit away, so this
 is the smallest piece of open work here and does not wait on the precision
 decision above.
 
-### T3. Output and pipeline contract (gaps 5–6, 14–15)
+### T3. Output and pipeline contract (gaps 5-6, 14-15)
 
 **Gap 5.** One specification derives one dataset. `sdtm-suppmh-qualifiers`
 cannot assign a parent sequence and consume it in the same run, and
@@ -149,8 +149,8 @@ response directly after a complete one, and the same fault with an intervening
 assessment passes.
 
 **Gap 14.** A run cannot read the dataset it is producing. A parameter derived
-from the analysis values of other parameters — a ratio between two
-transaminases, a mean arterial pressure from two blood pressures — reads
+from the analysis values of other parameters -- a ratio between two
+transaminases, a mean arterial pressure from two blood pressures -- reads
 records the same run is building, and nothing addresses one by key. The output
 `domain` cannot be a dataset identifier, so a keyed lookup cannot name it, and
 reducing the constructed rows instead reaches the very value being defined,
@@ -194,15 +194,15 @@ example declares a core designation or a display format, and the superseded
 `R/cdiscbuilder/inst/specs/adam/schema.yaml` governed `core` with a closed
 value list, so this vocabulary is narrower than the one it replaced.
 
-**Action.** Needs a vocabulary naming the attributes it governs — at least
+**Action.** Needs a vocabulary naming the attributes it governs -- at least
 origin, length, codelist, display format, core, and the dataset's own
-description — a link between a declared codelist and its enforced values, a
+description -- a link between a declared codelist and its enforced values, a
 link between a declared length and the `max_length` that enforces it, and an
 expected metadata artifact. `max_length` supplies the enforced half; what
 remains is binding the declared half to it. Until that artifact is defined,
 examples must not invent its shape.
 
-### T5. Declarable study structure (gaps 2, 7–9, 11–12, 16)
+### T5. Declarable study structure (gaps 2, 7-9, 11-12, 16)
 
 **Gap 2.** There is no interval join, so a record cannot be matched against a
 table of per-subject intervals of irregular count and length. Regular structure
@@ -275,8 +275,8 @@ cycle, totalling each, and then taking the largest across cycles needs an
 intermediate grain no expression can name. `adam-adtr-sum-of-target-diameters`
 is where the suite stops at that first level: it sums the target lesion
 diameters at each assessment and flags the assessments that measured every
-target lesion. The lowest of a subject's earlier flagged sums — the nadir
-RECIST measures progression against — needs the per-assessment grain named,
+target lesion. The lowest of a subject's earlier flagged sums -- the nadir
+RECIST measures progression against -- needs the per-assessment grain named,
 and gap 11 besides, because *earlier* is relative to the row being derived. A
 design that gives a reduction a grain of its own would retire this with gap
 11.
@@ -287,8 +287,8 @@ for a data-dependent number of administrations cannot be expanded into them:
 `negative-adex-single-dose-expansion` writes one row template per
 administration and loses every administration past the last template it
 declares, which is what its committed error reports. The opposite motion is the
-same decision — adding a row only where an expected combination has none,
-which is what carrying a value forward to an unattended visit needs — and gap
+same decision -- adding a row only where an expected combination has none,
+which is what carrying a value forward to an unattended visit needs -- and gap
 8 is its third face, so one design document answers all three.
 
 **Action.** The largest open area. Write a design document before the schema
