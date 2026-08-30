@@ -63,54 +63,21 @@ columns:
             then:
               literal: Weight-for-Age Percentile
 
-  - name: AVALSRC
-    type: float
-    label: Source Analysis Value
-    output: false
-    derivation:
-      source: ADVSPRE.AVAL
-
-  - name: LMS_M
-    type: float
-    label: Growth Reference Median
-    output: false
-    derivation:
-      source: GROWTH.M
-
-  - name: LMS_L
-    type: float
-    label: Growth Reference Skewness
-    output: false
-    derivation:
-      source: GROWTH.L
-
-  - name: LMS_S
-    type: float
-    label: Growth Reference Coefficient of Variation
-    output: false
-    derivation:
-      source: GROWTH.S
-
-  - name: ZNUM
-    type: float
-    label: Growth Z-Score
-    output: false
-    derivation:
-      compute:
-        expr: "(POWER(AVALSRC / LMS_M, LMS_L) - 1) / (LMS_L * LMS_S)"
-
   - name: AVAL
     type: float
     label: Analysis Value
     derivation:
       case:
         branches:
-          - when: "ZNUM IS NOT NULL"
+          - when: "ADVSPRE.AVAL IS NOT NULL AND GROWTH.L IS NOT NULL AND GROWTH.M IS NOT NULL AND GROWTH.S IS NOT NULL"
             then:
               function:
                 name: growth_percentile
                 args:
-                  z: ZNUM
+                  value: ADVSPRE.AVAL
+                  l: GROWTH.L
+                  m: GROWTH.M
+                  s: GROWTH.S
 
 verifications:
   - unique:
@@ -121,4 +88,4 @@ verifications:
   - implies:
       id: percentile-requires-a-growth-reference
       when: "AVAL IS NOT NULL"
-      then: "LMS_M IS NOT NULL"
+      then: "GROWTH.L IS NOT NULL AND GROWTH.M IS NOT NULL AND GROWTH.S IS NOT NULL"
