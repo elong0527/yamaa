@@ -11,7 +11,7 @@ keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
 record_lookups:
   - id: GROWTH
     dataset: LMS
-    source: [SRCPARAM, SEX, AGE]
+    source: [ADVSPRE.PARAMCD, ADVSPRE.SEX, ADVSPRE.AGE]
     key: [PARAMCD, SEX, AGE]
     unmatched: missing
 
@@ -111,27 +111,6 @@ columns:
     output: false
     derivation:
       source: ADVSPRE.AVAL
-
-  - name: SRCPARAM
-    type: str
-    label: Source Parameter Code
-    output: false
-    derivation:
-      source: ADVSPRE.PARAMCD
-
-  - name: SEX
-    type: str
-    label: Sex
-    output: false
-    derivation:
-      source: ADVSPRE.SEX
-
-  - name: AGE
-    type: int
-    label: Age in Days
-    output: false
-    derivation:
-      source: ADVSPRE.AGE
 
 verifications:
   - unique:
