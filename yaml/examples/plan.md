@@ -10,15 +10,15 @@ Only open work appears here. A change that lands is deleted rather than marked,
 so the git history of this file and of [`../rules/`](../rules/) is the record
 of what closed and how.
 
-The suite currently holds 103 examples: 54 successful golden outputs and 49
-expected failures. Six failure examples also commit a CSV beside the structured
-error: four record the dataset presented to the failing check, and two record
-the artifact the missing capability would produce.
+The suite currently holds 105 examples: 54 successful golden outputs and 51
+expected failures. Seven failure examples also commit a CSV beside the
+structured error: five record the dataset presented to the failing check, and
+two record the artifact the missing capability would produce.
 
 ## Open work
 
-Sixteen design gaps remain, grouped under five work items. Each item states the
-gap, the evidence from the suite, and what a solution requires.
+Seventeen design gaps remain, grouped under six work items. Each item states
+the gap, the evidence from the suite, and what a solution requires.
 
 ### T1. Literal operands (gap 1)
 
@@ -60,7 +60,7 @@ table of declared bands, with the comparison still in the specification, and
 never a predicate carried as data, so the open question is whether a portable
 form exists at all rather than whether to adopt the benchmark's.
 
-### T2. Dates and times (gaps 3–4, 16)
+### T2. Dates and times (gaps 3–4, 17)
 
 **Gap 3.** A `date` value carries no precision. `date_precision` now reports
 what was supplied, and `adam-adae-partial-dates` carries the flag ADaM expects,
@@ -76,6 +76,10 @@ silently decides classifications such as treatment emergence.
 
 - `adam-adae-partial-dates` derives `ASTDTF` from the same source it imputes
   from, but nothing prevents the flag and the date from drifting apart.
+- `adam-adrs-overall-response-records` completes an assessment date collected
+  without a day and carries no flag at all, so the completed `ADT` is a date
+  like any other. Every later comparison — study day, an eligibility window,
+  which assessment came first — treats a chosen day as a collected one.
 
 **Action.** A precision attached to the value would close both gaps. This is a
 change to the type vocabulary rather than a registry entry. If a precision
@@ -100,7 +104,7 @@ of its own:
 Each enters the vocabulary when an example needs it, under the acceptance rule
 below.
 
-**Gap 16.** Imputation cannot be bounded, stated relatively, or held back.
+**Gap 17.** Imputation cannot be bounded, stated relatively, or held back.
 `date_impute` takes a literal `month` and a literal `day`, both required, and
 three things a partial date routinely needs have no form:
 
@@ -125,7 +129,7 @@ calendar-range and ceiling counter-examples exist or are one edit away, so this
 is the smallest piece of open work here and does not wait on the precision
 decision above.
 
-### T3. Output and pipeline contract (gaps 5–6, 13–14)
+### T3. Output and pipeline contract (gaps 5–6, 14–15)
 
 **Gap 5.** One specification derives one dataset. `sdtm-suppmh-qualifiers`
 cannot assign a parent sequence and consume it in the same run, and
@@ -144,7 +148,7 @@ ordered series reaches one neighbour and no further:
 response directly after a complete one, and the same fault with an intervening
 assessment passes.
 
-**Gap 13.** A run cannot read the dataset it is producing. A parameter derived
+**Gap 14.** A run cannot read the dataset it is producing. A parameter derived
 from the analysis values of other parameters — a ratio between two
 transaminases, a mean arterial pressure from two blood pressures — reads
 records the same run is building, and nothing addresses one by key. The output
@@ -155,7 +159,7 @@ which R001 reports as a cycle.
 `negative-adlb-computed-parameter` shows the cycle; both commit the artifact
 the capability would produce.
 
-**Gap 14.** Reshaping runs one way only. `rows` builds records out of one
+**Gap 15.** Reshaping runs one way only. `rows` builds records out of one
 record's fields, and nothing goes the other way, so a keyed set of records
 cannot become fields of one row. `sdtm-suppmh-qualifiers` and
 `sdtm-suppmh-parent-linkage` produce supplemental qualifiers and no example
@@ -166,9 +170,9 @@ nothing counts the answered ones across a row.
 
 **Action.** Needs a manifest, cross-specification dependency inference, cycle
 reporting, and an output sort-order declaration. It must also say what a run
-may read of itself (gap 13) and whether a keyed set of records can become
-fields (gap 14); a transpose is the first workaround a reviewer proposes for
-gap 13, so the two are decided together. Write a design document before the
+may read of itself (gap 14) and whether a keyed set of records can become
+fields (gap 15); a transpose is the first workaround a reviewer proposes for
+gap 14, so the two are decided together. Write a design document before the
 schema change.
 
 ### T4. Governed metadata (gap 10)
@@ -176,21 +180,29 @@ schema change.
 **Gap.** Metadata is an ungoverned string map. Labels are first class and a
 value's length is now enforceable, but origin, the declared lengths, and
 controlled terminology are free-form text that no implementation can validate,
-and no expected metadata artifact exists to assert them.
+and no expected metadata artifact exists to assert them. Two further
+attributes cannot be written at all: a variable's core designation and its
+display format have no field and no settled metadata key, and the dataset's
+own description sits in the same ungoverned map as its class and structure.
 
 **Evidence.** `sdtm-dm-metadata-contract` declares origin, length, and
 codelist as free-form strings, marks `USUBJID` as `Derived` by hand although
 `str_concat` already encodes that, and declares a codelist name next to an
 unrelated `allowed_values` list. Its `USUBJID` now carries both a declared
-length and a `max_length` check, and nothing requires the two to agree.
+length and a `max_length` check, and nothing requires the two to agree. No
+example declares a core designation or a display format, and the superseded
+`R/cdiscbuilder/inst/specs/adam/schema.yaml` governed `core` with a closed
+value list, so this vocabulary is narrower than the one it replaced.
 
-**Action.** Needs a vocabulary, a link between a declared codelist and its
-enforced values, a link between a declared length and the `max_length` that
-enforces it, and an expected metadata artifact. `max_length` supplies the
-enforced half; what remains is binding the declared half to it. Until that
-artifact is defined, examples must not invent its shape.
+**Action.** Needs a vocabulary naming the attributes it governs — at least
+origin, length, codelist, display format, core, and the dataset's own
+description — a link between a declared codelist and its enforced values, a
+link between a declared length and the `max_length` that enforces it, and an
+expected metadata artifact. `max_length` supplies the enforced half; what
+remains is binding the declared half to it. Until that artifact is defined,
+examples must not invent its shape.
 
-### T5. Declarable study structure (gaps 2, 7–9, 11–12, 15)
+### T5. Declarable study structure (gaps 2, 7–9, 11–12, 16)
 
 **Gap 2.** There is no interval join, so a record cannot be matched against a
 table of per-subject intervals of irregular count and length. Regular structure
@@ -237,7 +249,12 @@ cannot be compared without reading their branch order.
 `adam-adrs-best-overall-response` shows the cost in a published definition:
 which response wins, and whether an assessment that came too early leaves the
 subject progressive or not evaluable, is carried by the order of the branches
-and by nothing a reader can check.
+and by nothing a reader can check. `adam-adtte-duration-of-response` shows it
+against a submission requirement: selection returns the winning date and not
+the record that supplied it, so `EVNTDESC`, `CNSDTDSC`, and the `SRCDOM`,
+`SRCVAR`, and `SRCSEQ` triplet are each rebuilt by a parallel `case` chain
+over the value that won, and nothing ties the triplet to the date it claims to
+trace.
 
 **Gap 11.** A right-side match or reduction cannot be narrowed by a value from
 the current output row. Its filter sees only right-side records, so a
@@ -255,10 +272,16 @@ it against the study's own metadata.
 **Gap 12.** A reduction cannot consume another reduction. R013 closes nesting
 rather than leaving it implementation-defined, so grouping `EX` by subject and
 cycle, totalling each, and then taking the largest across cycles needs an
-intermediate grain no expression can name. A design that gives a reduction a
-grain of its own would retire this with gap 11.
+intermediate grain no expression can name. `adam-adtr-sum-of-target-diameters`
+is where the suite stops at that first level: it sums the target lesion
+diameters at each assessment and flags the assessments that measured every
+target lesion. The lowest of a subject's earlier flagged sums — the nadir
+RECIST measures progression against — needs the per-assessment grain named,
+and gap 11 besides, because *earlier* is relative to the row being derived. A
+design that gives a reduction a grain of its own would retire this with gap
+11.
 
-**Gap 15.** Row construction is append-only and its count is fixed by its
+**Gap 16.** Row construction is append-only and its count is fixed by its
 driver. A `rows` entry appends one row per driver record, so a record standing
 for a data-dependent number of administrations cannot be expanded into them:
 `negative-adex-single-dose-expansion` writes one row template per
@@ -275,16 +298,40 @@ change, and expect it to retire several gaps at once, as `compute` and
 analysis windows, `EPOCH` assignment, subject-specific cutoffs, and two-level
 reductions need.
 
+### T6. Specification inheritance (gap 13)
+
+**Gap.** `root.parents` names the specifications a specification inherits
+from, and no rule defines what inheriting does. Nothing states which fields
+merge, how a child overrides or removes an inherited column, or what a name
+declared by two parents resolves to, so an implementation reading the field
+would have to invent all of it.
+
+**Evidence.** No rule mentions `parents` and no example declares it; R006
+quotes the field only as an illustration of quoting a bracketed type
+expression. The superseded `R/cdiscbuilder/inst/specs/adam/schema.yaml` carried
+the same field beside a per-column `drop` flag for removing an inherited
+column, so the merge it implies was once partly written down. The design
+picture in the repository README rests on it: organization, compound, and
+study templates reach a study specification by inheritance and by nothing
+else.
+
+**Action.** Either define the merge or remove the field. A validating
+implementation today accepts `parents` and can do nothing with it, so the
+field is structure that R006 validates and no rule interprets. Decide before
+an example declares it.
+
 ## Sequencing
 
-1. **T2, T3, T4, T5** are design documents. Write the document before the
+1. **T6** first, because it decides the fate of a field that already exists
+   rather than adding a capability, and either answer is small.
+2. **T2, T3, T4, T5** are design documents. Write the document before the
    schema change, and expect each to retire several gaps at once.
-2. **T1** last, because its answer probably lies inside T5 rather than in a
+3. **T1** last, because its answer probably lies inside T5 rather than in a
    widened field.
 
-Expected catalogue edits: T2 retires gaps 3, 4, and 16, T3 retires gaps 5, 6,
-13, and 14, T4 retires gap 10, and T5 retires gaps 2, 7, 8, 9, 11, 12, and 15
-along with whatever remains of gap 1.
+Expected catalogue edits: T2 retires gaps 3, 4, and 17, T3 retires gaps 5, 6,
+14, and 15, T4 retires gap 10, T5 retires gaps 2, 7, 8, 9, 11, 12, and 16 along
+with whatever remains of gap 1, and T6 retires gap 13.
 
 ## Untested rule text
 
@@ -313,7 +360,7 @@ evidence for a rule. One of its ideas remains undemonstrated: the irregular
 `EPOCH` interval join, which is gap 2. The questionnaire scale score is now
 shown by `adam-adqs-subscale-score`, which supplies the item-level input the
 pilot source lacks; scoring the same instrument from one field per item rather
-than one record per item stays with gap 14.
+than one record per item stays with gap 15.
 
 ## Acceptance rule for adding a schema feature
 

@@ -1,21 +1,58 @@
 version: "1.0"
 
+# R006 defines this notation: classes, descriptors, type expressions, and
+# registries. Every field description here documents the field and does not
+# validate it.
+
 includes:
     - schema_derivation.yaml
     - schema_verification.yaml
 
 root_class:
-    - schema_version: {type: str, required: true}
-    - domain: {type: domain_name, required: true}
-    - datasets: {type: "dict[dataset_id, dataset_source]", required: true}
-    - base: {type: dataset_id, required: false}
-    - parents: {type: [path, "list[path]"], required: false}
-    - record_lookups: {type: "list[record_lookup_class]", required: false}
-    - keys: {type: "list[column_name]", required: true}
-    - columns: {type: "list[column_class]", required: true}
-    - rows: {type: "list[row_class]", required: false}
-    - verifications: {type: [dataset_verification, "list[dataset_verification]"], required: false}
-    - metadata: {type: "dict[str, str]", required: false}
+    - schema_version:
+        type: str
+        required: true
+        description: Schema bundle this specification is written against; R006 requires an exact match.
+    - domain:
+        type: domain_name
+        required: true
+        description: Name of the output dataset this specification derives.
+    - datasets:
+        type: "dict[dataset_id, dataset_source]"
+        required: true
+        description: Source datasets readable by this specification, each under the name it is read through.
+    - base:
+        type: dataset_id
+        required: false
+        description: Dataset whose records drive row construction; R001 states when it is required.
+    - parents:
+        type: [path, "list[path]"]
+        required: false
+        description: Specifications this one inherits from; no rule defines the inheritance yet.
+    - record_lookups:
+        type: "list[record_lookup_class]"
+        required: false
+        description: Records of other datasets named so that several columns can read them; R015 defines them.
+    - keys:
+        type: "list[column_name]"
+        required: true
+        description: Output columns identifying a row; R005 defines the identity they assert.
+    - columns:
+        type: "list[column_class]"
+        required: true
+        description: Columns this specification declares, in the order R005 gives the artifact.
+    - rows:
+        type: "list[row_class]"
+        required: false
+        description: Templates constructing output rows from driving records; R001 evaluates them.
+    - verifications:
+        type: [dataset_verification, "list[dataset_verification]"]
+        required: false
+        description: Assertions over the completed dataset; R009 defines them.
+    - metadata:
+        type: "dict[str, str]"
+        required: false
+        description: Free-form annotations carried with the specification; nothing validates their content.
 
 record_lookup_class:
     - id:
@@ -59,19 +96,53 @@ record_lookup_class:
         description: Result when a declared source value is missing; defaults to fail.
 
 column_class:
-    - name: {type: column_name, required: true}
-    - type: {type: column_type, required: true}
-    - output: {type: bool, required: false, default: true}
-    - label: {type: str, required: false}
-    - derivation: {type: derivation, required: false}
-    - verifications: {type: [column_verification, "list[column_verification]"], required: false}
-    - metadata: {type: "dict[str, str]", required: false}
+    - name:
+        type: column_name
+        required: true
+        description: Column name this specification declares.
+    - type:
+        type: column_type
+        required: true
+        description: Declared data type this column must carry in the completed dataset.
+    - output:
+        type: bool
+        required: false
+        default: true
+        description: Whether the column reaches the artifact; R005 defines an internal column.
+    - label:
+        type: str
+        required: false
+        description: Descriptive text carried with the column for a reader of the dataset.
+    - derivation:
+        type: derivation
+        required: false
+        description: How the column's value is produced; R005 owns where a column may be derived.
+    - verifications:
+        type: [column_verification, "list[column_verification]"]
+        required: false
+        description: Assertions over this column's completed values; R009 defines them.
+    - metadata:
+        type: "dict[str, str]"
+        required: false
+        description: Free-form annotations carried with the column; nothing validates their content.
 
 row_class:
-    - id: {type: row_id, required: true}
-    - dataset: {type: dataset_id, required: false}
-    - filter: {type: sql, required: false}
-    - derivations: {type: "dict[column_name, derivation]", required: true}
+    - id:
+        type: row_id
+        required: true
+        description: Identifier of this row template, unique within rows.
+    - dataset:
+        type: dataset_id
+        required: false
+        description: Dataset driving this template's records; R001 falls back to base.
+    - filter:
+        type: sql
+        required: false
+        description: Predicate selecting the driving records this template constructs a row from.
+    - derivations:
+        type: "dict[column_name, derivation]"
+        required: true
+        description: Columns this template derives; R005 owns coverage across templates.
 
 column_type:
     type: str
