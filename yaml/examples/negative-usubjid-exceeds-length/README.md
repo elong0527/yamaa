@@ -8,7 +8,7 @@ This example uses collected demographics to attempt one record per subject:
 The study fixes how long a subject identifier may be, because every dataset
 that refers to a subject repeats the same value and a submission states its
 width once. One site's identifier is long enough that the value built for its
-subjects passes that width. Cutting the value to fit would break the link to
+subjects exceeds that width. Cutting the value to fit would break the link to
 every other dataset carrying it, and keeping the longer value would contradict
 the width already stated, so the run must fail and no artifact is accepted.
 

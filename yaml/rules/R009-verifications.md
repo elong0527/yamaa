@@ -47,7 +47,7 @@ reports in addition to the stable specification path.
 - `range` requires every non-missing numeric value to be greater than or equal
   to `min` and less than or equal to `max`, for whichever bounds are supplied.
   At least one bound is required.
-- `max_length` requires every non-missing value to be at most `max` Unicode
+- `max_length` requires every non-missing string to be at most `max` Unicode
   code points long. Missing values pass; combine with `not_missing` when
   absence is invalid. It is declared only on a `str` column: a length counts
   the characters of a stored string, and the text a number or a temporal value
