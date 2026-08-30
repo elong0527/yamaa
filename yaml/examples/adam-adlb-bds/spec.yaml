@@ -25,6 +25,8 @@ columns:
 
   - name: ADT
     type: date
+    derivation:
+      source: LB.LBDTC
 
   - name: TRTSDT
     type: date
@@ -85,8 +87,6 @@ rows:
         literal: ALT
       PARAM:
         literal: Alanine Aminotransferase
-      ADT:
-        source: LB.LBDTC
       AVAL:
         source: LB.LBSTRESN
       AVALU:
@@ -99,8 +99,6 @@ rows:
         literal: ALTSI
       PARAM:
         literal: Alanine Aminotransferase (SI)
-      ADT:
-        source: LB.LBDTC
       AVAL:
         compute:
           expr: "LB.LBSTRESN * 0.0167"
@@ -114,8 +112,6 @@ rows:
         literal: AST
       PARAM:
         literal: Aspartate Aminotransferase
-      ADT:
-        source: LB.LBDTC
       AVAL:
         source: LB.LBSTRESN
       AVALU:
