@@ -1,0 +1,86 @@
+schema_version: "1.0"
+domain: DS
+datasets:
+  DS_RAW: input/ds_raw.csv
+base: DS_RAW
+keys: [STUDYID, USUBJID, DSSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DS_RAW.STUDY
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: DS
+    verifications:
+      allowed_values:
+        values: [DS]
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DS_RAW.PATNUM
+
+  - name: DSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [DSDTC]
+    verifications:
+      not_missing: {}
+
+  - name: DSDECOD
+    type: str
+    label: Standardized Disposition Term
+    derivation:
+      source: DS_RAW.DSDECOD
+    verifications:
+      not_missing: {}
+      allowed_values:
+        values: [COMPLETED, RANDOMIZED, ADVERSE EVENT, SCREEN FAILURE]
+
+  - name: DSCAT
+    type: str
+    label: Category for Disposition Event
+    derivation:
+      case:
+        branches:
+          - when: "DSDECOD = 'RANDOMIZED'"
+            then:
+              literal: PROTOCOL MILESTONE
+        otherwise:
+          literal: DISPOSITION EVENT
+    verifications:
+      allowed_values:
+        values: [PROTOCOL MILESTONE, DISPOSITION EVENT]
+
+  - name: DSDTC
+    type: date
+    label: Date/Time of Collection
+    derivation:
+      value:
+        source: DS_RAW.DSDTCOL
+      conversion_failure: null
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, DSSEQ]
+  - row_count:
+      min: 7
+      max: 7
+  - implies:
+      id: randomized-record-is-a-milestone
+      when: "DSDECOD = 'RANDOMIZED'"
+      then: "DSCAT = 'PROTOCOL MILESTONE'"
+  - implies:
+      id: completion-record-is-a-disposition-event
+      when: "DSDECOD = 'COMPLETED'"
+      then: "DSCAT = 'DISPOSITION EVENT'"

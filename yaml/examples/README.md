@@ -35,6 +35,7 @@ the safest correction and shows the smallest useful YAML change.
 
 | Example | Derives |
 |---|---|
+| [`adam-adae-death-outcome`](adam-adae-death-outcome/) | carry each subject's death onto every event |
 | [`adam-adae-occurrence-flags`](adam-adae-occurrence-flags/) | flag the first occurrence at three levels |
 | [`adam-adae-partial-dates`](adam-adae-partial-dates/) | impute partial dates |
 | [`adam-adae-post-dose-onset`](adam-adae-post-dose-onset/) | classify an event by the moment it started |
@@ -45,11 +46,14 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adae-string-handlers`](adam-adae-string-handlers/) | clean text and handle invalid IDs |
 | [`adam-adae-treatment-emergent`](adam-adae-treatment-emergent/) | classify an event as treatment-emergent |
 | [`adam-adae-worst-severity`](adam-adae-worst-severity/) | flag the worst-severity event per preferred term |
+| [`adam-adce-worst-toxicity-grade`](adam-adce-worst-toxicity-grade/) | flag the subject's worst-grade event |
 | [`adam-adex-cumulative-dose`](adam-adex-cumulative-dose/) | summarize cumulative exposure |
 | [`adam-adex-uncollected-exposure`](adam-adex-uncollected-exposure/) | tell an uncollected dose from an absent administration |
 | [`adam-adlb-bds`](adam-adlb-bds/) | build a BDS dataset with baseline and change |
 | [`adam-adlb-closest-visit`](adam-adlb-closest-visit/) | select the record closest to a window's target day |
+| [`adam-adlb-mean`](adam-adlb-mean/) | calculate each subject's mean result |
 | [`adam-adlb-shift-and-criteria`](adam-adlb-shift-and-criteria/) | classify a result, its shift from baseline, and one criterion |
+| [`adam-adoe-study-eye`](adam-adoe-study-eye/) | tell the study eye from the fellow eye |
 | [`adam-adqs-subscale-score`](adam-adqs-subscale-score/) | score a questionnaire subscale from its item records |
 | [`adam-adrs-best-overall-response`](adam-adrs-best-overall-response/) | select the best overall response |
 | [`adam-adrs-composite-response`](adam-adrs-composite-response/) | combine efficacy, safety, and discontinuation into one response |
@@ -57,6 +61,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adrs-overall-response-records`](adam-adrs-overall-response-records/) | prepare the overall response records an endpoint reads |
 | [`adam-adsl-bmi-compute`](adam-adsl-bmi-compute/) | compute BMI from height and weight |
 | [`adam-adsl-bmi-function`](adam-adsl-bmi-function/) | compute BMI by calling a routine the project supplies |
+| [`adam-adsl-completion-flag`](adam-adsl-completion-flag/) | flag the subjects who completed the study |
 | [`adam-adsl-crossover-periods`](adam-adsl-crossover-periods/) | derive period-scoped treatments and dates across a washout |
 | [`adam-adsl-dependency-order`](adam-adsl-dependency-order/) | derive a chain of population flags |
 | [`adam-adsl-disposition`](adam-adsl-disposition/) | select the final subject disposition from DS |
@@ -71,6 +76,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adtte-duration-of-response`](adam-adtte-duration-of-response/) | derive the duration of a response |
 | [`adam-adtte-progression-free-survival`](adam-adtte-progression-free-survival/) | derive progression-free survival |
 | [`adam-advs-analysis-visit`](adam-advs-analysis-visit/) | assign records to analysis windows |
+| [`adam-advs-growth-percentile`](adam-advs-growth-percentile/) | express a measurement as a growth percentile |
 | [`adam-advs-once-measured-carry-forward`](adam-advs-once-measured-carry-forward/) | carry forward a once-measured characteristic |
 | [`negative-adam-adsl-stratification-reconciliation`](negative-adam-adsl-stratification-reconciliation/) | reconcile randomization strata |
 | [`negative-adex-relative-dose-intensity`](negative-adex-relative-dose-intensity/) | reject a dose intensity measured against a per-record plan |
@@ -129,6 +135,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`sdtm-dm-basic`](sdtm-dm-basic/) | build one subject record from collected data |
 | [`sdtm-dm-metadata-contract`](sdtm-dm-metadata-contract/) | declare the metadata a submission needs |
 | [`sdtm-dm-reference-dates`](sdtm-dm-reference-dates/) | derive the reference dates from EX, DS, and AE |
+| [`sdtm-ds-disposition-sequence`](sdtm-ds-disposition-sequence/) | number each subject's disposition records in date order |
 | [`sdtm-ex-combination-regimen`](sdtm-ex-combination-regimen/) | represent a combination regimen |
 | [`sdtm-lb-conditional-compartments`](sdtm-lb-conditional-compartments/) | tell an inapplicable compartment from an uncollected sample |
 | [`sdtm-lb-ctcae-grading`](sdtm-lb-ctcae-grading/) | assign toxicity grades |

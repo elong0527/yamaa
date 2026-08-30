@@ -1,0 +1,108 @@
+schema_version: "1.0"
+domain: ADCE
+datasets:
+  CE: input/ce.csv
+base: CE
+keys: [STUDYID, USUBJID, CESEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: CE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: CE.USUBJID
+
+  - name: CESEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: CE.CESEQ
+
+  - name: CETERM
+    type: str
+    label: Reported Term for Clinical Event
+    derivation:
+      source: CE.CETERM
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation:
+      source: CE.ASTDT
+
+  - name: ASEV
+    type: str
+    label: Analysis Severity/Intensity
+    derivation:
+      source: CE.CESEV
+    verifications:
+      allowed_values:
+        values: [MILD, MODERATE, SEVERE]
+
+  - name: ASEVN
+    type: int
+    label: Analysis Severity/Intensity (N)
+    derivation:
+      mapping:
+        source: ASEV
+        dict: {MILD: 1, MODERATE: 2, SEVERE: 3}
+        missing: null
+    verifications:
+      allowed_values:
+        values: [1, 2, 3]
+
+  - name: ATOXGRN
+    type: int
+    label: Analysis Toxicity Grade (N)
+    derivation:
+      source: ASEVN
+    verifications:
+      allowed_values:
+        values: [1, 2, 3]
+
+  - name: WGRSEQ
+    type: int
+    label: Worst Grade Sequence Number
+    output: false
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by:
+          - {variable: ASEVN, direction: desc}
+          - ASTDT
+          - CESEQ
+        filter: "ASEVN IS NOT NULL"
+
+  - name: AOCCFL
+    type: str
+    label: Worst Grade Occurrence Flag
+    derivation:
+      case:
+        branches:
+          - when: "WGRSEQ = 1"
+            then:
+              literal: Y
+    verifications:
+      allowed_values:
+        values: [Y]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, CESEQ]
+  - row_count:
+      min: 7
+      max: 7
+  - implies:
+      id: worst-grade-flag-requires-a-graded-event
+      when: "AOCCFL = 'Y'"
+      then: "ASEV IS NOT NULL"
+  - implies:
+      id: worst-grade-flag-is-unique-within-subject
+      when: "AOCCFL = 'Y'"
+      then: "WGRSEQ = 1"

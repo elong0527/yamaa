@@ -1,0 +1,52 @@
+schema_version: "1.0"
+domain: ADLB
+datasets:
+  LB: input/lb.csv
+base: LB
+keys: [STUDYID, USUBJID, LBSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: LB.USUBJID
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: LB.LBSEQ
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation:
+      source: LB.LBTESTCD
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      source: LB.LBSTRESN
+
+  - name: AVALMEAN
+    type: float
+    label: Mean Analysis Value
+    derivation:
+      aggregate:
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        expr: "MEAN(AVAL)"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, LBSEQ]
+  - row_count:
+      min: 7
+      max: 7
