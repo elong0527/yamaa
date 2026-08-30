@@ -15,6 +15,9 @@ specification; [`agents.md`](agents.md) states that contract.
 document itself. Its fields map to the official
 [CDISC ODM 2.0 clinical-data schema](https://github.com/cdisc-org/DataExchange-ODM/blob/main/schema/ODM-clinicaldata.xsd).
 
+[`sources.md`](sources.md) catalogues the pharmaverse repositories worth
+mining for new examples and which open gap each one speaks to.
+
 New to the suite? Read [`sdtm-dm-basic`](sdtm-dm-basic/) for direct mapping,
 [`sdtm-lb-findings`](sdtm-lb-findings/) for row construction, and
 [`adam-adlb-bds`](adam-adlb-bds/) for a full BDS derivation, in that order.

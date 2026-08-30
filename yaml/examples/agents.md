@@ -9,6 +9,8 @@ example derives.
 Read `../agents.md` first; it governs the schema and rules this directory
 exercises. Then read `README.md` here for the example index and
 `plan.md` for the open design gaps and the schema work they justify.
+`sources.md` ranks the external benchmarks a new example may be extracted
+from, and says what each supplies.
 
 ## Example layout
 
