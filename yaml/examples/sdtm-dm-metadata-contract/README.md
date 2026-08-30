@@ -12,9 +12,11 @@ how long it can be, and, where one applies, the controlled terminology list it
 draws on. The dataset itself declares its label, its class, its structure, and
 the standard version it follows.
 
-Only the labels are governed. The rest is free text: nothing checks that a
-length matches the variable it describes, that a named terminology list is the
-one actually enforced on the values, or that a variable marked as derived is
-one. Two studies can describe the same dataset in different words and both be
-accepted, and no file is produced that a submission could carry, so none of it
-is asserted anywhere.
+The labels are governed, and so is how long a `USUBJID` may be: a subject
+identifier longer than the study permits stops the run rather than being
+shortened to fit. The rest is free text. The lengths recorded beside the other
+variables are not connected to their values, nothing checks that a named
+terminology list is the one actually enforced on the values, and nothing
+checks that a variable marked as derived is one. Two studies can describe the
+same dataset in different words and both be accepted, and no file is produced
+that a submission could carry, so most of it is asserted nowhere.

@@ -1,0 +1,11 @@
+phase: verification
+condition: length_failed
+spec_paths:
+  - columns.USUBJID.verifications[0].max_length
+context:
+  column: USUBJID
+  max: 20
+  failure_count: 1
+  keys:
+    - STUDYID: CATH
+      USUBJID: CATH-STMARYSMONTREAL-0003

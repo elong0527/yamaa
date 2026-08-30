@@ -10,13 +10,13 @@ Only open work appears here. A change that lands is deleted rather than marked,
 so the git history of this file and of [`../rules/`](../rules/) is the record
 of what closed and how.
 
-The suite currently holds 96 examples: 51 successful golden outputs and 45
+The suite currently holds 97 examples: 51 successful golden outputs and 46
 expected failures. Four failure examples also commit the completed dataset
 beside the structured error.
 
 ## Open work
 
-Eleven design gaps remain, grouped under five work items. Each item states the
+Twelve design gaps remain, grouped under five work items. Each item states the
 gap, the evidence from the suite, and what a solution requires.
 
 ### T1. Literal operands (gap 1)
@@ -111,22 +111,24 @@ the schema change.
 
 ### T4. Governed metadata (gap 10)
 
-**Gap.** Metadata is an ungoverned string map. Labels are first class, but
-origin, length, and controlled terminology are free-form text that no
-implementation can validate, and no expected metadata artifact exists to assert
-them.
+**Gap.** Metadata is an ungoverned string map. Labels are first class and a
+value's length is now enforceable, but origin, the declared lengths, and
+controlled terminology are free-form text that no implementation can validate,
+and no expected metadata artifact exists to assert them.
 
 **Evidence.** `sdtm-dm-metadata-contract` declares origin, length, and
 codelist as free-form strings, marks `USUBJID` as `Derived` by hand although
 `str_concat` already encodes that, and declares a codelist name next to an
-unrelated `allowed_values` list.
+unrelated `allowed_values` list. Its `USUBJID` now carries both a declared
+length and a `max_length` check, and nothing requires the two to agree.
 
 **Action.** Needs a vocabulary, a link between a declared codelist and its
-enforced values, a length concept connected to the declared type, and an
-expected metadata artifact. Until that artifact is defined, examples must not
-invent its shape.
+enforced values, a link between a declared length and the `max_length` that
+enforces it, and an expected metadata artifact. `max_length` supplies the
+enforced half; what remains is binding the declared half to it. Until that
+artifact is defined, examples must not invent its shape.
 
-### T5. Declarable study structure (gaps 2, 7–9, 11)
+### T5. Declarable study structure (gaps 2, 7–9, 11–12)
 
 **Gap 2.** There is no interval join, so a record cannot be matched against a
 table of per-subject intervals of irregular count and length. Regular structure
@@ -169,11 +171,18 @@ summarized. The deferred `negative-adrs-response-before-progression` case
 therefore cannot limit response assessments to those on or before that
 subject's first progression.
 
+**Gap 12.** A reduction cannot consume another reduction. R013 closes nesting
+rather than leaving it implementation-defined, so grouping `EX` by subject and
+cycle, totalling each, and then taking the largest across cycles needs an
+intermediate grain no expression can name. A design that gives a reduction a
+grain of its own would retire this with gap 11.
+
 **Action.** The largest open area. Write a design document before the schema
 change, and expect it to retire several gaps at once, as `compute` and
-`record_lookups` did. The interval join (gap 2) and row-relative matching (gap
-11) are the comparison frames that analysis windows, `EPOCH` assignment, and
-subject-specific cutoffs need.
+`record_lookups` did. The interval join (gap 2), row-relative matching (gap
+11), and a nameable intermediate grain (gap 12) are the comparison frames that
+analysis windows, `EPOCH` assignment, subject-specific cutoffs, and two-level
+reductions need.
 
 ## Sequencing
 
@@ -183,7 +192,7 @@ subject-specific cutoffs need.
    widened field.
 
 Expected catalogue edits: T2 retires gaps 3 and 4, T3 retires gaps 5 and 6,
-T4 retires gap 10, and T5 retires gaps 2, 7, 8, 9, and 11 along with whatever
+T4 retires gap 10, and T5 retires gaps 2, 7, 8, 9, 11, and 12 along with whatever
 remains of gap 1.
 
 ## Untested rule text
