@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The suite holds 55 examples: 47 successful golden outputs and eight expected
+The suite holds 58 examples: 48 successful golden outputs and ten expected
 failures. Three failure examples also commit a CSV beside the structured
 error: two record the completed dataset presented to a failing check, and one
 records the artifact a blocked derivation would produce. This file records
@@ -37,6 +37,7 @@ example the acceptance rule requires.
 | `row_value`, R001 and R007 | one window reads any row of an ordered partition, so `adam-adrs-confirmed-response` became a golden output; a signed offset carries the direction rather than a `lead` and `lag` pair whose field lists would be identical, and reading a column's own earlier value stays a cycle rather than an iteration |
 | `sum` and `count`, R003 and R007 and R008 | the aggregate registry covers ordinary reductions, so `adam-adex-cumulative-dose` became a golden output; `count` counts non-missing values, an all-missing group totals to missing rather than zero, and four rules stopped naming `min` and `max` by hand. Replacing the entries with one grouping expression over a reducer grammar was deferred to issue #30 and landed in the row below |
 
+| `datetime` and R014 | a moment became a declared type instead of text that happens to sort. R014 fixes one lexical form, prohibits a zone and a fractional second so R and Python hold and order the same value, and fixes one canonical rendering, so a column, a `str` derived from it, and the artifact never disagree. `sdtm-ae-effective-transaction` types its audit timestamp rather than relying on ISO 8601 text sorting, and `adam-adae-post-dose-onset` decides treatment emergence at the moment of the first dose, which a `date` cannot do at all |
 | one `aggregate` expression and R013, replacing `min`, `max`, `sum`, and `count` | one closed reducer grammar in place of an entry per reducer, so a fifth reduction is a table row rather than a registry entry; arithmetic over the records being reduced became expressible, which issue #30 named as its real motivation; the aggregate `missing:` handler was removed rather than relocated, because an expression body gives it no operand to attach to; twenty call sites across eight examples moved with no change of meaning |
 
 Thirteen gaps closed and were removed from the catalogue in
@@ -297,35 +298,57 @@ which rows a window sees is separable from returning a record, and it landed as
 
 ### T6. Dates and times
 
-Evidence: gaps 8 and 9. `sdtm-ae-effective-transaction` carries an audit
-timestamp as `str` and orders it correctly only because ISO 8601 text sorts
-chronologically.
+Evidence: gaps 8 and 9.
 
-Two of the three parts are settled. R011 closed the vocabulary: `column_type`
-is closed, a declared `date` is complete or nothing, and there is no datetime
-type. `date_impute` closed the declared imputation rule, so completion is a
-statement in the specification rather than regular expressions and string
-defaults.
+Three of the four parts are settled. R011 closed the vocabulary: `column_type`
+is closed and a declared `date` is complete or nothing. `date_impute` closed
+the declared imputation rule, so completion is a statement in the specification
+rather than regular expressions and string defaults. `datetime` and R014 closed
+the time of day, and the two examples in the landed table above are what it
+cost and what it bought.
 
-What remains is the part neither addressed. A `date` produced by imputation is
-indistinguishable from a collected one, so precision can only be recovered from
-the source text, and nothing marks a comparison made against an imputed
-operand. A precision concept would close both at once, and a `date_precision`
-expression would close the first alone. Gap 9 is untouched.
+What remains is the part none of the three addressed. A `date` produced by
+imputation is indistinguishable from a collected one, so precision can only be
+recovered from the source text, and nothing marks a comparison made against an
+imputed operand. A precision concept would close both at once, and a
+`date_precision` expression would close the first alone. Gap 9 is untouched.
 
 No example now carries an imputation flag, so both halves are argued from the
 rules rather than shown in golden output. An example that records which
 component was supplied is the first thing this item needs.
 
-`greatest` and `least` compare dates as ordinary comparable values. If a
-precision concept lands here, a row-wise extreme over dates has to say whether
-an imputed operand can win, so this item owns that decision rather than R007.
+`greatest` and `least` compare dates and datetimes as ordinary comparable
+values. If a precision concept lands here, a row-wise extreme over dates has to
+say whether an imputed operand can win, so this item owns that decision rather
+than R007.
+
+Three consequences of the datetime decision are open and belong to this item
+rather than to a gap of their own, because each is a question the new type
+raises rather than a limitation an example has hit:
+
+- **Nothing converts between a date and a datetime.** R011 fails in both
+  directions rather than inventing a time of day or discarding a collected
+  one, so a specification holding a moment and needing a day has no expression
+  to ask for it. An extraction and a composition are the obvious pair, and
+  each waits for the example the acceptance rule requires.
+- **Nothing measures between two moments.** `date_diff` counts whole calendar
+  units and its `bounds` counts endpoints of a day range, and neither has a
+  meaning between two instants, so R007 keeps `date_diff` and `study_day` on
+  `date`. An elapsed-time expression is the counterpart to that pair.
+- **A time of day alone is still not a value.** R014 requires a complete date
+  beside the time, so the `--TM` family stays text. The no-time-of-day
+  divergence is narrowed to that family rather than closed.
 
 ### T7. Source-format ingestion
 
 Gap 7: source-format missing values and type inference have no normative rule.
 Every example assumes an empty CSV field is missing and distinguishes it from a
 nonempty malformed value, and nothing says so.
+
+R014 keeps the conversion half closed as the matrix grows rather than reopening
+it: the datetime cells were defined with the type, and a field declared
+`datetime` parses under the same `str` row, so an ingestion rule inherits the
+grammar and has nothing further to decide about a moment.
 
 The conversion half of this item has landed. Float-to-text was the last
 undefined cell in R011's matrix, and closing it corrected two committed values
@@ -424,8 +447,11 @@ reduce one, which is T5's question seen from here.
    required before any implementation can claim R and Python parity.
 3. **T5, T6, T8, T9, T10, T11** are design documents. Write the document before
    the schema change, and expect each to retire several gaps at once, as
-   `compute` did. T5, T8, and T11 overlap enough that the three should be
-   decided together rather than in sequence.
+   `compute` did. T6's datetime half landed ahead of that sequence because two
+   examples supplied the evidence and the decision closed no gap, so nothing
+   waited on the document; its precision half still needs one. T5, T8, and T11
+   overlap enough that the three should be decided together rather than in
+   sequence.
 4. **T1** last, because its answer probably lies inside T10 rather than in a
    widened field.
 
@@ -439,14 +465,14 @@ record which of those it actually closed.
 ## Negative examples this plan requires
 
 The acceptance rule needs failure behavior fixed before a feature is added.
-Eight expected-failure examples now establish a self-referential ordered
+Ten expected-failure examples now establish a self-referential ordered
 window, duplicate implicit-join matches, unmapped dictionary values, malformed
 string templates, dataset-predicate reporting, a reducer expression reading a
 value that varies within its group, an ordered-series predicate over one
-neighbour, and a right-side filter reaching for the current output row. The
-table below lists the remaining
-contracts. ODM form scoping is a positive example backed by normative rule
-text.
+neighbour, a right-side filter reaching for the current output row, a column
+type outside the closed vocabulary, and datetime text carrying a zone offset.
+The table below lists the remaining contracts. ODM form scoping is a positive
+example backed by normative rule text.
 
 | Example | Provokes | Gates |
 |---|---|---|
@@ -477,7 +503,9 @@ text.
 | `date_impute` over an invalid source with no `invalid` handler | fail rather than yield missing | already landed, untested |
 | a `mapping` whose `dict` keys collide once folded under `case_sensitive: false` | R007 rejects the dictionary rather than picking one | already landed, untested |
 | a non-missing value absent from `dict` with no `unmapped` handler | R008 makes the condition fatal | `negative-mapping-unmapped-value` |
-| a column type outside `column_type` | R011's closed vocabulary | already landed, untested |
+| a column type outside `column_type` | R011's closed vocabulary | `negative-column-type-unknown` |
+| datetime text carrying a zone offset | R014's prohibition on a zone | `negative-datetime-zone-offset` |
+| a bare date, a space separator, a fractional second, and hour 24 as datetime text | the rest of R014's single lexical form | already landed, untested |
 | unparseable numeric text, an incomplete date, and a non-integral value converted to `int` | R011's conversion failures | already landed, untested |
 | `greatest` whose `sources` mix incomparable types | R007 comparability | already landed, untested |
 | duplicate output keys | R005 key uniqueness | already landed, untested |

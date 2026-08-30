@@ -58,7 +58,7 @@ columns:
         values: [INSERT, UPDATE, REMOVE]
 
   - name: AUDITDTC
-    type: str
+    type: datetime
     derivation:
       source:
         variable: AE_TXN.AUDITDTC

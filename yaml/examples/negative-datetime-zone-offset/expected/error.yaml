@@ -1,0 +1,12 @@
+phase: convert
+condition: conversion_failure
+spec_paths:
+  - columns.ASTDTM.type
+  - columns.ASTDTM.derivation
+context:
+  target_type: datetime
+  value: "2025-03-04T09:00:00+02:00"
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-971
+      AESEQ: 2
