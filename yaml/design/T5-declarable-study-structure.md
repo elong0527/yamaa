@@ -95,11 +95,11 @@ reduction needs:
   output: false
   derivation:
     aggregate:
-    expr: "MIN(ASSESS.SUM)"
-    filter: "ASSESS.COMPLETE = 'Y'"
-    between:
-      value: ADT
-      upper: ASSESS.ADT
+      expr: "MIN(ASSESS.SUM)"
+      filter: "ASSESS.COMPLETE = 'Y'"
+      between:
+        value: ADT
+        upper: ASSESS.ADT
 ```
 
 `MIN(ASSESS.SUM)` over the current subject's completed assessments dated on or
