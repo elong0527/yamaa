@@ -10,7 +10,7 @@ Only open work appears here. A change that lands is deleted rather than marked,
 so the git history of this file and of [`../rules/`](../rules/) is the record
 of what closed and how.
 
-The suite currently holds 94 examples: 51 successful golden outputs and 43
+The suite currently holds 95 examples: 51 successful golden outputs and 44
 expected failures. Three failure examples also commit the completed dataset
 beside the structured error.
 
@@ -111,20 +111,22 @@ the schema change.
 
 ### T4. Governed metadata (gap 10)
 
-**Gap.** Metadata is an ungoverned string map. Labels are first class, but
-origin, length, and controlled terminology are free-form text that no
-implementation can validate, and no expected metadata artifact exists to assert
-them.
+**Gap.** Metadata is an ungoverned string map. Labels are first class and a
+value's length is now enforceable, but origin, the declared lengths, and
+controlled terminology are free-form text that no implementation can validate,
+and no expected metadata artifact exists to assert them.
 
 **Evidence.** `sdtm-dm-metadata-contract` declares origin, length, and
 codelist as free-form strings, marks `USUBJID` as `Derived` by hand although
 `str_concat` already encodes that, and declares a codelist name next to an
-unrelated `allowed_values` list.
+unrelated `allowed_values` list. Its `USUBJID` now carries both a declared
+length and a `max_length` check, and nothing requires the two to agree.
 
 **Action.** Needs a vocabulary, a link between a declared codelist and its
-enforced values, a length concept connected to the declared type, and an
-expected metadata artifact. Until that artifact is defined, examples must not
-invent its shape.
+enforced values, a link between a declared length and the `max_length` that
+enforces it, and an expected metadata artifact. `max_length` supplies the
+enforced half; what remains is binding the declared half to it. Until that
+artifact is defined, examples must not invent its shape.
 
 ### T5. Declarable study structure (gaps 2, 7–9, 11)
 

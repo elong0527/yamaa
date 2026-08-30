@@ -3,7 +3,7 @@ id: R009
 title: Verifications
 status: draft
 applies_to: [root.verifications, column.verifications, column_verifications, dataset_verifications]
-depends_on: [R004, R005, R006]
+depends_on: [R004, R005, R006, R011]
 ---
 
 # Verifications
@@ -47,8 +47,21 @@ reports in addition to the stable specification path.
 - `range` requires every non-missing numeric value to be greater than or equal
   to `min` and less than or equal to `max`, for whichever bounds are supplied.
   At least one bound is required.
+- `max_length` requires every non-missing value to be at most `max` Unicode
+  code points long. Missing values pass; combine with `not_missing` when
+  absence is invalid. It is declared only on a `str` column: a length counts
+  the characters of a stored string, and the text a number or a temporal value
+  renders as is a property of R011's rendering rather than of the value.
 - `matches` requires every non-missing string to match its ECMAScript regular
   expression. Matching searches unless the pattern is anchored.
+
+`max_length` counts code points rather than bytes or UTF-16 units, which is
+the unit R006 already fixes for its own `min_length`, so one character is one
+count in both R and Python whatever plane it comes from. A length is therefore
+a check of its own rather than an anchored `matches` pattern: `.` in an
+ECMAScript regular expression counts UTF-16 code units and excludes line
+terminators, so the same value could pass in one runtime's spelling of the
+bound and fail in another's.
 
 ## Dataset verifications
 
@@ -73,6 +86,8 @@ reports in addition to the stable specification path.
 - An unknown verification keyword or field: schema failure.
 - A duplicate dataset-verification `id`: fail.
 - `range` or `row_count` with no bound, or with `min > max`: fail.
+- `max_length` whose `max` is less than one: fail. A column that admits no
+  value at all is a column the specification should not declare.
 - `all_or_none` with fewer than two distinct columns: fail.
 - A verification applied to an incompatible column type: fail.
 - An unknown column in `unique`, `all_or_none`, `implies`, or `predicate`:
