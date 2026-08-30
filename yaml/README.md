@@ -14,6 +14,8 @@ and SDTM-to-ADaM derivations. The design is under active development.
 - `rules/` contains shared execution semantics, with one rule per file.
 - `examples/` contains source data, derivation specifications, and exact
   expected outputs.
+- `design/` contains design documents that decide a work item before its
+  schema change; `T5-declarable-study-structure.md` is the first.
 - `agents.md` tells AI coding agents how to discover and maintain the design.
 
 The schema defines shape and operation-local behavior through adjacent comments

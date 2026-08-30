@@ -88,11 +88,12 @@ as a `source` variable is.
 A record lookup may declare an ordered choice among candidate records rather
 than a single match. Each entry of `candidates` carries its own `id` and the
 `filter`, `order_by`, and `keep` that select its record from the lookup's
-dataset. The candidates are tried in order and the first that selects a record
-wins, so the order is the definition a reviewer checks rather than a
-preference an implementation applies.
+dataset, and the lookup declares `as`, the column name the winning candidate's
+`id` is read through. The candidates are tried in order and the first that
+selects a record wins, so the order is the definition a reviewer checks rather
+than a preference an implementation applies.
 
-The winning candidate's `id` is readable as a column of the lookup beside the
+The winning candidate's `id` is then a column of the lookup beside the
 record's own fields, so a derivation that must produce a value and the reason
 for it reads both from the one choice. A date and the sequence number of the
 record that supplied it, or a response and the rule that assigned it, cannot
@@ -176,13 +177,14 @@ second is an absent record, and `unmatched` answers only for the second.
   multiple match under R003.
 - A `between` declaring neither `lower` nor `upper`, or naming a column the
   lookup's dataset does not have: fail.
-- A `candidates` entry with no `id`, a duplicate candidate `id`, or both
-  `candidates` and a direct match on one lookup: fail.
+- A `candidates` entry with no `id`, a duplicate candidate `id`, a `candidates`
+  lookup with no `as`, or both `candidates` and a direct match on one lookup:
+  fail.
 - A variable qualified by a record lookup `id` naming a column its dataset does
   not have: fail under R002.
 - A missing declared `source` value where `incomplete` resolves to `fail`:
   fail, reporting the record lookup and the source that is missing.
 - An unmatched left row where `unmatched` resolves to `fail`: fail, reporting
   the record lookup and the offending keys.
-- A column reading a candidate `id` from a lookup that declares no
-  `candidates`: fail under R002, as a column the lookup does not have.
+- A column reading the `as` name from a lookup that declares no `candidates`:
+  fail under R002, as a column the lookup does not have.

@@ -95,17 +95,18 @@ reduction needs:
   output: false
   derivation:
     aggregate:
-      dataset: ASSESS
-      expr: "MIN(ASSESS.SUM)"
-      filter: "ASSESS.COMPLETE = 'Y'"
-      between:
-        value: ADT
-        upper: ASSESS.ADT
+    expr: "MIN(ASSESS.SUM)"
+    filter: "ASSESS.COMPLETE = 'Y'"
+    between:
+      value: ADT
+      upper: ASSESS.ADT
 ```
 
 `MIN(ASSESS.SUM)` over the current subject's completed assessments dated on or
 before the current row's analysis date is the RECIST nadir that
-`adam-adtr-sum-of-target-diameters` cannot name today.
+`adam-adtr-sum-of-target-diameters` cannot name today. The reduction joins
+ASSESS on the applicable keys as R003 already defines; `between` only narrows
+which of the subject's records enter it.
 
 ### A named intermediate dataset
 
@@ -200,16 +201,17 @@ derived:
       - {name: STUDYID, type: str, derivation: {source: EX.STUDYID}}
       - {name: USUBJID, type: str, derivation: {source: EX.USUBJID}}
       - {name: EXSEQ, type: int, derivation: {source: EX.EXSEQ}}
-      - {name: ADOSEN, type: int, derivation: {source: EX.__SEQ__}}
 ```
 
 `expand.count` is a variable resolving to a non-negative integer on each driver
-record; the derived dataset holds that many rows per record, with `ADOSEN`
-running 1 to the count. A record whose count is missing fails under R008; a
-record whose count is zero contributes no row, which is how a removed record
-and an unexpanded one stay distinct. The negative example's failure -- a record
-holding more administrations than the templates declare -- cannot recur,
-because the count is read from the record rather than written out in advance.
+record; the derived dataset holds that many rows per record, and the column
+`expand.as` names carries the 1-based index of each, so `ADOSEN` runs 1 to the
+count without a derivation of its own. A record whose count is missing fails
+under R008; a record whose count is zero contributes no row, which is how a
+removed record and an unexpanded one stay distinct. The negative example's
+failure -- a record holding more administrations than the templates declare --
+cannot recur, because the count is read from the record rather than written out
+in advance.
 
 The opposite motion in gap 16, adding a row where an expected combination has
 none, is the same step with the sides reversed: a derived dataset over the
@@ -233,6 +235,7 @@ records**, each candidate a named filter over the same dataset:
 record_lookups:
   - id: RESPONSE
     dataset: ADRSPRE
+    as: WHICH
     candidates:
       - id: CR
         filter: "ADRSPRE.AVALC = 'CR'"
@@ -250,12 +253,12 @@ record_lookups:
 ```
 
 The candidates are tried in order; the first that selects a record wins, and
-the winning candidate's `id` is readable as `RESPONSE.__CANDIDATE__` beside the
-record's own columns. `adam-adrs-best-overall-response`'s cascade -- complete
+the lookup declares the name the winning candidate's `id` is read through,
+here `WHICH`. `adam-adrs-best-overall-response`'s cascade -- complete
 response, then partial, then stable disease only from day 42 -- becomes one
-declaration whose order is the published definition, with `ADT` read as
-`RESPONSE.ADT` and the response itself as `RESPONSE.__CANDIDATE__`. The two
-cannot drift, because one selection produced both.
+declaration whose order is the published definition, with the date read as
+`RESPONSE.ADT` and the response itself as `RESPONSE.WHICH`. The two cannot
+drift, because one selection produced both.
 
 `adam-adrs-composite-response`'s parallel `AVALC` and `ARSN` chains collapse
 the same way: the value and the audit trail are two readings of one choice.
