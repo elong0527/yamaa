@@ -62,6 +62,10 @@ silently decides classifications such as treatment emergence.
 
 - `adam-adae-partial-dates` derives `ASTDTF` from the same source it imputes
   from, but nothing prevents the flag and the date from drifting apart.
+- `adam-adrs-overall-response-records` completes an assessment date collected
+  without a day and carries no flag at all, so the completed `ADT` is a date
+  like any other. Every later comparison — study day, an eligibility window,
+  which assessment came first — treats a chosen day as a collected one.
 
 **Action.** A precision attached to the value would close both gaps. This is a
 change to the type vocabulary rather than a registry entry. If a precision
@@ -162,7 +166,12 @@ cannot be compared without reading their branch order.
 `adam-adrs-best-overall-response` shows the cost in a published definition:
 which response wins, and whether an assessment that came too early leaves the
 subject progressive or not evaluable, is carried by the order of the branches
-and by nothing a reader can check.
+and by nothing a reader can check. `adam-adtte-duration-of-response` shows it
+against a submission requirement: selection returns the winning date and not
+the record that supplied it, so `EVNTDESC`, `CNSDTDSC`, and the `SRCDOM`,
+`SRCVAR`, and `SRCSEQ` triplet are each rebuilt by a parallel `case` chain
+over the value that won, and nothing ties the triplet to the date it claims to
+trace.
 
 **Gap 11.** A right-side match or reduction cannot be narrowed by a value from
 the current output row. Its filter sees only right-side records, so a
@@ -174,8 +183,14 @@ subject's first progression.
 **Gap 12.** A reduction cannot consume another reduction. R013 closes nesting
 rather than leaving it implementation-defined, so grouping `EX` by subject and
 cycle, totalling each, and then taking the largest across cycles needs an
-intermediate grain no expression can name. A design that gives a reduction a
-grain of its own would retire this with gap 11.
+intermediate grain no expression can name. `adam-adtr-sum-of-target-diameters`
+is where the suite stops at that first level: it sums the target lesion
+diameters at each assessment and flags the assessments that measured every
+target lesion. The lowest of a subject's earlier flagged sums — the nadir
+RECIST measures progression against — needs the per-assessment grain named,
+and gap 11 besides, because *earlier* is relative to the row being derived. A
+design that gives a reduction a grain of its own would retire this with gap
+11.
 
 **Action.** The largest open area. Write a design document before the schema
 change, and expect it to retire several gaps at once, as `compute` and
@@ -192,8 +207,8 @@ reductions need.
    widened field.
 
 Expected catalogue edits: T2 retires gaps 3 and 4, T3 retires gaps 5 and 6,
-T4 retires gap 10, and T5 retires gaps 2, 7, 8, 9, 11, and 12 along with whatever
-remains of gap 1.
+T4 retires gap 10, and T5 retires gaps 2, 7, 8, 9, 11, and 12 along with
+whatever remains of gap 1.
 
 ## Untested rule text
 
