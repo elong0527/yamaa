@@ -1,0 +1,7 @@
+phase: validation
+condition: prohibited_function
+spec_paths:
+  - columns.AVALMEAN.derivation.compute.expr
+context:
+  expr: "MEAN(AVAL)"
+  function: MEAN

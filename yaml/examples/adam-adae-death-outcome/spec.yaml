@@ -1,0 +1,89 @@
+schema_version: "1.0"
+domain: ADAE
+datasets:
+  AE: input/ae.csv
+  DM: input/dm.csv
+base: AE
+keys: [STUDYID, USUBJID, AESEQ]
+
+record_lookups:
+  - id: DEATHEV
+    dataset: AE
+    filter: "AE.AEOUT = 'FATAL'"
+    unmatched: missing
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    derivation:
+      source: AE.AESEQ
+
+  - name: AEDECOD
+    type: str
+    derivation:
+      source: AE.AEDECOD
+
+  - name: ASTDT
+    type: date
+    derivation:
+      source: AE.ASTDT
+
+  - name: DTHFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "AE.AEOUT = 'FATAL'"
+            then:
+              literal: Y
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  - name: DTHCAUS
+    type: str
+    derivation:
+      source: DEATHEV.AEDECOD
+
+  - name: DTHDT
+    type: date
+    derivation:
+      coalesce:
+        sources: [EVDTHDT, DMDTHDT]
+
+  - name: EVDTHDT
+    type: date
+    output: false
+    derivation:
+      source: DEATHEV.ASTDT
+
+  - name: DMDTHDT
+    type: date
+    output: false
+    derivation:
+      source: DM.DTHDT
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 4
+      max: 4
+  - implies:
+      id: fatal-event-carries-its-own-cause
+      when: "DTHFL = 'Y'"
+      then: "DTHCAUS = AEDECOD AND DTHDT = ASTDT"
+  - implies:
+      id: no-cause-without-a-fatal-event
+      when: "DTHCAUS IS NOT NULL"
+      then: "DTHDT IS NOT NULL"

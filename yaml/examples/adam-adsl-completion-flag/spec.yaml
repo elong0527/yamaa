@@ -1,0 +1,60 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  ADSLPRE: input/adsl_pre.csv
+  DS: input/ds.csv
+base: ADSLPRE
+keys: [STUDYID, USUBJID]
+
+record_lookups:
+  - id: COMPLT
+    dataset: DS
+    filter: "DS.DSDECOD = 'COMPLETED'"
+    unmatched: missing
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADSLPRE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADSLPRE.USUBJID
+
+  - name: TRTSDT
+    type: date
+    derivation:
+      source: ADSLPRE.TRTSDT
+
+  - name: COMPFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "COMPDT IS NOT NULL"
+            then:
+              literal: Y
+        otherwise:
+          literal: N
+    verifications:
+      allowed_values:
+        values: [Y, N]
+
+  - name: COMPDT
+    type: date
+    output: false
+    derivation:
+      source: COMPLT.DSDTC
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 4
+      max: 4
+  - implies:
+      id: completer-received-treatment
+      when: "COMPFL = 'Y'"
+      then: "TRTSDT IS NOT NULL"

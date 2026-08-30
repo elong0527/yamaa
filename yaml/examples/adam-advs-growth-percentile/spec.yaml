@@ -1,0 +1,129 @@
+schema_version: "1.0"
+domain: ADVS
+datasets:
+  ADVSPRE: input/advs_pre.csv
+  LMS:
+    path: input/lms_ref.csv
+    types: {L: float, M: float, S: float, AGE: int}
+base: ADVSPRE
+keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
+
+record_lookups:
+  - id: GROWTH
+    dataset: LMS
+    source: [SRCPARAM, SEX, AGE]
+    key: [PARAMCD, SEX, AGE]
+    unmatched: missing
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: ADVSPRE.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: ADVSPRE.USUBJID
+
+  - name: AVISIT
+    type: str
+    derivation:
+      source: ADVSPRE.AVISIT
+
+  - name: PARAMCD
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "ADVSPRE.PARAMCD = 'BMI'"
+            then:
+              literal: BMIPCTL
+          - when: "ADVSPRE.PARAMCD = 'WEIGHT'"
+            then:
+              literal: WGTPCTL
+    verifications:
+      allowed_values:
+        values: [BMIPCTL, WGTPCTL]
+
+  - name: PARAM
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "PARAMCD = 'BMIPCTL'"
+            then:
+              literal: BMI-for-Age Percentile
+          - when: "PARAMCD = 'WGTPCTL'"
+            then:
+              literal: Weight-for-Age Percentile
+
+  - name: AVAL
+    type: float
+    derivation:
+      case:
+        branches:
+          - when: "ZNUM IS NOT NULL"
+            then:
+              compute:
+                expr: "100 * PNORM(ZNUM)"
+
+  - name: ZNUM
+    type: float
+    output: false
+    derivation:
+      compute:
+        expr: "(POWER(AVALSRC / LMS_M, LMS_L) - 1) / (LMS_L * LMS_S)"
+
+  - name: LMS_M
+    type: float
+    output: false
+    derivation:
+      source: GROWTH.M
+
+  - name: LMS_L
+    type: float
+    output: false
+    derivation:
+      source: GROWTH.L
+
+  - name: LMS_S
+    type: float
+    output: false
+    derivation:
+      source: GROWTH.S
+
+  - name: AVALSRC
+    type: float
+    output: false
+    derivation:
+      source: ADVSPRE.AVAL
+
+  - name: SRCPARAM
+    type: str
+    output: false
+    derivation:
+      source: ADVSPRE.PARAMCD
+
+  - name: SEX
+    type: str
+    output: false
+    derivation:
+      source: ADVSPRE.SEX
+
+  - name: AGE
+    type: int
+    output: false
+    derivation:
+      source: ADVSPRE.AGE
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AVISIT, PARAMCD]
+  - row_count:
+      min: 4
+      max: 4
+  - implies:
+      id: percentile-requires-a-growth-reference
+      when: "AVAL IS NOT NULL"
+      then: "LMS_M IS NOT NULL"
