@@ -9,8 +9,8 @@ derive one row per event:
 - `ASEV` is the collected severity and `ASEVN` its order: mild, moderate, and
   severe count one, two, and three. An event collected without a severity has
   neither;
-- `ATOXGR` is the severity restated as a toxicity grade and `ATOXGRN` its
-  number, so a moderate event reads grade 2;
+- `ATOXGRN` is the severity restated as a numeric toxicity grade, so a
+  moderate event reads grade 2;
 - `AOCCFL` marks the subject's worst-graded event: the highest grade, the
   earliest start among events tied on grade, and the lower sequence number
   among events tied on both. An event without a grade can never be the worst.

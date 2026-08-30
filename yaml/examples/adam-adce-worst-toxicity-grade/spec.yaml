@@ -49,18 +49,13 @@ columns:
       allowed_values:
         values: [1, 2, 3]
 
-  - name: ATOXGR
-    type: str
-    derivation:
-      str_template: "GRADE {ASEVN}"
-    verifications:
-      allowed_values:
-        values: [GRADE 1, GRADE 2, GRADE 3]
-
   - name: ATOXGRN
     type: int
     derivation:
       source: ASEVN
+    verifications:
+      allowed_values:
+        values: [1, 2, 3]
 
   - name: WGRSEQ
     type: int

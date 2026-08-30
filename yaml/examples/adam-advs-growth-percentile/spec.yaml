@@ -65,8 +65,10 @@ columns:
         branches:
           - when: "ZNUM IS NOT NULL"
             then:
-              compute:
-                expr: "100 * PNORM(ZNUM)"
+              function:
+                name: growth_percentile
+                args:
+                  z: ZNUM
 
   - name: ZNUM
     type: float
