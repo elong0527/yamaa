@@ -16,7 +16,7 @@ beside the structured error.
 
 ## Open work
 
-Ten design gaps remain, grouped under five work items. Each item states the
+Eleven design gaps remain, grouped under five work items. Each item states the
 gap, the evidence from the suite, and what a solution requires.
 
 ### T1. Literal operands (gap 1)
@@ -110,7 +110,7 @@ enforced values, a length concept connected to the declared type, and an
 expected metadata artifact. Until that artifact is defined, examples must not
 invent its shape.
 
-### T5. Declarable study structure (gaps 2, 7–9)
+### T5. Declarable study structure (gaps 2, 7–9, 11)
 
 **Gap 2.** There is no interval join, so a record cannot be matched against a
 table of per-subject intervals of irregular count and length. Regular structure
@@ -146,10 +146,18 @@ which response wins, and whether an assessment that came too early leaves the
 subject progressive or not evaluable, is carried by the order of the branches
 and by nothing a reader can check.
 
+**Gap 11.** A right-side match or reduction cannot be narrowed by a value from
+the current output row. Its filter sees only right-side records, so a
+subject-specific cutoff derived on the left cannot restrict the records being
+summarized. The deferred `negative-adrs-response-before-progression` case
+therefore cannot limit response assessments to those on or before that
+subject's first progression.
+
 **Action.** The largest open area. Write a design document before the schema
 change, and expect it to retire several gaps at once, as `compute` and
-`record_lookups` did. The interval join (gap 2) is what an analysis window or
-`EPOCH` assignment actually needs.
+`record_lookups` did. The interval join (gap 2) and row-relative matching (gap
+11) are the comparison frames that analysis windows, `EPOCH` assignment, and
+subject-specific cutoffs need.
 
 ## Sequencing
 
@@ -159,7 +167,7 @@ change, and expect it to retire several gaps at once, as `compute` and
    widened field.
 
 Expected catalogue edits: T2 retires gaps 3 and 4, T3 retires gaps 5 and 6,
-T4 retires gap 10, and T5 retires gaps 2, 7, 8, and 9 along with whatever
+T4 retires gap 10, and T5 retires gaps 2, 7, 8, 9, and 11 along with whatever
 remains of gap 1.
 
 ## Untested rule text
@@ -173,7 +181,8 @@ let a dataset state its types once for every specification that reads it.
 
 ## Pilot 7 coverage
 
-The live examples retain every actionable finding from the
+The live examples and open-gap catalogue retain every actionable finding
+from the
 [RConsortium pilot 7 synthetic-data](https://github.com/RConsortium/submissions-pilot7-synthetic-data)
 survey, and fields that the source declares but never varies are not used as
 evidence for a rule. Two of its ideas remain undemonstrated: the irregular

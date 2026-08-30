@@ -94,14 +94,14 @@ CSV records the intended artifact once that capability exists.
 | [`negative-mapping-from-unmapped-key`](negative-mapping-from-unmapped-key/) | reject a result with no reference range |
 | [`negative-mapping-unmapped-value`](negative-mapping-unmapped-value/) | reject an unmapped response |
 | [`negative-output-duplicate-subject`](negative-output-duplicate-subject/) | reject a repeated demographics record |
-| [`negative-row-value-self-reference`](negative-row-value-self-reference/) | reject a weight carried forward from a carried-forward weight |
-| [`negative-row-value-zero-offset`](negative-row-value-zero-offset/) | reject a previous weight that names no earlier visit |
 | [`negative-record-lookup-id-collision`](negative-record-lookup-id-collision/) | reject a first treatment named after its own source |
 | [`negative-record-lookup-incomplete-key`](negative-record-lookup-incomplete-key/) | reject a reference limit chosen without a sex |
 | [`negative-record-lookup-unmatched-key`](negative-record-lookup-unmatched-key/) | reject a result with no reference range |
 | [`negative-record-lookup-unordered-choice`](negative-record-lookup-unordered-choice/) | reject a treatment and dose taken from an unchosen record |
 | [`negative-record-lookup-unordered-keep`](negative-record-lookup-unordered-keep/) | reject a treatment ordered but not chosen |
 | [`negative-record-lookup-unpaired-key`](negative-record-lookup-unpaired-key/) | reject a reference limit matched against nothing |
+| [`negative-row-value-self-reference`](negative-row-value-self-reference/) | reject a weight carried forward from a carried-forward weight |
+| [`negative-row-value-zero-offset`](negative-row-value-zero-offset/) | reject a previous weight that names no earlier visit |
 | [`negative-source-duplicate-right-key`](negative-source-duplicate-right-key/) | reject duplicate subject enrichment |
 | [`negative-sum-non-numeric-source`](negative-sum-non-numeric-source/) | reject a severity burden totalled from severity words |
 | [`negative-types-unknown-field`](negative-types-unknown-field/) | reject a total over a field the source does not have |

@@ -1,4 +1,4 @@
-phase: join
+phase: mapping
 condition: duplicate_lookup_key
 spec_paths:
   - columns.ANRHI.derivation.mapping_from

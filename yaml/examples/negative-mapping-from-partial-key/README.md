@@ -13,21 +13,3 @@ combined limit, would answer with a range the study never stated, so the run
 must fail and no artifact is accepted. An uncollected sex is a different
 condition from a sex the limit table does not cover, and a specification may
 answer them differently.
-
-## How to fix
-
-Recover and correct the missing sex when possible. If the intended result is a
-missing reference limit whenever any lookup input is missing, state that with
-the mapping operation's `missing` handler:
-
-```yaml
-mapping_from:
-  source: [PARAMCD, SEX]
-  dataset: LBREF
-  key: [LBTESTCD, SEX]
-  value: ANRHI
-  missing: null
-```
-
-This does not handle a complete key that is absent from `LBREF`; that separate
-condition uses `unmapped`.

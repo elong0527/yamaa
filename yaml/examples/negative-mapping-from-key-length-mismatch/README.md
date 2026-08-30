@@ -11,17 +11,3 @@ The limits are looked up by test and sex, but only the test is paired with a
 column of the limit table. Dropping the unpaired value, or pairing it with a
 column chosen by name, would each look up a different limit, so the run must
 fail and no artifact is accepted.
-
-## How to fix
-
-Pair every current-row lookup value with its corresponding lookup-table column:
-
-```yaml
-mapping_from:
-  source: [PARAMCD, SEX]
-  dataset: LBREF
-  key: [LBTESTCD, SEX]
-  value: ANRHI
-```
-
-The two lists pair by position and must have equal lengths.
