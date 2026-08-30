@@ -9,26 +9,31 @@ keys: [STUDYID, USUBJID, OESEQ]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: OE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: OE.USUBJID
 
   - name: OESEQ
     type: int
+    label: Sequence Number
     derivation:
       source: OE.OESEQ
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       source: OE.OETESTCD
 
   - name: OELAT
     type: str
+    label: Laterality
     derivation:
       source: OE.OELAT
     verifications:
@@ -37,11 +42,13 @@ columns:
 
   - name: AVAL
     type: float
+    label: Analysis Value
     derivation:
       source: OE.OESTRESN
 
   - name: STUDYEYE
     type: str
+    label: Study Eye Laterality
     output: false
     derivation:
       source: ADSL.STUDYEYE
@@ -51,6 +58,7 @@ columns:
 
   - name: AFEYE
     type: str
+    label: Analysis Eye
     derivation:
       case:
         branches:

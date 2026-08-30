@@ -18,21 +18,25 @@ record_lookups:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ADVSPRE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ADVSPRE.USUBJID
 
   - name: AVISIT
     type: str
+    label: Analysis Visit
     derivation:
       source: ADVSPRE.AVISIT
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       case:
         branches:
@@ -48,6 +52,7 @@ columns:
 
   - name: PARAM
     type: str
+    label: Parameter
     derivation:
       case:
         branches:
@@ -60,6 +65,7 @@ columns:
 
   - name: AVAL
     type: float
+    label: Analysis Value
     derivation:
       case:
         branches:
@@ -72,6 +78,7 @@ columns:
 
   - name: ZNUM
     type: float
+    label: Growth Z-Score
     output: false
     derivation:
       compute:
@@ -79,42 +86,49 @@ columns:
 
   - name: LMS_M
     type: float
+    label: Growth Reference Median
     output: false
     derivation:
       source: GROWTH.M
 
   - name: LMS_L
     type: float
+    label: Growth Reference Skewness
     output: false
     derivation:
       source: GROWTH.L
 
   - name: LMS_S
     type: float
+    label: Growth Reference Coefficient of Variation
     output: false
     derivation:
       source: GROWTH.S
 
   - name: AVALSRC
     type: float
+    label: Source Analysis Value
     output: false
     derivation:
       source: ADVSPRE.AVAL
 
   - name: SRCPARAM
     type: str
+    label: Source Parameter Code
     output: false
     derivation:
       source: ADVSPRE.PARAMCD
 
   - name: SEX
     type: str
+    label: Sex
     output: false
     derivation:
       source: ADVSPRE.SEX
 
   - name: AGE
     type: int
+    label: Age in Days
     output: false
     derivation:
       source: ADVSPRE.AGE

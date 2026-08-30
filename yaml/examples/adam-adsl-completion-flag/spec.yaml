@@ -15,21 +15,25 @@ record_lookups:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ADSLPRE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ADSLPRE.USUBJID
 
   - name: TRTSDT
     type: date
+    label: Date of First Exposure to Treatment
     derivation:
       source: ADSLPRE.TRTSDT
 
   - name: COMPFL
     type: str
+    label: Completion Flag
     derivation:
       case:
         branches:
@@ -44,6 +48,7 @@ columns:
 
   - name: COMPREC
     type: str
+    label: Completion Disposition Term
     output: false
     derivation:
       source: COMPLT.DSDECOD

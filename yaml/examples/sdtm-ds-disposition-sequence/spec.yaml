@@ -8,11 +8,13 @@ keys: [STUDYID, USUBJID, DSSEQ]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DS_RAW.STUDY
 
   - name: DOMAIN
     type: str
+    label: Domain Abbreviation
     derivation:
       literal: DS
     verifications:
@@ -21,11 +23,13 @@ columns:
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DS_RAW.PATNUM
 
   - name: DSSEQ
     type: int
+    label: Sequence Number
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]
@@ -35,6 +39,7 @@ columns:
 
   - name: DSDECOD
     type: str
+    label: Standardized Disposition Term
     derivation:
       source: DS_RAW.DSDECOD
     verifications:
@@ -44,6 +49,7 @@ columns:
 
   - name: DSCAT
     type: str
+    label: Category for Disposition Event
     derivation:
       case:
         branches:
@@ -58,6 +64,7 @@ columns:
 
   - name: DSDTC
     type: date
+    label: Date/Time of Collection
     derivation:
       value:
         source: DS_RAW.DSDTCOL
