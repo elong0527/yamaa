@@ -32,7 +32,8 @@ assertion: `row_value` under R007 places another row's value on the row, and
 immediately preceding assessment, so it rejects a partial response adjacent to
 a complete one and passes the same fault with an assessment in between.
 Whether the vocabulary should gain an assertion over a frame of rows is gap 6
-in `examples/plan.md`, not a question this rule answers.
+under T3 ([#52](https://github.com/elong0527/yamaa/issues/52)), not a question
+this rule answers.
 
 ## Registration and timing
 
