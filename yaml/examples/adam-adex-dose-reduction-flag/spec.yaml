@@ -1,0 +1,60 @@
+schema_version: "1.0"
+domain: ADEX
+datasets:
+  EX: input/ex.csv
+base: EX
+keys: [STUDYID, USUBJID, EXSEQ]
+
+output:
+  columns: [STUDYID, USUBJID, EXSEQ, EXSTDTM, EXDOSE, DOSREDFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: EX.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: EX.USUBJID
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: EX.EXSEQ
+
+  - name: EXSTDTM
+    type: datetime
+    label: Start Date/Time of Treatment
+    derivation:
+      source: EX.EXSTDTM
+
+  - name: EXDOSE
+    type: float
+    label: Dose
+    derivation:
+      source: EX.EXDOSE
+
+  - name: PREVDOSE
+    type: float
+    label: Previous Dose
+    derivation:
+      row_value:
+        source: EXDOSE
+        offset: -1
+        group_by: [STUDYID, USUBJID]
+        order_by: [EXSTDTM, EXSEQ]
+
+  - name: DOSREDFL
+    type: str
+    label: Dose Reduction Flag
+    derivation:
+      case:
+        branches:
+          - when: "EXDOSE > 0 AND PREVDOSE > 0 AND EXDOSE < PREVDOSE"
+            then:
+              literal: "Y"
