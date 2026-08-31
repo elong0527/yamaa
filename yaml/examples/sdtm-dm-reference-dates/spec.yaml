@@ -60,13 +60,11 @@ columns:
 
   - name: EXDOSE0
     type: float
-    output: false
     derivation:
       source: LASTEX.EXDOSE
 
   - name: DSDT0
     type: date
-    output: false
     derivation:
       aggregate:
         filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
@@ -74,7 +72,6 @@ columns:
 
   - name: AEDT0
     type: date
-    output: false
     derivation:
       aggregate:
         filter: "AE.AEENDTC IS NOT NULL"

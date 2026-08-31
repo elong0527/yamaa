@@ -82,7 +82,8 @@ this model.
 In both phases, a completed derivation runs the R005 lifecycle before anything
 depends on it, so a dependent always reads a value of the declared type.
 
-`output.columns` controls final layout independently of declaration order.
+`output.columns` selects and orders artifact columns independently of
+declaration order.
 
 ## Errors
 

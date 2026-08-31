@@ -35,7 +35,6 @@ columns:
 
   - name: RANDFL
     type: str
-    output: false
     derivation:
       case:
         branches:

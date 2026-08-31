@@ -75,7 +75,6 @@ columns:
 
   - name: RFSTDTC
     type: date
-    output: false
     derivation:
       source: DM.RFSTDTC
 

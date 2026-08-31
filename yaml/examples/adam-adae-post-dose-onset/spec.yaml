@@ -54,7 +54,6 @@ columns:
 
   - name: AOCCSEQ
     type: int
-    output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]

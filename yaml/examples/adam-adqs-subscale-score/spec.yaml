@@ -35,11 +35,9 @@ columns:
 
   - name: ITEMRESN
     type: float
-    output: false
 
   - name: ITEMSUM
     type: float
-    output: false
     derivation:
       aggregate:
         expr: "SUM(ITEMRESN)"
@@ -47,7 +45,6 @@ columns:
 
   - name: ITEMANS
     type: int
-    output: false
     derivation:
       aggregate:
         expr: "COUNT(ITEMRESN)"

@@ -21,13 +21,11 @@ columns:
 
   - name: CELLCNT
     type: int
-    output: false
     derivation:
       source: LB.CELLCNT
 
   - name: VOLUML
     type: int
-    output: false
     derivation:
       source: LB.VOLUML
 

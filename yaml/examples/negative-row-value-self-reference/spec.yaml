@@ -47,7 +47,6 @@ columns:
 
   - name: PRIORF
     type: float
-    output: false
     derivation:
       row_value:
         source: AVALF

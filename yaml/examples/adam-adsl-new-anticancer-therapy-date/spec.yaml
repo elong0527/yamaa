@@ -30,7 +30,6 @@ columns:
 
   - name: CMNACTDT
     type: date
-    output: false
     derivation:
       aggregate:
         filter: "CM.CMCAT = 'ON TREATMENT' AND CM.CMSTDTC IS NOT NULL"
@@ -38,7 +37,6 @@ columns:
 
   - name: PRNACTDT
     type: date
-    output: false
     derivation:
       aggregate:
         filter: "PR.PRCAT = 'CANCER RELATED' AND PR.PRSCAT = 'ON TREATMENT' AND PR.PRSTDTC IS NOT NULL"

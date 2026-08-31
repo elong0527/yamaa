@@ -40,13 +40,11 @@ columns:
 
   - name: NACTDT
     type: date
-    output: false
     derivation:
       source: ADSL.NACTDT
 
   - name: PDDT
     type: date
-    output: false
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC = 'PD'"
@@ -54,7 +52,6 @@ columns:
 
   - name: PDSEQ
     type: int
-    output: false
     derivation:
       source:
         variable: ADRSPRE.ASEQ
@@ -65,7 +62,6 @@ columns:
 
   - name: DEATHDT
     type: date
-    output: false
     derivation:
       aggregate:
         filter: "DS.DSDECOD = 'DEATH'"
@@ -73,7 +69,6 @@ columns:
 
   - name: DEATHSEQ
     type: int
-    output: false
     derivation:
       source:
         variable: DS.DSSEQ
@@ -84,7 +79,6 @@ columns:
 
   - name: LASTVLDT
     type: date
-    output: false
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC <> 'NE'"
@@ -92,7 +86,6 @@ columns:
 
   - name: LASTVLSEQ
     type: int
-    output: false
     derivation:
       source:
         variable: ADRSPRE.ASEQ
@@ -103,14 +96,12 @@ columns:
 
   - name: EVENTALLDT
     type: date
-    output: false
     derivation:
       least:
         sources: [PDDT, DEATHDT]
 
   - name: EVENTDT
     type: date
-    output: false
     derivation:
       case:
         branches:
@@ -145,7 +136,6 @@ columns:
 
   - name: CENSORDT
     type: date
-    output: false
     derivation:
       least:
         sources: [LASTVLDT, NACTDT]

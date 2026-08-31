@@ -52,7 +52,6 @@ columns:
 
   - name: ASTDTPR
     type: str
-    output: false
     derivation:
       date_precision:
         source: AESTDTC

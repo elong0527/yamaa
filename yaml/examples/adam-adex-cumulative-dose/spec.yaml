@@ -42,13 +42,11 @@ columns:
 
   - name: PLANDOSE
     type: float
-    output: false
     derivation:
       source: TRT.PLANDOSE
 
   - name: PLANCYC
     type: int
-    output: false
     derivation:
       source: TRT.PLANCYC
 

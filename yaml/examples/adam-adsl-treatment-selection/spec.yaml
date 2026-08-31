@@ -22,7 +22,6 @@ columns:
 
   - name: TRT01RAW
     type: str
-    output: false
     derivation:
       source:
         variable: EX.EXTRT
@@ -33,7 +32,6 @@ columns:
 
   - name: TRT01SRC
     type: str
-    output: false
     derivation:
       coalesce:
         sources: [TRT01RAW, DM.ACTARM]

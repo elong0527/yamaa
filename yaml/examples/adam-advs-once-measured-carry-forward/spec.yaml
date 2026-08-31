@@ -47,7 +47,6 @@ columns:
 
   - name: HGTDT
     type: date
-    output: false
     derivation:
       case:
         branches:
@@ -57,7 +56,6 @@ columns:
 
   - name: HGTBLFL
     type: str
-    output: false
     derivation:
       baseline_flag:
         group_by: [STUDYID, USUBJID]

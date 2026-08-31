@@ -35,11 +35,9 @@ columns:
 
   - name: LBRESN
     type: float
-    output: false
 
   - name: ALTVAL
     type: float
-    output: false
     derivation:
       aggregate:
         filter: "PARAMCD = 'ALT'"
@@ -48,7 +46,6 @@ columns:
 
   - name: ASTVAL
     type: float
-    output: false
     derivation:
       aggregate:
         filter: "PARAMCD = 'AST'"

@@ -83,14 +83,12 @@ columns:
 
   - name: AWTABS
     type: int
-    output: false
     derivation:
       compute:
         expr: "ABS(AWTDIFF)"
 
   - name: AWRANK
     type: int
-    output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]

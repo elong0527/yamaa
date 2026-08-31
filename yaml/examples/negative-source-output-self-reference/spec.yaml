@@ -36,21 +36,17 @@ columns:
 
   - name: LBRESN
     type: float
-    output: false
 
   - name: ALTDEN
     type: float
-    output: false
 
   - name: ASTCODE
     type: str
-    output: false
     derivation:
       literal: AST
 
   - name: ASTVAL
     type: float
-    output: false
     derivation:
       mapping_from:
         source: [USUBJID, ADT, ASTCODE]

@@ -118,7 +118,6 @@ columns:
 
   - name: CRITLIM
     type: float
-    output: false
     derivation:
       compute:
         expr: "3 * ANRHI"

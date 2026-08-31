@@ -55,43 +55,36 @@ columns:
 
   - name: PDDT
     type: date
-    output: false
     derivation:
       source: PROGRESSION.RSDTC
 
   - name: PDSEQ
     type: int
-    output: false
     derivation:
       source: PROGRESSION.RSSEQ
 
   - name: DEATHDT
     type: date
-    output: false
     derivation:
       source: DEATH.DSDTC
 
   - name: DEATHSEQ
     type: int
-    output: false
     derivation:
       source: DEATH.DSSEQ
 
   - name: CENSORDT
     type: date
-    output: false
     derivation:
       source: LASTASSESS.RSDTC
 
   - name: CENSORSEQ
     type: int
-    output: false
     derivation:
       source: LASTASSESS.RSSEQ
 
   - name: EVENTDT
     type: date
-    output: false
     derivation:
       least:
         sources: [PDDT, DEATHDT]

@@ -37,7 +37,6 @@ columns:
   - name: COMPREC
     type: str
     label: Completion Disposition Term
-    output: false
     derivation:
       source: COMPLT.DSDECOD
 

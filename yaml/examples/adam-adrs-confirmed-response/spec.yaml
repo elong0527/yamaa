@@ -41,7 +41,6 @@ columns:
 
   - name: NEXTDT
     type: date
-    output: false
     derivation:
       row_value:
         source: ADT
@@ -51,7 +50,6 @@ columns:
 
   - name: NEXTRESP
     type: str
-    output: false
     derivation:
       row_value:
         source: AVALC
@@ -61,7 +59,6 @@ columns:
 
   - name: DAYS_TO_NEXT
     type: int
-    output: false
     derivation:
       date_diff:
         start: ADT

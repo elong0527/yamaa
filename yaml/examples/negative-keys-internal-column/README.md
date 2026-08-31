@@ -12,13 +12,11 @@ of the result, so the run must fail and no artifact is accepted.
 ## How to fix
 
 Every key column must be present in the output. If `SITEID` is part of the
-record identity, expose it by removing `output: false`:
+record identity, add it to `output.columns`:
 
 ```yaml
-- name: SITEID
-  type: str
-  derivation:
-    source: DM.SITEID
+output:
+  columns: [STUDYID, USUBJID, SITEID, INVID]
 ```
 
 If study and subject already form the intended unique identity, remove

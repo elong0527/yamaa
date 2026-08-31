@@ -52,7 +52,6 @@ columns:
   - name: STUDYEYE
     type: str
     label: Study Eye Laterality
-    output: false
     derivation:
       source: ADSL.STUDYEYE
     verifications:

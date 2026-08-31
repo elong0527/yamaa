@@ -21,7 +21,6 @@ columns:
 
   - name: SITEID
     type: str
-    output: false
     derivation:
       source: DM.SITEID
 

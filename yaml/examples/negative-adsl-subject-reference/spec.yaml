@@ -21,13 +21,11 @@ columns:
 
   - name: SITEID
     type: str
-    output: false
     derivation:
       source: DM.SITEID
 
   - name: SUBJID
     type: str
-    output: false
     derivation:
       source: DM.SUBJID
 

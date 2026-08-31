@@ -44,7 +44,6 @@ columns:
 
   - name: PREVAVALC
     type: str
-    output: false
     derivation:
       row_value:
         source: AVALC

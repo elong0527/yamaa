@@ -46,7 +46,7 @@ Keep bullets to the variables a reader must understand. Direct key copies and
 fixed values need no bullet.
 
 Before `## How to fix`, **do not name anything from the schema.** No rule IDs,
-no expression or field names, no `output: false`, and none of the words
+no expression or field names, no `output.columns`, and none of the words
 *handler*, *verification*, *derivation*, or *schema*. State the effect instead:
 
     - counting neither the last day of period one nor the first day of period
@@ -57,10 +57,10 @@ no expression or field names, no `output: false`, and none of the words
     + Its period-two right side is empty after filtering, which R003 treats as
       an absent match
 
-**Do not describe intermediate columns in the data contract.** A column
-declaring `output: false` is not in the artifact and does not belong before the
-fix section. A concise fix may show one when a multi-step correction requires
-it.
+**Do not describe intermediate columns in the data contract.** A declared
+column omitted from `output.columns` is not in the artifact and does not belong
+before the fix section. A concise fix may show one when a multi-step correction
+requires it.
 
 Before `## How to fix`, **do not count the sample data.** "Two of the four
 subjects have no exposure" is a property of the input file; "a subject with no
@@ -100,8 +100,8 @@ following a link out of the repository.
 
 - Declare `keys`, and verify what the derivation guarantees rather than what
   the sample data happens to show.
-- Prefer no intermediate columns. When one is unavoidable, declare
-  `output: false`; it stays available to dependents and to verifications.
+- Prefer no intermediate columns. When one is unavoidable, omit it from
+  `output.columns`; it stays available to dependents and to verifications.
 - Use `rows` when row construction changes the row count. A specification whose
   input already maps one-to-one to its output usually needs columns, not row
   templates. `sdtm-vs-unit-standardization` is the deliberate exception, and it
@@ -174,7 +174,7 @@ check merely to make the sample pass.
     # and every negative example has exactly one remediation section
     python3 - <<'PY'
     import glob, re
-    pattern = re.compile(r"R0[01][0-9]|output: false|handler|verification")
+    pattern = re.compile(r"R0[01][0-9]|output\.columns|handler|verification")
     for f in sorted(glob.glob("*/README.md")):
         text = open(f).read()
         contract = text.split("\n## How to fix\n", 1)[0]

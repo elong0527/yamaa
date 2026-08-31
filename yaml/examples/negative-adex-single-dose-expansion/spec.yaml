@@ -61,7 +61,6 @@ columns:
 
   - name: NDOSMAX
     type: int
-    output: false
     derivation:
       aggregate:
         group_by: [STUDYID, USUBJID, EXSEQ]

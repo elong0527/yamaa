@@ -49,7 +49,6 @@ columns:
 
   - name: REPROGRADE
     type: str
-    output: false
     derivation:
       source: LB_RAW.REPROGRADE
 

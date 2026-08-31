@@ -62,7 +62,7 @@ output_class:
     - columns:
         type: "list[column_name]"
         required: true
-        description: Output columns in artifact order; R005 requires each non-internal column exactly once.
+        description: Declared columns selected for the artifact, in the order R005 requires.
 
 record_lookup_class:
     - id:
@@ -114,11 +114,6 @@ column_class:
         type: column_type
         required: true
         description: Declared data type this column must carry in the completed dataset.
-    - output:
-        type: bool
-        required: false
-        default: true
-        description: Whether the column reaches the artifact; R005 defines an internal column.
     - label:
         type: str
         required: false

@@ -39,7 +39,6 @@ columns:
 
   - name: CRDT
     type: date
-    output: false
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC = 'CR'"
@@ -47,7 +46,6 @@ columns:
 
   - name: PRDT
     type: date
-    output: false
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC = 'PR'"
@@ -55,7 +53,6 @@ columns:
 
   - name: SDDT
     type: date
-    output: false
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC = 'SD' AND ADRSPRE.RANDDY >= 42"
@@ -63,7 +60,6 @@ columns:
 
   - name: NCNPDDT
     type: date
-    output: false
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC = 'NON-CR/NON-PD' AND ADRSPRE.RANDDY >= 42"
@@ -71,7 +67,6 @@ columns:
 
   - name: PDDT
     type: date
-    output: false
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC = 'PD'"
@@ -79,7 +74,6 @@ columns:
 
   - name: NEDT
     type: date
-    output: false
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC IN ('CR', 'PR', 'SD', 'NON-CR/NON-PD', 'NE')"

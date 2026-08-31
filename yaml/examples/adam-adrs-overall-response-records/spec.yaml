@@ -77,7 +77,6 @@ columns:
 
   - name: TRTSDT
     type: date
-    output: false
     derivation:
       source: ADSL.TRTSDT
 
@@ -90,7 +89,6 @@ columns:
 
   - name: WORSTAVAL
     type: int
-    output: false
     derivation:
       aggregate:
         expr: "MAX(AVAL)"
@@ -98,7 +96,6 @@ columns:
 
   - name: WORSTORD
     type: int
-    output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, ADT]

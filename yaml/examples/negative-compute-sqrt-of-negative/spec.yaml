@@ -21,13 +21,11 @@ columns:
 
   - name: HEIGHTCM
     type: float
-    output: false
     derivation:
       source: DM.HEIGHTCM
 
   - name: WEIGHTKG
     type: float
-    output: false
     derivation:
       source: DM.WEIGHTKG
 
