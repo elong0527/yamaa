@@ -333,8 +333,54 @@ def build_schema_env(root: Path):
             else:
                 to_visit.append((inc_path, new_stack))
 
+        if 'portable_registry' in data:
+            registry_ref = data['portable_registry']
+            if current.name != 'schema.yaml':
+                errors.append(
+                    f"ERROR: {current.name}: portable_registry is allowed "
+                    "only in schema.yaml"
+                )
+            elif not isinstance(registry_ref, str) or not registry_ref:
+                errors.append(
+                    "ERROR: schema.yaml: portable_registry must be a "
+                    "non-empty string"
+                )
+            elif (
+                '://' in registry_ref
+                or registry_ref.startswith('/')
+                or '..' in registry_ref.split('/')
+            ):
+                errors.append(
+                    "ERROR: schema.yaml: portable_registry must be a "
+                    "relative path inside the yaml directory"
+                )
+            else:
+                unresolved_registry_path = schema_dir / registry_ref
+                if unresolved_registry_path.is_symlink():
+                    errors.append(
+                        "ERROR: schema.yaml: portable_registry must not be "
+                        "a symlink"
+                    )
+                else:
+                    registry_path = unresolved_registry_path.resolve()
+                    try:
+                        registry_path.relative_to(schema_dir.resolve())
+                    except ValueError:
+                        errors.append(
+                            "ERROR: schema.yaml: portable_registry is "
+                            "outside the yaml directory"
+                        )
+                    else:
+                        if not registry_path.is_file():
+                            errors.append(
+                                "ERROR: schema.yaml: portable_registry file "
+                                f"{registry_ref} not found"
+                            )
+                        else:
+                            env['portable_registry'] = registry_path
+
         for k, v in data.items():
-            if k in ('version', 'includes'):
+            if k in ('version', 'includes', 'portable_registry'):
                 continue
 
             if isinstance(v, list):

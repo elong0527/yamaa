@@ -3,7 +3,7 @@ id: R010
 title: Scalar Numeric Computation
 status: normative
 applies_to: [expression.compute, numeric_expression]
-depends_on: [R001, R004, R005, R006, R007, R011, R017]
+depends_on: [R001, R004, R005, R006, R007, R011, R014, R015, R017]
 ---
 
 # Scalar numeric computation
@@ -30,19 +30,21 @@ admits no reduction.
 
 ## Scope
 
-`compute` evaluates a closed numeric grammar over current-output columns and
-numeric literals and returns one numeric value per current row. The grammar is
-a subset of SQL.
+`compute` evaluates a closed numeric grammar over current-output columns,
+fields of a declared record lookup, and numeric literals, and returns one
+numeric value per current row. The grammar is a subset of SQL.
 
 ## Identifiers
 
 An identifier resolves the way the `sql` primitive already resolves one in the
 same phase, so a formula and a predicate never disagree about a name.
 
-During column derivation an identifier is an unqualified current-output column.
-A qualified `DATASET.VARIABLE` reference is not permitted there: bind the
-source variable to a column first and compute from it. Omitting that binding
-column from `output.columns` keeps it out of the final dataset.
+During column derivation an unqualified identifier is a current-output column.
+A qualified identifier is permitted only when its qualifier is a declared R015
+record lookup `id`; it reads the named field of that lookup's selected record.
+An arbitrary `DATASET.VARIABLE` reference is not permitted: bind the source
+variable to a column first and compute from it. Omitting that binding column
+from `output.columns` keeps it out of the final dataset.
 
 During row construction an identifier is either a variable of the row driver,
 qualified exactly as `row.filter` qualifies one, or an unqualified column
@@ -61,9 +63,11 @@ row construction precedes the R003 join and sees only the row driver.
       expr: "WEIGHTKG / POWER(HEIGHTCM / 100, 2)"
 ```
 
-An identifier that does not resolve in its phase is an error. R001 collects
-these identifiers, so a `compute` derivation participates in dependency
-ordering exactly as a predicate does.
+An identifier that does not resolve in its phase is an error. A lookup field
+carries the type R014 assigns to the field in the lookup's dataset. R001
+collects these identifiers and the lookup's source dependencies, so a
+`compute` derivation participates in dependency ordering exactly as a
+predicate does.
 
 ## Grammar
 
@@ -189,8 +193,10 @@ serialized values for every example. Two consequences are not optional:
   validation: fail with R017's stable condition.
 - An aggregate, window, comparison, Boolean, conditional, string, or
   host-language construct: fail.
-- A qualified `DATASET.VARIABLE` identifier: fail.
-- An identifier that does not resolve to a declared output column: fail.
+- A qualified identifier whose qualifier is not a declared record lookup
+  during column derivation: fail.
+- An identifier that does not resolve to a declared output column or a field
+  of a declared record lookup: fail.
 - An identifier whose runtime type is not numeric: fail.
 - Any failure condition listed above: fail, reporting the expression and the
   operation that failed.

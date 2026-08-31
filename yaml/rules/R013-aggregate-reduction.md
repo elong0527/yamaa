@@ -3,7 +3,7 @@ id: R013
 title: Aggregate Reduction
 status: normative
 applies_to: [expression.aggregate, aggregate_expression]
-depends_on: [R001, R002, R003, R004, R006, R007, R010, R011, R017]
+depends_on: [R001, R002, R003, R004, R006, R007, R010, R011, R015, R017]
 ---
 
 # Aggregate reduction
@@ -56,9 +56,11 @@ and must not be mixed:
 
 A single expression naming two datasets, or mixing a qualified identifier with
 an unqualified one, is an error. A reduction is not a join: an expression
-combining values from two relations binds each of them to a column first and
-composes the results with `compute`, which keeps R010's ban on qualified
-identifiers intact and keeps every join under R003.
+combining values from two dataset relations binds each of them to a column
+first and composes the results with `compute`. R010 admits a qualified
+identifier only for a record already selected by an R015 record lookup; it
+still rejects an arbitrary dataset-qualified identifier, so every join remains
+under R003 or R015.
 
 An ODM contextual reference is not available in this grammar, because its item
 identifiers carry further periods. Bind it with a structured `source` first.

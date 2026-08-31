@@ -11,9 +11,10 @@ The validation ensures:
    any `.yaml` files.
 2. **Schema integrity**: `schema.yaml` is required, and included files must
    stay inside `yaml/` and resolve without cycles. Custom types (`list[T]`,
-   `dict[K,V]`, unions, classes, aliases, and registries) must resolve. The
-   validator also enforces `values`, `pattern`, `min_length`, and `size`
-   constraints.
+   `dict[K,V]`, unions, classes, aliases, and registries) must resolve. A
+   `portable_registry` reference must resolve to a regular file inside
+   `yaml/`. The validator also enforces `values`, `pattern`, `min_length`, and
+   `size` constraints.
 3. **Example specs**: Every example `spec.yaml` validates against the schemas,
    checking required fields, unknown fields, and registry payload shapes.
    Negative examples (folders prefixed with `negative-`) are structurally

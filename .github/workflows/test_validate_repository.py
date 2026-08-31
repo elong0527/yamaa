@@ -238,6 +238,44 @@ class TestValidatorCLI(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout)
 
+    def test_schema_portable_registry_path_resolves(self):
+        yaml_dir = self.root_dir / 'yaml'
+        registry_dir = yaml_dir / 'registry'
+        registry_dir.mkdir(parents=True)
+        (yaml_dir / 'schema.yaml').write_text(
+            'version: "1.0"\n'
+            'portable_registry: registry/portable-functions.yaml\n'
+            'root_class:\n  - f1: {type: str}\n'
+        )
+        (registry_dir / 'portable-functions.yaml').write_text(
+            'version: "1.0"\n'
+        )
+
+        result = subprocess.run(
+            [sys.executable, str(self.tool_path), '--root', str(self.root_dir)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_schema_portable_registry_path_cannot_escape_yaml_directory(self):
+        yaml_dir = self.root_dir / 'yaml'
+        yaml_dir.mkdir()
+        (yaml_dir / 'schema.yaml').write_text(
+            'version: "1.0"\n'
+            'portable_registry: ../outside.yaml\n'
+            'root_class:\n  - f1: {type: str}\n'
+        )
+        (self.root_dir / 'outside.yaml').write_text('version: "1.0"\n')
+
+        result = subprocess.run(
+            [sys.executable, str(self.tool_path), '--root', str(self.root_dir)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('inside the yaml directory', result.stdout.lower())
+
     def test_schema_include_cannot_escape_yaml_directory(self):
         yaml_dir = self.root_dir / 'yaml'
         yaml_dir.mkdir(exist_ok=True)

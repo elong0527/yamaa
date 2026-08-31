@@ -43,24 +43,6 @@ columns:
     derivation:
       source: ADVSPRE.AVAL
 
-  - name: LMS_L
-    type: float
-    label: LMS Power Coefficient
-    derivation:
-      source: GROWTH.L
-
-  - name: LMS_M
-    type: float
-    label: LMS Median Coefficient
-    derivation:
-      source: GROWTH.M
-
-  - name: LMS_S
-    type: float
-    label: LMS Variation Coefficient
-    derivation:
-      source: GROWTH.S
-
   - name: PARAMCD
     type: str
     label: Parameter Code
@@ -95,7 +77,7 @@ columns:
     label: LMS Standard Normal Score
     derivation:
       compute:
-        expr: "(POWER(AVALSRC / LMS_M, LMS_L) - 1) / (LMS_L * LMS_S)"
+        expr: "(POWER(AVALSRC / GROWTH.M, GROWTH.L) - 1) / (GROWTH.L * GROWTH.S)"
 
   - name: AVAL
     type: float
