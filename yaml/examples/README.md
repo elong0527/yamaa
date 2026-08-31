@@ -67,6 +67,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adsl-crossover-periods`](adam-adsl-crossover-periods/) | derive period-scoped treatments and dates across a washout |
 | [`adam-adsl-dependency-order`](adam-adsl-dependency-order/) | derive a chain of population flags |
 | [`adam-adsl-disposition`](adam-adsl-disposition/) | select the final subject disposition from DS |
+| [`adam-adsl-dose-adjustment-flag`](adam-adsl-dose-adjustment-flag/) | derive a dose adjustment flag from multiple sources |
 | [`adam-adsl-geography-normalization`](adam-adsl-geography-normalization/) | normalize collected country and group it into a region |
 | [`adam-adsl-identifier-parsing`](adam-adsl-identifier-parsing/) | parse the site from USUBJID with a collected fallback |
 | [`adam-adsl-mapping`](adam-adsl-mapping/) | translate collected values into a standard vocabulary |
