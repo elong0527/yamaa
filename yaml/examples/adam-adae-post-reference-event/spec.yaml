@@ -1,0 +1,103 @@
+schema_version: "1.0"
+domain: ADAE
+datasets:
+  AE: input/ae.csv
+base: AE
+keys: [STUDYID, USUBJID, AESEQ]
+
+output:
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, AFTCOVFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: AE.AESEQ
+
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation:
+      source: AE.AEDECOD
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation:
+      source: AE.AESTDTC
+
+  - name: ROWSEQ
+    type: int
+    label: Ordered Row Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [ASTDT, AESEQ]
+
+  - name: COVFL
+    type: str
+    label: COVID-19 Reference Event Flag
+    derivation:
+      case:
+        branches:
+          - when: "AEDECOD = 'COVID-19'"
+            then:
+              literal: Y
+
+  - name: COVSEQ
+    type: int
+    label: COVID-19 Occurrence Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [ASTDT, AESEQ]
+        filter: "COVFL = 'Y'"
+
+  - name: FCOVFL
+    type: str
+    label: First COVID-19 Occurrence Flag
+    derivation:
+      case:
+        branches:
+          - when: "COVSEQ = 1"
+            then:
+              literal: Y
+
+  - name: FCOVROW
+    type: int
+    label: Row Sequence of First COVID-19
+    derivation:
+      baseline_value:
+        group_by: [STUDYID, USUBJID]
+        value: ROWSEQ
+        flag: FCOVFL
+
+  - name: AFTCOVFL
+    type: str
+    label: After First COVID-19 Flag
+    derivation:
+      case:
+        branches:
+          - when: "ROWSEQ > FCOVROW"
+            then:
+              literal: Y
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 9
+      max: 9

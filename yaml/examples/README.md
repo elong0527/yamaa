@@ -39,6 +39,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adae-occurrence-flags`](adam-adae-occurrence-flags/) | flag the first occurrence at three levels |
 | [`adam-adae-partial-dates`](adam-adae-partial-dates/) | impute partial dates |
 | [`adam-adae-post-dose-onset`](adam-adae-post-dose-onset/) | classify an event by the moment it started |
+| [`adam-adae-post-reference-event`](adam-adae-post-reference-event/) | flag an event after a specific reference event |
 | [`adam-adae-query-flags`](adam-adae-query-flags/) | record which queries a coded event belongs to |
 | [`adam-adae-serious-event-sequence`](adam-adae-serious-event-sequence/) | number a subject's serious events in onset order |
 | [`adam-adae-severity-override`](adam-adae-severity-override/) | apply an approved severity correction |
