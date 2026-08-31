@@ -693,6 +693,54 @@ def example_spec_paths(example_dir: Path):
     )
 
 
+def validate_grouped_rows(spec, spec_label):
+    errors = []
+    rows = spec.get('rows')
+    if not isinstance(rows, list):
+        return errors
+
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict) or 'group_by' not in row:
+            continue
+
+        path = f"{spec_label}.rows[{index}].group_by"
+        group_by = row['group_by']
+        if not isinstance(group_by, list):
+            continue
+        if not group_by:
+            errors.append(f"ERROR: {path}: grouped row requires at least one variable")
+            continue
+
+        string_variables = [
+            variable for variable in group_by if isinstance(variable, str)
+        ]
+        duplicates = sorted(
+            variable
+            for variable in set(string_variables)
+            if string_variables.count(variable) > 1
+        )
+        if duplicates:
+            errors.append(
+                f"ERROR: {path}: duplicate group variable(s): "
+                f"{', '.join(duplicates)}"
+            )
+
+        driver = row.get('dataset', spec.get('base'))
+        if not isinstance(driver, str):
+            continue
+        for variable_index, variable in enumerate(group_by):
+            if not isinstance(variable, str):
+                continue
+            qualifier, separator, _ = variable.partition('.')
+            if not separator or qualifier != driver:
+                errors.append(
+                    f"ERROR: {path}[{variable_index}]: grouped row variable "
+                    f"{variable!r} must be qualified to driver {driver!r}"
+                )
+
+    return errors
+
+
 def validate_examples_structure(root: Path, env, warnings=None):
     errors = []
     if warnings is None:
@@ -735,6 +783,7 @@ def validate_examples_structure(root: Path, env, warnings=None):
             spec_errors = validate_type(
                 spec, ['root_class'], env, spec_label
             )
+            spec_errors.extend(validate_grouped_rows(spec, spec_label))
             is_negative = ex_dir.name.startswith('negative-')
             if not is_negative:
                 for spec_error in spec_errors:

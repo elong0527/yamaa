@@ -116,6 +116,10 @@ following a link out of the repository.
   input already maps one-to-one to its output usually needs columns, not row
   templates. `sdtm-vs-unit-standardization` is the deliberate exception, and it
   reorders its output to get per-test separation.
+- Add `row.group_by` only when one candidate row must be constructed from a
+  driver group. In that mode aggregate row derivations summarize the group and
+  `row.filter` decides whether the completed candidate is emitted; without it,
+  `row.filter` continues to select individual driver records before derivation.
 - Declare columns in dependency order: source and independent columns first,
   then each column only after every declared column it reads. Preserve the
   artifact layout independently in `output.columns`.

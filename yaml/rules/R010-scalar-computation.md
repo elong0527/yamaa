@@ -45,10 +45,13 @@ An arbitrary `DATASET.VARIABLE` reference is not permitted: bind the source
 variable to a column first and compute from it. Omitting that binding column
 from `output.columns` keeps it out of the final dataset.
 
-During row construction an identifier is either a variable of the row driver,
-qualified exactly as `row.filter` qualifies one, or an unqualified column
-derived by the same `rows` entry. No other dataset may be qualified, because
-row construction precedes the R003 join and sees only the row driver.
+During ungrouped row construction an identifier is either a variable of the
+row driver, qualified exactly as `row.filter` qualifies one, or an unqualified
+column derived by the same `rows` entry. During grouped row construction a
+qualified driver identifier must be one of the enclosing `row.group_by`
+variables; other values are first reduced to a row-derived column with
+`aggregate`. No other dataset may be qualified, because row construction
+precedes the R003 join and sees only the row driver.
 
 ```yaml
 - name: HEIGHTCM

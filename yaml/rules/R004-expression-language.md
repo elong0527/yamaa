@@ -36,6 +36,14 @@ it is `TRUE`; `FALSE` and `UNKNOWN` remove it.
 An identifier resolves against the phase in which the predicate is evaluated,
 as R001 defines.
 
+For an ungrouped row template, `row.filter` evaluates before row derivation and
+its identifiers name fields of that template's row driver. For a grouped row
+template, it evaluates after every candidate value completes stages 1 through
+4 of the R005 lifecycle; its identifiers are unqualified columns derived by
+that row template. The two uses share this Boolean language but do not share an
+evaluation point. Aggregate and window filters continue to select records
+inside their owning expression and do not suppress a candidate row.
+
 ## Unresolved
 
 The complete predicate grammar, coercion, collation, and literal grammar remain

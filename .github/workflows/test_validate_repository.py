@@ -158,6 +158,67 @@ class TestTypeValidation(unittest.TestCase):
         self.assertIn("expected int", errors[0])
 
 
+class TestGroupedRows(unittest.TestCase):
+    def test_accepts_driver_qualified_group_variables(self):
+        spec = {
+            "base": "ADLBIN",
+            "rows": [
+                {
+                    "id": "derived",
+                    "group_by": ["ADLBIN.USUBJID", "ADLBIN.VISIT"],
+                }
+            ],
+        }
+
+        errors = VALIDATOR.validate_grouped_rows(spec, "example/spec.yaml")
+
+        self.assertEqual(errors, [])
+
+    def test_rejects_empty_group(self):
+        spec = {
+            "base": "ADLBIN",
+            "rows": [{"id": "derived", "group_by": []}],
+        }
+
+        errors = VALIDATOR.validate_grouped_rows(spec, "example/spec.yaml")
+
+        self.assertTrue(errors)
+        self.assertIn("at least one", "\n".join(errors))
+
+    def test_rejects_unqualified_or_wrong_driver_variable(self):
+        spec = {
+            "base": "ADLBIN",
+            "rows": [
+                {
+                    "id": "derived",
+                    "dataset": "ADLBIN",
+                    "group_by": ["USUBJID", "OTHER.VISIT"],
+                }
+            ],
+        }
+
+        errors = VALIDATOR.validate_grouped_rows(spec, "example/spec.yaml")
+
+        self.assertEqual(len(errors), 2)
+        self.assertIn("driver 'ADLBIN'", "\n".join(errors))
+
+    def test_rejects_duplicate_group_variable(self):
+        spec = {
+            "base": "ADLBIN",
+            "rows": [
+                {
+                    "id": "derived",
+                    "group_by": ["ADLBIN.USUBJID", "ADLBIN.USUBJID"],
+                }
+            ],
+        }
+
+        errors = VALIDATOR.validate_grouped_rows(spec, "example/spec.yaml")
+
+        self.assertTrue(errors)
+        self.assertIn("duplicate", "\n".join(errors))
+
+
 class TestValidatorCLI(unittest.TestCase):
     def setUp(self):
         self.tool_path = Path(__file__).parent / 'validate_repository.py'

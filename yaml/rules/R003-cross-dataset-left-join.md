@@ -89,8 +89,9 @@ In both places `filter` is a predicate over right-side records only. A left row
 whose right side is empty after filtering has no match and receives missing,
 exactly as if no record had existed.
 
-This is not `row.filter`, which selects row-driver records during row
-construction, before any column is derived.
+This is not `row.filter`. R001 makes an ungrouped row filter select driver
+records before row derivation and a grouped row filter select completed
+candidate groups; neither is a right-side reduction filter.
 
 ## Multiple matches
 

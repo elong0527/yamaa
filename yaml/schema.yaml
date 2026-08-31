@@ -48,7 +48,7 @@ root_class:
     - rows:
         type: "list[row_class]"
         required: false
-        description: Templates constructing output rows from driving records; R001 evaluates them.
+        description: Templates constructing output rows from driving records or groups; R001 evaluates them.
     - verifications:
         type: [dataset_verification, "list[dataset_verification]"]
         required: false
@@ -140,10 +140,14 @@ row_class:
         type: dataset_id
         required: false
         description: Dataset driving this template's records; R001 falls back to base.
+    - group_by:
+        type: "list[variable]"
+        required: false
+        description: Non-empty driver-variable grain producing one candidate row per group; R001 defines grouped construction.
     - filter:
         type: sql
         required: false
-        description: Predicate selecting the driving records this template constructs a row from.
+        description: Predicate selecting driver records for an ungrouped template or completed candidate groups for a grouped template.
     - derivations:
         type: "dict[column_name, derivation]"
         required: true

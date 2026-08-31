@@ -1,0 +1,4 @@
+USUBJID,PARAMCD,AVAL,PARAM,VISIT
+P01,WBC,33,Leukocyte Count (10^9/L),CYCLE 1 DAY 1
+P01,WBC,34,Leukocyte Count (10^9/L),CYCLE 1 DAY 1
+P01,LYMLE,0.90,Lymphocytes (fraction of 1),CYCLE 1 DAY 1

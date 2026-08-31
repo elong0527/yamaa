@@ -3,6 +3,7 @@ require "set"
 require "yaml"
 
 IDENTIFIER = /[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/
+SQL_WORDS = Set.new(%w[AND BETWEEN FALSE IN IS LIKE NOT NULL OR TRUE UNKNOWN])
 
 def values(value)
   value.is_a?(Array) ? value : [value]
@@ -33,14 +34,21 @@ def variable_dependencies(value, declared, lookup_sources, resolving = Set.new)
   end
 end
 
-def identifier_dependencies(text, declared, lookup_sources)
+def identifier_tokens(text)
   return Set.new unless text.is_a?(String)
 
   unquoted = text.gsub(/'(?:''|[^'])*'/, " ")
-  unquoted.to_enum(:scan, IDENTIFIER).each_with_object(Set.new) do |_match, dependencies|
+  unquoted.to_enum(:scan, IDENTIFIER).each_with_object(Set.new) do |_match, tokens|
     token = Regexp.last_match[0]
     following = unquoted[Regexp.last_match.end(0)..].to_s.lstrip
     next if !token.include?(".") && following.start_with?("(")
+
+    tokens << token unless SQL_WORDS.include?(token.upcase)
+  end
+end
+
+def identifier_dependencies(text, declared, lookup_sources)
+  identifier_tokens(text).each_with_object(Set.new) do |token, dependencies|
 
     dependencies.merge(
       variable_dependencies(token, declared, lookup_sources)
@@ -336,6 +344,23 @@ def check(spec)
       graph[name].merge(
         derivation_dependencies(derivation, declared, lookup_sources)
       )
+    end
+
+    next unless row.key?("group_by") && row["filter"].is_a?(String)
+
+    filter_tokens = identifier_tokens(row["filter"])
+    qualified = filter_tokens.select { |token| token.include?(".") }
+    unless qualified.empty?
+      problems << "grouped row #{row["id"]} filter contains qualified " \
+                  "identifier(s): #{qualified.sort.join(', ')}"
+    end
+
+    row_columns = row["derivations"].keys.to_set
+    missing = filter_tokens.reject { |token| token.include?(".") }.to_set -
+              row_columns
+    unless missing.empty?
+      problems << "grouped row #{row["id"]} filter references column(s) " \
+                  "not derived by that row: #{missing.sort.join(', ')}"
     end
   end
 
