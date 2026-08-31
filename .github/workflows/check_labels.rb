@@ -1,7 +1,8 @@
 require "yaml"
 
 errors = []
-specs = Dir[File.join(__dir__, "*", "spec.yaml")].sort
+examples = File.expand_path("../../yaml/examples", __dir__)
+specs = Dir[File.join(examples, "*", "spec.yaml")].sort
 
 specs.each do |spec|
   relative_spec = spec.delete_prefix("#{Dir.pwd}/")

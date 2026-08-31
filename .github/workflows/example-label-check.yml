@@ -11,4 +11,4 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check example column labels
-        run: ruby yaml/examples/check_labels.rb
+        run: ruby .github/workflows/check_labels.rb

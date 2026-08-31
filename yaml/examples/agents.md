@@ -170,7 +170,7 @@ check merely to make the sample pass.
 ## Checks to run before finishing
 
     # every declared example column has a non-empty, human-readable label
-    ruby check_labels.rb
+    ruby ../../.github/workflows/check_labels.rb
 
     # no schema vocabulary reached the data-contract portion of a README,
     # and every negative example has exactly one remediation section
