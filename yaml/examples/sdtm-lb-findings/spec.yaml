@@ -8,21 +8,25 @@ keys: [STUDYID, USUBJID, LBSEQ]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ODM.StudyOID
 
   - name: DOMAIN
     type: str
+    label: Domain Abbreviation
     derivation:
       literal: LB
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ODM.SubjectKey
 
   - name: LBSEQ
     type: int
+    label: Sequence Number
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]
@@ -30,24 +34,31 @@ columns:
 
   - name: LBTESTCD
     type: str
+    label: Lab Test or Examination Short Name
 
   - name: LBTEST
     type: str
+    label: Lab Test or Examination Name
 
   - name: LBORRES
     type: str
+    label: Result or Finding in Original Units
 
   - name: LBORRESU
     type: str
+    label: Original Units
 
   - name: LBSTRESN
     type: float
+    label: Numeric Result/Finding in Standard Units
 
   - name: LBSTRESU
     type: str
+    label: Standard Units
 
   - name: LBDTC
     type: date
+    label: Date/Time of Specimen Collection
     derivation:
       source: ODM.IT.LB.LBDTC
 

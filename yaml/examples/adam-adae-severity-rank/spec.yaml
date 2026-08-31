@@ -8,21 +8,25 @@ keys: [STUDYID, USUBJID, AESEQ]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: AE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: AE.USUBJID
 
   - name: AESEQ
     type: int
+    label: Sequence Number
     derivation:
       source: AE.AESEQ
 
   - name: ASEV
     type: str
+    label: Analysis Severity/Intensity
     derivation:
       source: AE.AESEV
     verifications:
@@ -31,6 +35,7 @@ columns:
 
   - name: ASEVN
     type: int
+    label: Analysis Severity/Intensity (N)
     derivation:
       mapping:
         source: ASEV
@@ -42,6 +47,7 @@ columns:
 
   - name: SEVRANK
     type: int
+    label: Severity Rank
     derivation:
       rank:
         group_by: [STUDYID, USUBJID]
@@ -52,6 +58,7 @@ columns:
 
   - name: SEVLVL
     type: int
+    label: Severity Level
     derivation:
       rank:
         method: dense

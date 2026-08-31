@@ -9,46 +9,55 @@ keys: [STUDYID, USUBJID, CMSEQ]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: CM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: CM.USUBJID
 
   - name: CMSEQ
     type: int
+    label: Sequence Number
     derivation:
       source: CM.CMSEQ
 
   - name: CMTRT
     type: str
+    label: Reported Name of Drug, Medication, or Therapy
     derivation:
       source: CM.CMTRT
 
   - name: ASTDT
     type: date
+    label: Analysis Start Date
     derivation:
       source: CM.CMSTDTC
 
   - name: AENDT
     type: date
+    label: Analysis End Date
     derivation:
       source: CM.CMENDTC
 
   - name: TRTSDT
     type: date
+    label: Date of First Exposure to Treatment
     derivation:
       source: ADSL.TRTSDT
 
   - name: TRTEDT
     type: date
+    label: Date of Last Exposure to Treatment
     derivation:
       source: ADSL.TRTEDT
 
   - name: ONTRTFL
     type: str
+    label: On-Treatment Flag
     derivation:
       case:
         branches:

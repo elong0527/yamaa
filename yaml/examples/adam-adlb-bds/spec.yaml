@@ -9,43 +9,53 @@ keys: [STUDYID, USUBJID, PARAMCD, ADT, ASEQ]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: LB.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: LB.USUBJID
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
 
   - name: PARAM
     type: str
+    label: Parameter
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       source: LB.LBDTC
 
   - name: TRTSDT
     type: date
+    label: Date of First Exposure to Treatment
     derivation:
       source: ADSL.TRTSDT
 
   - name: TRT01A
     type: str
+    label: Actual Treatment for Period 01
     derivation:
       source: ADSL.TRT01A
 
   - name: AVAL
     type: float
+    label: Analysis Value
 
   - name: AVALU
     type: str
+    label: Analysis Value Unit
 
   - name: ABLFL
     type: str
+    label: Baseline Record Flag
     derivation:
       baseline_flag:
         group_by: [STUDYID, USUBJID, PARAMCD]
@@ -54,6 +64,7 @@ columns:
 
   - name: BASE
     type: float
+    label: Baseline Value
     derivation:
       baseline_value:
         group_by: [STUDYID, USUBJID, PARAMCD]
@@ -62,18 +73,21 @@ columns:
 
   - name: CHG
     type: float
+    label: Change from Baseline
     derivation:
       compute:
         expr: "AVAL - BASE"
 
   - name: PCHG
     type: float
+    label: Percent Change from Baseline
     derivation:
       compute:
         expr: "100 * (AVAL - BASE) / NULLIF(BASE, 0)"
 
   - name: ASEQ
     type: int
+    label: Analysis Sequence Number
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]

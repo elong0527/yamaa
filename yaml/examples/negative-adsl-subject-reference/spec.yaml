@@ -8,27 +8,32 @@ keys: [STUDYID, USUBJID]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM.USUBJID
 
   - name: SITEID
     type: str
+    label: Study Site Identifier
     output: false
     derivation:
       source: DM.SITEID
 
   - name: SUBJID
     type: str
+    label: Subject Identifier for the Study
     output: false
     derivation:
       source: DM.SUBJID
 
   - name: SUBJREF
     type: str
+    label: Subject Display Reference
     derivation:
       str_template: "{SITEID + ':' + SUBJID}"

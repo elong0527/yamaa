@@ -1,0 +1,14 @@
+name: Example label check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  example-label-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check example column labels
+        run: ruby yaml/examples/check_labels.rb

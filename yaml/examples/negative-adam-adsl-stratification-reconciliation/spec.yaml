@@ -10,51 +10,61 @@ keys: [STUDYID, USUBJID]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM.USUBJID
 
   - name: METSTATR
     type: str
+    label: Randomization Metastatic Disease Status
     derivation:
       source: RE.METSTAT
 
   - name: ECOG0R
     type: str
+    label: Randomization Baseline ECOG Performance Status
     derivation:
       source: RE.ECOG0
 
   - name: REGIONUSR
     type: str
+    label: Randomization United States Region
     derivation:
       source: RE.REGIONUS
 
   - name: METSTAT
     type: str
+    label: Metastatic Disease Status
     derivation:
       source: MH.METSTAT
 
   - name: ECOG0
     type: str
+    label: Baseline ECOG Performance Status
     derivation:
       source: DM.ECOG0
 
   - name: REGIONUS
     type: str
+    label: United States Region
     derivation:
       source: DM.REGIONUS
 
   - name: STRAT1R
     type: str
+    label: Randomization Stratification Factor 1
     derivation:
       str_template: "{METSTATR}|{ECOG0R}|{REGIONUSR}"
 
   - name: STRAT1
     type: str
+    label: Analysis Stratification Factor 1
     derivation:
       str_template: "{METSTAT}|{ECOG0}|{REGIONUS}"
 

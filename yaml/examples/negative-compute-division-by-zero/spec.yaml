@@ -8,31 +8,37 @@ keys: [STUDYID, USUBJID, PARAMCD]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: LB.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: LB.USUBJID
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       source: LB.LBTESTCD
 
   - name: AVAL
     type: float
+    label: Analysis Value
     derivation:
       source: LB.LBSTRESN
 
   - name: BASE
     type: float
+    label: Baseline Value
     derivation:
       source: LB.LBBLRESN
 
   - name: PCHG
     type: float
+    label: Percent Change from Baseline
     derivation:
       compute:
         expr: "100 * (AVAL - BASE) / BASE"

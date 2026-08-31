@@ -9,31 +9,37 @@ keys: [STUDYID, USUBJID, EXTRT]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: TRT.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: TRT.USUBJID
 
   - name: EXTRT
     type: str
+    label: Name of Treatment
     derivation:
       source: TRT.EXTRT
 
   - name: DOSECUM
     type: float
+    label: Cumulative Dose
     derivation:
       aggregate: "SUM(EX.EXDOSE)"
 
   - name: NDOSREC
     type: int
+    label: Number of Dose Records
     derivation:
       aggregate: "COUNT(EX.EXSEQ)"
 
   - name: NDOSVAL
     type: int
+    label: Number of Nonmissing Doses
     derivation:
       aggregate: "COUNT(EX.EXDOSE)"
 

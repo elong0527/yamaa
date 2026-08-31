@@ -8,28 +8,33 @@ keys: [STUDYID, USUBJID]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: LB.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: LB.USUBJID
 
   - name: CELLCNT
     type: int
+    label: Cell Concentration
     output: false
     derivation:
       source: LB.CELLCNT
 
   - name: VOLUML
     type: int
+    label: Sample Volume (L)
     output: false
     derivation:
       source: LB.VOLUML
 
   - name: CELLTOT
     type: int
+    label: Total Cell Count
     derivation:
       compute:
         expr: "CELLCNT * VOLUML"

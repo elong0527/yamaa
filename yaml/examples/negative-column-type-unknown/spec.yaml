@@ -8,20 +8,24 @@ keys: [STUDYID, USUBJID, LBSEQ]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: LB.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: LB.USUBJID
 
   - name: LBSEQ
     type: int
+    label: Sequence Number
     derivation:
       source: LB.LBSEQ
 
   - name: AVAL
     type: number
+    label: Analysis Value
     derivation:
       source: LB.LBSTRESN

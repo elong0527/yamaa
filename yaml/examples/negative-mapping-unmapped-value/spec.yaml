@@ -8,21 +8,25 @@ keys: [STUDYID, USUBJID, RSSEQ]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: RS.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: RS.USUBJID
 
   - name: RSSEQ
     type: int
+    label: Sequence Number
     derivation:
       source: RS.RSSEQ
 
   - name: AVALC
     type: str
+    label: Analysis Value (C)
     derivation:
       mapping:
         source: RS.OVRLRESP
