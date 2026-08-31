@@ -27,12 +27,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python3 -m pip install -r yaml/tools/requirements.txt
+          python3 -m pip install -r .github/workflows/requirements.txt
 
       - name: Run unit tests
         run: |
-          python3 yaml/tools/test_validate_repository.py
+          python3 .github/workflows/test_validate_repository.py
 
       - name: Run repository validation
         run: |
-          python3 yaml/tools/validate_repository.py
+          python3 .github/workflows/validate_repository.py

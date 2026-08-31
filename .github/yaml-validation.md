@@ -41,7 +41,7 @@ not**:
 To run the validator locally:
 
 ```bash
-python3 yaml/tools/validate_repository.py --root .
+python3 .github/workflows/validate_repository.py --root .
 ```
 
 By default, the script infers the repository root relative to its own path.
@@ -61,5 +61,5 @@ and dependency-order policies remain owned by the existing Ruby checks under
 To treat warnings as errors, run with the `--warnings-as-errors` flag:
 
 ```bash
-python3 yaml/tools/validate_repository.py --warnings-as-errors
+python3 .github/workflows/validate_repository.py --warnings-as-errors
 ```
