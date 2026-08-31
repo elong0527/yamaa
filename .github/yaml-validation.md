@@ -16,7 +16,8 @@ The validation ensures:
    constraints.
 3. **Example specs**: Every `spec.yaml` or `spec_<variant>.yaml` validates
    against the schemas, checking required fields, unknown fields, and registry
-   payload shapes.
+   payload shapes. A grouped row must declare a non-empty, duplicate-free
+   `group_by` whose variables are qualified to that row's driver.
    Negative examples (folders prefixed with `negative-`) are structurally
    validated; structural errors are only suppressed if their named path matches
    a `spec_path` declared in `expected/error.yaml` with `phase: validation`.
@@ -33,8 +34,8 @@ The validation ensures:
    example's `README.md`.
 
 ## Explicit Non-Goals
-The validator only ensures structural correctness. At this time, it **does
-not**:
+The validator ensures structural correctness and the grouped-row binding check
+listed above. At this time, it **does not**:
 - Execute clinical derivations.
 - Materialize shorthand canonical forms (no transformed document is returned).
 - Reproduce golden output values in the `.csv` files.

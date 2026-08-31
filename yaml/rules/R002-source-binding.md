@@ -2,7 +2,7 @@
 id: R002
 title: Source Binding
 status: normative
-applies_to: [root.datasets, root.base, row.dataset, expression.source, string_template]
+applies_to: [root.datasets, root.base, row.dataset, row.group_by, expression.source, string_template]
 depends_on: [R003, R006, R008, R014, R015]
 ---
 
@@ -55,6 +55,13 @@ to.
 
 A qualified reference to the current row-driving dataset reads the current
 source record. A qualified reference to another dataset follows R003.
+
+During grouped row construction there is no single current source record. A
+qualified reference to the row driver is therefore scalar only when the exact
+variable appears in the enclosing `row.group_by`; it then returns that group's
+key value. Reading any other driver field with a scalar `source` is an error.
+An aggregate expression is how a grouped row reduces non-key fields, as R007
+and R013 define.
 
 Operation operand fields typed as `variable` accept a concise source or current
 output variable. Compose operations through an explicitly named derived column:
@@ -137,6 +144,8 @@ absent-item handler.
 - A dataset identifier equal to the output `domain`: fail.
 - A source path that cannot be resolved: fail.
 - An unresolved unqualified reference: fail.
+- A scalar source in a grouped row naming a driver field absent from that
+  row's `group_by`: fail.
 - An ODM contextual reference with no available context column: fail.
 - More than one ODM contextual match: fail unless locally handled.
 - No ODM contextual match: fail unless locally handled.

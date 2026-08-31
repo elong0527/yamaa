@@ -59,6 +59,14 @@ becoming a join, a window, or a second spelling of `compute`, and they leave
 where an aggregate may be used with R007 and the join that consumes it with
 R003.
 
+A row template may declare `group_by` when its driver records must first form
+one candidate row per group. Aggregate row derivations reduce the current
+driver group, scalar derivations compose those results, and the template's
+existing `filter` then decides whether the completed candidate is appended.
+Without `group_by`, `row.filter` keeps its original meaning of selecting driver
+records before derivation. R001 owns both modes, and R013's `ONLY` reducer makes
+a required single source record reject duplicates rather than choose one.
+
 `output.columns` keeps binding columns out of the final dataset while retaining
 them as named intermediate values. A `compute` formula may also read a numeric
 field directly from a declared record lookup; this avoids a binding column when
