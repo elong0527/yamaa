@@ -28,7 +28,7 @@ and must not be treated as a portable implementation contract.
 - Register every expression in an `expressions` registry and every verification
   in its applicable verification registry before an example uses it.
 - Register scalar functions and reducers in R017's shared portable registry,
-  regenerate its documentation, and run both conformance implementations.
+  regenerate its documentation, and run both CI validators.
 - Keep handler fields local to the expression or result stage that can use them;
   do not recreate a generic exception list.
 - Store each cohesive semantic area in one rule file under `rules/`.

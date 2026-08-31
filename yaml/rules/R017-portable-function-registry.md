@@ -186,7 +186,8 @@ requires all of the following evidence:
    project-specific call or distorting the data model;
 3. its types, missing values, failures, determinism, and cross-runtime accuracy
    can be closed declaratively; and
-4. shared fixtures pass in R and Python.
+4. shared fixture contracts pass the R and Python CI validators; runtime
+   evaluation must pass the same fixtures when an implementation lands.
 
 An extension pack is for a reusable but non-core domain whose compatibility
 can still be closed by the same test. A sponsor algorithm, external service,
@@ -201,10 +202,12 @@ have at least one evaluation case. The same file fixes central and tail values
 for probability functions and validation cases for name, kind, arity, type,
 namespace, extension, and version handling.
 
-R and Python loaders must validate the registry before using a fixture. A
-runtime may dispatch to native code only after registry validation and must
-compare the result using the entry's accuracy contract. A fixture contains
-values and expected results, not executable expressions.
+The R and Python CI checks validate the same registry metadata, call contracts,
+fixture shape, and coverage. They deliberately do not implement function or
+reducer evaluation. A future runtime may dispatch to native code only after
+registry validation and must evaluate these fixtures using each entry's
+accuracy contract. A fixture contains values and expected results, not
+executable expressions.
 
 Documentation tables are generated from the registry. Schema files reference
 the registry and do not enumerate its names. Normative behavior therefore has

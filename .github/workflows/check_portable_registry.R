@@ -1,8 +1,4 @@
-# Shared portable function registry support.
-#
-# These internal helpers validate the declarative registry and its conformance
-# fixtures. Expression parsing and dataset execution remain outside the current
-# R package implementation.
+# CI validation for the shared portable function registry.
 
 .portable_registry_error <- function(condition, ...) {
   context <- list(...)
@@ -380,95 +376,7 @@
   entry
 }
 
-.evaluate_portable <- function(entry, arguments) {
-  name <- entry$canonical_name
-  result <- if (identical(entry$evaluation_kind, "reducer")) {
-    .evaluate_portable_reducer(name, arguments[[1]])
-  } else {
-    .evaluate_portable_scalar(name, arguments)
-  }
-  if (is.numeric(result) && length(result) == 1 && !is.na(result) && !is.finite(result)) {
-    .portable_registry_error("non_finite_result", name = name)
-  }
-  result
-}
-
-.evaluate_portable_scalar <- function(name, arguments) {
-  missing <- vapply(arguments, is.null, logical(1))
-  if (!name %in% c("COALESCE", "GREATEST", "LEAST", "NULLIF") && any(missing)) {
-    return(NULL)
-  }
-  present <- arguments[!missing]
-  if (identical(name, "COALESCE")) return(if (length(present)) present[[1]] else NULL)
-  if (identical(name, "GREATEST")) return(if (length(present)) max(unlist(present)) else NULL)
-  if (identical(name, "LEAST")) return(if (length(present)) min(unlist(present)) else NULL)
-  if (identical(name, "NULLIF")) {
-    x <- arguments[[1]]
-    y <- arguments[[2]]
-    return(if (is.null(x) || (!is.null(y) && isTRUE(x == y))) NULL else x)
-  }
-
-  x <- arguments[[1]]
-  if (identical(name, "ABS")) return(abs(x))
-  if (identical(name, "CEIL")) return(as.numeric(ceiling(x)))
-  if (identical(name, "FLOOR")) return(as.numeric(floor(x)))
-  if (identical(name, "TRUNC")) return(as.numeric(trunc(x)))
-  if (identical(name, "SQRT")) {
-    if (x < 0) .portable_registry_error("domain_error", name = name)
-    return(sqrt(x))
-  }
-  if (identical(name, "POWER")) {
-    y <- arguments[[2]]
-    if ((x == 0 && y < 0) || (x < 0 && y != trunc(y))) {
-      .portable_registry_error("domain_error", name = name)
-    }
-    return(x ^ y)
-  }
-  if (identical(name, "EXP")) return(exp(x))
-  if (identical(name, "LN")) {
-    if (x <= 0) .portable_registry_error("domain_error", name = name)
-    return(log(x))
-  }
-  if (identical(name, "MOD")) {
-    y <- arguments[[2]]
-    if (y == 0) .portable_registry_error("domain_error", name = name)
-    return(x - trunc(x / y) * y)
-  }
-  if (identical(name, "NORMAL_CDF")) return(pnorm(x))
-  .portable_registry_error("unknown_function", name = name)
-}
-
-.evaluate_portable_reducer <- function(name, values) {
-  if (identical(name, "COUNT")) {
-    if (length(values) > 0 && all(unlist(values) == "__record__")) return(length(values))
-    return(sum(!vapply(values, is.null, logical(1))))
-  }
-  present <- values[!vapply(values, is.null, logical(1))]
-  if (length(present) == 0) return(NULL)
-  present <- unlist(present)
-  if (identical(name, "SUM")) return(sum(present))
-  if (identical(name, "MIN")) return(min(present))
-  if (identical(name, "MAX")) return(max(present))
-  if (identical(name, "MEAN")) return(sum(present) / length(present))
-  .portable_registry_error("unknown_function", name = name)
-}
-
-.portable_results_equal <- function(entry, actual, expected) {
-  if (is.null(actual) || is.null(expected)) return(is.null(actual) && is.null(expected))
-  if (is.numeric(expected)) {
-    if (identical(entry$accuracy$mode, "exact")) {
-      return(isTRUE(actual == expected))
-    }
-    tolerance <- max(
-      entry$accuracy$absolute_tolerance,
-      entry$accuracy$relative_tolerance * max(abs(actual), abs(expected))
-    )
-    return(abs(actual - expected) <= tolerance)
-  }
-  identical(actual, expected)
-}
-
-.run_portable_conformance <- function(registry_path, fixtures_path) {
+.check_portable_registry <- function(registry_path, fixtures_path) {
   fixture <- .portable_read_registry(fixtures_path)
   .portable_require_fields(
     fixture,
@@ -482,6 +390,12 @@
 
   covered <- character()
   for (case in fixture$evaluation_cases) {
+    .portable_require_fields(
+      case,
+      c("id", "name", "evaluation_kind", "argument_types", "arguments", "expected"),
+      paste0(fixtures_path, ".", if (is.null(case$id)) "<unknown>" else case$id),
+      "specification_version"
+    )
     entry <- .validate_portable_call(
       registry,
       case$name,
@@ -489,9 +403,8 @@
       case$argument_types,
       if (is.null(case$specification_version)) "1.0" else case$specification_version
     )
-    actual <- .evaluate_portable(entry, case$arguments)
-    if (!.portable_results_equal(entry, actual, case$expected)) {
-      stop(case$id, ": conformance result differs")
+    if (length(case$arguments) != length(case$argument_types)) {
+      stop(case$id, ": argument values and types differ")
     }
     covered <- c(covered, entry$canonical_name)
   }
@@ -530,3 +443,16 @@
     validation_cases = length(fixture$validation_cases)
   ))
 }
+
+arguments <- commandArgs(trailingOnly = TRUE)
+if (length(arguments) != 2) {
+  stop("usage: check_portable_registry.R REGISTRY FIXTURES")
+}
+counts <- .check_portable_registry(arguments[[1]], arguments[[2]])
+cat(
+  "Portable registry validated",
+  counts[["evaluation_cases"]],
+  "evaluation contracts and",
+  counts[["validation_cases"]],
+  "validation fixtures.\n"
+)

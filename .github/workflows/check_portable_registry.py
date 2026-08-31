@@ -1,9 +1,4 @@
-"""Load and validate the shared portable function registry.
-
-This module is intentionally independent of an expression parser. It proves
-that Python can consume the same declarative call contracts and conformance
-fixtures as R; R010 and R013 remain the owners of expression evaluation.
-"""
+"""CI validation for the shared portable function registry."""
 
 from __future__ import annotations
 
@@ -521,112 +516,7 @@ class PortableRegistry:
         return entry
 
 
-def evaluate_portable(entry: Mapping[str, Any], arguments: Sequence[Any]) -> Any:
-    """Evaluate fixture values after registry validation."""
-
-    name = entry["canonical_name"]
-    if entry["evaluation_kind"] == "reducer":
-        result = _evaluate_reducer(name, arguments[0])
-    else:
-        result = _evaluate_scalar(name, arguments)
-    if isinstance(result, float) and not math.isfinite(result):
-        raise PortableRegistryError("non_finite_result", name=name)
-    if isinstance(result, int) and not -(2**63) <= result <= 2**63 - 1:
-        raise PortableRegistryError("integer_overflow", name=name)
-    return result
-
-
-def _evaluate_scalar(name: str, arguments: Sequence[Any]) -> Any:
-    if name not in {"COALESCE", "GREATEST", "LEAST", "NULLIF"} and any(
-        value is None for value in arguments
-    ):
-        return None
-    if name == "COALESCE":
-        return next((value for value in arguments if value is not None), None)
-    if name == "GREATEST":
-        values = [value for value in arguments if value is not None]
-        return max(values) if values else None
-    if name == "LEAST":
-        values = [value for value in arguments if value is not None]
-        return min(values) if values else None
-    if name == "NULLIF":
-        x, y = arguments
-        return None if x is None or (y is not None and x == y) else x
-
-    if name == "ABS":
-        if arguments[0] == -(2**63):
-            raise PortableRegistryError("domain_error", name=name)
-        return abs(arguments[0])
-    if name == "CEIL":
-        return float(math.ceil(arguments[0]))
-    if name == "FLOOR":
-        return float(math.floor(arguments[0]))
-    if name == "TRUNC":
-        return float(math.trunc(arguments[0]))
-    if name == "SQRT":
-        if arguments[0] < 0:
-            raise PortableRegistryError("domain_error", name=name)
-        return math.sqrt(arguments[0])
-    if name == "POWER":
-        x, y = arguments
-        if (x == 0 and y < 0) or (x < 0 and not float(y).is_integer()):
-            raise PortableRegistryError("domain_error", name=name)
-        try:
-            return math.pow(x, y)
-        except (OverflowError, ValueError) as error:
-            raise PortableRegistryError("domain_error", name=name) from error
-    if name == "EXP":
-        try:
-            return math.exp(arguments[0])
-        except OverflowError as error:
-            raise PortableRegistryError("non_finite_result", name=name) from error
-    if name == "LN":
-        if arguments[0] <= 0:
-            raise PortableRegistryError("domain_error", name=name)
-        return math.log(arguments[0])
-    if name == "MOD":
-        if arguments[1] == 0:
-            raise PortableRegistryError("domain_error", name=name)
-        return math.fmod(arguments[0], arguments[1])
-    if name == "NORMAL_CDF":
-        return 0.5 * math.erfc(-arguments[0] / math.sqrt(2.0))
-    raise PortableRegistryError("unknown_function", name=name)
-
-
-def _evaluate_reducer(name: str, values: Sequence[Any]) -> Any:
-    present = [value for value in values if value is not None]
-    if name == "COUNT":
-        if values and all(value == "__record__" for value in values):
-            return len(values)
-        return len(present)
-    if not present:
-        return None
-    if name == "SUM":
-        return sum(present)
-    if name == "MIN":
-        return min(present)
-    if name == "MAX":
-        return max(present)
-    if name == "MEAN":
-        return sum(present) / len(present)
-    raise PortableRegistryError("unknown_function", name=name)
-
-
-def _results_equal(entry: Mapping[str, Any], actual: Any, expected: Any) -> bool:
-    if actual is None or expected is None:
-        return actual is expected
-    if isinstance(expected, (int, float)) and not isinstance(expected, bool):
-        if entry["accuracy"]["mode"] == "exact":
-            return actual == expected
-        absolute = entry["accuracy"]["absolute_tolerance"]
-        relative = entry["accuracy"]["relative_tolerance"]
-        return abs(actual - expected) <= max(
-            absolute, relative * max(abs(actual), abs(expected))
-        )
-    return actual == expected
-
-
-def run_conformance(
+def check_portable_registry(
     registry_path: str | Path, fixtures_path: str | Path
 ) -> tuple[int, int]:
     registry_path = Path(registry_path)
@@ -643,17 +533,27 @@ def run_conformance(
 
     covered = set()
     for case in fixture["evaluation_cases"]:
+        _require_fields(
+            case,
+            {
+                "id",
+                "name",
+                "evaluation_kind",
+                "argument_types",
+                "arguments",
+                "expected",
+            },
+            f"{fixtures_path}.{case.get('id', '<unknown>')}",
+            optional={"specification_version"},
+        )
         entry = registry.validate_call(
             case["name"],
             case["evaluation_kind"],
             case["argument_types"],
             case.get("specification_version", "1.0"),
         )
-        actual = evaluate_portable(entry, case["arguments"])
-        if not _results_equal(entry, actual, case["expected"]):
-            raise AssertionError(
-                f"{case['id']}: expected {case['expected']!r}, got {actual!r}"
-            )
+        if len(case["arguments"]) != len(case["argument_types"]):
+            raise AssertionError(f"{case['id']}: argument values and types differ")
         covered.add(entry["canonical_name"])
     required = {entry["canonical_name"] for entry in registry.core["entries"]}
     if covered != required:
@@ -688,7 +588,7 @@ def render_documentation(registry: PortableRegistry) -> str:
     lines = [
         "# Portable function registry",
         "",
-        "<!-- Generated by python -m yamaa.portable_registry. Do not edit. -->",
+        "<!-- Generated by .github/workflows/check_portable_registry.py. -->",
         "",
         f"Registry version: `{registry.core['registry_version']}`",
         "",
@@ -739,7 +639,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--check-doc", type=Path)
     args = parser.parse_args(argv)
 
-    evaluation_count, validation_count = run_conformance(
+    evaluation_count, validation_count = check_portable_registry(
         args.registry, args.fixtures
     )
     registry = PortableRegistry.load(args.registry)
@@ -751,8 +651,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if actual != rendered:
             raise SystemExit(f"generated documentation differs: {args.check_doc}")
     print(
-        f"Portable registry passed {evaluation_count} evaluation and "
-        f"{validation_count} validation fixtures."
+        f"Portable registry validated {evaluation_count} evaluation contracts "
+        f"and {validation_count} validation fixtures."
     )
     return 0
 
