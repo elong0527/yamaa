@@ -2,7 +2,7 @@
 id: R015
 title: Record Lookup
 status: normative
-applies_to: [root.record_lookups, record_lookup_class, expression.source]
+applies_to: [root.record_lookups, record_lookup_class, expression.source, numeric_expression]
 depends_on: [R001, R002, R003, R004, R005, R006, R007, R008, R014]
 ---
 
@@ -65,17 +65,23 @@ A record lookup matches its `dataset` against each constructed current row:
    exactly as R003 defines them, and at least one is required.
 3. `between`, when declared, narrows the equality-matched records as described
    below.
-4. The remaining pool is resolved by the lookup's `order_by` and `keep` when
-   they are declared. Without them, more than one surviving record fails.
+4. When `order_by` and `keep` are declared, the remaining records are ordered
+   by R007's order terms and `first` or `last` is retained; remaining ties are
+   resolved by record order. When they are not declared, more than one
+   surviving record fails.
 
 `source` and `key` are declared together or not at all, and so are `order_by`
 and `keep`.
 
-A record lookup may also match by range. Declaring `between` adds one `value`
-the current row reads and one `lower` or `upper` column of the lookup's dataset.
-A record is eligible when every declared comparison holds: `lower <= value`
-and `value <= upper`. Either bound may be omitted for a one-sided match; every
-stated endpoint remains inclusive.
+A record lookup may also match by a closed range. Declaring `between` adds one
+`value` the current row reads and `lower` and `upper` columns of the lookup's
+dataset. A record is eligible when `lower <= value` and `value <= upper`; both
+endpoints are inclusive.
+
+The value and both bounds must be mutually comparable under R007. `int` and
+`float` may compare through R010's numeric promotion; every other runtime type
+must be the same. No operand is converted implicitly to make the comparison
+work.
 
 A missing `between.value` is an incomplete match, answered before the right
 side is searched. A right-side record missing a stated bound is ineligible, and
@@ -89,7 +95,8 @@ as a `source` variable is.
 ## Reading a record lookup
 
 A variable qualified by a record lookup `id` reads that column of the selected
-record, in any field typed as `variable`:
+record in any field typed as `variable`. R010 also permits the same qualified
+form as an identifier inside a column-level `numeric_expression`:
 
 ```yaml
 - name: RFXENDTC
@@ -100,19 +107,23 @@ record, in any field typed as `variable`:
   type: float
   derivation:
     source: LASTEX.EXDOSE
+- name: EXDOSE2
+  type: float
+  derivation:
+    compute:
+      expr: "2 * LASTEX.EXDOSE"
 ```
 
 The named column must exist in the record lookup's dataset. A stored value
 carries the type R014 gives that field.
 
 A record lookup is not evaluated ahead of the columns that read it. It resolves
-where they do, so a column reading one depends on the record lookup's own
-`source` variables under R001, exactly as a column using `mapping_from` depends
-on its source variables. A record lookup's `filter` and `order_by` name records
-of its own dataset and contribute no output-column dependency. Its `source`
-variables do contribute dependencies, so R001 detects a cycle when a column
-reads a record lookup whose match depends directly or indirectly on that
-column.
+where they do. A record lookup's `filter` and `order_by` name records of its own
+dataset and contribute no output-column dependency. Its `source` and
+`between.value` variables do contribute dependencies, exactly as a column using
+`mapping_from` depends on its source variables. R001 therefore detects a cycle
+when a column reads a record lookup whose match depends directly or indirectly
+on that column.
 
 ## When no record is selected
 
@@ -156,8 +167,10 @@ second is an absent record, and `unmatched` answers only for the second.
   R003.
 - More than one surviving record on a lookup with no `order_by`: fail, as an
   unhandled multiple match under R003.
-- A `between` declaring neither `lower` nor `upper`, or naming a column the
-  lookup's dataset does not have: fail.
+- A `between` missing `lower` or `upper`, or naming a column the lookup's
+  dataset does not have: fail.
+- A `between.value`, `lower`, and `upper` that are not mutually comparable:
+  fail before data is read and report their runtime types.
 - A variable qualified by a record lookup `id` naming a column its dataset does
   not have: fail under R002.
 - A missing declared `source` or `between.value` where `incomplete` resolves

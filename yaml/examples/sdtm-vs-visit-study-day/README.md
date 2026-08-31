@@ -1,7 +1,7 @@
 # SDTM VS: attach visit metadata and study day to a result
 
-This example uses collected vital signs with DM and the trial-visits table and
-a `yamaa` specification to derive one record per collected result:
+This example uses collected vital signs with DM, the trial-visits table, and a
+study-defined epoch-range table to derive one record per collected result:
 
 - `VSTESTCD`, `VSORRES`, `VSDTC`, and `VISIT` are the test, the result, the
   date, and the visit label as collected;
@@ -17,4 +17,8 @@ a `yamaa` specification to derive one record per collected result:
   belonging to a subject with no reference date, has no study day.
 
 The reference date itself is not part of a VS record, so it is used to derive
-the study day and then dropped.
+the study day and then dropped. This example assumes all subjects share epoch
+transitions expressed relative to that reference date; a design whose epochs
+follow arm-specific or actual subject element dates needs a correspondingly
+keyed source. The epoch-range input is an example fixture, not a standard SDTM
+trial-design domain.

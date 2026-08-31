@@ -61,7 +61,9 @@ where an aggregate may be used with R007 and the join that consumes it with
 R003.
 
 `output.columns` keeps binding columns out of the final dataset while retaining
-them as named intermediate values.
+them as named intermediate values. A `compute` formula may also read a numeric
+field directly from a declared record lookup; this avoids a binding column when
+the lookup already gives the selected record a stable name.
 
 A `record_lookups` entry names one record of another dataset so that several
 columns can read it, which no expression can do while each returns one value.
@@ -79,7 +81,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `str_concat` | An ordered list of expressions, because concatenating requires literals beside sources |
 | `str_template` | One closed string template over named variables (R012) |
 | `mapping_from` | One or more named sources paired by position with declared right-side key columns; exceptional results are literals |
-| `compute` | One closed numeric expression over named output columns (R010) |
+| `compute` | One closed numeric expression over named output columns and declared record-lookup fields (R010) |
 | `date_diff`, `study_day` | Named variable operands; `date_diff` declares which endpoints it counts |
 | `date_impute` | One named source plus integer literals for the imputed components; exceptional results are literals |
 | `date_precision` | One named source; exceptional results are literals |

@@ -316,7 +316,10 @@ def check(spec)
   values(document["record_lookups"]).each do |lookup|
     next unless lookup.is_a?(Hash) && lookup["id"]
 
-    lookup_sources[lookup["id"]] = lookup["source"] || document["keys"]
+    lookup_sources[lookup["id"]] = [
+      *values(lookup["source"] || document["keys"]),
+      lookup.dig("between", "value")
+    ].compact
   end
 
   graph = names.to_h { |name| [name, Set.new] }
@@ -385,20 +388,24 @@ rescue StandardError => error
   [error.message]
 end
 
-examples = File.expand_path("../../yaml/examples", __dir__)
-specs = if ARGV.empty?
-          Dir[File.join(examples, "*", "spec.yaml")].sort
-        else
-          ARGV.map { |path| File.expand_path(path) }
-        end
-errors = specs.flat_map do |spec|
-  relative = spec.delete_prefix("#{Dir.pwd}/")
-  check(spec).map { |problem| "#{relative}: #{problem}" }
-end
+if __FILE__ == $PROGRAM_NAME
+  examples = File.expand_path("../../yaml/examples", __dir__)
+  specs = if ARGV.empty?
+            Dir[File.join(examples, "*", "spec*.yaml")].select do |spec|
+              File.basename(spec).match?(/\Aspec(?:_[a-z][a-z0-9_]*)?\.yaml\z/)
+            end.sort
+          else
+            ARGV.map { |path| File.expand_path(path) }
+          end
+  errors = specs.flat_map do |spec|
+    relative = spec.delete_prefix("#{Dir.pwd}/")
+    check(spec).map { |problem| "#{relative}: #{problem}" }
+  end
 
-if errors.empty?
-  puts "Checked dependency and output order in #{specs.length} example specs."
-else
-  warn errors.join("\n")
-  exit 1
+  if errors.empty?
+    puts "Checked dependency and output order in #{specs.length} example specs."
+  else
+    warn errors.join("\n")
+    exit 1
+  end
 end

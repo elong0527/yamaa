@@ -1,0 +1,47 @@
+schema_version: "1.0"
+domain: VS
+datasets:
+  VS_RAW:
+    path: input/vs.csv
+    types: {VSSEQ: int, ADT: date}
+  EPOCHS:
+    path: input/epoch.csv
+    types: {DYLO: int, DYHI: int}
+base: VS_RAW
+keys: [STUDYID, USUBJID, VSSEQ]
+
+record_lookups:
+  - id: EPOCHDEF
+    dataset: EPOCHS
+    source: STUDYID
+    key: STUDYID
+    between: {value: ADT, lower: DYLO, upper: DYHI}
+
+output:
+  columns: [STUDYID, USUBJID, VSSEQ, ADT, EPOCH]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: VS_RAW.STUDYID}
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {source: VS_RAW.USUBJID}
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation: {source: VS_RAW.VSSEQ}
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: {source: VS_RAW.ADT}
+
+  - name: EPOCH
+    type: str
+    label: Epoch
+    derivation: {source: EPOCHDEF.EPOCH}

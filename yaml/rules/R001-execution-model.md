@@ -51,8 +51,8 @@ Implementations must infer dependencies to validate declaration order and
 detect cycles. Recursively traverse each expression and collect:
 
 - every unqualified output variable referenced by `source`;
-- the `source` and `between.value` variables of a record lookup a qualified
-  variable names, which R015 defines;
+- the `source` and `between.value` variables of a record lookup any qualified
+  reference names, which R015 defines;
 - variables in `group_by`, `order_by`, and other fields typed as `variable`;
 - variables referenced by fields whose type contains nested `expression`;
 - current-output identifiers used by an `sql` predicate;

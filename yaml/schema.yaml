@@ -84,7 +84,7 @@ record_lookup_class:
     - between:
         type: record_lookup_between_class
         required: false
-        description: Current-row value matched inclusively against one or two dataset bounds.
+        description: Current-row value matched inclusively against lower and upper dataset bounds.
     - filter:
         type: sql
         required: false
@@ -116,11 +116,11 @@ record_lookup_between_class:
         description: Value read from the current row.
     - lower:
         type: dataset_column
-        required: false
+        required: true
         description: Dataset column whose value is an inclusive lower bound.
     - upper:
         type: dataset_column
-        required: false
+        required: true
         description: Dataset column whose value is an inclusive upper bound.
 
 column_class:

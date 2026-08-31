@@ -11,5 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Test dependency checker
+        run: ruby .github/workflows/test_check_example_dependencies.rb
       - name: Check example dependency and output order
         run: ruby .github/workflows/check_example_dependencies.rb

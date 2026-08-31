@@ -1,0 +1,56 @@
+schema_version: "1.0"
+domain: ADVS
+datasets:
+  ADVSPRE:
+    path: input/advs_pre.csv
+    types: {VSSEQ: int, ADY: int}
+  AWINDOW:
+    path: input/awindow.csv
+    types: {AWLO: int, AWHI: int}
+base: ADVSPRE
+keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
+
+record_lookups:
+  - id: AWIN
+    dataset: AWINDOW
+    source: STUDYID
+    key: STUDYID
+    between: {value: ADY, lower: AWLO, upper: AWHI}
+
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, ADY, AVISIT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: ADVSPRE.STUDYID}
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {source: ADVSPRE.USUBJID}
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: {source: ADVSPRE.PARAMCD}
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation: {source: ADVSPRE.VSSEQ}
+
+  - name: ADY
+    type: int
+    label: Analysis Relative Day
+    derivation: {source: ADVSPRE.ADY}
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation: {source: AWIN.AVISIT}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]

@@ -37,6 +37,12 @@ columns:
     derivation:
       source: ADVSPRE.AVISIT
 
+  - name: AVALSRC
+    type: float
+    label: Source Analysis Value
+    derivation:
+      source: ADVSPRE.AVAL
+
   - name: PARAMCD
     type: str
     label: Parameter Code
@@ -66,21 +72,34 @@ columns:
             then:
               literal: Weight-for-Age Percentile
 
+  - name: ZNUM
+    type: float
+    label: LMS Standard Normal Score
+    derivation:
+      compute:
+        expr: "(POWER(AVALSRC / GROWTH.M, GROWTH.L) - 1) / (GROWTH.L * GROWTH.S)"
+
+  - name: NORMCDF
+    type: float
+    label: Standard Normal Cumulative Probability
+    derivation:
+      case:
+        branches:
+          - when: "ZNUM IS NULL"
+            then:
+              literal: null
+        otherwise:
+          function:
+            name: scipy.stats.norm.cdf
+            args:
+              x: ZNUM
+
   - name: AVAL
     type: float
     label: Analysis Value
     derivation:
-      case:
-        branches:
-          - when: "ADVSPRE.AVAL IS NOT NULL AND GROWTH.L IS NOT NULL AND GROWTH.M IS NOT NULL AND GROWTH.S IS NOT NULL"
-            then:
-              function:
-                name: growth_percentile
-                args:
-                  value: ADVSPRE.AVAL
-                  l: GROWTH.L
-                  m: GROWTH.M
-                  s: GROWTH.S
+      compute:
+        expr: "100 * NORMCDF"
 
 verifications:
   - unique:
