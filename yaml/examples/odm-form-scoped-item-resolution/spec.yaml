@@ -5,6 +5,9 @@ datasets:
 base: ODM
 keys: [STUDYID, USUBJID, LBSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBCAT, LBORRES, LBDTC]
+
 columns:
   - name: STUDYID
     type: str
@@ -20,13 +23,6 @@ columns:
     type: str
     derivation:
       source: ODM.SubjectKey
-
-  - name: LBSEQ
-    type: int
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [FORMORD]
 
   - name: LBTESTCD
     type: str
@@ -88,6 +84,13 @@ columns:
           FO.LB_THY: 3
           FO.LB_UA: 4
           FO.LB_EXTRA: 5
+
+  - name: LBSEQ
+    type: int
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [FORMORD]
 
 rows:
   - id: reported-result

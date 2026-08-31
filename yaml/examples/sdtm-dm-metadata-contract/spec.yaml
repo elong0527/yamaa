@@ -10,6 +10,9 @@ metadata:
   dataset_structure: One record per subject
   standard: SDTMIG 3.4
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, COUNTRY]
+
 columns:
   - name: STUDYID
     type: str

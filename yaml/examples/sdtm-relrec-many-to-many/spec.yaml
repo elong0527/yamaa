@@ -5,6 +5,9 @@ datasets:
   CM: input/cm.csv
 keys: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
 
+output:
+  columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID]
+
 columns:
   - name: STUDYID
     type: str

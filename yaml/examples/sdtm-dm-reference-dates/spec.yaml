@@ -15,6 +15,9 @@ record_lookups:
     order_by: [EX.EXENDTC, EX.EXSEQ]
     keep: last
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC, RFENDTC]
+
 columns:
   - name: STUDYID
     type: str

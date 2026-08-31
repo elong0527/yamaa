@@ -15,8 +15,5 @@ one row per subject:
 Each flag rests on the one before it, so the chain runs from a collected date
 through to the combined population flag.
 
-The variables are written down in the reverse of that order, with `POPFL`
-first and the subject identifier last. The order they are written in has no
-effect on the result, which is what this example is here to show; a real ADSL
-would not be laid out this way. `RANDFL` is used along the way but is not part
-of the output.
+The variables are declared from collected values through the dependent flag
+chain. `RANDFL` is used along the way but is not part of the output.

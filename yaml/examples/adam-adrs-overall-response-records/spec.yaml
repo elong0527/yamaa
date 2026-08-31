@@ -6,6 +6,9 @@ datasets:
 base: RS
 keys: [STUDYID, USUBJID, RSSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADY, AVALC, AVAL, ANL01FL]
+
 columns:
   - name: STUDYID
     type: str
@@ -47,13 +50,6 @@ columns:
     verifications:
       not_missing: {}
 
-  - name: ADY
-    type: int
-    derivation:
-      study_day:
-        date: ADT
-        reference: TRTSDT
-
   - name: AVALC
     type: str
     derivation:
@@ -79,23 +75,18 @@ columns:
         min: 1
         max: 6
 
-  - name: ANL01FL
-    type: str
-    derivation:
-      case:
-        branches:
-          - when: "WORSTORD = 1"
-            then:
-              literal: Y
-    verifications:
-      allowed_values:
-        values: [Y]
-
   - name: TRTSDT
     type: date
     output: false
     derivation:
       source: ADSL.TRTSDT
+
+  - name: ADY
+    type: int
+    derivation:
+      study_day:
+        date: ADT
+        reference: TRTSDT
 
   - name: WORSTAVAL
     type: int
@@ -113,6 +104,18 @@ columns:
         group_by: [STUDYID, USUBJID, ADT]
         order_by: [RSSEQ]
         filter: "AVAL = WORSTAVAL"
+
+  - name: ANL01FL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "WORSTORD = 1"
+            then:
+              literal: Y
+    verifications:
+      allowed_values:
+        values: [Y]
 
 rows:
   - id: overall_response

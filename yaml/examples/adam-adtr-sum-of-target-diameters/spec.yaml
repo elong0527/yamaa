@@ -7,6 +7,9 @@ datasets:
 base: TRVISIT
 keys: [STUDYID, USUBJID, AVISIT]
 
+output:
+  columns: [STUDYID, USUBJID, AVISIT, AVISITN, ADT, PARAMCD, PARAM, AVAL, NMEAS, NTARGET, ANL01FL]
+
 columns:
   - name: STUDYID
     type: str

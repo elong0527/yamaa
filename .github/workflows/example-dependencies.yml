@@ -1,0 +1,15 @@
+name: Example dependency order
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  dependency-order:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check example dependency and output order
+        run: python3 scripts/check_example_dependencies.py

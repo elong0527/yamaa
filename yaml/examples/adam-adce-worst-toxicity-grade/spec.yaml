@@ -5,6 +5,9 @@ datasets:
 base: CE
 keys: [STUDYID, USUBJID, CESEQ]
 
+output:
+  columns: [STUDYID, USUBJID, CESEQ, CETERM, ASTDT, ASEV, ASEVN, ATOXGRN, AOCCFL]
+
 columns:
   - name: STUDYID
     type: str

@@ -5,6 +5,9 @@ datasets:
 base: LB
 keys: [STUDYID, USUBJID, LBSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, LBSEQ, AVAL]
+
 columns:
   - name: STUDYID
     type: str

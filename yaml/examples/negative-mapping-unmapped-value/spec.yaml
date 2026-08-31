@@ -5,6 +5,9 @@ datasets:
 base: RS
 keys: [STUDYID, USUBJID, RSSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, RSSEQ, AVALC]
+
 columns:
   - name: STUDYID
     type: str

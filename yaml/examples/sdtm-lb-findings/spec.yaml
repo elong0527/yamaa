@@ -5,6 +5,9 @@ datasets:
 base: ODM
 keys: [STUDYID, USUBJID, LBSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESN, LBSTRESU, LBDTC]
+
 columns:
   - name: STUDYID
     type: str
@@ -20,13 +23,6 @@ columns:
     type: str
     derivation:
       source: ODM.SubjectKey
-
-  - name: LBSEQ
-    type: int
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [LBDTC, LBTESTCD]
 
   - name: LBTESTCD
     type: str
@@ -50,6 +46,13 @@ columns:
     type: date
     derivation:
       source: ODM.IT.LB.LBDTC
+
+  - name: LBSEQ
+    type: int
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [LBDTC, LBTESTCD]
 
 rows:
   - id: calcium

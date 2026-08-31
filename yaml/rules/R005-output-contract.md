@@ -2,7 +2,7 @@
 id: R005
 title: Output Contract
 status: normative
-applies_to: [root.keys, root.columns, column.output, column.type, row.derivations, derivation]
+applies_to: [root.keys, root.output, root.columns, column.output, column.type, row.derivations, derivation]
 depends_on: [R001, R002, R003, R007, R008, R009, R011]
 ---
 
@@ -25,8 +25,8 @@ dependency order within them.
 ## The artifact
 
 The **artifact** is the single dataset this specification produces. Its columns
-are the declared columns that do not set `output: false`, in declaration order,
-and its rows are the rows R001 constructs.
+are the declared columns that do not set `output: false`, in the order listed
+by `output.columns`, and its rows are the rows R001 constructs.
 
 Its serialization is only partly defined. R011 fixes the text form of each
 non-missing value and states that a `float` renders the same way here as it does
@@ -104,8 +104,8 @@ output column may depend on an internal one.
 - Column verifications may be declared on an internal column and run normally.
 - Dataset verifications may reference an internal column. They then assert a
   property of the derivation rather than of the artifact.
-- Column declaration order controls artifact column order. Internal columns are
-  skipped without disturbing that order.
+- `output.columns` must list every non-internal column exactly once and must not
+  list an internal or unknown column. Its order controls artifact column order.
 
 ## Derivation lifecycle
 
@@ -175,6 +175,8 @@ R006 owns the corresponding requirements for the schema bundle.
   entries that omit it.
 - A `rows` derivation naming an undeclared column: fail.
 - An internal column named in `keys`: fail and report the column name.
+- A missing, duplicate, internal, or unknown entry in `output.columns`, or an
+  output column omitted from it: fail and report the column name.
 - An empty `keys`, an unknown key column, or a repeated key column: fail.
 - A duplicate YAML mapping key, dataset identifier, column name, or row ID:
   fail.

@@ -6,6 +6,9 @@ datasets:
 base: TRT
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, DOSEDBL]
+
 columns:
   - name: STUDYID
     type: str

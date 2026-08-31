@@ -5,6 +5,9 @@ datasets:
 base: QS
 keys: [STUDYID, USUBJID, VISIT, PARAMCD]
 
+output:
+  columns: [STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVAL]
+
 columns:
   - name: STUDYID
     type: str

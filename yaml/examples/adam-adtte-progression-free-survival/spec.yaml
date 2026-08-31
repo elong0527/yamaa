@@ -24,6 +24,9 @@ record_lookups:
     order_by: [RS.RSDTC, RS.RSSEQ]
     keep: last
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, SRCDOM, SRCVAR, SRCSEQ]
+
 columns:
   - name: STUDYID
     type: str
@@ -49,6 +52,49 @@ columns:
     type: date
     derivation:
       source: ADSL.RANDDT
+
+  - name: PDDT
+    type: date
+    output: false
+    derivation:
+      source: PROGRESSION.RSDTC
+
+  - name: PDSEQ
+    type: int
+    output: false
+    derivation:
+      source: PROGRESSION.RSSEQ
+
+  - name: DEATHDT
+    type: date
+    output: false
+    derivation:
+      source: DEATH.DSDTC
+
+  - name: DEATHSEQ
+    type: int
+    output: false
+    derivation:
+      source: DEATH.DSSEQ
+
+  - name: CENSORDT
+    type: date
+    output: false
+    derivation:
+      source: LASTASSESS.RSDTC
+
+  - name: CENSORSEQ
+    type: int
+    output: false
+    derivation:
+      source: LASTASSESS.RSSEQ
+
+  - name: EVENTDT
+    type: date
+    output: false
+    derivation:
+      least:
+        sources: [PDDT, DEATHDT]
 
   - name: ADT
     type: date
@@ -125,49 +171,6 @@ columns:
               source: DEATHSEQ
         otherwise:
           source: CENSORSEQ
-
-  - name: PDDT
-    type: date
-    output: false
-    derivation:
-      source: PROGRESSION.RSDTC
-
-  - name: PDSEQ
-    type: int
-    output: false
-    derivation:
-      source: PROGRESSION.RSSEQ
-
-  - name: DEATHDT
-    type: date
-    output: false
-    derivation:
-      source: DEATH.DSDTC
-
-  - name: DEATHSEQ
-    type: int
-    output: false
-    derivation:
-      source: DEATH.DSSEQ
-
-  - name: CENSORDT
-    type: date
-    output: false
-    derivation:
-      source: LASTASSESS.RSDTC
-
-  - name: CENSORSEQ
-    type: int
-    output: false
-    derivation:
-      source: LASTASSESS.RSSEQ
-
-  - name: EVENTDT
-    type: date
-    output: false
-    derivation:
-      least:
-        sources: [PDDT, DEATHDT]
 
 verifications:
   - row_count:

@@ -6,17 +6,16 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [POPFL, SAFFL, ITTFL, TRTSDT, RANDDT, AGEGR1, AGERNK, STUDYID, USUBJID, AGE]
+
 columns:
-  - name: POPFL
-    type: str
+  - name: TRTSDT
+    type: date
     derivation:
-      case:
-        branches:
-          - when: "SAFFL = 'Y' AND ITTFL = 'Y'"
-            then:
-              literal: Y
-        otherwise:
-          literal: N
+      aggregate:
+        filter: "EX.EXSTDTC IS NOT NULL"
+        expr: "MIN(EX.EXSTDTC)"
 
   - name: SAFFL
     type: str
@@ -24,6 +23,23 @@ columns:
       case:
         branches:
           - when: "TRTSDT IS NOT NULL"
+            then:
+              literal: Y
+        otherwise:
+          literal: N
+
+  - name: RANDDT
+    type: date
+    derivation:
+      source: DM.RANDDT
+
+  - name: RANDFL
+    type: str
+    output: false
+    derivation:
+      case:
+        branches:
+          - when: "RANDDT IS NOT NULL"
             then:
               literal: Y
         otherwise:
@@ -40,29 +56,31 @@ columns:
         otherwise:
           literal: N
 
-  - name: RANDFL
+  - name: POPFL
     type: str
-    output: false
     derivation:
       case:
         branches:
-          - when: "RANDDT IS NOT NULL"
+          - when: "SAFFL = 'Y' AND ITTFL = 'Y'"
             then:
               literal: Y
         otherwise:
           literal: N
 
-  - name: TRTSDT
-    type: date
+  - name: STUDYID
+    type: str
     derivation:
-      aggregate:
-        filter: "EX.EXSTDTC IS NOT NULL"
-        expr: "MIN(EX.EXSTDTC)"
+      source: DM.STUDYID
 
-  - name: RANDDT
-    type: date
+  - name: USUBJID
+    type: str
     derivation:
-      source: DM.RANDDT
+      source: DM.USUBJID
+
+  - name: AGE
+    type: int
+    derivation:
+      source: DM.AGE
 
   - name: AGEGR1
     type: str
@@ -79,21 +97,6 @@ columns:
       row_number:
         group_by: [STUDYID]
         order_by: [AGE, USUBJID]
-
-  - name: STUDYID
-    type: str
-    derivation:
-      source: DM.STUDYID
-
-  - name: USUBJID
-    type: str
-    derivation:
-      source: DM.USUBJID
-
-  - name: AGE
-    type: int
-    derivation:
-      source: DM.AGE
 
 verifications:
   - unique:

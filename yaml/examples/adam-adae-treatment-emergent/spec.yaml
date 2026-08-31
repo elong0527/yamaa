@@ -6,6 +6,9 @@ datasets:
 base: AE
 keys: [STUDYID, USUBJID, AESEQ]
 
+output:
+  columns: [STUDYID, USUBJID, AESEQ, ASTDT, TRTSDT, TRTEDT, TRTA, TRTEMFL]
+
 columns:
   - name: STUDYID
     type: str

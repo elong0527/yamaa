@@ -12,6 +12,9 @@ record_lookups:
     source: [LBTESTCD, SEX]
     key: [LBTESTCD, SEX]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTRESN, LBORRESU, LBSTNRLO, LBSTNRHI, LBNRIND]
+
 columns:
   - name: STUDYID
     type: str

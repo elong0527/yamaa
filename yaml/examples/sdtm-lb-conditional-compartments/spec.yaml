@@ -5,6 +5,9 @@ datasets:
 base: BX_RAW
 keys: [STUDYID, USUBJID, LBSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESN, LBSTAT]
+
 columns:
   - name: STUDYID
     type: str
@@ -20,13 +23,6 @@ columns:
     type: str
     derivation:
       source: BX_RAW.USUBJID
-
-  - name: LBSEQ
-    type: int
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [LBLOC, LBTESTCD]
 
   - name: LBTESTCD
     type: str
@@ -45,6 +41,13 @@ columns:
 
   - name: LBLOC
     type: str
+
+  - name: LBSEQ
+    type: int
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [LBLOC, LBTESTCD]
 
   - name: LBORRES
     type: str

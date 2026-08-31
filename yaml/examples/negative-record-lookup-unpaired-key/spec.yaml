@@ -11,6 +11,9 @@ record_lookups:
     dataset: LBRANGE
     source: [LBTESTCD, SEX]
 
+output:
+  columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTNRHI]
+
 columns:
   - name: STUDYID
     type: str

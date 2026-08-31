@@ -5,6 +5,9 @@ datasets:
 base: ADVSPRE
 keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, VISIT, VISITNUM, ADT, ADY, AVAL, AVISIT, AVISITN, ANL01FL]
+
 columns:
   - name: STUDYID
     type: str

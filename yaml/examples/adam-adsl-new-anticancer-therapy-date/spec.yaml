@@ -7,6 +7,9 @@ datasets:
 base: ADSL_RAW
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, TRTSDT, NACTDT, NACTDY, NACTFL]
+
 columns:
   - name: STUDYID
     type: str
@@ -24,6 +27,22 @@ columns:
       source: ADSL_RAW.TRTSDT
     verifications:
       not_missing: {}
+
+  - name: CMNACTDT
+    type: date
+    output: false
+    derivation:
+      aggregate:
+        filter: "CM.CMCAT = 'ON TREATMENT' AND CM.CMSTDTC IS NOT NULL"
+        expr: "MIN(CM.CMSTDTC)"
+
+  - name: PRNACTDT
+    type: date
+    output: false
+    derivation:
+      aggregate:
+        filter: "PR.PRCAT = 'CANCER RELATED' AND PR.PRSCAT = 'ON TREATMENT' AND PR.PRSTDTC IS NOT NULL"
+        expr: "MIN(PR.PRSTDTC)"
 
   - name: NACTDT
     type: date
@@ -49,22 +68,6 @@ columns:
     verifications:
       allowed_values:
         values: [Y]
-
-  - name: CMNACTDT
-    type: date
-    output: false
-    derivation:
-      aggregate:
-        filter: "CM.CMCAT = 'ON TREATMENT' AND CM.CMSTDTC IS NOT NULL"
-        expr: "MIN(CM.CMSTDTC)"
-
-  - name: PRNACTDT
-    type: date
-    output: false
-    derivation:
-      aggregate:
-        filter: "PR.PRCAT = 'CANCER RELATED' AND PR.PRSCAT = 'ON TREATMENT' AND PR.PRSTDTC IS NOT NULL"
-        expr: "MIN(PR.PRSTDTC)"
 
 verifications:
   - unique:

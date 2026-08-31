@@ -37,10 +37,14 @@ root_class:
         type: "list[column_name]"
         required: true
         description: Output columns identifying a row; R005 defines the identity they assert.
+    - output:
+        type: output_class
+        required: true
+        description: Artifact presentation independent of dependency-ordered declarations; R005 defines it.
     - columns:
         type: "list[column_class]"
         required: true
-        description: Columns this specification declares, in the order R005 gives the artifact.
+        description: Columns in the dependency order R001 requires; output.columns controls artifact order.
     - rows:
         type: "list[row_class]"
         required: false
@@ -53,6 +57,12 @@ root_class:
         type: "dict[str, str]"
         required: false
         description: Free-form annotations carried with the specification; nothing validates their content.
+
+output_class:
+    - columns:
+        type: "list[column_name]"
+        required: true
+        description: Output columns in artifact order; R005 requires each non-internal column exactly once.
 
 record_lookup_class:
     - id:

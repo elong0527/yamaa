@@ -5,6 +5,9 @@ datasets:
 base: DS_RAW
 keys: [STUDYID, USUBJID, DSSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, DSSEQ, DSDECOD, DSCAT, DSDTC]
+
 columns:
   - name: STUDYID
     type: str
@@ -26,16 +29,6 @@ columns:
     label: Unique Subject Identifier
     derivation:
       source: DS_RAW.PATNUM
-
-  - name: DSSEQ
-    type: int
-    label: Sequence Number
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [DSDTC]
-    verifications:
-      not_missing: {}
 
   - name: DSDECOD
     type: str
@@ -69,6 +62,16 @@ columns:
       value:
         source: DS_RAW.DSDTCOL
       conversion_failure: null
+
+  - name: DSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [DSDTC]
+    verifications:
+      not_missing: {}
 
 verifications:
   - unique:

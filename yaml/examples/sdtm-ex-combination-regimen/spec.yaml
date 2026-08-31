@@ -5,6 +5,9 @@ datasets:
 base: EX_RAW
 keys: [STUDYID, USUBJID, EXSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC, EXENDTC, EXADJ]
+
 columns:
   - name: STUDYID
     type: str
@@ -20,13 +23,6 @@ columns:
     type: str
     derivation:
       source: EX_RAW.USUBJID
-
-  - name: EXSEQ
-    type: int
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [EXSTDTC, EXTRT]
 
   - name: EXTRT
     type: str
@@ -47,6 +43,13 @@ columns:
     type: date
     derivation:
       source: EX_RAW.EXSTDTC
+
+  - name: EXSEQ
+    type: int
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [EXSTDTC, EXTRT]
 
   - name: EXENDTC
     type: date

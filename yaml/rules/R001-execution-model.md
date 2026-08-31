@@ -10,8 +10,8 @@ depends_on: [R002, R003, R004, R005, R007, R008, R010, R012, R013, R015]
 
 ## Intent
 
-Define how output rows, columns, and derivation expressions are evaluated
-without relying on YAML declaration order for dependencies.
+Define how output rows, columns, and derivation expressions are evaluated in
+an explicit, reviewable dependency order.
 
 ## Boundaries
 
@@ -47,8 +47,8 @@ All other expressions return one value per current row.
 
 ## Dependency execution
 
-Implementations must infer dependencies rather than evaluate columns in YAML
-declaration order. Recursively traverse each expression and collect:
+Implementations must infer dependencies to validate declaration order and
+detect cycles. Recursively traverse each expression and collect:
 
 - every unqualified output variable referenced by `source`;
 - the `source` variables of a record lookup a qualified variable names, which
@@ -70,9 +70,8 @@ them as dependency-free.
 For each row definition, evaluate row derivations using a dependency graph.
 Row derivations cannot depend on values produced only during the column phase.
 
-After row construction, build the column dependency graph and evaluate it in
-topological order. When several columns are ready, declaration order is the
-deterministic tie-breaker.
+After row construction, build the column dependency graph. Every dependency
+must refer to a column declared earlier. Evaluate columns in declaration order.
 
 The graph is over columns, not over rows. A column that reads another row of
 its own partition therefore depends on the whole column it names, so a column
@@ -83,7 +82,7 @@ this model.
 In both phases, a completed derivation runs the R005 lifecycle before anything
 depends on it, so a dependent always reads a value of the declared type.
 
-Column declaration order controls final layout, not evaluation order.
+`output.columns` controls final layout independently of declaration order.
 
 ## Errors
 
@@ -91,5 +90,6 @@ Column declaration order controls final layout, not evaluation order.
 - A specification with no `rows` entry and no `base`: fail.
 - A row dependency on a later-phase value: fail.
 - An unresolved variable or predicate reference: fail.
+- A reference to a later declared column: fail and report both columns.
 - A dependency cycle: fail and report the cycle path.
 - An expression that changes row count during column derivation: fail.

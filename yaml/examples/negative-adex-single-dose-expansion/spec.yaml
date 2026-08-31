@@ -7,6 +7,9 @@ datasets:
 base: EX
 keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
 
+output:
+  columns: [STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, ASTDT, AENDT, ADOSEN, NDOSE]
+
 columns:
   - name: STUDYID
     type: str

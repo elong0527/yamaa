@@ -5,6 +5,9 @@ datasets:
 base: ODM
 keys: [STUDYID, USUBJID, LBSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, VISIT, VISITNUM, LBTESTCD, LBTEST, LBCAT, LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESC, LBSTRESN, LBSTRESU, LBSTAT, LBDTC]
+
 columns:
   - name: STUDYID
     type: str
@@ -23,13 +26,6 @@ columns:
     type: str
     derivation:
       source: ODM.SubjectKey
-
-  - name: LBSEQ
-    type: int
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [LBDTC, LBTESTCD, LBSPEC]
 
   - name: VISIT
     type: str
@@ -125,6 +121,13 @@ columns:
 
   - name: LBDTC
     type: date
+
+  - name: LBSEQ
+    type: int
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [LBDTC, LBTESTCD, LBSPEC]
 
 rows:
   - id: serum_vitamin_d

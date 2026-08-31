@@ -5,6 +5,9 @@ datasets:
 base: ADAEPRE
 keys: [STUDYID, USUBJID, AESEQ]
 
+output:
+  columns: [STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, TRTEMFL, AOCCFL, AOCCSFL, AOCCPFL]
+
 columns:
   - name: STUDYID
     type: str

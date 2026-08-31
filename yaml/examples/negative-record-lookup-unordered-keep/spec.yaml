@@ -11,6 +11,9 @@ record_lookups:
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, TRT01A]
+
 columns:
   - name: STUDYID
     type: str

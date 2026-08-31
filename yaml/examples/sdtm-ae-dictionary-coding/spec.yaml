@@ -9,6 +9,9 @@ metadata:
   dictionary: MedDRA
   dictionary_version: "26.1"
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS]
+
 columns:
   - name: STUDYID
     type: str

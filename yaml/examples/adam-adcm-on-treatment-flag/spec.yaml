@@ -6,6 +6,9 @@ datasets:
 base: CM
 keys: [STUDYID, USUBJID, CMSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, CMSEQ, CMTRT, ASTDT, AENDT, TRTSDT, TRTEDT, ONTRTFL]
+
 columns:
   - name: STUDYID
     type: str

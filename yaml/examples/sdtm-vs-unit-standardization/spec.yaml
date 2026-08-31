@@ -5,6 +5,9 @@ datasets:
 base: VS_RAW
 keys: [STUDYID, USUBJID, VSSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU]
+
 columns:
   - name: STUDYID
     type: str

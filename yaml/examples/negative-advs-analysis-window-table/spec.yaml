@@ -16,6 +16,9 @@ record_lookups:
     filter: "AWINDOW.AWLO <= ADY AND ADY <= AWINDOW.AWHI"
     unmatched: missing
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, VISIT, ADT, ADY, AVAL, AVISIT, AVISITN, AWTARGET, AWTDIFF, ANL01FL]
+
 columns:
   - name: STUDYID
     type: str

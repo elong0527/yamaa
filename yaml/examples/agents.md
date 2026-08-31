@@ -106,8 +106,9 @@ following a link out of the repository.
   input already maps one-to-one to its output usually needs columns, not row
   templates. `sdtm-vs-unit-standardization` is the deliberate exception, and it
   reorders its output to get per-test separation.
-- Output column order is declaration order. Dependencies are inferred, so a
-  column may be declared before the one it reads.
+- Declare columns in dependency order: source and independent columns first,
+  then each column only after every declared column it reads. Preserve the
+  artifact layout independently in `output.columns`.
 
 ## Golden output
 

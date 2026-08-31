@@ -6,6 +6,9 @@ datasets:
 base: ADRSPRE
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, PCHG, SAEFL, DCSREAS, AVALC, ARSN, AVAL]
+
 columns:
   - name: STUDYID
     type: str

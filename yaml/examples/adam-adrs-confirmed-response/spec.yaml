@@ -5,6 +5,9 @@ datasets:
 base: RS
 keys: [STUDYID, USUBJID, RSSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, RSSEQ, ADT, AVALC, CONFIRMED]
+
 columns:
   - name: STUDYID
     type: str
@@ -36,20 +39,6 @@ columns:
     derivation:
       source: RS.RSSTRESC
 
-  - name: CONFIRMED
-    type: str
-    derivation:
-      case:
-        branches:
-          - when: "AVALC = 'PD'"
-            then:
-              literal: Y
-          - when: "AVALC IN ('PR', 'CR') AND NEXTRESP IN ('PR', 'CR') AND DAYS_TO_NEXT >= 28"
-            then:
-              literal: Y
-        otherwise:
-          literal: N
-
   - name: NEXTDT
     type: date
     output: false
@@ -78,6 +67,20 @@ columns:
         start: ADT
         end: NEXTDT
         unit: day
+
+  - name: CONFIRMED
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: "AVALC = 'PD'"
+            then:
+              literal: Y
+          - when: "AVALC IN ('PR', 'CR') AND NEXTRESP IN ('PR', 'CR') AND DAYS_TO_NEXT >= 28"
+            then:
+              literal: Y
+        otherwise:
+          literal: N
 
 verifications:
   - row_count:
