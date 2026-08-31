@@ -1,0 +1,74 @@
+schema_version: "1.0"
+domain: ADCM
+datasets:
+  CM: input/cm.csv
+  ADSL: input/adsl.csv
+base: CM
+keys: [STUDYID, USUBJID, CMSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation:
+      source: CM.STUDYID
+
+  - name: USUBJID
+    type: str
+    derivation:
+      source: CM.USUBJID
+
+  - name: CMSEQ
+    type: int
+    derivation:
+      source: CM.CMSEQ
+
+  - name: CMTRT
+    type: str
+    derivation:
+      source: CM.CMTRT
+
+  - name: ASTDT
+    type: date
+    derivation:
+      source: CM.CMSTDTC
+
+  - name: AENDT
+    type: date
+    derivation:
+      source: CM.CMENDTC
+
+  - name: TRTSDT
+    type: date
+    derivation:
+      source: ADSL.TRTSDT
+
+  - name: TRTEDT
+    type: date
+    derivation:
+      source: ADSL.TRTEDT
+
+  - name: ONTRTFL
+    type: str
+    derivation:
+      case:
+        branches:
+          - when: >
+              TRTSDT IS NOT NULL AND
+              (TRTEDT IS NULL OR ASTDT IS NULL OR ASTDT <= TRTEDT) AND
+              (AENDT IS NULL OR AENDT >= TRTSDT)
+            then:
+              literal: Y
+    verifications:
+      allowed_values:
+        values: [Y]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, CMSEQ]
+  - row_count:
+      min: 8
+      max: 8
+  - implies:
+      id: on-treatment-medication-has-treatment-start
+      when: "ONTRTFL = 'Y'"
+      then: "TRTSDT IS NOT NULL"
