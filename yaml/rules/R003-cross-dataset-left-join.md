@@ -89,6 +89,16 @@ In both places `filter` is a predicate over right-side records only. A left row
 whose right side is empty after filtering has no match and receives missing,
 exactly as if no record had existed.
 
+A qualified aggregate may also be narrowed by the current left row. Its
+`between` declaration names one `value` the current row reads and one `lower`
+or `upper` column on the right. A record is eligible when every declared
+comparison holds: `lower <= value` and `value <= upper`.
+
+A missing current-row value leaves the aggregate's right side empty for that
+row and the result is missing; it never silently removes the narrowing. A
+right-side record missing a declared bound is ineligible. R013 defines the
+complete aggregate contract.
+
 This is not `row.filter`, which selects row-driver records during row
 construction, before any column is derived.
 
@@ -109,3 +119,5 @@ so an aggregate cannot encounter multiple matches and does not declare
 - An applicable left key is unavailable: fail.
 - Multiple matches after reduction: fail unless locally handled.
 - No right-side match: return missing.
+- An aggregate `between` with neither bound, a bound outside the right-side
+  relation, or values whose types are not comparable: fail.

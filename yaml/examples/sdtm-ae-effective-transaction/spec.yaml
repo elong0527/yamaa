@@ -3,14 +3,48 @@ domain: AE
 datasets:
   AE_REC: input/ae_records.csv
   AE_TXN: {path: input/ae_txn.csv, types: {TXNSEQ: int, AUDITDTC: datetime}}
-base: AE_REC
-keys: [STUDYID, USUBJID, AESEQ]
 
-record_lookups:
-  - id: EFFECTIVE
-    dataset: AE_TXN
-    order_by: [AE_TXN.AUDITDTC, AE_TXN.TXNSEQ]
-    keep: last
+derived:
+  - id: AE_EFFECTIVE
+    base: AE_REC
+    record_lookups:
+      - id: EFFECTIVE
+        dataset: AE_TXN
+        order_by: [AE_TXN.AUDITDTC, AE_TXN.TXNSEQ]
+        keep: last
+    keys: [STUDYID, USUBJID, AESEQ]
+    columns:
+      - name: STUDYID
+        type: str
+        label: Study Identifier
+        derivation: {source: AE_REC.STUDYID}
+      - name: USUBJID
+        type: str
+        label: Unique Subject Identifier
+        derivation: {source: AE_REC.USUBJID}
+      - name: AESEQ
+        type: int
+        label: Sequence Number
+        derivation: {source: AE_REC.AESEQ}
+      - name: AETERM
+        type: str
+        label: Reported Term for the Adverse Event
+        derivation: {source: EFFECTIVE.AETERM}
+      - name: AESEV
+        type: str
+        label: Severity/Intensity
+        derivation: {source: EFFECTIVE.AESEV}
+      - name: TXNTYPE
+        type: str
+        label: Transaction Type
+        derivation: {source: EFFECTIVE.TXNTYPE}
+      - name: AUDITDTC
+        type: datetime
+        label: Audit Date/Time
+        derivation: {source: EFFECTIVE.AUDITDTC}
+
+base: AE_EFFECTIVE
+keys: [STUDYID, USUBJID, AESEQ]
 
 output:
   columns: [STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AESEV, TXNTYPE, AUDITDTC]
@@ -20,7 +54,7 @@ columns:
     type: str
     label: Study Identifier
     derivation:
-      source: AE_REC.STUDYID
+      source: AE_EFFECTIVE.STUDYID
 
   - name: DOMAIN
     type: str
@@ -32,31 +66,31 @@ columns:
     type: str
     label: Unique Subject Identifier
     derivation:
-      source: AE_REC.USUBJID
+      source: AE_EFFECTIVE.USUBJID
 
   - name: AESEQ
     type: int
     label: Sequence Number
     derivation:
-      source: AE_REC.AESEQ
+      source: AE_EFFECTIVE.AESEQ
 
   - name: AETERM
     type: str
     label: Reported Term for the Adverse Event
     derivation:
-      source: EFFECTIVE.AETERM
+      source: AE_EFFECTIVE.AETERM
 
   - name: AESEV
     type: str
     label: Severity/Intensity
     derivation:
-      source: EFFECTIVE.AESEV
+      source: AE_EFFECTIVE.AESEV
 
   - name: TXNTYPE
     type: str
     label: Transaction Type
     derivation:
-      source: EFFECTIVE.TXNTYPE
+      source: AE_EFFECTIVE.TXNTYPE
     verifications:
       allowed_values:
         values: [INSERT, UPDATE, REMOVE]
@@ -65,14 +99,19 @@ columns:
     type: datetime
     label: Audit Date/Time
     derivation:
-      source: EFFECTIVE.AUDITDTC
+      source: AE_EFFECTIVE.AUDITDTC
+
+rows:
+  - id: active
+    filter: "AE_EFFECTIVE.TXNTYPE <> 'REMOVE'"
+    derivations: {}
 
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 4
-      max: 4
+      min: 3
+      max: 3
   - all_or_none:
       id: effective-record-completeness
       columns: [AETERM, AESEV, TXNTYPE, AUDITDTC]

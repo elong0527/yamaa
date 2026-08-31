@@ -10,6 +10,9 @@ aggregate_class:
     - filter:
         type: sql
         description: Predicate selecting records before reduction.
+    - between:
+        type: aggregate_between_class
+        description: Current-row value matched inclusively against one or two columns of a qualified right-side relation.
     - group_by:
         type: "list[variable]"
         description: Grain of the reduction; right-side columns for a qualified expression and current-output columns for an unqualified one.
@@ -22,3 +25,17 @@ aggregate_expression:
     type: str
     min_length: 1
     description: Reducer expression in the portable grammar defined by R013.
+
+aggregate_between_class:
+    - value:
+        type: variable
+        required: true
+        description: Value read from the current row.
+    - lower:
+        type: variable
+        required: false
+        description: Qualified right-side variable serving as an inclusive lower bound.
+    - upper:
+        type: variable
+        required: false
+        description: Qualified right-side variable serving as an inclusive upper bound.

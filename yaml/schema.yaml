@@ -21,6 +21,10 @@ root_class:
         type: "dict[dataset_id, dataset_source]"
         required: true
         description: Source datasets readable by this specification, each under the name it is read through.
+    - derived:
+        type: "list[derived_dataset_class]"
+        required: false
+        description: Private, non-serialized intermediate datasets built before this artifact; R001 limits when they should be used.
     - base:
         type: dataset_id
         required: false
@@ -65,6 +69,44 @@ root_class:
         type: "dict[str, str]"
         required: false
         description: Free-form annotations carried with the specification; nothing validates their content.
+
+derived_dataset_class:
+    - id:
+        type: dataset_id
+        required: true
+        description: Dataset identifier through which readers address the completed intermediate dataset.
+    - base:
+        type: dataset_id
+        required: false
+        description: Source or earlier derived dataset driving row construction.
+    - record_lookups:
+        type: "list[record_lookup_class]"
+        required: false
+        description: Records named for use while building this dataset.
+    - keys:
+        type: "list[column_name]"
+        required: true
+        description: Columns uniquely identifying one completed intermediate row.
+    - columns:
+        type: "list[column_class]"
+        required: true
+        description: Columns the intermediate dataset declares.
+    - rows:
+        type: "list[row_class]"
+        required: false
+        description: Templates constructing rows; mutually exclusive with group_by and expand.
+    - group_by:
+        type: "list[variable]"
+        required: false
+        description: Base variables whose distinct tuples construct one row each; mutually exclusive with rows and expand.
+    - expand:
+        type: expand_class
+        required: false
+        description: Counted row expansion; mutually exclusive with rows and group_by.
+    - metadata:
+        type: "dict[str, str]"
+        required: false
+        description: Free-form annotations carried with the intermediate dataset.
 
 output_class:
     - columns:

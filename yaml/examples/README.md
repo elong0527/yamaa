@@ -75,7 +75,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adsl-population-flags`](adam-adsl-population-flags/) | derive the safety and intent-to-treat flags |
 | [`adam-adsl-rescue-medication`](adam-adsl-rescue-medication/) | select the first rescue medication |
 | [`adam-adsl-treatment-selection`](adam-adsl-treatment-selection/) | select actual treatment and its duration from EX |
-| [`adam-adtr-sum-of-target-diameters`](adam-adtr-sum-of-target-diameters/) | sum the target lesion diameters at each assessment |
+| [`adam-adtr-sum-of-target-diameters`](adam-adtr-sum-of-target-diameters/) | sum target lesion diameters and derive the nadir |
 | [`adam-adtte-duration-of-response`](adam-adtte-duration-of-response/) | derive the duration of a response |
 | [`adam-adtte-progression-free-survival`](adam-adtte-progression-free-survival/) | derive progression-free survival |
 | [`adam-advs-analysis-visit`](adam-advs-analysis-visit/) | assign records to analysis windows |
@@ -88,6 +88,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-adlb-computed-parameter`](negative-adlb-computed-parameter/) | reject a parameter computed from the dataset being built |
 | [`negative-adrs-partial-response-after-complete-response`](negative-adrs-partial-response-after-complete-response/) | reject a partial response recorded after a complete response |
 | [`negative-adsl-subject-reference`](negative-adsl-subject-reference/) | reject a malformed subject reference |
+| [`negative-adtr-duplicate-assessment`](negative-adtr-duplicate-assessment/) | reject a repeated scheduled assessment |
 | [`negative-baseline-flag-tied-date`](negative-baseline-flag-tied-date/) | reject a baseline chosen between two same-day results |
 | [`negative-column-type-unknown`](negative-column-type-unknown/) | reject an analysis value with an ambiguous numeric type |
 | [`negative-compute-aggregate-function`](negative-compute-aggregate-function/) | reject a total written as a formula |

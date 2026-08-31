@@ -2,8 +2,8 @@
 id: R005
 title: Output Contract
 status: normative
-applies_to: [root.keys, root.output, root.columns, root.expand, column.type,
-  row.derivations, derivation]
+applies_to: [root.keys, root.output, root.columns, root.derived, root.expand,
+  derived_dataset_class, column.type, row.derivations, derivation]
 depends_on: [R001, R002, R003, R007, R008, R009, R011]
 ---
 
@@ -89,24 +89,34 @@ row templates at row level and the rest at column level.
 A column whose value is intentionally absent is still derived. Write
 `literal: null` rather than omitting the derivation.
 
+These requirements apply independently to the artifact and to each derived
+dataset. Column names and row IDs are scoped to the dataset definition that
+declares them, so the same standard column name may appear in an intermediate
+dataset and the artifact.
+
 ## Output and internal columns
 
 A column listed in `output.columns` is part of the artifact. Any other declared
 column is internal: it is derived, converted, verified, and made available to
 dependents exactly as an output column is, but is omitted from the artifact.
 
-Internal columns exist so that a multi-step derivation does not have to publish
-its own working values. They do not change evaluation. R001 builds one
-dependency graph over all declared columns regardless of `output`, and an
-output column may depend on an internal one.
+Every column declared by a derived dataset is visible to its readers. A derived
+dataset has no `output.columns` selection and is never serialized.
 
-- Column coverage applies unchanged; an internal column still needs a
+Internal artifact columns exist so that a multi-step derivation does not have
+to publish its own working values. They do not change evaluation. R001 builds
+one dependency graph over all declared artifact columns, and an output column
+may depend on an internal one.
+
+- Column coverage applies unchanged; an internal artifact column still needs a
   derivation in exactly one place.
-- `keys` must name output columns only. An internal column in `keys` is an
-  error, because a key identifies rows in the artifact.
-- Column verifications may be declared on an internal column and run normally.
-- Dataset verifications may reference an internal column. They then assert a
-  property of the derivation rather than of the artifact.
+- Artifact `keys` must name output columns only. An internal artifact column in
+  `keys` is an error, because a key identifies rows in the artifact. Derived
+  dataset `keys` must name columns declared by that derived dataset.
+- Column verifications may be declared on an internal artifact column and run
+  normally.
+- Dataset verifications may reference an internal artifact column. They then
+  assert a property of the derivation rather than of the artifact.
 - `output.columns` must not repeat a column or name an undeclared column. Its
   entries select the artifact columns and control their order.
 
@@ -152,12 +162,15 @@ derivation:
 
 ## Output identity
 
-`keys` is an ordered list of columns named in `output.columns` and must name at
-least one. A column must not be listed twice.
+`keys` is an ordered list and must name at least one column. Artifact keys must
+be named in `output.columns`; derived dataset keys must be columns declared by
+that derived dataset. A column must not be listed twice.
 
 Once every column's lifecycle is complete, the combined key values of each row
-must be non-missing and unique across the artifact. Key validation happens
-before dataset verifications, which R009 runs last.
+must be non-missing and unique across the artifact or derived dataset being
+built. Artifact key validation happens before dataset verifications, which R009
+runs last. A derived dataset cannot become readable until its own identity has
+passed.
 
 Key order is significant to R003, which joins on the output keys a right side
 also carries. That is a subset used for enrichment and does not change the
@@ -166,8 +179,10 @@ identity asserted here.
 ## Specification-wide uniqueness
 
 Within one specification, implementations must reject duplicate YAML mapping
-keys, and dataset identifiers, column names, and row IDs must each be unique.
-R006 owns the corresponding requirements for the schema bundle.
+keys and duplicate source or derived dataset identifiers. Column names and row
+IDs must be unique within each artifact or derived dataset definition. Record
+lookup IDs follow R015's namespace. R006 owns the corresponding requirements
+for the schema bundle.
 
 ## Errors
 
@@ -178,12 +193,12 @@ R006 owns the corresponding requirements for the schema bundle.
 - A `rows` derivation naming an undeclared column: fail.
 - An `expand.as` column that is undeclared, not `int`, or derived anywhere
   else: fail.
-- An internal column named in `keys`: fail and report the column name.
+- An internal artifact column named in `keys`: fail and report the column name.
 - A missing `output.columns`, a duplicate entry, or an entry naming an
   undeclared column: fail and report the column name.
 - An empty `keys`, an unknown key column, or a repeated key column: fail.
-- A duplicate YAML mapping key, dataset identifier, column name, or row ID:
-  fail.
+- A duplicate YAML mapping key or dataset identifier, or a duplicate column
+  name or row ID within one dataset definition: fail.
 - A conversion failure with no `conversion_failure` handler: fail.
 - A missing or duplicate combined key value: fail and report the offending
   rows.

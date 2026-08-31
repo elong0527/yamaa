@@ -1,4 +1,4 @@
-# ADaM ADTR: sum the target lesion diameters at each assessment
+# ADaM ADTR: sum target lesion diameters and derive the nadir
 
 This example uses a schedule of tumour assessments, the lesions measured at
 each of them, and the lesion inventory selected at study entry to derive one
@@ -15,7 +15,10 @@ record per subject and assessment:
   zero when the assessment left no lesion record at all, which separates an
   assessment that was never performed from one that measured nothing;
 - `ANL01FL` is `Y` when every target lesion was measured, and is empty
-  otherwise.
+  otherwise;
+- `NADIR` is the lowest sum from a complete assessment on or before the
+  current assessment. An assessment with no date has no cutoff and therefore
+  no nadir, even when earlier complete assessments exist.
 
 Lesions outside the target inventory are measured and recorded too, and are
 never part of this sum.
