@@ -5,24 +5,31 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, SUBJID, SITEIDP, SITEID, SUBJREF]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM.USUBJID
 
   - name: SUBJID
     type: str
+    label: Subject Identifier for the Study
     derivation:
       source: DM.SUBJID
 
   - name: SITEIDP
     type: str
+    label: Parsed Study Site Identifier
     derivation:
       str_extract:
         source: USUBJID
@@ -33,6 +40,7 @@ columns:
 
   - name: SITEID
     type: str
+    label: Study Site Identifier
     derivation:
       coalesce:
         sources: [SITEIDP, DM.SITEID]
@@ -42,6 +50,7 @@ columns:
 
   - name: SUBJREF
     type: str
+    label: Subject Display Reference
     derivation:
       str_template:
         template: "{SITEID}:{SUBJID}"

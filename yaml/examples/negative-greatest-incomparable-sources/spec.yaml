@@ -5,29 +5,37 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, DTHDT, LSTVSDY, LSTALVDT]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM.USUBJID
 
   - name: DTHDT
     type: date
+    label: Date of Death
     derivation:
       source: DM.DTHDTC
 
   - name: LSTVSDY
     type: int
+    label: Last Visit Study Day
     derivation:
       source: DM.LSTVSDY
 
   - name: LSTALVDT
     type: date
+    label: Last Known Alive Date
     derivation:
       greatest:
         sources: [DTHDT, LSTVSDY]

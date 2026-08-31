@@ -6,44 +6,55 @@ datasets:
 base: LB
 keys: [STUDYID, USUBJID, PARAMCD, LBSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, LBSEQ, ADT, TRTSDT, AVAL, ABLFL, BASE]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: LB.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: LB.USUBJID
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       source: LB.LBTESTCD
 
   - name: LBSEQ
     type: int
+    label: Sequence Number
     derivation:
       source: LB.LBSEQ
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       source: LB.LBDTC
 
   - name: TRTSDT
     type: date
+    label: Date of First Exposure to Treatment
     derivation:
       source: ADSL.TRTSDT
 
   - name: AVAL
     type: float
+    label: Analysis Value
     derivation:
       source: LB.LBSTRESN
 
   - name: ABLFL
     type: str
+    label: Baseline Record Flag
     derivation:
       baseline_flag:
         group_by: [STUDYID, USUBJID, PARAMCD]
@@ -52,6 +63,7 @@ columns:
 
   - name: BASE
     type: float
+    label: Baseline Value
     derivation:
       baseline_value:
         group_by: [STUDYID, USUBJID, PARAMCD]

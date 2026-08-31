@@ -5,62 +5,77 @@ datasets:
 base: BX_RAW
 keys: [STUDYID, USUBJID, LBSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESN, LBSTAT]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: BX_RAW.STUDYID
 
   - name: DOMAIN
     type: str
+    label: Domain Abbreviation
     derivation:
       literal: LB
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: BX_RAW.USUBJID
 
-  - name: LBSEQ
-    type: int
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [LBLOC, LBTESTCD]
-
   - name: LBTESTCD
     type: str
+    label: Lab Test or Examination Short Name
     derivation:
       literal: IL13
 
   - name: LBTEST
     type: str
+    label: Lab Test or Examination Name
     derivation:
       literal: Interleukin 13
 
   - name: LBSPEC
     type: str
+    label: Specimen Material Type
     derivation:
       literal: SKIN
 
   - name: LBLOC
     type: str
+    label: Location Used for Measurement
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [LBLOC, LBTESTCD]
 
   - name: LBORRES
     type: str
+    label: Result or Finding in Original Units
 
   - name: LBORRESU
     type: str
+    label: Original Units
     derivation:
       source: BX_RAW.RESU
 
   - name: LBSTRESN
     type: float
+    label: Numeric Result/Finding in Standard Units
     derivation:
       source: LBORRES
 
   - name: LBSTAT
     type: str
+    label: Completion Status
     derivation:
       case:
         branches:

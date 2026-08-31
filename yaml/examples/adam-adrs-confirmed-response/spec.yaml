@@ -5,39 +5,78 @@ datasets:
 base: RS
 keys: [STUDYID, USUBJID, RSSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, RSSEQ, ADT, AVALC, CONFIRMED]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: RS.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: RS.USUBJID
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       literal: CONFRESP
 
   - name: RSSEQ
     type: int
+    label: Sequence Number
     derivation:
       source: RS.RSSEQ
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       source: RS.RSDTC
 
   - name: AVALC
     type: str
+    label: Analysis Value (C)
     derivation:
       source: RS.RSSTRESC
 
+  - name: NEXTDT
+    type: date
+    label: Next Assessment Date
+    derivation:
+      row_value:
+        source: ADT
+        offset: 1
+        group_by: [STUDYID, USUBJID]
+        order_by: [ADT, RSSEQ]
+
+  - name: NEXTRESP
+    type: str
+    label: Next Response
+    derivation:
+      row_value:
+        source: AVALC
+        offset: 1
+        group_by: [STUDYID, USUBJID]
+        order_by: [ADT, RSSEQ]
+
+  - name: DAYS_TO_NEXT
+    type: int
+    label: Days to Next Assessment
+    derivation:
+      date_diff:
+        start: ADT
+        end: NEXTDT
+        unit: day
+
   - name: CONFIRMED
     type: str
+    label: Confirmation Flag
     derivation:
       case:
         branches:
@@ -49,35 +88,6 @@ columns:
               literal: Y
         otherwise:
           literal: N
-
-  - name: NEXTDT
-    type: date
-    output: false
-    derivation:
-      row_value:
-        source: ADT
-        offset: 1
-        group_by: [STUDYID, USUBJID]
-        order_by: [ADT, RSSEQ]
-
-  - name: NEXTRESP
-    type: str
-    output: false
-    derivation:
-      row_value:
-        source: AVALC
-        offset: 1
-        group_by: [STUDYID, USUBJID]
-        order_by: [ADT, RSSEQ]
-
-  - name: DAYS_TO_NEXT
-    type: int
-    output: false
-    derivation:
-      date_diff:
-        start: ADT
-        end: NEXTDT
-        unit: day
 
 verifications:
   - row_count:

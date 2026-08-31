@@ -40,16 +40,15 @@ A finished dataset an earlier run produced is an ordinary source and is
 declared under a name of its own. A **derived dataset** -- one the
 specification itself builds before the artifact, under `derived` -- is also an
 ordinary source once built: a qualified source, an aggregate, or a record
-lookup reads its reader-visible columns exactly as it reads a declared dataset,
-and a `rows` entry may drive from it. An internal derived column declaring
-`output: false` is not part of that surface. R001 owns when a derived dataset is
-built relative to its readers, and R005's column coverage and key identity
-apply to it as they do to the artifact. Reaching a sibling record of the dataset
-this run is building is a different thing, and no keyed construct reaches it;
-R001 owns what happens when a column reaches its own value through the rows of
-its partition. Within one dataset, addressing a sibling record by key stays
-open work, because a derived dataset is built before its readers and is not
-such a sibling.
+lookup reads every column it declares exactly as it reads a declared dataset,
+and a `rows` entry may drive from it. R001 owns when a derived dataset is built
+relative to its readers, and R005's column coverage and key identity apply to
+it as they do to the artifact. Reaching a sibling record of the dataset this
+run is building is a different thing, and no keyed construct reaches it; R001
+owns what happens when a column reaches its own value through the rows of its
+partition. Within one dataset, addressing a sibling record by key stays open
+work, because a derived dataset is built before its readers and is not such a
+sibling.
 
 ## Source expressions
 

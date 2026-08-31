@@ -5,30 +5,36 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, SUBJREF]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM.USUBJID
 
   - name: SITEID
     type: str
-    output: false
+    label: Study Site Identifier
     derivation:
       source: DM.SITEID
 
   - name: SUBJID
     type: str
-    output: false
+    label: Subject Identifier for the Study
     derivation:
       source: DM.SUBJID
 
   - name: SUBJREF
     type: str
+    label: Subject Display Reference
     derivation:
       str_template: "{SITEID + ':' + SUBJID}"

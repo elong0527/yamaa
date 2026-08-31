@@ -16,62 +16,79 @@ derived:
     columns:
       - name: STUDYID
         type: str
+        label: Study Identifier
         derivation: {source: AE_REC.STUDYID}
       - name: USUBJID
         type: str
+        label: Unique Subject Identifier
         derivation: {source: AE_REC.USUBJID}
       - name: AESEQ
         type: int
+        label: Sequence Number
         derivation: {source: AE_REC.AESEQ}
       - name: AETERM
         type: str
+        label: Reported Term for the Adverse Event
         derivation: {source: EFFECTIVE.AETERM}
       - name: AESEV
         type: str
+        label: Severity/Intensity
         derivation: {source: EFFECTIVE.AESEV}
       - name: TXNTYPE
         type: str
+        label: Transaction Type
         derivation: {source: EFFECTIVE.TXNTYPE}
       - name: AUDITDTC
         type: datetime
+        label: Audit Date/Time
         derivation: {source: EFFECTIVE.AUDITDTC}
 
 base: AE_EFFECTIVE
 keys: [STUDYID, USUBJID, AESEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AESEV, TXNTYPE, AUDITDTC]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: AE_EFFECTIVE.STUDYID
 
   - name: DOMAIN
     type: str
+    label: Domain Abbreviation
     derivation:
       literal: AE
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: AE_EFFECTIVE.USUBJID
 
   - name: AESEQ
     type: int
+    label: Sequence Number
     derivation:
       source: AE_EFFECTIVE.AESEQ
 
   - name: AETERM
     type: str
+    label: Reported Term for the Adverse Event
     derivation:
       source: AE_EFFECTIVE.AETERM
 
   - name: AESEV
     type: str
+    label: Severity/Intensity
     derivation:
       source: AE_EFFECTIVE.AESEV
 
   - name: TXNTYPE
     type: str
+    label: Transaction Type
     derivation:
       source: AE_EFFECTIVE.TXNTYPE
     verifications:
@@ -80,6 +97,7 @@ columns:
 
   - name: AUDITDTC
     type: datetime
+    label: Audit Date/Time
     derivation:
       source: AE_EFFECTIVE.AUDITDTC
 

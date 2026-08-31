@@ -6,39 +6,49 @@ datasets:
 base: RS
 keys: [STUDYID, USUBJID, RSSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADY, AVALC, AVAL, ANL01FL]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: RS.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: RS.USUBJID
 
   - name: RSSEQ
     type: int
+    label: Sequence Number
     derivation:
       source: RS.RSSEQ
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       literal: OVR
 
   - name: PARAM
     type: str
+    label: Parameter
     derivation:
       literal: Overall Response by Investigator
 
   - name: RSDTC
     type: str
+    label: Date/Time of Assessment
     derivation:
       source: RS.RSDTC
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       date_impute:
         source: RSDTC
@@ -47,15 +57,9 @@ columns:
     verifications:
       not_missing: {}
 
-  - name: ADY
-    type: int
-    derivation:
-      study_day:
-        date: ADT
-        reference: TRTSDT
-
   - name: AVALC
     type: str
+    label: Analysis Value (C)
     derivation:
       source: RS.RSSTRESC
     verifications:
@@ -64,6 +68,7 @@ columns:
 
   - name: AVAL
     type: int
+    label: Analysis Value
     derivation:
       mapping:
         source: AVALC
@@ -79,8 +84,40 @@ columns:
         min: 1
         max: 6
 
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation:
+      source: ADSL.TRTSDT
+
+  - name: ADY
+    type: int
+    label: Analysis Relative Day
+    derivation:
+      study_day:
+        date: ADT
+        reference: TRTSDT
+
+  - name: WORSTAVAL
+    type: int
+    label: Worst Analysis Value
+    derivation:
+      aggregate:
+        expr: "MAX(AVAL)"
+        group_by: [STUDYID, USUBJID, ADT]
+
+  - name: WORSTORD
+    type: int
+    label: Worst Response Order
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID, ADT]
+        order_by: [RSSEQ]
+        filter: "AVAL = WORSTAVAL"
+
   - name: ANL01FL
     type: str
+    label: Analysis Record Flag 01
     derivation:
       case:
         branches:
@@ -90,29 +127,6 @@ columns:
     verifications:
       allowed_values:
         values: [Y]
-
-  - name: TRTSDT
-    type: date
-    output: false
-    derivation:
-      source: ADSL.TRTSDT
-
-  - name: WORSTAVAL
-    type: int
-    output: false
-    derivation:
-      aggregate:
-        expr: "MAX(AVAL)"
-        group_by: [STUDYID, USUBJID, ADT]
-
-  - name: WORSTORD
-    type: int
-    output: false
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID, ADT]
-        order_by: [RSSEQ]
-        filter: "AVAL = WORSTAVAL"
 
 rows:
   - id: overall_response

@@ -5,34 +5,43 @@ datasets:
 base: LB
 keys: [STUDYID, USUBJID, PARAMCD]
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, AVAL, ANRHI, HIFL]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: LB.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: LB.USUBJID
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       source: LB.LBTESTCD
 
   - name: AVAL
     type: float
+    label: Analysis Value
     derivation:
       source: LB.LBSTRESN
 
   - name: ANRHI
     type: float
+    label: Analysis Normal Range Upper Limit
     derivation:
       source: LB.LBSTNRHI
 
   - name: HIFL
     type: int
+    label: High Result Flag
     derivation:
       compute:
         expr: "AVAL > ANRHI"

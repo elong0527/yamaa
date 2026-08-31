@@ -5,6 +5,9 @@ datasets:
 base: SOURCE
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, HEIGHTCM, WEIGHTKG, BMI]
+
 columns:
   - name: STUDYID
     type: str

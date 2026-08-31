@@ -5,24 +5,30 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID, SITEID]
 
+output:
+  columns: [STUDYID, USUBJID, INVID]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM.USUBJID
 
   - name: SITEID
     type: str
-    output: false
+    label: Study Site Identifier
     derivation:
       source: DM.SITEID
 
   - name: INVID
     type: str
+    label: Investigator Identifier
     derivation:
       source: DM.INVID

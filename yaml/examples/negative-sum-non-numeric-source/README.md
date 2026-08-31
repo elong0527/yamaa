@@ -20,7 +20,6 @@ column:
 ```yaml
 - name: ASEVN
   type: int
-  output: false
   derivation:
     mapping:
       source: ASEV
@@ -36,6 +35,8 @@ column:
       group_by: [STUDYID, USUBJID]
       expr: "SUM(ASEVN)"
 ```
+
+Keep `ASEVN` internal by omitting it from `output.columns`.
 
 The numeric assignments are analysis policy and must be confirmed rather than
 inferred from the order of the words.

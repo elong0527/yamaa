@@ -28,24 +28,31 @@ record_lookups:
     incomplete: missing
     unmatched: fail
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, VISIT, VISITNUM, EPOCH, VSDY]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: VS_RAW.STUDYID
 
   - name: DOMAIN
     type: str
+    label: Domain Abbreviation
     derivation:
       literal: VS
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: VS_RAW.USUBJID
 
   - name: VSSEQ
     type: int
+    label: Sequence Number
     derivation:
       source: VS_RAW.VSSEQ
     verifications:
@@ -53,49 +60,56 @@ columns:
 
   - name: VSTESTCD
     type: str
+    label: Vital Signs Test Short Name
     derivation:
       source: VS_RAW.VSTESTCD
 
   - name: VSORRES
     type: str
+    label: Result or Finding in Original Units
     derivation:
       source: VS_RAW.VSORRES
 
   - name: VSDTC
     type: date
+    label: Date/Time of Measurements
     derivation:
       source: VS_RAW.VSDTC
 
   - name: VISIT
     type: str
+    label: Visit Name
     derivation:
       source: VS_RAW.VISIT
 
   - name: VISITNUM
     type: float
+    label: Visit Number
     derivation:
       source: PLANNEDVISIT.VISITNUM
 
-  - name: EPOCH
-    type: str
-    derivation:
-      source: EPOCHDEF.EPOCH
-    verifications:
-      allowed_values:
-        values: [SCREENING, TREATMENT, FOLLOW-UP]
-
   - name: RFSTDTC
     type: date
-    output: false
+    label: Subject Reference Start Date/Time
     derivation:
       source: DM.RFSTDTC
 
   - name: VSDY
     type: int
+    label: Study Day of Vital Signs
     derivation:
       study_day:
         date: VSDTC
         reference: RFSTDTC
+
+  - name: EPOCH
+    type: str
+    label: Epoch
+    derivation:
+      source: EPOCHDEF.EPOCH
+    verifications:
+      allowed_values:
+        values: [SCREENING, TREATMENT, FOLLOW-UP]
 
 verifications:
   - unique:

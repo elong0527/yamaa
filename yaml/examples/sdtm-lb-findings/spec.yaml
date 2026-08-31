@@ -5,51 +5,65 @@ datasets:
 base: ODM
 keys: [STUDYID, USUBJID, LBSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESN, LBSTRESU, LBDTC]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ODM.StudyOID
 
   - name: DOMAIN
     type: str
+    label: Domain Abbreviation
     derivation:
       literal: LB
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ODM.SubjectKey
 
+  - name: LBTESTCD
+    type: str
+    label: Lab Test or Examination Short Name
+
+  - name: LBTEST
+    type: str
+    label: Lab Test or Examination Name
+
+  - name: LBORRES
+    type: str
+    label: Result or Finding in Original Units
+
+  - name: LBORRESU
+    type: str
+    label: Original Units
+
+  - name: LBSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+
+  - name: LBSTRESU
+    type: str
+    label: Standard Units
+
+  - name: LBDTC
+    type: date
+    label: Date/Time of Specimen Collection
+    derivation:
+      source: ODM.IT.LB.LBDTC
+
   - name: LBSEQ
     type: int
+    label: Sequence Number
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]
         order_by: [LBDTC, LBTESTCD]
-
-  - name: LBTESTCD
-    type: str
-
-  - name: LBTEST
-    type: str
-
-  - name: LBORRES
-    type: str
-
-  - name: LBORRESU
-    type: str
-
-  - name: LBSTRESN
-    type: float
-
-  - name: LBSTRESU
-    type: str
-
-  - name: LBDTC
-    type: date
-    derivation:
-      source: ODM.IT.LB.LBDTC
 
 rows:
   - id: calcium

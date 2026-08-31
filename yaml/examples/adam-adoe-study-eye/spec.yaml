@@ -6,6 +6,9 @@ datasets:
 base: OE
 keys: [STUDYID, USUBJID, OESEQ]
 
+output:
+  columns: [STUDYID, USUBJID, OESEQ, PARAMCD, OELAT, AVAL, AFEYE]
+
 columns:
   - name: STUDYID
     type: str
@@ -49,7 +52,6 @@ columns:
   - name: STUDYEYE
     type: str
     label: Study Eye Laterality
-    output: false
     derivation:
       source: ADSL.STUDYEYE
     verifications:

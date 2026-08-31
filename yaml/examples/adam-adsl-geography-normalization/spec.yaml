@@ -5,19 +5,25 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, COUNTRY, REGION1]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM.USUBJID
 
   - name: COUNTRY
     type: str
+    label: Country
     derivation:
       str_upper:
         source: DM.COUNTRY
@@ -28,6 +34,7 @@ columns:
 
   - name: REGION1
     type: str
+    label: Geographic Region 1
     derivation:
       mapping:
         source: COUNTRY

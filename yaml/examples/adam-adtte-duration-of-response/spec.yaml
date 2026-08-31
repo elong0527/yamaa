@@ -7,53 +7,125 @@ datasets:
 base: ADSL
 keys: [STUDYID, USUBJID, PARAMCD]
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ADSL.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ADSL.USUBJID
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       literal: DOR
 
   - name: PARAM
     type: str
+    label: Parameter
     derivation:
       literal: Duration of Response
 
   - name: STARTDT
     type: date
+    label: Time-to-Event Origin Date
     derivation:
       source: ADSL.RESPDT
     verifications:
       not_missing: {}
 
-  - name: ADT
+  - name: NACTDT
     type: date
+    label: New Anti-Cancer Therapy Start Date
     derivation:
-      coalesce:
-        sources: [EVENTDT, CENSORDT]
-    verifications:
-      not_missing: {}
+      source: ADSL.NACTDT
 
-  - name: AVAL
-    type: int
+  - name: PDDT
+    type: date
+    label: Disease Progression Date
     derivation:
-      date_diff:
-        start: STARTDT
-        end: ADT
-        unit: day
-        bounds: inclusive
+      aggregate:
+        filter: "ADRSPRE.AVALC = 'PD'"
+        expr: "MIN(ADRSPRE.ADT)"
+
+  - name: PDSEQ
+    type: int
+    label: Disease Progression Source Sequence Number
+    derivation:
+      source:
+        variable: ADRSPRE.ASEQ
+        multiple_matches:
+          order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
+          keep: first
+          filter: "ADRSPRE.AVALC = 'PD'"
+
+  - name: DEATHDT
+    type: date
+    label: Death Date
+    derivation:
+      aggregate:
+        filter: "DS.DSDECOD = 'DEATH'"
+        expr: "MIN(DS.DSSTDTC)"
+
+  - name: DEATHSEQ
+    type: int
+    label: Death Source Sequence Number
+    derivation:
+      source:
+        variable: DS.DSSEQ
+        multiple_matches:
+          order_by: [DS.DSSTDTC, DS.DSSEQ]
+          keep: first
+          filter: "DS.DSDECOD = 'DEATH'"
+
+  - name: LASTVLDT
+    type: date
+    label: Last Valid Assessment Date
+    derivation:
+      aggregate:
+        filter: "ADRSPRE.AVALC <> 'NE'"
+        expr: "MAX(ADRSPRE.ADT)"
+
+  - name: LASTVLSEQ
+    type: int
+    label: Last Valid Assessment Sequence Number
+    derivation:
+      source:
+        variable: ADRSPRE.ASEQ
+        multiple_matches:
+          order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
+          keep: last
+          filter: "ADRSPRE.AVALC <> 'NE'"
+
+  - name: EVENTALLDT
+    type: date
+    label: Earliest Progression or Death Date
+    derivation:
+      least:
+        sources: [PDDT, DEATHDT]
+
+  - name: EVENTDT
+    type: date
+    label: Event Date
+    derivation:
+      case:
+        branches:
+          - when: "EVENTALLDT IS NOT NULL AND (NACTDT IS NULL OR EVENTALLDT <= NACTDT)"
+            then:
+              source: EVENTALLDT
 
   - name: CNSR
     type: int
+    label: Censor
     derivation:
       case:
         branches:
@@ -65,6 +137,7 @@ columns:
 
   - name: EVNTDESC
     type: str
+    label: Event or Censoring Description
     derivation:
       case:
         branches:
@@ -77,8 +150,35 @@ columns:
         otherwise:
           literal: DEATH
 
+  - name: CENSORDT
+    type: date
+    label: Censoring Date
+    derivation:
+      least:
+        sources: [LASTVLDT, NACTDT]
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation:
+      coalesce:
+        sources: [EVENTDT, CENSORDT]
+    verifications:
+      not_missing: {}
+
+  - name: AVAL
+    type: int
+    label: Analysis Value
+    derivation:
+      date_diff:
+        start: STARTDT
+        end: ADT
+        unit: day
+        bounds: inclusive
+
   - name: CNSDTDSC
     type: str
+    label: Censoring Date Description
     derivation:
       case:
         branches:
@@ -93,6 +193,7 @@ columns:
 
   - name: SRCDOM
     type: str
+    label: Source Data
     derivation:
       case:
         branches:
@@ -110,6 +211,7 @@ columns:
 
   - name: SRCVAR
     type: str
+    label: Source Variable
     derivation:
       case:
         branches:
@@ -124,6 +226,7 @@ columns:
 
   - name: SRCSEQ
     type: int
+    label: Source Sequence Number
     derivation:
       case:
         branches:
@@ -136,93 +239,6 @@ columns:
           - when: "CNSDTDSC = 'LAST TUMOUR ASSESSMENT'"
             then:
               source: LASTVLSEQ
-
-  - name: NACTDT
-    type: date
-    output: false
-    derivation:
-      source: ADSL.NACTDT
-
-  - name: PDDT
-    type: date
-    output: false
-    derivation:
-      aggregate:
-        filter: "ADRSPRE.AVALC = 'PD'"
-        expr: "MIN(ADRSPRE.ADT)"
-
-  - name: PDSEQ
-    type: int
-    output: false
-    derivation:
-      source:
-        variable: ADRSPRE.ASEQ
-        multiple_matches:
-          order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
-          keep: first
-          filter: "ADRSPRE.AVALC = 'PD'"
-
-  - name: DEATHDT
-    type: date
-    output: false
-    derivation:
-      aggregate:
-        filter: "DS.DSDECOD = 'DEATH'"
-        expr: "MIN(DS.DSSTDTC)"
-
-  - name: DEATHSEQ
-    type: int
-    output: false
-    derivation:
-      source:
-        variable: DS.DSSEQ
-        multiple_matches:
-          order_by: [DS.DSSTDTC, DS.DSSEQ]
-          keep: first
-          filter: "DS.DSDECOD = 'DEATH'"
-
-  - name: LASTVLDT
-    type: date
-    output: false
-    derivation:
-      aggregate:
-        filter: "ADRSPRE.AVALC <> 'NE'"
-        expr: "MAX(ADRSPRE.ADT)"
-
-  - name: LASTVLSEQ
-    type: int
-    output: false
-    derivation:
-      source:
-        variable: ADRSPRE.ASEQ
-        multiple_matches:
-          order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
-          keep: last
-          filter: "ADRSPRE.AVALC <> 'NE'"
-
-  - name: EVENTALLDT
-    type: date
-    output: false
-    derivation:
-      least:
-        sources: [PDDT, DEATHDT]
-
-  - name: EVENTDT
-    type: date
-    output: false
-    derivation:
-      case:
-        branches:
-          - when: "EVENTALLDT IS NOT NULL AND (NACTDT IS NULL OR EVENTALLDT <= NACTDT)"
-            then:
-              source: EVENTALLDT
-
-  - name: CENSORDT
-    type: date
-    output: false
-    derivation:
-      least:
-        sources: [LASTVLDT, NACTDT]
 
 rows:
   - id: responder

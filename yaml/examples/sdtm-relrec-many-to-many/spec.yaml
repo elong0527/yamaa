@@ -5,29 +5,39 @@ datasets:
   CM: input/cm.csv
 keys: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
 
+output:
+  columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
 
   - name: RDOMAIN
     type: str
+    label: Related Domain Abbreviation
 
   - name: IDVAR
     type: str
+    label: Identifying Variable
 
   - name: IDVARVAL
     type: str
+    label: Identifying Variable Value
 
   - name: RELTYPE
     type: str
+    label: Relationship Type
     derivation:
       literal: null
 
   - name: RELID
     type: str
+    label: Relationship Identifier
 
 rows:
   - id: ae_link_1

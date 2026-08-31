@@ -5,29 +5,37 @@ datasets:
 base: AE
 keys: [STUDYID, USUBJID, AESEQ]
 
+output:
+  columns: [STUDYID, USUBJID, AESEQ, ASEV, SEVTOT]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: AE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: AE.USUBJID
 
   - name: AESEQ
     type: int
+    label: Sequence Number
     derivation:
       source: AE.AESEQ
 
   - name: ASEV
     type: str
+    label: Analysis Severity/Intensity
     derivation:
       source: AE.AESEV
 
   - name: SEVTOT
     type: float
+    label: Total Severity Score
     derivation:
       aggregate:
         group_by: [STUDYID, USUBJID]

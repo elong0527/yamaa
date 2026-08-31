@@ -92,7 +92,6 @@ reduction needs:
 ```yaml
 - name: NADIR
   type: float
-  output: false
   derivation:
     aggregate:
       expr: "MIN(ASSESS.AVAL)"

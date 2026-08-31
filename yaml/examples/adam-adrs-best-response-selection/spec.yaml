@@ -5,33 +5,43 @@ datasets:
 base: ADRSPRE
 keys: [STUDYID, USUBJID, ASEQ]
 
+output:
+  columns: [STUDYID, USUBJID, ASEQ, ADT, RANDDY, AVALC, BORCAT, BORPRI, BORSEQ]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation: {source: ADRSPRE.STUDYID}
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation: {source: ADRSPRE.USUBJID}
 
   - name: ASEQ
     type: int
+    label: Sequence Number
     derivation: {source: ADRSPRE.ASEQ}
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation: {source: ADRSPRE.ADT}
 
   - name: RANDDY
     type: int
+    label: Analysis Day Relative to Randomization
     derivation: {source: ADRSPRE.RANDDY}
 
   - name: AVALC
     type: str
+    label: Analysis Value (C)
     derivation: {source: ADRSPRE.AVALC}
 
   - name: BORCAT
     type: str
+    label: Best Overall Response Category
     derivation:
       case:
         branches:
@@ -54,6 +64,7 @@ columns:
 
   - name: BORPRI
     type: int
+    label: Best Overall Response Priority
     derivation:
       mapping:
         source: BORCAT
@@ -70,6 +81,7 @@ columns:
 
   - name: BORSEQ
     type: int
+    label: Best Overall Response Sequence
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]

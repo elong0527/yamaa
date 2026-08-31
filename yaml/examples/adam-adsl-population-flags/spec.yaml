@@ -5,29 +5,37 @@ datasets:
 base: ADSLPRE
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, ARMCD, TRTSDT, SAFFL, ITTFL]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ADSLPRE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ADSLPRE.USUBJID
 
   - name: ARMCD
     type: str
+    label: Planned Arm Code
     derivation:
       source: ADSLPRE.ARMCD
 
   - name: TRTSDT
     type: date
+    label: Date of First Exposure to Treatment
     derivation:
       source: ADSLPRE.TRTSDT
 
   - name: SAFFL
     type: str
+    label: Safety Population Flag
     derivation:
       case:
         branches:
@@ -43,6 +51,7 @@ columns:
 
   - name: ITTFL
     type: str
+    label: Intent-to-Treat Population Flag
     derivation:
       case:
         branches:

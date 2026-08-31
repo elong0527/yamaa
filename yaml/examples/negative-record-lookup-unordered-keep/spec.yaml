@@ -11,18 +11,24 @@ record_lookups:
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, TRT01A]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM.USUBJID
 
   - name: TRT01A
     type: str
+    label: Actual Treatment for Period 01
     derivation:
       source: DOSING.EXTRT

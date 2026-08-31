@@ -19,24 +19,29 @@ record_lookups:
     key: [STUDYID, USUBJID, VSTESTCD, VSDTC]
     unmatched: missing
 
+output:
+  columns: [STUDYID, USUBJID, ASEQ, VSSEQ, PARAMCD, ADT, AVAL, TRTSDT, HEIGHTBL]
+
 columns:
   - name: STUDYID
     type: str
-    derivation: {source: ADSL.STUDYID}
+    label: Study Identifier
+    derivation:
+      source: ADSL.STUDYID
 
   - name: USUBJID
     type: str
-    derivation: {source: ADSL.USUBJID}
+    label: Unique Subject Identifier
+    derivation:
+      source: ADSL.USUBJID
 
   - name: ASEQ
     type: int
-
-  - name: VSSEQ
-    type: int
-    derivation: {source: COLLECTED.VSSEQ}
+    label: Analysis Sequence Number
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       case:
         branches:
@@ -46,6 +51,7 @@ columns:
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       case:
         branches:
@@ -55,25 +61,27 @@ columns:
             then: {source: ADSL.WGTBLDT}
         otherwise: {source: ADSL.WGTW3DT}
 
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: COLLECTED.VSSEQ
+
   - name: AVAL
     type: float
-    derivation: {source: COLLECTED.VSSTRESN}
+    label: Analysis Value
+    derivation:
+      source: COLLECTED.VSSTRESN
 
   - name: TRTSDT
     type: date
-    derivation: {source: ADSL.TRTSDT}
-
-  - name: HEIGHTBL
-    type: float
+    label: Date of First Exposure to Treatment
     derivation:
-      baseline_value:
-        group_by: [STUDYID, USUBJID]
-        value: AVAL
-        flag: HGTBLFL
+      source: ADSL.TRTSDT
 
   - name: HGTDT
     type: date
-    output: false
+    label: Height Assessment Date
     derivation:
       case:
         branches:
@@ -82,12 +90,21 @@ columns:
 
   - name: HGTBLFL
     type: str
-    output: false
+    label: Baseline Height Record Flag
     derivation:
       baseline_flag:
         group_by: [STUDYID, USUBJID]
         date: HGTDT
         reference_date: TRTSDT
+
+  - name: HEIGHTBL
+    type: float
+    label: Baseline Height
+    derivation:
+      baseline_value:
+        group_by: [STUDYID, USUBJID]
+        value: AVAL
+        flag: HGTBLFL
 
 verifications:
   - unique:

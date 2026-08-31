@@ -5,24 +5,31 @@ datasets:
 base: VS_RAW
 keys: [STUDYID, USUBJID, VSSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: VS_RAW.STUDYID
 
   - name: DOMAIN
     type: str
+    label: Domain Abbreviation
     derivation:
       literal: VS
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: VS_RAW.USUBJID
 
   - name: VSSEQ
     type: int
+    label: Sequence Number
     derivation:
       source: VS_RAW.VSSEQ
     verifications:
@@ -30,11 +37,13 @@ columns:
 
   - name: VISIT
     type: str
+    label: Visit Name
     derivation:
       source: VS_RAW.VISIT
 
   - name: VSTESTCD
     type: str
+    label: Vital Signs Test Short Name
     derivation:
       source: VS_RAW.VSTESTCD
     verifications:
@@ -43,16 +52,19 @@ columns:
 
   - name: VSTEST
     type: str
+    label: Vital Signs Test Name
     derivation:
       source: VS_RAW.VSTEST
 
   - name: VSORRES
     type: str
+    label: Result or Finding in Original Units
     derivation:
       source: VS_RAW.VSORRES
 
   - name: VSORRESU
     type: str
+    label: Original Units
     derivation:
       source: VS_RAW.VSORRESU
     verifications:
@@ -61,14 +73,17 @@ columns:
 
   - name: VSSTRESN
     type: float
+    label: Numeric Result/Finding in Standard Units
 
   - name: VSSTRESC
     type: str
+    label: Character Result/Finding in Std Format
     derivation:
       source: VSSTRESN
 
   - name: VSSTRESU
     type: str
+    label: Standard Units
     verifications:
       allowed_values:
         values: [cm, kg, C]

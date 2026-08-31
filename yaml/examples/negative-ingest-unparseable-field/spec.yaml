@@ -6,23 +6,30 @@ datasets:
 base: TRT
 keys: [STUDYID, USUBJID, EXTRT]
 
+output:
+  columns: [STUDYID, USUBJID, EXTRT, DOSECUM]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: TRT.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: TRT.USUBJID
 
   - name: EXTRT
     type: str
+    label: Name of Treatment
     derivation:
       source: TRT.EXTRT
 
   - name: DOSECUM
     type: float
+    label: Cumulative Dose
     derivation:
       aggregate: "SUM(EX.EXDOSE)"

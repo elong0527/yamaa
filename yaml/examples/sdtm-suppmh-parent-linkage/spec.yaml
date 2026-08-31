@@ -6,29 +6,37 @@ datasets:
 base: MH_SUPP_RAW
 keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 
+output:
+  columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: MH_SUPP_RAW.STUDYID
 
   - name: RDOMAIN
     type: str
+    label: Related Domain Abbreviation
     derivation:
       literal: MH
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: MH_SUPP_RAW.USUBJID
 
   - name: IDVAR
     type: str
+    label: Identifying Variable
     derivation:
       literal: MHSEQ
 
   - name: IDVARVAL
     type: str
+    label: Identifying Variable Value
     derivation:
       mapping_from:
         source: [MH_SUPP_RAW.USUBJID, MH_SUPP_RAW.MHTERM]
@@ -40,15 +48,18 @@ columns:
 
   - name: QNAM
     type: str
+    label: Qualifier Variable Name
     verifications:
       allowed_values:
         values: [MHFAMHX, MHCONF]
 
   - name: QLABEL
     type: str
+    label: Qualifier Label
 
   - name: QVAL
     type: str
+    label: Data Value
     verifications:
       - not_missing: {}
       - allowed_values:
@@ -56,11 +67,13 @@ columns:
 
   - name: QORIG
     type: str
+    label: Origin
     derivation:
       literal: CRF
 
   - name: QEVAL
     type: str
+    label: Evaluator
     derivation:
       literal: null
 

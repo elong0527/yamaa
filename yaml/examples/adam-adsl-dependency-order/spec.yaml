@@ -6,20 +6,21 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [POPFL, SAFFL, ITTFL, TRTSDT, RANDDT, AGEGR1, AGERNK, STUDYID, USUBJID, AGE]
+
 columns:
-  - name: POPFL
-    type: str
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
     derivation:
-      case:
-        branches:
-          - when: "SAFFL = 'Y' AND ITTFL = 'Y'"
-            then:
-              literal: Y
-        otherwise:
-          literal: N
+      aggregate:
+        filter: "EX.EXSTDTC IS NOT NULL"
+        expr: "MIN(EX.EXSTDTC)"
 
   - name: SAFFL
     type: str
+    label: Safety Population Flag
     derivation:
       case:
         branches:
@@ -29,20 +30,15 @@ columns:
         otherwise:
           literal: N
 
-  - name: ITTFL
-    type: str
+  - name: RANDDT
+    type: date
+    label: Randomization Date
     derivation:
-      case:
-        branches:
-          - when: "RANDFL = 'Y'"
-            then:
-              literal: Y
-        otherwise:
-          literal: N
+      source: DM.RANDDT
 
   - name: RANDFL
     type: str
-    output: false
+    label: Randomized Population Flag
     derivation:
       case:
         branches:
@@ -52,20 +48,51 @@ columns:
         otherwise:
           literal: N
 
-  - name: TRTSDT
-    type: date
+  - name: ITTFL
+    type: str
+    label: Intent-to-Treat Population Flag
     derivation:
-      aggregate:
-        filter: "EX.EXSTDTC IS NOT NULL"
-        expr: "MIN(EX.EXSTDTC)"
+      case:
+        branches:
+          - when: "RANDFL = 'Y'"
+            then:
+              literal: Y
+        otherwise:
+          literal: N
 
-  - name: RANDDT
-    type: date
+  - name: POPFL
+    type: str
+    label: Analysis Population Flag
     derivation:
-      source: DM.RANDDT
+      case:
+        branches:
+          - when: "SAFFL = 'Y' AND ITTFL = 'Y'"
+            then:
+              literal: Y
+        otherwise:
+          literal: N
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation:
+      source: DM.AGE
 
   - name: AGEGR1
     type: str
+    label: Pooled Age Group 1
     derivation:
       cut:
         source: AGE
@@ -75,25 +102,11 @@ columns:
 
   - name: AGERNK
     type: int
+    label: Pooled Age Group 1 Rank
     derivation:
       row_number:
         group_by: [STUDYID]
         order_by: [AGE, USUBJID]
-
-  - name: STUDYID
-    type: str
-    derivation:
-      source: DM.STUDYID
-
-  - name: USUBJID
-    type: str
-    derivation:
-      source: DM.USUBJID
-
-  - name: AGE
-    type: int
-    derivation:
-      source: DM.AGE
 
 verifications:
   - unique:

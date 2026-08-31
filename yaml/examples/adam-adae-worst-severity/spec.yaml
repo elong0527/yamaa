@@ -5,39 +5,49 @@ datasets:
 base: ADAEPRE
 keys: [STUDYID, USUBJID, AESEQ]
 
+output:
+  columns: [STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, AESEV, TRTEMFL, AESEVN, AWSEVFL]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ADAEPRE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ADAEPRE.USUBJID
 
   - name: AESEQ
     type: int
+    label: Sequence Number
     derivation:
       source: ADAEPRE.AESEQ
 
   - name: AEBODSYS
     type: str
+    label: Body System or Organ Class
     derivation:
       source: ADAEPRE.AEBODSYS
 
   - name: AEDECOD
     type: str
+    label: Dictionary-Derived Term
     derivation:
       source: ADAEPRE.AEDECOD
 
   - name: ASTDT
     type: date
+    label: Analysis Start Date
     derivation:
       source: ADAEPRE.ASTDT
 
   - name: AESEV
     type: str
+    label: Severity/Intensity
     derivation:
       source: ADAEPRE.AESEV
     verifications:
@@ -46,6 +56,7 @@ columns:
 
   - name: TRTEMFL
     type: str
+    label: Treatment Emergent Analysis Flag
     derivation:
       source: ADAEPRE.TRTEMFL
     verifications:
@@ -54,6 +65,7 @@ columns:
 
   - name: AESEVN
     type: int
+    label: Severity/Intensity (N)
     derivation:
       mapping:
         source: AESEV
@@ -69,7 +81,7 @@ columns:
 
   - name: AWSRNK
     type: int
-    output: false
+    label: Worst Severity Rank
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, AEDECOD]
@@ -81,6 +93,7 @@ columns:
 
   - name: AWSEVFL
     type: str
+    label: Worst Severity Flag
     derivation:
       case:
         branches:

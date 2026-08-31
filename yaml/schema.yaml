@@ -41,10 +41,14 @@ root_class:
         type: "list[column_name]"
         required: true
         description: Output columns identifying a row; R005 defines the identity they assert.
+    - output:
+        type: output_class
+        required: true
+        description: Artifact presentation independent of dependency-ordered declarations; R005 defines it.
     - columns:
         type: "list[column_class]"
         required: true
-        description: Columns this specification declares, in the order R005 gives the artifact.
+        description: Columns in the dependency order R001 requires; output.columns controls artifact order.
     - rows:
         type: "list[row_class]"
         required: false
@@ -114,6 +118,12 @@ expand_class:
         required: true
         description: Declared integer column receiving the one-based expansion index.
 
+output_class:
+    - columns:
+        type: "list[column_name]"
+        required: true
+        description: Declared columns selected for the artifact, in the order R005 requires.
+
 record_lookup_class:
     - id:
         type: record_lookup_id
@@ -182,11 +192,6 @@ column_class:
         type: column_type
         required: true
         description: Declared data type this column must carry in the completed dataset.
-    - output:
-        type: bool
-        required: false
-        default: true
-        description: Whether the column reaches the artifact; R005 defines an internal column.
     - label:
         type: str
         required: false

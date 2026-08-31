@@ -5,14 +5,19 @@ datasets:
 base: ODM
 keys: [STUDYID, USUBJID, LBSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, VISIT, VISITNUM, LBTESTCD, LBTEST, LBCAT, LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESC, LBSTRESN, LBSTRESU, LBSTAT, LBDTC]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ODM.StudyOID
 
   - name: DOMAIN
     type: str
+    label: Domain Abbreviation
     derivation:
       literal: LB
     verifications:
@@ -21,18 +26,13 @@ columns:
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ODM.SubjectKey
 
-  - name: LBSEQ
-    type: int
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [LBDTC, LBTESTCD, LBSPEC]
-
   - name: VISIT
     type: str
+    label: Visit Name
     derivation:
       mapping:
         source: ODM.StudyEventOID
@@ -47,6 +47,7 @@ columns:
 
   - name: VISITNUM
     type: int
+    label: Visit Number
     derivation:
       mapping:
         source: ODM.StudyEventOID
@@ -61,30 +62,36 @@ columns:
 
   - name: LBTESTCD
     type: str
+    label: Lab Test or Examination Short Name
     verifications:
       allowed_values:
         values: [VITD25OH, IL13, CAMPPRO]
 
   - name: LBTEST
     type: str
+    label: Lab Test or Examination Name
 
   - name: LBCAT
     type: str
+    label: Category for Lab Test
 
   - name: LBSPEC
     type: str
+    label: Specimen Material Type
     verifications:
       allowed_values:
         values: [SERUM, SKIN BIOPSY, SALIVA, TAPE STRIP]
 
   - name: LBLOC
     type: str
+    label: Location Used for Measurement
     verifications:
       allowed_values:
         values: [LESIONAL, NON-LESIONAL]
 
   - name: LBORRES
     type: str
+    label: Result or Finding in Original Units
     derivation:
       source: ODM.Value
     verifications:
@@ -92,14 +99,17 @@ columns:
 
   - name: LBORRESU
     type: str
+    label: Original Units
 
   - name: LBSTRESC
     type: str
+    label: Character Result/Finding in Std Format
     derivation:
       source: LBORRES
 
   - name: LBSTRESN
     type: float
+    label: Numeric Result/Finding in Standard Units
     derivation:
       value:
         source: LBORRES
@@ -110,9 +120,11 @@ columns:
 
   - name: LBSTRESU
     type: str
+    label: Standard Units
 
   - name: LBSTAT
     type: str
+    label: Completion Status
     derivation:
       case:
         branches:
@@ -125,6 +137,15 @@ columns:
 
   - name: LBDTC
     type: date
+    label: Date/Time of Specimen Collection
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [LBDTC, LBTESTCD, LBSPEC]
 
 rows:
   - id: serum_vitamin_d

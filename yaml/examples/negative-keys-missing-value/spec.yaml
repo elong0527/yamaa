@@ -5,44 +5,55 @@ datasets:
 base: ADVSPRE
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, ADT, ADY, AVAL, AVISIT]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ADVSPRE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ADVSPRE.USUBJID
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       source: ADVSPRE.PARAMCD
 
   - name: VSSEQ
     type: int
+    label: Sequence Number
     derivation:
       source: ADVSPRE.VSSEQ
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       source: ADVSPRE.ADT
 
   - name: ADY
     type: int
+    label: Analysis Relative Day
     derivation:
       source: ADVSPRE.ADY
 
   - name: AVAL
     type: float
+    label: Analysis Value
     derivation:
       source: ADVSPRE.AVAL
 
   - name: AVISIT
     type: str
+    label: Analysis Visit
     derivation:
       cut:
         source: ADY

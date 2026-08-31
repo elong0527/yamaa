@@ -12,6 +12,9 @@ record_lookups:
     filter: "DS.DSDECOD = 'COMPLETED'"
     unmatched: missing
 
+output:
+  columns: [STUDYID, USUBJID, TRTSDT, COMPFL]
+
 columns:
   - name: STUDYID
     type: str
@@ -31,6 +34,12 @@ columns:
     derivation:
       source: ADSLPRE.TRTSDT
 
+  - name: COMPREC
+    type: str
+    label: Completion Disposition Term
+    derivation:
+      source: COMPLT.DSDECOD
+
   - name: COMPFL
     type: str
     label: Completion Flag
@@ -45,13 +54,6 @@ columns:
     verifications:
       allowed_values:
         values: [Y, N]
-
-  - name: COMPREC
-    type: str
-    label: Completion Disposition Term
-    output: false
-    derivation:
-      source: COMPLT.DSDECOD
 
 verifications:
   - unique:

@@ -12,39 +12,48 @@ derived:
     columns:
       - name: STUDYID
         type: str
+        label: Study Identifier
         derivation: {source: TRVISIT.STUDYID}
       - name: USUBJID
         type: str
+        label: Unique Subject Identifier
         derivation: {source: TRVISIT.USUBJID}
       - name: AVISIT
         type: str
+        label: Analysis Visit
         derivation: {source: TRVISIT.AVISIT}
       - name: AVISITN
         type: int
+        label: Analysis Visit (N)
         derivation: {source: TRVISIT.AVISITN}
       - name: ADT
         type: date
+        label: Analysis Date
         derivation: {source: TRVISIT.ADT}
       - name: AVAL
         type: float
+        label: Analysis Value
         derivation:
           aggregate:
             filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
             expr: "SUM(TR.TRSTRESN)"
       - name: NMEAS
         type: int
+        label: Number of Measured Target Lesions
         derivation:
           aggregate:
             filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
             expr: "COUNT(TR.TRSTRESN)"
       - name: NTARGET
         type: int
+        label: Number of Target Lesions
         derivation:
           aggregate:
             filter: "TU.TUGRPID = 'TARGET'"
             expr: "COUNT(TU.TULNKID)"
       - name: ANL01FL
         type: str
+        label: Analysis Record Flag 01
         derivation:
           case:
             branches:
@@ -54,56 +63,82 @@ derived:
 base: ASSESS
 keys: [STUDYID, USUBJID, AVISIT]
 
+output:
+  columns: [STUDYID, USUBJID, AVISIT, AVISITN, ADT, PARAMCD, PARAM, AVAL, NMEAS, NTARGET, ANL01FL, NADIR]
+
 columns:
   - name: STUDYID
     type: str
-    derivation: {source: ASSESS.STUDYID}
+    label: Study Identifier
+    derivation:
+      source: ASSESS.STUDYID
 
   - name: USUBJID
     type: str
-    derivation: {source: ASSESS.USUBJID}
+    label: Unique Subject Identifier
+    derivation:
+      source: ASSESS.USUBJID
 
   - name: AVISIT
     type: str
-    derivation: {source: ASSESS.AVISIT}
+    label: Analysis Visit
+    derivation:
+      source: ASSESS.AVISIT
 
   - name: AVISITN
     type: int
-    derivation: {source: ASSESS.AVISITN}
+    label: Analysis Visit (N)
+    derivation:
+      source: ASSESS.AVISITN
 
   - name: ADT
     type: date
-    derivation: {source: ASSESS.ADT}
+    label: Analysis Date
+    derivation:
+      source: ASSESS.ADT
 
   - name: PARAMCD
     type: str
-    derivation: {literal: SDIAM}
+    label: Parameter Code
+    derivation:
+      literal: SDIAM
 
   - name: PARAM
     type: str
-    derivation: {literal: Sum of Target Lesion Diameters (mm)}
+    label: Parameter
+    derivation:
+      literal: Sum of Target Lesion Diameters (mm)
 
   - name: AVAL
     type: float
-    derivation: {source: ASSESS.AVAL}
+    label: Analysis Value
+    derivation:
+      source: ASSESS.AVAL
 
   - name: NMEAS
     type: int
-    derivation: {source: ASSESS.NMEAS}
+    label: Number of Measured Target Lesions
+    derivation:
+      source: ASSESS.NMEAS
 
   - name: NTARGET
     type: int
-    derivation: {source: ASSESS.NTARGET}
+    label: Number of Target Lesions
+    derivation:
+      source: ASSESS.NTARGET
 
   - name: ANL01FL
     type: str
-    derivation: {source: ASSESS.ANL01FL}
+    label: Analysis Record Flag 01
+    derivation:
+      source: ASSESS.ANL01FL
     verifications:
       allowed_values:
         values: [Y]
 
   - name: NADIR
     type: float
+    label: Nadir Sum of Target Lesion Diameters
     derivation:
       aggregate:
         filter: "ASSESS.ANL01FL = 'Y'"

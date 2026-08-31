@@ -5,14 +5,19 @@ datasets:
 base: DM_RAW
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, SUBJID, SITEID]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM_RAW.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       str_concat:
         sources:
@@ -27,10 +32,12 @@ columns:
 
   - name: SUBJID
     type: str
+    label: Subject Identifier for the Study
     derivation:
       source: DM_RAW.SUBJID
 
   - name: SITEID
     type: str
+    label: Study Site Identifier
     derivation:
       source: DM_RAW.SITEID

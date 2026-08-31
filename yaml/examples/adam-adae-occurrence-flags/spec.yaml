@@ -5,39 +5,49 @@ datasets:
 base: ADAEPRE
 keys: [STUDYID, USUBJID, AESEQ]
 
+output:
+  columns: [STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, TRTEMFL, AOCCFL, AOCCSFL, AOCCPFL]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ADAEPRE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ADAEPRE.USUBJID
 
   - name: AESEQ
     type: int
+    label: Sequence Number
     derivation:
       source: ADAEPRE.AESEQ
 
   - name: AEBODSYS
     type: str
+    label: Body System or Organ Class
     derivation:
       source: ADAEPRE.AEBODSYS
 
   - name: AEDECOD
     type: str
+    label: Dictionary-Derived Term
     derivation:
       source: ADAEPRE.AEDECOD
 
   - name: ASTDT
     type: date
+    label: Analysis Start Date
     derivation:
       source: ADAEPRE.ASTDT
 
   - name: TRTEMFL
     type: str
+    label: Treatment Emergent Analysis Flag
     derivation:
       source: ADAEPRE.TRTEMFL
     verifications:
@@ -46,7 +56,7 @@ columns:
 
   - name: AOCCSEQ
     type: int
-    output: false
+    label: Subject Occurrence Sequence Number
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]
@@ -55,7 +65,7 @@ columns:
 
   - name: AOCCSSEQ
     type: int
-    output: false
+    label: Body System Occurrence Sequence Number
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, AEBODSYS]
@@ -64,7 +74,7 @@ columns:
 
   - name: AOCCPSEQ
     type: int
-    output: false
+    label: Preferred Term Occurrence Sequence Number
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, AEBODSYS, AEDECOD]
@@ -73,6 +83,7 @@ columns:
 
   - name: AOCCFL
     type: str
+    label: First Occurrence Within Subject Flag
     derivation:
       case:
         branches:
@@ -82,6 +93,7 @@ columns:
 
   - name: AOCCSFL
     type: str
+    label: First Occurrence of Body System Flag
     derivation:
       case:
         branches:
@@ -91,6 +103,7 @@ columns:
 
   - name: AOCCPFL
     type: str
+    label: First Occurrence of Preferred Term Flag
     derivation:
       case:
         branches:

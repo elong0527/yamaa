@@ -39,9 +39,9 @@ An identifier resolves the way the `sql` primitive already resolves one in the
 same phase, so a formula and a predicate never disagree about a name.
 
 During column derivation an identifier is an unqualified current-output column.
-A qualified `DATASET.VARIABLE` reference is not permitted there: bind the source
-variable to a column first and compute from it. `output: false` keeps that
-binding column out of the final dataset.
+A qualified `DATASET.VARIABLE` reference is not permitted there: bind the
+source variable to a column first and compute from it. Omitting that binding
+column from `output.columns` keeps it out of the final dataset.
 
 During row construction an identifier is either a variable of the row driver,
 qualified exactly as `row.filter` qualifies one, or an unqualified column
@@ -51,7 +51,6 @@ row construction precedes the R003 join and sees only the row driver.
 ```yaml
 - name: HEIGHTCM
   type: float
-  output: false
   derivation:
     source: DM.HEIGHTCM
 - name: BMI

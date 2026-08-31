@@ -14,29 +14,37 @@ record_lookups:
     filter: "ADRSSEL.BORSEQ = 1"
     unmatched: missing
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, RANDDT, AVALC, AVAL, ADT]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ADSL.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ADSL.USUBJID
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       literal: BOR
 
   - name: PARAM
     type: str
+    label: Parameter
     derivation:
       literal: Best Overall Response by Investigator
 
   - name: RANDDT
     type: date
+    label: Randomization Date
     derivation:
       source: ADSL.RANDDT
     verifications:
@@ -44,6 +52,7 @@ columns:
 
   - name: AVALC
     type: str
+    label: Analysis Value (C)
     derivation:
       source: RESPONSE.BORCAT
     verifications:
@@ -52,6 +61,7 @@ columns:
 
   - name: AVAL
     type: int
+    label: Analysis Value
     derivation:
       mapping:
         source: AVALC
@@ -70,6 +80,7 @@ columns:
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       source: RESPONSE.ADT
 

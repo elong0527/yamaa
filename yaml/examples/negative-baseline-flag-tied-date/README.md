@@ -30,7 +30,6 @@ the first:
 ```yaml
 - name: ABLRANK
   type: int
-  output: false
   derivation:
     row_number:
       group_by: [STUDYID, USUBJID, PARAMCD]
@@ -48,6 +47,8 @@ the first:
           then:
             literal: Y
 ```
+
+Keep `ABLRANK` internal by omitting it from `output.columns`.
 
 Order by the term the study names; the sequence number above stands in for it
 and is not itself a clinical rule. Do not average the two results into one

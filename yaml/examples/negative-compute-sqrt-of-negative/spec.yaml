@@ -5,31 +5,37 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, BSA]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM.USUBJID
 
   - name: HEIGHTCM
     type: float
-    output: false
+    label: Height (cm)
     derivation:
       source: DM.HEIGHTCM
 
   - name: WEIGHTKG
     type: float
-    output: false
+    label: Weight (kg)
     derivation:
       source: DM.WEIGHTKG
 
   - name: BSA
     type: float
+    label: Body Surface Area (m2)
     derivation:
       compute:
         expr: "SQRT(HEIGHTCM * WEIGHTKG / 3600)"

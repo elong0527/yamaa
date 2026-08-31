@@ -24,40 +24,93 @@ record_lookups:
     order_by: [RS.RSDTC, RS.RSSEQ]
     keep: last
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, SRCDOM, SRCVAR, SRCSEQ]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ADSL.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ADSL.USUBJID
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       literal: PFS
 
   - name: PARAM
     type: str
+    label: Parameter
     derivation:
       literal: Progression-Free Survival
 
   - name: STARTDT
     type: date
+    label: Time-to-Event Origin Date
     derivation:
       source: ADSL.RANDDT
 
+  - name: PDDT
+    type: date
+    label: Disease Progression Date
+    derivation:
+      source: PROGRESSION.RSDTC
+
+  - name: PDSEQ
+    type: int
+    label: Disease Progression Source Sequence Number
+    derivation:
+      source: PROGRESSION.RSSEQ
+
+  - name: DEATHDT
+    type: date
+    label: Death Date
+    derivation:
+      source: DEATH.DSDTC
+
+  - name: DEATHSEQ
+    type: int
+    label: Death Source Sequence Number
+    derivation:
+      source: DEATH.DSSEQ
+
+  - name: CENSORDT
+    type: date
+    label: Censoring Date
+    derivation:
+      source: LASTASSESS.RSDTC
+
+  - name: CENSORSEQ
+    type: int
+    label: Censoring Source Sequence Number
+    derivation:
+      source: LASTASSESS.RSSEQ
+
+  - name: EVENTDT
+    type: date
+    label: Event Date
+    derivation:
+      least:
+        sources: [PDDT, DEATHDT]
+
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       coalesce:
         sources: [EVENTDT, CENSORDT]
 
   - name: AVAL
     type: int
+    label: Analysis Value
     derivation:
       date_diff:
         start: STARTDT
@@ -67,6 +120,7 @@ columns:
 
   - name: CNSR
     type: int
+    label: Censor
     derivation:
       case:
         branches:
@@ -78,6 +132,7 @@ columns:
 
   - name: EVNTDESC
     type: str
+    label: Event or Censoring Description
     derivation:
       case:
         branches:
@@ -92,6 +147,7 @@ columns:
 
   - name: SRCDOM
     type: str
+    label: Source Data
     derivation:
       case:
         branches:
@@ -103,6 +159,7 @@ columns:
 
   - name: SRCVAR
     type: str
+    label: Source Variable
     derivation:
       case:
         branches:
@@ -114,6 +171,7 @@ columns:
 
   - name: SRCSEQ
     type: int
+    label: Source Sequence Number
     derivation:
       case:
         branches:
@@ -125,49 +183,6 @@ columns:
               source: DEATHSEQ
         otherwise:
           source: CENSORSEQ
-
-  - name: PDDT
-    type: date
-    output: false
-    derivation:
-      source: PROGRESSION.RSDTC
-
-  - name: PDSEQ
-    type: int
-    output: false
-    derivation:
-      source: PROGRESSION.RSSEQ
-
-  - name: DEATHDT
-    type: date
-    output: false
-    derivation:
-      source: DEATH.DSDTC
-
-  - name: DEATHSEQ
-    type: int
-    output: false
-    derivation:
-      source: DEATH.DSSEQ
-
-  - name: CENSORDT
-    type: date
-    output: false
-    derivation:
-      source: LASTASSESS.RSDTC
-
-  - name: CENSORSEQ
-    type: int
-    output: false
-    derivation:
-      source: LASTASSESS.RSSEQ
-
-  - name: EVENTDT
-    type: date
-    output: false
-    derivation:
-      least:
-        sources: [PDDT, DEATHDT]
 
 verifications:
   - row_count:

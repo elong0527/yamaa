@@ -7,51 +7,61 @@ base: EX
 group_by: [EX.STUDYID, EX.USUBJID, EX.EXTRT]
 keys: [STUDYID, USUBJID, EXTRT]
 
+output:
+  columns: [STUDYID, USUBJID, EXTRT, EXDOSU, DOSECUM, NCYCLES, RDI]
+
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: EX.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: EX.USUBJID
 
   - name: EXTRT
     type: str
+    label: Name of Treatment
     derivation:
       source: EX.EXTRT
 
   - name: EXDOSU
     type: str
+    label: Dose Units
     derivation:
       source: TRT.EXDOSU
 
   - name: DOSECUM
     type: float
+    label: Cumulative Dose
     derivation:
       aggregate: "SUM(EX.EXDOSE)"
 
   - name: NCYCLES
     type: int
+    label: Number of Treatment Cycles
     derivation:
       aggregate: "COUNT(EX.EXSEQ)"
 
   - name: PLANDOSE
     type: float
-    output: false
+    label: Planned Dose per Cycle
     derivation:
       source: TRT.PLANDOSE
 
   - name: PLANCYC
     type: int
-    output: false
+    label: Planned Number of Cycles
     derivation:
       source: TRT.PLANCYC
 
   - name: RDI
     type: float
+    label: Relative Dose Intensity
     derivation:
       compute:
         expr: "100 * DOSECUM / NULLIF(PLANDOSE * PLANCYC, 0)"
