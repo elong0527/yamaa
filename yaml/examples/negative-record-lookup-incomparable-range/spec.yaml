@@ -3,7 +3,7 @@ domain: VS
 datasets:
   VS_RAW:
     path: input/vs.csv
-    types: {VSSEQ: int, ADT: date}
+    types: {VSSEQ: int, VSDTC: date}
   EPOCHS:
     path: input/epoch.csv
     types: {DYLO: int, DYHI: int}
@@ -15,10 +15,10 @@ record_lookups:
     dataset: EPOCHS
     source: STUDYID
     key: STUDYID
-    between: {value: ADT, lower: DYLO, upper: DYHI}
+    between: {value: VSDTC, lower: DYLO, upper: DYHI}
 
 output:
-  columns: [STUDYID, USUBJID, VSSEQ, ADT, EPOCH]
+  columns: [STUDYID, USUBJID, VSSEQ, VSDTC, EPOCH]
 
 columns:
   - name: STUDYID
@@ -36,10 +36,10 @@ columns:
     label: Sequence Number
     derivation: {source: VS_RAW.VSSEQ}
 
-  - name: ADT
+  - name: VSDTC
     type: date
-    label: Analysis Date
-    derivation: {source: VS_RAW.ADT}
+    label: Date/Time of Measurements
+    derivation: {source: VS_RAW.VSDTC}
 
   - name: EPOCH
     type: str

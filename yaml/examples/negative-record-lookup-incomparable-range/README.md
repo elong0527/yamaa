@@ -3,7 +3,7 @@
 This example uses one vital-sign date and an epoch table expressed in integer
 study days to attempt one output record:
 
-- `ADT` is the collected calendar date;
+- `VSDTC` is the collected calendar date;
 - `EPOCH` is meant to be the period containing the corresponding study day.
 
 A calendar date cannot be ordered directly against integer day bounds. The run

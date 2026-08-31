@@ -5,10 +5,10 @@ table shared by all parameters to derive one row per record:
 
 - `ADT`, `ADY`, and `AVAL` are the record's analysis date, its study day, and
   the value measured, all carried through as given;
-- `AVISIT` and `AVISITN` are the analysis window the record falls in, and its
-  order. The table states each window's first and last study day, so a record
-  belongs to the one window whose range contains its day, and a record with no
-  study day belongs to none;
+- `AVISIT` and `AVISITN` identify the analysis visit assigned to the record and
+  its order. The table states each visit window's first and last study day, so
+  a record belongs to the one window whose range contains its day, and a
+  record with no study day belongs to none;
 - `AWTARGET` is the target analysis day defined by the window table, and
   `AWTDIFF` is how far the record sits from it, negative before the target and
   positive after;
