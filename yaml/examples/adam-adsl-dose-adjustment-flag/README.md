@@ -9,6 +9,15 @@ indicating a dose adjustment:
   but no dose adjustment is reported, the value is `N`. If the subject is
   absent from all sources, the value is missing.
 
+## Robustness
+
+The derivation provides these guarantees:
+- **Condition precedence**: A qualifying record yields `Y` even if the same subject has non-qualifying or missing records in the same or other sources.
+- **Negative completion**: A subject with source records that all lack a qualifying condition receives `N`.
+- **Null safety**: A subject absent from all sources receives a missing value.
+- **Composite-key isolation**: Matches require both `STUDYID` and `USUBJID`.
+- **Orphan rejection**: Qualifying source records without a matching parent row create no output.
+
 ## Provenance
 
 - Upstream repository: `pharmaverse/admiral`
