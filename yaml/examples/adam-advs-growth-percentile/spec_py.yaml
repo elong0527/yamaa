@@ -79,9 +79,9 @@ columns:
       compute:
         expr: "(POWER(AVALSRC / GROWTH.M, GROWTH.L) - 1) / (GROWTH.L * GROWTH.S)"
 
-  - name: ERFCVAL
+  - name: NORMCDF
     type: float
-    label: Complementary Error Function Value
+    label: Standard Normal Cumulative Probability
     derivation:
       case:
         branches:
@@ -90,18 +90,16 @@ columns:
               literal: null
         otherwise:
           function:
-            name: math.erfc
+            name: scipy.stats.norm.cdf
             args:
-              x:
-                compute:
-                  expr: "-ZNUM / SQRT(2)"
+              x: ZNUM
 
   - name: AVAL
     type: float
     label: Analysis Value
     derivation:
       compute:
-        expr: "50 * ERFCVAL"
+        expr: "100 * NORMCDF"
 
 verifications:
   - unique:

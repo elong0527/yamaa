@@ -17,6 +17,6 @@ fixed constant, and is supplied beside the measurements.
 
 ## Specification variants
 
-`spec_r.yaml` uses R's `pnorm`, while `spec_py.yaml` uses Python's `math.erfc`
-and the equivalent normal-CDF identity. They share the same inputs, expected
-output, lookup, and LMS calculation.
+`spec_r.yaml` uses R's `pnorm`, while `spec_py.yaml` uses SciPy's
+`scipy.stats.norm.cdf`. They share the same inputs, expected output, lookup,
+and LMS calculation.
