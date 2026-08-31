@@ -9,7 +9,7 @@ record_lookups:
   - id: RR_REC
     dataset: ADEG
     filter: "ADEG.PARAMCD = 'RR'"
-    source: [STUDYID, USUBJID, AVISIT]
+    source: [ADEG.STUDYID, ADEG.USUBJID, ADEG.AVISIT]
     key: [STUDYID, USUBJID, AVISIT]
     unmatched: missing
 
@@ -43,44 +43,13 @@ columns:
     derivation:
       source: ADEG.AVISIT
 
-  - name: QTVAL
-    type: float
-    label: Source QT Interval
-    output: false
-    derivation:
-      source: ADEG.AVAL
-
-  - name: RRVAL
-    type: float
-    label: Source RR Interval
-    output: false
-    derivation:
-      source: RR_REC.AVAL
-
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation:
-      case:
-        branches:
-          - when: "PARAMCD = 'QTCFR'"
-            then:
-              compute:
-                expr: "QTVAL / POWER(RRVAL / 1000, 1 / 3)"
-        otherwise:
-          source: ADEG.AVAL
 
   - name: AVALU
     type: str
     label: Analysis Value Unit
-    derivation:
-      case:
-        branches:
-          - when: "PARAMCD = 'QTCFR'"
-            then:
-              literal: ms
-        otherwise:
-          source: ADEG.AVALU
 
 rows:
   - id: original
@@ -89,6 +58,10 @@ rows:
         source: ADEG.PARAMCD
       PARAM:
         source: ADEG.PARAM
+      AVAL:
+        source: ADEG.AVAL
+      AVALU:
+        source: ADEG.AVALU
   - id: qtcfr
     filter: "ADEG.PARAMCD = 'QT'"
     derivations:
@@ -96,6 +69,11 @@ rows:
         literal: QTCFR
       PARAM:
         literal: "QTcF - Fridericia's Correction Formula Rederived (ms)"
+      AVAL:
+        compute:
+          expr: "ADEG.AVAL / POWER(RR_REC.AVAL / 1000, 1 / 3)"
+      AVALU:
+        literal: ms
 
 verifications:
   - unique:
