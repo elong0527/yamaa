@@ -2,7 +2,8 @@
 id: R001
 title: Execution Model
 status: normative
-applies_to: [root.base, root.rows, row.dataset, root.columns, derivation]
+applies_to: [root.base, root.rows, root.group_by, root.expand, row.dataset,
+  root.columns, derivation]
 depends_on: [R002, R003, R004, R005, R007, R008, R010, R012, R013, R015]
 ---
 
@@ -30,8 +31,26 @@ Each `rows` entry uses its explicit `dataset` as the row driver. If `dataset`
 is omitted, it uses root `base`. `base` is optional when every row declares a
 dataset. Constructed rows are appended in specification order.
 
-When `rows` is absent or empty, row construction produces exactly one output
-row per `base` record, in base-record order. `base` is required in that case.
+When `rows` is absent or empty and neither `group_by` nor `expand` is declared,
+row construction produces exactly one output row per `base` record, in
+base-record order. `base` is required in that case.
+
+An artifact may replace ordinary `rows` construction with exactly one of two
+other row-construction modes:
+
+- `group_by` requires `base` and constructs one row for each distinct tuple of
+  its base variables. Tuples appear in the order their first base record
+  appears. The variables must be qualified fields of that base. They are the
+  only base fields a scalar expression may read directly on the grouped row;
+  an aggregate may reduce the base records in the group normally.
+- `expand` requires `base` and constructs `count` rows for each base record, in
+  base-record order. Within each record, `as` receives the integers from 1
+  through `count` in order. `count` must resolve on the base record to a
+  non-missing, non-negative integer. Zero contributes no row. R005 treats `as`
+  as the row-phase derivation of that declared integer column.
+
+`rows`, `group_by`, and `expand` are mutually exclusive. When all three are
+absent, the ordinary one-row-per-`base` construction applies.
 
 ## Expression evaluation
 
@@ -88,7 +107,15 @@ declaration order.
 ## Errors
 
 - A row without an explicit `dataset` or default `base`: fail.
-- A specification with no `rows` entry and no `base`: fail.
+- A specification with no row-construction declaration and no `base`: fail.
+- More than one of `rows`, `group_by`, and `expand`: fail.
+- An empty `group_by`, or a `group_by` variable that is unqualified, belongs to
+  a dataset other than `base`, is repeated, or does not exist: fail.
+- A scalar expression reading a non-grouped field of the grouped base: fail.
+- An `expand.count` that is missing, non-integer, or negative: fail during row
+  construction and report the base record.
+- An `expand.as` that is undeclared, is not `int`, or has another derivation:
+  fail.
 - A row dependency on a later-phase value: fail.
 - An unresolved variable or predicate reference: fail.
 - A reference to a later declared column: fail and report both columns.

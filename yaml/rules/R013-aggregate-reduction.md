@@ -47,7 +47,9 @@ about a name.
 and must not be mixed:
 
 - **Qualified.** Every identifier names the same declared dataset. The
-  expression reduces that right side before the R003 join.
+  expression reduces that right side before the R003 join. While a grouped
+  artifact is being built, its base records are the right side and the
+  expression reduces the current group directly.
 - **Unqualified.** Every identifier names a current-output column. The
   expression reduces constructed output rows within the partition its
   `group_by` declares and broadcasts the result, which is R007's second

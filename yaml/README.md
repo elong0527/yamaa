@@ -32,6 +32,9 @@ results, string concatenation inputs, runtime-function arguments, and final
 
 This is the version 1.0 direction for team review.
 
+An artifact may construct ordinary rows, distinct `group_by` tuples, or a
+counted `expand` set. R001 defines the mutually exclusive forms.
+
 Three closed mini-languages are narrow exceptions to fields that name
 their inputs directly. Registering an operator per arithmetic operation makes a
 single formula such as

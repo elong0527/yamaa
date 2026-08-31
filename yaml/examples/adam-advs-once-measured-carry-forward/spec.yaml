@@ -2,49 +2,76 @@ schema_version: "1.0"
 domain: ADVS
 datasets:
   VS: input/vs.csv
-  ADSL: input/adsl.csv
-base: VS
-keys: [STUDYID, USUBJID, VSSEQ]
+  ADSL:
+    path: input/adsl.csv
+    types: {PLANCNT: int}
+
+base: ADSL
+expand:
+  count: ADSL.PLANCNT
+  as: ASEQ
+keys: [STUDYID, USUBJID, ASEQ]
+
+record_lookups:
+  - id: COLLECTED
+    dataset: VS
+    source: [STUDYID, USUBJID, PARAMCD, ADT]
+    key: [STUDYID, USUBJID, VSTESTCD, VSDTC]
+    unmatched: missing
 
 output:
-  columns: [STUDYID, USUBJID, VSSEQ, PARAMCD, ADT, AVAL, TRTSDT, HEIGHTBL]
+  columns: [STUDYID, USUBJID, ASEQ, VSSEQ, PARAMCD, ADT, AVAL, TRTSDT, HEIGHTBL]
 
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
     derivation:
-      source: VS.STUDYID
+      source: ADSL.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation:
-      source: VS.USUBJID
+      source: ADSL.USUBJID
 
-  - name: VSSEQ
+  - name: ASEQ
     type: int
-    label: Sequence Number
-    derivation:
-      source: VS.VSSEQ
+    label: Analysis Sequence Number
 
   - name: PARAMCD
     type: str
     label: Parameter Code
     derivation:
-      source: VS.VSTESTCD
+      case:
+        branches:
+          - when: "ASEQ = 1"
+            then: {literal: HEIGHT}
+        otherwise: {literal: WEIGHT}
 
   - name: ADT
     type: date
     label: Analysis Date
     derivation:
-      source: VS.VSDTC
+      case:
+        branches:
+          - when: "ASEQ = 1"
+            then: {source: ADSL.HGTDT}
+          - when: "ASEQ = 2"
+            then: {source: ADSL.WGTBLDT}
+        otherwise: {source: ADSL.WGTW3DT}
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: COLLECTED.VSSEQ
 
   - name: AVAL
     type: float
     label: Analysis Value
     derivation:
-      source: VS.VSSTRESN
+      source: COLLECTED.VSSTRESN
 
   - name: TRTSDT
     type: date
@@ -58,9 +85,8 @@ columns:
     derivation:
       case:
         branches:
-          - when: "PARAMCD = 'HEIGHT'"
-            then:
-              source: ADT
+          - when: "PARAMCD = 'HEIGHT' AND AVAL IS NOT NULL"
+            then: {source: ADT}
 
   - name: HGTBLFL
     type: str
@@ -81,9 +107,14 @@ columns:
         flag: HGTBLFL
 
 verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, ASEQ]
   - row_count:
-      min: 7
-      max: 7
+      min: 9
+      max: 9
+  - all_or_none:
+      id: collected-record-carries-sequence-and-value
+      columns: [VSSEQ, AVAL]
   - implies:
       id: height-record-supplies-subject-height
       when: "PARAMCD = 'HEIGHT' AND HGTBLFL = 'Y'"

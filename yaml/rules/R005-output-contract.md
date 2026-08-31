@@ -2,7 +2,8 @@
 id: R005
 title: Output Contract
 status: normative
-applies_to: [root.keys, root.output, root.columns, column.type, row.derivations, derivation]
+applies_to: [root.keys, root.output, root.columns, root.expand, column.type,
+  row.derivations, derivation]
 depends_on: [R001, R002, R003, R007, R008, R009, R011]
 ---
 
@@ -57,7 +58,7 @@ from data is open.
 
 ## Column coverage
 
-Every declared column is derived in exactly one place. Five requirements make
+Every declared column is derived in exactly one place. Six requirements make
 that precise, and they apply to internal columns exactly as they apply to
 output ones:
 
@@ -72,11 +73,14 @@ output ones:
    in some entries and not others leaves the remaining constructed rows with no
    value for it, so partial row coverage is an error rather than an implied
    missing value.
-4. **A specification with no `rows` entry must derive every column at column
-   level.** Requirement 3 is vacuous when there are no entries, so this states
-   the base-driven case directly.
+4. **A specification with neither `rows` nor `expand` derives every column at
+   column level.** Requirement 3 is vacuous when there are no entries, so this
+   states the base-driven and grouped cases directly.
 5. **A `rows` derivation must target a declared column.** A key in
    `derivations` that names no declared column is an error.
+6. **`expand.as` is one row-phase derivation.** It must name one declared `int`
+   column, and that column must have no column-level or `rows` derivation. Every
+   other column on an expanded artifact is derived at column level.
 
 Mixing the two placements across different columns is normal and expected: a
 specification with `rows` typically derives the columns that distinguish its
@@ -172,6 +176,8 @@ R006 owns the corresponding requirements for the schema bundle.
 - A column derived in some `rows` entries but not all: fail and report the
   entries that omit it.
 - A `rows` derivation naming an undeclared column: fail.
+- An `expand.as` column that is undeclared, not `int`, or derived anywhere
+  else: fail.
 - An internal column named in `keys`: fail and report the column name.
 - A missing `output.columns`, a duplicate entry, or an entry naming an
   undeclared column: fail and report the column name.
