@@ -81,6 +81,10 @@ record_lookup_class:
         type: [dataset_column, "list[dataset_column]"]
         required: false
         description: Dataset columns paired by position with source.
+    - between:
+        type: record_lookup_between_class
+        required: false
+        description: Current-row value matched inclusively against lower and upper dataset bounds.
     - filter:
         type: sql
         required: false
@@ -103,7 +107,21 @@ record_lookup_class:
         type: str
         required: false
         values: [missing, fail]
-        description: Result when a declared source value is missing; defaults to fail.
+        description: Result when a declared source or between value is missing; defaults to fail.
+
+record_lookup_between_class:
+    - value:
+        type: variable
+        required: true
+        description: Value read from the current row.
+    - lower:
+        type: dataset_column
+        required: true
+        description: Dataset column whose value is an inclusive lower bound.
+    - upper:
+        type: dataset_column
+        required: true
+        description: Dataset column whose value is an inclusive upper bound.
 
 column_class:
     - name:
