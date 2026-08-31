@@ -61,6 +61,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adrs-composite-response`](adam-adrs-composite-response/) | combine efficacy, safety, and discontinuation into one response |
 | [`adam-adrs-confirmed-response`](adam-adrs-confirmed-response/) | confirm an objective response |
 | [`adam-adrs-overall-response-records`](adam-adrs-overall-response-records/) | prepare the overall response records an endpoint reads |
+| [`adam-adsl-analysis-age`](adam-adsl-analysis-age/) | analysis age |
 | [`adam-adsl-bmi-compute`](adam-adsl-bmi-compute/) | compute BMI from height and weight |
 | [`adam-adsl-bmi-function`](adam-adsl-bmi-function/) | compute BMI by calling a routine the project supplies |
 | [`adam-adsl-completion-flag`](adam-adsl-completion-flag/) | flag the subjects who completed the study |

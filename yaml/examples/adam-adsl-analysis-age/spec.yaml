@@ -1,0 +1,50 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+output:
+  columns: [STUDYID, USUBJID, BRTHDT, RANDDT, AAGE, AAGEU]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM.USUBJID
+
+  - name: BRTHDT
+    type: date
+    label: Date of Birth
+    derivation:
+      source: DM.BRTHDT
+
+  - name: RANDDT
+    type: date
+    label: Date of Randomization
+    derivation:
+      source: DM.RANDDT
+
+  - name: AAGE
+    type: int
+    label: Analysis Age
+    derivation:
+      date_diff:
+        start: BRTHDT
+        end: RANDDT
+        unit: year
+        bounds: exclusive
+
+  - name: AAGEU
+    type: str
+    label: Analysis Age Unit
+    derivation:
+      literal: YEARS
