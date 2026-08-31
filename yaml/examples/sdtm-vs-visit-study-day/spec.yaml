@@ -4,6 +4,9 @@ datasets:
   VS_RAW: input/vs_raw.csv
   DM: input/dm.csv
   TV: input/tv.csv
+  TEPOCH:
+    path: input/tepoch.csv
+    types: {DYLO: int, DYHI: int}
 base: VS_RAW
 keys: [STUDYID, USUBJID, VSSEQ]
 
@@ -13,6 +16,17 @@ record_lookups:
     source: VISIT
     key: VISIT
     unmatched: missing
+
+  - id: EPOCHDEF
+    dataset: TEPOCH
+    source: STUDYID
+    key: STUDYID
+    between:
+      value: VSDY
+      lower: DYLO
+      upper: DYHI
+    incomplete: missing
+    unmatched: fail
 
 output:
   columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, VISIT, VISITNUM, EPOCH, VSDY]
@@ -74,15 +88,6 @@ columns:
     derivation:
       source: PLANNEDVISIT.VISITNUM
 
-  - name: EPOCH
-    type: str
-    label: Epoch
-    derivation:
-      source: PLANNEDVISIT.EPOCH
-    verifications:
-      allowed_values:
-        values: [SCREENING, TREATMENT, FOLLOW-UP]
-
   - name: RFSTDTC
     type: date
     label: Subject Reference Start Date/Time
@@ -97,15 +102,21 @@ columns:
         date: VSDTC
         reference: RFSTDTC
 
+  - name: EPOCH
+    type: str
+    label: Epoch
+    derivation:
+      source: EPOCHDEF.EPOCH
+    verifications:
+      allowed_values:
+        values: [SCREENING, TREATMENT, FOLLOW-UP]
+
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, VSSEQ]
   - row_count:
       min: 7
       max: 7
-  - all_or_none:
-      id: scheduled-visit-metadata-completeness
-      columns: [VISITNUM, EPOCH]
   - implies:
       id: study-day-requires-both-dates
       when: "VSDTC IS NOT NULL AND RFSTDTC IS NOT NULL"

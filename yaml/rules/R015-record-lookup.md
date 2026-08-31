@@ -2,7 +2,8 @@
 id: R015
 title: Record Lookup
 status: normative
-applies_to: [root.record_lookups, record_lookup_class, expression.source]
+applies_to: [root.record_lookups, derived_dataset_class.record_lookups,
+  record_lookup_class, expression.source]
 depends_on: [R001, R002, R003, R004, R005, R006, R007, R008, R014]
 ---
 
@@ -54,7 +55,7 @@ equal a dataset identifier, another record lookup's `id`, or the output
 
 ## Matching
 
-A record lookup matches its `dataset` against each constructed output row:
+A record lookup matches its `dataset` against each constructed current row:
 
 1. `filter` selects eligible records. It is a predicate over records of the
    record lookup's dataset only, evaluated exactly as R003 evaluates the
@@ -63,13 +64,28 @@ A record lookup matches its `dataset` against each constructed output row:
    pair by position and match by equality, exactly as `mapping_from` does
    under R007. When neither is declared, the applicable output keys match,
    exactly as R003 defines them, and at least one is required.
-3. When `order_by` and `keep` are declared, the surviving records are ordered
-   by R007's order terms and `first` or `last` is retained; remaining ties are
-   resolved by record order. When they are not declared, more than one
-   surviving record fails.
+3. `between`, when declared, narrows the equality-matched records as described
+   below.
+4. The remaining pool is resolved by the lookup's `order_by` and `keep` when
+   they are declared. Without them, more than one surviving record fails.
 
 `source` and `key` are declared together or not at all, and so are `order_by`
 and `keep`.
+
+A record lookup may also match by range. Declaring `between` adds one `value`
+the current row reads and one `lower` or `upper` column of the lookup's dataset.
+A record is eligible when every declared comparison holds: `lower <= value`
+and `value <= upper`. Either bound may be omitted for a one-sided match; every
+stated endpoint remains inclusive.
+
+A missing `between.value` is an incomplete match, answered before the right
+side is searched. A right-side record missing a stated bound is ineligible, and
+a complete value with no eligible record is `unmatched`. This is the interval
+join R003 names: the comparison is fixed, the bounds name right-side columns,
+and the value names one current-row variable, so a match against a table of
+irregular intervals is declared rather than re-expressed as literals.
+`between.value` is a dependency of every column that reads the lookup, exactly
+as a `source` variable is.
 
 ## Reading a record lookup
 
@@ -87,7 +103,7 @@ record, in any field typed as `variable`:
     source: LASTEX.EXDOSE
 ```
 
-The named column must exist in the record lookup's dataset, and the value
+The named column must exist in the record lookup's dataset. A stored value
 carries the type R014 gives that field.
 
 A record lookup is not evaluated ahead of the columns that read it. It resolves
@@ -106,11 +122,11 @@ R008 keeps them disjoint for `mapping_from`: an incomplete match value is
 answered before any record is looked for, and an unmatched key is answered
 after.
 
-`incomplete` answers the first. A declared `source` whose value is missing
-cannot be matched with anything, and the default is `fail`, because a lookup
-that quietly returns nothing for an uncollected key reports an absent record
-that was never looked for. It applies only where `source` is declared: output
-keys are never missing, as R005 requires.
+`incomplete` answers the first. A declared `source` or `between.value` whose
+value is missing cannot be matched with anything, and the default is `fail`,
+because a lookup that quietly returns nothing for an uncollected match value
+reports an absent record that was never looked for. Output keys are never
+missing, as R005 requires.
 
 `unmatched` answers the second: a complete match value that no record carries.
 `missing` gives every column that reads the record lookup a missing value, and
@@ -139,11 +155,13 @@ second is an absent record, and `unmatched` answers only for the second.
   that pairing.
 - No applicable key when neither `source` nor `key` is declared: fail under
   R003.
-- More than one surviving record with no `order_by`: fail, as an unhandled
-  multiple match under R003.
+- More than one surviving record on a lookup with no `order_by`: fail, as an
+  unhandled multiple match under R003.
+- A `between` declaring neither `lower` nor `upper`, or naming a column the
+  lookup's dataset does not have: fail.
 - A variable qualified by a record lookup `id` naming a column its dataset does
   not have: fail under R002.
-- A missing declared `source` value where `incomplete` resolves to `fail`:
-  fail, reporting the record lookup and the source that is missing.
+- A missing declared `source` or `between.value` where `incomplete` resolves
+  to `fail`: fail, reporting the record lookup and value that is missing.
 - An unmatched left row where `unmatched` resolves to `fail`: fail, reporting
   the record lookup and the offending keys.
