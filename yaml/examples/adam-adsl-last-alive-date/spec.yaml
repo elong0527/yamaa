@@ -1,0 +1,60 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  ADSL:
+    path: input/adsl.csv
+    types:
+      TRTEDT: date
+  ADAE:
+    path: input/adae.csv
+    types:
+      AENDT: date
+  ADVS:
+    path: input/advs.csv
+    types:
+      ADATE: date
+base: ADSL
+keys: [STUDYID, USUBJID]
+
+output:
+  columns: [STUDYID, USUBJID, TRTEDT, LSTALVDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ADSL.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ADSL.USUBJID
+
+  - name: TRTEDT
+    type: date
+    label: Date of Last Exposure to Treatment
+    derivation:
+      source: ADSL.TRTEDT
+
+  - name: ADAE_LST
+    type: date
+    label: Latest Adverse Event Date
+    derivation:
+      aggregate:
+        expr: "MAX(ADAE.AENDT)"
+
+  - name: ADVS_LST
+    type: date
+    label: Latest Vital Signs Date
+    derivation:
+      aggregate:
+        expr: "MAX(ADVS.ADATE)"
+
+  - name: LSTALVDT
+    type: date
+    label: Last Known Alive Date
+    derivation:
+      greatest:
+        sources: [TRTEDT, ADAE_LST, ADVS_LST]
