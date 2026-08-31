@@ -2,7 +2,8 @@
 id: R013
 title: Aggregate Reduction
 status: normative
-applies_to: [expression.aggregate, aggregate_expression]
+applies_to: [expression.aggregate, aggregate_class.between,
+  aggregate_expression]
 depends_on: [R001, R002, R003, R004, R006, R007, R010, R011]
 ---
 
@@ -47,7 +48,9 @@ about a name.
 and must not be mixed:
 
 - **Qualified.** Every identifier names the same declared dataset. The
-  expression reduces that right side before the R003 join.
+  expression reduces that right side before the R003 join. While a grouped
+  derived dataset is being built, its base records are the right side and the
+  expression reduces the current group directly.
 - **Unqualified.** Every identifier names a current-output column. The
   expression reduces constructed output rows within the partition its
   `group_by` declares and broadcasts the result, which is R007's second
@@ -68,6 +71,25 @@ reduction stays coarser than or equal to the applicable keys R003 joins on. An
 unqualified expression declares current-output columns and must declare at
 least one: a reduction over the whole output is not registered, because no
 example needs one.
+
+## Row-relative range narrowing
+
+A qualified aggregate may declare `between` to narrow its right-side records
+for each current row. `value` is a variable the current row can read. `lower`
+and `upper` are qualified columns of the aggregate expression's one right-side
+relation, and at least one is required. Every declared comparison is inclusive:
+`lower <= value` and `value <= upper`. Omitting one bound makes the match
+one-sided; it does not exclude the stated endpoint.
+
+The value and every stated bound must be mutually comparable under R007. A
+missing current-row value admits no right-side record, so the aggregate result
+is missing under the empty-group rule below. A right-side record with a missing
+stated bound is ineligible. In particular, a missing cutoff never causes an
+implementation to reduce the unrestricted right side.
+
+`between` is invalid on an unqualified aggregate: there is no separate
+right-side relation to narrow, and a current-output reduction already works on
+one partition of the completed rows.
 
 ## Grammar
 
@@ -200,6 +222,9 @@ a rule that needs a record chosen by order uses a window or
 - An ODM contextual reference: fail.
 - A qualified `group_by` column that is not an output key, or an unqualified
   expression with no `group_by`: fail.
+- A `between` on an unqualified aggregate, with neither bound, with a bound
+  outside the expression's right-side relation, or with incomparable values:
+  fail.
 - `SUM` over a non-numeric argument, or arithmetic over a non-numeric
   reduction or grouped identifier: fail.
 - `MIN` or `MAX` over values that are not mutually comparable: fail.

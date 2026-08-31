@@ -2,7 +2,8 @@
 id: R015
 title: Record Lookup
 status: normative
-applies_to: [root.record_lookups, record_lookup_class, expression.source]
+applies_to: [root.record_lookups, derived_dataset_class.record_lookups,
+  record_lookup_class, expression.source]
 depends_on: [R001, R002, R003, R004, R005, R006, R007, R008, R014]
 ---
 
@@ -54,7 +55,7 @@ equal a dataset identifier, another record lookup's `id`, or the output
 
 ## Matching
 
-A record lookup matches its `dataset` against each constructed output row:
+A record lookup matches its `dataset` against each constructed current row:
 
 1. `filter` selects eligible records. It is a predicate over records of the
    record lookup's dataset only, evaluated exactly as R003 evaluates the
@@ -63,47 +64,55 @@ A record lookup matches its `dataset` against each constructed output row:
    pair by position and match by equality, exactly as `mapping_from` does
    under R007. When neither is declared, the applicable output keys match,
    exactly as R003 defines them, and at least one is required.
-3. When `order_by` and `keep` are declared, the surviving records are ordered
-   by R007's order terms and `first` or `last` is retained; remaining ties are
-   resolved by record order. When they are not declared, more than one
-   surviving record fails.
+3. `between`, when declared, narrows the equality-matched records as described
+   below.
+4. The remaining pool is resolved either by the lookup's `order_by` and `keep`
+   or by its ordered `candidates`, as described below. Without either form,
+   more than one surviving record fails.
 
 `source` and `key` are declared together or not at all, and so are `order_by`
 and `keep`.
 
 A record lookup may also match by range. Declaring `between` adds one `value`
-the current left row reads and one `lower` or `upper` column of the lookup's
-dataset; a record is eligible only when the row's value falls within the
-declared bounds, inclusively. Stating one bound gives a half-open match. A
-missing `value`, or a missing bound on a record, makes that record ineligible
-for that row, and a row with no eligible record is `unmatched`. This is the
-interval join R003 names: the comparison is fixed, the bounds name right-side
-columns, and the value names one left-side variable, so a match against a
-table of irregular intervals is declared rather than re-expressed as literals.
+the current row reads and one `lower` or `upper` column of the lookup's dataset.
+A record is eligible when every declared comparison holds: `lower <= value`
+and `value <= upper`. Either bound may be omitted for a one-sided match; every
+stated endpoint remains inclusive.
+
+A missing `between.value` is an incomplete match, answered before the right
+side is searched. A right-side record missing a stated bound is ineligible, and
+a complete value with no eligible record is `unmatched`. This is the interval
+join R003 names: the comparison is fixed, the bounds name right-side columns,
+and the value names one current-row variable, so a match against a table of
+irregular intervals is declared rather than re-expressed as literals.
 `between.value` is a dependency of every column that reads the lookup, exactly
 as a `source` variable is.
 
 ## Choosing among candidates
 
-A record lookup may declare an ordered choice among candidate records rather
-than a single match. Each entry of `candidates` carries its own `id` and the
-`filter`, `order_by`, and `keep` that select its record from the lookup's
-dataset, and the lookup declares `as`, the column name the winning candidate's
-`id` is read through. The candidates are tried in order and the first that
+A record lookup may declare an ordered choice within the equality- and
+range-matched pool. Each entry of `candidates` carries its own `id` and the
+`filter`, `order_by`, and `keep` that select its record from that pool, and the
+lookup declares `as`, the synthetic column name the winning candidate's `id`
+is read through. Candidates are tried in declaration order. A candidate whose
+filter leaves no record is skipped. One record selects it; more than one fails
+unless its paired `order_by` and `keep` select one. The first candidate that
 selects a record wins, so the order is the definition a reviewer checks rather
 than a preference an implementation applies.
 
-The winning candidate's `id` is then a column of the lookup beside the
+The winning candidate's `id` is then a string field of the lookup beside the
 record's own fields, so a derivation that must produce a value and the reason
-for it reads both from the one choice. A date and the sequence number of the
+for it reads both from the one choice. The `as` name must not collide with a
+stored field of the lookup dataset. A date and the sequence number of the
 record that supplied it, or a response and the rule that assigned it, cannot
 drift, because one selection produced them. Candidates share the lookup's
-dataset, so the choice never becomes a join, and a candidate selects a record
-rather than computing a value, so what can be returned stays a stored field.
+dataset and the common matched pool, so neither subject keys nor other equality
+constraints are bypassed, and a candidate selects a record rather than
+computing one.
 
-A lookup with no matching candidate is `unmatched`, as above. `candidates` and
-the equality or range match above are alternative ways to reach the one record;
-a lookup declares one or the other.
+A lookup whose complete matched pool produces no candidate is `unmatched`, as
+above. `candidates` replaces only lookup-level `order_by` and `keep`; it may and
+normally does appear with equality keys, `between`, and a common `filter`.
 
 ## Reading a record lookup
 
@@ -121,8 +130,9 @@ record, in any field typed as `variable`:
     source: LASTEX.EXDOSE
 ```
 
-The named column must exist in the record lookup's dataset, and the value
-carries the type R014 gives that field.
+The named column must exist in the record lookup's dataset, or equal the
+synthetic `as` name. A stored value carries the type R014 gives that field; the
+synthetic candidate id is `str`.
 
 A record lookup is not evaluated ahead of the columns that read it. It resolves
 where they do, so a column reading one depends on the record lookup's own
@@ -140,11 +150,11 @@ R008 keeps them disjoint for `mapping_from`: an incomplete match value is
 answered before any record is looked for, and an unmatched key is answered
 after.
 
-`incomplete` answers the first. A declared `source` whose value is missing
-cannot be matched with anything, and the default is `fail`, because a lookup
-that quietly returns nothing for an uncollected key reports an absent record
-that was never looked for. It applies only where `source` is declared: output
-keys are never missing, as R005 requires.
+`incomplete` answers the first. A declared `source` or `between.value` whose
+value is missing cannot be matched with anything, and the default is `fail`,
+because a lookup that quietly returns nothing for an uncollected match value
+reports an absent record that was never looked for. Output keys are never
+missing, as R005 requires.
 
 `unmatched` answers the second: a complete match value that no record carries.
 `missing` gives every column that reads the record lookup a missing value, and
@@ -173,17 +183,19 @@ second is an absent record, and `unmatched` answers only for the second.
   that pairing.
 - No applicable key when neither `source` nor `key` is declared: fail under
   R003.
-- More than one surviving record with no `order_by`: fail, as an unhandled
-  multiple match under R003.
+- More than one surviving record on a lookup with neither candidates nor
+  `order_by`: fail, as an unhandled multiple match under R003.
 - A `between` declaring neither `lower` nor `upper`, or naming a column the
   lookup's dataset does not have: fail.
-- A `candidates` entry with no `id`, a duplicate candidate `id`, a `candidates`
-  lookup with no `as`, or both `candidates` and a direct match on one lookup:
-  fail.
+- An empty `candidates` list, a candidate with no `id`, a duplicate candidate
+  `id`, candidates with no `as`, `as` without candidates, an `as` name
+  colliding with a stored field, or a lookup declaring both candidates and
+  lookup-level `order_by` or `keep`: fail.
+- Candidate `order_by` without `keep`, or `keep` without `order_by`: fail.
 - A variable qualified by a record lookup `id` naming a column its dataset does
   not have: fail under R002.
-- A missing declared `source` value where `incomplete` resolves to `fail`:
-  fail, reporting the record lookup and the source that is missing.
+- A missing declared `source` or `between.value` where `incomplete` resolves
+  to `fail`: fail, reporting the record lookup and value that is missing.
 - An unmatched left row where `unmatched` resolves to `fail`: fail, reporting
   the record lookup and the offending keys.
 - A column reading the `as` name from a lookup that declares no `candidates`:

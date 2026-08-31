@@ -13,7 +13,11 @@ record_lookups:
     dataset: AWINDOW
     source: [STUDYID]
     key: [STUDYID]
-    filter: "AWINDOW.AWLO <= ADY AND ADY <= AWINDOW.AWHI"
+    between:
+      value: ADY
+      lower: AWLO
+      upper: AWHI
+    incomplete: missing
     unmatched: missing
 
 columns:

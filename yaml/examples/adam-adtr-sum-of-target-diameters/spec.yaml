@@ -4,84 +4,142 @@ datasets:
   TRVISIT: input/trvisit.csv
   TR: input/tr.csv
   TU: input/tu.csv
-base: TRVISIT
+
+derived:
+  - id: MEASURED
+    base: TR
+    group_by: [TR.STUDYID, TR.USUBJID, TR.AVISIT]
+    keys: [STUDYID, USUBJID, AVISIT]
+    columns:
+      - name: STUDYID
+        type: str
+        derivation: {source: TR.STUDYID}
+      - name: USUBJID
+        type: str
+        derivation: {source: TR.USUBJID}
+      - name: AVISIT
+        type: str
+        derivation: {source: TR.AVISIT}
+      - name: AVAL
+        type: float
+        derivation:
+          aggregate:
+            filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
+            expr: "SUM(TR.TRSTRESN)"
+      - name: NMEAS
+        type: int
+        derivation:
+          aggregate:
+            filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
+            expr: "COUNT(TR.TRSTRESN)"
+
+  - id: ASSESS
+    base: TRVISIT
+    keys: [STUDYID, USUBJID, AVISIT]
+    columns:
+      - name: STUDYID
+        type: str
+        derivation: {source: TRVISIT.STUDYID}
+      - name: USUBJID
+        type: str
+        derivation: {source: TRVISIT.USUBJID}
+      - name: AVISIT
+        type: str
+        derivation: {source: TRVISIT.AVISIT}
+      - name: AVISITN
+        type: int
+        derivation: {source: TRVISIT.AVISITN}
+      - name: ADT
+        type: date
+        derivation: {source: TRVISIT.ADT}
+      - name: AVAL
+        type: float
+        derivation: {source: MEASURED.AVAL}
+      - name: NMEAS
+        type: int
+        derivation: {source: MEASURED.NMEAS}
+      - name: NTARGET
+        type: int
+        derivation:
+          aggregate:
+            filter: "TU.TUGRPID = 'TARGET'"
+            expr: "COUNT(TU.TULNKID)"
+      - name: ANL01FL
+        type: str
+        derivation:
+          case:
+            branches:
+              - when: "NMEAS = NTARGET"
+                then: {literal: Y}
+
+base: ASSESS
 keys: [STUDYID, USUBJID, AVISIT]
 
 columns:
   - name: STUDYID
     type: str
-    derivation:
-      source: TRVISIT.STUDYID
+    derivation: {source: ASSESS.STUDYID}
 
   - name: USUBJID
     type: str
-    derivation:
-      source: TRVISIT.USUBJID
+    derivation: {source: ASSESS.USUBJID}
 
   - name: AVISIT
     type: str
-    derivation:
-      source: TRVISIT.AVISIT
+    derivation: {source: ASSESS.AVISIT}
 
   - name: AVISITN
     type: int
-    derivation:
-      source: TRVISIT.AVISITN
+    derivation: {source: ASSESS.AVISITN}
 
   - name: ADT
     type: date
-    derivation:
-      source: TRVISIT.ADT
+    derivation: {source: ASSESS.ADT}
 
   - name: PARAMCD
     type: str
-    derivation:
-      literal: SDIAM
+    derivation: {literal: SDIAM}
 
   - name: PARAM
     type: str
-    derivation:
-      literal: Sum of Target Lesion Diameters (mm)
+    derivation: {literal: Sum of Target Lesion Diameters (mm)}
 
   - name: AVAL
     type: float
-    derivation:
-      aggregate:
-        filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
-        expr: "SUM(TR.TRSTRESN)"
+    derivation: {source: ASSESS.AVAL}
 
   - name: NMEAS
     type: int
-    derivation:
-      aggregate:
-        filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
-        expr: "COUNT(TR.TRSTRESN)"
+    derivation: {source: ASSESS.NMEAS}
 
   - name: NTARGET
     type: int
-    derivation:
-      aggregate:
-        filter: "TU.TUGRPID = 'TARGET'"
-        expr: "COUNT(TU.TULNKID)"
+    derivation: {source: ASSESS.NTARGET}
 
   - name: ANL01FL
     type: str
-    derivation:
-      case:
-        branches:
-          - when: "NMEAS = NTARGET"
-            then:
-              literal: Y
+    derivation: {source: ASSESS.ANL01FL}
     verifications:
       allowed_values:
         values: [Y]
+
+  - name: NADIR
+    type: float
+    derivation:
+      aggregate:
+        filter: "ASSESS.ANL01FL = 'Y'"
+        group_by: [ASSESS.STUDYID, ASSESS.USUBJID]
+        between:
+          value: ADT
+          lower: ASSESS.ADT
+        expr: "MIN(ASSESS.AVAL)"
 
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, AVISIT]
   - row_count:
-      min: 6
-      max: 6
+      min: 7
+      max: 7
   - predicate:
       id: measured-lesions-do-not-exceed-the-target-lesions
       assert: "NMEAS IS NULL OR NMEAS <= NTARGET"
@@ -89,3 +147,7 @@ verifications:
       id: complete-assessment-has-a-sum
       when: "ANL01FL = 'Y'"
       then: "AVAL IS NOT NULL"
+  - implies:
+      id: dated-assessment-has-a-nadir
+      when: "ADT IS NOT NULL"
+      then: "NADIR IS NOT NULL"

@@ -2,7 +2,8 @@
 id: R001
 title: Execution Model
 status: normative
-applies_to: [root.base, root.rows, row.dataset, root.columns, derivation]
+applies_to: [root.base, root.derived, root.rows, derived_dataset_class,
+  row.dataset, root.columns, derivation]
 depends_on: [R002, R003, R004, R005, R007, R008, R010, R012, R013, R015]
 ---
 
@@ -27,20 +28,42 @@ Derivation has two phases:
 2. Column derivation enriches constructed rows and must not change row count.
 
 Each `rows` entry uses its explicit `dataset` as the row driver. If `dataset`
-is omitted, it uses root `base`. `base` is optional when every row declares a
-dataset. Constructed rows are appended in specification order.
+is omitted, it uses the containing artifact or derived dataset's `base`.
+`base` is optional when every row declares a dataset. Constructed rows are
+appended in specification order.
 
-When `rows` is absent or empty, row construction produces exactly one output
-row per `base` record, in base-record order. `base` is required in that case.
+When `rows` is absent or empty and neither derived-only mode below is declared,
+row construction produces exactly one output row per `base` record, in
+base-record order. `base` is required in that case.
 
-A `derived` entry builds a second dataset the specification reads before the
-artifact. Each derived dataset runs the same two phases over its own driver,
-and is built before any column, `rows` filter, or further derived dataset that
-reads it, in dependency order. It is never serialized. Reading a derived
-dataset adds a dependency from its reader to the whole derived dataset, so a
-derived dataset that reads itself directly or indirectly is a cycle. A derived
-dataset's own columns and rows answer to the same rules as the artifact's;
-what its readers see is a finished dataset.
+A `derived` entry builds an intermediate dataset the specification reads before
+the artifact. Each derived dataset runs the same two phases over its own driver,
+answers to R005's column and identity contract, and is never serialized. Its
+columns that do not declare `output: false` are the fields later readers see.
+
+A derived dataset may replace ordinary `rows` construction with exactly one of
+two other row-construction modes:
+
+- `group_by` requires `base` and constructs one row for each distinct tuple of
+  its base variables. Tuples appear in the order their first base record
+  appears. The variables must be qualified fields of that base. They are the
+  only base fields a scalar expression may read directly on the grouped row;
+  an aggregate may reduce the base records in the group normally.
+- `expand` requires `base` and constructs `count` rows for each base record, in
+  base-record order. Within each record, `as` receives the integers from 1
+  through `count` in order. `count` must resolve on the base record to a
+  non-missing, non-negative integer. Zero contributes no row. R005 treats `as`
+  as the row-phase derivation of that declared integer column.
+
+`rows`, `group_by`, and `expand` are mutually exclusive. When all three are
+absent, the ordinary one-row-per-`base` construction applies.
+
+Derived datasets are built before the artifact in dependency order, not list
+order. A dependency comes from `base`, `rows.dataset`, `group_by`,
+`expand.count`, a record lookup's dataset, or any qualified variable read while
+building the dataset. Reading a derived dataset depends on its completed
+result, so a derived dataset that reads itself directly or indirectly is a
+cycle. What a later reader sees is a finished dataset.
 
 ## Expression evaluation
 
@@ -60,8 +83,8 @@ Implementations must infer dependencies rather than evaluate columns in YAML
 declaration order. Recursively traverse each expression and collect:
 
 - every unqualified output variable referenced by `source`;
-- the `source` variables of a record lookup a qualified variable names, which
-  R015 defines;
+- the `source` and `between.value` variables of a record lookup a qualified
+  variable names, which R015 defines;
 - variables in `group_by`, `order_by`, and other fields typed as `variable`;
 - variables referenced by fields whose type contains nested `expression`;
 - current-output identifiers used by an `sql` predicate;
@@ -97,7 +120,17 @@ Column declaration order controls final layout, not evaluation order.
 ## Errors
 
 - A row without an explicit `dataset` or default `base`: fail.
-- A specification with no `rows` entry and no `base`: fail.
+- A dataset definition with no row-construction declaration and no `base`:
+  fail.
+- More than one of `rows`, `group_by`, and `expand` on a derived dataset:
+  fail.
+- An empty `group_by`, or a `group_by` variable that is unqualified, belongs to
+  a dataset other than `base`, is repeated, or does not exist: fail.
+- A scalar expression reading a non-grouped field of the grouped base: fail.
+- An `expand.count` that is missing, non-integer, or negative: fail during row
+  construction and report the derived dataset and base record.
+- An `expand.as` that is undeclared, is not `int`, or has another derivation:
+  fail.
 - A row dependency on a later-phase value: fail.
 - An unresolved variable or predicate reference: fail.
 - A dependency cycle: fail and report the cycle path.

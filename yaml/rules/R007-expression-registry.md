@@ -74,8 +74,10 @@ value is missing.
 reducers it permits, and what each returns; this rule fixes where it may be
 used. It is valid in exactly two contexts:
 
-1. Its identifiers are qualified to another dataset. It then reduces that
-   right side before the R003 join, which R003 defines.
+1. Its identifiers are qualified to a declared dataset. It then reduces that
+   right side before the R003 join, which R003 defines. While constructing a
+   grouped derived dataset, an aggregate qualified to its base reduces the
+   current group directly; the group is already the right-side partition.
 2. Its identifiers are unqualified. It then declares `group_by`, reduces
    constructed output rows within each partition, and broadcasts the result to
    each row.

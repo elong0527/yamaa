@@ -2,7 +2,8 @@
 id: R005
 title: Output Contract
 status: normative
-applies_to: [root.keys, root.columns, column.output, column.type, row.derivations, derivation]
+applies_to: [root.keys, root.columns, root.derived, derived_dataset_class,
+  column.output, column.type, row.derivations, derivation]
 depends_on: [R001, R002, R003, R007, R008, R009, R011]
 ---
 
@@ -70,7 +71,7 @@ state it. A study that wants the grouping checkable records it in the columns'
 
 ## Column coverage
 
-Every declared column is derived in exactly one place. Five requirements make
+Every declared column is derived in exactly one place. Six requirements make
 that precise, and they apply to internal columns exactly as they apply to
 output ones:
 
@@ -85,11 +86,14 @@ output ones:
    in some entries and not others leaves the remaining constructed rows with no
    value for it, so partial row coverage is an error rather than an implied
    missing value.
-4. **A specification with no `rows` entry must derive every column at column
+4. **A dataset with neither `rows` nor `expand` derives every column at column
    level.** Requirement 3 is vacuous when there are no entries, so this states
-   the base-driven case directly.
+   the base-driven and grouped cases directly.
 5. **A `rows` derivation must target a declared column.** A key in
    `derivations` that names no declared column is an error.
+6. **`expand.as` is one row-phase derivation.** It must name one declared `int`
+   column, and that column must have no column-level or `rows` derivation. Every
+   other column on an expanded dataset is derived at column level.
 
 Mixing the two placements across different columns is normal and expected: a
 specification with `rows` typically derives the columns that distinguish its
@@ -98,12 +102,21 @@ row templates at row level and the rest at column level.
 A column whose value is intentionally absent is still derived. Write
 `literal: null` rather than omitting the derivation.
 
+These requirements apply independently to the artifact and to each derived
+dataset. Column names and row IDs are scoped to the dataset definition that
+declares them, so the same standard column name may appear in an intermediate
+dataset and the artifact.
+
 ## Output and internal columns
 
 A column is part of the artifact unless it declares `output: false`. An
 internal column is derived, converted, verified, and made available to
 dependents exactly as an output column is; it is only omitted from the
 artifact.
+
+On a derived dataset, the same distinction defines its reader-visible surface:
+a later dataset may read its output columns but not its internal columns. The
+derived dataset itself is never serialized.
 
 Internal columns exist so that a multi-step derivation does not have to publish
 its own working values. They do not change evaluation. R001 builds one
@@ -167,8 +180,10 @@ one. A column declaring `output: false` is not eligible, and a column must not
 be listed twice.
 
 Once every column's lifecycle is complete, the combined key values of each row
-must be non-missing and unique across the artifact. Key validation happens
-before dataset verifications, which R009 runs last.
+must be non-missing and unique across the artifact or derived dataset being
+built. Artifact key validation happens before dataset verifications, which R009
+runs last. A derived dataset cannot become readable until its own identity has
+passed.
 
 Key order is significant to R003, which joins on the output keys a right side
 also carries. That is a subset used for enrichment and does not change the
@@ -177,8 +192,10 @@ identity asserted here.
 ## Specification-wide uniqueness
 
 Within one specification, implementations must reject duplicate YAML mapping
-keys, and dataset identifiers, column names, and row IDs must each be unique.
-R006 owns the corresponding requirements for the schema bundle.
+keys and duplicate source or derived dataset identifiers. Column names and row
+IDs must be unique within each artifact or derived dataset definition. Record
+lookup IDs follow R015's namespace. R006 owns the corresponding requirements
+for the schema bundle.
 
 ## Errors
 
@@ -187,10 +204,12 @@ R006 owns the corresponding requirements for the schema bundle.
 - A column derived in some `rows` entries but not all: fail and report the
   entries that omit it.
 - A `rows` derivation naming an undeclared column: fail.
+- An `expand.as` column that is undeclared, not `int`, or derived anywhere
+  else: fail.
 - An internal column named in `keys`: fail and report the column name.
 - An empty `keys`, an unknown key column, or a repeated key column: fail.
-- A duplicate YAML mapping key, dataset identifier, column name, or row ID:
-  fail.
+- A duplicate YAML mapping key or dataset identifier, or a duplicate column
+  name or row ID within one dataset definition: fail.
 - A conversion failure with no `conversion_failure` handler: fail.
 - A missing or duplicate combined key value: fail and report the offending
   rows.

@@ -1,0 +1,11 @@
+phase: output
+condition: duplicate_key
+spec_paths:
+  - derived[0].keys
+context:
+  dataset: ASSESS
+  duplicate_count: 1
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-924
+      AVISIT: WEEK 8

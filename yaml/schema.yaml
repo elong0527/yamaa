@@ -21,10 +21,14 @@ root_class:
         type: "dict[dataset_id, dataset_source]"
         required: true
         description: Source datasets readable by this specification, each under the name it is read through.
+    - derived:
+        type: "list[derived_dataset_class]"
+        required: false
+        description: Intermediate datasets built before readers; R001 defines their construction and order.
     - base:
         type: dataset_id
         required: false
-        description: Dataset whose records drive row construction; R001 states when it is required.
+        description: Source or derived dataset whose records drive row construction; R001 states when it is required.
     - parents:
         type: [path, "list[path]"]
         required: false
@@ -54,6 +58,54 @@ root_class:
         required: false
         description: Free-form annotations carried with the specification; nothing validates their content.
 
+derived_dataset_class:
+    - id:
+        type: dataset_id
+        required: true
+        description: Dataset identifier through which readers address the completed intermediate dataset.
+    - base:
+        type: dataset_id
+        required: false
+        description: Source or earlier derived dataset driving row construction.
+    - record_lookups:
+        type: "list[record_lookup_class]"
+        required: false
+        description: Records named for use while building this dataset.
+    - keys:
+        type: "list[column_name]"
+        required: true
+        description: Columns uniquely identifying one completed intermediate row.
+    - columns:
+        type: "list[column_class]"
+        required: true
+        description: Columns the intermediate dataset declares.
+    - rows:
+        type: "list[row_class]"
+        required: false
+        description: Templates constructing rows; mutually exclusive with group_by and expand.
+    - group_by:
+        type: "list[variable]"
+        required: false
+        description: Base variables whose distinct tuples construct one row each; mutually exclusive with rows and expand.
+    - expand:
+        type: expand_class
+        required: false
+        description: Counted row expansion; mutually exclusive with rows and group_by.
+    - metadata:
+        type: "dict[str, str]"
+        required: false
+        description: Free-form annotations carried with the intermediate dataset.
+
+expand_class:
+    - count:
+        type: variable
+        required: true
+        description: Non-negative integer on the driving record giving the number of rows to construct.
+    - as:
+        type: column_name
+        required: true
+        description: Declared integer column receiving the one-based expansion index.
+
 record_lookup_class:
     - id:
         type: record_lookup_id
@@ -71,6 +123,10 @@ record_lookup_class:
         type: [dataset_column, "list[dataset_column]"]
         required: false
         description: Dataset columns paired by position with source.
+    - between:
+        type: record_lookup_between_class
+        required: false
+        description: Current-row value matched inclusively against one or two dataset bounds.
     - filter:
         type: sql
         required: false
@@ -84,6 +140,14 @@ record_lookup_class:
         required: false
         values: [first, last]
         description: Ordered record to retain; declared with order_by.
+    - candidates:
+        type: "list[record_candidate_class]"
+        required: false
+        description: Ordered candidate-specific selections tried within the equality and range-matched records.
+    - as:
+        type: column_name
+        required: false
+        description: Synthetic string field carrying the winning candidate id; declared with candidates.
     - unmatched:
         type: str
         required: false
@@ -93,7 +157,41 @@ record_lookup_class:
         type: str
         required: false
         values: [missing, fail]
-        description: Result when a declared source value is missing; defaults to fail.
+        description: Result when a declared source or between value is missing; defaults to fail.
+
+record_lookup_between_class:
+    - value:
+        type: variable
+        required: true
+        description: Value read from the current row.
+    - lower:
+        type: dataset_column
+        required: false
+        description: Dataset column whose value is an inclusive lower bound.
+    - upper:
+        type: dataset_column
+        required: false
+        description: Dataset column whose value is an inclusive upper bound.
+
+record_candidate_class:
+    - id:
+        type: str
+        required: true
+        min_length: 1
+        description: Value exposed through the lookup's synthetic as field when this candidate wins.
+    - filter:
+        type: sql
+        required: false
+        description: Predicate selecting this candidate's eligible records from the matched pool.
+    - order_by:
+        type: "list[order_by_term]"
+        required: false
+        description: Terms ordering this candidate's records; declared with keep.
+    - keep:
+        type: str
+        required: false
+        values: [first, last]
+        description: Ordered candidate record to retain; declared with order_by.
 
 column_class:
     - name:
@@ -178,7 +276,7 @@ dataset_class:
 dataset_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Identifier of a dataset declared in datasets.
+    description: Identifier of a source dataset or a completed derived dataset.
 
 record_lookup_id:
     type: str

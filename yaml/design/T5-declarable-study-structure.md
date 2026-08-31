@@ -27,9 +27,9 @@ decision:
 | Gap | Subject | Decision | Retires now |
 |---|---|---|---|
 | 2 | No interval join | Declared range matching on a record lookup | Yes |
-| 7 | Protocol structure is not a concept | Fork answered: fixed at authoring time | Partially |
-| 8 | Row construction cannot consume derived values | Early row phase reading declared slots | Yes |
-| 9 | A derivation cannot carry value and reason | Selection carries the chosen record | Partially |
+| 7 | Protocol structure is not a concept | Fork answered: fixed at authoring time | Yes |
+| 8 | Row construction cannot consume derived values | Rows drive from a completed intermediate | Yes |
+| 9 | A derivation cannot carry value and reason | Selection carries the chosen record and rule id | Yes |
 | 11 | Right side cannot be narrowed by the current row | Row-narrowed matching and reduction | Yes |
 | 12 | A reduction cannot consume a reduction | A named intermediate dataset | Yes |
 | 16 | Row construction is append-only with a fixed count | An expansion step over a counted slot | Yes |
@@ -68,10 +68,10 @@ record_lookups:
 - `between.lower` and `between.upper` name columns of the lookup's dataset. A
   record is eligible when `lower <= value <= upper`; the bounds are inclusive,
   matching the clinical convention that a window's endpoints belong to it.
-- A missing `value`, or a missing bound on a record, makes that record
-  ineligible for that row. A row with no eligible record is `unmatched` and
-  follows R015.
-- Half-open designs state one bound only. Stating `lower` alone matches
+- A missing `value` is an incomplete lookup and follows R015's `incomplete`
+  policy. A missing bound on a right-side record makes that record ineligible;
+  a complete value with no eligible record is `unmatched`.
+- One-sided designs state one bound only. Stating `lower` alone matches
   `lower <= value`; stating `upper` alone matches `value <= upper`.
 
 This is an interval join and nothing more. It does not express an arbitrary
@@ -97,9 +97,10 @@ reduction needs:
     aggregate:
       expr: "MIN(ASSESS.SUM)"
       filter: "ASSESS.COMPLETE = 'Y'"
+      group_by: [ASSESS.STUDYID, ASSESS.USUBJID]
       between:
         value: ADT
-        upper: ASSESS.ADT
+        lower: ASSESS.ADT
 ```
 
 `MIN(ASSESS.SUM)` over the current subject's completed assessments dated on or
@@ -121,31 +122,20 @@ datasets:
   TR: input/tr.csv
 
 derived:
-  - id: ASSESS
+  - id: MEASURED
     base: TR
-    rows:
-      - id: assessment
-        filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
-        derivations: {}
+    group_by: [TR.STUDYID, TR.USUBJID, TR.AVISIT]
     keys: [STUDYID, USUBJID, AVISIT]
     columns:
       - {name: STUDYID, type: str, derivation: {source: TR.STUDYID}}
       - {name: USUBJID, type: str, derivation: {source: TR.USUBJID}}
       - {name: AVISIT, type: str, derivation: {source: TR.AVISIT}}
-      - {name: ADT, type: date, derivation: {source: TR.ADT}}
       - name: SUM
         type: float
         derivation:
           aggregate:
-            group_by: [STUDYID, USUBJID, AVISIT]
+            filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
             expr: "SUM(TR.TRSTRESN)"
-      - name: COMPLETE
-        type: str
-        derivation:
-          case:
-            branches:
-              - when: "NMEAS = NTARGET"
-                then: {literal: Y}
 ```
 
 A derived dataset runs the same two phases as the artifact, in dependency
@@ -154,8 +144,16 @@ and key identity exactly as the artifact does. It is the intermediate grain
 R013 says the language cannot name, given a name. Reading it is not a new join:
 a qualified source into a derived dataset is the ordinary R003 join, an
 aggregate over it is the ordinary R013 reduction, and a record lookup over it
-is the ordinary R015 match. The design adds no evaluation semantics beyond
-"built before its readers."
+is the ordinary R015 match.
+
+The intermediate has three mutually exclusive row-construction forms. Ordinary
+`rows` behaves as it does for the artifact. `group_by` constructs one row per
+distinct tuple of base variables, in first-occurrence order; those grouped base
+variables are the scalar fields the row carries, while reductions read the
+group's base records. `expand` is the counted form below. With none of the
+three, the derived dataset has one row per base record. These forms make the
+intermediate grain explicit rather than relying on a conveniently pre-grouped
+input.
 
 Two uses beyond gap 12 matter here, and they are what retire gaps 8 and 16.
 
@@ -206,9 +204,9 @@ derived:
 `expand.count` is a variable resolving to a non-negative integer on each driver
 record; the derived dataset holds that many rows per record, and the column
 `expand.as` names carries the 1-based index of each, so `ADOSEN` runs 1 to the
-count without a derivation of its own. A record whose count is missing fails
-under R008; a record whose count is zero contributes no row, which is how a
-removed record and an unexpanded one stay distinct. The negative example's
+count without a second derivation. A record whose count is missing fails during
+row construction; a record whose count is zero contributes no row, which is
+how a removed record and an unexpanded one stay distinct. The negative example's
 failure -- a record holding more administrations than the templates declare --
 cannot recur, because the count is read from the record rather than written out
 in advance.
@@ -229,7 +227,7 @@ selects a record. What is missing is a selection whose chosen branch exposes
 what it chose from.
 
 The design extends `record_lookups` with an ordered choice among **candidate
-records**, each candidate a named filter over the same dataset:
+records**, each candidate a named filter over the same matched pool:
 
 ```yaml
 record_lookups:
@@ -252,7 +250,9 @@ record_lookups:
     unmatched: missing
 ```
 
-The candidates are tried in order; the first that selects a record wins, and
+Equality keys and any range match are applied before candidates, so a
+subject-level lookup never considers another subject's record. The candidates
+are then tried in order; the first that selects a record wins, and
 the lookup declares the name the winning candidate's `id` is read through,
 here `WHICH`. `adam-adrs-best-overall-response`'s cascade -- complete
 response, then partial, then stable disease only from day 42 -- becomes one
@@ -261,13 +261,9 @@ declaration whose order is the published definition, with the date read as
 drift, because one selection produced both.
 
 `adam-adrs-composite-response`'s parallel `AVALC` and `ARSN` chains collapse
-the same way: the value and the audit trail are two readings of one choice.
-`adam-adtte-duration-of-response`'s `SRCDOM`, `SRCVAR`, and `SRCSEQ` triplet is
-the strongest case: today the winning date is selected and the record that
-supplied it is rebuilt by a parallel `case` over which value won, with nothing
-tying the triplet to the date. Under candidates, the date is `EVENT.ADT` and
-the sequence is `EVENT.ASEQ` from the same winning record, so traceability is
-structural rather than reconstructed.
+the same way after the decision inputs are named on one derived record: the
+candidate id names the rule once, and both outputs map from that id. The value
+and its audit reason therefore cannot select different branches.
 
 Two limits keep this inside the boundary. Candidates share one dataset, so the
 selection never becomes a join; and a candidate selects a record rather than
@@ -317,16 +313,16 @@ explicitly in R005 rather than leaving it as open text.
 
 - **Gap 2** retires. `sdtm-vs-visit-study-day` assigns `EPOCH` to an
   unscheduled visit by range-matching the study-day against the epoch table;
-  `negative-advs-analysis-window-table` becomes a positive example whose window
-  table is read rather than restated as literals.
+  `adam-advs-analysis-window-table` reads its window table rather than restating
+  it as literals.
 - **Gap 7** retires as a fork. The family's members stay fixed; the naming
   problem is documented as a convention.
 - **Gap 8** retires. The logically removed record is filtered from a derived
   dataset before the artifact is constructed.
-- **Gap 9** retires for the record-carrying case. A derivation whose reason is
-  not a record -- a branch chosen on a computed predicate with no source record
-  behind it -- still writes its audit trail by hand; no example in the suite
-  needs that case, so it stays open until one does.
+- **Gap 9** retires. A lookup exposes both the chosen record and the candidate
+  id. A record-backed endpoint reads its value and provenance from the record;
+  a computed endpoint maps its value and audit reason from the one candidate
+  id.
 - **Gap 11** retires. The subject-specific cutoff narrows the reduction through
   `between`, and the analysis-window table matches through the same pairs.
 - **Gap 12** retires. The intermediate grain is a named derived dataset.
@@ -337,17 +333,17 @@ explicitly in R005 rather than leaving it as open text.
 
 Each closed gap needs one positive example that needs the construct and one
 negative or edge example fixing its failure behavior, per the acceptance rule
-in #49. The suite already holds the negatives; the design names the positives
-they pair with.
+in #49. The examples below pair each construct with a data edge or an expected
+failure.
 
 | Construct | Positive example | Negative / edge example |
 |---|---|---|
-| Range matching | `sdtm-vs-visit-study-day` assigns `EPOCH` to an unscheduled visit | `negative-advs-analysis-window-table` keeps its validation error for a `between` value that does not resolve |
+| Range matching | `sdtm-vs-visit-study-day` assigns `EPOCH` to an unscheduled visit and `adam-advs-analysis-window-table` reads the protocol windows | A missing study day follows the lookup's declared incomplete policy |
 | Row-narrowed reduction | `adam-adtr-sum-of-target-diameters` derives the RECIST nadir | A reduction narrowed against a missing cutoff returns missing, never the whole right side |
-| Candidates | `adam-adrs-best-overall-response` declares the response order once | `adam-adrs-composite-response` reads the reason from the same choice as the value |
-| Candidates with traceability | `adam-adtte-duration-of-response` reads `SRCSEQ` from the winning record | A candidate list with no match follows `unmatched` |
-| Derived dataset | `adam-adtr-sum-of-target-diameters` names the per-assessment grain | A derived dataset's keys must be unique, under R005 |
-| Counted expansion | `negative-adex-single-dose-expansion` becomes a positive example | A missing count fails; a zero count expands to no row |
+| Candidates | `adam-adrs-best-overall-response` declares the response order once | A subject with no candidate follows `unmatched` |
+| Candidate rule id | `adam-adrs-composite-response` maps value and reason from one choice | The final unfiltered candidate makes the default policy explicit |
+| Derived dataset | `adam-adtr-sum-of-target-diameters` names measured and scheduled assessment grains | `negative-adtr-duplicate-assessment` rejects a repeated intermediate key |
+| Counted expansion and fill-in | `adam-adex-single-dose-expansion` expands every administration; `adam-advs-once-measured-carry-forward` builds the planned spine | `negative-adex-missing-dose-count` fails, while a zero count contributes no row |
 
 ## What this design does not do
 
@@ -368,8 +364,9 @@ they pair with.
 
 ## Rule changes this design requires
 
-- **R005** states the fork's answer where it now says the question is open, and
-  records the naming convention for numbered families.
+- **R005** states the fork's answer where it now says the question is open,
+  records the naming convention for numbered families, and treats an expansion
+  index as a row-phase derivation.
 - **R013** drops the sentence that an intermediate grain cannot be named, and
   points to the derived dataset as the name.
 - **R002** admits a derived dataset as a source its readers bind to, and states
@@ -378,6 +375,8 @@ they pair with.
   narrowing semantics above.
 - **R001** adds the derived-dataset build to the phase order and to dependency
   inference.
+- **R007** admits a qualified aggregate over the base group while a grouped
+  intermediate is being built.
 
 No rule is superseded. The changes are amendments that close what the rules
 currently state as open.

@@ -6,6 +6,37 @@ datasets:
 base: ADSL
 keys: [STUDYID, USUBJID, PARAMCD]
 
+record_lookups:
+  - id: RESPONSE
+    dataset: ADRSPRE
+    as: WHICH
+    candidates:
+      - id: CR
+        filter: "ADRSPRE.AVALC = 'CR'"
+        order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
+        keep: first
+      - id: PR
+        filter: "ADRSPRE.AVALC = 'PR'"
+        order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
+        keep: first
+      - id: SD
+        filter: "ADRSPRE.AVALC = 'SD' AND ADRSPRE.RANDDY >= 42"
+        order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
+        keep: first
+      - id: NON-CR/NON-PD
+        filter: "ADRSPRE.AVALC = 'NON-CR/NON-PD' AND ADRSPRE.RANDDY >= 42"
+        order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
+        keep: first
+      - id: PD
+        filter: "ADRSPRE.AVALC = 'PD'"
+        order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
+        keep: first
+      - id: NE
+        filter: "ADRSPRE.AVALC IN ('CR', 'PR', 'SD', 'NON-CR/NON-PD', 'NE')"
+        order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
+        keep: first
+    unmatched: missing
+
 columns:
   - name: STUDYID
     type: str
@@ -37,26 +68,7 @@ columns:
   - name: AVALC
     type: str
     derivation:
-      case:
-        branches:
-          - when: "CRDT IS NOT NULL"
-            then:
-              literal: CR
-          - when: "PRDT IS NOT NULL"
-            then:
-              literal: PR
-          - when: "SDDT IS NOT NULL"
-            then:
-              literal: SD
-          - when: "NCNPDDT IS NOT NULL"
-            then:
-              literal: NON-CR/NON-PD
-          - when: "PDDT IS NOT NULL"
-            then:
-              literal: PD
-          - when: "NEDT IS NOT NULL"
-            then:
-              literal: NE
+      source: RESPONSE.WHICH
     verifications:
       allowed_values:
         values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]
@@ -73,6 +85,7 @@ columns:
           NON-CR/NON-PD: 4
           PD: 5
           NE: 6
+        missing: null
     verifications:
       range:
         min: 1
@@ -81,74 +94,7 @@ columns:
   - name: ADT
     type: date
     derivation:
-      case:
-        branches:
-          - when: "AVALC = 'CR'"
-            then:
-              source: CRDT
-          - when: "AVALC = 'PR'"
-            then:
-              source: PRDT
-          - when: "AVALC = 'SD'"
-            then:
-              source: SDDT
-          - when: "AVALC = 'NON-CR/NON-PD'"
-            then:
-              source: NCNPDDT
-          - when: "AVALC = 'PD'"
-            then:
-              source: PDDT
-          - when: "AVALC = 'NE'"
-            then:
-              source: NEDT
-
-  - name: CRDT
-    type: date
-    output: false
-    derivation:
-      aggregate:
-        filter: "ADRSPRE.AVALC = 'CR'"
-        expr: "MIN(ADRSPRE.ADT)"
-
-  - name: PRDT
-    type: date
-    output: false
-    derivation:
-      aggregate:
-        filter: "ADRSPRE.AVALC = 'PR'"
-        expr: "MIN(ADRSPRE.ADT)"
-
-  - name: SDDT
-    type: date
-    output: false
-    derivation:
-      aggregate:
-        filter: "ADRSPRE.AVALC = 'SD' AND ADRSPRE.RANDDY >= 42"
-        expr: "MIN(ADRSPRE.ADT)"
-
-  - name: NCNPDDT
-    type: date
-    output: false
-    derivation:
-      aggregate:
-        filter: "ADRSPRE.AVALC = 'NON-CR/NON-PD' AND ADRSPRE.RANDDY >= 42"
-        expr: "MIN(ADRSPRE.ADT)"
-
-  - name: PDDT
-    type: date
-    output: false
-    derivation:
-      aggregate:
-        filter: "ADRSPRE.AVALC = 'PD'"
-        expr: "MIN(ADRSPRE.ADT)"
-
-  - name: NEDT
-    type: date
-    output: false
-    derivation:
-      aggregate:
-        filter: "ADRSPRE.AVALC IN ('CR', 'PR', 'SD', 'NON-CR/NON-PD', 'NE')"
-        expr: "MIN(ADRSPRE.ADT)"
+      source: RESPONSE.ADT
 
 verifications:
   - unique:

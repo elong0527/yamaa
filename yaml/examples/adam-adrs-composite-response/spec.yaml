@@ -3,19 +3,57 @@ domain: ADRS
 datasets:
   ADRSPRE: input/adrs_pre.csv
   ADSL: input/adsl.csv
-base: ADRSPRE
+
+derived:
+  - id: DECISION
+    base: ADRSPRE
+    keys: [STUDYID, USUBJID, AVISIT]
+    columns:
+      - name: STUDYID
+        type: str
+        derivation: {source: ADRSPRE.STUDYID}
+      - name: USUBJID
+        type: str
+        derivation: {source: ADRSPRE.USUBJID}
+      - name: AVISIT
+        type: str
+        derivation: {source: ADRSPRE.AVISIT}
+      - name: PCHG
+        type: float
+        derivation: {source: ADRSPRE.PCHG}
+      - name: SAEFL
+        type: str
+        derivation: {source: ADSL.SAEFL}
+      - name: DCSREAS
+        type: str
+        derivation: {source: ADSL.DCSREAS}
+
+base: DECISION
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+
+record_lookups:
+  - id: OUTCOME
+    dataset: DECISION
+    as: RULE
+    candidates:
+      - id: SAFETY
+        filter: "DECISION.SAEFL = 'Y' OR DECISION.DCSREAS IS NOT NULL"
+      - id: MISSING
+        filter: "DECISION.PCHG IS NULL"
+      - id: THRESHOLD
+        filter: "DECISION.PCHG <= -75"
+      - id: OTHERWISE
 
 columns:
   - name: STUDYID
     type: str
     derivation:
-      source: ADRSPRE.STUDYID
+      source: DECISION.STUDYID
 
   - name: USUBJID
     type: str
     derivation:
-      source: ADRSPRE.USUBJID
+      source: DECISION.USUBJID
 
   - name: PARAMCD
     type: str
@@ -30,39 +68,39 @@ columns:
   - name: AVISIT
     type: str
     derivation:
-      source: ADRSPRE.AVISIT
+      source: DECISION.AVISIT
 
   - name: PCHG
     type: float
     derivation:
-      source: ADRSPRE.PCHG
+      source: DECISION.PCHG
 
   - name: SAEFL
     type: str
     derivation:
-      source: ADSL.SAEFL
+      source: DECISION.SAEFL
 
   - name: DCSREAS
     type: str
     derivation:
-      source: ADSL.DCSREAS
+      source: DECISION.DCSREAS
+
+  - name: RULE
+    type: str
+    output: false
+    derivation:
+      source: OUTCOME.RULE
 
   - name: AVALC
     type: str
     derivation:
-      case:
-        branches:
-          - when: "SAEFL = 'Y' OR DCSREAS IS NOT NULL"
-            then:
-              literal: NON-RESPONDER
-          - when: "PCHG IS NULL"
-            then:
-              literal: NOT EVALUABLE
-          - when: "PCHG <= -75"
-            then:
-              literal: RESPONDER
-        otherwise:
-          literal: NON-RESPONDER
+      mapping:
+        source: RULE
+        dict:
+          SAFETY: NON-RESPONDER
+          MISSING: NOT EVALUABLE
+          THRESHOLD: RESPONDER
+          OTHERWISE: NON-RESPONDER
     verifications:
       - not_missing: {}
       - allowed_values:
@@ -71,19 +109,13 @@ columns:
   - name: ARSN
     type: str
     derivation:
-      case:
-        branches:
-          - when: "SAEFL = 'Y' OR DCSREAS IS NOT NULL"
-            then:
-              literal: SAFETY OR DISCONTINUATION RULE
-          - when: "PCHG IS NULL"
-            then:
-              literal: COMPONENT MISSING
-          - when: "PCHG <= -75"
-            then:
-              literal: THRESHOLD MET
-        otherwise:
-          literal: THRESHOLD NOT MET
+      mapping:
+        source: RULE
+        dict:
+          SAFETY: SAFETY OR DISCONTINUATION RULE
+          MISSING: COMPONENT MISSING
+          THRESHOLD: THRESHOLD MET
+          OTHERWISE: THRESHOLD NOT MET
     verifications:
       not_missing: {}
 

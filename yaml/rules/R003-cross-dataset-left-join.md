@@ -90,15 +90,20 @@ whose right side is empty after filtering has no match and receives missing,
 exactly as if no record had existed.
 
 A right-side reduction or selection may also be narrowed by the current left
-row. An `aggregate` or a structured `source` may declare `between`: one
-`value` the current row reads and one `lower` or `upper` column on the right.
-A right-side record is eligible only when the row's value falls within the
-declared bounds, inclusively, so a subject-specific cutoff or a record's own
-study day can restrict the records being summarized or selected. A missing
-value or bound makes the record ineligible for that row. R015 defines the same
-pairs for a record lookup. This is a declared range match, not a predicate over
-both sides: the comparison is fixed, and the bounds name right-side columns
-while the value names one left-side variable.
+row. An `aggregate`, or `multiple_matches` on a structured `source`, may
+declare `between`: one `value` the current row reads and one `lower` or `upper`
+column on the right. A record is eligible when every declared comparison holds:
+`lower <= value` and `value <= upper`. Either bound may be omitted for a
+one-sided match. Thus an earlier-record cutoff declares the right-side date as
+`lower` and the current date as `value`.
+
+A missing current-row value leaves the right side empty for that row and the
+result is missing; it never silently removes the narrowing. A right-side record
+missing a declared bound is ineligible. R015 defines the same pairs for a
+record lookup, including its explicit incomplete-match policy. This is a
+declared range match, not a predicate over both sides: the comparison is fixed,
+and the bounds name right-side columns while the value names one left-side
+variable.
 
 This is not `row.filter`, which selects row-driver records during row
 construction, before any column is derived.
@@ -120,3 +125,5 @@ so an aggregate cannot encounter multiple matches and does not declare
 - An applicable left key is unavailable: fail.
 - Multiple matches after reduction: fail unless locally handled.
 - No right-side match: return missing.
+- A `between` with neither bound, a bound outside the right-side relation, or
+  values whose types are not comparable: fail.

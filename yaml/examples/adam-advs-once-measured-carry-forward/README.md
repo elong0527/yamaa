@@ -1,16 +1,20 @@
 # ADaM ADVS: carry forward a once-measured characteristic
 
-This example uses long-form vital signs with subject treatment dates and a
-`yamaa` specification to derive one record per collected measurement:
+This example uses long-form vital signs with each subject's planned measurement
+dates and treatment start to derive one record per planned measurement:
 
-- `PARAMCD`, `ADT`, and `AVAL` identify the measurement, its analysis date,
-  and its value;
+- `ASEQ` numbers the planned measurements and `VSSEQ` identifies the collected
+  record when the measurement occurred;
+- `PARAMCD`, `ADT`, and `AVAL` identify the planned measurement, its analysis
+  date, and its collected value. An unattended measurement has no `VSSEQ` or
+  value but remains a row;
 - `TRTSDT` is the subject's treatment start date;
 - `HEIGHTBL` is the latest height on or before treatment. It is repeated on
   both height and weight records so later weights retain the once-measured
   subject characteristic, and is empty on every record for a subject without
   a pre-treatment height.
 
-Weight is collected repeatedly, while height is collected only at screening.
-The two parameters share the subject-level height without treating a weight as
-a candidate height.
+Weight is planned repeatedly, while height is planned only at screening. The
+two parameters share the subject-level height without treating a weight as a
+candidate height. A subject with no collected height has no carried value; a
+later unattended weight still carries a collected baseline height.

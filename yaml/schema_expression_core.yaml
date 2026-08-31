@@ -59,6 +59,9 @@ multiple_matches_class:
     - filter:
         type: sql
         description: Predicate selecting eligible right-side matches.
+    - between:
+        type: between_class
+        description: Current-row value matched inclusively against one or two right-side bounds.
 
 order_by_term:
     type: [variable, order_term_class]

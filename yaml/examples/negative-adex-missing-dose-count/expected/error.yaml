@@ -1,0 +1,11 @@
+phase: row_construction
+condition: missing_expansion_count
+spec_paths:
+  - derived[0].expand.count
+context:
+  dataset: DOSES
+  driver: EX
+  keys:
+    STUDYID: PILOT7
+    USUBJID: P7-504
+    EXSEQ: 1

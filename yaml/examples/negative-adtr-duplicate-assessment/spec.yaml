@@ -1,0 +1,44 @@
+schema_version: "1.0"
+domain: ADTR
+datasets:
+  TRVISIT: input/trvisit.csv
+
+derived:
+  - id: ASSESS
+    base: TRVISIT
+    keys: [STUDYID, USUBJID, AVISIT]
+    columns:
+      - name: STUDYID
+        type: str
+        derivation: {source: TRVISIT.STUDYID}
+      - name: USUBJID
+        type: str
+        derivation: {source: TRVISIT.USUBJID}
+      - name: AVISIT
+        type: str
+        derivation: {source: TRVISIT.AVISIT}
+      - name: AVISITN
+        type: int
+        derivation: {source: TRVISIT.AVISITN}
+      - name: ADT
+        type: date
+        derivation: {source: TRVISIT.ADT}
+
+base: ASSESS
+keys: [STUDYID, USUBJID, AVISIT]
+columns:
+  - name: STUDYID
+    type: str
+    derivation: {source: ASSESS.STUDYID}
+  - name: USUBJID
+    type: str
+    derivation: {source: ASSESS.USUBJID}
+  - name: AVISIT
+    type: str
+    derivation: {source: ASSESS.AVISIT}
+  - name: AVISITN
+    type: int
+    derivation: {source: ASSESS.AVISITN}
+  - name: ADT
+    type: date
+    derivation: {source: ASSESS.ADT}

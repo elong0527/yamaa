@@ -2,7 +2,8 @@
 id: R002
 title: Source Binding
 status: normative
-applies_to: [root.datasets, root.base, row.dataset, expression.source, string_template]
+applies_to: [root.datasets, root.derived, root.base, row.dataset,
+  expression.source, string_template]
 depends_on: [R003, R006, R008, R014, R015]
 ---
 
@@ -23,28 +24,32 @@ type it carries, is R014.
 
 ## Dataset declarations
 
-`datasets` maps dataset identifiers to source data declarations. Identifiers
+`datasets` maps source dataset identifiers to data declarations. Identifiers
 are used by `base`, `rows.dataset`, qualified source variables, and
-`mapping_from`. A declaration is a path, or a path with the types its fields
-carry; R014 owns that reading and the shorthand between the two forms. Paths
-are resolved relative to the specification file.
+`mapping_from`. A source declaration is a path, or a path with the types its
+fields carry; R014 owns that reading and the shorthand between the two forms.
+Paths are resolved relative to the specification file.
 
-Every referenced dataset identifier must exist in `datasets`. A dataset
-identifier must not equal the output `domain`; unqualified names address the
-dataset currently being derived, so reusing the domain would be ambiguous.
+Every referenced dataset identifier must exist in `datasets` or name one entry
+under `derived`. Source and derived identifiers share one namespace and must be
+unique. An identifier must not equal the output `domain`; unqualified names
+address the dataset currently being derived, so reusing the domain would be
+ambiguous.
 
 A finished dataset an earlier run produced is an ordinary source and is
 declared under a name of its own. A **derived dataset** -- one the
 specification itself builds before the artifact, under `derived` -- is also an
 ordinary source once built: a qualified source, an aggregate, or a record
-lookup reads it exactly as it reads a declared dataset, and a `rows` entry may
-drive from it. R001 owns when a derived dataset is built relative to its
-readers, and R005's column coverage and key identity apply to it as they do to
-the artifact. Reaching a sibling record of the dataset this run is building is
-a different thing, and no keyed construct reaches it; R001 owns what happens
-when a column reaches its own value through the rows of its partition. Within
-one dataset, addressing a sibling record by key stays open work, because a
-derived dataset is built before its readers and is not such a sibling.
+lookup reads its reader-visible columns exactly as it reads a declared dataset,
+and a `rows` entry may drive from it. An internal derived column declaring
+`output: false` is not part of that surface. R001 owns when a derived dataset is
+built relative to its readers, and R005's column coverage and key identity
+apply to it as they do to the artifact. Reaching a sibling record of the dataset
+this run is building is a different thing, and no keyed construct reaches it;
+R001 owns what happens when a column reaches its own value through the rows of
+its partition. Within one dataset, addressing a sibling record by key stays
+open work, because a derived dataset is built before its readers and is not
+such a sibling.
 
 ## Source expressions
 
@@ -61,7 +66,9 @@ identifier, which share one namespace; R015 owns what a record lookup resolves
 to.
 
 A qualified reference to the current row-driving dataset reads the current
-source record. A qualified reference to another dataset follows R003.
+source record. On the grouped row construction R001 defines, it may read only
+a base variable named by `group_by`, whose value is constant for the group. A
+qualified reference to another dataset follows R003.
 
 Operation operand fields typed as `variable` accept a concise source or current
 output variable. Compose operations through an explicitly named derived column:
@@ -140,7 +147,8 @@ absent-item handler.
 
 ## Errors
 
-- An unknown dataset identifier or variable: fail.
+- An unknown dataset identifier or variable, including an internal column of a
+  derived dataset read from outside that dataset: fail.
 - A dataset identifier equal to the output `domain`: fail.
 - A source path that cannot be resolved: fail.
 - An unresolved unqualified reference: fail.
