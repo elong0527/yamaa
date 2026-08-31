@@ -14,3 +14,9 @@ A percentile says where a measurement stands among children of the same sex
 and age, so the same value means different things at different ages and is not
 compared to the collected number. The growth reference is study data, not a
 fixed constant, and is supplied beside the measurements.
+
+## Specification variants
+
+`spec_r.yaml` uses R's `pnorm`, while `spec_py.yaml` uses Python's `math.erfc`
+and the equivalent normal-CDF identity. They share the same inputs, expected
+output, lookup, and LMS calculation.

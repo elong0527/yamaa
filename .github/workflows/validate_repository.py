@@ -333,54 +333,8 @@ def build_schema_env(root: Path):
             else:
                 to_visit.append((inc_path, new_stack))
 
-        if 'portable_registry' in data:
-            registry_ref = data['portable_registry']
-            if current.name != 'schema.yaml':
-                errors.append(
-                    f"ERROR: {current.name}: portable_registry is allowed "
-                    "only in schema.yaml"
-                )
-            elif not isinstance(registry_ref, str) or not registry_ref:
-                errors.append(
-                    "ERROR: schema.yaml: portable_registry must be a "
-                    "non-empty string"
-                )
-            elif (
-                '://' in registry_ref
-                or registry_ref.startswith('/')
-                or '..' in registry_ref.split('/')
-            ):
-                errors.append(
-                    "ERROR: schema.yaml: portable_registry must be a "
-                    "relative path inside the yaml directory"
-                )
-            else:
-                unresolved_registry_path = schema_dir / registry_ref
-                if unresolved_registry_path.is_symlink():
-                    errors.append(
-                        "ERROR: schema.yaml: portable_registry must not be "
-                        "a symlink"
-                    )
-                else:
-                    registry_path = unresolved_registry_path.resolve()
-                    try:
-                        registry_path.relative_to(schema_dir.resolve())
-                    except ValueError:
-                        errors.append(
-                            "ERROR: schema.yaml: portable_registry is "
-                            "outside the yaml directory"
-                        )
-                    else:
-                        if not registry_path.is_file():
-                            errors.append(
-                                "ERROR: schema.yaml: portable_registry file "
-                                f"{registry_ref} not found"
-                            )
-                        else:
-                            env['portable_registry'] = registry_path
-
         for k, v in data.items():
-            if k in ('version', 'includes', 'portable_registry'):
+            if k in ('version', 'includes'):
                 continue
 
             if isinstance(v, list):
@@ -727,6 +681,18 @@ def validate_schemas(root: Path):
     env, errors = build_schema_env(root)
     return errors
 
+
+SPEC_FILE_PATTERN = re.compile(r'^spec(?:_[a-z][a-z0-9_]*)?\.yaml$')
+
+
+def example_spec_paths(example_dir: Path):
+    return sorted(
+        path
+        for path in example_dir.iterdir()
+        if path.is_file() and SPEC_FILE_PATTERN.fullmatch(path.name)
+    )
+
+
 def validate_examples_structure(root: Path, env, warnings=None):
     errors = []
     if warnings is None:
@@ -742,74 +708,87 @@ def validate_examples_structure(root: Path, env, warnings=None):
         if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
             continue
 
-        spec_path = ex_dir / 'spec.yaml'
-        if not spec_path.exists():
-            continue
+        for spec_path in example_spec_paths(ex_dir):
+            try:
+                with open(spec_path, 'r', encoding='utf-8') as f:
+                    spec = yaml.load(f, Loader=UniqueKeyLoader)
+            except Exception:
+                continue
 
-        try:
-            with open(spec_path, 'r', encoding='utf-8') as f:
-                spec = yaml.load(f, Loader=UniqueKeyLoader)
-        except Exception:
-            continue
+            spec_label = f"{ex_dir.name}/{spec_path.name}"
+            if not isinstance(spec, dict) or not spec:
+                errors.append(
+                    f"ERROR: {spec_label}: spec is empty or not a mapping"
+                )
+                continue
 
-        if not isinstance(spec, dict) or not spec:
-            errors.append(f"ERROR: {ex_dir.name}/spec.yaml: spec is empty or not a mapping")
-            continue
-
-        if 'schema_version' in spec:
-            spec_version = str(spec['schema_version'])
-            env_version = str(env.get('version', '1.0'))
-            if spec_version != env_version:
-                errors.append(f"ERROR: {ex_dir.name}/spec.yaml: schema_version '{spec_version}' does not match bundle version '{env_version}'")
-
-        spec_errors = validate_type(spec, ['root_class'], env, f"{ex_dir.name}/spec.yaml")
-        is_negative = ex_dir.name.startswith('negative-')
-        if not is_negative:
-            for spec_error in spec_errors:
-                if spec_error == KNOWN_STRUCTURAL_WARNING:
-                    warnings.append(
-                        "WARNING: existing DSDECOD verifications mapping "
-                        "must become a list of one-entry mappings"
+            if 'schema_version' in spec:
+                spec_version = str(spec['schema_version'])
+                env_version = str(env.get('version', '1.0'))
+                if spec_version != env_version:
+                    errors.append(
+                        f"ERROR: {spec_label}: schema_version "
+                        f"'{spec_version}' does not match bundle version "
+                        f"'{env_version}'"
                     )
-                else:
-                    errors.append(spec_error)
-        else:
-            error_yaml_path = ex_dir / 'expected' / 'error.yaml'
-            if error_yaml_path.exists():
-                try:
-                    with open(error_yaml_path, 'r', encoding='utf-8') as f:
-                        err_spec = yaml.load(f, Loader=UniqueKeyLoader)
-                    if isinstance(err_spec, dict) and err_spec.get('phase') == 'validation':
-                        expected_paths = err_spec.get('spec_paths', [])
-                        if not isinstance(expected_paths, list):
-                            expected_paths = [expected_paths]
 
-                        filtered_errors = []
-                        for err in spec_errors:
-                            parts = err.split(': ', 2)
-                            if len(parts) >= 2:
-                                path_part = parts[1]
-                                prefix = f"{ex_dir.name}/spec.yaml."
-                                if path_part.startswith(prefix):
-                                    norm_path = path_part[len(prefix):]
-                                else:
-                                    norm_path = path_part
-                                path_matches = any(
-                                    norm_path == expected_path
-                                    or norm_path.startswith(f"{expected_path}.")
-                                    or norm_path.startswith(f"{expected_path}[")
-                                    for expected_path in expected_paths
-                                )
-                                if not path_matches:
-                                    filtered_errors.append(err)
-                            else:
-                                filtered_errors.append(err)
-                        errors.extend(filtered_errors)
+            spec_errors = validate_type(
+                spec, ['root_class'], env, spec_label
+            )
+            is_negative = ex_dir.name.startswith('negative-')
+            if not is_negative:
+                for spec_error in spec_errors:
+                    if spec_error == KNOWN_STRUCTURAL_WARNING:
+                        warnings.append(
+                            "WARNING: existing DSDECOD verifications mapping "
+                            "must become a list of one-entry mappings"
+                        )
                     else:
-                        errors.extend(spec_errors)
-                except Exception:
+                        errors.append(spec_error)
+                continue
+
+            error_yaml_path = ex_dir / 'expected' / 'error.yaml'
+            if not error_yaml_path.exists():
+                errors.extend(spec_errors)
+                continue
+
+            try:
+                with open(error_yaml_path, 'r', encoding='utf-8') as f:
+                    err_spec = yaml.load(f, Loader=UniqueKeyLoader)
+                if not (
+                    isinstance(err_spec, dict)
+                    and err_spec.get('phase') == 'validation'
+                ):
                     errors.extend(spec_errors)
-            else:
+                    continue
+
+                expected_paths = err_spec.get('spec_paths', [])
+                if not isinstance(expected_paths, list):
+                    expected_paths = [expected_paths]
+
+                filtered_errors = []
+                for err in spec_errors:
+                    parts = err.split(': ', 2)
+                    if len(parts) < 2:
+                        filtered_errors.append(err)
+                        continue
+                    path_part = parts[1]
+                    prefix = f"{spec_label}."
+                    norm_path = (
+                        path_part[len(prefix):]
+                        if path_part.startswith(prefix)
+                        else path_part
+                    )
+                    path_matches = any(
+                        norm_path == expected_path
+                        or norm_path.startswith(f"{expected_path}.")
+                        or norm_path.startswith(f"{expected_path}[")
+                        for expected_path in expected_paths
+                    )
+                    if not path_matches:
+                        filtered_errors.append(err)
+                errors.extend(filtered_errors)
+            except Exception:
                 errors.extend(spec_errors)
 
     return errors
@@ -853,40 +832,45 @@ def validate_examples_csv(root: Path):
         if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
             continue
 
-        spec_path = ex_dir / 'spec.yaml'
-        if not spec_path.exists():
-            continue
+        for spec_path in example_spec_paths(ex_dir):
+            try:
+                with open(spec_path, 'r', encoding='utf-8') as f:
+                    spec = yaml.load(f, Loader=UniqueKeyLoader)
+            except Exception:
+                continue
 
-        try:
-            with open(spec_path, 'r', encoding='utf-8') as f:
-                spec = yaml.load(f, Loader=UniqueKeyLoader)
-        except Exception:
-            continue
+            if not isinstance(spec, dict) or 'columns' not in spec:
+                continue
 
-        if not isinstance(spec, dict) or 'columns' not in spec:
-            continue
+            output = spec.get('output')
+            expected_cols = (
+                output.get('columns')
+                if isinstance(output, dict)
+                else None
+            )
+            if not isinstance(expected_cols, list):
+                continue
 
-        output = spec.get('output')
-        expected_cols = (
-            output.get('columns')
-            if isinstance(output, dict)
-            else None
-        )
-        if not isinstance(expected_cols, list):
-            continue
-
-        expected_dir = ex_dir / 'expected'
-        if expected_dir.exists():
+            expected_dir = ex_dir / 'expected'
+            if not expected_dir.exists():
+                continue
             for csv_file in sorted(expected_dir.glob('*.csv')):
                 with open(csv_file, 'r', encoding='utf-8') as f:
                     reader = csv.reader(f)
                     try:
                         header = next(reader)
                         if header != expected_cols:
-                            errors.append(f"ERROR: {ex_dir.name}/{csv_file.name}: header mismatch. Expected {expected_cols}, got {header}")
+                            errors.append(
+                                f"ERROR: {ex_dir.name}/{csv_file.name}: "
+                                f"header mismatch for {spec_path.name}. "
+                                f"Expected {expected_cols}, got {header}"
+                            )
                     except StopIteration:
                         if expected_cols:
-                            errors.append(f"ERROR: {ex_dir.name}/{csv_file.name} is empty")
+                            errors.append(
+                                f"ERROR: {ex_dir.name}/{csv_file.name} is "
+                                f"empty for {spec_path.name}"
+                            )
 
     return errors, warnings
 
@@ -977,9 +961,18 @@ def validate_examples_layout(root: Path):
                 if '## How to fix' not in content:
                     errors.append(f"ERROR: {rel}/README.md missing '## How to fix' section")
 
-        # spec.yaml
-        if not (ex_dir / 'spec.yaml').exists():
-            errors.append(f"ERROR: {rel} missing spec.yaml")
+        # Specification files
+        spec_paths = example_spec_paths(ex_dir)
+        if not spec_paths:
+            errors.append(
+                f"ERROR: {rel} missing spec.yaml or spec_<variant>.yaml"
+            )
+        elif len(spec_paths) > 1 and any(
+            path.name == 'spec.yaml' for path in spec_paths
+        ):
+            errors.append(
+                f"ERROR: {rel} cannot mix spec.yaml with variant specs"
+            )
 
         # input/
         if not (ex_dir / 'input').is_dir():

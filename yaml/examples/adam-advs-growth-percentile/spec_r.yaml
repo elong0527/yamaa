@@ -1,0 +1,113 @@
+schema_version: "1.0"
+domain: ADVS
+datasets:
+  ADVSPRE: input/advs_pre.csv
+  LMS:
+    path: input/lms_ref.csv
+    types: {L: float, M: float, S: float, AGE: int}
+base: ADVSPRE
+keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
+
+record_lookups:
+  - id: GROWTH
+    dataset: LMS
+    source: [ADVSPRE.PARAMCD, ADVSPRE.SEX, ADVSPRE.AGE]
+    key: [PARAMCD, SEX, AGE]
+    unmatched: missing
+
+output:
+  columns: [STUDYID, USUBJID, AVISIT, PARAMCD, PARAM, AVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ADVSPRE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ADVSPRE.USUBJID
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation:
+      source: ADVSPRE.AVISIT
+
+  - name: AVALSRC
+    type: float
+    label: Source Analysis Value
+    derivation:
+      source: ADVSPRE.AVAL
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation:
+      case:
+        branches:
+          - when: "ADVSPRE.PARAMCD = 'BMI'"
+            then:
+              literal: BMIPCTL
+          - when: "ADVSPRE.PARAMCD = 'WEIGHT'"
+            then:
+              literal: WGTPCTL
+    verifications:
+      allowed_values:
+        values: [BMIPCTL, WGTPCTL]
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation:
+      case:
+        branches:
+          - when: "PARAMCD = 'BMIPCTL'"
+            then:
+              literal: BMI-for-Age Percentile
+          - when: "PARAMCD = 'WGTPCTL'"
+            then:
+              literal: Weight-for-Age Percentile
+
+  - name: ZNUM
+    type: float
+    label: LMS Standard Normal Score
+    derivation:
+      compute:
+        expr: "(POWER(AVALSRC / GROWTH.M, GROWTH.L) - 1) / (GROWTH.L * GROWTH.S)"
+
+  - name: NORMCDF
+    type: float
+    label: Standard Normal Cumulative Probability
+    derivation:
+      case:
+        branches:
+          - when: "ZNUM IS NULL"
+            then:
+              literal: null
+        otherwise:
+          function:
+            name: pnorm
+            args:
+              q: ZNUM
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      compute:
+        expr: "100 * NORMCDF"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AVISIT, PARAMCD]
+  - row_count:
+      min: 5
+      max: 5
+  - implies:
+      id: percentile-requires-a-growth-reference
+      when: "AVAL IS NOT NULL"
+      then: "GROWTH.L IS NOT NULL AND GROWTH.M IS NOT NULL AND GROWTH.S IS NOT NULL"

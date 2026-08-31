@@ -12,4 +12,4 @@ expressions:
 numeric_expression:
     type: str
     min_length: 1
-    description: Numeric formula in R010's grammar using portable scalar calls from R017.
+    description: Numeric formula in the portable grammar defined by R010.

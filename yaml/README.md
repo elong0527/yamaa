@@ -9,9 +9,6 @@ and SDTM-to-ADaM derivations. The design is under active development.
 - `schema_derivation.yaml`, `schema_expression_*.yaml`, and
   `schema_verification.yaml` register and document closed derivation and
   verification types.
-- `registry/portable-functions.yaml` is the versioned scalar-function and
-  reducer contract; a Python CI check validates its metadata and fixtures and
-  generates its README table.
 - `schema_function.yaml` registers calls to functions resolved by the project's
   global execution environment.
 - `rules/` contains shared execution semantics, with one rule per file.
@@ -42,9 +39,9 @@ registry without end, so `compute` takes one closed numeric expression instead
 and is the only arithmetic expression. It stays inside the boundary's purpose:
 its payload is a leaf field, not a nested argument tree, and R001 extracts its
 identifiers exactly as it already extracts them from `case.branches[].when`, so
-dependencies remain visible. R010 closes its grammar, R017 supplies its typed
-function vocabulary, and both confine it to numeric results, so it cannot
-displace the typed string, date, mapping, or conditional expressions.
+dependencies remain visible. R010 closes its grammar and function vocabulary
+and confines it to numeric results, so it cannot displace the typed string,
+date, mapping, or conditional expressions.
 
 `str_template` is the string counterpart. It permits literal text and braced
 variable placeholders only. R001 extracts every placeholder as a dependency,
@@ -54,9 +51,8 @@ that composes nested expressions.
 
 `aggregate` is the third, and it replaced `min`, `max`, `sum`, and `count` for
 the reason `compute` replaced the arithmetic operators: an entry per reducer
-grows the expression registry without end and cannot express arithmetic over
-the records being reduced. R013 closes its grammar, R017 supplies its typed
-reducer vocabulary, and R013 requires every
+grows the registry without end and cannot express arithmetic over the records
+being reduced. R013 closes its reducer table and its grammar, requires every
 identifier to name one relation, and requires every identifier to sit inside a
 reduction unless the reduction groups on it. Those three limits keep it from
 becoming a join, a window, or a second spelling of `compute`, and they leave
@@ -84,7 +80,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `str_concat` | An ordered list of expressions, because concatenating requires literals beside sources |
 | `str_template` | One closed string template over named variables (R012) |
 | `mapping_from` | One or more named sources paired by position with declared right-side key columns; exceptional results are literals |
-| `compute` | One closed numeric expression over named output columns and declared record-lookup fields (R010), with calls from R017 |
+| `compute` | One closed numeric expression over named output columns and declared record-lookup fields (R010) |
 | `date_diff`, `study_day` | Named variable operands; `date_diff` declares which endpoints it counts |
 | `date_impute` | One named source plus integer literals for the imputed components; exceptional results are literals |
 | `date_precision` | One named source; exceptional results are literals |
@@ -92,7 +88,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
 | `row_number`, `rank`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
 | `row_value` | One named source with named grouping and ordering variables, plus a signed integer literal offset along the declared order |
-| `aggregate` | One closed reducer expression over one relation (R013), with reducers from R017 |
+| `aggregate` | One closed reducer expression over the records of one relation (R013) |
 | `case` | Nested result expressions retained because selecting expressions is its purpose |
 | `function` | Named arguments may be variables, non-string literals, or explicit expressions |
 
@@ -100,14 +96,9 @@ At the derivation-result level, `conversion_failure` is a literal and
 `override.value` remains an expression because a final correction may select a
 source, literal, or another registered operation.
 
-`portable_extensions` declares exact namespaced portable packs. A pack uses the
-same metadata and fixtures as core and must be present at the declared version
-in every conforming runtime. It never supplies unqualified names.
-
-`function` is the deliberate project-code boundary. Its environment, available
-functions, and package setup are global project configuration rather than
-fields repeated at each call site, and its names never enter the portable
-registry implicitly.
+`function` is the deliberate extensibility boundary. Its environment, available
+functions, and package setup are global project configuration rather than fields
+repeated at each call site.
 
 ## Review workflow
 

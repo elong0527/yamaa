@@ -79,12 +79,29 @@ columns:
       compute:
         expr: "(POWER(AVALSRC / GROWTH.M, GROWTH.L) - 1) / (GROWTH.L * GROWTH.S)"
 
+  - name: ERFCVAL
+    type: float
+    label: Complementary Error Function Value
+    derivation:
+      case:
+        branches:
+          - when: "ZNUM IS NULL"
+            then:
+              literal: null
+        otherwise:
+          function:
+            name: math.erfc
+            args:
+              x:
+                compute:
+                  expr: "-ZNUM / SQRT(2)"
+
   - name: AVAL
     type: float
     label: Analysis Value
     derivation:
       compute:
-        expr: "100 * NORMAL_CDF(ZNUM)"
+        expr: "50 * ERFCVAL"
 
 verifications:
   - unique:

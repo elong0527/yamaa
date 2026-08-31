@@ -1,8 +1,8 @@
 # Derivation examples
 
-Each subdirectory is one example: a specification, its input data, the exact
-output an implementation must reproduce, and a README describing what the
-example derives.
+Each subdirectory is one example: one or more alternative specifications, their
+shared input data, the exact output an implementation must reproduce, and a
+README describing what the example derives.
 
 ## Required reading
 
@@ -15,9 +15,14 @@ tracker, one work item per root cause.
 
     <standard>-<domain>-<subject>/
         README.md
-        spec.yaml
+        spec.yaml | spec_<variant>.yaml ...
         input/*.csv
         expected/<domain>.csv
+
+Use `spec.yaml` for one specification. Use one or more `spec_<variant>.yaml`
+files when the example intentionally demonstrates a runtime or design variant
+over shared inputs and an expected artifact. Do not mix the base filename with
+variants.
 
 An expected failure before a dataset is completed replaces the CSV with
 `expected/error.yaml`, unless the intended artifact is useful as a forward
@@ -57,6 +62,11 @@ no expression or field names, no `output.columns`, and none of the words
     + Its period-two right side is empty after filtering, which R003 treats as
       an absent match
 
+A positive example with alternative specs may add a final `## Specification
+variants` section after the data contract. Keep it to the variant filenames,
+runtime operations, and the semantic difference between them; do not turn it
+into a schema tutorial.
+
 **Do not describe intermediate columns in the data contract.** A declared
 column omitted from `output.columns` is not in the artifact and does not belong
 before the fix section. A concise fix may show one when a multi-step correction
@@ -65,9 +75,9 @@ requires it.
 Before `## How to fix`, **do not count the sample data.** "Two of the four
 subjects have no exposure" is a property of the input file; "a subject with no
 exposure falls back to the planned arm" is the rule. Write the rule. Row
-counts, keys, and expected handler counts are stated in `spec.yaml` and do not
-belong in the data contract. A fix may name an offending sample value when that
-makes the correction concrete.
+counts, keys, and expected handler counts are stated in the specification and
+do not belong in the data contract. A fix may name an offending sample value
+when that makes the correction concrete.
 
 In `## How to fix`, lead with the clinical or data decision. Then show the
 smallest valid correction. Name exact fields and operations there when doing so
@@ -211,9 +221,9 @@ check reports is a variable the README does not explain.
 
 ## Adding an example
 
-1. Write `spec.yaml`, the input data, and either the expected output or the
-   expected error. Add an expected CSV beside an error when it makes a blocked
-   or rejected result concrete.
+1. Write `spec.yaml`, or the applicable `spec_<variant>.yaml` files, the input
+   data, and either the expected output or the expected error. Add an expected
+   CSV beside an error when it makes a blocked or rejected result concrete.
 2. Write the README to the contract above. A negative example must include its
    `## How to fix` section.
 3. Add a row to the index table in `README.md`. Its `Derives` column is the
@@ -243,9 +253,7 @@ same kind of value, as `date_diff`'s `bounds` still returns a count. Add an
 entry when it does not: `study_day` returns an ordinal on a calendar with no
 zero, and folding it into `date_diff` would have allowed `unit: week` with it.
 
-After registering a top-level expression, update the input-shape audit in
-`../README.md`, R007's type behavior, and R008 if it declares handlers. A
-scalar function or reducer instead enters the shared R017 registry; regenerate
-its README table and add shared R and Python conformance fixtures. Then delete
-the gap it closed from its work item in the issue tracker, and close the work
-item when its last gap closes.
+After registering one, update every place that enumerates the vocabulary: the
+input-shape audit in `../README.md`, R007's type behavior, and R008 if it
+declares handlers. Then delete the gap it closed from its work item in the
+issue tracker, and close the work item when its last gap closes.

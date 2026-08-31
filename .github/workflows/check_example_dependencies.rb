@@ -387,7 +387,9 @@ end
 
 examples = File.expand_path("../../yaml/examples", __dir__)
 specs = if ARGV.empty?
-          Dir[File.join(examples, "*", "spec.yaml")].sort
+          Dir[File.join(examples, "*", "spec*.yaml")].select do |spec|
+            File.basename(spec).match?(/\Aspec(?:_[a-z][a-z0-9_]*)?\.yaml\z/)
+          end.sort
         else
           ARGV.map { |path| File.expand_path(path) }
         end

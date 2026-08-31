@@ -21,4 +21,4 @@ aggregate_class:
 aggregate_expression:
     type: str
     min_length: 1
-    description: Reducer expression in R013's grammar using portable calls from R017.
+    description: Reducer expression in the portable grammar defined by R013.
