@@ -1,0 +1,94 @@
+schema_version: "1.0"
+domain: ADOE
+datasets:
+  OE: input/oe.csv
+  ADSL: input/adsl.csv
+base: OE
+keys: [STUDYID, USUBJID, OESEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: OE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: OE.USUBJID
+
+  - name: OESEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: OE.OESEQ
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation:
+      source: OE.OETESTCD
+
+  - name: OELAT
+    type: str
+    label: Laterality
+    derivation:
+      source: OE.OELAT
+    verifications:
+      allowed_values:
+        values: [LEFT, RIGHT, BILATERAL]
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      source: OE.OESTRESN
+
+  - name: STUDYEYE
+    type: str
+    label: Study Eye Laterality
+    output: false
+    derivation:
+      source: ADSL.STUDYEYE
+    verifications:
+      allowed_values:
+        values: [LEFT, RIGHT, BILATERAL]
+
+  - name: AFEYE
+    type: str
+    label: Analysis Eye
+    derivation:
+      case:
+        branches:
+          - when: "OELAT = 'BILATERAL' AND STUDYEYE IS NOT NULL"
+            then:
+              literal: Both Eyes
+          - when: "STUDYEYE = 'BILATERAL' AND OELAT IS NOT NULL"
+            then:
+              literal: Study Eye
+          - when: "OELAT = STUDYEYE"
+            then:
+              literal: Study Eye
+          - when: "STUDYEYE IS NOT NULL AND OELAT IS NOT NULL"
+            then:
+              literal: Fellow Eye
+    verifications:
+      allowed_values:
+        values: [Study Eye, Fellow Eye, Both Eyes]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, OESEQ]
+  - row_count:
+      min: 7
+      max: 7
+  - implies:
+      id: study-eye-record-carries-the-study-laterality
+      when: "AFEYE = 'Study Eye'"
+      then: "OELAT = STUDYEYE OR STUDYEYE = 'BILATERAL'"
+  - implies:
+      id: both-eyes-record-is-bilateral
+      when: "AFEYE = 'Both Eyes'"
+      then: "OELAT = 'BILATERAL'"
