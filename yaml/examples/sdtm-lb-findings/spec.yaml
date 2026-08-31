@@ -5,6 +5,9 @@ datasets:
 base: ODM
 keys: [STUDYID, USUBJID, LBSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESN, LBSTRESU, LBDTC]
+
 columns:
   - name: STUDYID
     type: str
@@ -23,14 +26,6 @@ columns:
     label: Unique Subject Identifier
     derivation:
       source: ODM.SubjectKey
-
-  - name: LBSEQ
-    type: int
-    label: Sequence Number
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [LBDTC, LBTESTCD]
 
   - name: LBTESTCD
     type: str
@@ -61,6 +56,14 @@ columns:
     label: Date/Time of Specimen Collection
     derivation:
       source: ODM.IT.LB.LBDTC
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [LBDTC, LBTESTCD]
 
 rows:
   - id: calcium

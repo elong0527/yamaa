@@ -15,6 +15,9 @@ record_lookups:
     key: [PARAMCD, SEX, AGE]
     unmatched: missing
 
+output:
+  columns: [STUDYID, USUBJID, AVISIT, PARAMCD, PARAM, AVAL]
+
 columns:
   - name: STUDYID
     type: str

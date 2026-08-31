@@ -12,6 +12,9 @@ record_lookups:
     order_by: [AE_TXN.AUDITDTC, AE_TXN.TXNSEQ]
     keep: last
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AESEV, TXNTYPE, AUDITDTC]
+
 columns:
   - name: STUDYID
     type: str

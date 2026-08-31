@@ -5,6 +5,9 @@ datasets:
 base: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, VSSEQ, ADT, AVAL, PREVAL]
+
 columns:
   - name: STUDYID
     type: str

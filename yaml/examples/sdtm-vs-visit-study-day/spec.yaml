@@ -14,6 +14,9 @@ record_lookups:
     key: VISIT
     unmatched: missing
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, VISIT, VISITNUM, EPOCH, VSDY]
+
 columns:
   - name: STUDYID
     type: str
@@ -83,7 +86,6 @@ columns:
   - name: RFSTDTC
     type: date
     label: Subject Reference Start Date/Time
-    output: false
     derivation:
       source: DM.RFSTDTC
 

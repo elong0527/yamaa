@@ -5,6 +5,9 @@ datasets:
 base: QS
 keys: [STUDYID, USUBJID, VISIT, PARAMCD]
 
+output:
+  columns: [STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVAL]
+
 columns:
   - name: STUDYID
     type: str
@@ -38,12 +41,10 @@ columns:
   - name: ITEMRESN
     type: float
     label: Numeric Item Response
-    output: false
 
   - name: ITEMSUM
     type: float
     label: Sum of Item Responses
-    output: false
     derivation:
       aggregate:
         expr: "SUM(ITEMRESN)"
@@ -52,7 +53,6 @@ columns:
   - name: ITEMANS
     type: int
     label: Number of Answered Items
-    output: false
     derivation:
       aggregate:
         expr: "COUNT(ITEMRESN)"

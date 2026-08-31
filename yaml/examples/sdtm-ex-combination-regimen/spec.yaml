@@ -5,6 +5,9 @@ datasets:
 base: EX_RAW
 keys: [STUDYID, USUBJID, EXSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC, EXENDTC, EXADJ]
+
 columns:
   - name: STUDYID
     type: str
@@ -23,14 +26,6 @@ columns:
     label: Unique Subject Identifier
     derivation:
       source: EX_RAW.USUBJID
-
-  - name: EXSEQ
-    type: int
-    label: Sequence Number
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [EXSTDTC, EXTRT]
 
   - name: EXTRT
     type: str
@@ -55,6 +50,14 @@ columns:
     label: Start Date/Time of Treatment
     derivation:
       source: EX_RAW.EXSTDTC
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [EXSTDTC, EXTRT]
 
   - name: EXENDTC
     type: date

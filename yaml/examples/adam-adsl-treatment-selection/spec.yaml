@@ -6,6 +6,9 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, TRT01A, TRTSDT, TRTEDT, TRTDURD, SAFFL]
+
 columns:
   - name: STUDYID
     type: str
@@ -22,7 +25,6 @@ columns:
   - name: TRT01RAW
     type: str
     label: First Actual Treatment from Exposure
-    output: false
     derivation:
       source:
         variable: EX.EXTRT
@@ -34,7 +36,6 @@ columns:
   - name: TRT01SRC
     type: str
     label: Selected Actual Treatment for Period 01
-    output: false
     derivation:
       coalesce:
         sources: [TRT01RAW, DM.ACTARM]

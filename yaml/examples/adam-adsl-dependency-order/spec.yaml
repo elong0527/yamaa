@@ -6,18 +6,17 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [POPFL, SAFFL, ITTFL, TRTSDT, RANDDT, AGEGR1, AGERNK, STUDYID, USUBJID, AGE]
+
 columns:
-  - name: POPFL
-    type: str
-    label: Analysis Population Flag
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
     derivation:
-      case:
-        branches:
-          - when: "SAFFL = 'Y' AND ITTFL = 'Y'"
-            then:
-              literal: Y
-        otherwise:
-          literal: N
+      aggregate:
+        filter: "EX.EXSTDTC IS NOT NULL"
+        expr: "MIN(EX.EXSTDTC)"
 
   - name: SAFFL
     type: str
@@ -26,6 +25,24 @@ columns:
       case:
         branches:
           - when: "TRTSDT IS NOT NULL"
+            then:
+              literal: Y
+        otherwise:
+          literal: N
+
+  - name: RANDDT
+    type: date
+    label: Randomization Date
+    derivation:
+      source: DM.RANDDT
+
+  - name: RANDFL
+    type: str
+    label: Randomized Population Flag
+    derivation:
+      case:
+        branches:
+          - when: "RANDDT IS NOT NULL"
             then:
               literal: Y
         otherwise:
@@ -43,50 +60,17 @@ columns:
         otherwise:
           literal: N
 
-  - name: RANDFL
+  - name: POPFL
     type: str
-    label: Randomized Population Flag
-    output: false
+    label: Analysis Population Flag
     derivation:
       case:
         branches:
-          - when: "RANDDT IS NOT NULL"
+          - when: "SAFFL = 'Y' AND ITTFL = 'Y'"
             then:
               literal: Y
         otherwise:
           literal: N
-
-  - name: TRTSDT
-    type: date
-    label: Date of First Exposure to Treatment
-    derivation:
-      aggregate:
-        filter: "EX.EXSTDTC IS NOT NULL"
-        expr: "MIN(EX.EXSTDTC)"
-
-  - name: RANDDT
-    type: date
-    label: Randomization Date
-    derivation:
-      source: DM.RANDDT
-
-  - name: AGEGR1
-    type: str
-    label: Pooled Age Group 1
-    derivation:
-      cut:
-        source: AGE
-        breaks: [65]
-        labels: ["<65", ">=65"]
-        right: false
-
-  - name: AGERNK
-    type: int
-    label: Pooled Age Group 1 Rank
-    derivation:
-      row_number:
-        group_by: [STUDYID]
-        order_by: [AGE, USUBJID]
 
   - name: STUDYID
     type: str
@@ -105,6 +89,24 @@ columns:
     label: Age
     derivation:
       source: DM.AGE
+
+  - name: AGEGR1
+    type: str
+    label: Pooled Age Group 1
+    derivation:
+      cut:
+        source: AGE
+        breaks: [65]
+        labels: ["<65", ">=65"]
+        right: false
+
+  - name: AGERNK
+    type: int
+    label: Pooled Age Group 1 Rank
+    derivation:
+      row_number:
+        group_by: [STUDYID]
+        order_by: [AGE, USUBJID]
 
 verifications:
   - unique:

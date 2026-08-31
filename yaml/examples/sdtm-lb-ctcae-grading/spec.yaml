@@ -5,6 +5,9 @@ datasets:
 base: LB_RAW
 keys: [STUDYID, USUBJID, LBSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTRESN, ATOXGR]
+
 columns:
   - name: STUDYID
     type: str
@@ -55,7 +58,6 @@ columns:
   - name: REPROGRADE
     type: str
     label: Reproduced Toxicity Grade
-    output: false
     derivation:
       source: LB_RAW.REPROGRADE
 

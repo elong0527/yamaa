@@ -5,6 +5,9 @@ datasets:
 base: ODM
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, SUBJID, SEX, AGE, ARM, ACTARM]
+
 columns:
   - name: STUDYID
     type: str

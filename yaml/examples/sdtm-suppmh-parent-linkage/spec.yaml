@@ -6,6 +6,9 @@ datasets:
 base: MH_SUPP_RAW
 keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 
+output:
+  columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL]
+
 columns:
   - name: STUDYID
     type: str

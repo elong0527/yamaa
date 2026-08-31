@@ -7,6 +7,9 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, METSTATR, ECOG0R, REGIONUSR, METSTAT, ECOG0, REGIONUS, STRAT1R, STRAT1]
+
 columns:
   - name: STUDYID
     type: str

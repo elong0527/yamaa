@@ -5,6 +5,9 @@ datasets:
 base: ODM
 keys: [STUDYID, USUBJID, LBSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBCAT, LBORRES, LBDTC]
+
 columns:
   - name: STUDYID
     type: str
@@ -23,14 +26,6 @@ columns:
     label: Unique Subject Identifier
     derivation:
       source: ODM.SubjectKey
-
-  - name: LBSEQ
-    type: int
-    label: Sequence Number
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [FORMORD]
 
   - name: LBTESTCD
     type: str
@@ -88,7 +83,6 @@ columns:
   - name: FORMORD
     type: int
     label: Form Order
-    output: false
     derivation:
       mapping:
         source: ODM.FormOID
@@ -98,6 +92,14 @@ columns:
           FO.LB_THY: 3
           FO.LB_UA: 4
           FO.LB_EXTRA: 5
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [FORMORD]
 
 rows:
   - id: reported-result

@@ -5,6 +5,9 @@ datasets:
 base: BX_RAW
 keys: [STUDYID, USUBJID, LBSEQ]
 
+output:
+  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESN, LBSTAT]
+
 columns:
   - name: STUDYID
     type: str
@@ -23,14 +26,6 @@ columns:
     label: Unique Subject Identifier
     derivation:
       source: BX_RAW.USUBJID
-
-  - name: LBSEQ
-    type: int
-    label: Sequence Number
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [LBLOC, LBTESTCD]
 
   - name: LBTESTCD
     type: str
@@ -53,6 +48,14 @@ columns:
   - name: LBLOC
     type: str
     label: Location Used for Measurement
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [LBLOC, LBTESTCD]
 
   - name: LBORRES
     type: str

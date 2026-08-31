@@ -5,6 +5,9 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, BSA]
+
 columns:
   - name: STUDYID
     type: str
@@ -21,14 +24,12 @@ columns:
   - name: HEIGHTCM
     type: float
     label: Height (cm)
-    output: false
     derivation:
       source: DM.HEIGHTCM
 
   - name: WEIGHTKG
     type: float
     label: Weight (kg)
-    output: false
     derivation:
       source: DM.WEIGHTKG
 

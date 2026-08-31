@@ -5,6 +5,9 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, SEX, SEXN, SEXDECOD, RACE, RACEN, AGE, AGEGR1]
+
 columns:
   - name: STUDYID
     type: str

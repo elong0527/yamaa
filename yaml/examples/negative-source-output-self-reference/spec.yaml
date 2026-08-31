@@ -6,6 +6,9 @@ datasets:
 base: LB
 keys: [STUDYID, USUBJID, ADT, PARAMCD]
 
+output:
+  columns: [STUDYID, USUBJID, ADT, PARAMCD, PARAM, AVAL]
+
 columns:
   - name: STUDYID
     type: str
@@ -39,24 +42,20 @@ columns:
   - name: LBRESN
     type: float
     label: Numeric Laboratory Result
-    output: false
 
   - name: ALTDEN
     type: float
     label: Alanine Aminotransferase Value as Denominator
-    output: false
 
   - name: ASTCODE
     type: str
     label: Aspartate Aminotransferase Parameter Code
-    output: false
     derivation:
       literal: AST
 
   - name: ASTVAL
     type: float
     label: Aspartate Aminotransferase Analysis Value
-    output: false
     derivation:
       mapping_from:
         source: [USUBJID, ADT, ASTCODE]

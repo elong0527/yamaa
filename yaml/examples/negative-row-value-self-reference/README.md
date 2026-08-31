@@ -21,7 +21,6 @@ filled value, then coalesce the two named columns:
 ```yaml
 - name: PRIOR
   type: float
-  output: false
   derivation:
     row_value:
       source: AVAL
@@ -34,6 +33,8 @@ filled value, then coalesce the two named columns:
     coalesce:
       sources: [AVAL, PRIOR]
 ```
+
+Keep `PRIOR` internal by omitting it from `output.columns`.
 
 That deliberately does not cross two consecutive gaps. A true last-observation
 carry-forward needs a separately defined project function or an upstream step;

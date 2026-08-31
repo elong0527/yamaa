@@ -5,6 +5,9 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, DTHDT, LSTVSDY, LSTALVDT]
+
 columns:
   - name: STUDYID
     type: str

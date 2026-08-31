@@ -23,6 +23,9 @@ record_lookups:
     incomplete: missing
     unmatched: missing
 
+output:
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AEDECOD, SMQ01NAM, SMQ01CD, SMQ02NAM, SMQ02CD]
+
 columns:
   - name: STUDYID
     type: str

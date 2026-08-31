@@ -5,6 +5,9 @@ datasets:
 base: RS
 keys: [STUDYID, USUBJID, RSSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, RSSEQ, ADT, AVALC, CONFIRMED]
+
 columns:
   - name: STUDYID
     type: str
@@ -42,6 +45,35 @@ columns:
     derivation:
       source: RS.RSSTRESC
 
+  - name: NEXTDT
+    type: date
+    label: Next Assessment Date
+    derivation:
+      row_value:
+        source: ADT
+        offset: 1
+        group_by: [STUDYID, USUBJID]
+        order_by: [ADT, RSSEQ]
+
+  - name: NEXTRESP
+    type: str
+    label: Next Response
+    derivation:
+      row_value:
+        source: AVALC
+        offset: 1
+        group_by: [STUDYID, USUBJID]
+        order_by: [ADT, RSSEQ]
+
+  - name: DAYS_TO_NEXT
+    type: int
+    label: Days to Next Assessment
+    derivation:
+      date_diff:
+        start: ADT
+        end: NEXTDT
+        unit: day
+
   - name: CONFIRMED
     type: str
     label: Confirmation Flag
@@ -56,38 +88,6 @@ columns:
               literal: Y
         otherwise:
           literal: N
-
-  - name: NEXTDT
-    type: date
-    label: Next Assessment Date
-    output: false
-    derivation:
-      row_value:
-        source: ADT
-        offset: 1
-        group_by: [STUDYID, USUBJID]
-        order_by: [ADT, RSSEQ]
-
-  - name: NEXTRESP
-    type: str
-    label: Next Response
-    output: false
-    derivation:
-      row_value:
-        source: AVALC
-        offset: 1
-        group_by: [STUDYID, USUBJID]
-        order_by: [ADT, RSSEQ]
-
-  - name: DAYS_TO_NEXT
-    type: int
-    label: Days to Next Assessment
-    output: false
-    derivation:
-      date_diff:
-        start: ADT
-        end: NEXTDT
-        unit: day
 
 verifications:
   - row_count:

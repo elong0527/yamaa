@@ -7,6 +7,9 @@ datasets:
 base: EX
 keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
 
+output:
+  columns: [STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, ASTDT, AENDT, ADOSEN, NDOSE]
+
 columns:
   - name: STUDYID
     type: str
@@ -69,7 +72,6 @@ columns:
   - name: NDOSMAX
     type: int
     label: Maximum Administration Sequence Number
-    output: false
     derivation:
       aggregate:
         group_by: [STUDYID, USUBJID, EXSEQ]

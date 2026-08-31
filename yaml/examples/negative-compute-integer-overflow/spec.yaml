@@ -5,6 +5,9 @@ datasets:
 base: LB
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, CELLTOT]
+
 columns:
   - name: STUDYID
     type: str
@@ -21,14 +24,12 @@ columns:
   - name: CELLCNT
     type: int
     label: Cell Concentration
-    output: false
     derivation:
       source: LB.CELLCNT
 
   - name: VOLUML
     type: int
     label: Sample Volume (L)
-    output: false
     derivation:
       source: LB.VOLUML
 

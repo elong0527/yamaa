@@ -6,6 +6,9 @@ datasets:
 base: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, VSSEQ, PARAMCD, ADT, AVAL, TRTSDT, HEIGHTBL]
+
 columns:
   - name: STUDYID
     type: str
@@ -49,19 +52,9 @@ columns:
     derivation:
       source: ADSL.TRTSDT
 
-  - name: HEIGHTBL
-    type: float
-    label: Baseline Height
-    derivation:
-      baseline_value:
-        group_by: [STUDYID, USUBJID]
-        value: AVAL
-        flag: HGTBLFL
-
   - name: HGTDT
     type: date
     label: Height Assessment Date
-    output: false
     derivation:
       case:
         branches:
@@ -72,12 +65,20 @@ columns:
   - name: HGTBLFL
     type: str
     label: Baseline Height Record Flag
-    output: false
     derivation:
       baseline_flag:
         group_by: [STUDYID, USUBJID]
         date: HGTDT
         reference_date: TRTSDT
+
+  - name: HEIGHTBL
+    type: float
+    label: Baseline Height
+    derivation:
+      baseline_value:
+        group_by: [STUDYID, USUBJID]
+        value: AVAL
+        flag: HGTBLFL
 
 verifications:
   - row_count:

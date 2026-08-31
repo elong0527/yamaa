@@ -5,6 +5,9 @@ datasets:
 base: RS
 keys: [STUDYID, USUBJID, RSSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, RSSEQ, PARAMCD, ADT, AVALC]
+
 columns:
   - name: STUDYID
     type: str
@@ -48,7 +51,6 @@ columns:
   - name: PREVAVALC
     type: str
     label: Previous Analysis Value (C)
-    output: false
     derivation:
       row_value:
         source: AVALC

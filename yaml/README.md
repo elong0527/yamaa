@@ -59,7 +59,8 @@ becoming a join, a window, or a second spelling of `compute`, and they leave
 where an aggregate may be used with R007 and the join that consumes it with
 R003.
 
-`column.output` keeps any binding column it needs out of the final dataset.
+`output.columns` keeps binding columns out of the final dataset while retaining
+them as named intermediate values.
 
 A `record_lookups` entry names one record of another dataset so that several
 columns can read it, which no expression can do while each returns one value.

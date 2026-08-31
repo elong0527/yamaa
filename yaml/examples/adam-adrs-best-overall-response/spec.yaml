@@ -6,6 +6,9 @@ datasets:
 base: ADSL
 keys: [STUDYID, USUBJID, PARAMCD]
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, RANDDT, AVALC, AVAL, ADT]
+
 columns:
   - name: STUDYID
     type: str
@@ -38,6 +41,54 @@ columns:
       source: ADSL.RANDDT
     verifications:
       not_missing: {}
+
+  - name: CRDT
+    type: date
+    label: First Complete Response Date
+    derivation:
+      aggregate:
+        filter: "ADRSPRE.AVALC = 'CR'"
+        expr: "MIN(ADRSPRE.ADT)"
+
+  - name: PRDT
+    type: date
+    label: First Partial Response Date
+    derivation:
+      aggregate:
+        filter: "ADRSPRE.AVALC = 'PR'"
+        expr: "MIN(ADRSPRE.ADT)"
+
+  - name: SDDT
+    type: date
+    label: First Stable Disease Date
+    derivation:
+      aggregate:
+        filter: "ADRSPRE.AVALC = 'SD' AND ADRSPRE.RANDDY >= 42"
+        expr: "MIN(ADRSPRE.ADT)"
+
+  - name: NCNPDDT
+    type: date
+    label: First Non-CR/Non-PD Date
+    derivation:
+      aggregate:
+        filter: "ADRSPRE.AVALC = 'NON-CR/NON-PD' AND ADRSPRE.RANDDY >= 42"
+        expr: "MIN(ADRSPRE.ADT)"
+
+  - name: PDDT
+    type: date
+    label: Disease Progression Date
+    derivation:
+      aggregate:
+        filter: "ADRSPRE.AVALC = 'PD'"
+        expr: "MIN(ADRSPRE.ADT)"
+
+  - name: NEDT
+    type: date
+    label: First Non-Progressive Assessment Date
+    derivation:
+      aggregate:
+        filter: "ADRSPRE.AVALC IN ('CR', 'PR', 'SD', 'NON-CR/NON-PD', 'NE')"
+        expr: "MIN(ADRSPRE.ADT)"
 
   - name: AVALC
     type: str
@@ -109,60 +160,6 @@ columns:
           - when: "AVALC = 'NE'"
             then:
               source: NEDT
-
-  - name: CRDT
-    type: date
-    label: First Complete Response Date
-    output: false
-    derivation:
-      aggregate:
-        filter: "ADRSPRE.AVALC = 'CR'"
-        expr: "MIN(ADRSPRE.ADT)"
-
-  - name: PRDT
-    type: date
-    label: First Partial Response Date
-    output: false
-    derivation:
-      aggregate:
-        filter: "ADRSPRE.AVALC = 'PR'"
-        expr: "MIN(ADRSPRE.ADT)"
-
-  - name: SDDT
-    type: date
-    label: First Stable Disease Date
-    output: false
-    derivation:
-      aggregate:
-        filter: "ADRSPRE.AVALC = 'SD' AND ADRSPRE.RANDDY >= 42"
-        expr: "MIN(ADRSPRE.ADT)"
-
-  - name: NCNPDDT
-    type: date
-    label: First Non-CR/Non-PD Date
-    output: false
-    derivation:
-      aggregate:
-        filter: "ADRSPRE.AVALC = 'NON-CR/NON-PD' AND ADRSPRE.RANDDY >= 42"
-        expr: "MIN(ADRSPRE.ADT)"
-
-  - name: PDDT
-    type: date
-    label: Disease Progression Date
-    output: false
-    derivation:
-      aggregate:
-        filter: "ADRSPRE.AVALC = 'PD'"
-        expr: "MIN(ADRSPRE.ADT)"
-
-  - name: NEDT
-    type: date
-    label: First Non-Progressive Assessment Date
-    output: false
-    derivation:
-      aggregate:
-        filter: "ADRSPRE.AVALC IN ('CR', 'PR', 'SD', 'NON-CR/NON-PD', 'NE')"
-        expr: "MIN(ADRSPRE.ADT)"
 
 verifications:
   - unique:

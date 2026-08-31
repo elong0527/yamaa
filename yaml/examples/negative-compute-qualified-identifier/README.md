@@ -21,7 +21,6 @@ administration:
 ```yaml
 - name: DOSE
   type: float
-  output: false
   derivation:
     source:
       variable: EX.EXDOSE
@@ -35,6 +34,8 @@ administration:
     compute:
       expr: "DOSE * 2"
 ```
+
+Keep `DOSE` internal by omitting it from `output.columns`.
 
 If the intended value is cumulative dose instead, use a qualified `aggregate`
 rather than selecting one record.

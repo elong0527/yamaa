@@ -12,6 +12,9 @@ record_lookups:
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: first
 
+output:
+  columns: [STUDYID, USUBJID, TRT01A]
+
 columns:
   - name: STUDYID
     type: str

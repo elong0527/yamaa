@@ -5,6 +5,9 @@ datasets:
 base: ADSLPRE
 keys: [STUDYID, USUBJID]
 
+output:
+  columns: [STUDYID, USUBJID, ARMCD, TRTSDT, SAFFL, ITTFL]
+
 columns:
   - name: STUDYID
     type: str

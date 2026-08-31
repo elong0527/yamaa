@@ -16,6 +16,9 @@ record_lookups:
     filter: "AWINDOW.AWLO <= ADY AND ADY <= AWINDOW.AWHI"
     unmatched: missing
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, VISIT, ADT, ADY, AVAL, AVISIT, AVISITN, AWTARGET, AWTDIFF, ANL01FL]
+
 columns:
   - name: STUDYID
     type: str
@@ -93,7 +96,6 @@ columns:
   - name: AWTABS
     type: int
     label: Absolute Analysis Window Distance
-    output: false
     derivation:
       compute:
         expr: "ABS(AWTDIFF)"
@@ -101,7 +103,6 @@ columns:
   - name: AWRANK
     type: int
     label: Analysis Window Rank
-    output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]

@@ -5,6 +5,9 @@ datasets:
 base: CE
 keys: [STUDYID, USUBJID, CESEQ]
 
+output:
+  columns: [STUDYID, USUBJID, CESEQ, CETERM, ASTDT, ASEV, ASEVN, ATOXGRN, AOCCFL]
+
 columns:
   - name: STUDYID
     type: str
@@ -69,7 +72,6 @@ columns:
   - name: WGRSEQ
     type: int
     label: Worst Grade Sequence Number
-    output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]

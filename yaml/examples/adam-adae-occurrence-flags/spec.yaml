@@ -5,6 +5,9 @@ datasets:
 base: ADAEPRE
 keys: [STUDYID, USUBJID, AESEQ]
 
+output:
+  columns: [STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, TRTEMFL, AOCCFL, AOCCSFL, AOCCPFL]
+
 columns:
   - name: STUDYID
     type: str
@@ -54,7 +57,6 @@ columns:
   - name: AOCCSEQ
     type: int
     label: Subject Occurrence Sequence Number
-    output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]
@@ -64,7 +66,6 @@ columns:
   - name: AOCCSSEQ
     type: int
     label: Body System Occurrence Sequence Number
-    output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, AEBODSYS]
@@ -74,7 +75,6 @@ columns:
   - name: AOCCPSEQ
     type: int
     label: Preferred Term Occurrence Sequence Number
-    output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, AEBODSYS, AEDECOD]

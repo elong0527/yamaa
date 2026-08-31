@@ -14,6 +14,9 @@ record_lookups:
     filter: "AE.AEOUT = 'FATAL'"
     unmatched: missing
 
+output:
+  columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, DTHFL, DTHCAUS, DTHDT]
+
 columns:
   - name: STUDYID
     type: str
@@ -48,21 +51,18 @@ columns:
   - name: EVDTHDT
     type: date
     label: Death Date from Fatal Event
-    output: false
     derivation:
       source: DEATHEV.ASTDT
 
   - name: DMDTHDT
     type: date
     label: Death Date from Demographics
-    output: false
     derivation:
       source: DM.DTHDT
 
   - name: FATALFL
     type: str
     label: Fatal Event Flag
-    output: false
     derivation:
       case:
         branches:

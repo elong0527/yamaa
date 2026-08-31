@@ -6,6 +6,9 @@ datasets:
 base: TRT
 keys: [STUDYID, USUBJID, EXTRT]
 
+output:
+  columns: [STUDYID, USUBJID, EXTRT, EXDOSU, DOSECUM, RDI]
+
 columns:
   - name: STUDYID
     type: str

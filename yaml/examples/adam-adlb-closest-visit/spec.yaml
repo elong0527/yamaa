@@ -5,6 +5,9 @@ datasets:
 base: ADLBPRE
 keys: [STUDYID, USUBJID, PARAMCD, LBSEQ]
 
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, LBSEQ, ADT, ADY, AVAL, AVISIT, AWTARGET, ADIST, ANL01FL]
+
 columns:
   - name: STUDYID
     type: str
@@ -84,7 +87,6 @@ columns:
   - name: ARNK
     type: int
     label: Analysis Rank
-    output: false
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]

@@ -19,7 +19,6 @@ to `str_upper`:
 ```yaml
 - name: COUNTRYSRC
   type: str
-  output: false
   derivation:
     coalesce:
       sources: [DM.COUNTRY, DM.SITECNTY]
@@ -30,6 +29,8 @@ to `str_upper`:
     str_upper:
       source: COUNTRYSRC
 ```
+
+Keep `COUNTRYSRC` internal by omitting it from `output.columns`.
 
 Fields typed as `variable`, including `str_upper.source`, accept a variable
 name rather than a nested expression.

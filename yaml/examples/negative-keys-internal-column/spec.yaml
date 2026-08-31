@@ -5,6 +5,9 @@ datasets:
 base: DM
 keys: [STUDYID, USUBJID, SITEID]
 
+output:
+  columns: [STUDYID, USUBJID, INVID]
+
 columns:
   - name: STUDYID
     type: str
@@ -21,7 +24,6 @@ columns:
   - name: SITEID
     type: str
     label: Study Site Identifier
-    output: false
     derivation:
       source: DM.SITEID
 
