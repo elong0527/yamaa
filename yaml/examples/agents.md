@@ -243,7 +243,9 @@ same kind of value, as `date_diff`'s `bounds` still returns a count. Add an
 entry when it does not: `study_day` returns an ordinal on a calendar with no
 zero, and folding it into `date_diff` would have allowed `unit: week` with it.
 
-After registering one, update every place that enumerates the vocabulary: the
-input-shape audit in `../README.md`, R007's type behavior, and R008 if it
-declares handlers. Then delete the gap it closed from its work item in the
-issue tracker, and close the work item when its last gap closes.
+After registering a top-level expression, update the input-shape audit in
+`../README.md`, R007's type behavior, and R008 if it declares handlers. A
+scalar function or reducer instead enters the shared R017 registry; regenerate
+its README table and add shared R and Python conformance fixtures. Then delete
+the gap it closed from its work item in the issue tracker, and close the work
+item when its last gap closes.

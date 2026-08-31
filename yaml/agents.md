@@ -10,7 +10,8 @@ Before reviewing, implementing, or modifying this design:
 1. Read `README.md` for scope and navigation.
 2. Read `rules/R006-schema-language.md` for the notation used by the schema.
 3. Read `schema.yaml` and follow every transitive `includes` entry needed for
-   the derivation or verification vocabulary in scope.
+   the derivation or verification vocabulary in scope. When `compute` or
+   `aggregate` is in scope, also read the `portable_registry` it names.
 4. Read `rules/README.md` and every rule applicable to the fields in scope.
 5. Read the relevant example specification, README, input data, and expected
    output under `examples/`.
@@ -26,6 +27,8 @@ and must not be treated as a portable implementation contract.
   YAML.
 - Register every expression in an `expressions` registry and every verification
   in its applicable verification registry before an example uses it.
+- Register scalar functions and reducers in R017's shared portable registry,
+  regenerate its documentation, and run both conformance implementations.
 - Keep handler fields local to the expression or result stage that can use them;
   do not recreate a generic exception list.
 - Store each cohesive semantic area in one rule file under `rules/`.

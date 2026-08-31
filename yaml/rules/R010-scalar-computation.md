@@ -3,7 +3,7 @@ id: R010
 title: Scalar Numeric Computation
 status: normative
 applies_to: [expression.compute, numeric_expression]
-depends_on: [R001, R004, R005, R006, R007, R011]
+depends_on: [R001, R004, R005, R006, R007, R011, R017]
 ---
 
 # Scalar numeric computation
@@ -15,8 +15,9 @@ without a registry entry per operator and without host-language code.
 
 ## Boundaries
 
-This rule owns the `numeric_expression` primitive: its grammar, function
-vocabulary, numeric types, missing-value behavior, and failure conditions.
+This rule owns the `numeric_expression` primitive: its grammar, numeric types,
+missing-value behavior, and failure conditions. R017 owns the portable function
+vocabulary and its machine-readable call contracts.
 `compute` is the only arithmetic expression and is deliberately numeric.
 Strings, dates, comparison, conditional selection, and row-wise extremes over
 non-numeric types keep their registered expressions under R007, so a general
@@ -72,38 +73,29 @@ term    := factor (("*" | "/") factor)*
 factor  := ("-" | "+")? primary
 primary := number | "NULL" | identifier | call | "(" expr ")"
 identifier := name ["." name]
-call    := function "(" [expr ("," expr)*] ")"
+call    := portable_name "(" [expr ("," expr)*] ")"
+portable_name := name | namespace "::" name
 number  := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
 ```
 
 Precedence is unary sign, then `*` and `/`, then binary `+` and `-`, all
 left-associative. Parentheses override precedence. Function names and `NULL`
-are case-insensitive; identifiers are not.
+are case-insensitive; namespaces and identifiers are not.
 
-Permitted functions are exactly:
+## Portable scalar calls
 
-| Function | Result |
-|---|---|
-| `ABS(x)` | absolute value |
-| `CEIL(x)` | least integer value not less than `x` |
-| `FLOOR(x)` | greatest integer value not greater than `x` |
-| `TRUNC(x)` | `x` with its fractional part removed, toward zero |
-| `SQRT(x)` | non-negative square root |
-| `POWER(x, y)` | `x` raised to `y` |
-| `EXP(x)` | `e` raised to `x` |
-| `LN(x)` | natural logarithm |
-| `MOD(x, y)` | remainder of `x / y`, taking the sign of `x` |
-| `GREATEST(x, ...)` | largest non-`NULL` argument, or `NULL` if all are `NULL` |
-| `LEAST(x, ...)` | smallest non-`NULL` argument, or `NULL` if all are `NULL` |
-| `NULLIF(x, y)` | `NULL` when `x = y`, otherwise `x` |
-| `COALESCE(x, ...)` | first non-`NULL` argument, or `NULL` if all are `NULL` |
+A call resolves through R017. The resolved entry must have
+`evaluation_kind: scalar`, accept the static type of every argument, and return
+a numeric type. Core calls are unqualified. A namespaced call requires the
+exact extension declaration R017 defines.
 
-`GREATEST` and `LEAST` require at least two arguments; `COALESCE` requires at
-least one. Any other function name, any operator outside the grammar, any
-string literal, any comparison or Boolean operator, any `CASE`, any aggregate
-function, any window function or `OVER`, any subquery, and any host-language
-call are validation errors. Closing the vocabulary is what makes portability
-checkable; widening it requires amending this table.
+The generated table in `registry/README.md` is the readable inventory; the
+schema entry point's `portable_registry` file is the source of truth for names,
+aliases, arity, parameter types, promotion, result type, missing values,
+failures, determinism, accuracy, and availability. A function name outside
+that registry, an aggregate function, any operator outside the grammar, any
+string literal, comparison or Boolean operator, `CASE`, window function or
+`OVER`, subquery, or host-language call is a validation error.
 
 `LOG` is excluded because its base differs between dialects. Write `LN(x)` or
 `LN(x) / LN(b)`.
@@ -132,13 +124,10 @@ how this grammar expresses integer division.
   `float`.
 - `/`: always returns `float`. There is no integer division. Write
   `FLOOR(a / b)` for a floor-divided integer.
-- `SQRT`, `POWER`, `EXP`, and `LN` return `float`.
-- `CEIL`, `FLOOR`, and `TRUNC` return `float`. Declare the column
-  `type: int` when an integer is wanted; R005 converts the completed result
-  and R011 defines that conversion.
-- `ABS`, `GREATEST`, `LEAST`, `MOD`, `NULLIF`, and `COALESCE` return the
-  promoted type of their arguments: `int` when every argument is `int`,
-  otherwise `float`.
+- A function call uses its registry entry's `type_promotion` and
+  `result_type`. An `always_float` result is a `float`; a
+  `promoted_numeric` result is `int` only when every non-missing argument is
+  `int`, and is otherwise `float`.
 
 `GREATEST` and `LEAST` stay numeric here like every other function in this
 grammar. A row-wise extreme over dates, or over any other comparable type, is
@@ -152,9 +141,9 @@ numeric column first.
 
 ## Missing values
 
-`NULL` propagates. Any operator or function argument that is `NULL` produces a
-`NULL` result, except `COALESCE`, `NULLIF`, `GREATEST`, and `LEAST`, whose
-argument-level behavior is defined in the table above.
+`NULL` propagates through every operator. A function applies the
+`missing_values` behavior in its registry entry, so an exception to propagation
+is explicit and shared by both runtimes.
 
 A `compute` derivation therefore needs no guarding predicate to survive a
 missing input, and a formula that must yield missing rather than fail says so
@@ -166,14 +155,13 @@ with `NULLIF`. Percentage change against a zero base is
 These fail the run. They are not silently converted to missing, consistent with
 R005: an implementation must not replace an error with a missing value.
 
-- Division by zero, by `/` or by `MOD`. Write `NULLIF(denominator, 0)` to
-  choose missing explicitly.
-- `SQRT` of a negative argument.
-- `LN` of a zero or negative argument.
-- `POWER` with a zero base and a negative exponent, or a negative base and a
-  non-integer exponent.
+- Division by zero by `/`. Write `NULLIF(denominator, 0)` to choose missing
+  explicitly.
 - Integer overflow of `+`, `-`, or `*` under `int` promotion.
 - A float result that is infinite or not a number.
+
+A function call additionally applies the domain, overflow, and non-finite
+result behavior declared by its registry entry.
 
 Floating-point results are not exact decimals. `POWER(x, 2)` and `x * x` are
 permitted to differ in the last place. A specification cannot round that away,
@@ -183,8 +171,8 @@ produces one.
 ## Determinism
 
 Evaluation must be deterministic and free of side effects. Implementations must
-produce identical results in R and Python for every example. Two consequences
-are not optional:
+meet each function entry's cross-runtime accuracy contract and produce the same
+serialized values for every example. Two consequences are not optional:
 
 - `/` never truncates. Language or engine settings that make division integral
   must be overridden.
@@ -197,8 +185,8 @@ are not optional:
 ## Errors
 
 - A `numeric_expression` that does not parse under the grammar: fail.
-- A function name outside the permitted table, or called with a prohibited
-  argument count: fail.
+- A function call that fails R017 name, kind, version, arity, or type
+  validation: fail with R017's stable condition.
 - An aggregate, window, comparison, Boolean, conditional, string, or
   host-language construct: fail.
 - A qualified `DATASET.VARIABLE` identifier: fail.

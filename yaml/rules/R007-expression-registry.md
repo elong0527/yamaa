@@ -3,7 +3,7 @@ id: R007
 title: Expression Registry
 status: normative
 applies_to: [expression, expressions, schema_expression]
-depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014, R015, R016]
+depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014, R015, R016, R017]
 ---
 
 # Expression registry
@@ -24,7 +24,7 @@ in its owning rule: R002 and R003 for source binding and joins, R008 for local
 handlers, R010 for `compute`, R011 for column types, R012 for string templates,
 R013 for aggregate reduction, R014 for the type a source field carries, R015
 for a record selected once and read by several columns, R016 for dates and
-datetimes, and R004 for predicates.
+datetimes, R017 for portable scalar and reducer calls, and R004 for predicates.
 
 ## Registration
 
@@ -35,6 +35,12 @@ registry as the `expression` type.
 Each registered keyword owns all its inputs, options, grouping, local error
 handlers, and operation-local semantics. Adding a keyword requires one complete
 registry entry. Unknown keywords and unknown payload fields fail validation.
+
+The `portable_registry` named by `schema.yaml` is a different typed registry:
+it supplies functions callable inside R010 and R013's closed grammars rather
+than top-level expression keywords. R017 defines that file and its extension
+packs. A portable function cannot add an expression keyword, change evaluation
+kind, or call a project-environment `function`.
 
 ## Nesting policy
 
@@ -140,6 +146,9 @@ runtime types:
   consequence;
 - `aggregate` states its own input types in R013.
 
+R010 scalar calls and R013 reducers validate their argument types and result
+types against R017's shared registry before evaluation.
+
 **Comparability is a property of the runtime type.** `int` and `float` are
 mutually comparable, because R010 promotes them. Every other type is
 comparable only with itself. A comparable type therefore satisfies any input
@@ -190,6 +199,8 @@ behavior and do not affect schema validation.
 - An unhandled local missing, mapping, or extraction condition: fail under
   R008.
 - A `compute` expression that violates R010: fail.
+- A portable scalar or reducer call that violates R017: fail with R017's stable
+  condition.
 - A `str_template` expression that violates R012: fail.
 - A temporal value or operation that violates R016: fail.
 - An unresolved function, failed function call, or non-scalar function result:

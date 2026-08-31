@@ -37,6 +37,30 @@ columns:
     derivation:
       source: ADVSPRE.AVISIT
 
+  - name: AVALSRC
+    type: float
+    label: Source Analysis Value
+    derivation:
+      source: ADVSPRE.AVAL
+
+  - name: LMS_L
+    type: float
+    label: LMS Power Coefficient
+    derivation:
+      source: GROWTH.L
+
+  - name: LMS_M
+    type: float
+    label: LMS Median Coefficient
+    derivation:
+      source: GROWTH.M
+
+  - name: LMS_S
+    type: float
+    label: LMS Variation Coefficient
+    derivation:
+      source: GROWTH.S
+
   - name: PARAMCD
     type: str
     label: Parameter Code
@@ -66,21 +90,19 @@ columns:
             then:
               literal: Weight-for-Age Percentile
 
+  - name: ZNUM
+    type: float
+    label: LMS Standard Normal Score
+    derivation:
+      compute:
+        expr: "(POWER(AVALSRC / LMS_M, LMS_L) - 1) / (LMS_L * LMS_S)"
+
   - name: AVAL
     type: float
     label: Analysis Value
     derivation:
-      case:
-        branches:
-          - when: "ADVSPRE.AVAL IS NOT NULL AND GROWTH.L IS NOT NULL AND GROWTH.M IS NOT NULL AND GROWTH.S IS NOT NULL"
-            then:
-              function:
-                name: growth_percentile
-                args:
-                  value: ADVSPRE.AVAL
-                  l: GROWTH.L
-                  m: GROWTH.M
-                  s: GROWTH.S
+      compute:
+        expr: "100 * NORMAL_CDF(ZNUM)"
 
 verifications:
   - unique:

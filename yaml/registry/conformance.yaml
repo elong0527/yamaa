@@ -1,0 +1,238 @@
+registry_version: "1.0.0"
+
+evaluation_cases:
+  - id: abs-integer
+    name: ABS
+    evaluation_kind: scalar
+    argument_types: [int]
+    arguments: [-2]
+    expected: 2
+
+  - id: abs-null-literal
+    name: ABS
+    evaluation_kind: scalar
+    argument_types: ["null"]
+    arguments: [null]
+    expected: null
+
+  - id: ceil-positive
+    name: CEIL
+    evaluation_kind: scalar
+    argument_types: [float]
+    arguments: [1.2]
+    expected: 2.0
+
+  - id: floor-negative
+    name: FLOOR
+    evaluation_kind: scalar
+    argument_types: [float]
+    arguments: [-1.2]
+    expected: -2.0
+
+  - id: trunc-negative
+    name: TRUNC
+    evaluation_kind: scalar
+    argument_types: [float]
+    arguments: [-1.8]
+    expected: -1.0
+
+  - id: sqrt-square
+    name: SQRT
+    evaluation_kind: scalar
+    argument_types: [int]
+    arguments: [9]
+    expected: 3.0
+
+  - id: power-integers
+    name: POWER
+    evaluation_kind: scalar
+    argument_types: [int, int]
+    arguments: [2, 3]
+    expected: 8.0
+
+  - id: exp-one
+    name: EXP
+    evaluation_kind: scalar
+    argument_types: [int]
+    arguments: [1]
+    expected: 2.718281828459045
+
+  - id: ln-e
+    name: LN
+    evaluation_kind: scalar
+    argument_types: [float]
+    arguments: [2.718281828459045]
+    expected: 1.0
+
+  - id: mod-negative-dividend
+    name: MOD
+    evaluation_kind: scalar
+    argument_types: [int, int]
+    arguments: [-5, 2]
+    expected: -1
+
+  - id: greatest-ignores-missing
+    name: GREATEST
+    evaluation_kind: scalar
+    argument_types: [int, int, int]
+    arguments: [null, 3, 2]
+    expected: 3
+
+  - id: least-ignores-missing
+    name: LEAST
+    evaluation_kind: scalar
+    argument_types: [int, int, int]
+    arguments: [null, 3, 2]
+    expected: 2
+
+  - id: nullif-equal
+    name: NULLIF
+    evaluation_kind: scalar
+    argument_types: [int, int]
+    arguments: [4, 4]
+    expected: null
+
+  - id: coalesce-variadic
+    name: COALESCE
+    evaluation_kind: scalar
+    argument_types: [float, float, float]
+    arguments: [null, 2.5, 3.0]
+    expected: 2.5
+
+  - id: normal-cdf-center
+    name: NORMAL_CDF
+    evaluation_kind: scalar
+    argument_types: [int]
+    arguments: [0]
+    expected: 0.5
+
+  - id: normal-cdf-lower-tail
+    name: NORMAL_CDF
+    evaluation_kind: scalar
+    argument_types: [int]
+    arguments: [-8]
+    expected: 6.220960574271784e-16
+
+  - id: normal-cdf-deep-lower-tail
+    name: NORMAL_CDF
+    evaluation_kind: scalar
+    argument_types: [int]
+    arguments: [-10]
+    expected: 7.61985302416047e-24
+
+  - id: normal-cdf-upper-tail
+    name: NORMAL_CDF
+    evaluation_kind: scalar
+    argument_types: [int]
+    arguments: [8]
+    expected: 0.9999999999999993
+
+  - id: normal-cdf-missing
+    name: NORMAL_CDF
+    evaluation_kind: scalar
+    argument_types: [float]
+    arguments: [null]
+    expected: null
+
+  - id: sum-skips-missing
+    name: SUM
+    evaluation_kind: reducer
+    argument_types: [int]
+    arguments: [[1, null, 3]]
+    expected: 4
+
+  - id: count-values
+    name: COUNT
+    evaluation_kind: reducer
+    argument_types: [int]
+    arguments: [[1, null, 3]]
+    expected: 2
+
+  - id: count-records
+    name: COUNT
+    evaluation_kind: reducer
+    argument_types: [record_star]
+    arguments: [[__record__, __record__, __record__]]
+    expected: 3
+
+  - id: min-string
+    name: MIN
+    evaluation_kind: reducer
+    argument_types: [str]
+    arguments: [[beta, alpha]]
+    expected: alpha
+
+  - id: max-integer
+    name: MAX
+    evaluation_kind: reducer
+    argument_types: [int]
+    arguments: [[2, null, 7, 4]]
+    expected: 7
+
+  - id: mean-numeric
+    name: MEAN
+    evaluation_kind: reducer
+    argument_types: [float]
+    arguments: [[1.0, null, 2.0, 3.0]]
+    expected: 2.0
+
+validation_cases:
+  - id: unknown-core-name
+    name: MYSTERY
+    evaluation_kind: scalar
+    argument_types: [float]
+    expected_error: unknown_function
+
+  - id: wrong-evaluation-kind
+    name: MEAN
+    evaluation_kind: scalar
+    argument_types: [float]
+    expected_error: wrong_evaluation_kind
+
+  - id: wrong-fixed-arity
+    name: POWER
+    evaluation_kind: scalar
+    argument_types: [float]
+    expected_error: wrong_arity
+
+  - id: incompatible-argument-type
+    name: ABS
+    evaluation_kind: scalar
+    argument_types: [str]
+    expected_error: incompatible_type
+
+  - id: unavailable-extension
+    name: stats::MEDIAN
+    evaluation_kind: reducer
+    argument_types: [float]
+    expected_error: unavailable_extension
+
+  - id: extension-version-mismatch
+    extension_registries: [fixtures/stats.yaml]
+    declared_extensions: {stats: "2.0.0"}
+    name: stats::MEDIAN
+    evaluation_kind: reducer
+    argument_types: [float]
+    expected_error: unavailable_extension
+
+  - id: available-extension
+    extension_registries: [fixtures/stats.yaml]
+    declared_extensions: {stats: "1.0.0"}
+    name: stats::MEDIAN
+    evaluation_kind: reducer
+    argument_types: [float]
+    expected_error: null
+
+  - id: extension-name-collision
+    extension_registries: [fixtures/name-collision.yaml]
+    name: ABS
+    evaluation_kind: scalar
+    argument_types: [float]
+    expected_error: name_collision
+
+  - id: extension-namespace-collision
+    extension_registries: [fixtures/stats.yaml, fixtures/stats.yaml]
+    name: ABS
+    evaluation_kind: scalar
+    argument_types: [float]
+    expected_error: namespace_collision

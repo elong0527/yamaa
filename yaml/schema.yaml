@@ -8,11 +8,17 @@ includes:
     - schema_derivation.yaml
     - schema_verification.yaml
 
+portable_registry: registry/portable-functions.yaml
+
 root_class:
     - schema_version:
         type: str
         required: true
         description: Schema bundle this specification is written against; R006 requires an exact match.
+    - portable_extensions:
+        type: "list[portable_extension_class]"
+        required: false
+        description: Exact namespaced portable packs this specification requires; R017 validates availability and versions.
     - domain:
         type: domain_name
         required: true
@@ -63,6 +69,16 @@ output_class:
         type: "list[column_name]"
         required: true
         description: Declared columns selected for the artifact, in the order R005 requires.
+
+portable_extension_class:
+    - namespace:
+        type: portable_extension_namespace
+        required: true
+        description: Namespace qualifying every call supplied by this extension pack.
+    - registry_version:
+        type: portable_extension_version
+        required: true
+        description: Exact pack registry version required for portable validation.
 
 record_lookup_class:
     - id:
@@ -204,6 +220,16 @@ row_id:
     type: str
     min_length: 1
     description: Identifier of a row template, unique within rows.
+
+portable_extension_namespace:
+    type: str
+    pattern: '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'
+    description: Lowercase namespace of an optional portable extension pack.
+
+portable_extension_version:
+    type: str
+    pattern: '^[0-9]+\.[0-9]+\.[0-9]+$'
+    description: Semantic version of a portable extension registry.
 
 regex:
     type: str
