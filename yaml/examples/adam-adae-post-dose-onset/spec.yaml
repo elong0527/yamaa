@@ -9,36 +9,43 @@ keys: [STUDYID, USUBJID, AESEQ]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: AE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: AE.USUBJID
 
   - name: AESEQ
     type: int
+    label: Sequence Number
     derivation:
       source: AE.AESEQ
 
   - name: AETERM
     type: str
+    label: Reported Term for the Adverse Event
     derivation:
       source: AE.AETERM
 
   - name: ASTDTM
     type: datetime
+    label: Analysis Start Date/Time
     derivation:
       source: AE.AESTDTC
 
   - name: TRTSDTM
     type: datetime
+    label: Datetime of First Exposure to Treatment
     derivation:
       source: ADSL.TRTSDTM
 
   - name: TRTEMFL
     type: str
+    label: Treatment Emergent Analysis Flag
     derivation:
       case:
         branches:
@@ -51,6 +58,7 @@ columns:
 
   - name: AOCCSEQ
     type: int
+    label: Subject Occurrence Sequence Number
     output: false
     derivation:
       row_number:
@@ -60,6 +68,7 @@ columns:
 
   - name: AOCCFL
     type: str
+    label: First Occurrence Within Subject Flag
     derivation:
       case:
         branches:

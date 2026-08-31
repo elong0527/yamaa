@@ -10,26 +10,31 @@ keys: [STUDYID, USUBJID, PARAMCD]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ADSL.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ADSL.USUBJID
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       literal: DOR
 
   - name: PARAM
     type: str
+    label: Parameter
     derivation:
       literal: Duration of Response
 
   - name: STARTDT
     type: date
+    label: Time-to-Event Origin Date
     derivation:
       source: ADSL.RESPDT
     verifications:
@@ -37,6 +42,7 @@ columns:
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       coalesce:
         sources: [EVENTDT, CENSORDT]
@@ -45,6 +51,7 @@ columns:
 
   - name: AVAL
     type: int
+    label: Analysis Value
     derivation:
       date_diff:
         start: STARTDT
@@ -54,6 +61,7 @@ columns:
 
   - name: CNSR
     type: int
+    label: Censor
     derivation:
       case:
         branches:
@@ -65,6 +73,7 @@ columns:
 
   - name: EVNTDESC
     type: str
+    label: Event or Censoring Description
     derivation:
       case:
         branches:
@@ -79,6 +88,7 @@ columns:
 
   - name: CNSDTDSC
     type: str
+    label: Censoring Date Description
     derivation:
       case:
         branches:
@@ -93,6 +103,7 @@ columns:
 
   - name: SRCDOM
     type: str
+    label: Source Data
     derivation:
       case:
         branches:
@@ -110,6 +121,7 @@ columns:
 
   - name: SRCVAR
     type: str
+    label: Source Variable
     derivation:
       case:
         branches:
@@ -124,6 +136,7 @@ columns:
 
   - name: SRCSEQ
     type: int
+    label: Source Sequence Number
     derivation:
       case:
         branches:
@@ -139,12 +152,14 @@ columns:
 
   - name: NACTDT
     type: date
+    label: New Anti-Cancer Therapy Start Date
     output: false
     derivation:
       source: ADSL.NACTDT
 
   - name: PDDT
     type: date
+    label: Disease Progression Date
     output: false
     derivation:
       aggregate:
@@ -153,6 +168,7 @@ columns:
 
   - name: PDSEQ
     type: int
+    label: Disease Progression Source Sequence Number
     output: false
     derivation:
       source:
@@ -164,6 +180,7 @@ columns:
 
   - name: DEATHDT
     type: date
+    label: Death Date
     output: false
     derivation:
       aggregate:
@@ -172,6 +189,7 @@ columns:
 
   - name: DEATHSEQ
     type: int
+    label: Death Source Sequence Number
     output: false
     derivation:
       source:
@@ -183,6 +201,7 @@ columns:
 
   - name: LASTVLDT
     type: date
+    label: Last Valid Assessment Date
     output: false
     derivation:
       aggregate:
@@ -191,6 +210,7 @@ columns:
 
   - name: LASTVLSEQ
     type: int
+    label: Last Valid Assessment Sequence Number
     output: false
     derivation:
       source:
@@ -202,6 +222,7 @@ columns:
 
   - name: EVENTALLDT
     type: date
+    label: Earliest Progression or Death Date
     output: false
     derivation:
       least:
@@ -209,6 +230,7 @@ columns:
 
   - name: EVENTDT
     type: date
+    label: Event Date
     output: false
     derivation:
       case:
@@ -219,6 +241,7 @@ columns:
 
   - name: CENSORDT
     type: date
+    label: Censoring Date
     output: false
     derivation:
       least:

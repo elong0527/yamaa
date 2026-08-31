@@ -8,21 +8,25 @@ keys: [STUDYID, USUBJID, SITEID]
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM.USUBJID
 
   - name: SITEID
     type: str
+    label: Study Site Identifier
     output: false
     derivation:
       source: DM.SITEID
 
   - name: INVID
     type: str
+    label: Investigator Identifier
     derivation:
       source: DM.INVID
