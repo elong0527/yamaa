@@ -1,0 +1,4 @@
+STUDYID,USUBJID,PARAMCD,PARAM,AVALC,AVAL
+XX1234,1,MDIS,Measurable Disease at Baseline,Y,1
+XX1234,2,MDIS,Measurable Disease at Baseline,N,0
+XX1234,3,MDIS,Measurable Disease at Baseline,N,0
