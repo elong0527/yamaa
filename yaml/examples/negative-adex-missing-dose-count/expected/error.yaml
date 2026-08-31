@@ -1,9 +1,9 @@
 phase: row_construction
 condition: missing_expansion_count
 spec_paths:
-  - derived[0].expand.count
+  - expand.count
 context:
-  dataset: DOSES
+  dataset: ADEX
   driver: EX
   keys:
     STUDYID: PILOT7

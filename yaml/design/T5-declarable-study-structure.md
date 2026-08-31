@@ -28,16 +28,16 @@ decision:
 |---|---|---|---|
 | 2 | No interval join | Declared range matching on a record lookup | Yes |
 | 7 | Protocol structure is not a concept | Fork answered: fixed at authoring time | Yes |
-| 8 | Row construction cannot consume derived values | Rows drive from a completed intermediate | Yes |
-| 9 | A derivation cannot carry value and reason | Selection carries the chosen record and rule id | Yes |
+| 8 | Row construction cannot consume derived values | Rows drive from a completed private intermediate | Yes |
+| 9 | A derivation cannot carry value and reason | A prepared selection dataset stores the rule beside its record | Yes |
 | 11 | Right side cannot be narrowed by the current row | Row-narrowed matching and reduction | Yes |
-| 12 | A reduction cannot consume a reduction | A named intermediate dataset | Yes |
+| 12 | A reduction cannot consume a reduction | A named dataset at the intermediate grain | Yes |
 | 16 | Row construction is append-only with a fixed count | An expansion step over a counted slot | Yes |
 
-Three constructs carry every closure: **declared range matching** (gaps 2 and
-11), **a named intermediate dataset** (gaps 8, 12, and 16), and **selection
-that carries its record** (gap 9). Gap 7 needs no construct; it needs a
-decision, stated below.
+Two constructs carry the structural closures: **declared range matching**
+(gaps 2 and 11) and **dataset-level row construction with a private
+intermediate when one atomic build needs it** (gaps 8, 12, and 16). Gaps 7 and
+9 need boundary decisions rather than new schema constructs.
 
 ## The constructs
 
@@ -95,42 +95,51 @@ reduction needs:
   output: false
   derivation:
     aggregate:
-      expr: "MIN(ASSESS.SUM)"
-      filter: "ASSESS.COMPLETE = 'Y'"
+      expr: "MIN(ASSESS.AVAL)"
+      filter: "ASSESS.ANL01FL = 'Y'"
       group_by: [ASSESS.STUDYID, ASSESS.USUBJID]
       between:
         value: ADT
         lower: ASSESS.ADT
 ```
 
-`MIN(ASSESS.SUM)` over the current subject's completed assessments dated on or
+`MIN(ASSESS.AVAL)` over the current subject's completed assessments dated on or
 before the current row's analysis date is the RECIST nadir that
 `adam-adtr-sum-of-target-diameters` cannot name today. The reduction joins
 ASSESS on the applicable keys as R003 already defines; `between` only narrows
 which of the subject's records enter it.
 
-### A named intermediate dataset
+### Dataset grain and a private intermediate
 
 R013 closes nesting because reducing at one grain and reducing that result at
-another needs an intermediate grain no expression can name. The name the design
-adds is a **derived dataset**: a second dataset the specification builds before
-the artifact, declared once, read like any declared dataset, and never
-serialized.
+another needs an intermediate relation no expression can name. The default
+boundary for a durable or reused relation is another specification: its
+materialized artifact is a declared source of each downstream specification.
+That keeps independent datasets independently readable, testable, and
+releasable. Pipeline orchestration supplies their execution order; source paths
+do not imply it.
+
+Some intermediates have no independent contract. They exist only so one atomic
+artifact build can complete a private row grain before its next reduction or
+row-construction step. The design names that case with a **derived dataset**:
+a dataset built before the artifact, read like any declared dataset, and never
+serialized. `adam-adtr-sum-of-target-diameters` needs one private `ASSESS`
+grain because the artifact reduces completed assessments to the current nadir:
 
 ```yaml
 datasets:
+  TRVISIT: input/trvisit.csv
   TR: input/tr.csv
 
 derived:
-  - id: MEASURED
-    base: TR
-    group_by: [TR.STUDYID, TR.USUBJID, TR.AVISIT]
+  - id: ASSESS
+    base: TRVISIT
     keys: [STUDYID, USUBJID, AVISIT]
     columns:
-      - {name: STUDYID, type: str, derivation: {source: TR.STUDYID}}
-      - {name: USUBJID, type: str, derivation: {source: TR.USUBJID}}
-      - {name: AVISIT, type: str, derivation: {source: TR.AVISIT}}
-      - name: SUM
+      - {name: STUDYID, type: str, derivation: {source: TRVISIT.STUDYID}}
+      - {name: USUBJID, type: str, derivation: {source: TRVISIT.USUBJID}}
+      - {name: AVISIT, type: str, derivation: {source: TRVISIT.AVISIT}}
+      - name: AVAL
         type: float
         derivation:
           aggregate:
@@ -140,20 +149,20 @@ derived:
 
 A derived dataset runs the same two phases as the artifact, in dependency
 order before the columns that read it, and answers to R005's column coverage
-and key identity exactly as the artifact does. It is the intermediate grain
-R013 says the language cannot name, given a name. Reading it is not a new join:
-a qualified source into a derived dataset is the ordinary R003 join, an
-aggregate over it is the ordinary R013 reduction, and a record lookup over it
-is the ordinary R015 match.
+and key identity exactly as the artifact does. Reading it is not a new join: a
+qualified source into it is the ordinary R003 join, an aggregate over it is
+the ordinary R013 reduction, and a record lookup over it is the ordinary R015
+match. If `ASSESS` acquires another artifact consumer, it should be promoted to
+its own specification instead of copied or retained as private work.
 
-The intermediate has three mutually exclusive row-construction forms. Ordinary
-`rows` behaves as it does for the artifact. `group_by` constructs one row per
-distinct tuple of base variables, in first-occurrence order; those grouped base
-variables are the scalar fields the row carries, while reductions read the
-group's base records. `expand` is the counted form below. With none of the
-three, the derived dataset has one row per base record. These forms make the
-intermediate grain explicit rather than relying on a conveniently pre-grouped
-input.
+The artifact and a derived dataset have the same three mutually exclusive
+row-construction forms. Ordinary `rows` behaves as before. `group_by`
+constructs one row per distinct tuple of base variables, in first-occurrence
+order; grouped base variables are the scalar fields the row carries while
+reductions read the group's base records. `expand` is the counted form below.
+With none of the three, a dataset has one row per base record. Making these
+forms available on the artifact avoids a derived wrapper when the constructed
+grain is already the result the specification exists to produce.
 
 Two uses beyond gap 12 matter here, and they are what retire gaps 8 and 16.
 
@@ -184,92 +193,81 @@ reads that dataset's columns, which is true of any dataset the row driver
 carries; the change is that the derived dataset exists to be driven from.
 
 **Counted expansion (gap 16).** A `rows` entry appends one row per driver
-record. The expansion step lets one entry append a counted number of rows per
-record by driving from a derived dataset that declares the count:
+record. The artifact can instead declare a counted number of rows per base
+record directly:
 
 ```yaml
-derived:
-  - id: DOSES
-    base: EX
-    expand:
-      count: EX.EXDOSCNT
-      as: ADOSEN
-    keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
-    columns:
-      - {name: STUDYID, type: str, derivation: {source: EX.STUDYID}}
-      - {name: USUBJID, type: str, derivation: {source: EX.USUBJID}}
-      - {name: EXSEQ, type: int, derivation: {source: EX.EXSEQ}}
+base: EX
+expand:
+  count: EX.EXDOSCNT
+  as: ADOSEN
+keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
+columns:
+  - {name: STUDYID, type: str, derivation: {source: EX.STUDYID}}
+  - {name: USUBJID, type: str, derivation: {source: EX.USUBJID}}
+  - {name: EXSEQ, type: int, derivation: {source: EX.EXSEQ}}
+  - {name: ADOSEN, type: int}
 ```
 
 `expand.count` is a variable resolving to a non-negative integer on each driver
-record; the derived dataset holds that many rows per record, and the column
+record; the dataset holds that many rows per record, and the column
 `expand.as` names carries the 1-based index of each, so `ADOSEN` runs 1 to the
 count without a second derivation. A record whose count is missing fails during
 row construction; a record whose count is zero contributes no row, which is
-how a removed record and an unexpanded one stay distinct. The negative example's
-failure -- a record holding more administrations than the templates declare --
-cannot recur, because the count is read from the record rather than written out
-in advance.
+how a removed record and an unexpanded one stay distinct. The negative
+example's failure -- a record holding more administrations than the templates
+declare -- cannot recur, because the count is read from the record rather than
+written out in advance.
 
 The opposite motion in gap 16, adding a row where an expected combination has
-none, is the same step with the sides reversed: a derived dataset over the
-schedule's spine, expanded or left at one row per planned visit, then matched
-against the collected records. `adam-advs-once-measured-carry-forward` carries
-a value forward to an unattended visit by constructing the visit row from the
-spine and letting the collected value be missing there, rather than by
-repeating a collected record.
+none, is the same step with the sides reversed: the artifact expands its
+schedule spine and then matches the collected records.
+`adam-advs-once-measured-carry-forward` carries a value forward to an
+unattended visit by constructing the visit row from the spine and letting the
+collected value be missing there, rather than by repeating a collected record.
 
-### Selection that carries its record
+### Selection is an explicit dataset contract
 
-Gap 9 is the derivation that must produce a value and the reason for it. The
-schema already has the two halves separately: `case` selects a value, and R015
-selects a record. What is missing is a selection whose chosen branch exposes
-what it chose from.
+Gap 9 is the decision that must produce a value, its reason, and the record
+supporting both. That decision has independent clinical meaning and is better
+expressed as a prepared dataset than embedded as branch language inside a
+record lookup.
 
-The design extends `record_lookups` with an ordered choice among **candidate
-records**, each candidate a named filter over the same matched pool:
+`adam-adrs-best-response-selection` prepares every assessment with `BORCAT`,
+the response category it can support; `BORPRI`, that category's clinical
+priority; and `BORSEQ`, its subject-level order by priority, date, and sequence.
+The selected record is the ordinary stored record where `BORSEQ = 1`. The
+downstream endpoint uses an ordinary lookup:
 
 ```yaml
+datasets:
+  ADRSSEL: input/adrs_selection.csv
+
 record_lookups:
   - id: RESPONSE
-    dataset: ADRSPRE
-    as: WHICH
-    candidates:
-      - id: CR
-        filter: "ADRSPRE.AVALC = 'CR'"
-        order_by: [ADRSPRE.ADT]
-        keep: first
-      - id: PR
-        filter: "ADRSPRE.AVALC = 'PR'"
-        order_by: [ADRSPRE.ADT]
-        keep: first
-      - id: SD
-        filter: "ADRSPRE.AVALC = 'SD' AND ADRSPRE.RANDDY >= 42"
-        order_by: [ADRSPRE.ADT]
-        keep: first
+    dataset: ADRSSEL
+    filter: "ADRSSEL.BORSEQ = 1"
     unmatched: missing
+
+columns:
+  - name: AVALC
+    type: str
+    derivation: {source: RESPONSE.BORCAT}
+  - name: ADT
+    type: date
+    derivation: {source: RESPONSE.ADT}
 ```
 
-Equality keys and any range match are applied before candidates, so a
-subject-level lookup never considers another subject's record. The candidates
-are then tried in order; the first that selects a record wins, and
-the lookup declares the name the winning candidate's `id` is read through,
-here `WHICH`. `adam-adrs-best-overall-response`'s cascade -- complete
-response, then partial, then stable disease only from day 42 -- becomes one
-declaration whose order is the published definition, with the date read as
-`RESPONSE.ADT` and the response itself as `RESPONSE.WHICH`. The two cannot
-drift, because one selection produced both.
+The category and date cannot drift because the upstream artifact stores them
+on one identified assessment record. Its separate specification makes the
+priority independently testable and reusable, while R015 remains one
+operation: select one already prepared record.
 
-`adam-adrs-composite-response`'s parallel `AVALC` and `ARSN` chains collapse
-the same way after the decision inputs are named on one derived record: the
-candidate id names the rule once, and both outputs map from that id. The value
-and its audit reason therefore cannot select different branches.
-
-Two limits keep this inside the boundary. Candidates share one dataset, so the
-selection never becomes a join; and a candidate selects a record rather than
-computing a value, so the grammar of what can be returned stays R014's. A
-missing component meaning not evaluable rather than non-response is stated by
-which candidate a row matches, which a reviewer reads in one place.
+`adam-adrs-composite-response` does not select among records once its decision
+inputs are bound. One internal `RULE` column therefore uses the existing
+`case`, and both `AVALC` and `ARSN` map from it. This keeps a same-row decision
+in the artifact and a record-selection decision in its own dataset, without
+adding a second conditional language to R015.
 
 ## Gap 7: the family fork is answered
 
@@ -319,13 +317,15 @@ explicitly in R005 rather than leaving it as open text.
   problem is documented as a convention.
 - **Gap 8** retires. The logically removed record is filtered from a derived
   dataset before the artifact is constructed.
-- **Gap 9** retires. A lookup exposes both the chosen record and the candidate
-  id. A record-backed endpoint reads its value and provenance from the record;
-  a computed endpoint maps its value and audit reason from the one candidate
-  id.
+- **Gap 9** retires. A prepared selection dataset stores the clinical priority
+  and result on the supporting record; an ordinary lookup reads that record.
+  A same-row computed endpoint continues to name an internal rule with the
+  existing `case` and `mapping` operations.
 - **Gap 11** retires. The subject-specific cutoff narrows the reduction through
   `between`, and the analysis-window table matches through the same pairs.
-- **Gap 12** retires. The intermediate grain is a named derived dataset.
+- **Gap 12** retires. The intermediate grain is a named dataset: a separate
+  specification when durable or reused, or a private derived dataset when one
+  atomic artifact build consumes it.
 - **Gap 16** retires. Expansion reads the count from the record; fill-in
   constructs rows from the spine.
 
@@ -340,9 +340,9 @@ failure.
 |---|---|---|
 | Range matching | `sdtm-vs-visit-study-day` assigns `EPOCH` to an unscheduled visit and `adam-advs-analysis-window-table` reads the protocol windows | A missing study day follows the lookup's declared incomplete policy |
 | Row-narrowed reduction | `adam-adtr-sum-of-target-diameters` derives the RECIST nadir | A reduction narrowed against a missing cutoff returns missing, never the whole right side |
-| Candidates | `adam-adrs-best-overall-response` declares the response order once | A subject with no candidate follows `unmatched` |
-| Candidate rule id | `adam-adrs-composite-response` maps value and reason from one choice | The final unfiltered candidate makes the default policy explicit |
-| Derived dataset | `adam-adtr-sum-of-target-diameters` names measured and scheduled assessment grains | `negative-adtr-duplicate-assessment` rejects a repeated intermediate key |
+| Prepared selection dataset | `adam-adrs-best-response-selection` declares the response order and `adam-adrs-best-overall-response` reads its selected record | A subject with no prepared record follows `unmatched` |
+| Internal rule id | `adam-adrs-composite-response` maps value and reason from one `case` result | The final `otherwise` branch makes the default policy explicit |
+| Private derived dataset | `adam-adtr-sum-of-target-diameters` names its assessment grain | `negative-adtr-duplicate-assessment` rejects a repeated intermediate key |
 | Counted expansion and fill-in | `adam-adex-single-dose-expansion` expands every administration; `adam-advs-once-measured-carry-forward` builds the planned spine | `negative-adex-missing-dose-count` fails, while a zero count contributes no row |
 
 ## What this design does not do
@@ -368,15 +368,16 @@ failure.
   records the naming convention for numbered families, and treats an expansion
   index as a row-phase derivation.
 - **R013** drops the sentence that an intermediate grain cannot be named, and
-  points to the derived dataset as the name.
+  points to a source or private derived dataset as that name.
 - **R002** admits a derived dataset as a source its readers bind to, and states
   when it is built.
 - **R003 and R015** admit `between` pairs beside equality keys, with the
   narrowing semantics above.
-- **R001** adds the derived-dataset build to the phase order and to dependency
-  inference.
+- **R001** gives artifacts and derived datasets the same row-construction
+  modes, defines the private derived-dataset boundary, and adds its build to
+  phase order and dependency inference.
 - **R007** admits a qualified aggregate over the base group while a grouped
-  intermediate is being built.
+  artifact or intermediate is being built.
 
 No rule is superseded. The changes are amendments that close what the rules
 currently state as open.

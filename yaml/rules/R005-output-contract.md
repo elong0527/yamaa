@@ -2,8 +2,9 @@
 id: R005
 title: Output Contract
 status: normative
-applies_to: [root.keys, root.columns, root.derived, derived_dataset_class,
-  column.output, column.type, row.derivations, derivation]
+applies_to: [root.keys, root.columns, root.derived, root.expand,
+  derived_dataset_class, column.output, column.type, row.derivations,
+  derivation]
 depends_on: [R001, R002, R003, R007, R008, R009, R011]
 ---
 

@@ -24,7 +24,7 @@ root_class:
     - derived:
         type: "list[derived_dataset_class]"
         required: false
-        description: Intermediate datasets built before readers; R001 defines their construction and order.
+        description: Private, non-serialized intermediate datasets built before this artifact; R001 limits when they should be used.
     - base:
         type: dataset_id
         required: false
@@ -49,6 +49,14 @@ root_class:
         type: "list[row_class]"
         required: false
         description: Templates constructing output rows from driving records; R001 evaluates them.
+    - group_by:
+        type: "list[variable]"
+        required: false
+        description: Base variables whose distinct tuples construct artifact rows; mutually exclusive with rows and expand.
+    - expand:
+        type: expand_class
+        required: false
+        description: Counted artifact-row expansion; mutually exclusive with rows and group_by.
     - verifications:
         type: [dataset_verification, "list[dataset_verification]"]
         required: false
@@ -140,14 +148,6 @@ record_lookup_class:
         required: false
         values: [first, last]
         description: Ordered record to retain; declared with order_by.
-    - candidates:
-        type: "list[record_candidate_class]"
-        required: false
-        description: Ordered candidate-specific selections tried within the equality and range-matched records.
-    - as:
-        type: column_name
-        required: false
-        description: Synthetic string field carrying the winning candidate id; declared with candidates.
     - unmatched:
         type: str
         required: false
@@ -172,26 +172,6 @@ record_lookup_between_class:
         type: dataset_column
         required: false
         description: Dataset column whose value is an inclusive upper bound.
-
-record_candidate_class:
-    - id:
-        type: str
-        required: true
-        min_length: 1
-        description: Value exposed through the lookup's synthetic as field when this candidate wins.
-    - filter:
-        type: sql
-        required: false
-        description: Predicate selecting this candidate's eligible records from the matched pool.
-    - order_by:
-        type: "list[order_by_term]"
-        required: false
-        description: Terms ordering this candidate's records; declared with keep.
-    - keep:
-        type: str
-        required: false
-        values: [first, last]
-        description: Ordered candidate record to retain; declared with order_by.
 
 column_class:
     - name:

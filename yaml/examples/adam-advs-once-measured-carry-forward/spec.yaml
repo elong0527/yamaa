@@ -6,45 +6,10 @@ datasets:
     path: input/adsl.csv
     types: {PLANCNT: int}
 
-derived:
-  - id: SPINE
-    base: ADSL
-    expand:
-      count: ADSL.PLANCNT
-      as: ASEQ
-    keys: [STUDYID, USUBJID, ASEQ]
-    columns:
-      - name: STUDYID
-        type: str
-        derivation: {source: ADSL.STUDYID}
-      - name: USUBJID
-        type: str
-        derivation: {source: ADSL.USUBJID}
-      - name: ASEQ
-        type: int
-      - name: PARAMCD
-        type: str
-        derivation:
-          case:
-            branches:
-              - when: "ASEQ = 1"
-                then: {literal: HEIGHT}
-            otherwise: {literal: WEIGHT}
-      - name: ADT
-        type: date
-        derivation:
-          case:
-            branches:
-              - when: "ASEQ = 1"
-                then: {source: ADSL.HGTDT}
-              - when: "ASEQ = 2"
-                then: {source: ADSL.WGTBLDT}
-            otherwise: {source: ADSL.WGTW3DT}
-      - name: TRTSDT
-        type: date
-        derivation: {source: ADSL.TRTSDT}
-
-base: SPINE
+base: ADSL
+expand:
+  count: ADSL.PLANCNT
+  as: ASEQ
 keys: [STUDYID, USUBJID, ASEQ]
 
 record_lookups:
@@ -57,15 +22,14 @@ record_lookups:
 columns:
   - name: STUDYID
     type: str
-    derivation: {source: SPINE.STUDYID}
+    derivation: {source: ADSL.STUDYID}
 
   - name: USUBJID
     type: str
-    derivation: {source: SPINE.USUBJID}
+    derivation: {source: ADSL.USUBJID}
 
   - name: ASEQ
     type: int
-    derivation: {source: SPINE.ASEQ}
 
   - name: VSSEQ
     type: int
@@ -73,11 +37,23 @@ columns:
 
   - name: PARAMCD
     type: str
-    derivation: {source: SPINE.PARAMCD}
+    derivation:
+      case:
+        branches:
+          - when: "ASEQ = 1"
+            then: {literal: HEIGHT}
+        otherwise: {literal: WEIGHT}
 
   - name: ADT
     type: date
-    derivation: {source: SPINE.ADT}
+    derivation:
+      case:
+        branches:
+          - when: "ASEQ = 1"
+            then: {source: ADSL.HGTDT}
+          - when: "ASEQ = 2"
+            then: {source: ADSL.WGTBLDT}
+        otherwise: {source: ADSL.WGTW3DT}
 
   - name: AVAL
     type: float
@@ -85,7 +61,7 @@ columns:
 
   - name: TRTSDT
     type: date
-    derivation: {source: SPINE.TRTSDT}
+    derivation: {source: ADSL.TRTSDT}
 
   - name: HEIGHTBL
     type: float

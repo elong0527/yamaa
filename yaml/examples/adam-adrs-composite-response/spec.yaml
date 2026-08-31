@@ -4,56 +4,19 @@ datasets:
   ADRSPRE: input/adrs_pre.csv
   ADSL: input/adsl.csv
 
-derived:
-  - id: DECISION
-    base: ADRSPRE
-    keys: [STUDYID, USUBJID, AVISIT]
-    columns:
-      - name: STUDYID
-        type: str
-        derivation: {source: ADRSPRE.STUDYID}
-      - name: USUBJID
-        type: str
-        derivation: {source: ADRSPRE.USUBJID}
-      - name: AVISIT
-        type: str
-        derivation: {source: ADRSPRE.AVISIT}
-      - name: PCHG
-        type: float
-        derivation: {source: ADRSPRE.PCHG}
-      - name: SAEFL
-        type: str
-        derivation: {source: ADSL.SAEFL}
-      - name: DCSREAS
-        type: str
-        derivation: {source: ADSL.DCSREAS}
-
-base: DECISION
+base: ADRSPRE
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
-
-record_lookups:
-  - id: OUTCOME
-    dataset: DECISION
-    as: RULE
-    candidates:
-      - id: SAFETY
-        filter: "DECISION.SAEFL = 'Y' OR DECISION.DCSREAS IS NOT NULL"
-      - id: MISSING
-        filter: "DECISION.PCHG IS NULL"
-      - id: THRESHOLD
-        filter: "DECISION.PCHG <= -75"
-      - id: OTHERWISE
 
 columns:
   - name: STUDYID
     type: str
     derivation:
-      source: DECISION.STUDYID
+      source: ADRSPRE.STUDYID
 
   - name: USUBJID
     type: str
     derivation:
-      source: DECISION.USUBJID
+      source: ADRSPRE.USUBJID
 
   - name: PARAMCD
     type: str
@@ -68,28 +31,36 @@ columns:
   - name: AVISIT
     type: str
     derivation:
-      source: DECISION.AVISIT
+      source: ADRSPRE.AVISIT
 
   - name: PCHG
     type: float
     derivation:
-      source: DECISION.PCHG
+      source: ADRSPRE.PCHG
 
   - name: SAEFL
     type: str
     derivation:
-      source: DECISION.SAEFL
+      source: ADSL.SAEFL
 
   - name: DCSREAS
     type: str
     derivation:
-      source: DECISION.DCSREAS
+      source: ADSL.DCSREAS
 
   - name: RULE
     type: str
     output: false
     derivation:
-      source: OUTCOME.RULE
+      case:
+        branches:
+          - when: "SAEFL = 'Y' OR DCSREAS IS NOT NULL"
+            then: {literal: SAFETY}
+          - when: "PCHG IS NULL"
+            then: {literal: MISSING}
+          - when: "PCHG <= -75"
+            then: {literal: THRESHOLD}
+        otherwise: {literal: OTHERWISE}
 
   - name: AVALC
     type: str

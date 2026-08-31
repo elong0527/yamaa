@@ -3,24 +3,25 @@ domain: ADEX
 datasets:
   TRT: input/subject_treatment.csv
   EX: {path: input/ex.csv, types: {EXDOSE: float}}
-base: TRT
+base: EX
+group_by: [EX.STUDYID, EX.USUBJID, EX.EXTRT]
 keys: [STUDYID, USUBJID, EXTRT]
 
 columns:
   - name: STUDYID
     type: str
     derivation:
-      source: TRT.STUDYID
+      source: EX.STUDYID
 
   - name: USUBJID
     type: str
     derivation:
-      source: TRT.USUBJID
+      source: EX.USUBJID
 
   - name: EXTRT
     type: str
     derivation:
-      source: TRT.EXTRT
+      source: EX.EXTRT
 
   - name: EXDOSU
     type: str

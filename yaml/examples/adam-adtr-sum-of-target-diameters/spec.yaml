@@ -6,33 +6,6 @@ datasets:
   TU: input/tu.csv
 
 derived:
-  - id: MEASURED
-    base: TR
-    group_by: [TR.STUDYID, TR.USUBJID, TR.AVISIT]
-    keys: [STUDYID, USUBJID, AVISIT]
-    columns:
-      - name: STUDYID
-        type: str
-        derivation: {source: TR.STUDYID}
-      - name: USUBJID
-        type: str
-        derivation: {source: TR.USUBJID}
-      - name: AVISIT
-        type: str
-        derivation: {source: TR.AVISIT}
-      - name: AVAL
-        type: float
-        derivation:
-          aggregate:
-            filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
-            expr: "SUM(TR.TRSTRESN)"
-      - name: NMEAS
-        type: int
-        derivation:
-          aggregate:
-            filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
-            expr: "COUNT(TR.TRSTRESN)"
-
   - id: ASSESS
     base: TRVISIT
     keys: [STUDYID, USUBJID, AVISIT]
@@ -54,10 +27,16 @@ derived:
         derivation: {source: TRVISIT.ADT}
       - name: AVAL
         type: float
-        derivation: {source: MEASURED.AVAL}
+        derivation:
+          aggregate:
+            filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
+            expr: "SUM(TR.TRSTRESN)"
       - name: NMEAS
         type: int
-        derivation: {source: MEASURED.NMEAS}
+        derivation:
+          aggregate:
+            filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
+            expr: "COUNT(TR.TRSTRESN)"
       - name: NTARGET
         type: int
         derivation:

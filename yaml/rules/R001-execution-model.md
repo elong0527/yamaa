@@ -2,8 +2,8 @@
 id: R001
 title: Execution Model
 status: normative
-applies_to: [root.base, root.derived, root.rows, derived_dataset_class,
-  row.dataset, root.columns, derivation]
+applies_to: [root.base, root.derived, root.rows, root.group_by, root.expand,
+  derived_dataset_class, row.dataset, root.columns, derivation]
 depends_on: [R002, R003, R004, R005, R007, R008, R010, R012, R013, R015]
 ---
 
@@ -32,17 +32,12 @@ is omitted, it uses the containing artifact or derived dataset's `base`.
 `base` is optional when every row declares a dataset. Constructed rows are
 appended in specification order.
 
-When `rows` is absent or empty and neither derived-only mode below is declared,
+When `rows` is absent or empty and neither `group_by` nor `expand` is declared,
 row construction produces exactly one output row per `base` record, in
 base-record order. `base` is required in that case.
 
-A `derived` entry builds an intermediate dataset the specification reads before
-the artifact. Each derived dataset runs the same two phases over its own driver,
-answers to R005's column and identity contract, and is never serialized. Its
-columns that do not declare `output: false` are the fields later readers see.
-
-A derived dataset may replace ordinary `rows` construction with exactly one of
-two other row-construction modes:
+An artifact or derived dataset may replace ordinary `rows` construction with
+exactly one of two other row-construction modes:
 
 - `group_by` requires `base` and constructs one row for each distinct tuple of
   its base variables. Tuples appear in the order their first base record
@@ -57,6 +52,22 @@ two other row-construction modes:
 
 `rows`, `group_by`, and `expand` are mutually exclusive. When all three are
 absent, the ordinary one-row-per-`base` construction applies.
+
+A `derived` entry builds a private intermediate dataset that this specification
+reads before its artifact. Each derived dataset runs the same two phases over
+its own driver, answers to R005's column and identity contract, and is never
+serialized. Its columns that do not declare `output: false` are the fields
+later readers see.
+
+`derived` is not the default boundary between pipeline stages. A dataset with
+independent meaning, independent release or verification needs, or more than
+one artifact consumer should be the artifact of its own specification and be
+provided to downstream specifications as a stored source. Cross-specification
+execution and materialization belong to pipeline orchestration and are not
+inferred from source paths. A local derived dataset is for an atomic,
+single-artifact build whose private row grain must be completed before the
+artifact can consume it. A one-to-one convenience projection that direct
+expressions can replace should not be declared as a derived dataset.
 
 Derived datasets are built before the artifact in dependency order, not list
 order. A dependency comes from `base`, `rows.dataset`, `group_by`,
@@ -122,13 +133,13 @@ Column declaration order controls final layout, not evaluation order.
 - A row without an explicit `dataset` or default `base`: fail.
 - A dataset definition with no row-construction declaration and no `base`:
   fail.
-- More than one of `rows`, `group_by`, and `expand` on a derived dataset:
+- More than one of `rows`, `group_by`, and `expand` on one dataset definition:
   fail.
 - An empty `group_by`, or a `group_by` variable that is unqualified, belongs to
   a dataset other than `base`, is repeated, or does not exist: fail.
 - A scalar expression reading a non-grouped field of the grouped base: fail.
 - An `expand.count` that is missing, non-integer, or negative: fail during row
-  construction and report the derived dataset and base record.
+  construction and report the dataset definition and base record.
 - An `expand.as` that is undeclared, is not `int`, or has another derivation:
   fail.
 - A row dependency on a later-phase value: fail.

@@ -2,39 +2,16 @@ schema_version: "1.0"
 domain: ADRS
 datasets:
   ADSL: input/adsl.csv
-  ADRSPRE: input/adrs_pre.csv
+  ADRSSEL:
+    path: input/adrs_selection.csv
+    types: {BORSEQ: int}
 base: ADSL
 keys: [STUDYID, USUBJID, PARAMCD]
 
 record_lookups:
   - id: RESPONSE
-    dataset: ADRSPRE
-    as: WHICH
-    candidates:
-      - id: CR
-        filter: "ADRSPRE.AVALC = 'CR'"
-        order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
-        keep: first
-      - id: PR
-        filter: "ADRSPRE.AVALC = 'PR'"
-        order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
-        keep: first
-      - id: SD
-        filter: "ADRSPRE.AVALC = 'SD' AND ADRSPRE.RANDDY >= 42"
-        order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
-        keep: first
-      - id: NON-CR/NON-PD
-        filter: "ADRSPRE.AVALC = 'NON-CR/NON-PD' AND ADRSPRE.RANDDY >= 42"
-        order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
-        keep: first
-      - id: PD
-        filter: "ADRSPRE.AVALC = 'PD'"
-        order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
-        keep: first
-      - id: NE
-        filter: "ADRSPRE.AVALC IN ('CR', 'PR', 'SD', 'NON-CR/NON-PD', 'NE')"
-        order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
-        keep: first
+    dataset: ADRSSEL
+    filter: "ADRSSEL.BORSEQ = 1"
     unmatched: missing
 
 columns:
@@ -68,7 +45,7 @@ columns:
   - name: AVALC
     type: str
     derivation:
-      source: RESPONSE.WHICH
+      source: RESPONSE.BORCAT
     verifications:
       allowed_values:
         values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]

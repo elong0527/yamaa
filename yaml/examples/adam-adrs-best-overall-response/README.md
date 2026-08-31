@@ -1,7 +1,8 @@
 # ADaM ADRS: select the best overall response
 
-This example uses a subject's randomization date and the overall responses
-prepared for them to derive one best-response record per subject:
+This example uses a subject's randomization date and their prepared,
+priority-ordered response assessments to derive one best-response record per
+subject:
 
 - `RANDDT` is the randomization date the response window is measured from;
 - `AVALC` is the best response the subject achieved and `AVAL` its rank, `1`

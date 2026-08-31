@@ -5,87 +5,51 @@ datasets:
     path: input/ex.csv
     types: {EXSEQ: int, EXDOSE: float, EXDOSCNT: int}
 
-derived:
-  - id: DOSES
-    base: EX
-    expand:
-      count: EX.EXDOSCNT
-      as: ADOSEN
-    keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
-    columns:
-      - name: STUDYID
-        type: str
-        derivation: {source: EX.STUDYID}
-      - name: USUBJID
-        type: str
-        derivation: {source: EX.USUBJID}
-      - name: EXSEQ
-        type: int
-        derivation: {source: EX.EXSEQ}
-      - name: EXTRT
-        type: str
-        derivation: {source: EX.EXTRT}
-      - name: EXDOSE
-        type: float
-        derivation: {source: EX.EXDOSE}
-      - name: EXDOSU
-        type: str
-        derivation: {source: EX.EXDOSU}
-      - name: ASTDT
-        type: date
-        derivation: {source: EX.EXSTDTC}
-      - name: AENDT
-        type: date
-        derivation: {source: EX.EXENDTC}
-      - name: ADOSEN
-        type: int
-      - name: NDOSE
-        type: int
-        derivation: {source: EX.EXDOSCNT}
-
-base: DOSES
+base: EX
+expand:
+  count: EX.EXDOSCNT
+  as: ADOSEN
 keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
 
 columns:
   - name: STUDYID
     type: str
-    derivation: {source: DOSES.STUDYID}
+    derivation: {source: EX.STUDYID}
 
   - name: USUBJID
     type: str
-    derivation: {source: DOSES.USUBJID}
+    derivation: {source: EX.USUBJID}
 
   - name: EXSEQ
     type: int
-    derivation: {source: DOSES.EXSEQ}
+    derivation: {source: EX.EXSEQ}
 
   - name: EXTRT
     type: str
-    derivation: {source: DOSES.EXTRT}
+    derivation: {source: EX.EXTRT}
 
   - name: EXDOSE
     type: float
-    derivation: {source: DOSES.EXDOSE}
+    derivation: {source: EX.EXDOSE}
 
   - name: EXDOSU
     type: str
-    derivation: {source: DOSES.EXDOSU}
+    derivation: {source: EX.EXDOSU}
 
   - name: ASTDT
     type: date
-    derivation: {source: DOSES.ASTDT}
+    derivation: {source: EX.EXSTDTC}
 
   - name: AENDT
     type: date
-    derivation: {source: DOSES.AENDT}
+    derivation: {source: EX.EXENDTC}
 
   - name: ADOSEN
     type: int
-    derivation: {source: DOSES.ADOSEN}
 
   - name: NDOSE
     type: int
-    derivation: {source: DOSES.NDOSE}
+    derivation: {source: EX.EXDOSCNT}
 
 verifications:
   - unique:

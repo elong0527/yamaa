@@ -70,6 +70,14 @@ ordering fields are the ones `mapping_from` and `multiple_matches` already
 declare, and a column reads it through the qualified variable form it already
 uses for a dataset. R015 defines it.
 
+An artifact and a private derived dataset share the same row-construction
+forms: ordinary `rows`, distinct `group_by` tuples, and counted `expand` rows.
+R001 defines the boundary between them. A durable or reused intermediate is a
+separate specification whose materialized artifact is a downstream source;
+`derived` is reserved for a private grain needed inside one atomic artifact
+build. Pipeline orchestration between specifications remains outside this
+schema.
+
 The version 1.0 input-shape audit covers every registered expression:
 
 | Expressions | Input policy |

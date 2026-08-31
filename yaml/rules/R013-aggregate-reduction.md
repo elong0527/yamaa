@@ -49,8 +49,8 @@ and must not be mixed:
 
 - **Qualified.** Every identifier names the same declared dataset. The
   expression reduces that right side before the R003 join. While a grouped
-  derived dataset is being built, its base records are the right side and the
-  expression reduces the current group directly.
+  artifact or derived dataset is being built, its base records are the right
+  side and the expression reduces the current group directly.
 - **Unqualified.** Every identifier names a current-output column. The
   expression reduces constructed output rows within the partition its
   `group_by` declares and broadcasts the result, which is R007's second
@@ -137,11 +137,12 @@ agree, so it is not registered by default.
 
 **Reductions do not nest.** The argument of a reduction must contain no
 reduction, so `MAX(SUM(EX.EXDOSE))` is an error. Reducing at one grain and
-reducing that result at another needs an intermediate grain, and the language
-names it with a derived dataset: a dataset the specification builds at the
-first grain and then reduces at the second, as the T5 design defines. A
-derived dataset is read like any declared dataset, so the second reduction is
-an ordinary right-side reduction over it rather than a nested expression.
+reducing that result at another needs a named intermediate grain. R001 prefers
+a separately specified source when that grain is durable or reusable. When the
+grain is private to one atomic artifact build, a derived dataset builds it at
+the first grain and the artifact reduces it at the second, as the T5 design
+defines. Either form is an ordinary right-side reduction over a dataset rather
+than a nested expression.
 
 `COUNT(D.*)` takes no other argument; in this rule, `D` is a placeholder for the dataset named by the expression's qualified identifiers (for example, `COUNT(EX.*)`). It is the one reducer that names no column, and it counts records where `COUNT(x)` counts values.
 
