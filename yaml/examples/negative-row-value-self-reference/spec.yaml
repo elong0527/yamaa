@@ -11,42 +11,50 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: VS.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: VS.USUBJID
 
   - name: VSSEQ
     type: int
+    label: Sequence Number
     derivation:
       source: VS.VSSEQ
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       source: VS.VSTESTCD
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       source: VS.VSDTC
 
   - name: AVAL
     type: float
+    label: Analysis Value
     derivation:
       source: VS.VSSTRESN
 
   - name: AVALF
     type: float
+    label: Filled Analysis Value
     derivation:
       coalesce:
         sources: [AVAL, PRIORF]
 
   - name: PRIORF
     type: float
+    label: Prior Filled Analysis Value
     derivation:
       row_value:
         source: AVALF

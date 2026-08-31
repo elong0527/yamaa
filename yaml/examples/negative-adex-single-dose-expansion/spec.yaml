@@ -13,54 +13,65 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: EX.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: EX.USUBJID
 
   - name: EXSEQ
     type: int
+    label: Sequence Number
     derivation:
       source: EX.EXSEQ
 
   - name: EXTRT
     type: str
+    label: Name of Treatment
     derivation:
       source: EX.EXTRT
 
   - name: EXDOSE
     type: float
+    label: Dose
     derivation:
       source: EX.EXDOSE
 
   - name: EXDOSU
     type: str
+    label: Dose Units
     derivation:
       source: EX.EXDOSU
 
   - name: ASTDT
     type: date
+    label: Analysis Start Date
     derivation:
       source: EX.EXSTDTC
 
   - name: AENDT
     type: date
+    label: Analysis End Date
     derivation:
       source: EX.EXENDTC
 
   - name: ADOSEN
     type: int
+    label: Administration Sequence Number
 
   - name: NDOSE
     type: int
+    label: Number of Administrations
     derivation:
       source: EX.EXDOSCNT
 
   - name: NDOSMAX
     type: int
+    label: Maximum Administration Sequence Number
     derivation:
       aggregate:
         group_by: [STUDYID, USUBJID, EXSEQ]

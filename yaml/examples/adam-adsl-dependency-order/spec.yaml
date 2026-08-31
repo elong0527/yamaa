@@ -12,6 +12,7 @@ output:
 columns:
   - name: TRTSDT
     type: date
+    label: Date of First Exposure to Treatment
     derivation:
       aggregate:
         filter: "EX.EXSTDTC IS NOT NULL"
@@ -19,6 +20,7 @@ columns:
 
   - name: SAFFL
     type: str
+    label: Safety Population Flag
     derivation:
       case:
         branches:
@@ -30,11 +32,13 @@ columns:
 
   - name: RANDDT
     type: date
+    label: Randomization Date
     derivation:
       source: DM.RANDDT
 
   - name: RANDFL
     type: str
+    label: Randomized Population Flag
     derivation:
       case:
         branches:
@@ -46,6 +50,7 @@ columns:
 
   - name: ITTFL
     type: str
+    label: Intent-to-Treat Population Flag
     derivation:
       case:
         branches:
@@ -57,6 +62,7 @@ columns:
 
   - name: POPFL
     type: str
+    label: Analysis Population Flag
     derivation:
       case:
         branches:
@@ -68,21 +74,25 @@ columns:
 
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM.USUBJID
 
   - name: AGE
     type: int
+    label: Age
     derivation:
       source: DM.AGE
 
   - name: AGEGR1
     type: str
+    label: Pooled Age Group 1
     derivation:
       cut:
         source: AGE
@@ -92,6 +102,7 @@ columns:
 
   - name: AGERNK
     type: int
+    label: Pooled Age Group 1 Rank
     derivation:
       row_number:
         group_by: [STUDYID]

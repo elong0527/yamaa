@@ -12,16 +12,19 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: TRT.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: TRT.USUBJID
 
   - name: DOSEDBL
     type: float
+    label: Doubled Dose
     derivation:
       compute:
         expr: "EX.EXDOSE * 2"

@@ -13,16 +13,19 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ADSL_RAW.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ADSL_RAW.USUBJID
 
   - name: TRTSDT
     type: date
+    label: Date of First Exposure to Treatment
     derivation:
       source: ADSL_RAW.TRTSDT
     verifications:
@@ -30,6 +33,7 @@ columns:
 
   - name: CMNACTDT
     type: date
+    label: First New Anti-Cancer Medication Date
     derivation:
       aggregate:
         filter: "CM.CMCAT = 'ON TREATMENT' AND CM.CMSTDTC IS NOT NULL"
@@ -37,6 +41,7 @@ columns:
 
   - name: PRNACTDT
     type: date
+    label: First New Anti-Cancer Procedure Date
     derivation:
       aggregate:
         filter: "PR.PRCAT = 'CANCER RELATED' AND PR.PRSCAT = 'ON TREATMENT' AND PR.PRSTDTC IS NOT NULL"
@@ -44,12 +49,14 @@ columns:
 
   - name: NACTDT
     type: date
+    label: New Anti-Cancer Therapy Start Date
     derivation:
       least:
         sources: [CMNACTDT, PRNACTDT]
 
   - name: NACTDY
     type: int
+    label: New Anti-Cancer Therapy Start Relative Day
     derivation:
       study_day:
         date: NACTDT
@@ -57,6 +64,7 @@ columns:
 
   - name: NACTFL
     type: str
+    label: New Anti-Cancer Therapy Flag
     derivation:
       case:
         branches:

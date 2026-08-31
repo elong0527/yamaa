@@ -12,31 +12,37 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: AE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: AE.USUBJID
 
   - name: AESEQ
     type: int
+    label: Sequence Number
     derivation:
       source: AE.AESEQ
 
   - name: AETERM
     type: str
+    label: Reported Term for the Adverse Event
     derivation:
       source: AE.AETERM
 
   - name: AESTDTC
     type: str
+    label: Start Date/Time of Adverse Event
     derivation:
       source: AE.AESTDTC
 
   - name: ASTDT
     type: date
+    label: Analysis Start Date
     derivation:
       date_impute:
         source: AESTDTC
@@ -47,11 +53,13 @@ columns:
 
   - name: ASTDTC
     type: str
+    label: Analysis Start Date (C)
     derivation:
       source: ASTDT
 
   - name: ASTDTPR
     type: str
+    label: Analysis Start Date Precision
     derivation:
       date_precision:
         source: AESTDTC
@@ -60,6 +68,7 @@ columns:
 
   - name: ASTDTF
     type: str
+    label: Analysis Start Date Imputation Flag
     derivation:
       mapping:
         source: ASTDTPR
@@ -74,11 +83,13 @@ columns:
 
   - name: TRTSDT
     type: date
+    label: Date of First Exposure to Treatment
     derivation:
       source: ADSL.TRTSDT
 
   - name: TRTEMFL
     type: str
+    label: Treatment Emergent Analysis Flag
     derivation:
       case:
         branches:

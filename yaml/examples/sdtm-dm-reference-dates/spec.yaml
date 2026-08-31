@@ -21,21 +21,25 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM_RAW.STUDYID
 
   - name: DOMAIN
     type: str
+    label: Domain Abbreviation
     derivation:
       literal: DM
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM_RAW.USUBJID
 
   - name: RFICDTC
     type: date
+    label: Date/Time of Informed Consent
     derivation:
       source: DM_RAW.RFICDTC
     verifications:
@@ -43,6 +47,7 @@ columns:
 
   - name: RFXSTDTC
     type: date
+    label: Date/Time of First Study Treatment
     derivation:
       aggregate:
         filter: "EX.EXSTDTC IS NOT NULL"
@@ -50,21 +55,25 @@ columns:
 
   - name: RFXENDTC
     type: date
+    label: Date/Time of Last Study Treatment
     derivation:
       source: LASTEX.EXENDTC
 
   - name: RFSTDTC
     type: date
+    label: Subject Reference Start Date/Time
     derivation:
       source: RFXSTDTC
 
   - name: EXDOSE0
     type: float
+    label: Last Exposure Dose
     derivation:
       source: LASTEX.EXDOSE
 
   - name: DSDT0
     type: date
+    label: Latest Disposition Date
     derivation:
       aggregate:
         filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
@@ -72,6 +81,7 @@ columns:
 
   - name: AEDT0
     type: date
+    label: Latest Adverse Event End Date
     derivation:
       aggregate:
         filter: "AE.AEENDTC IS NOT NULL"
@@ -79,6 +89,7 @@ columns:
 
   - name: RFENDTC
     type: date
+    label: Subject Reference End Date/Time
     derivation:
       greatest:
         sources: [RFXENDTC, DSDT0, AEDT0]

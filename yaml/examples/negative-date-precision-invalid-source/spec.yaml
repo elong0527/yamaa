@@ -11,21 +11,25 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: AE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: AE.USUBJID
 
   - name: AESEQ
     type: int
+    label: Sequence Number
     derivation:
       source: AE.AESEQ
 
   - name: ASTDTF
     type: str
+    label: Analysis Start Date Imputation Flag
     derivation:
       date_precision:
         source: AE.AESTDTC

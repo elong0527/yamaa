@@ -11,33 +11,40 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: QS.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: QS.USUBJID
 
   - name: VISIT
     type: str
+    label: Visit Name
     derivation:
       source: QS.VISIT
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     verifications:
       allowed_values:
         values: [PF01, PF02, PF03, PF04, PFSCORE]
 
   - name: PARAM
     type: str
+    label: Parameter
 
   - name: ITEMRESN
     type: float
+    label: Numeric Item Response
 
   - name: ITEMSUM
     type: float
+    label: Sum of Item Responses
     derivation:
       aggregate:
         expr: "SUM(ITEMRESN)"
@@ -45,6 +52,7 @@ columns:
 
   - name: ITEMANS
     type: int
+    label: Number of Answered Items
     derivation:
       aggregate:
         expr: "COUNT(ITEMRESN)"
@@ -52,6 +60,7 @@ columns:
 
   - name: AVAL
     type: float
+    label: Analysis Value
     derivation:
       case:
         branches:

@@ -12,16 +12,19 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM.USUBJID
 
   - name: TRT01RAW
     type: str
+    label: First Actual Treatment from Exposure
     derivation:
       source:
         variable: EX.EXTRT
@@ -32,6 +35,7 @@ columns:
 
   - name: TRT01SRC
     type: str
+    label: Selected Actual Treatment for Period 01
     derivation:
       coalesce:
         sources: [TRT01RAW, DM.ACTARM]
@@ -39,6 +43,7 @@ columns:
 
   - name: TRT01A
     type: str
+    label: Actual Treatment for Period 01
     derivation:
       str_upper:
         source: TRT01SRC
@@ -48,6 +53,7 @@ columns:
 
   - name: TRTSDT
     type: date
+    label: Date of First Exposure to Treatment
     derivation:
       aggregate:
         filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXSTDTC IS NOT NULL"
@@ -55,6 +61,7 @@ columns:
 
   - name: TRTEDT
     type: date
+    label: Date of Last Exposure to Treatment
     derivation:
       aggregate:
         filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXENDTC IS NOT NULL"
@@ -62,6 +69,7 @@ columns:
 
   - name: TRTDURD
     type: int
+    label: Total Treatment Duration (Days)
     derivation:
       date_diff:
         start: TRTSDT
@@ -74,6 +82,7 @@ columns:
 
   - name: SAFFL
     type: str
+    label: Safety Population Flag
     derivation:
       case:
         branches:

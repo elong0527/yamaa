@@ -13,26 +13,31 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ADSL.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ADSL.USUBJID
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       literal: DOR
 
   - name: PARAM
     type: str
+    label: Parameter
     derivation:
       literal: Duration of Response
 
   - name: STARTDT
     type: date
+    label: Time-to-Event Origin Date
     derivation:
       source: ADSL.RESPDT
     verifications:
@@ -40,11 +45,13 @@ columns:
 
   - name: NACTDT
     type: date
+    label: New Anti-Cancer Therapy Start Date
     derivation:
       source: ADSL.NACTDT
 
   - name: PDDT
     type: date
+    label: Disease Progression Date
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC = 'PD'"
@@ -52,6 +59,7 @@ columns:
 
   - name: PDSEQ
     type: int
+    label: Disease Progression Source Sequence Number
     derivation:
       source:
         variable: ADRSPRE.ASEQ
@@ -62,6 +70,7 @@ columns:
 
   - name: DEATHDT
     type: date
+    label: Death Date
     derivation:
       aggregate:
         filter: "DS.DSDECOD = 'DEATH'"
@@ -69,6 +78,7 @@ columns:
 
   - name: DEATHSEQ
     type: int
+    label: Death Source Sequence Number
     derivation:
       source:
         variable: DS.DSSEQ
@@ -79,6 +89,7 @@ columns:
 
   - name: LASTVLDT
     type: date
+    label: Last Valid Assessment Date
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC <> 'NE'"
@@ -86,6 +97,7 @@ columns:
 
   - name: LASTVLSEQ
     type: int
+    label: Last Valid Assessment Sequence Number
     derivation:
       source:
         variable: ADRSPRE.ASEQ
@@ -96,12 +108,14 @@ columns:
 
   - name: EVENTALLDT
     type: date
+    label: Earliest Progression or Death Date
     derivation:
       least:
         sources: [PDDT, DEATHDT]
 
   - name: EVENTDT
     type: date
+    label: Event Date
     derivation:
       case:
         branches:
@@ -111,6 +125,7 @@ columns:
 
   - name: CNSR
     type: int
+    label: Censor
     derivation:
       case:
         branches:
@@ -122,6 +137,7 @@ columns:
 
   - name: EVNTDESC
     type: str
+    label: Event or Censoring Description
     derivation:
       case:
         branches:
@@ -136,12 +152,14 @@ columns:
 
   - name: CENSORDT
     type: date
+    label: Censoring Date
     derivation:
       least:
         sources: [LASTVLDT, NACTDT]
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       coalesce:
         sources: [EVENTDT, CENSORDT]
@@ -150,6 +168,7 @@ columns:
 
   - name: AVAL
     type: int
+    label: Analysis Value
     derivation:
       date_diff:
         start: STARTDT
@@ -159,6 +178,7 @@ columns:
 
   - name: CNSDTDSC
     type: str
+    label: Censoring Date Description
     derivation:
       case:
         branches:
@@ -173,6 +193,7 @@ columns:
 
   - name: SRCDOM
     type: str
+    label: Source Data
     derivation:
       case:
         branches:
@@ -190,6 +211,7 @@ columns:
 
   - name: SRCVAR
     type: str
+    label: Source Variable
     derivation:
       case:
         branches:
@@ -204,6 +226,7 @@ columns:
 
   - name: SRCSEQ
     type: int
+    label: Source Sequence Number
     derivation:
       case:
         branches:

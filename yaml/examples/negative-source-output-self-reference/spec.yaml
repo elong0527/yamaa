@@ -12,41 +12,50 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: LB.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: LB.USUBJID
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       source: LB.LBDTC
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     verifications:
       allowed_values:
         values: [ALT, AST, ASTALT]
 
   - name: PARAM
     type: str
+    label: Parameter
 
   - name: LBRESN
     type: float
+    label: Numeric Laboratory Result
 
   - name: ALTDEN
     type: float
+    label: Alanine Aminotransferase Value as Denominator
 
   - name: ASTCODE
     type: str
+    label: Aspartate Aminotransferase Parameter Code
     derivation:
       literal: AST
 
   - name: ASTVAL
     type: float
+    label: Aspartate Aminotransferase Analysis Value
     derivation:
       mapping_from:
         source: [USUBJID, ADT, ASTCODE]
@@ -58,6 +67,7 @@ columns:
 
   - name: AVAL
     type: float
+    label: Analysis Value
     derivation:
       case:
         branches:

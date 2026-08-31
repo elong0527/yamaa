@@ -12,16 +12,19 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM.USUBJID
 
   - name: TR01SDT
     type: date
+    label: Date of First Exposure in Period 01
     derivation:
       aggregate:
         filter: "EX.APERIOD = 1 AND EX.EXSTDTC IS NOT NULL"
@@ -29,6 +32,7 @@ columns:
 
   - name: TR01EDT
     type: date
+    label: Date of Last Exposure in Period 01
     derivation:
       aggregate:
         filter: "EX.APERIOD = 1 AND EX.EXENDTC IS NOT NULL"
@@ -36,6 +40,7 @@ columns:
 
   - name: TR02SDT
     type: date
+    label: Date of First Exposure in Period 02
     derivation:
       aggregate:
         filter: "EX.APERIOD = 2 AND EX.EXSTDTC IS NOT NULL"
@@ -43,6 +48,7 @@ columns:
 
   - name: TR02EDT
     type: date
+    label: Date of Last Exposure in Period 02
     derivation:
       aggregate:
         filter: "EX.APERIOD = 2 AND EX.EXENDTC IS NOT NULL"
@@ -50,6 +56,7 @@ columns:
 
   - name: TRT01A
     type: str
+    label: Actual Treatment for Period 01
     derivation:
       source:
         variable: EX.EXTRT
@@ -63,6 +70,7 @@ columns:
 
   - name: TRT02A
     type: str
+    label: Actual Treatment for Period 02
     derivation:
       source:
         variable: EX.EXTRT
@@ -76,6 +84,7 @@ columns:
 
   - name: WASHDUR
     type: int
+    label: Washout Duration (Days)
     derivation:
       date_diff:
         start: TR01EDT

@@ -11,21 +11,25 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ODM.StudyOID
 
   - name: DOMAIN
     type: str
+    label: Domain Abbreviation
     derivation:
       literal: LB
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ODM.SubjectKey
 
   - name: LBTESTCD
     type: str
+    label: Lab Test or Examination Short Name
     derivation:
       mapping:
         source: ODM.FormOID
@@ -38,6 +42,7 @@ columns:
 
   - name: LBTEST
     type: str
+    label: Lab Test or Examination Name
     derivation:
       mapping:
         source: ODM.FormOID
@@ -50,6 +55,7 @@ columns:
 
   - name: LBCAT
     type: str
+    label: Category for Lab Test
     derivation:
       mapping:
         source: ODM.FormOID
@@ -62,11 +68,13 @@ columns:
 
   - name: LBORRES
     type: str
+    label: Result or Finding in Original Units
     derivation:
       source: ODM.Value
 
   - name: LBDTC
     type: date
+    label: Date/Time of Specimen Collection
     derivation:
       source:
         variable: ODM.IT.LB.LBDTC
@@ -74,6 +82,7 @@ columns:
 
   - name: FORMORD
     type: int
+    label: Form Order
     derivation:
       mapping:
         source: ODM.FormOID
@@ -86,6 +95,7 @@ columns:
 
   - name: LBSEQ
     type: int
+    label: Sequence Number
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]

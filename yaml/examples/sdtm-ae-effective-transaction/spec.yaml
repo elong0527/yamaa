@@ -18,36 +18,43 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: AE_REC.STUDYID
 
   - name: DOMAIN
     type: str
+    label: Domain Abbreviation
     derivation:
       literal: AE
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: AE_REC.USUBJID
 
   - name: AESEQ
     type: int
+    label: Sequence Number
     derivation:
       source: AE_REC.AESEQ
 
   - name: AETERM
     type: str
+    label: Reported Term for the Adverse Event
     derivation:
       source: EFFECTIVE.AETERM
 
   - name: AESEV
     type: str
+    label: Severity/Intensity
     derivation:
       source: EFFECTIVE.AESEV
 
   - name: TXNTYPE
     type: str
+    label: Transaction Type
     derivation:
       source: EFFECTIVE.TXNTYPE
     verifications:
@@ -56,6 +63,7 @@ columns:
 
   - name: AUDITDTC
     type: datetime
+    label: Audit Date/Time
     derivation:
       source: EFFECTIVE.AUDITDTC
 

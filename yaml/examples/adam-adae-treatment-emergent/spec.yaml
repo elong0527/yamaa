@@ -12,21 +12,25 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: AE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: AE.USUBJID
 
   - name: AESEQ
     type: int
+    label: Sequence Number
     derivation:
       source: AE.AESEQ
 
   - name: ASTDT
     type: date
+    label: Analysis Start Date
     derivation:
       source: AE.AESTDTC
     verifications:
@@ -34,21 +38,25 @@ columns:
 
   - name: TRTSDT
     type: date
+    label: Date of First Exposure to Treatment
     derivation:
       source: ADSL.TRTSDT
 
   - name: TRTEDT
     type: date
+    label: Date of Last Exposure to Treatment
     derivation:
       source: ADSL.TRTEDT
 
   - name: TRTA
     type: str
+    label: Actual Treatment
     derivation:
       source: ADSL.TRT01A
 
   - name: TRTEMFL
     type: str
+    label: Treatment Emergent Analysis Flag
     derivation:
       case:
         branches:

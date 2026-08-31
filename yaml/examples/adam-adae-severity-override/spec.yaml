@@ -11,21 +11,25 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: AE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: AE.USUBJID
 
   - name: AESEQ
     type: int
+    label: Sequence Number
     derivation:
       source: AE.AESEQ
 
   - name: ASEV
     type: str
+    label: Analysis Severity/Intensity
     derivation:
       value:
         str_upper:
@@ -41,6 +45,7 @@ columns:
 
   - name: ASEVN
     type: int
+    label: Analysis Severity/Intensity (N)
     derivation:
       mapping:
         source: ASEV

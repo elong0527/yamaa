@@ -12,46 +12,55 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ADRSPRE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ADRSPRE.USUBJID
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       literal: RESP75
 
   - name: PARAM
     type: str
+    label: Parameter
     derivation:
       literal: EASI-75 Response
 
   - name: AVISIT
     type: str
+    label: Analysis Visit
     derivation:
       source: ADRSPRE.AVISIT
 
   - name: PCHG
     type: float
+    label: Percent Change from Baseline
     derivation:
       source: ADRSPRE.PCHG
 
   - name: SAEFL
     type: str
+    label: Serious Adverse Event Flag
     derivation:
       source: ADSL.SAEFL
 
   - name: DCSREAS
     type: str
+    label: Reason for Discontinuation
     derivation:
       source: ADSL.DCSREAS
 
   - name: AVALC
     type: str
+    label: Analysis Value (C)
     derivation:
       case:
         branches:
@@ -73,6 +82,7 @@ columns:
 
   - name: ARSN
     type: str
+    label: Analysis Reason
     derivation:
       case:
         branches:
@@ -92,6 +102,7 @@ columns:
 
   - name: AVAL
     type: int
+    label: Analysis Value
     derivation:
       case:
         branches:

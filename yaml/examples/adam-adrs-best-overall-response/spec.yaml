@@ -12,26 +12,31 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: ADSL.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: ADSL.USUBJID
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       literal: BOR
 
   - name: PARAM
     type: str
+    label: Parameter
     derivation:
       literal: Best Overall Response by Investigator
 
   - name: RANDDT
     type: date
+    label: Randomization Date
     derivation:
       source: ADSL.RANDDT
     verifications:
@@ -39,6 +44,7 @@ columns:
 
   - name: CRDT
     type: date
+    label: First Complete Response Date
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC = 'CR'"
@@ -46,6 +52,7 @@ columns:
 
   - name: PRDT
     type: date
+    label: First Partial Response Date
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC = 'PR'"
@@ -53,6 +60,7 @@ columns:
 
   - name: SDDT
     type: date
+    label: First Stable Disease Date
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC = 'SD' AND ADRSPRE.RANDDY >= 42"
@@ -60,6 +68,7 @@ columns:
 
   - name: NCNPDDT
     type: date
+    label: First Non-CR/Non-PD Date
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC = 'NON-CR/NON-PD' AND ADRSPRE.RANDDY >= 42"
@@ -67,6 +76,7 @@ columns:
 
   - name: PDDT
     type: date
+    label: Disease Progression Date
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC = 'PD'"
@@ -74,6 +84,7 @@ columns:
 
   - name: NEDT
     type: date
+    label: First Non-Progressive Assessment Date
     derivation:
       aggregate:
         filter: "ADRSPRE.AVALC IN ('CR', 'PR', 'SD', 'NON-CR/NON-PD', 'NE')"
@@ -81,6 +92,7 @@ columns:
 
   - name: AVALC
     type: str
+    label: Analysis Value (C)
     derivation:
       case:
         branches:
@@ -108,6 +120,7 @@ columns:
 
   - name: AVAL
     type: int
+    label: Analysis Value
     derivation:
       mapping:
         source: AVALC
@@ -125,6 +138,7 @@ columns:
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       case:
         branches:

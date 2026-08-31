@@ -12,36 +12,43 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: RS.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: RS.USUBJID
 
   - name: RSSEQ
     type: int
+    label: Sequence Number
     derivation:
       source: RS.RSSEQ
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       literal: OVR
 
   - name: PARAM
     type: str
+    label: Parameter
     derivation:
       literal: Overall Response by Investigator
 
   - name: RSDTC
     type: str
+    label: Date/Time of Assessment
     derivation:
       source: RS.RSDTC
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       date_impute:
         source: RSDTC
@@ -52,6 +59,7 @@ columns:
 
   - name: AVALC
     type: str
+    label: Analysis Value (C)
     derivation:
       source: RS.RSSTRESC
     verifications:
@@ -60,6 +68,7 @@ columns:
 
   - name: AVAL
     type: int
+    label: Analysis Value
     derivation:
       mapping:
         source: AVALC
@@ -77,11 +86,13 @@ columns:
 
   - name: TRTSDT
     type: date
+    label: Date of First Exposure to Treatment
     derivation:
       source: ADSL.TRTSDT
 
   - name: ADY
     type: int
+    label: Analysis Relative Day
     derivation:
       study_day:
         date: ADT
@@ -89,6 +100,7 @@ columns:
 
   - name: WORSTAVAL
     type: int
+    label: Worst Analysis Value
     derivation:
       aggregate:
         expr: "MAX(AVAL)"
@@ -96,6 +108,7 @@ columns:
 
   - name: WORSTORD
     type: int
+    label: Worst Response Order
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID, ADT]
@@ -104,6 +117,7 @@ columns:
 
   - name: ANL01FL
     type: str
+    label: Analysis Record Flag 01
     derivation:
       case:
         branches:

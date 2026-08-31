@@ -11,36 +11,43 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: RS.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: RS.USUBJID
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       literal: CONFRESP
 
   - name: RSSEQ
     type: int
+    label: Sequence Number
     derivation:
       source: RS.RSSEQ
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       source: RS.RSDTC
 
   - name: AVALC
     type: str
+    label: Analysis Value (C)
     derivation:
       source: RS.RSSTRESC
 
   - name: NEXTDT
     type: date
+    label: Next Assessment Date
     derivation:
       row_value:
         source: ADT
@@ -50,6 +57,7 @@ columns:
 
   - name: NEXTRESP
     type: str
+    label: Next Response
     derivation:
       row_value:
         source: AVALC
@@ -59,6 +67,7 @@ columns:
 
   - name: DAYS_TO_NEXT
     type: int
+    label: Days to Next Assessment
     derivation:
       date_diff:
         start: ADT
@@ -67,6 +76,7 @@ columns:
 
   - name: CONFIRMED
     type: str
+    label: Confirmation Flag
     derivation:
       case:
         branches:

@@ -12,41 +12,49 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: VS.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: VS.USUBJID
 
   - name: VSSEQ
     type: int
+    label: Sequence Number
     derivation:
       source: VS.VSSEQ
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
     derivation:
       source: VS.VSTESTCD
 
   - name: ADT
     type: date
+    label: Analysis Date
     derivation:
       source: VS.VSDTC
 
   - name: AVAL
     type: float
+    label: Analysis Value
     derivation:
       source: VS.VSSTRESN
 
   - name: TRTSDT
     type: date
+    label: Date of First Exposure to Treatment
     derivation:
       source: ADSL.TRTSDT
 
   - name: HGTDT
     type: date
+    label: Height Assessment Date
     derivation:
       case:
         branches:
@@ -56,6 +64,7 @@ columns:
 
   - name: HGTBLFL
     type: str
+    label: Baseline Height Record Flag
     derivation:
       baseline_flag:
         group_by: [STUDYID, USUBJID]
@@ -64,6 +73,7 @@ columns:
 
   - name: HEIGHTBL
     type: float
+    label: Baseline Height
     derivation:
       baseline_value:
         group_by: [STUDYID, USUBJID]

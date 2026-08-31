@@ -37,41 +37,49 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: AE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: AE.USUBJID
 
   - name: AESEQ
     type: int
+    label: Sequence Number
     derivation:
       source: AE.AESEQ
 
   - name: AETERM
     type: str
+    label: Reported Term for the Adverse Event
     derivation:
       source: AE.AETERM
 
   - name: AEDECOD
     type: str
+    label: Dictionary-Derived Term
     derivation:
       source: AE.AEDECOD
 
   - name: SMQ01NAM
     type: str
+    label: Standardized MedDRA Query 01 Name
     derivation:
       source: SMQ1.GRPNAME
 
   - name: SMQ01CD
     type: int
+    label: Standardized MedDRA Query 01 Code
     derivation:
       source: SMQ1.GRPID
 
   - name: SMQ01SC
     type: str
+    label: Standardized MedDRA Query 01 Scope
     derivation:
       source: SMQ1.SCOPE
     verifications:
@@ -80,16 +88,19 @@ columns:
 
   - name: SMQ02NAM
     type: str
+    label: Standardized MedDRA Query 02 Name
     derivation:
       source: SMQ2.GRPNAME
 
   - name: SMQ02CD
     type: int
+    label: Standardized MedDRA Query 02 Code
     derivation:
       source: SMQ2.GRPID
 
   - name: SMQ02SC
     type: str
+    label: Standardized MedDRA Query 02 Scope
     derivation:
       source: SMQ2.SCOPE
     verifications:
@@ -98,6 +109,7 @@ columns:
 
   - name: CQ01NAM
     type: str
+    label: Customized Query 01 Name
     derivation:
       source: CQ1.GRPNAME
 

@@ -12,16 +12,19 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: DM.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: DM.USUBJID
 
   - name: EOSDT
     type: date
+    label: End of Study Date
     derivation:
       aggregate:
         filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
@@ -29,6 +32,7 @@ columns:
 
   - name: EOSDECOD
     type: str
+    label: End of Study Decoded Term
     derivation:
       source:
         variable: DS.DSDECOD
@@ -39,6 +43,7 @@ columns:
 
   - name: EOSREAS
     type: str
+    label: End of Study Reason
     derivation:
       source:
         variable: DS.DSTERM
@@ -49,6 +54,7 @@ columns:
 
   - name: EOSSTT
     type: str
+    label: End of Study Status
     derivation:
       case:
         branches:
@@ -66,6 +72,7 @@ columns:
 
   - name: DCSREAS
     type: str
+    label: Reason for Discontinuation
     derivation:
       case:
         branches:

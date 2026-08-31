@@ -11,26 +11,31 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: AE.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: AE.USUBJID
 
   - name: AESEQ
     type: int
+    label: Sequence Number
     derivation:
       source: AE.AESEQ
 
   - name: AESPID
     type: str
+    label: Sponsor-Defined Identifier
     derivation:
       source: AE.AESPID
 
   - name: AEREFNUM
     type: int
+    label: Adverse Event Reference Number
     derivation:
       str_extract:
         source: AESPID
@@ -46,11 +51,13 @@ columns:
 
   - name: AETERM
     type: str
+    label: Reported Term for the Adverse Event
     derivation:
       source: AE.AETERM
 
   - name: AETERMLO
     type: str
+    label: Reported Term in Lower Case
     derivation:
       str_lower:
         source: AETERM
@@ -59,6 +66,7 @@ columns:
 
   - name: AERELLC
     type: str
+    label: Causality in Lower Case
     derivation:
       str_lower:
         source: AE.AEREL
@@ -66,6 +74,7 @@ columns:
 
   - name: AREL
     type: str
+    label: Analysis Causality
     derivation:
       str_upper:
         source: AERELLC

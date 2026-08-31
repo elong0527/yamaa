@@ -12,46 +12,55 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation:
       source: TRT.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation:
       source: TRT.USUBJID
 
   - name: EXTRT
     type: str
+    label: Name of Treatment
     derivation:
       source: TRT.EXTRT
 
   - name: EXDOSU
     type: str
+    label: Dose Units
     derivation:
       source: TRT.EXDOSU
 
   - name: DOSECUM
     type: float
+    label: Cumulative Dose
     derivation:
       aggregate: "SUM(EX.EXDOSE)"
 
   - name: NCYCLES
     type: int
+    label: Number of Treatment Cycles
     derivation:
       aggregate: "COUNT(EX.EXSEQ)"
 
   - name: PLANDOSE
     type: float
+    label: Planned Dose per Cycle
     derivation:
       source: TRT.PLANDOSE
 
   - name: PLANCYC
     type: int
+    label: Planned Number of Cycles
     derivation:
       source: TRT.PLANCYC
 
   - name: RDI
     type: float
+    label: Relative Dose Intensity
     derivation:
       compute:
         expr: "100 * DOSECUM / NULLIF(PLANDOSE * PLANCYC, 0)"
