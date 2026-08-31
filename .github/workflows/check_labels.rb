@@ -2,7 +2,9 @@ require "yaml"
 
 errors = []
 examples = File.expand_path("../../yaml/examples", __dir__)
-specs = Dir[File.join(examples, "*", "spec.yaml")].sort
+specs = Dir[File.join(examples, "*", "spec*.yaml")].select do |spec|
+  File.basename(spec).match?(/\Aspec(?:_[a-z][a-z0-9_]*)?\.yaml\z/)
+end.sort
 
 specs.each do |spec|
   relative_spec = spec.delete_prefix("#{Dir.pwd}/")

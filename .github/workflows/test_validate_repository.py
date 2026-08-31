@@ -536,6 +536,53 @@ bad_field: "what"
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('bad_field', result.stdout)
 
+    def test_multiple_spec_variants_are_discovered_and_validated(self):
+        ex_dir = self.root_dir / 'yaml' / 'examples' / 'variant-example'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'README.md').write_text('# Variant example\n')
+        (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
+        (ex_dir / 'spec_r.yaml').write_text('value: valid\n')
+        (ex_dir / 'spec_py.yaml').write_text(
+            'value: valid\nbad_field: true\n'
+        )
+        env = {
+            'version': '1.0',
+            'classes': {
+                'root_class': [
+                    {'value': {'type': 'str', 'required': True}}
+                ]
+            },
+            'aliases': {},
+            'registries': {},
+        }
+
+        paths = VALIDATOR.example_spec_paths(ex_dir)
+        self.assertEqual(
+            [path.name for path in paths],
+            ['spec_py.yaml', 'spec_r.yaml'],
+        )
+        self.assertEqual(
+            VALIDATOR.validate_examples_layout(self.root_dir), []
+        )
+        errors = VALIDATOR.validate_examples_structure(self.root_dir, env)
+        self.assertTrue(errors)
+        self.assertIn('spec_py.yaml', '\n'.join(errors))
+        self.assertIn('bad_field', '\n'.join(errors))
+
+    def test_layout_rejects_base_spec_mixed_with_variants(self):
+        ex_dir = self.root_dir / 'yaml' / 'examples' / 'mixed-specs'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'README.md').write_text('# Mixed specs\n')
+        (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
+        (ex_dir / 'spec.yaml').write_text('value: base\n')
+        (ex_dir / 'spec_r.yaml').write_text('value: variant\n')
+
+        errors = VALIDATOR.validate_examples_layout(self.root_dir)
+        self.assertTrue(errors)
+        self.assertIn('cannot mix', '\n'.join(errors))
+
     def test_empty_spec_is_rejected(self):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'empty-spec'
         ex_dir.mkdir(parents=True)

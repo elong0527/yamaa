@@ -2,7 +2,7 @@
 id: R015
 title: Record Lookup
 status: normative
-applies_to: [root.record_lookups, record_lookup_class, expression.source]
+applies_to: [root.record_lookups, record_lookup_class, expression.source, numeric_expression]
 depends_on: [R001, R002, R003, R004, R005, R006, R007, R008, R014]
 ---
 
@@ -74,7 +74,8 @@ and `keep`.
 ## Reading a record lookup
 
 A variable qualified by a record lookup `id` reads that column of the selected
-record, in any field typed as `variable`:
+record in any field typed as `variable`. R010 also permits the same qualified
+form as an identifier inside a column-level `numeric_expression`:
 
 ```yaml
 - name: RFXENDTC
@@ -85,6 +86,11 @@ record, in any field typed as `variable`:
   type: float
   derivation:
     source: LASTEX.EXDOSE
+- name: EXDOSE2
+  type: float
+  derivation:
+    compute:
+      expr: "2 * LASTEX.EXDOSE"
 ```
 
 The named column must exist in the record lookup's dataset, and the value

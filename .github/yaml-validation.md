@@ -14,14 +14,16 @@ The validation ensures:
    `dict[K,V]`, unions, classes, aliases, and registries) must resolve. The
    validator also enforces `values`, `pattern`, `min_length`, and `size`
    constraints.
-3. **Example specs**: Every example `spec.yaml` validates against the schemas,
-   checking required fields, unknown fields, and registry payload shapes.
+3. **Example specs**: Every `spec.yaml` or `spec_<variant>.yaml` validates
+   against the schemas, checking required fields, unknown fields, and registry
+   payload shapes.
    Negative examples (folders prefixed with `negative-`) are structurally
    validated; structural errors are only suppressed if their named path matches
    a `spec_path` declared in `expected/error.yaml` with `phase: validation`.
-4. **Layout**: All examples have `README.md`, `spec.yaml`, `input/`, and
-   `expected/`. Negative examples must provide `expected/error.yaml` and a `##
-   How to fix` section. Positive examples must not provide
+4. **Layout**: All examples have `README.md`, one `spec.yaml` or one or more
+   `spec_<variant>.yaml` files, `input/`, and `expected/`. A base spec cannot be
+   mixed with variants. Negative examples must provide `expected/error.yaml`
+   and a `## How to fix` section. Positive examples must not provide
    `expected/error.yaml`.
 5. **CSV consistency**: Expected output CSV files must match exactly the
    `output.columns` sequence declared by the specification.
