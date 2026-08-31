@@ -10,8 +10,8 @@ and SDTM-to-ADaM derivations. The design is under active development.
   `schema_verification.yaml` register and document closed derivation and
   verification types.
 - `registry/portable-functions.yaml` is the versioned scalar-function and
-  reducer contract; R and Python CI checks validate the same metadata and
-  fixtures, and its README table is generated.
+  reducer contract; a Python CI check validates its metadata and fixtures and
+  generates its README table.
 - `schema_function.yaml` registers calls to functions resolved by the project's
   global execution environment.
 - `rules/` contains shared execution semantics, with one rule per file.
