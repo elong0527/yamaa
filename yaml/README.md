@@ -14,6 +14,8 @@ and SDTM-to-ADaM derivations. The design is under active development.
 - `rules/` contains shared execution semantics, with one rule per file.
 - `examples/` contains source data, derivation specifications, and exact
   expected outputs.
+- `design/` contains focused design decisions that precede schema changes or
+  close a boundary question without adding one.
 - `agents.md` tells AI coding agents how to discover and maintain the design.
 
 The schema defines shape and operation-local behavior through adjacent comments

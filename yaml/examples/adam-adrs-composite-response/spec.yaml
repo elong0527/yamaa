@@ -3,6 +3,7 @@ domain: ADRS
 datasets:
   ADRSPRE: input/adrs_pre.csv
   ADSL: input/adsl.csv
+
 base: ADRSPRE
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 
@@ -58,23 +59,31 @@ columns:
     derivation:
       source: ADSL.DCSREAS
 
-  - name: AVALC
+  - name: RULE
     type: str
-    label: Analysis Value (C)
+    label: Decision Rule
     derivation:
       case:
         branches:
           - when: "SAEFL = 'Y' OR DCSREAS IS NOT NULL"
-            then:
-              literal: NON-RESPONDER
+            then: {literal: SAFETY}
           - when: "PCHG IS NULL"
-            then:
-              literal: NOT EVALUABLE
+            then: {literal: MISSING}
           - when: "PCHG <= -75"
-            then:
-              literal: RESPONDER
-        otherwise:
-          literal: NON-RESPONDER
+            then: {literal: THRESHOLD}
+        otherwise: {literal: OTHERWISE}
+
+  - name: AVALC
+    type: str
+    label: Analysis Value (C)
+    derivation:
+      mapping:
+        source: RULE
+        dict:
+          SAFETY: NON-RESPONDER
+          MISSING: NOT EVALUABLE
+          THRESHOLD: RESPONDER
+          OTHERWISE: NON-RESPONDER
     verifications:
       - not_missing: {}
       - allowed_values:
@@ -84,19 +93,13 @@ columns:
     type: str
     label: Analysis Reason
     derivation:
-      case:
-        branches:
-          - when: "SAEFL = 'Y' OR DCSREAS IS NOT NULL"
-            then:
-              literal: SAFETY OR DISCONTINUATION RULE
-          - when: "PCHG IS NULL"
-            then:
-              literal: COMPONENT MISSING
-          - when: "PCHG <= -75"
-            then:
-              literal: THRESHOLD MET
-        otherwise:
-          literal: THRESHOLD NOT MET
+      mapping:
+        source: RULE
+        dict:
+          SAFETY: SAFETY OR DISCONTINUATION RULE
+          MISSING: COMPONENT MISSING
+          THRESHOLD: THRESHOLD MET
+          OTHERWISE: THRESHOLD NOT MET
     verifications:
       not_missing: {}
 

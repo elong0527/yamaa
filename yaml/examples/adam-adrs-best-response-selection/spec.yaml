@@ -1,0 +1,94 @@
+schema_version: "1.0"
+domain: ADRS
+datasets:
+  ADRSPRE: input/adrs_pre.csv
+base: ADRSPRE
+keys: [STUDYID, USUBJID, ASEQ]
+
+output:
+  columns: [STUDYID, USUBJID, ASEQ, ADT, RANDDY, AVALC, BORCAT, BORPRI, BORSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: ADRSPRE.STUDYID}
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {source: ADRSPRE.USUBJID}
+
+  - name: ASEQ
+    type: int
+    label: Sequence Number
+    derivation: {source: ADRSPRE.ASEQ}
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: {source: ADRSPRE.ADT}
+
+  - name: RANDDY
+    type: int
+    label: Analysis Day Relative to Randomization
+    derivation: {source: ADRSPRE.RANDDY}
+
+  - name: AVALC
+    type: str
+    label: Analysis Value (C)
+    derivation: {source: ADRSPRE.AVALC}
+
+  - name: BORCAT
+    type: str
+    label: Best Overall Response Category
+    derivation:
+      case:
+        branches:
+          - when: "AVALC = 'CR'"
+            then: {literal: CR}
+          - when: "AVALC = 'PR'"
+            then: {literal: PR}
+          - when: "AVALC = 'SD' AND RANDDY >= 42"
+            then: {literal: SD}
+          - when: "AVALC = 'NON-CR/NON-PD' AND RANDDY >= 42"
+            then: {literal: NON-CR/NON-PD}
+          - when: "AVALC = 'PD'"
+            then: {literal: PD}
+          - when: "AVALC IN ('CR', 'PR', 'SD', 'NON-CR/NON-PD', 'NE')"
+            then: {literal: NE}
+        otherwise: {literal: null}
+    verifications:
+      allowed_values:
+        values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]
+
+  - name: BORPRI
+    type: int
+    label: Best Overall Response Priority
+    derivation:
+      mapping:
+        source: BORCAT
+        dict:
+          CR: 1
+          PR: 2
+          SD: 3
+          NON-CR/NON-PD: 4
+          PD: 5
+          NE: 6
+        missing: null
+    verifications:
+      range: {min: 1, max: 6}
+
+  - name: BORSEQ
+    type: int
+    label: Best Overall Response Sequence
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [BORPRI, ADT, ASEQ]
+        filter: "BORPRI IS NOT NULL"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, ASEQ]
+  - row_count: {min: 10, max: 10}
