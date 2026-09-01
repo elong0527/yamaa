@@ -3,6 +3,7 @@ require "set"
 require "yaml"
 
 IDENTIFIER = /[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/
+SQL_WORDS = Set.new(%w[AND BETWEEN FALSE IN IS LIKE NOT NULL OR TRUE UNKNOWN])
 
 def values(value)
   value.is_a?(Array) ? value : [value]
@@ -33,14 +34,21 @@ def variable_dependencies(value, declared, lookup_sources, resolving = Set.new)
   end
 end
 
-def identifier_dependencies(text, declared, lookup_sources)
+def identifier_tokens(text)
   return Set.new unless text.is_a?(String)
 
   unquoted = text.gsub(/'(?:''|[^'])*'/, " ")
-  unquoted.to_enum(:scan, IDENTIFIER).each_with_object(Set.new) do |_match, dependencies|
+  unquoted.to_enum(:scan, IDENTIFIER).each_with_object(Set.new) do |_match, tokens|
     token = Regexp.last_match[0]
     following = unquoted[Regexp.last_match.end(0)..].to_s.lstrip
     next if !token.include?(".") && following.start_with?("(")
+
+    tokens << token unless SQL_WORDS.include?(token.upcase)
+  end
+end
+
+def identifier_dependencies(text, declared, lookup_sources)
+  identifier_tokens(text).each_with_object(Set.new) do |token, dependencies|
 
     dependencies.merge(
       variable_dependencies(token, declared, lookup_sources)
@@ -316,7 +324,10 @@ def check(spec)
   values(document["record_lookups"]).each do |lookup|
     next unless lookup.is_a?(Hash) && lookup["id"]
 
-    lookup_sources[lookup["id"]] = lookup["source"] || document["keys"]
+    lookup_sources[lookup["id"]] = [
+      *values(lookup["source"] || document["keys"]),
+      lookup.dig("between", "value")
+    ].compact
   end
 
   graph = names.to_h { |name| [name, Set.new] }
@@ -336,6 +347,23 @@ def check(spec)
       graph[name].merge(
         derivation_dependencies(derivation, declared, lookup_sources)
       )
+    end
+
+    next unless row.key?("group_by") && row["filter"].is_a?(String)
+
+    filter_tokens = identifier_tokens(row["filter"])
+    qualified = filter_tokens.select { |token| token.include?(".") }
+    unless qualified.empty?
+      problems << "grouped row #{row["id"]} filter contains qualified " \
+                  "identifier(s): #{qualified.sort.join(', ')}"
+    end
+
+    row_columns = row["derivations"].keys.to_set
+    missing = filter_tokens.reject { |token| token.include?(".") }.to_set -
+              row_columns
+    unless missing.empty?
+      problems << "grouped row #{row["id"]} filter references column(s) " \
+                  "not derived by that row: #{missing.sort.join(', ')}"
     end
   end
 
@@ -385,20 +413,24 @@ rescue StandardError => error
   [error.message]
 end
 
-examples = File.expand_path("../../yaml/examples", __dir__)
-specs = if ARGV.empty?
-          Dir[File.join(examples, "*", "spec.yaml")].sort
-        else
-          ARGV.map { |path| File.expand_path(path) }
-        end
-errors = specs.flat_map do |spec|
-  relative = spec.delete_prefix("#{Dir.pwd}/")
-  check(spec).map { |problem| "#{relative}: #{problem}" }
-end
+if __FILE__ == $PROGRAM_NAME
+  examples = File.expand_path("../../yaml/examples", __dir__)
+  specs = if ARGV.empty?
+            Dir[File.join(examples, "*", "spec*.yaml")].select do |spec|
+              File.basename(spec).match?(/\Aspec(?:_[a-z][a-z0-9_]*)?\.yaml\z/)
+            end.sort
+          else
+            ARGV.map { |path| File.expand_path(path) }
+          end
+  errors = specs.flat_map do |spec|
+    relative = spec.delete_prefix("#{Dir.pwd}/")
+    check(spec).map { |problem| "#{relative}: #{problem}" }
+  end
 
-if errors.empty?
-  puts "Checked dependency and output order in #{specs.length} example specs."
-else
-  warn errors.join("\n")
-  exit 1
+  if errors.empty?
+    puts "Checked dependency and output order in #{specs.length} example specs."
+  else
+    warn errors.join("\n")
+    exit 1
+  end
 end

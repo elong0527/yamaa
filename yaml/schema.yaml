@@ -48,7 +48,7 @@ root_class:
     - rows:
         type: "list[row_class]"
         required: false
-        description: Templates constructing output rows from driving records; R001 evaluates them.
+        description: Templates constructing output rows from driving records or groups; R001 evaluates them.
     - verifications:
         type: [dataset_verification, "list[dataset_verification]"]
         required: false
@@ -81,6 +81,10 @@ record_lookup_class:
         type: [dataset_column, "list[dataset_column]"]
         required: false
         description: Dataset columns paired by position with source.
+    - between:
+        type: record_lookup_between_class
+        required: false
+        description: Current-row value matched inclusively against lower and upper dataset bounds.
     - filter:
         type: sql
         required: false
@@ -103,7 +107,21 @@ record_lookup_class:
         type: str
         required: false
         values: [missing, fail]
-        description: Result when a declared source value is missing; defaults to fail.
+        description: Result when a declared source or between value is missing; defaults to fail.
+
+record_lookup_between_class:
+    - value:
+        type: variable
+        required: true
+        description: Value read from the current row.
+    - lower:
+        type: dataset_column
+        required: true
+        description: Dataset column whose value is an inclusive lower bound.
+    - upper:
+        type: dataset_column
+        required: true
+        description: Dataset column whose value is an inclusive upper bound.
 
 column_class:
     - name:
@@ -140,10 +158,14 @@ row_class:
         type: dataset_id
         required: false
         description: Dataset driving this template's records; R001 falls back to base.
+    - group_by:
+        type: "list[variable]"
+        required: false
+        description: Non-empty driver-variable grain producing one candidate row per group; R001 defines grouped construction.
     - filter:
         type: sql
         required: false
-        description: Predicate selecting the driving records this template constructs a row from.
+        description: Predicate selecting driver records for an ungrouped template or completed candidate groups for a grouped template.
     - derivations:
         type: "dict[column_name, derivation]"
         required: true

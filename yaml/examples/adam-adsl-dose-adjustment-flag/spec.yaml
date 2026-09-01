@@ -1,0 +1,86 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  ADSL_PRE: input/adsl.csv
+  EX: input/ex.csv
+  EC: input/ec.csv
+  FA: input/fa.csv
+base: ADSL_PRE
+keys: [STUDYID, USUBJID]
+
+output:
+  columns: [STUDYID, USUBJID, DOSADJFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ADSL_PRE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ADSL_PRE.USUBJID
+
+  - name: EX_ADJ_CNT
+    type: int
+    label: Dose Adjustment Count in EX
+    derivation:
+      aggregate:
+        filter: "EX.EXADJ IS NOT NULL"
+        expr: "COUNT(EX.USUBJID)"
+
+  - name: EX_ANY_CNT
+    type: int
+    label: Record Count in EX
+    derivation:
+      aggregate:
+        expr: "COUNT(EX.USUBJID)"
+
+  - name: EC_ADJ_CNT
+    type: int
+    label: Dose Adjustment Count in EC
+    derivation:
+      aggregate:
+        filter: "EC.ECADJ IS NOT NULL"
+        expr: "COUNT(EC.USUBJID)"
+
+  - name: EC_ANY_CNT
+    type: int
+    label: Record Count in EC
+    derivation:
+      aggregate:
+        expr: "COUNT(EC.USUBJID)"
+
+  - name: FA_ADJ_CNT
+    type: int
+    label: Dose Adjustment Count in FA
+    derivation:
+      aggregate:
+        filter: "FA.FATESTCD = 'OCCUR' AND FA.FAOBJ = 'DOSE ADJUSTMENT' AND FA.FASTRESC = 'Y'"
+        expr: "COUNT(FA.USUBJID)"
+
+  - name: FA_ANY_CNT
+    type: int
+    label: Record Count in FA
+    derivation:
+      aggregate:
+        expr: "COUNT(FA.USUBJID)"
+
+  - name: DOSADJFL
+    type: str
+    label: Dose Adjustment Flag
+    derivation:
+      case:
+        branches:
+          - when: "EX_ADJ_CNT > 0 OR EC_ADJ_CNT > 0 OR FA_ADJ_CNT > 0"
+            then:
+              literal: "Y"
+          - when: "EX_ANY_CNT > 0 OR EC_ANY_CNT > 0 OR FA_ANY_CNT > 0"
+            then:
+              literal: "N"
+    verifications:
+      allowed_values:
+        values: ["Y", "N"]

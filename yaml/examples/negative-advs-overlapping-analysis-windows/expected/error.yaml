@@ -1,0 +1,10 @@
+phase: join
+condition: multiple_matches
+spec_paths:
+  - record_lookups[0]
+context:
+  record_lookup: AWIN
+  dataset: AWINDOW
+  match_count: 2
+  keys:
+    - STUDYID: CATH

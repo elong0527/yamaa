@@ -13,7 +13,11 @@ record_lookups:
     dataset: AWINDOW
     source: [STUDYID]
     key: [STUDYID]
-    filter: "AWINDOW.AWLO <= ADY AND ADY <= AWINDOW.AWHI"
+    between:
+      value: ADY
+      lower: AWLO
+      upper: AWHI
+    incomplete: missing
     unmatched: missing
 
 output:
@@ -126,8 +130,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, PARAMCD, VSSEQ]
   - row_count:
-      min: 9
-      max: 9
+      min: 11
+      max: 11
   - all_or_none:
       id: an-assigned-window-carries-its-order-and-target
       columns: [AVISIT, AVISITN, AWTARGET]

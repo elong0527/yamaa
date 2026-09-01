@@ -143,6 +143,12 @@ value of the declared type. This matters because R007 permits no implicit
 conversion between operation inputs: an operation consuming a row-derived
 column must be able to rely on its declared type.
 
+For a grouped row template, R001 evaluates its `filter` after stages 1 to 4
+complete for every value on the candidate row. A discarded candidate never
+enters the completed dataset, so stage 5 column verifications do not include
+it. An error reached while deriving the candidate still fails the run; the
+filter does not retroactively hide a failed derivation.
+
 Conversion must be deterministic and must not silently replace an error with a
 missing value. A conversion failure with no `conversion_failure` handler fails
 the run.

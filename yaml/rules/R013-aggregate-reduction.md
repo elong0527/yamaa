@@ -3,7 +3,7 @@ id: R013
 title: Aggregate Reduction
 status: normative
 applies_to: [expression.aggregate, aggregate_expression]
-depends_on: [R001, R002, R003, R004, R006, R007, R010, R011]
+depends_on: [R001, R002, R003, R004, R006, R007, R010, R011, R015]
 ---
 
 # Aggregate reduction
@@ -17,7 +17,7 @@ per reducer and without host-language code.
 
 This rule owns the `aggregate_expression` primitive: its grammar, reducer
 vocabulary, grain rule, result semantics, and failure conditions. It does not
-own the two contexts an aggregate is valid in, which is R007, the join that
+own the three contexts an aggregate is valid in, which is R007, the join that
 consumes a right-side reduction, which is R003, or the Boolean `filter`, which
 is R004.
 
@@ -27,15 +27,18 @@ apply here unchanged and are not restated. R010 stays per-row and admits no
 reduction; this rule adds reduction and admits no window, `CASE`, comparison,
 or Boolean construct.
 
-Ordering, and selecting one record rather than reducing many, stay with the
-window expressions R007 defines and with `multiple_matches` under R003.
+Ordering, and choosing one record from several, stay with the window
+expressions R007 defines and with `multiple_matches` under R003. `ONLY` does
+not choose: it accepts exactly one record and fails when several are present.
 
 ## Scope
 
 An `aggregate_expression` evaluates over the records of one relation and
-returns one value per group. Its result is a single value for the group, so a
-reduction never changes row count: R003 joins a right-side reduction to the
-constructed rows, and an output-row reduction broadcasts under R007.
+returns one value per group. Its result is a single value for the group, so the
+expression itself never changes row count: R003 joins a right-side reduction
+to constructed rows, an output-row reduction broadcasts under R007, and a
+grouped row template asks the expression for one value while R001 owns whether
+that candidate row is appended.
 
 ## Relations and identifiers
 
@@ -43,8 +46,8 @@ An identifier is `NAME` or `DATASET.NAME`, resolved as R002 resolves the same
 name in the same phase, so a reducer expression and a predicate never disagree
 about a name.
 
-**Every identifier in one expression must name one relation.** Two forms exist
-and must not be mixed:
+**Every identifier in one expression must name one relation.** Three forms
+exist and must not be mixed:
 
 - **Qualified.** Every identifier names the same declared dataset. The
   expression reduces that right side before the R003 join.
@@ -52,22 +55,29 @@ and must not be mixed:
   expression reduces constructed output rows within the partition its
   `group_by` declares and broadcasts the result, which is R007's second
   aggregate context.
+- **Grouped row driver.** Every identifier is qualified to the row driver of
+  the enclosing grouped row template. The expression reduces only the records
+  of the current driver group, which is R007's third aggregate context.
 
 A single expression naming two datasets, or mixing a qualified identifier with
 an unqualified one, is an error. A reduction is not a join: an expression
-combining values from two relations binds each of them to a column first and
-composes the results with `compute`, which keeps R010's ban on qualified
-identifiers intact and keeps every join under R003.
+combining values from two dataset relations binds each of them to a column
+first and composes the results with `compute`. R010 admits a qualified
+identifier only for a record already selected by an R015 record lookup; it
+still rejects an arbitrary dataset-qualified identifier, so every join remains
+under R003 or R015.
 
 An ODM contextual reference is not available in this grammar, because its item
 identifiers carry further periods. Bind it with a structured `source` first.
 
-`group_by` follows the same division. A qualified expression declares
-qualified right-side columns, each of which must also be an output key, so the
-reduction stays coarser than or equal to the applicable keys R003 joins on. An
-unqualified expression declares current-output columns and must declare at
-least one: a reduction over the whole output is not registered, because no
-example needs one.
+`group_by` follows the first two forms. An ordinary qualified expression
+declares qualified right-side columns, each of which must also be an output
+key, so the reduction stays coarser than or equal to the applicable keys R003
+joins on. An unqualified expression declares current-output columns and must
+declare at least one: a reduction over the whole output is not registered,
+because no example needs one. A grouped-row aggregate declares no local
+`group_by`; the enclosing `row.group_by` already fixes its current relation and
+grain.
 
 ## Grammar
 
@@ -97,6 +107,7 @@ Permitted reducers are exactly:
 | `MIN(x)` | smallest non-missing value |
 | `MAX(x)` | largest non-missing value |
 | `MEAN(x)` | arithmetic mean of the non-missing numeric values |
+| `ONLY(x)` | the value from the group's only record; more than one record fails |
 
 Any other reducer name, any window function or `OVER`, any subquery, any
 `CASE`, any comparison or Boolean operator, any string literal, and any
@@ -113,6 +124,12 @@ a host language's mean implementation.
 additionally have to fix its interpolation rule before two runtimes could
 agree, so it is not registered by default.
 
+`ONLY` counts records, not non-missing values. An eligible group with one
+record returns that record's value even when it is missing. An eligible group
+with more than one record fails rather than choosing by value or record order.
+It is the reduction for a grouped calculation that requires one source record
+and must reject duplicates.
+
 **Reductions do not nest.** The argument of a reduction must contain no
 reduction, so `MAX(SUM(EX.EXDOSE))` is an error. Reducing at one grain and
 reducing that result at another needs an intermediate grain the language cannot
@@ -126,7 +143,8 @@ name. Naming one is open work.
 `group_by` column.** `SUM(a) / SUM(b)` is legal. `SUM(a) + b` is an error
 unless `b` is grouped on, because a value that varies within the group gives
 the expression no single answer, and silently taking one record's value would
-depend on record order.
+depend on record order. For a grouped-row aggregate, the enclosing
+`row.group_by` supplies those grouped columns.
 
 An identifier that is grouped on is constant within the group and may be used
 directly, so `SUM(EX.EXDOSE) / EX.EXPLDOS` is legal exactly when `EX.EXPLDOS`
@@ -136,14 +154,14 @@ is declared in `group_by`.
 
 - An expression that is a single reduction retains that reduction's result
   type. `COUNT` returns `int`; `MEAN` returns `float`. `SUM` retains the numeric
-  type of its argument. `MIN` and `MAX` retain the type they reduce, whatever
-  that type is.
+  type of its argument. `MIN`, `MAX`, and `ONLY` retain the type they reduce,
+  whatever that type is.
 - An expression using any operator or R010 function is numeric. Every
   reduction and every grouped identifier in it must be numeric, and R010's
   promotion rules give the result type.
 - `SUM` and `MEAN` require a numeric argument. `MIN` and `MAX` require mutually
   comparable values; a column mixing incomparable types is an error rather
-  than an implementation-defined order. `COUNT` accepts any type.
+  than an implementation-defined order. `COUNT` and `ONLY` accept any type.
 
 R011 converts the completed derivation result, as it does for every other
 expression. No implicit conversion happens inside this grammar.
@@ -163,9 +181,14 @@ the three runtimes this design targets disagree:
 | Every value missing -- `SUM`, `MIN`, `MAX`, `MEAN` | missing, never zero |
 | Every value missing -- `COUNT(x)` | `0`, because the records exist |
 | No record in the group -- `COUNT(x)`, `COUNT(D.*)` | missing |
+| No record in the group -- `ONLY(x)` | missing |
+| One record whose value is missing -- `ONLY(x)` | missing |
 
 An uncollected quantity is therefore never reported as a measured zero, and an
 absent record stays distinguishable from a collected missing value.
+
+More than one record reaching `ONLY` is not a missing-value case. It fails the
+current derivation and reports the group values and record count.
 
 `MEAN` answers missing before applying its defined division when no non-missing
 value remains, so an all-missing group does not fail with division by zero.
@@ -199,6 +222,8 @@ a rule that needs a record chosen by order uses a window or
 - An `aggregate_expression` that does not parse under this grammar: fail.
 - A reducer name outside the table, or one called with a prohibited argument
   count: fail.
+- `ONLY` receiving more than one record after its filter: fail, reporting the
+  enclosing row, group values, and record count.
 - A nested reduction: fail, reporting the outer and inner reducers.
 - An identifier outside every reduction that is not a `group_by` column: fail,
   reporting the identifier.
@@ -208,6 +233,8 @@ a rule that needs a record chosen by order uses a window or
 - An ODM contextual reference: fail.
 - A qualified `group_by` column that is not an output key, or an unqualified
   expression with no `group_by`: fail.
+- A grouped-row aggregate declaring its own `group_by`, naming an identifier
+  outside its row driver, or being used by an ungrouped row template: fail.
 - `SUM` or `MEAN` over a non-numeric argument, or arithmetic over a non-numeric
   reduction or grouped identifier: fail.
 - `MIN` or `MAX` over values that are not mutually comparable: fail.

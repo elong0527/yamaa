@@ -1,0 +1,11 @@
+phase: row_construction
+condition: aggregate_multiple_records
+spec_paths:
+  - rows[1].derivations.WBCVAL.aggregate
+context:
+  reducer: ONLY
+  row: derived_lymph
+  group:
+    USUBJID: P01
+    VISIT: CYCLE 1 DAY 1
+  record_count: 2

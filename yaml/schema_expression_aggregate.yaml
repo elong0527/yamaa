@@ -3,7 +3,7 @@ version: "1.0"
 # R013 defines the reducer grammar, the results it pins, and its failures.
 
 expressions:
-    aggregate: # Reduces the records of one relation to one value under R013.
+    aggregate: # Reduces one relation or the current driver group to one value under R013.
         type: [aggregate_expression, aggregate_class]
 
 aggregate_class:
@@ -12,7 +12,7 @@ aggregate_class:
         description: Predicate selecting records before reduction.
     - group_by:
         type: "list[variable]"
-        description: Grain of the reduction; right-side columns for a qualified expression and current-output columns for an unqualified one.
+        description: Grain of an ordinary right-side or output-row reduction; omit when the enclosing grouped row owns the grain.
     - expr:
         type: aggregate_expression
         required: true

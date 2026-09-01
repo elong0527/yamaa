@@ -158,6 +158,67 @@ class TestTypeValidation(unittest.TestCase):
         self.assertIn("expected int", errors[0])
 
 
+class TestGroupedRows(unittest.TestCase):
+    def test_accepts_driver_qualified_group_variables(self):
+        spec = {
+            "base": "ADLBIN",
+            "rows": [
+                {
+                    "id": "derived",
+                    "group_by": ["ADLBIN.USUBJID", "ADLBIN.VISIT"],
+                }
+            ],
+        }
+
+        errors = VALIDATOR.validate_grouped_rows(spec, "example/spec.yaml")
+
+        self.assertEqual(errors, [])
+
+    def test_rejects_empty_group(self):
+        spec = {
+            "base": "ADLBIN",
+            "rows": [{"id": "derived", "group_by": []}],
+        }
+
+        errors = VALIDATOR.validate_grouped_rows(spec, "example/spec.yaml")
+
+        self.assertTrue(errors)
+        self.assertIn("at least one", "\n".join(errors))
+
+    def test_rejects_unqualified_or_wrong_driver_variable(self):
+        spec = {
+            "base": "ADLBIN",
+            "rows": [
+                {
+                    "id": "derived",
+                    "dataset": "ADLBIN",
+                    "group_by": ["USUBJID", "OTHER.VISIT"],
+                }
+            ],
+        }
+
+        errors = VALIDATOR.validate_grouped_rows(spec, "example/spec.yaml")
+
+        self.assertEqual(len(errors), 2)
+        self.assertIn("driver 'ADLBIN'", "\n".join(errors))
+
+    def test_rejects_duplicate_group_variable(self):
+        spec = {
+            "base": "ADLBIN",
+            "rows": [
+                {
+                    "id": "derived",
+                    "group_by": ["ADLBIN.USUBJID", "ADLBIN.USUBJID"],
+                }
+            ],
+        }
+
+        errors = VALIDATOR.validate_grouped_rows(spec, "example/spec.yaml")
+
+        self.assertTrue(errors)
+        self.assertIn("duplicate", "\n".join(errors))
+
+
 class TestValidatorCLI(unittest.TestCase):
     def setUp(self):
         self.tool_path = Path(__file__).parent / 'validate_repository.py'
@@ -535,6 +596,53 @@ bad_field: "what"
         result = subprocess.run([sys.executable, str(self.tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('bad_field', result.stdout)
+
+    def test_multiple_spec_variants_are_discovered_and_validated(self):
+        ex_dir = self.root_dir / 'yaml' / 'examples' / 'variant-example'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'README.md').write_text('# Variant example\n')
+        (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
+        (ex_dir / 'spec_r.yaml').write_text('value: valid\n')
+        (ex_dir / 'spec_py.yaml').write_text(
+            'value: valid\nbad_field: true\n'
+        )
+        env = {
+            'version': '1.0',
+            'classes': {
+                'root_class': [
+                    {'value': {'type': 'str', 'required': True}}
+                ]
+            },
+            'aliases': {},
+            'registries': {},
+        }
+
+        paths = VALIDATOR.example_spec_paths(ex_dir)
+        self.assertEqual(
+            [path.name for path in paths],
+            ['spec_py.yaml', 'spec_r.yaml'],
+        )
+        self.assertEqual(
+            VALIDATOR.validate_examples_layout(self.root_dir), []
+        )
+        errors = VALIDATOR.validate_examples_structure(self.root_dir, env)
+        self.assertTrue(errors)
+        self.assertIn('spec_py.yaml', '\n'.join(errors))
+        self.assertIn('bad_field', '\n'.join(errors))
+
+    def test_layout_rejects_base_spec_mixed_with_variants(self):
+        ex_dir = self.root_dir / 'yaml' / 'examples' / 'mixed-specs'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'README.md').write_text('# Mixed specs\n')
+        (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
+        (ex_dir / 'spec.yaml').write_text('value: base\n')
+        (ex_dir / 'spec_r.yaml').write_text('value: variant\n')
+
+        errors = VALIDATOR.validate_examples_layout(self.root_dir)
+        self.assertTrue(errors)
+        self.assertIn('cannot mix', '\n'.join(errors))
 
     def test_empty_spec_is_rejected(self):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'empty-spec'
