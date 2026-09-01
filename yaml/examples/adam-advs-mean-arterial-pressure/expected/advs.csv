@@ -1,0 +1,11 @@
+STUDYID,USUBJID,PARAMCD,PARAM,AVAL,VISIT,DTYPE
+S1,P01,DIABP,Diastolic Blood Pressure (mmHg),51,BASELINE,
+S1,P01,SYSBP,Systolic Blood Pressure (mmHg),121,BASELINE,
+S1,P01,DIABP,Diastolic Blood Pressure (mmHg),50,WEEK 2,
+S1,P01,SYSBP,Systolic Blood Pressure (mmHg),121,WEEK 2,
+S1,P02,DIABP,Diastolic Blood Pressure (mmHg),79,BASELINE,
+S1,P02,SYSBP,Systolic Blood Pressure (mmHg),130,BASELINE,
+S1,P03,SYSBP,Systolic Blood Pressure (mmHg),110,BASELINE,
+S1,P01,MAP,Mean Arterial Pressure (mmHg),74.33333333333333,BASELINE,CALCULATION
+S1,P01,MAP,Mean Arterial Pressure (mmHg),73.66666666666667,WEEK 2,CALCULATION
+S1,P02,MAP,Mean Arterial Pressure (mmHg),96,BASELINE,CALCULATION

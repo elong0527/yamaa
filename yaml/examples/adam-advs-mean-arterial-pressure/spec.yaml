@@ -1,0 +1,91 @@
+schema_version: "1.0"
+domain: ADVS
+datasets:
+  ADVSIN: {path: input/advs.csv, types: {AVAL: float}}
+base: ADVSIN
+keys: [STUDYID, USUBJID, VISIT, PARAMCD]
+
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  - name: SYSBP_VAL
+    type: float
+    label: Systolic Blood Pressure Value
+
+  - name: DIABP_VAL
+    type: float
+    label: Diastolic Blood Pressure Value
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+
+  - name: DTYPE
+    type: str
+    label: Derivation Type
+
+rows:
+  - id: collected
+    derivations:
+      STUDYID: {source: ADVSIN.STUDYID}
+      USUBJID: {source: ADVSIN.USUBJID}
+      PARAMCD: {source: ADVSIN.PARAMCD}
+      PARAM: {source: ADVSIN.PARAM}
+      SYSBP_VAL: {literal: null}
+      DIABP_VAL: {literal: null}
+      AVAL: {source: ADVSIN.AVAL}
+      VISIT: {source: ADVSIN.VISIT}
+      DTYPE: {literal: null}
+
+  - id: derived_map
+    group_by: [ADVSIN.STUDYID, ADVSIN.USUBJID, ADVSIN.VISIT]
+    filter: "SYSBP_VAL IS NOT NULL AND DIABP_VAL IS NOT NULL"
+    derivations:
+      STUDYID: {source: ADVSIN.STUDYID}
+      USUBJID: {source: ADVSIN.USUBJID}
+      PARAMCD: {literal: MAP}
+      PARAM: {literal: Mean Arterial Pressure (mmHg)}
+      SYSBP_VAL:
+        aggregate:
+          filter: "ADVSIN.PARAMCD = 'SYSBP'"
+          expr: "ONLY(ADVSIN.AVAL)"
+      DIABP_VAL:
+        aggregate:
+          filter: "ADVSIN.PARAMCD = 'DIABP'"
+          expr: "ONLY(ADVSIN.AVAL)"
+      AVAL:
+        compute:
+          expr: "(2 * DIABP_VAL + SYSBP_VAL) / 3"
+      VISIT: {source: ADVSIN.VISIT}
+      DTYPE: {literal: CALCULATION}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VISIT, PARAMCD]
+  - row_count:
+      min: 10
+      max: 10
+  - predicate:
+      id: no-pre-existing-target
+      assert: "NOT (PARAMCD = 'MAP' AND DTYPE IS NULL)"
