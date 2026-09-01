@@ -275,6 +275,14 @@ distinguishes it from a fully collected one. `date_precision` reads how much
 of a date the collected text carried, so a specification can record beside the
 date what it supplied; the date value itself still carries no precision.
 
+`minimum_source_precision` bounds how much `date_impute` may invent. Its
+default is `year`, preserving completion of both year-only and year-month
+sources. With `month`, a year-month source may receive the declared day, while
+a valid year-only source produces missing because supplying both month and day
+would exceed the declared policy. A complete source date is always returned
+unchanged. Falling below the minimum is neither a missing source nor invalid
+text, so it does not invoke either R008 handler.
+
 Both read the same source text and answer the same two conditions about it, so
 one handler stage in R008 serves both: a missing source, and a non-missing
 source that is neither a complete date nor a date prefix. Text that is not a
@@ -294,7 +302,7 @@ Their input and result types are:
 |---|---|---|
 | `date_diff` | `start` and `end` are `date` | `int` |
 | `study_day` | `date` and `reference` are `date` | `int`, never zero |
-| `date_impute` | `source` is `str`; `month` and `day` are `int` | `date` |
+| `date_impute` | `source` is `str`; `month` and `day` are `int`; `minimum_source_precision` is `year` or `month` | `date` |
 | `date_precision` | `source` is `str` | `str` |
 
 **Every temporal operation is a date operation.** A `datetime` operand is an
@@ -307,7 +315,8 @@ moments enters the vocabulary when an example needs it.
 
 `date_impute` requires its `month` and `day` to lie within the calendar
 ranges its registration states, and the date it completes to must be a real
-calendar date.
+calendar date. The range checks still apply when a component is not used, so a
+specification cannot hide an invalid literal behind a precision policy.
 
 A `datetime` is therefore produced only by converting text and consumed only
 by the comparisons above, which is what the examples need and no more.
