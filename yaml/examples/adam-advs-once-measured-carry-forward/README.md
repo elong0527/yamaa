@@ -1,7 +1,7 @@
 # ADaM ADVS: carry forward a once-measured characteristic
 
-This example uses long-form vital signs with each subject's planned measurement
-dates and treatment start to derive one record per planned measurement:
+This example uses a planned-measurement spine, long-form vital signs, and
+subject treatment dates to derive one record per planned measurement:
 
 - `ASEQ` numbers the planned measurements and `VSSEQ` identifies the collected
   record when the measurement occurred;

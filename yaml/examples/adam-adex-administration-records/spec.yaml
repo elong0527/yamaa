@@ -1,14 +1,11 @@
 schema_version: "1.0"
 domain: ADEX
 datasets:
-  EX:
-    path: input/ex.csv
-    types: {EXSEQ: int, EXDOSE: float, EXDOSCNT: int}
+  EXADM:
+    path: input/ex_administrations.csv
+    types: {EXSEQ: int, EXDOSE: float, ADOSEN: int, NDOSE: int}
 
-base: EX
-expand:
-  count: EX.EXDOSCNT
-  index: ADOSEN
+base: EXADM
 keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
 
 output:
@@ -18,51 +15,52 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {source: EX.STUDYID}
+    derivation: {source: EXADM.STUDYID}
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: {source: EX.USUBJID}
+    derivation: {source: EXADM.USUBJID}
 
   - name: EXSEQ
     type: int
     label: Sequence Number
-    derivation: {source: EX.EXSEQ}
+    derivation: {source: EXADM.EXSEQ}
 
   - name: EXTRT
     type: str
     label: Name of Treatment
-    derivation: {source: EX.EXTRT}
+    derivation: {source: EXADM.EXTRT}
 
   - name: EXDOSE
     type: float
     label: Dose per Administration
-    derivation: {source: EX.EXDOSE}
+    derivation: {source: EXADM.EXDOSE}
 
   - name: EXDOSU
     type: str
     label: Dose Units
-    derivation: {source: EX.EXDOSU}
+    derivation: {source: EXADM.EXDOSU}
 
   - name: ASTDT
     type: date
     label: Analysis Start Date
-    derivation: {source: EX.EXSTDTC}
+    derivation: {source: EXADM.EXSTDTC}
 
   - name: AENDT
     type: date
     label: Analysis End Date
-    derivation: {source: EX.EXENDTC}
+    derivation: {source: EXADM.EXENDTC}
 
   - name: ADOSEN
     type: int
     label: Administration Number
+    derivation: {source: EXADM.ADOSEN}
 
   - name: NDOSE
     type: int
     label: Number of Administrations
-    derivation: {source: EX.EXDOSCNT}
+    derivation: {source: EXADM.NDOSE}
 
 verifications:
   - unique:

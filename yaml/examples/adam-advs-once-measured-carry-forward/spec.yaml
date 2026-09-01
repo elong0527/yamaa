@@ -1,18 +1,21 @@
 schema_version: "1.0"
 domain: ADVS
 datasets:
+  PLAN:
+    path: input/plan.csv
+    types: {ASEQ: int}
   VS: input/vs.csv
-  ADSL:
-    path: input/adsl.csv
-    types: {PLANCNT: int}
+  ADSL: input/adsl.csv
 
-base: ADSL
-expand:
-  count: ADSL.PLANCNT
-  index: ASEQ
+base: PLAN
 keys: [STUDYID, USUBJID, ASEQ]
 
 record_lookups:
+  - id: SUBJECT
+    dataset: ADSL
+    source: [STUDYID, USUBJID]
+    key: [STUDYID, USUBJID]
+
   - id: COLLECTED
     dataset: VS
     source: [STUDYID, USUBJID, PARAMCD, ADT]
@@ -27,39 +30,31 @@ columns:
     type: str
     label: Study Identifier
     derivation:
-      source: ADSL.STUDYID
+      source: PLAN.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation:
-      source: ADSL.USUBJID
+      source: PLAN.USUBJID
 
   - name: ASEQ
     type: int
     label: Analysis Sequence Number
+    derivation:
+      source: PLAN.ASEQ
 
   - name: PARAMCD
     type: str
     label: Parameter Code
     derivation:
-      case:
-        branches:
-          - when: "ASEQ = 1"
-            then: {literal: HEIGHT}
-        otherwise: {literal: WEIGHT}
+      source: PLAN.PARAMCD
 
   - name: ADT
     type: date
     label: Analysis Date
     derivation:
-      case:
-        branches:
-          - when: "ASEQ = 1"
-            then: {source: ADSL.HGTDT}
-          - when: "ASEQ = 2"
-            then: {source: ADSL.WGTBLDT}
-        otherwise: {source: ADSL.WGTW3DT}
+      source: PLAN.ADT
 
   - name: VSSEQ
     type: int
@@ -77,7 +72,7 @@ columns:
     type: date
     label: Date of First Exposure to Treatment
     derivation:
-      source: ADSL.TRTSDT
+      source: SUBJECT.TRTSDT
 
   - name: HGTDT
     type: date

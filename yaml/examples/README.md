@@ -50,9 +50,9 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adce-worst-toxicity-grade`](adam-adce-worst-toxicity-grade/) | flag the subject's worst-grade event |
 | [`adam-adcm-on-treatment-flag`](adam-adcm-on-treatment-flag/) | flag a medication during treatment |
 | [`adam-adeg-fridericia-qtc`](adam-adeg-fridericia-qtc/) | derive a Fridericia-corrected QT parameter |
+| [`adam-adex-administration-records`](adam-adex-administration-records/) | derive administration-level exposure records |
 | [`adam-adex-cumulative-dose`](adam-adex-cumulative-dose/) | summarize cumulative exposure |
 | [`adam-adex-dose-reduction-flag`](adam-adex-dose-reduction-flag/) | derive a dose reduction flag |
-| [`adam-adex-single-dose-expansion`](adam-adex-single-dose-expansion/) | expand an aggregate dose into its administrations |
 | [`adam-adex-uncollected-exposure`](adam-adex-uncollected-exposure/) | tell an uncollected dose from an absent administration |
 | [`adam-adlb-absolute-wbc-differential`](adam-adlb-absolute-wbc-differential/) | derive absolute WBC differentials |
 | [`adam-adlb-bds`](adam-adlb-bds/) | build a BDS dataset with baseline and change |
@@ -90,8 +90,8 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-advs-growth-percentile`](adam-advs-growth-percentile/) | express a measurement as a growth percentile |
 | [`adam-advs-once-measured-carry-forward`](adam-advs-once-measured-carry-forward/) | carry forward a once-measured characteristic |
 | [`negative-adam-adsl-stratification-reconciliation`](negative-adam-adsl-stratification-reconciliation/) | reconcile randomization strata |
-| [`negative-adex-missing-dose-count`](negative-adex-missing-dose-count/) | reject an administration expansion with no dose count |
 | [`negative-adex-relative-dose-intensity`](negative-adex-relative-dose-intensity/) | reject a dose intensity measured against a per-record plan |
+| [`negative-adex-single-dose-expansion`](negative-adex-single-dose-expansion/) | reject one record per administration built from an aggregate dose |
 | [`negative-adlb-absolute-wbc-duplicate`](negative-adlb-absolute-wbc-duplicate/) | reject duplicate WBC inputs for an absolute differential |
 | [`negative-adlb-computed-parameter`](negative-adlb-computed-parameter/) | reject a parameter computed from the dataset being built |
 | [`negative-adrs-partial-response-after-complete-response`](negative-adrs-partial-response-after-complete-response/) | reject a partial response recorded after a complete response |

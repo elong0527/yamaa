@@ -2,8 +2,7 @@
 id: R001
 title: Execution Model
 status: normative
-applies_to: [root.base, root.rows, root.expand, row.dataset, row.group_by,
-  row.filter, root.columns, derivation]
+applies_to: [root.base, root.rows, row.dataset, row.group_by, row.filter, root.columns, derivation]
 depends_on: [R002, R003, R004, R005, R007, R008, R010, R012, R013, R015]
 ---
 
@@ -24,8 +23,7 @@ does not define what an expression means (R007), how a name binds to a source
 
 Derivation has two phases:
 
-1. Row construction evaluates `rows` entries or `expand` and may change row
-   count.
+1. Row construction evaluates `rows` entries and may change row count.
 2. Column derivation enriches constructed rows and must not change row count.
 
 Each `rows` entry uses its explicit `dataset` as the row driver. If `dataset`
@@ -53,21 +51,8 @@ Constructed rows are appended in specification order, using driver order for
 record-driven templates and first-occurrence group order for group-driven
 templates.
 
-When `rows` is absent or empty and `expand` is not declared, row construction
-produces exactly one output row per `base` record, in base-record order. `base`
-is required in that case.
-
-An artifact may replace ordinary `rows` construction with `expand`. It
-requires `base`; `count` names a qualified field of that base and constructs
-that many rows for each base record, in base-record order. Within each record,
-`index` receives the integers from 1 through `count` in order. `count` must
-resolve to a non-missing, non-negative `int`. Zero contributes no row. R005
-treats `index` as the row-phase derivation of that declared integer column.
-
-`rows` and `expand` are mutually exclusive. When both are absent, the ordinary
-one-row-per-`base` construction applies. Group-driven construction remains a
-mode of an individual row template through `rows[].group_by`; it has no second
-artifact-level spelling.
+When `rows` is absent or empty, row construction produces exactly one output
+row per `base` record, in base-record order. `base` is required in that case.
 
 ## Expression evaluation
 
@@ -137,11 +122,7 @@ declaration order.
 ## Errors
 
 - A row without an explicit `dataset` or default `base`: fail.
-- A specification with neither `rows` nor `expand` and no `base`: fail.
-- An `expand` declaration without `base`: fail.
-- Both `rows` and `expand`: fail.
-- An `expand.count` that is missing, not `int`, or negative: fail during row
-  construction and report the base record.
+- A specification with no `rows` entry and no `base`: fail.
 - An empty or duplicate `row.group_by`: fail.
 - A `row.group_by` variable not qualified to that row's driver: fail.
 - A grouped row derivation reading a non-grouped driver field without an

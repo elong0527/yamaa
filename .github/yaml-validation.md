@@ -18,10 +18,6 @@ The validation ensures:
    against the schemas, checking required fields, unknown fields, and registry
    payload shapes. A grouped row must declare a non-empty, duplicate-free
    `group_by` whose variables are qualified to that row's driver.
-   Counted expansion must be mutually exclusive with `rows`, bind its `int`
-   count to `base`, and name one underived declared `int` column as its
-   generated index; every other expanded column must declare a column-level
-   derivation.
    Negative examples (folders prefixed with `negative-`) are structurally
    validated; structural errors are only suppressed if their named path matches
    a `spec_path` declared in `expected/error.yaml` with `phase: validation`.

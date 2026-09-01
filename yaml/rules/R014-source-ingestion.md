@@ -2,8 +2,7 @@
 id: R014
 title: Source-Format Ingestion
 status: normative
-applies_to: [root.datasets, root.expand, dataset_source, dataset_class,
-  expression.source]
+applies_to: [root.datasets, dataset_source, dataset_class, expression.source]
 depends_on: [R002, R006, R011, R016]
 ---
 
@@ -11,8 +10,8 @@ depends_on: [R002, R006, R011, R016]
 
 ## Intent
 
-Define what a stored field becomes before a derivation or row-construction
-field reads it: when it is missing, and which type it carries.
+Define what a stored field becomes before any expression reads it: when it is
+missing, and which type it carries.
 
 ## Boundaries
 

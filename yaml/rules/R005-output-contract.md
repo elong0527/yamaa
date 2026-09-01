@@ -2,8 +2,7 @@
 id: R005
 title: Output Contract
 status: normative
-applies_to: [root.keys, root.output, root.columns, root.expand, column.type,
-  row.derivations, derivation]
+applies_to: [root.keys, root.output, root.columns, column.type, row.derivations, derivation]
 depends_on: [R001, R002, R003, R007, R008, R009, R011]
 ---
 
@@ -53,12 +52,25 @@ like any other, so the count is fixed when the specification is written. A
 study whose reference data outgrows that count is re-read against the data
 rather than left to fill the places it already has, and a second value
 competing for one declared place is the ordinary multiple-match failure R003
-defines rather than a new place. Whether a family's members may instead come
-from data is open.
+defines rather than a new place.
+
+A family's members do not come from data. A data-dependent column list would
+move a dictionary that outgrows its declared places from a loud
+specification-data mismatch into a silent, data-dependent artifact schema, and
+a key over such a list is not an identity a reviewer can state. When a study's
+dictionary outgrows the declaration, the new member is declared as a column
+like any other and the specification is re-read against the data.
+
+The members of one family name their grouping by position: `SMQ02NAM`,
+`SMQ02CD`, and `SMQ02SC` belong together because each carries the `02`, and
+nothing in the schema links them beyond it. That link is a property of the
+study's design rather than of the derivation, so a portable construct cannot
+state it. A study that wants the grouping checkable records it in the columns'
+`metadata`; the schema does not.
 
 ## Column coverage
 
-Every declared column is derived in exactly one place. Six requirements make
+Every declared column is derived in exactly one place. Five requirements make
 that precise, and they apply to internal columns exactly as they apply to
 output ones:
 
@@ -73,14 +85,11 @@ output ones:
    in some entries and not others leaves the remaining constructed rows with no
    value for it, so partial row coverage is an error rather than an implied
    missing value.
-4. **A specification with no row templates and no `expand` derives every
-   column at column level.** Requirement 3 is vacuous when there are no
-   entries, so this states the base-driven case directly.
+4. **A specification with no `rows` entry must derive every column at column
+   level.** Requirement 3 is vacuous when there are no entries, so this states
+   the base-driven case directly.
 5. **A `rows` derivation must target a declared column.** A key in
    `derivations` that names no declared column is an error.
-6. **`expand.index` is one row-phase derivation.** It must name one declared
-   `int` column, and that column must have no column-level or `rows` derivation.
-   Every other column on an expanded artifact is derived at column level.
 
 Mixing the two placements across different columns is normal and expected: a
 specification with `rows` typically derives the columns that distinguish its
@@ -182,8 +191,6 @@ R006 owns the corresponding requirements for the schema bundle.
 - A column derived in some `rows` entries but not all: fail and report the
   entries that omit it.
 - A `rows` derivation naming an undeclared column: fail.
-- An `expand.index` column that is undeclared, not `int`, or derived anywhere
-  else: fail.
 - An internal column named in `keys`: fail and report the column name.
 - A missing `output.columns`, a duplicate entry, or an entry naming an
   undeclared column: fail and report the column name.

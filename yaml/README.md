@@ -31,10 +31,6 @@ results, string concatenation inputs, runtime-function arguments, and final
 
 This is the version 1.0 direction for team review.
 
-An artifact may use ordinary row templates or counted `expand`. A row template
-may use `group_by` when its driver records must first form groups. R001 defines
-these forms and their evaluation.
-
 Three closed mini-languages are narrow exceptions to fields that name
 their inputs directly. Registering an operator per arithmetic operation makes a
 single formula such as

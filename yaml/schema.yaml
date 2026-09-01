@@ -49,10 +49,6 @@ root_class:
         type: "list[row_class]"
         required: false
         description: Templates constructing output rows from driving records or groups; R001 evaluates them.
-    - expand:
-        type: expand_class
-        required: false
-        description: Counted artifact-row expansion; mutually exclusive with rows.
     - verifications:
         type: [dataset_verification, "list[dataset_verification]"]
         required: false
@@ -126,16 +122,6 @@ record_lookup_between_class:
         type: dataset_column
         required: true
         description: Dataset column whose value is an inclusive upper bound.
-
-expand_class:
-    - count:
-        type: variable
-        required: true
-        description: Qualified base variable whose non-missing, non-negative int gives the number of rows to construct.
-    - index:
-        type: column_name
-        required: true
-        description: Declared integer column receiving the one-based expansion index.
 
 column_class:
     - name:
