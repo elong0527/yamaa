@@ -1,0 +1,36 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM:
+    path: input/dm.csv
+    schema: input/dm.schema.yaml
+base: DM
+keys: [STUDYID, USUBJID]
+
+output:
+  columns: [STUDYID, USUBJID, RANDDT, RANDDTTM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM.USUBJID
+
+  - name: RANDDT
+    type: date
+    label: Date of Randomization
+    derivation:
+      source: DM.RANDDT
+
+  - name: RANDDTTM
+    type: datetime
+    label: Date and Time of Randomization
+    derivation:
+      source: DM.RANDDTTM

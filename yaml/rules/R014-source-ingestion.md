@@ -29,9 +29,9 @@ of the same dataset bind the same field to the same type.
 
 Where the type comes from depends on the container:
 
-- A **self-describing container** supplies it. An ODM `ItemDef` data type, a
-  columnar file's schema, and a transport file's variable types are each the
-  field's type, and the specification does not restate it.
+- A **self-describing source** supplies it. An ODM `ItemDef` data type, a
+  container's embedded schema, and a delimited file's portable schema sidecar
+  are each the field's type, and the specification does not restate it.
 - A **typeless container**, such as a delimited text file, supplies none. Every
   one of its fields is `str` unless the specification declares otherwise.
 
@@ -50,6 +50,51 @@ datasets:
 
 Both forms are the same declaration: a bare path is R006 shorthand for a
 `dataset_class` with no `types`.
+
+## Portable schema sidecar
+
+`dataset_class.schema` makes a delimited file a self-describing source without
+requiring a binary container or a format-specific runtime dependency. It is a
+path, resolved relative to the specification like `dataset_class.path`, to a
+YAML document of this exact form:
+
+```yaml
+version: "1.0"
+fields:
+  STUDYID: string
+  USUBJID: string
+  AGE: integer
+  WEIGHT: number
+  RANDDT: date
+  RANDDTTM: datetime
+```
+
+`version` is required and is exactly the string `"1.0"`. `fields` is a
+required, non-empty mapping whose keys are distinct `dataset_column` names and
+whose values come from the closed vocabulary below. No other top-level field,
+field descriptor, or source type is allowed.
+
+| Sidecar type | R011 field type and runtime value |
+|---|---|
+| `string` | `str` |
+| `integer` | `int` |
+| `number` | `float` |
+| `date` | `date` |
+| `datetime` | `datetime` |
+
+The sidecar must name every field in the delimited file exactly once, and the
+file must contain every field it names. A missing or extra name fails rather
+than silently becoming `str`; a self-describing source has one complete schema,
+not a typed subset. `types` may be present only for a typeless source, so it
+must be absent whenever `schema` is present. This rejects even an inline entry
+that agrees with the sidecar instead of creating two authorities for one type.
+
+The mapping produces the R011 runtime type directly, but the stored cells are
+still delimited text. After recognizing missing values, ingestion applies the
+`str` row of R011's conversion table to every non-missing cell. In particular,
+sidecar `date` and `datetime` use R016's lexical grammar and representations,
+exactly as an inline `types` declaration or a column conversion does; the
+sidecar does not enable a runtime's more permissive temporal parser.
 
 ## Values are never inferred
 

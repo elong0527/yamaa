@@ -190,7 +190,7 @@ domain_name:
 
 dataset_source:
     type: [path, dataset_class]
-    description: Path to the dataset, or a path with the types its fields carry.
+    description: Path to the dataset, or a path with its source schema or field types.
 
 dataset_class:
     - path:
@@ -201,6 +201,10 @@ dataset_class:
         type: "dict[dataset_column, column_type]"
         required: false
         description: Type each named field carries; R014 types the rest.
+    - schema:
+        type: path
+        required: false
+        description: Portable schema sidecar for the source, as defined by R014.
 
 dataset_id:
     type: str

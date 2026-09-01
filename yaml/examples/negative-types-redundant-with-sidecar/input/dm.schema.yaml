@@ -1,0 +1,5 @@
+version: "1.0"
+fields:
+  STUDYID: string
+  USUBJID: string
+  RANDDT: date
