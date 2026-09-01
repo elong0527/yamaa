@@ -1,7 +1,7 @@
 schema_version: "1.0"
 domain: ADSL
 datasets:
-  ADSL:
+  ADSL_IN:
     path: input/adsl.csv
     types:
       TRTEDT: date
@@ -13,7 +13,7 @@ datasets:
     path: input/advs.csv
     types:
       ADATE: date
-base: ADSL
+base: ADSL_IN
 keys: [STUDYID, USUBJID]
 
 output:
@@ -24,19 +24,19 @@ columns:
     type: str
     label: Study Identifier
     derivation:
-      source: ADSL.STUDYID
+      source: ADSL_IN.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation:
-      source: ADSL.USUBJID
+      source: ADSL_IN.USUBJID
 
   - name: TRTEDT
     type: date
     label: Date of Last Exposure to Treatment
     derivation:
-      source: ADSL.TRTEDT
+      source: ADSL_IN.TRTEDT
 
   - name: ADAE_LST
     type: date

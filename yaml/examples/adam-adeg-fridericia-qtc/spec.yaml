@@ -1,15 +1,15 @@
 schema_version: "1.0"
 domain: ADEG
 datasets:
-  ADEG: input/adeg.csv
-base: ADEG
+  ADEG_IN: input/adeg.csv
+base: ADEG_IN
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 
 record_lookups:
   - id: RR_REC
-    dataset: ADEG
-    filter: "ADEG.PARAMCD = 'RR'"
-    source: [ADEG.STUDYID, ADEG.USUBJID, ADEG.AVISIT]
+    dataset: ADEG_IN
+    filter: "ADEG_IN.PARAMCD = 'RR'"
+    source: [ADEG_IN.STUDYID, ADEG_IN.USUBJID, ADEG_IN.AVISIT]
     key: [STUDYID, USUBJID, AVISIT]
     unmatched: missing
 
@@ -21,13 +21,13 @@ columns:
     type: str
     label: Study Identifier
     derivation:
-      source: ADEG.STUDYID
+      source: ADEG_IN.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation:
-      source: ADEG.USUBJID
+      source: ADEG_IN.USUBJID
 
   - name: PARAMCD
     type: str
@@ -41,7 +41,7 @@ columns:
     type: str
     label: Analysis Visit
     derivation:
-      source: ADEG.AVISIT
+      source: ADEG_IN.AVISIT
 
   - name: AVAL
     type: float
@@ -55,15 +55,15 @@ rows:
   - id: original
     derivations:
       PARAMCD:
-        source: ADEG.PARAMCD
+        source: ADEG_IN.PARAMCD
       PARAM:
-        source: ADEG.PARAM
+        source: ADEG_IN.PARAM
       AVAL:
-        source: ADEG.AVAL
+        source: ADEG_IN.AVAL
       AVALU:
-        source: ADEG.AVALU
+        source: ADEG_IN.AVALU
   - id: qtcfr
-    filter: "ADEG.PARAMCD = 'QT'"
+    filter: "ADEG_IN.PARAMCD = 'QT'"
     derivations:
       PARAMCD:
         literal: QTCFR
@@ -71,7 +71,7 @@ rows:
         literal: "QTcF - Fridericia's Correction Formula Rederived (ms)"
       AVAL:
         compute:
-          expr: "ADEG.AVAL / POWER(RR_REC.AVAL / 1000, 1 / 3)"
+          expr: "ADEG_IN.AVAL / POWER(RR_REC.AVAL / 1000, 1 / 3)"
       AVALU:
         literal: ms
 

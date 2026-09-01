@@ -13,13 +13,6 @@ from yaml.constructor import ConstructorError
 from yaml.events import AliasEvent
 
 
-KNOWN_STRUCTURAL_WARNING = (
-    "ERROR: sdtm-ds-disposition-sequence/spec.yaml.columns.DSDECOD."
-    "verifications: registry column_verifications expects exactly one "
-    "operation, got 2"
-)
-
-
 class UniqueKeyLoader(yaml.SafeLoader):
     yaml_implicit_resolvers = copy.deepcopy(
         yaml.SafeLoader.yaml_implicit_resolvers
@@ -741,6 +734,122 @@ def validate_grouped_rows(spec, spec_label):
     return errors
 
 
+def validate_spec_names(spec, spec_label):
+    """Validate cross-field names and uniqueness required by R002/R005/R015."""
+    errors = []
+
+    def duplicate_errors(values, path, noun):
+        if not isinstance(values, list):
+            return
+        strings = [value for value in values if isinstance(value, str)]
+        for value in sorted(set(strings)):
+            if strings.count(value) > 1:
+                errors.append(
+                    f"ERROR: {spec_label}.{path}: duplicate {noun} {value!r}"
+                )
+
+    datasets = spec.get('datasets')
+    dataset_names = set(datasets) if isinstance(datasets, dict) else set()
+    domain = spec.get('domain')
+    if isinstance(domain, str) and domain in dataset_names:
+        errors.append(
+            f"ERROR: {spec_label}.datasets.{domain}: dataset identifier "
+            "must not equal the output domain"
+        )
+
+    base = spec.get('base')
+    if isinstance(base, str) and base not in dataset_names:
+        errors.append(
+            f"ERROR: {spec_label}.base: undeclared dataset {base!r}"
+        )
+
+    columns = spec.get('columns')
+    column_names = []
+    if isinstance(columns, list):
+        column_names = [
+            column.get('name') for column in columns
+            if isinstance(column, dict) and isinstance(column.get('name'), str)
+        ]
+    duplicate_errors(column_names, 'columns', 'column name')
+    declared_columns = set(column_names)
+
+    keys = spec.get('keys')
+    duplicate_errors(keys, 'keys', 'key column')
+    if isinstance(keys, list):
+        if not keys:
+            errors.append(
+                f"ERROR: {spec_label}.keys: at least one key column is required"
+            )
+        for index, key in enumerate(keys):
+            if isinstance(key, str) and key not in declared_columns:
+                errors.append(
+                    f"ERROR: {spec_label}.keys[{index}]: undeclared column "
+                    f"{key!r}"
+                )
+
+    output = spec.get('output')
+    output_columns = output.get('columns') if isinstance(output, dict) else None
+    duplicate_errors(output_columns, 'output.columns', 'output column')
+    if isinstance(output_columns, list):
+        for index, name in enumerate(output_columns):
+            if isinstance(name, str) and name not in declared_columns:
+                errors.append(
+                    f"ERROR: {spec_label}.output.columns[{index}]: "
+                    f"undeclared column {name!r}"
+                )
+        output_names = set(output_columns)
+        if isinstance(keys, list):
+            for index, key in enumerate(keys):
+                if isinstance(key, str) and key not in output_names:
+                    errors.append(
+                        f"ERROR: {spec_label}.keys[{index}]: key column "
+                        f"{key!r} is not in output.columns"
+                    )
+
+    rows = spec.get('rows')
+    if isinstance(rows, list):
+        row_ids = [
+            row.get('id') for row in rows
+            if isinstance(row, dict) and isinstance(row.get('id'), str)
+        ]
+        duplicate_errors(row_ids, 'rows', 'row id')
+        for index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                continue
+            driver = row.get('dataset')
+            if isinstance(driver, str) and driver not in dataset_names:
+                errors.append(
+                    f"ERROR: {spec_label}.rows[{index}].dataset: "
+                    f"undeclared dataset {driver!r}"
+                )
+
+    lookups = spec.get('record_lookups')
+    if isinstance(lookups, list):
+        lookup_ids = [
+            lookup.get('id') for lookup in lookups
+            if isinstance(lookup, dict) and isinstance(lookup.get('id'), str)
+        ]
+        duplicate_errors(lookup_ids, 'record_lookups', 'record lookup id')
+        reserved_names = dataset_names | ({domain} if isinstance(domain, str) else set())
+        for index, lookup in enumerate(lookups):
+            if not isinstance(lookup, dict):
+                continue
+            lookup_id = lookup.get('id')
+            if isinstance(lookup_id, str) and lookup_id in reserved_names:
+                errors.append(
+                    f"ERROR: {spec_label}.record_lookups[{index}].id: "
+                    f"identifier {lookup_id!r} conflicts with a dataset or domain"
+                )
+            lookup_dataset = lookup.get('dataset')
+            if isinstance(lookup_dataset, str) and lookup_dataset not in dataset_names:
+                errors.append(
+                    f"ERROR: {spec_label}.record_lookups[{index}].dataset: "
+                    f"undeclared dataset {lookup_dataset!r}"
+                )
+
+    return errors
+
+
 def validate_examples_structure(root: Path, env, warnings=None):
     errors = []
     if warnings is None:
@@ -784,16 +893,10 @@ def validate_examples_structure(root: Path, env, warnings=None):
                 spec, ['root_class'], env, spec_label
             )
             spec_errors.extend(validate_grouped_rows(spec, spec_label))
+            spec_errors.extend(validate_spec_names(spec, spec_label))
             is_negative = ex_dir.name.startswith('negative-')
             if not is_negative:
-                for spec_error in spec_errors:
-                    if spec_error == KNOWN_STRUCTURAL_WARNING:
-                        warnings.append(
-                            "WARNING: existing DSDECOD verifications mapping "
-                            "must become a list of one-entry mappings"
-                        )
-                    else:
-                        errors.append(spec_error)
+                errors.extend(spec_errors)
                 continue
 
             error_yaml_path = ex_dir / 'expected' / 'error.yaml'
