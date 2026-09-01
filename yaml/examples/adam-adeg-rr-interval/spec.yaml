@@ -1,0 +1,85 @@
+schema_version: "1.0"
+domain: ADEG
+datasets:
+  ADEG: input/adeg.csv
+base: ADEG
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL, AVALU]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ADEG.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ADEG.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation:
+      source: ADEG.AVISIT
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+
+  - name: _PROVENANCE
+    type: str
+    label: Internal Row Provenance
+
+rows:
+  - id: collected
+    derivations:
+      PARAMCD:
+        source: ADEG.PARAMCD
+      PARAM:
+        source: ADEG.PARAM
+      AVAL:
+        source: ADEG.AVAL
+      AVALU:
+        source: ADEG.AVALU
+      _PROVENANCE:
+        literal: collected
+
+  - id: derived_rrr
+    filter: "ADEG.PARAMCD = 'HR' AND ADEG.AVAL IS NOT NULL AND ADEG.AVAL <> 0"
+    derivations:
+      PARAMCD:
+        literal: RRR
+      PARAM:
+        literal: RR Duration Rederived (ms)
+      AVAL:
+        compute:
+          expr: "60000 / ADEG.AVAL"
+      AVALU:
+        literal: ms
+      _PROVENANCE:
+        literal: derived
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
+  - implies:
+      id: reject-pre-existing-rrr
+      when: "PARAMCD = 'RRR'"
+      then: "_PROVENANCE = 'derived'"

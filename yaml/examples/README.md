@@ -50,6 +50,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adce-worst-toxicity-grade`](adam-adce-worst-toxicity-grade/) | flag the subject's worst-grade event |
 | [`adam-adcm-on-treatment-flag`](adam-adcm-on-treatment-flag/) | flag a medication during treatment |
 | [`adam-adeg-fridericia-qtc`](adam-adeg-fridericia-qtc/) | derive a Fridericia-corrected QT parameter |
+| [`adam-adeg-rr-interval`](adam-adeg-rr-interval/) | derive an RR interval |
 | [`adam-adex-cumulative-dose`](adam-adex-cumulative-dose/) | summarize cumulative exposure |
 | [`adam-adex-dose-reduction-flag`](adam-adex-dose-reduction-flag/) | derive a dose reduction flag |
 | [`adam-adex-uncollected-exposure`](adam-adex-uncollected-exposure/) | tell an uncollected dose from an absent administration |
