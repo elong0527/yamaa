@@ -90,6 +90,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adtte-progression-free-survival`](adam-adtte-progression-free-survival/) | derive progression-free survival |
 | [`adam-advs-analysis-visit`](adam-advs-analysis-visit/) | assign records to analysis windows |
 | [`adam-advs-analysis-window-table`](adam-advs-analysis-window-table/) | assign analysis windows from the study's window table |
+| [`adam-advs-body-mass-index`](adam-advs-body-mass-index/) | derive body mass index |
 | [`adam-advs-body-surface-area`](adam-advs-body-surface-area/) | derive a body surface area parameter |
 | [`adam-advs-growth-percentile`](adam-advs-growth-percentile/) | express a measurement as a growth percentile |
 | [`adam-advs-mean-arterial-pressure`](adam-advs-mean-arterial-pressure/) | derive mean arterial pressure |
