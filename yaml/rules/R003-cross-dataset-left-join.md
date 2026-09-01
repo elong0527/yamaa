@@ -57,10 +57,14 @@ semantics.
 
 ## Right-side reduction
 
-An aggregate expression whose identifiers are qualified to another dataset
-reduces that right side by applicable keys before joining. R007 registers the
-expression and R013 defines what it computes. Its optional `filter` selects
-which right-side records enter that reduction:
+During column derivation, an aggregate expression whose identifiers are
+qualified to a declared dataset reads that relation as its right side. For each
+current row, applicable keys select a right-side partition, R013 reduces its
+eligible records to one value, and that value is joined back without changing
+row count. The qualifier may equal the current row driver: a scalar source then
+reads the current driver record, while an aggregate reads the driver relation.
+R007 registers the expression and R013 defines what it computes. Its optional
+`filter` selects which right-side records enter that reduction:
 
 ```yaml
 aggregate:
@@ -89,6 +93,17 @@ In both places `filter` is a predicate over right-side records only. A left row
 whose right side is empty after filtering has no match and receives missing,
 exactly as if no record had existed.
 
+A qualified aggregate may also be narrowed by the current left row. Its
+`between` declaration names one `value` the current row reads and at least one
+`lower` or `upper` column on the right. A record is eligible when every
+declared comparison holds: `lower <= value` and `value <= upper`. Every stated
+endpoint is inclusive.
+
+A missing current-row value leaves the aggregate's right side empty for that
+row and the result is missing; it never silently removes the narrowing. A
+right-side record missing a declared bound is ineligible. R013 defines the
+complete aggregate contract.
+
 This is not `row.filter`. R001 makes an ungrouped row filter select driver
 records before row derivation and a grouped row filter select completed
 candidate groups; neither is a right-side reduction filter.
@@ -110,3 +125,5 @@ so an aggregate cannot encounter multiple matches and does not declare
 - An applicable left key is unavailable: fail.
 - Multiple matches after reduction: fail unless locally handled.
 - No right-side match: return missing.
+- An aggregate `between` with neither bound, a bound outside the right-side
+  relation, or operands whose types are not comparable: fail under R013.

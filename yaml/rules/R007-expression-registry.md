@@ -74,8 +74,10 @@ value is missing.
 reducers it permits, and what each returns; this rule fixes where it may be
 used. It is valid in exactly three contexts:
 
-1. Its identifiers are qualified to another dataset. It then reduces that
-   right side before the R003 join, which R003 defines.
+1. Its identifiers are qualified to one declared dataset relation during
+   column derivation. It then reduces that right side before the R003 join,
+   which R003 defines. The qualifier may equal the current row driver because
+   an aggregate reads the relation rather than the scalar driver record.
 2. Its identifiers are unqualified. It then declares `group_by`, reduces
    constructed output rows within each partition, and broadcasts the result to
    each row.
@@ -87,7 +89,8 @@ used. It is valid in exactly three contexts:
 Any other aggregate context is an error. A `filter` narrows the records the
 owning expression already works in: right-side records for context 1, and
 constructed output rows for a window or for context 2, and current driver-group
-records for context 3.
+records for context 3. `between` is valid only in context 1 and narrows those
+right-side records separately for each current row under R013.
 
 ## Ordering
 
@@ -190,6 +193,8 @@ behavior and do not affect schema validation.
 - A `row_value` whose `offset` is zero: fail. The current row's own value is
   `source`, and a window must not be a second spelling of it.
 - An aggregate outside its three permitted contexts: fail.
+- An aggregate declaring `between` outside the qualified dataset context:
+  fail.
 - A grouped-row aggregate naming a dataset other than its row driver or
   declaring its own `group_by`: fail.
 - An `aggregate` expression that violates R013: fail.

@@ -26,4 +26,26 @@ class TestExampleDependencies < Minitest::Test
   ensure
     spec&.unlink
   end
+
+  def test_between_value_is_an_aggregate_dependency
+    spec = Tempfile.new(["aggregate-between-dependency", ".yaml"])
+    spec.write(<<~YAML)
+      output:
+        columns: [STUDYID, NADIR, ADT]
+      columns:
+        - {name: STUDYID, derivation: {literal: STUDY}}
+        - name: NADIR
+          derivation:
+            aggregate:
+              expr: "MIN(ADTRPRE.AVAL)"
+              group_by: [ADTRPRE.STUDYID]
+              between: {value: ADT, lower: ADTRPRE.ADT}
+        - {name: ADT, derivation: {literal: "2025-01-01"}}
+    YAML
+    spec.close
+
+    assert_includes check(spec.path), "NADIR references later column ADT"
+  ensure
+    spec&.unlink
+  end
 end

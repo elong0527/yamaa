@@ -2,7 +2,8 @@
 id: R013
 title: Aggregate Reduction
 status: normative
-applies_to: [expression.aggregate, aggregate_expression]
+applies_to: [expression.aggregate, aggregate_class.between,
+  aggregate_expression]
 depends_on: [R001, R002, R003, R004, R006, R007, R010, R011, R015]
 ---
 
@@ -49,8 +50,11 @@ about a name.
 **Every identifier in one expression must name one relation.** Three forms
 exist and must not be mixed:
 
-- **Qualified.** Every identifier names the same declared dataset. The
-  expression reduces that right side before the R003 join.
+- **Qualified.** Every identifier names the same declared dataset relation.
+  During column derivation the expression reduces that right side before the
+  R003 join, even when its qualifier equals the current row driver. A scalar
+  source qualified to the driver reads one record; the aggregate keyword makes
+  the same qualifier relational.
 - **Unqualified.** Every identifier names a current-output column. The
   expression reduces constructed output rows within the partition its
   `group_by` declares and broadcasts the result, which is R007's second
@@ -78,6 +82,24 @@ declare at least one: a reduction over the whole output is not registered,
 because no example needs one. A grouped-row aggregate declares no local
 `group_by`; the enclosing `row.group_by` already fixes its current relation and
 grain.
+
+## Row-relative range narrowing
+
+A qualified aggregate may declare `between` to narrow its right-side records
+for each current row. `value` is a variable the current row can read. `lower`
+and `upper` are qualified columns of the aggregate expression's one right-side
+relation, and at least one is required. Every declared comparison is inclusive:
+`lower <= value` and `value <= upper`. Omitting one bound makes the match
+one-sided; it does not exclude the stated endpoint.
+
+The value and every stated bound must be mutually comparable under R007. A
+missing current-row value admits no right-side record, so the aggregate result
+is missing under the empty-group rule below. A right-side record with a missing
+stated bound is ineligible. In particular, a missing cutoff never causes an
+implementation to reduce the unrestricted right side.
+
+`between` is invalid on an unqualified or grouped-row aggregate: neither has a
+separate right-side relation to narrow for each current row.
 
 ## Grammar
 
@@ -132,8 +154,11 @@ and must reject duplicates.
 
 **Reductions do not nest.** The argument of a reduction must contain no
 reduction, so `MAX(SUM(EX.EXDOSE))` is an error. Reducing at one grain and
-reducing that result at another needs an intermediate grain the language cannot
-name. Naming one is open work.
+reducing that result at another uses two specifications: the first artifact
+names and validates the intermediate grain, and the downstream specification
+declares that stored artifact as an ordinary source under R002. Pipeline
+orchestration supplies the execution and materialization boundary; it is not
+inferred from a source path.
 
 `COUNT(D.*)` takes no other argument; in this rule, `D` is a placeholder for the dataset named by the expression's qualified identifiers (for example, `COUNT(EX.*)`). It is the one reducer that names no column, and it counts records where `COUNT(x)` counts values.
 
@@ -235,6 +260,9 @@ a rule that needs a record chosen by order uses a window or
   expression with no `group_by`: fail.
 - A grouped-row aggregate declaring its own `group_by`, naming an identifier
   outside its row driver, or being used by an ungrouped row template: fail.
+- A `between` on an unqualified or grouped-row aggregate, declaring neither
+  bound, naming a bound outside the qualified relation, or using incomparable
+  operands: fail.
 - `SUM` or `MEAN` over a non-numeric argument, or arithmetic over a non-numeric
   reduction or grouped identifier: fail.
 - `MIN` or `MAX` over values that are not mutually comparable: fail.
