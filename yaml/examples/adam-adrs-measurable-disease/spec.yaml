@@ -10,7 +10,9 @@ record_lookups:
     dataset: TU
     source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
-    filter: "TU.TUTESTCD = 'TUMIDENT' AND TU.VISIT = 'SCREENING' AND TU.TUSTRESC = 'TARGET'"
+    filter: >-
+      TU.TUTESTCD = 'TUMIDENT' AND TU.VISIT = 'SCREENING'
+      AND TU.TUSTRESC = 'TARGET'
     order_by: [TU.TUSEQ]
     keep: first
     unmatched: missing
