@@ -4,12 +4,11 @@ datasets:
   DM:
     path: input/dm.csv
     schema: input/dm.schema.yaml
-    types: {RANDDT: date}
 base: DM
 keys: [STUDYID, USUBJID]
 
 output:
-  columns: [STUDYID, USUBJID, RANDDT]
+  columns: [STUDYID, USUBJID, RANDDT, RANDDTC]
 
 columns:
   - name: STUDYID
@@ -29,3 +28,9 @@ columns:
     label: Date of Randomization
     derivation:
       source: DM.RANDDT
+
+  - name: RANDDTC
+    type: str
+    label: Date and Time of Randomization
+    derivation:
+      source: DM.RANDDTTM

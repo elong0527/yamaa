@@ -4,11 +4,13 @@ datasets:
   DM:
     path: input/dm.csv
     schema: input/dm.schema.yaml
+    # Intentionally invalid: RANDDT already has this type in the sidecar.
+    types: {RANDDT: date}
 base: DM
 keys: [STUDYID, USUBJID]
 
 output:
-  columns: [STUDYID, USUBJID, RANDDT, RANDDTTM]
+  columns: [STUDYID, USUBJID, RANDDT]
 
 columns:
   - name: STUDYID
@@ -28,9 +30,3 @@ columns:
     label: Date of Randomization
     derivation:
       source: DM.RANDDT
-
-  - name: RANDDTTM
-    type: datetime
-    label: Date and Time of Randomization
-    derivation:
-      source: DM.RANDDTTM
