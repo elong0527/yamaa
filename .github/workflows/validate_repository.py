@@ -4,20 +4,12 @@ import copy
 import csv
 import re
 import sys
-from datetime import date, datetime
 from pathlib import Path
 
 import yaml
 from yaml.composer import ComposerError
 from yaml.constructor import ConstructorError
 from yaml.events import AliasEvent
-
-
-KNOWN_STRUCTURAL_WARNING = (
-    "ERROR: sdtm-ds-disposition-sequence/spec.yaml.columns.DSDECOD."
-    "verifications: registry column_verifications expects exactly one "
-    "operation, got 2"
-)
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -74,18 +66,62 @@ class UniqueKeyLoader(yaml.SafeLoader):
         return mapping
 
 
+# PyYAML defaults to YAML 1.1 scalar resolution. Replace the resolvers whose
+# YAML 1.2 core behavior differs: timestamps are plain strings, sexagesimal
+# numbers are not numbers, octal uses 0o, and exponent-only decimals are
+# floats. Null resolution is already compatible with the core schema.
 for first_char, resolvers in list(
     UniqueKeyLoader.yaml_implicit_resolvers.items()
 ):
     UniqueKeyLoader.yaml_implicit_resolvers[first_char] = [
         (tag, regexp)
         for tag, regexp in resolvers
-        if tag != 'tag:yaml.org,2002:bool'
+        if tag not in {
+            'tag:yaml.org,2002:bool',
+            'tag:yaml.org,2002:float',
+            'tag:yaml.org,2002:int',
+            'tag:yaml.org,2002:timestamp',
+        }
     ]
 UniqueKeyLoader.add_implicit_resolver(
     'tag:yaml.org,2002:bool',
-    re.compile(r'^(?:true|false)$', re.IGNORECASE),
+    re.compile(r'^(?:true|True|TRUE|false|False|FALSE)$'),
     list('tTfF'),
+)
+UniqueKeyLoader.add_implicit_resolver(
+    'tag:yaml.org,2002:int',
+    re.compile(r'^(?:[-+]?[0-9]+|0o[0-7]+|0x[0-9a-fA-F]+)$'),
+    list('-+0123456789'),
+)
+UniqueKeyLoader.add_implicit_resolver(
+    'tag:yaml.org,2002:float',
+    re.compile(
+        r'^(?:'
+        r'[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?'
+        r'|[-+]?\.(?:inf|Inf|INF)'
+        r'|\.(?:nan|NaN|NAN)'
+        r')$'
+    ),
+    list('-+0123456789.'),
+)
+
+
+def construct_yaml_12_int(loader, node):
+    value = loader.construct_scalar(node)
+    sign = 1
+    if value.startswith('-'):
+        sign = -1
+    if value.startswith(('-', '+')):
+        value = value[1:]
+    if value.startswith('0o'):
+        return sign * int(value[2:], 8)
+    if value.startswith('0x'):
+        return sign * int(value[2:], 16)
+    return sign * int(value, 10)
+
+
+UniqueKeyLoader.add_constructor(
+    'tag:yaml.org,2002:int', construct_yaml_12_int
 )
 
 
@@ -179,7 +215,9 @@ def check_descriptor(desc, is_class_field, path):
 
     string_only = type_members == ['str']
     sized_only = bool(type_members) and all(
-        member.startswith('list[') or member.startswith('dict[')
+        member in {'list', 'dict'}
+        or member.startswith('list[')
+        or member.startswith('dict[')
         for member in type_members
     )
 
@@ -244,7 +282,7 @@ def build_schema_env(root: Path):
 
     completed = set()
     to_visit = [(schema_path, tuple())]
-    known_types = {'str', 'int', 'float', 'bool', 'null', 'date', 'datetime'}
+    known_types = {'str', 'int', 'float', 'bool', 'null', 'list', 'dict'}
     all_type_refs = []
 
     env = {
@@ -287,8 +325,15 @@ def build_schema_env(root: Path):
         version = data.get('version')
         if current.name == 'schema.yaml':
             env['version'] = version
-        if version != "1.0":
-            errors.append(f"ERROR: {current.name}: schema version '{version}' != '1.0'")
+            if not isinstance(version, str) or not version:
+                errors.append(
+                    "ERROR: schema.yaml: version must be a non-empty string"
+                )
+        elif version != env.get('version'):
+            errors.append(
+                f"ERROR: {current.name}: schema version {version!r} does not "
+                f"match bundle version {env.get('version')!r}"
+            )
 
         includes = data.get('includes', [])
         if not isinstance(includes, list):
@@ -360,7 +405,8 @@ def build_schema_env(root: Path):
                 )
                 continue
             declaration_kinds.setdefault(k, declaration_kind)
-            known_types.add(k)
+            if declaration_kind in {'class', 'alias'}:
+                known_types.add(k)
             # Find type references
             if declaration_kind in {'class', 'alias'}:
                 if isinstance(v, list): # Class definition
@@ -565,10 +611,14 @@ def _check_single_type(data, t, env, path):
         if type(data) is bool:
             return []
         return [f"ERROR: {path}: expected bool, got {type(data).__name__}"]
-    if t == 'date' or t == 'datetime':
-        if isinstance(data, (date, datetime)):
-            return []
-        return [f"ERROR: {path}: expected {t}, got {type(data).__name__}"]
+    if t == 'list':
+        return [] if isinstance(data, list) else [
+            f"ERROR: {path}: expected list, got {type(data).__name__}"
+        ]
+    if t == 'dict':
+        return [] if isinstance(data, dict) else [
+            f"ERROR: {path}: expected dict, got {type(data).__name__}"
+        ]
 
     if t.startswith('list['):
         inner = t[5:-1]
@@ -741,6 +791,375 @@ def validate_grouped_rows(spec, spec_label):
     return errors
 
 
+def validate_spec_names(spec, spec_label):
+    """Validate cross-field names and uniqueness required by R002/R005/R015."""
+    errors = []
+
+    def duplicate_errors(values, path, noun):
+        if not isinstance(values, list):
+            return
+        strings = [value for value in values if isinstance(value, str)]
+        for value in sorted(set(strings)):
+            if strings.count(value) > 1:
+                errors.append(
+                    f"ERROR: {spec_label}.{path}: duplicate {noun} {value!r}"
+                )
+
+    datasets = spec.get('datasets')
+    dataset_names = set(datasets) if isinstance(datasets, dict) else set()
+    domain = spec.get('domain')
+    if isinstance(domain, str) and domain in dataset_names:
+        errors.append(
+            f"ERROR: {spec_label}.datasets.{domain}: dataset identifier "
+            "must not equal the output domain"
+        )
+
+    base = spec.get('base')
+    if isinstance(base, str) and base not in dataset_names:
+        errors.append(
+            f"ERROR: {spec_label}.base: undeclared dataset {base!r}"
+        )
+
+    columns = spec.get('columns')
+    column_names = []
+    if isinstance(columns, list):
+        column_names = [
+            column.get('name') for column in columns
+            if isinstance(column, dict) and isinstance(column.get('name'), str)
+        ]
+    duplicate_errors(column_names, 'columns', 'column name')
+    declared_columns = set(column_names)
+
+    keys = spec.get('keys')
+    duplicate_errors(keys, 'keys', 'key column')
+    if isinstance(keys, list):
+        if not keys:
+            errors.append(
+                f"ERROR: {spec_label}.keys: at least one key column is required"
+            )
+        for index, key in enumerate(keys):
+            if isinstance(key, str) and key not in declared_columns:
+                errors.append(
+                    f"ERROR: {spec_label}.keys[{index}]: undeclared column "
+                    f"{key!r}"
+                )
+
+    output = spec.get('output')
+    output_columns = output.get('columns') if isinstance(output, dict) else None
+    duplicate_errors(output_columns, 'output.columns', 'output column')
+    if isinstance(output_columns, list):
+        for index, name in enumerate(output_columns):
+            if isinstance(name, str) and name not in declared_columns:
+                errors.append(
+                    f"ERROR: {spec_label}.output.columns[{index}]: "
+                    f"undeclared column {name!r}"
+                )
+        output_names = set(output_columns)
+        if isinstance(keys, list):
+            for index, key in enumerate(keys):
+                if isinstance(key, str) and key not in output_names:
+                    errors.append(
+                        f"ERROR: {spec_label}.keys[{index}]: key column "
+                        f"{key!r} is not in output.columns"
+                    )
+
+    rows = spec.get('rows')
+    if isinstance(rows, list):
+        row_ids = [
+            row.get('id') for row in rows
+            if isinstance(row, dict) and isinstance(row.get('id'), str)
+        ]
+        duplicate_errors(row_ids, 'rows', 'row id')
+        for index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                continue
+            driver = row.get('dataset')
+            if isinstance(driver, str) and driver not in dataset_names:
+                errors.append(
+                    f"ERROR: {spec_label}.rows[{index}].dataset: "
+                    f"undeclared dataset {driver!r}"
+                )
+
+    lookups = spec.get('record_lookups')
+    if isinstance(lookups, list):
+        lookup_ids = [
+            lookup.get('id') for lookup in lookups
+            if isinstance(lookup, dict) and isinstance(lookup.get('id'), str)
+        ]
+        duplicate_errors(lookup_ids, 'record_lookups', 'record lookup id')
+        reserved_names = dataset_names | ({domain} if isinstance(domain, str) else set())
+        for index, lookup in enumerate(lookups):
+            if not isinstance(lookup, dict):
+                continue
+            lookup_id = lookup.get('id')
+            if isinstance(lookup_id, str) and lookup_id in reserved_names:
+                errors.append(
+                    f"ERROR: {spec_label}.record_lookups[{index}].id: "
+                    f"identifier {lookup_id!r} conflicts with a dataset or domain"
+                )
+            lookup_dataset = lookup.get('dataset')
+            if isinstance(lookup_dataset, str) and lookup_dataset not in dataset_names:
+                errors.append(
+                    f"ERROR: {spec_label}.record_lookups[{index}].dataset: "
+                    f"undeclared dataset {lookup_dataset!r}"
+                )
+
+    return errors
+
+
+def validate_spec_contracts(spec, spec_label, spec_path=None):
+    """Validate static cross-field contracts from normative rules."""
+    errors = []
+
+    rows = spec.get('rows')
+    row_entries = rows if isinstance(rows, list) else []
+    base = spec.get('base')
+    full_spec = all(
+        field in spec
+        for field in ('domain', 'datasets', 'keys', 'output', 'columns')
+    )
+    if full_spec and not row_entries and not isinstance(base, str):
+        errors.append(
+            f"ERROR: {spec_label}.base: base is required when rows is absent "
+            "or empty"
+        )
+    for index, row in enumerate(row_entries):
+        if (
+            full_spec
+            and isinstance(row, dict)
+            and 'dataset' not in row
+            and not isinstance(base, str)
+        ):
+            errors.append(
+                f"ERROR: {spec_label}.rows[{index}].dataset: row requires a "
+                "dataset or root base"
+            )
+
+    columns = spec.get('columns')
+    column_entries = columns if isinstance(columns, list) else []
+    declared = {
+        column.get('name')
+        for column in column_entries
+        if isinstance(column, dict) and isinstance(column.get('name'), str)
+    }
+    column_derivations = {
+        column.get('name')
+        for column in column_entries
+        if (
+            isinstance(column, dict)
+            and isinstance(column.get('name'), str)
+            and 'derivation' in column
+        )
+    }
+    row_derivations = []
+    for index, row in enumerate(row_entries):
+        derivations = row.get('derivations') if isinstance(row, dict) else None
+        names = set(derivations) if isinstance(derivations, dict) else set()
+        row_derivations.append(names)
+        undeclared = sorted(names - declared) if full_spec else []
+        for name in undeclared:
+            errors.append(
+                f"ERROR: {spec_label}.rows[{index}].derivations.{name}: "
+                f"undeclared column {name!r}"
+            )
+
+    covered_columns = sorted(declared) if full_spec else []
+    for name in covered_columns:
+        at_column = name in column_derivations
+        at_rows = [name in names for names in row_derivations]
+        if at_column and any(at_rows):
+            errors.append(
+                f"ERROR: {spec_label}.columns.{name}.derivation: column "
+                "is also derived by a row"
+            )
+        elif row_entries and not at_column and not all(at_rows):
+            missing_rows = [
+                str(index) for index, present in enumerate(at_rows)
+                if not present
+            ]
+            errors.append(
+                f"ERROR: {spec_label}.columns.{name}.derivation: column is "
+                "not derived by row(s) " + ', '.join(missing_rows)
+            )
+        elif not row_entries and not at_column:
+            errors.append(
+                f"ERROR: {spec_label}.columns.{name}.derivation: column has "
+                "no derivation"
+            )
+
+    lookups = spec.get('record_lookups')
+    if isinstance(lookups, list):
+        for index, lookup in enumerate(lookups):
+            if not isinstance(lookup, dict):
+                continue
+            path = f"{spec_label}.record_lookups[{index}]"
+            has_source = 'source' in lookup
+            has_key = 'key' in lookup
+            if has_source != has_key:
+                errors.append(
+                    f"ERROR: {path}: source and key must be declared together"
+                )
+            elif has_source:
+                sources = (
+                    lookup['source']
+                    if isinstance(lookup['source'], list)
+                    else [lookup['source']]
+                )
+                keys = (
+                    lookup['key']
+                    if isinstance(lookup['key'], list)
+                    else [lookup['key']]
+                )
+                if len(sources) != len(keys):
+                    errors.append(
+                        f"ERROR: {path}: source and key must have equal length"
+                    )
+            if ('order_by' in lookup) != ('keep' in lookup):
+                errors.append(
+                    f"ERROR: {path}: order_by and keep must be declared "
+                    "together"
+                )
+
+    verification_ids = []
+    verifications = spec.get('verifications')
+    if isinstance(verifications, dict):
+        verifications = [verifications]
+    if isinstance(verifications, list):
+        for index, verification in enumerate(verifications):
+            if not isinstance(verification, dict) or len(verification) != 1:
+                continue
+            keyword, payload = next(iter(verification.items()))
+            if not isinstance(payload, dict):
+                continue
+            path = f"{spec_label}.verifications[{index}].{keyword}"
+            if keyword in {'all_or_none', 'implies', 'predicate'}:
+                verification_id = payload.get('id')
+                if isinstance(verification_id, str):
+                    verification_ids.append((verification_id, path))
+            if keyword in {'unique', 'all_or_none'}:
+                names = payload.get('columns')
+                if isinstance(names, list):
+                    for name in names:
+                        if isinstance(name, str) and name not in declared:
+                            errors.append(
+                                f"ERROR: {path}.columns: unknown column "
+                                f"{name!r}"
+                            )
+                if (
+                    keyword == 'all_or_none'
+                    and isinstance(names, list)
+                    and len(set(names)) < 2
+                ):
+                    errors.append(
+                        f"ERROR: {path}.columns: requires at least two "
+                        "distinct columns"
+                    )
+            if keyword == 'row_count':
+                minimum = payload.get('min')
+                maximum = payload.get('max')
+                if minimum is None and maximum is None:
+                    errors.append(
+                        f"ERROR: {path}: requires at least one bound"
+                    )
+                elif (
+                    type(minimum) is int
+                    and type(maximum) is int
+                    and minimum > maximum
+                ):
+                    errors.append(f"ERROR: {path}: min must not exceed max")
+
+    seen_ids = set()
+    for verification_id, path in verification_ids:
+        if verification_id in seen_ids:
+            errors.append(
+                f"ERROR: {path}.id: duplicate dataset verification id "
+                f"{verification_id!r}"
+            )
+        seen_ids.add(verification_id)
+
+    for column in column_entries:
+        if not isinstance(column, dict):
+            continue
+        column_name = column.get('name', '<unnamed>')
+        column_type = column.get('type')
+        verifications = column.get('verifications')
+        if isinstance(verifications, dict):
+            verifications = [verifications]
+        if not isinstance(verifications, list):
+            continue
+        for index, verification in enumerate(verifications):
+            if not isinstance(verification, dict) or len(verification) != 1:
+                continue
+            keyword, payload = next(iter(verification.items()))
+            if not isinstance(payload, dict):
+                continue
+            path = (
+                f"{spec_label}.columns.{column_name}.verifications[{index}]."
+                f"{keyword}"
+            )
+            if keyword == 'range':
+                if column_type not in {'int', 'float'}:
+                    errors.append(
+                        f"ERROR: {path}: range requires an int or float column"
+                    )
+                minimum = payload.get('min')
+                maximum = payload.get('max')
+                if minimum is None and maximum is None:
+                    errors.append(
+                        f"ERROR: {path}: requires at least one bound"
+                    )
+                elif (
+                    type(minimum) in (int, float)
+                    and type(maximum) in (int, float)
+                    and minimum > maximum
+                ):
+                    errors.append(f"ERROR: {path}: min must not exceed max")
+            if (
+                keyword == 'max_length'
+                and type(payload.get('max')) is int
+                and payload['max'] < 1
+            ):
+                errors.append(f"ERROR: {path}.max: must be at least 1")
+            if keyword in {'max_length', 'matches'} and column_type != 'str':
+                errors.append(
+                    f"ERROR: {path}: {keyword} requires a str column"
+                )
+
+    datasets = spec.get('datasets')
+    if spec_path is not None and isinstance(datasets, dict):
+        for dataset_id, source in datasets.items():
+            source_path = source if isinstance(source, str) else None
+            types = None
+            if isinstance(source, dict):
+                source_path = source.get('path')
+                types = source.get('types')
+            if not isinstance(source_path, str):
+                continue
+            resolved = spec_path.parent / source_path
+            path = f"{spec_label}.datasets.{dataset_id}"
+            if not resolved.is_file():
+                errors.append(
+                    f"ERROR: {path}: source path does not exist: "
+                    f"{source_path}"
+                )
+                continue
+            if resolved.suffix.lower() != '.csv' or not isinstance(types, dict):
+                continue
+            try:
+                with open(resolved, 'r', encoding='utf-8', newline='') as f:
+                    header = next(csv.reader(f, strict=True), [])
+            except (OSError, csv.Error) as exc:
+                errors.append(f"ERROR: {path}: cannot read CSV header: {exc}")
+                continue
+            for field in sorted(set(types) - set(header)):
+                errors.append(
+                    f"ERROR: {path}.types.{field}: field is absent from "
+                    f"{source_path}"
+                )
+
+    return errors
+
+
 def validate_examples_structure(root: Path, env, warnings=None):
     errors = []
     if warnings is None:
@@ -784,16 +1203,13 @@ def validate_examples_structure(root: Path, env, warnings=None):
                 spec, ['root_class'], env, spec_label
             )
             spec_errors.extend(validate_grouped_rows(spec, spec_label))
+            spec_errors.extend(validate_spec_names(spec, spec_label))
+            spec_errors.extend(
+                validate_spec_contracts(spec, spec_label, spec_path)
+            )
             is_negative = ex_dir.name.startswith('negative-')
             if not is_negative:
-                for spec_error in spec_errors:
-                    if spec_error == KNOWN_STRUCTURAL_WARNING:
-                        warnings.append(
-                            "WARNING: existing DSDECOD verifications mapping "
-                            "must become a list of one-entry mappings"
-                        )
-                    else:
-                        errors.append(spec_error)
+                errors.extend(spec_errors)
                 continue
 
             error_yaml_path = ex_dir / 'expected' / 'error.yaml'
@@ -842,6 +1258,253 @@ def validate_examples_structure(root: Path, env, warnings=None):
 
     return errors
 
+
+EXPECTED_ERROR_PHASES = {
+    'validation',
+    'ingest',
+    'row_construction',
+    'derivation',
+    'output',
+    'verification',
+    'bind',
+    'join',
+    'mapping',
+    'cut',
+    'extract',
+    'template',
+    'impute',
+    'convert',
+    'final',
+}
+
+
+def spec_path_exists(spec, path):
+    node = spec
+    for part in path.split('.'):
+        match = re.fullmatch(r'([A-Za-z_][A-Za-z0-9_]*)(?:\[([0-9]+)\])?', part)
+        if match is None:
+            return False
+        name, index_text = match.groups()
+        if isinstance(node, dict):
+            if name not in node:
+                return False
+            node = node[name]
+        elif isinstance(node, list):
+            candidates = [
+                item for item in node
+                if (
+                    isinstance(item, dict)
+                    and (item.get('name') == name or item.get('id') == name)
+                )
+            ]
+            if len(candidates) != 1:
+                return False
+            node = candidates[0]
+        else:
+            return False
+        if index_text is not None:
+            if not isinstance(node, list):
+                return False
+            index = int(index_text)
+            if index >= len(node):
+                return False
+            node = node[index]
+    return True
+
+
+def validate_expected_error_contracts(root: Path):
+    errors = []
+    examples_dir = root / 'yaml' / 'examples'
+    if not examples_dir.exists():
+        return errors
+    for ex_dir in sorted(examples_dir.glob('negative-*')):
+        if not ex_dir.is_dir():
+            continue
+        error_path = ex_dir / 'expected' / 'error.yaml'
+        if not error_path.exists():
+            continue
+        label = error_path.relative_to(root)
+        try:
+            with open(error_path, 'r', encoding='utf-8') as f:
+                contract = yaml.load(f, Loader=UniqueKeyLoader)
+        except Exception:
+            continue
+        if not isinstance(contract, dict):
+            errors.append(f"ERROR: {label}: expected a mapping")
+            continue
+        unknown = sorted(
+            set(contract) - {'phase', 'condition', 'spec_paths', 'context'}
+        )
+        for field in unknown:
+            errors.append(f"ERROR: {label}.{field}: unknown field")
+        if contract.get('phase') not in EXPECTED_ERROR_PHASES:
+            errors.append(
+                f"ERROR: {label}.phase: expected one of "
+                f"{sorted(EXPECTED_ERROR_PHASES)!r}"
+            )
+        condition = contract.get('condition')
+        if not (
+            isinstance(condition, str)
+            and re.fullmatch(r'[a-z][a-z0-9]*(?:_[a-z0-9]+)*', condition)
+        ):
+            errors.append(
+                f"ERROR: {label}.condition: expected a snake-case name"
+            )
+        paths = contract.get('spec_paths')
+        if not (
+            isinstance(paths, list)
+            and paths
+            and all(isinstance(path, str) and path for path in paths)
+        ):
+            errors.append(
+                f"ERROR: {label}.spec_paths: expected a non-empty string list"
+            )
+            paths = []
+        if 'context' in contract and not isinstance(contract['context'], dict):
+            errors.append(f"ERROR: {label}.context: expected a mapping")
+
+        for spec_path in example_spec_paths(ex_dir):
+            try:
+                with open(spec_path, 'r', encoding='utf-8') as f:
+                    spec = yaml.load(f, Loader=UniqueKeyLoader)
+            except Exception:
+                continue
+            if not isinstance(spec, dict):
+                continue
+            for path in paths:
+                if not spec_path_exists(spec, path):
+                    errors.append(
+                        f"ERROR: {label}.spec_paths: {path!r} does not exist "
+                        f"in {spec_path.name}"
+                    )
+    return errors
+
+
+def validate_csv_shapes(root: Path):
+    errors = []
+    examples_dir = root / 'yaml' / 'examples'
+    if not examples_dir.exists():
+        return errors
+    csv_paths = sorted(examples_dir.glob('*/input/*.csv'))
+    csv_paths.extend(sorted(examples_dir.glob('*/expected/*.csv')))
+    for csv_path in csv_paths:
+        label = csv_path.relative_to(root)
+        try:
+            with open(csv_path, 'r', encoding='utf-8', newline='') as f:
+                rows = list(csv.reader(f, strict=True))
+        except (OSError, csv.Error) as exc:
+            errors.append(f"ERROR: {label}: invalid CSV: {exc}")
+            continue
+        if not rows:
+            errors.append(f"ERROR: {label}: CSV is empty")
+            continue
+        header = rows[0]
+        if not header or any(not name for name in header):
+            errors.append(f"ERROR: {label}: header contains an empty name")
+        duplicates = sorted(
+            name for name in set(header) if header.count(name) > 1
+        )
+        if duplicates:
+            errors.append(
+                f"ERROR: {label}: duplicate header(s): "
+                + ', '.join(duplicates)
+            )
+        for line_number, row in enumerate(rows[1:], 2):
+            if len(row) != len(header):
+                errors.append(
+                    f"ERROR: {label}:{line_number}: expected {len(header)} "
+                    f"fields, got {len(row)}"
+                )
+    return errors
+
+
+README_FORBIDDEN_PATTERN = re.compile(
+    r'\b(?:derivation|schema|handler|verification)s?\b'
+    r'|R0[01][0-9]|output\.columns',
+    re.IGNORECASE,
+)
+README_KEY_COLUMNS = {
+    'STUDYID', 'USUBJID', 'DOMAIN', 'SUBJID', 'AESEQ', 'VSSEQ', 'LBSEQ',
+    'RSSEQ', 'ASEQ', 'PARAMCD', 'PARAM', 'AVISIT', 'VISIT', 'RDOMAIN',
+    'IDVAR', 'QNAM',
+}
+
+
+def validate_example_readmes(root: Path):
+    errors = []
+    examples_dir = root / 'yaml' / 'examples'
+    if not examples_dir.exists():
+        return errors
+    for ex_dir in sorted(examples_dir.iterdir()):
+        if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
+            continue
+        readme_path = ex_dir / 'README.md'
+        if not readme_path.exists():
+            continue
+        label = readme_path.relative_to(root)
+        text = readme_path.read_text(encoding='utf-8')
+        for line_number, line in enumerate(text.splitlines(), 1):
+            if len(line) > 79:
+                errors.append(
+                    f"ERROR: {label}:{line_number}: line has {len(line)} "
+                    "characters; maximum is 79"
+                )
+
+        marker = '\n## How to fix\n'
+        contract = text.split(marker, 1)[0]
+        for line_number, line in enumerate(contract.splitlines(), 1):
+            if README_FORBIDDEN_PATTERN.search(line):
+                errors.append(
+                    f"ERROR: {label}:{line_number}: schema vocabulary is "
+                    "not allowed in the data contract"
+                )
+
+        headings = [
+            line for line in text.splitlines() if line.startswith('## ')
+        ]
+        if ex_dir.name.startswith('negative-'):
+            if headings != ['## How to fix']:
+                errors.append(
+                    f"ERROR: {label}: negative README must contain exactly "
+                    "one '## How to fix' section and no other level-two section"
+                )
+        else:
+            invalid = [
+                heading for heading in headings
+                if heading != '## Specification variants'
+            ]
+            if invalid:
+                errors.append(
+                    f"ERROR: {label}: unsupported level-two section(s): "
+                    + ', '.join(invalid)
+                )
+            if (
+                '## Specification variants' in headings
+                and len(example_spec_paths(ex_dir)) < 2
+            ):
+                errors.append(
+                    f"ERROR: {label}: Specification variants requires at "
+                    "least two variant specs"
+                )
+
+        for csv_path in sorted((ex_dir / 'expected').glob('*.csv')):
+            try:
+                with open(csv_path, 'r', encoding='utf-8', newline='') as f:
+                    header = next(csv.reader(f, strict=True), [])
+            except (OSError, csv.Error):
+                continue
+            missing = [
+                name for name in header
+                if name not in README_KEY_COLUMNS and name not in text
+            ]
+            if missing:
+                errors.append(
+                    f"ERROR: {label}: expected columns not described: "
+                    + ', '.join(missing)
+                )
+    return errors
+
+
 def check_yaml_files(root: Path):
     errors = []
     warnings = []
@@ -863,6 +1526,9 @@ def check_yaml_files(root: Path):
     errors.extend(validate_examples_structure(root, env, warnings))
     errors.extend(validate_examples_layout(root))
     errors.extend(validate_examples_index(root))
+    errors.extend(validate_expected_error_contracts(root))
+    errors.extend(validate_csv_shapes(root))
+    errors.extend(validate_example_readmes(root))
 
     csv_errors, csv_warnings = validate_examples_csv(root)
     errors.extend(csv_errors)
@@ -904,6 +1570,15 @@ def validate_examples_csv(root: Path):
             if not expected_dir.exists():
                 continue
             for csv_file in sorted(expected_dir.glob('*.csv')):
+                domain = spec.get('domain')
+                if (
+                    isinstance(domain, str)
+                    and csv_file.name != f"{domain.lower()}.csv"
+                ):
+                    errors.append(
+                        f"ERROR: {ex_dir.name}/{csv_file.name}: expected "
+                        f"artifact name {domain.lower()}.csv"
+                    )
                 with open(csv_file, 'r', encoding='utf-8') as f:
                     reader = csv.reader(f)
                     try:

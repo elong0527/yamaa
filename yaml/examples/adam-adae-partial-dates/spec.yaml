@@ -48,6 +48,7 @@ columns:
         source: AESTDTC
         month: 6
         day: 15
+        minimum_source_precision: month
         missing: null
         invalid: null
 
@@ -70,16 +71,14 @@ columns:
     type: str
     label: Analysis Start Date Imputation Flag
     derivation:
-      mapping:
-        source: ASTDTPR
-        missing: null
-        dict:
-          D: null
-          M: "D"
-          Y: "M"
+      case:
+        branches:
+          - when: "ASTDT IS NOT NULL AND ASTDTPR = 'M'"
+            then:
+              literal: "D"
     verifications:
       allowed_values:
-        values: ["D", "M"]
+        values: ["D"]
 
   - name: TRTSDT
     type: date

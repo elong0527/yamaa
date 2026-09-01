@@ -1,0 +1,97 @@
+schema_version: "1.0"
+domain: FA
+datasets:
+  VS:
+    path: input/vs.csv
+    types:
+      VSSEQ: int
+      VSSTRESN: float
+base: VS
+keys: [STUDYID, USUBJID, FASEQ]
+
+output:
+  columns:
+    - STUDYID
+    - DOMAIN
+    - USUBJID
+    - FASEQ
+    - FATESTCD
+    - FATEST
+    - FACAT
+    - FASCAT
+    - FAOBJ
+    - FAORRES
+    - FASTRESC
+    - VSSTRESN
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: VS.STUDYID}
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: FA}
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {source: VS.USUBJID}
+
+  - name: FASEQ
+    type: int
+    label: Sequence Number
+    derivation: {source: VS.VSSEQ}
+
+  - name: FATESTCD
+    type: str
+    label: Findings About Test Short Name
+    derivation: {literal: OCCUR}
+
+  - name: FATEST
+    type: str
+    label: Findings About Test Name
+    derivation: {literal: Occurrence Indicator}
+
+  - name: FACAT
+    type: str
+    label: Category for Findings About
+    derivation: {literal: REACTOGENICITY}
+
+  - name: FASCAT
+    type: str
+    label: Subcategory for Findings About
+    derivation: {literal: SYSTEMIC}
+
+  - name: FAOBJ
+    type: str
+    label: Object of the Observation
+    derivation: {literal: FEVER}
+
+  - name: FAORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation:
+      case:
+        branches:
+          - when: "VS.VSSTRESU = 'C' AND VS.VSSTRESN >= 38"
+            then: {literal: Y}
+          - when: "VS.VSSTRESU = 'C' AND VS.VSSTRESN < 38"
+            then: {literal: N}
+
+  - name: FASTRESC
+    type: str
+    label: Character Result/Finding in Std Format
+    derivation: {source: FAORRES}
+
+  - name: VSSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+    derivation: {source: VS.VSSTRESN}
+
+rows:
+  - id: fever_occurrence
+    filter: "VS.VSCAT = 'REACTOGENICITY' AND VS.VSTESTCD = 'TEMP'"
+    derivations: {}
