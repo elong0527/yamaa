@@ -28,8 +28,8 @@ The validation ensures:
    CSV header exactly, and they cannot be combined with inline `types`.
    Negative examples (folders prefixed with `negative-`) are structurally
    validated; structural errors are only suppressed if their named path
-   matches a `spec_path` declared in `expected/error.yaml` with `phase:
-   validation`.
+   matches a `spec_path` declared in `expected/error.yaml` with
+   `phase: validation`.
 4. **Layout**: All examples have `README.md`, one `spec.yaml` or one or more
    `spec_<variant>.yaml` files, `input/`, and `expected/`. A base spec cannot
    be mixed with variants. Negative examples must provide `expected/error.yaml`
