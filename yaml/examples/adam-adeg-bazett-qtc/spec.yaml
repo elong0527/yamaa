@@ -1,0 +1,125 @@
+schema_version: "1.0"
+domain: ADEG
+datasets:
+  ADEG_IN: {path: input/adeg.csv, types: {AVAL: float}}
+base: ADEG_IN
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
+
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL, AVALU]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+
+  - name: QTVAL
+    type: float
+    label: QT Interval
+
+  - name: RRVAL
+    type: float
+    label: RR Interval
+
+  - name: QTUNIT
+    type: str
+    label: QT Unit
+
+  - name: RRUNIT
+    type: str
+    label: RR Unit
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+
+  - name: ROW_PROVENANCE
+    type: str
+    label: Row Provenance
+
+rows:
+  - id: collected
+    derivations:
+      STUDYID: {source: ADEG_IN.STUDYID}
+      USUBJID: {source: ADEG_IN.USUBJID}
+      PARAMCD: {source: ADEG_IN.PARAMCD}
+      PARAM: {source: ADEG_IN.PARAM}
+      AVISIT: {source: ADEG_IN.AVISIT}
+      QTVAL: {literal: null}
+      RRVAL: {literal: null}
+      QTUNIT: {literal: null}
+      RRUNIT: {literal: null}
+      AVAL: {source: ADEG_IN.AVAL}
+      AVALU: {source: ADEG_IN.AVALU}
+      ROW_PROVENANCE: {literal: collected}
+
+  - id: qtcbr
+    group_by: [ADEG_IN.STUDYID, ADEG_IN.USUBJID, ADEG_IN.AVISIT]
+    filter: >-
+      QTVAL IS NOT NULL
+      AND RRVAL IS NOT NULL
+    derivations:
+      STUDYID: {source: ADEG_IN.STUDYID}
+      USUBJID: {source: ADEG_IN.USUBJID}
+      PARAMCD: {literal: QTCBR}
+      PARAM: {literal: "QTcB - Bazett's Correction Formula Rederived (ms)"}
+      AVISIT: {source: ADEG_IN.AVISIT}
+      QTVAL:
+        aggregate:
+          filter: "ADEG_IN.PARAMCD = 'QT'"
+          expr: "ONLY(ADEG_IN.AVAL)"
+      RRVAL:
+        aggregate:
+          filter: "ADEG_IN.PARAMCD = 'RR'"
+          expr: "ONLY(ADEG_IN.AVAL)"
+      QTUNIT:
+        aggregate:
+          filter: "ADEG_IN.PARAMCD = 'QT'"
+          expr: "ONLY(ADEG_IN.AVALU)"
+      RRUNIT:
+        aggregate:
+          filter: "ADEG_IN.PARAMCD = 'RR'"
+          expr: "ONLY(ADEG_IN.AVALU)"
+      AVAL:
+        compute:
+          expr: "QTVAL / SQRT(RRVAL / 1000)"
+      AVALU: {literal: ms}
+      ROW_PROVENANCE: {literal: generated}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
+  - implies:
+      id: derived-parameter-has-expected-unit
+      when: "PARAMCD = 'QTCBR'"
+      then: "AVALU = 'ms'"
+  - implies:
+      id: assert_param_does_not_exist
+      when: "PARAMCD = 'QTCBR'"
+      then: "ROW_PROVENANCE = 'generated'"
+  - implies:
+      id: assert_unit_is_ms_or_msec
+      when: >-
+        ROW_PROVENANCE = 'collected'
+        AND (PARAMCD = 'QT' OR PARAMCD = 'RR')
+      then: "AVALU = 'ms' OR AVALU = 'msec'"
