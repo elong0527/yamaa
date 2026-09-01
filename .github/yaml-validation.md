@@ -23,9 +23,10 @@ The validation ensures:
    cross-field checks enforce base selection, complete and exclusive
    derivation coverage, record-lookup field pairing, verification bounds and
    IDs, source-file existence, and declared CSV fields. Referenced source
-   sidecars validate against `source_sidecar_class` in the main schema bundle;
-   their version must match, their field map must be non-empty and match the
-   CSV header exactly, and they cannot be combined with inline `types`.
+   schemas validate against `source_schema_class` in the main schema bundle;
+   their version must match, keys and columns must resolve against the complete
+   `output.columns` contract, the CSV header must match that ordered contract
+   exactly, and source schemas cannot be combined with inline `types`.
    Negative examples (folders prefixed with `negative-`) are structurally
    validated; structural errors are only suppressed if their named path
    matches a `spec_path` declared in `expected/error.yaml` with

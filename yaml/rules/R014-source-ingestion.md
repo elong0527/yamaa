@@ -51,52 +51,58 @@ datasets:
 Both forms are the same declaration: a bare path is R006 shorthand for a
 `dataset_class` with no `types`.
 
-## Portable schema sidecar
+## Portable source schema
 
 `dataset_class.schema` makes a delimited file a self-describing source without
 requiring a binary container or a format-specific runtime dependency. It is a
 path, resolved relative to the specification like `dataset_class.path`, to a
-YAML document of this exact form:
+metadata-only dataset contract using the same vocabulary as a derivation
+specification:
 
 ```yaml
-version: "1.0"
-fields:
-  STUDYID: string
-  USUBJID: string
-  AGE: integer
-  WEIGHT: number
-  RANDDT: date
-  RANDDTTM: datetime
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+
+output:
+  columns: [STUDYID, USUBJID, RANDDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+  - name: RANDDT
+    type: date
+    label: Date of Randomization
 ```
 
-The document validates against `source_sidecar_class` in the `schema.yaml`
-bundle, using R006's class and descriptor rules. `version` is required and must
-equal that bundle's version. `fields` is a required, non-empty mapping whose
-keys are distinct `dataset_column` names and whose values come from the closed
-portable vocabulary below. No other top-level field, field descriptor, or
-source type is allowed.
+The document validates against `source_schema_class` in the `schema.yaml`
+bundle under R006. It deliberately has no `datasets`, `base`, `rows`, or
+derivations: it describes an existing artifact and is not an executable
+producer. `schema_version`, `domain`, `keys`, `output`, `columns`, labels, and
+metadata retain their derivation-specification spellings so a dataset contract
+does not introduce a second field-description language.
 
-| Sidecar type | R011 field type and runtime value |
-|---|---|
-| `string` | `str` |
-| `integer` | `int` |
-| `number` | `float` |
-| `date` | `date` |
-| `datetime` | `datetime` |
+`output.columns` must name every delimited field exactly once and in stored
+order. `columns` must contain exactly one descriptor for every selected field,
+and `keys` must be a non-empty subset. The file header must equal
+`output.columns`; missing, extra, reordered, duplicate, or undescribed fields
+fail rather than silently becoming `str`.
 
-The sidecar must name every field in the delimited file exactly once, and the
-file must contain every field it names. A missing or extra name fails rather
-than silently becoming `str`; a self-describing source has one complete schema,
-not a typed subset. `types` may be present only for a typeless source, so it
-must be absent whenever `schema` is present. This rejects even an inline entry
-that agrees with the sidecar instead of creating two authorities for one type.
+Each descriptor's `type` is the field's R011 runtime type. `types` may be
+present only for a typeless source, so it must be absent whenever `schema` is
+present. This rejects even an inline entry that agrees with the source schema
+instead of creating two authorities for one type.
 
-The mapping produces the R011 runtime type directly, but the stored cells are
-still delimited text. After recognizing missing values, ingestion applies the
-`str` row of R011's conversion table to every non-missing cell. In particular,
-sidecar `date` and `datetime` use R016's lexical grammar and representations,
-exactly as an inline `types` declaration or a column conversion does; the
-sidecar does not enable a runtime's more permissive temporal parser.
+The stored cells are still delimited text. After recognizing missing values,
+ingestion applies the `str` row of R011's conversion table to every non-missing
+cell. In particular, a source column declared `date` or `datetime` uses R016's
+lexical grammar and representations, exactly as an inline `types` declaration
+or a column conversion does; the source schema does not enable a runtime's
+more permissive temporal parser.
 
 ## Values are never inferred
 

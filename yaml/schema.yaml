@@ -204,22 +204,51 @@ dataset_class:
     - schema:
         type: path
         required: false
-        description: Portable source sidecar matching source_sidecar_class under R014.
+        description: Spec-shaped source dataset contract matching source_schema_class under R014.
 
-source_sidecar_class:
-    - version:
+source_schema_class:
+    - schema_version:
         type: str
         required: true
-        description: Portable sidecar version; R014 requires an exact bundle-version match.
-    - fields:
-        type: "dict[dataset_column, source_sidecar_type]"
+        description: Schema bundle this source contract is written against; R014 requires an exact match.
+    - domain:
+        type: domain_name
         required: true
-        description: Complete mapping from stored field names to portable source types.
+        description: Name of the stored dataset this contract describes.
+    - keys:
+        type: "list[dataset_column]"
+        required: true
+        description: Columns identifying a stored row, using the same spelling as a derivation specification.
+    - output:
+        type: output_class
+        required: true
+        description: Stored fields in artifact order; R014 requires complete coverage.
+    - columns:
+        type: "list[source_schema_column_class]"
+        required: true
+        description: Stored field contracts independent of derivation logic.
+    - metadata:
+        type: "dict[str, str]"
+        required: false
+        description: Free-form dataset annotations carried by the source contract.
 
-source_sidecar_type:
-    type: str
-    values: [string, integer, number, date, datetime]
-    description: Portable source type mapped to an R011 runtime type by R014.
+source_schema_column_class:
+    - name:
+        type: dataset_column
+        required: true
+        description: Stored field name.
+    - type:
+        type: column_type
+        required: true
+        description: R011 runtime type carried by the stored field.
+    - label:
+        type: str
+        required: true
+        description: Human-readable field label.
+    - metadata:
+        type: "dict[str, str]"
+        required: false
+        description: Free-form annotations carried with the stored field.
 
 dataset_id:
     type: str

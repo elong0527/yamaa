@@ -1,6 +1,23 @@
-version: "1.0"
-fields:
-  STUDYID: string
-  USUBJID: string
-  RANDDT: date
-  RANDDTTM: datetime
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+
+output:
+  columns: [STUDYID, USUBJID, RANDDT, RANDDTTM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: RANDDT
+    type: date
+    label: Date of Randomization
+
+  - name: RANDDTTM
+    type: datetime
+    label: Date and Time of Randomization

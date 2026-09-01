@@ -1160,8 +1160,95 @@ def validate_spec_contracts(spec, spec_label, spec_path=None):
     return errors
 
 
-def validate_source_sidecars(spec, spec_label, spec_path, env):
-    """Validate portable source schemas and their referenced CSV headers."""
+def validate_source_schema_contract(source_schema, path):
+    """Validate names, identity, and artifact selection in a source schema."""
+    errors = []
+    columns = source_schema.get('columns')
+    column_entries = columns if isinstance(columns, list) else []
+    if isinstance(columns, list) and not columns:
+        errors.append(
+            f"ERROR: {path}.columns: source schema columns must not be empty"
+        )
+    declared = []
+    for index, column in enumerate(column_entries):
+        if isinstance(column, dict) and isinstance(column.get('name'), str):
+            declared.append((column['name'], index))
+
+    declared_names = [name for name, _ in declared]
+    for name in sorted(set(declared_names)):
+        occurrences = [
+            index for declared_name, index in declared
+            if declared_name == name
+        ]
+        for index in occurrences[1:]:
+            errors.append(
+                f"ERROR: {path}.columns[{index}].name: duplicate source "
+                f"column {name!r}"
+            )
+
+    output = source_schema.get('output')
+    output_columns = output.get('columns') if isinstance(output, dict) else None
+    selected = output_columns if isinstance(output_columns, list) else []
+    string_selected = [name for name in selected if isinstance(name, str)]
+    if isinstance(output_columns, list) and not output_columns:
+        errors.append(
+            f"ERROR: {path}.output.columns: source schema output must not "
+            "be empty"
+        )
+    for name in sorted(set(string_selected)):
+        occurrences = [
+            index for index, selected_name in enumerate(selected)
+            if selected_name == name
+        ]
+        for index in occurrences[1:]:
+            errors.append(
+                f"ERROR: {path}.output.columns[{index}]: duplicate selected "
+                f"column {name!r}"
+            )
+
+    declared_set = set(declared_names)
+    selected_set = set(string_selected)
+    for index, name in enumerate(selected):
+        if isinstance(name, str) and name not in declared_set:
+            errors.append(
+                f"ERROR: {path}.output.columns[{index}]: undeclared source "
+                f"column {name!r}"
+            )
+    for name, index in declared:
+        if name not in selected_set:
+            errors.append(
+                f"ERROR: {path}.columns[{index}].name: source column "
+                f"{name!r} is absent from output.columns"
+            )
+
+    keys = source_schema.get('keys')
+    key_entries = keys if isinstance(keys, list) else []
+    if isinstance(keys, list) and not keys:
+        errors.append(
+            f"ERROR: {path}.keys: source schema keys must not be empty"
+        )
+    string_keys = [key for key in key_entries if isinstance(key, str)]
+    for key in sorted(set(string_keys)):
+        occurrences = [
+            index for index, candidate in enumerate(key_entries)
+            if candidate == key
+        ]
+        for index in occurrences[1:]:
+            errors.append(
+                f"ERROR: {path}.keys[{index}]: duplicate key column {key!r}"
+            )
+    for index, key in enumerate(key_entries):
+        if isinstance(key, str) and key not in selected_set:
+            errors.append(
+                f"ERROR: {path}.keys[{index}]: key column {key!r} is not "
+                "in output.columns"
+            )
+
+    return errors
+
+
+def validate_source_schemas(spec, spec_label, spec_path, env):
+    """Validate spec-shaped source contracts and referenced CSV headers."""
     errors = []
     datasets = spec.get('datasets')
     if not isinstance(datasets, dict):
@@ -1189,8 +1276,8 @@ def validate_source_sidecars(spec, spec_label, spec_path, env):
         schema_ref = source.get('schema')
         if not isinstance(schema_ref, str):
             continue
-        sidecar_path = spec_path.parent / schema_ref
-        if not sidecar_path.is_file():
+        source_schema_path = spec_path.parent / schema_ref
+        if not source_schema_path.is_file():
             errors.append(
                 f"ERROR: {path}.schema: source schema does not exist: "
                 f"{schema_ref}"
@@ -1198,8 +1285,8 @@ def validate_source_sidecars(spec, spec_label, spec_path, env):
             continue
 
         try:
-            with open(sidecar_path, 'r', encoding='utf-8') as f:
-                sidecar = yaml.load(f, Loader=UniqueKeyLoader)
+            with open(source_schema_path, 'r', encoding='utf-8') as f:
+                source_schema = yaml.load(f, Loader=UniqueKeyLoader)
         except (OSError, yaml.YAMLError) as exc:
             errors.append(
                 f"ERROR: {path}.schema: cannot read source schema "
@@ -1209,35 +1296,31 @@ def validate_source_sidecars(spec, spec_label, spec_path, env):
 
         errors.extend(
             validate_type(
-                sidecar,
-                ['source_sidecar_class'],
+                source_schema,
+                ['source_schema_class'],
                 env,
                 f"{path}.schema",
             )
         )
-        if not isinstance(sidecar, dict):
+        if not isinstance(source_schema, dict):
             continue
+        errors.extend(
+            validate_source_schema_contract(
+                source_schema, f"{path}.schema"
+            )
+        )
 
-        schema_version = sidecar.get('version')
+        schema_version = source_schema.get('schema_version')
         bundle_version = env.get('version')
         if (
             isinstance(schema_version, str)
             and schema_version != bundle_version
         ):
             errors.append(
-                f"ERROR: {path}.schema.version: version "
+                f"ERROR: {path}.schema.schema_version: version "
                 f"{schema_version!r} does not match bundle version "
                 f"{bundle_version!r}"
             )
-
-        fields = sidecar.get('fields')
-        if isinstance(fields, dict) and not fields:
-            errors.append(
-                f"ERROR: {path}.schema.fields: source schema fields must "
-                "not be empty"
-            )
-        if not isinstance(fields, dict) or not fields:
-            continue
 
         source_ref = source.get('path')
         if not isinstance(source_ref, str):
@@ -1255,21 +1338,15 @@ def validate_source_sidecars(spec, spec_label, spec_path, env):
             )
             continue
 
-        absent_from_schema = sorted(set(header) - set(fields))
-        absent_from_source = sorted(set(fields) - set(header))
-        if absent_from_schema or absent_from_source:
-            details = []
-            if absent_from_schema:
-                details.append(
-                    "absent from schema: " + ', '.join(absent_from_schema)
-                )
-            if absent_from_source:
-                details.append(
-                    "absent from source: " + ', '.join(absent_from_source)
-                )
+        output = source_schema.get('output')
+        output_columns = (
+            output.get('columns') if isinstance(output, dict) else None
+        )
+        if isinstance(output_columns, list) and header != output_columns:
             errors.append(
-                f"ERROR: {path}.schema.fields: source schema fields must "
-                f"match the CSV header exactly ({'; '.join(details)})"
+                f"ERROR: {path}.schema.output.columns: source schema output "
+                f"must match the CSV header exactly; expected {header!r}, "
+                f"got {output_columns!r}"
             )
 
     return errors
@@ -1323,7 +1400,7 @@ def validate_examples_structure(root: Path, env, warnings=None):
                 validate_spec_contracts(spec, spec_label, spec_path)
             )
             spec_errors.extend(
-                validate_source_sidecars(spec, spec_label, spec_path, env)
+                validate_source_schemas(spec, spec_label, spec_path, env)
             )
             is_negative = ex_dir.name.startswith('negative-')
             if not is_negative:

@@ -473,7 +473,21 @@ class TestSpecContracts(unittest.TestCase):
         self.assertIn("source path does not exist", message)
 
 
-class TestSourceSidecars(unittest.TestCase):
+class TestSourceSchemas(unittest.TestCase):
+    VALID_SOURCE_SCHEMA = '''schema_version: "1.0"
+domain: DM
+keys: [STUDYID]
+output:
+  columns: [STUDYID, AGE]
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+  - name: AGE
+    type: int
+    label: Age
+'''
+
     def setUp(self):
         self.env, schema_errors = VALIDATOR.build_schema_env(
             TOOL_PATH.parents[2]
@@ -491,7 +505,9 @@ class TestSourceSidecars(unittest.TestCase):
     def tearDown(self):
         self.test_dir.cleanup()
 
-    def write_sidecar(self, content):
+    def write_source_schema(self, content=None):
+        if content is None:
+            content = self.VALID_SOURCE_SCHEMA
         (self.input_dir / "dm.schema.yaml").write_text(
             content, encoding="utf-8"
         )
@@ -502,28 +518,20 @@ class TestSourceSidecars(unittest.TestCase):
                 "path": "input/dm.csv",
                 "schema": "input/dm.schema.yaml",
             }
-        return VALIDATOR.validate_source_sidecars(
+        return VALIDATOR.validate_source_schemas(
             {"datasets": {"DM": source}},
             "example/spec.yaml",
             self.spec_path,
             self.env,
         )
 
-    def test_accepts_complete_sidecar_from_main_schema_bundle(self):
-        self.write_sidecar(
-            'version: "1.0"\n'
-            "fields:\n"
-            "  AGE: integer\n"
-            "  STUDYID: string\n"
-        )
+    def test_accepts_spec_shaped_source_schema(self):
+        self.write_source_schema()
 
         self.assertEqual(self.validate(), [])
 
-    def test_rejects_inline_types_with_sidecar(self):
-        self.write_sidecar(
-            'version: "1.0"\n'
-            "fields: {STUDYID: string, AGE: integer}\n"
-        )
+    def test_rejects_inline_types_with_source_schema(self):
+        self.write_source_schema()
 
         errors = self.validate(
             {
@@ -550,52 +558,109 @@ class TestSourceSidecars(unittest.TestCase):
             "\n".join(empty_types_errors),
         )
 
-    def test_rejects_version_mismatch_and_empty_fields(self):
-        self.write_sidecar('version: "2.0"\nfields: {}\n')
+    def test_rejects_version_mismatch_and_empty_contract(self):
+        self.write_source_schema(
+            '''schema_version: "2.0"
+domain: DM
+keys: []
+output: {columns: []}
+columns: []
+'''
+        )
 
         message = "\n".join(self.validate())
 
         self.assertIn("does not match bundle version", message)
-        self.assertIn("fields must not be empty", message)
+        self.assertIn("source schema keys must not be empty", message)
+        self.assertIn("source schema columns must not be empty", message)
+        self.assertIn("source schema output must not be empty", message)
 
-    def test_rejects_nonmatching_csv_header(self):
-        self.write_sidecar(
-            'version: "1.0"\n'
-            "fields: {AGE: integer, OTHER: string}\n"
+    def test_rejects_reordered_csv_header_contract(self):
+        self.write_source_schema(
+            '''schema_version: "1.0"
+domain: DM
+keys: [STUDYID]
+output:
+  columns: [AGE, STUDYID]
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+  - name: AGE
+    type: int
+    label: Age
+'''
         )
 
         message = "\n".join(self.validate())
 
         self.assertIn("match the CSV header exactly", message)
-        self.assertIn("absent from schema: STUDYID", message)
-        self.assertIn("absent from source: OTHER", message)
+        self.assertIn("['STUDYID', 'AGE']", message)
+        self.assertIn("['AGE', 'STUDYID']", message)
 
-    def test_rejects_yamaa_internal_sidecar_vocabulary(self):
-        self.write_sidecar(
-            'schema_version: "1.0"\n'
-            "fields: {STUDYID: str, AGE: int}\n"
+    def test_rejects_legacy_field_map(self):
+        self.write_source_schema(
+            '''version: "1.0"
+fields: {STUDYID: string, AGE: integer}
+'''
         )
 
         message = "\n".join(self.validate())
 
-        self.assertIn("missing required field 'version'", message)
-        self.assertIn("unknown field 'schema_version'", message)
-        self.assertIn("value 'str'", message)
-        self.assertIn("value 'int'", message)
+        self.assertIn("missing required field 'schema_version'", message)
+        self.assertIn("unknown field 'version'", message)
+        self.assertIn("unknown field 'fields'", message)
 
-    def test_rejects_unknown_fields_and_types(self):
-        self.write_sidecar(
-            'version: "1.0"\n'
-            "fields: {STUDYID: string, AGE: decimal}\n"
-            "extra: true\n"
+    def test_rejects_executable_producer_fields(self):
+        self.write_source_schema(
+            '''schema_version: "1.0"
+domain: DM
+datasets: {RAW: raw.csv}
+base: RAW
+keys: [STUDYID]
+output: {columns: [STUDYID, AGE]}
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: RAW.STUDYID}
+  - name: AGE
+    type: int
+    label: Age
+'''
         )
 
         message = "\n".join(self.validate())
 
-        self.assertIn("allowed values", message)
-        self.assertIn("unknown field 'extra'", message)
+        self.assertIn("unknown field 'datasets'", message)
+        self.assertIn("unknown field 'base'", message)
+        self.assertIn("unknown field 'derivation'", message)
 
-    def test_rejects_missing_sidecar(self):
+    def test_rejects_unresolved_and_duplicate_contract_names(self):
+        source_schema = {
+            "keys": ["MISSING", "MISSING"],
+            "output": {"columns": ["STUDYID", "STUDYID", "OTHER"]},
+            "columns": [
+                {"name": "STUDYID"},
+                {"name": "STUDYID"},
+                {"name": "AGE"},
+            ],
+        }
+
+        message = "\n".join(
+            VALIDATOR.validate_source_schema_contract(
+                source_schema, "example/spec.yaml.datasets.DM.schema"
+            )
+        )
+
+        self.assertIn("duplicate source column 'STUDYID'", message)
+        self.assertIn("duplicate selected column 'STUDYID'", message)
+        self.assertIn("undeclared source column 'OTHER'", message)
+        self.assertIn("source column 'AGE' is absent", message)
+        self.assertIn("duplicate key column 'MISSING'", message)
+        self.assertIn("key column 'MISSING' is not in output", message)
+
+    def test_rejects_missing_source_schema(self):
         message = "\n".join(self.validate())
 
         self.assertIn("source schema does not exist", message)
