@@ -54,9 +54,7 @@ equal a dataset identifier, another record lookup's `id`, or the output
 
 ## Matching
 
-A record lookup matches its `dataset` where a derivation reads it: against a
-constructed current row during column derivation, or against the current
-candidate during grouped row construction:
+A record lookup matches its `dataset` against each constructed current row:
 
 1. `filter` selects eligible records. It is a predicate over records of the
    record lookup's dataset only, evaluated exactly as R003 evaluates the
@@ -74,11 +72,6 @@ candidate during grouped row construction:
 
 `source` and `key` are declared together or not at all, and so are `order_by`
 and `keep`.
-
-During grouped row construction, every current-row variable used for matching
-must be derived by that row template. R001 orders those row derivations before
-the derivation that reads the lookup and rejects a dependency on a value that
-will not exist until column derivation.
 
 A record lookup may also match by a closed range. Declaring `between` adds one
 `value` the current row reads and `lower` and `upper` columns of the lookup's

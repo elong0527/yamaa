@@ -19,59 +19,60 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
+    derivation:
+      source: AE_REC.STUDYID
 
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
+    derivation:
+      literal: AE
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation:
+      source: AE_REC.USUBJID
 
   - name: AESEQ
     type: int
     label: Sequence Number
+    derivation:
+      source: AE_REC.AESEQ
 
   - name: AETERM
     type: str
     label: Reported Term for the Adverse Event
+    derivation:
+      source: EFFECTIVE.AETERM
 
   - name: AESEV
     type: str
     label: Severity/Intensity
+    derivation:
+      source: EFFECTIVE.AESEV
 
   - name: TXNTYPE
     type: str
     label: Transaction Type
+    derivation:
+      source: EFFECTIVE.TXNTYPE
     verifications:
       allowed_values:
-        values: [INSERT, UPDATE]
+        values: [INSERT, UPDATE, REMOVE]
 
   - name: AUDITDTC
     type: datetime
     label: Audit Date/Time
-
-rows:
-  - id: effective
-    group_by: [AE_REC.STUDYID, AE_REC.USUBJID, AE_REC.AESEQ]
-    filter: "TXNTYPE <> 'REMOVE'"
-    derivations:
-      STUDYID:
-        aggregate: "ONLY(AE_REC.STUDYID)"
-      DOMAIN: {literal: AE}
-      USUBJID: {source: AE_REC.USUBJID}
-      AESEQ: {source: AE_REC.AESEQ}
-      AETERM: {source: EFFECTIVE.AETERM}
-      AESEV: {source: EFFECTIVE.AESEV}
-      TXNTYPE: {source: EFFECTIVE.TXNTYPE}
-      AUDITDTC: {source: EFFECTIVE.AUDITDTC}
+    derivation:
+      source: EFFECTIVE.AUDITDTC
 
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 3
-      max: 3
+      min: 4
+      max: 4
   - all_or_none:
       id: effective-record-completeness
       columns: [AETERM, AESEV, TXNTYPE, AUDITDTC]
