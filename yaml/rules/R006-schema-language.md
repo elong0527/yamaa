@@ -47,8 +47,10 @@ explicit tags, and unknown schema constructs.
 ## Scalar resolution
 
 The schema bundle and every specification use the YAML 1.2 core schema. Only
-`true` and `false` resolve to Boolean. Every other alphabetic scalar, including
-`y`, `Y`, `n`, `N`, `yes`, `no`, `on`, and `off`, resolves to a string.
+`true`, `True`, `TRUE`, `false`, `False`, and `FALSE` resolve to Boolean. Every
+other alphabetic scalar, including `y`, `Y`, `n`, `N`, `yes`, `no`, `on`, and
+`off`, resolves to a string. The core schema has no timestamp resolver, so an
+unquoted ISO-looking date or datetime is also a string.
 
 Default parser settings do not satisfy this requirement. How an implementation
 meets it is its own choice, but it must not be met by requiring authors to

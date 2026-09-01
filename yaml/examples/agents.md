@@ -149,8 +149,8 @@ An implementation may report additional context and may word its human-readable
 message differently. The expected fields and values must match. Stack traces
 and implementation-specific exception classes do not belong in this artifact.
 
-`phase` comes from a closed list, so two examples that stop at the same point
-say so the same way:
+`phase` comes from the two closed tables below, so two examples that stop at
+the same point say so the same way. Whole-run evaluation failures use:
 
 | Phase | Rejects |
 |---|---|
@@ -161,11 +161,23 @@ say so the same way:
 | `output` | output identity, once every column holds its final value |
 | `verification` | a declared assertion |
 
-A condition that an operation could have answered locally instead names the
-stage R008 gives it: `bind`, `join`, `mapping`, `cut`, `extract`, `template`,
-`impute`, `convert`, or `final`. Declaring the corresponding handler is then
-exactly what turns the failure into a value, which is what makes the pairing
-worth keeping.
+A condition that an operation could have answered locally uses the stage R008
+gives it:
+
+| Phase | Rejects |
+|---|---|
+| `bind` | an absent source variable or ODM item |
+| `join` | an unresolved multiple match |
+| `mapping` | a missing or unmapped lookup input |
+| `cut` | a missing numeric classification input |
+| `extract` | a missing string or unmatched pattern |
+| `template` | a missing placeholder value |
+| `impute` | a missing or unusable partial-date input |
+| `convert` | a result that cannot take its declared type |
+| `final` | a failed final replacement |
+
+Declaring the corresponding handler is exactly what turns the failure into a
+value, which is what makes the pairing worth keeping.
 
 `condition` names what failed rather than what the implementation raised, and
 one condition keeps one name across every example that provokes it.

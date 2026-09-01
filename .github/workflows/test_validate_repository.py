@@ -18,12 +18,41 @@ SPEC.loader.exec_module(VALIDATOR)
 class TestYamlLoader(unittest.TestCase):
     def test_yaml_12_boolean_resolution(self):
         loaded = yaml.load(
-            "yes_value: yes\non_value: ON\ntrue_value: true\n",
+            "yes_value: yes\n"
+            "on_value: ON\n"
+            "true_value: true\n"
+            "title_true_value: True\n"
+            "upper_false_value: FALSE\n"
+            "mixed_true_value: TrUe\n"
+            "mixed_false_value: FaLsE\n",
             Loader=VALIDATOR.UniqueKeyLoader,
         )
         self.assertEqual(loaded["yes_value"], "yes")
         self.assertEqual(loaded["on_value"], "ON")
         self.assertIs(loaded["true_value"], True)
+        self.assertIs(loaded["title_true_value"], True)
+        self.assertIs(loaded["upper_false_value"], False)
+        self.assertEqual(loaded["mixed_true_value"], "TrUe")
+        self.assertEqual(loaded["mixed_false_value"], "FaLsE")
+
+    def test_yaml_12_core_scalar_resolution(self):
+        loaded = yaml.load(
+            "date_value: 2025-01-02\n"
+            "decimal_value: 012\n"
+            "octal_value: 0o12\n"
+            "signed_octal_value: -0o12\n"
+            "sexagesimal_value: 1:20\n"
+            "exponent_value: 1e3\n"
+            "underscored_value: 1_000\n",
+            Loader=VALIDATOR.UniqueKeyLoader,
+        )
+        self.assertEqual(loaded["date_value"], "2025-01-02")
+        self.assertEqual(loaded["decimal_value"], 12)
+        self.assertEqual(loaded["octal_value"], 10)
+        self.assertEqual(loaded["signed_octal_value"], "-0o12")
+        self.assertEqual(loaded["sexagesimal_value"], "1:20")
+        self.assertEqual(loaded["exponent_value"], 1000.0)
+        self.assertEqual(loaded["underscored_value"], "1_000")
 
     def test_aliases_are_rejected(self):
         with self.assertRaises(yaml.YAMLError):
@@ -156,6 +185,27 @@ class TestTypeValidation(unittest.TestCase):
         )
         self.assertTrue(errors)
         self.assertIn("expected int", errors[0])
+
+    def test_bare_list_and_dict_types(self):
+        env = {"classes": {}, "aliases": {}, "registries": {}}
+        self.assertEqual(
+            VALIDATOR.validate_type([], ["list"], env, "spec.items"), []
+        )
+        self.assertEqual(
+            VALIDATOR.validate_type({}, ["dict"], env, "spec.mapping"), []
+        )
+
+    def test_size_accepts_bare_list_and_dict_types(self):
+        for type_name in ("list", "dict"):
+            with self.subTest(type_name=type_name):
+                self.assertEqual(
+                    VALIDATOR.check_descriptor(
+                        {"type": type_name, "size": 0},
+                        is_class_field=False,
+                        path="schema.value",
+                    ),
+                    [],
+                )
 
 
 class TestDateImputeSchema(unittest.TestCase):
@@ -330,6 +380,97 @@ class TestSpecNames(unittest.TestCase):
         self.assertIn("duplicate record lookup id", message)
         self.assertIn("conflicts with a dataset or domain", message)
         self.assertIn("duplicate row id", message)
+
+
+class TestSpecContracts(unittest.TestCase):
+    def test_rejects_missing_base_and_incomplete_column_coverage(self):
+        spec = {
+            "domain": "ADSL",
+            "datasets": {"DM": "dm.csv"},
+            "keys": ["USUBJID"],
+            "output": {"columns": ["USUBJID", "AGE"]},
+            "columns": [
+                {"name": "USUBJID", "derivation": {"source": "DM.USUBJID"}},
+                {"name": "AGE"},
+            ],
+        }
+
+        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+
+        message = "\n".join(errors)
+        self.assertIn("base is required", message)
+        self.assertIn("AGE", message)
+        self.assertIn("no derivation", message)
+
+    def test_rejects_lookup_pairing_and_verification_constraints(self):
+        spec = {
+            "domain": "ADSL",
+            "datasets": {"DM": "dm.csv"},
+            "base": "DM",
+            "record_lookups": [
+                {"id": "LAST", "dataset": "DM", "source": "USUBJID"},
+                {"id": "FIRST", "dataset": "DM", "order_by": ["DM.DATE"]},
+            ],
+            "keys": ["USUBJID"],
+            "output": {"columns": ["USUBJID"]},
+            "columns": [
+                {
+                    "name": "USUBJID",
+                    "derivation": {"source": "DM.USUBJID"},
+                    "verifications": {"range": {}},
+                }
+            ],
+            "verifications": [
+                {"row_count": {}},
+                {"all_or_none": {"id": "complete", "columns": ["USUBJID"]}},
+                {"predicate": {"id": "complete", "assert": "TRUE"}},
+            ],
+        }
+
+        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+
+        message = "\n".join(errors)
+        self.assertIn("source and key", message)
+        self.assertIn("order_by and keep", message)
+        self.assertIn("requires at least one bound", message)
+        self.assertIn("at least two distinct columns", message)
+        self.assertIn("duplicate dataset verification id", message)
+        self.assertIn("range requires an int or float column", message)
+
+    def test_rejects_missing_source_and_type_for_absent_csv_field(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            example_dir = Path(temp_dir)
+            input_dir = example_dir / "input"
+            input_dir.mkdir()
+            (input_dir / "dm.csv").write_text("USUBJID\n01\n")
+            spec_path = example_dir / "spec.yaml"
+            spec = {
+                "domain": "ADSL",
+                "datasets": {
+                    "DM": {
+                        "path": "input/dm.csv",
+                        "types": {"AGE": "int"},
+                    },
+                    "EX": "input/missing.csv",
+                },
+                "base": "DM",
+                "keys": ["USUBJID"],
+                "output": {"columns": ["USUBJID"]},
+                "columns": [
+                    {
+                        "name": "USUBJID",
+                        "derivation": {"source": "DM.USUBJID"},
+                    }
+                ],
+            }
+
+            errors = VALIDATOR.validate_spec_contracts(
+                spec, "example/spec.yaml", spec_path
+            )
+
+        message = "\n".join(errors)
+        self.assertIn("types.AGE", message)
+        self.assertIn("source path does not exist", message)
 
 
 class TestValidatorCLI(unittest.TestCase):
@@ -562,6 +703,41 @@ class TestValidatorCLI(unittest.TestCase):
             print("STDERR:", result.stderr)
         self.assertIn('unknown_type', result.stdout)
 
+    def test_schema_column_types_are_not_schema_builtins(self):
+        yaml_dir = self.root_dir / 'yaml'
+        yaml_dir.mkdir(exist_ok=True)
+        (yaml_dir / 'schema.yaml').write_text(
+            'version: "1.0"\nroot_class:\n  - f1: {type: date}\n'
+        )
+
+        result = subprocess.run(
+            [sys.executable, str(self.tool_path), '--root', str(self.root_dir)],
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unknown_type 'date'", result.stdout)
+
+    def test_registry_name_is_not_a_schema_type(self):
+        yaml_dir = self.root_dir / 'yaml'
+        yaml_dir.mkdir(exist_ok=True)
+        (yaml_dir / 'schema.yaml').write_text(
+            'version: "1.0"\n'
+            'root_class:\n  - f1: {type: operations}\n'
+            'operation: {registry: operations}\n'
+            'operations:\n  one: {type: str}\n'
+        )
+
+        result = subprocess.run(
+            [sys.executable, str(self.tool_path), '--root', str(self.root_dir)],
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unknown_type 'operations'", result.stdout)
+
     def test_schema_version_mismatch(self):
         yaml_dir = self.root_dir / 'yaml'
         yaml_dir.mkdir(exist_ok=True)
@@ -572,6 +748,23 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('ERROR', result.stdout)
         self.assertIn('version', result.stdout.lower())
+
+    def test_schema_bundle_version_is_not_hardcoded(self):
+        yaml_dir = self.root_dir / 'yaml'
+        yaml_dir.mkdir(exist_ok=True)
+        (yaml_dir / 'schema.yaml').write_text(
+            'version: "2.0"\nincludes: ["schema_extra.yaml"]\n'
+            'root_class:\n  - value: {type: str}\n'
+        )
+        (yaml_dir / 'schema_extra.yaml').write_text('version: "2.0"\n')
+
+        result = subprocess.run(
+            [sys.executable, str(self.tool_path), '--root', str(self.root_dir)],
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_example_layout_missing_files(self):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'bad-example'
@@ -874,6 +1067,47 @@ bad_field: "what"
 
         errors = VALIDATOR.validate_examples_structure(self.root_dir, env)
         self.assertEqual(errors, [])
+
+    def test_expected_error_contract_rejects_bad_phase_and_path(self):
+        ex_dir = self.root_dir / 'yaml' / 'examples' / 'negative-contract'
+        (ex_dir / 'expected').mkdir(parents=True)
+        (ex_dir / 'spec.yaml').write_text('columns: [{name: A}]\n')
+        (ex_dir / 'expected' / 'error.yaml').write_text(
+            'phase: someday\ncondition: Bad Name\n'
+            'spec_paths: [columns.MISSING]\ncontext: text\n'
+        )
+
+        errors = VALIDATOR.validate_expected_error_contracts(self.root_dir)
+
+        message = '\n'.join(errors)
+        self.assertIn('phase', message)
+        self.assertIn('snake-case', message)
+        self.assertIn('does not exist', message)
+        self.assertIn('context', message)
+
+    def test_csv_shape_rejects_duplicate_header_and_short_row(self):
+        csv_dir = self.root_dir / 'yaml' / 'examples' / 'csv-shape' / 'input'
+        csv_dir.mkdir(parents=True)
+        (csv_dir / 'input.csv').write_text('A,A\n1\n')
+
+        errors = VALIDATOR.validate_csv_shapes(self.root_dir)
+
+        message = '\n'.join(errors)
+        self.assertIn('duplicate header', message)
+        self.assertIn('expected 2 fields, got 1', message)
+
+    def test_readme_contract_rejects_schema_vocabulary_and_extra_section(self):
+        ex_dir = self.root_dir / 'yaml' / 'examples' / 'readme-contract'
+        (ex_dir / 'expected').mkdir(parents=True)
+        (ex_dir / 'README.md').write_text(
+            '# Test: output\n\nThe schema derivation is shown.\n\n## Notes\n'
+        )
+
+        errors = VALIDATOR.validate_example_readmes(self.root_dir)
+
+        message = '\n'.join(errors)
+        self.assertIn('schema vocabulary', message)
+        self.assertIn('unsupported level-two section', message)
 
     def test_integration_full_corpus(self):
         real_root = self.tool_path.parent.parent.parent

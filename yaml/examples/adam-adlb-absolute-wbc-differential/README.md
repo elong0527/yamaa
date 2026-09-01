@@ -11,9 +11,3 @@ and visit grain:
 
 Each contributing parameter must occur at most once within a subject and visit;
 an ambiguous source group is rejected rather than selected by value or order.
-
-## Provenance
-
-- Upstream repository: `pharmaverse/admiral`
-- Source path: `R/derive_param_wbc_abs.R`
-- Immutable commit: `e32e5689d7fd03e224ddbcfc369c332c5df837d9`
