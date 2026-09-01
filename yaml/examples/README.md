@@ -62,6 +62,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adoe-study-eye`](adam-adoe-study-eye/) | tell the study eye from the fellow eye |
 | [`adam-adqs-subscale-score`](adam-adqs-subscale-score/) | score a questionnaire subscale from its item records |
 | [`adam-adrs-best-overall-response`](adam-adrs-best-overall-response/) | select the best overall response |
+| [`adam-adrs-best-response-selection`](adam-adrs-best-response-selection/) | prepare assessments for best overall response |
 | [`adam-adrs-composite-response`](adam-adrs-composite-response/) | combine efficacy, safety, and discontinuation into one response |
 | [`adam-adrs-confirmed-response`](adam-adrs-confirmed-response/) | confirm an objective response |
 | [`adam-adrs-measurable-disease`](adam-adrs-measurable-disease/) | derive measurable disease at baseline |
