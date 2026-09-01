@@ -51,6 +51,19 @@ Constructed rows are appended in specification order, using driver order for
 record-driven templates and first-occurrence group order for group-driven
 templates.
 
+The output row grain belongs to the input relations and the row templates
+written in the specification. Row construction has no operation that repeats a
+candidate a data-dependent number of times and no generated index for such a
+repetition. A source value may decide whether a written template retains its
+one candidate, but it cannot create additional instances of that template.
+
+When the required artifact has one row per observation, administration, or
+planned event, an input relation must therefore contain one driver record per
+required row. Expected-but-uncollected rows use an explicit planning relation
+at that grain and may be enriched from collected relations through record
+lookups. Dynamically counted expansion must happen upstream and its expanded
+records enter the specification as ordinary input.
+
 When `rows` is absent or empty, row construction produces exactly one output
 row per `base` record, in base-record order. `base` is required in that case.
 

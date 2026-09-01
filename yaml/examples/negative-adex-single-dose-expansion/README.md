@@ -20,13 +20,14 @@ records the rows the rejected run built.
 
 ## How to fix
 
-First decide who owns the expansion. Until a rule can repeat a record a
-counted number of times, the administrations belong in the data: expand the
-aggregate record into one collected record per administration upstream, and
-read those records here one to one.
+The administration grain belongs in the input data. Expand the aggregate
+record into one collected record per administration upstream, and read those
+records here one to one. For expected-but-uncollected rows, use the long-form
+planning input in `adam-advs-once-measured-carry-forward` and enrich it from
+collected data.
 
-If the analysis genuinely needs only the totals, drop the per-administration
-grain and key on the collected record instead:
+If the analysis genuinely needs only the totals, drop the
+per-administration grain and key on the collected record instead:
 
 ```yaml
 keys: [STUDYID, USUBJID, EXSEQ]
