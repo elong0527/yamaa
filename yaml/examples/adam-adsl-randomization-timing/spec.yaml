@@ -8,7 +8,7 @@ base: DM
 keys: [STUDYID, USUBJID]
 
 output:
-  columns: [STUDYID, USUBJID, RANDDT, RANDDTC]
+  columns: [STUDYID, USUBJID, RANDDT, RANDDY, RANDDTC]
 
 columns:
   - name: STUDYID
@@ -28,6 +28,14 @@ columns:
     label: Date of Randomization
     derivation:
       source: DM.RANDDT
+
+  - name: RANDDY
+    type: int
+    label: Randomization Study Day
+    derivation:
+      study_day:
+        date: DM.RANDDT
+        reference: DM.RFSTDTC
 
   - name: RANDDTC
     type: str

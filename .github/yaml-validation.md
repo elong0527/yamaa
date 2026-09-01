@@ -23,10 +23,12 @@ The validation ensures:
    cross-field checks enforce base selection, complete and exclusive
    derivation coverage, record-lookup field pairing, verification bounds and
    IDs, source-file existence, and declared CSV fields. Referenced source
-   schemas validate against `source_schema_class` in the main schema bundle;
-   their version must match, keys and columns must resolve against the complete
-   `output.columns` contract, the CSV header must match that ordered contract
-   exactly, and source schemas cannot be combined with inline `types`.
+   producing specifications referenced through `schema` validate recursively
+   against `root_class`; producer paths and derivations must resolve, workflow
+   dependencies must be acyclic, every stored producer column must have a
+   non-empty label, and the stored CSV header must match the producer's ordered
+   `output.columns` exactly. A producing specification cannot be combined with
+   inline `types`.
    Negative examples (folders prefixed with `negative-`) are structurally
    validated; structural errors are only suppressed if their named path
    matches a `spec_path` declared in `expected/error.yaml` with

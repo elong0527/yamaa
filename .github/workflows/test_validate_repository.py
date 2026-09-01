@@ -473,9 +473,12 @@ class TestSpecContracts(unittest.TestCase):
         self.assertIn("source path does not exist", message)
 
 
-class TestSourceSchemas(unittest.TestCase):
-    VALID_SOURCE_SCHEMA = '''schema_version: "1.0"
+class TestProducingSpecs(unittest.TestCase):
+    VALID_PRODUCER_SPEC = '''schema_version: "1.0"
 domain: DM
+datasets:
+  RAW: raw.csv
+base: RAW
 keys: [STUDYID]
 output:
   columns: [STUDYID, AGE]
@@ -483,9 +486,11 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
+    derivation: {source: RAW.STUDYID}
   - name: AGE
     type: int
     label: Age
+    derivation: {source: RAW.AGE}
 '''
 
     def setUp(self):
@@ -501,13 +506,16 @@ columns:
         (self.input_dir / "dm.csv").write_text(
             "STUDYID,AGE\nSTUDY1,42\n", encoding="utf-8"
         )
+        (self.input_dir / "raw.csv").write_text(
+            "STUDYID,AGE\nSTUDY1,42\n", encoding="utf-8"
+        )
 
     def tearDown(self):
         self.test_dir.cleanup()
 
-    def write_source_schema(self, content=None):
+    def write_producer_spec(self, content=None):
         if content is None:
-            content = self.VALID_SOURCE_SCHEMA
+            content = self.VALID_PRODUCER_SPEC
         (self.input_dir / "dm.schema.yaml").write_text(
             content, encoding="utf-8"
         )
@@ -518,20 +526,21 @@ columns:
                 "path": "input/dm.csv",
                 "schema": "input/dm.schema.yaml",
             }
-        return VALIDATOR.validate_source_schemas(
+        return VALIDATOR.validate_producing_specs(
             {"datasets": {"DM": source}},
             "example/spec.yaml",
             self.spec_path,
             self.env,
+            {self.spec_path.resolve()},
         )
 
-    def test_accepts_spec_shaped_source_schema(self):
-        self.write_source_schema()
+    def test_accepts_complete_producing_spec(self):
+        self.write_producer_spec()
 
         self.assertEqual(self.validate(), [])
 
-    def test_rejects_inline_types_with_source_schema(self):
-        self.write_source_schema()
+    def test_rejects_inline_types_with_producing_spec(self):
+        self.write_producer_spec()
 
         errors = self.validate(
             {
@@ -554,31 +563,27 @@ columns:
         )
         self.assertIn(
             "example/spec.yaml.datasets.DM.types: inline types cannot be "
-            "combined with a source schema",
+            "combined with a producing specification",
             "\n".join(empty_types_errors),
         )
 
-    def test_rejects_version_mismatch_and_empty_contract(self):
-        self.write_source_schema(
-            '''schema_version: "2.0"
-domain: DM
-keys: []
-output: {columns: []}
-columns: []
-'''
+    def test_rejects_producer_version_mismatch(self):
+        self.write_producer_spec(
+            self.VALID_PRODUCER_SPEC.replace(
+                'schema_version: "1.0"', 'schema_version: "2.0"'
+            )
         )
 
         message = "\n".join(self.validate())
 
         self.assertIn("does not match bundle version", message)
-        self.assertIn("source schema keys must not be empty", message)
-        self.assertIn("source schema columns must not be empty", message)
-        self.assertIn("source schema output must not be empty", message)
 
-    def test_rejects_reordered_csv_header_contract(self):
-        self.write_source_schema(
+    def test_rejects_reordered_producer_output(self):
+        self.write_producer_spec(
             '''schema_version: "1.0"
 domain: DM
+datasets: {RAW: raw.csv}
+base: RAW
 keys: [STUDYID]
 output:
   columns: [AGE, STUDYID]
@@ -586,20 +591,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
+    derivation: {source: RAW.STUDYID}
   - name: AGE
     type: int
     label: Age
+    derivation: {source: RAW.AGE}
 '''
         )
 
         message = "\n".join(self.validate())
 
-        self.assertIn("match the CSV header exactly", message)
+        self.assertIn("match the artifact header exactly", message)
         self.assertIn("['STUDYID', 'AGE']", message)
         self.assertIn("['AGE', 'STUDYID']", message)
 
     def test_rejects_legacy_field_map(self):
-        self.write_source_schema(
+        self.write_producer_spec(
             '''version: "1.0"
 fields: {STUDYID: string, AGE: integer}
 '''
@@ -611,19 +618,17 @@ fields: {STUDYID: string, AGE: integer}
         self.assertIn("unknown field 'version'", message)
         self.assertIn("unknown field 'fields'", message)
 
-    def test_rejects_executable_producer_fields(self):
-        self.write_source_schema(
+    def test_rejects_metadata_only_contract(self):
+        self.write_producer_spec(
             '''schema_version: "1.0"
 domain: DM
-datasets: {RAW: raw.csv}
-base: RAW
+datasets: {}
 keys: [STUDYID]
 output: {columns: [STUDYID, AGE]}
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {source: RAW.STUDYID}
   - name: AGE
     type: int
     label: Age
@@ -632,38 +637,59 @@ columns:
 
         message = "\n".join(self.validate())
 
-        self.assertIn("unknown field 'datasets'", message)
-        self.assertIn("unknown field 'base'", message)
-        self.assertIn("unknown field 'derivation'", message)
+        self.assertIn("base is required", message)
+        self.assertIn("column has no derivation", message)
 
-    def test_rejects_unresolved_and_duplicate_contract_names(self):
-        source_schema = {
-            "keys": ["MISSING", "MISSING"],
-            "output": {"columns": ["STUDYID", "STUDYID", "OTHER"]},
-            "columns": [
-                {"name": "STUDYID"},
-                {"name": "STUDYID"},
-                {"name": "AGE"},
-            ],
-        }
-
-        message = "\n".join(
-            VALIDATOR.validate_source_schema_contract(
-                source_schema, "example/spec.yaml.datasets.DM.schema"
-            )
+    def test_rejects_unlabeled_producer_output(self):
+        self.write_producer_spec(
+            self.VALID_PRODUCER_SPEC.replace("label: Age", "label: ''")
         )
 
-        self.assertIn("duplicate source column 'STUDYID'", message)
-        self.assertIn("duplicate selected column 'STUDYID'", message)
-        self.assertIn("undeclared source column 'OTHER'", message)
-        self.assertIn("source column 'AGE' is absent", message)
-        self.assertIn("duplicate key column 'MISSING'", message)
-        self.assertIn("key column 'MISSING' is not in output", message)
-
-    def test_rejects_missing_source_schema(self):
         message = "\n".join(self.validate())
 
-        self.assertIn("source schema does not exist", message)
+        self.assertIn(
+            "stored producer column requires a non-empty label", message
+        )
+
+    def test_rejects_missing_producer_input(self):
+        self.write_producer_spec()
+        (self.input_dir / "raw.csv").unlink()
+
+        message = "\n".join(self.validate())
+
+        self.assertIn("source path does not exist: raw.csv", message)
+
+    def test_rejects_producer_dependency_cycle(self):
+        self.write_producer_spec(
+            '''schema_version: "1.0"
+domain: DM
+datasets:
+  LOOP:
+    path: dm.csv
+    schema: ../spec.yaml
+base: LOOP
+keys: [STUDYID]
+output: {columns: [STUDYID, AGE]}
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: LOOP.STUDYID}
+  - name: AGE
+    type: int
+    label: Age
+    derivation: {source: LOOP.AGE}
+'''
+        )
+
+        message = "\n".join(self.validate())
+
+        self.assertIn("producer workflow dependency cycle", message)
+
+    def test_rejects_missing_producing_spec(self):
+        message = "\n".join(self.validate())
+
+        self.assertIn("producing specification does not exist", message)
 
 
 class TestValidatorCLI(unittest.TestCase):

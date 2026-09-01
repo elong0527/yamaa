@@ -1,5 +1,8 @@
 schema_version: "1.0"
 domain: DM
+datasets:
+  DM_RAW: dm_raw.csv
+base: DM_RAW
 keys: [STUDYID, USUBJID]
 
 output:
@@ -9,11 +12,17 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
+    derivation:
+      source: DM_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation:
+      source: DM_RAW.USUBJID
 
   - name: RANDDT
     type: date
     label: Date of Randomization
+    derivation:
+      source: DM_RAW.RANDDT

@@ -11,8 +11,8 @@ accepted.
 
 ## How to fix
 
-Keep the source schema as the single type authority and remove the inline
-`types` entry:
+Keep the producing DM specification as the single type authority and remove
+the inline `types` entry:
 
 ```yaml
 datasets:

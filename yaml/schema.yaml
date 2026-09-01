@@ -190,7 +190,7 @@ domain_name:
 
 dataset_source:
     type: [path, dataset_class]
-    description: Path to the dataset, or a path with its source schema or field types.
+    description: Path to the dataset, or a path with its producing specification or field types.
 
 dataset_class:
     - path:
@@ -204,51 +204,7 @@ dataset_class:
     - schema:
         type: path
         required: false
-        description: Spec-shaped source dataset contract matching source_schema_class under R014.
-
-source_schema_class:
-    - schema_version:
-        type: str
-        required: true
-        description: Schema bundle this source contract is written against; R014 requires an exact match.
-    - domain:
-        type: domain_name
-        required: true
-        description: Name of the stored dataset this contract describes.
-    - keys:
-        type: "list[dataset_column]"
-        required: true
-        description: Columns identifying a stored row, using the same spelling as a derivation specification.
-    - output:
-        type: output_class
-        required: true
-        description: Stored fields in artifact order; R014 requires complete coverage.
-    - columns:
-        type: "list[source_schema_column_class]"
-        required: true
-        description: Stored field contracts independent of derivation logic.
-    - metadata:
-        type: "dict[str, str]"
-        required: false
-        description: Free-form dataset annotations carried by the source contract.
-
-source_schema_column_class:
-    - name:
-        type: dataset_column
-        required: true
-        description: Stored field name.
-    - type:
-        type: column_type
-        required: true
-        description: R011 runtime type carried by the stored field.
-    - label:
-        type: str
-        required: true
-        description: Human-readable field label.
-    - metadata:
-        type: "dict[str, str]"
-        required: false
-        description: Free-form annotations carried with the stored field.
+        description: Producing specification whose output contract supplies the source fields and types; R014 defines the workflow edge.
 
 dataset_id:
     type: str
