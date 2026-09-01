@@ -156,6 +156,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`sdtm-dm-reference-dates`](sdtm-dm-reference-dates/) | derive the reference dates from EX, DS, and AE |
 | [`sdtm-ds-disposition-sequence`](sdtm-ds-disposition-sequence/) | number each subject's disposition records in date order |
 | [`sdtm-ex-combination-regimen`](sdtm-ex-combination-regimen/) | represent a combination regimen |
+| [`sdtm-fa-fever-occurrence`](sdtm-fa-fever-occurrence/) | fever occurrence |
 | [`sdtm-lb-conditional-compartments`](sdtm-lb-conditional-compartments/) | tell an inapplicable compartment from an uncollected sample |
 | [`sdtm-lb-ctcae-grading`](sdtm-lb-ctcae-grading/) | assign toxicity grades |
 | [`sdtm-lb-findings`](sdtm-lb-findings/) | build one record per collected lab result |
