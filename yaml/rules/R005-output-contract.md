@@ -52,8 +52,21 @@ like any other, so the count is fixed when the specification is written. A
 study whose reference data outgrows that count is re-read against the data
 rather than left to fill the places it already has, and a second value
 competing for one declared place is the ordinary multiple-match failure R003
-defines rather than a new place. Whether a family's members may instead come
-from data is open.
+defines rather than a new place.
+
+A family's members do not come from data. A data-dependent column list would
+move a dictionary that outgrows its declared places from a loud
+specification-data mismatch into a silent, data-dependent artifact schema, and
+a key over such a list is not an identity a reviewer can state. When a study's
+dictionary outgrows the declaration, the new member is declared as a column
+like any other and the specification is re-read against the data.
+
+The members of one family name their grouping by position: `SMQ02NAM`,
+`SMQ02CD`, and `SMQ02SC` belong together because each carries the `02`, and
+nothing in the schema links them beyond it. That link is a property of the
+study's design rather than of the derivation, so a portable construct cannot
+state it. A study that wants the grouping checkable records it in the columns'
+`metadata`; the schema does not.
 
 ## Column coverage
 
