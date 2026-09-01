@@ -1,0 +1,97 @@
+schema_version: "1.0"
+domain: ADVS
+datasets:
+  ADVSIN: {path: input/advs.csv, types: {AVAL: float}}
+base: ADVSIN
+keys: [STUDYID, USUBJID, VISIT, PARAMCD]
+
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  - name: HEIGHT_VAL
+    type: float
+    label: Height Value
+
+  - name: WEIGHT_VAL
+    type: float
+    label: Weight Value
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+
+  - name: DTYPE
+    type: str
+    label: Derivation Type
+
+rows:
+  - id: collected
+    derivations:
+      STUDYID: {source: ADVSIN.STUDYID}
+      USUBJID: {source: ADVSIN.USUBJID}
+      PARAMCD: {source: ADVSIN.PARAMCD}
+      PARAM: {source: ADVSIN.PARAM}
+      HEIGHT_VAL: {literal: null}
+      WEIGHT_VAL: {literal: null}
+      AVAL: {source: ADVSIN.AVAL}
+      VISIT: {source: ADVSIN.VISIT}
+      DTYPE: {literal: null}
+
+  - id: derived_bsa
+    group_by: [ADVSIN.STUDYID, ADVSIN.USUBJID, ADVSIN.VISIT]
+    filter: "HEIGHT_VAL IS NOT NULL AND WEIGHT_VAL IS NOT NULL"
+    derivations:
+      STUDYID: {source: ADVSIN.STUDYID}
+      USUBJID: {source: ADVSIN.USUBJID}
+      PARAMCD: {literal: BSA}
+      PARAM: {literal: Body Surface Area (m^2)}
+      HEIGHT_VAL:
+        aggregate:
+          filter: "ADVSIN.PARAMCD = 'HEIGHT'"
+          expr: "ONLY(ADVSIN.AVAL)"
+      WEIGHT_VAL:
+        aggregate:
+          filter: "ADVSIN.PARAMCD = 'WEIGHT'"
+          expr: "ONLY(ADVSIN.AVAL)"
+      AVAL:
+        compute:
+          expr: "SQRT(WEIGHT_VAL * HEIGHT_VAL / 3600)"
+      VISIT: {source: ADVSIN.VISIT}
+      DTYPE: {literal: CALCULATION}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VISIT, PARAMCD]
+  - row_count:
+      min: 8
+      max: 8
+  - predicate:
+      id: no-pre-existing-target
+      assert: "NOT (PARAMCD = 'BSA' AND DTYPE IS NULL)"
+  - predicate:
+      id: verify-height-unit
+      assert: "PARAMCD <> 'HEIGHT' OR PARAM LIKE '%(cm)%'"
+  - predicate:
+      id: verify-weight-unit
+      assert: "PARAMCD <> 'WEIGHT' OR PARAM LIKE '%(kg)%'"
