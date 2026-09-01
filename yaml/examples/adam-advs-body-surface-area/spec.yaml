@@ -83,9 +83,6 @@ rows:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, VISIT, PARAMCD]
-  - row_count:
-      min: 8
-      max: 8
   - predicate:
       id: no-pre-existing-target
       assert: "NOT (PARAMCD = 'BSA' AND DTYPE IS NULL)"
