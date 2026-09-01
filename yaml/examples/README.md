@@ -92,6 +92,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-advs-growth-percentile`](adam-advs-growth-percentile/) | express a measurement as a growth percentile |
 | [`adam-advs-mean-arterial-pressure`](adam-advs-mean-arterial-pressure/) | derive mean arterial pressure |
 | [`adam-advs-once-measured-carry-forward`](adam-advs-once-measured-carry-forward/) | carry forward a once-measured characteristic |
+| [`negative-adam-adeg-pre-existing-rrr`](negative-adam-adeg-pre-existing-rrr/) | reject a collected RR interval |
 | [`negative-adam-adsl-stratification-reconciliation`](negative-adam-adsl-stratification-reconciliation/) | reconcile randomization strata |
 | [`negative-adex-relative-dose-intensity`](negative-adex-relative-dose-intensity/) | reject a dose intensity measured against a per-record plan |
 | [`negative-adex-single-dose-expansion`](negative-adex-single-dose-expansion/) | reject one record per administration built from an aggregate dose |
