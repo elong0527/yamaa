@@ -158,6 +158,47 @@ class TestTypeValidation(unittest.TestCase):
         self.assertIn("expected int", errors[0])
 
 
+class TestDateImputeSchema(unittest.TestCase):
+    def setUp(self):
+        self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[2])
+        self.assertEqual(schema_errors, [])
+
+    def test_accepts_month_minimum_source_precision(self):
+        errors = VALIDATOR.validate_type(
+            {
+                "date_impute": {
+                    "source": "AE.AESTDTC",
+                    "month": 6,
+                    "day": 15,
+                    "minimum_source_precision": "month",
+                }
+            },
+            ["expression"],
+            self.env,
+            "spec.columns.ASTDT.derivation",
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_rejects_unknown_minimum_source_precision(self):
+        errors = VALIDATOR.validate_type(
+            {
+                "date_impute": {
+                    "source": "AE.AESTDTC",
+                    "month": 6,
+                    "day": 15,
+                    "minimum_source_precision": "day",
+                }
+            },
+            ["expression"],
+            self.env,
+            "spec.columns.ASTDT.derivation",
+        )
+
+        self.assertTrue(errors)
+        self.assertIn("allowed values", errors[0])
+
+
 class TestGroupedRows(unittest.TestCase):
     def test_accepts_driver_qualified_group_variables(self):
         spec = {

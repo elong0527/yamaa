@@ -28,7 +28,8 @@ expressions:
               between counts neither and is one smaller.
     date_impute: # Completes a truncated ISO 8601 date and returns a date.
         # A complete source date is returned unchanged; a source carrying only a
-        # year, or a year and month, is completed from month and day.
+        # year, or a year and month, is completed from month and day unless
+        # minimum_source_precision forbids supplying that much information.
         # A source that is not an ISO 8601 date or an ISO 8601 date prefix is an
         # invalid value, distinct from a missing one; both yield no date unless
         # a handler is declared. R016 governs the resulting date.
@@ -44,6 +45,14 @@ expressions:
             type: int
             required: true
             description: Day used when the source carries no day, 1 to 31.
+        - minimum_source_precision:
+            type: str
+            default: year
+            values: [year, month]
+            description: >-
+              Least precision the collected source must carry before imputation;
+              month leaves a year-only source missing instead of supplying both
+              month and day.
         - missing:
             type: literal_value
             description: Result when the source value is missing.
