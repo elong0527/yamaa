@@ -684,6 +684,160 @@ bad_field: "what"
         self.assertIn('2.0', '\n'.join(errors))
         self.assertIn('1.0', '\n'.join(errors))
 
+    def test_source_contract_accepts_producing_specification(self):
+        spec_path = self.root_dir / 'spec.yaml'
+        artifact_path = self.root_dir / 'dm.csv'
+        producer_path = self.root_dir / 'dm.schema.yaml'
+        spec_path.write_text('placeholder: true\n')
+        artifact_path.write_text('STUDYID,USUBJID\nS1,S1-001\n')
+        producer_path.write_text('''schema_version: "1.0"
+domain: DM
+datasets: {ODM: odm.csv}
+keys: [STUDYID, USUBJID]
+output: {columns: [STUDYID, USUBJID]}
+columns:
+  - {name: STUDYID, type: str}
+  - {name: USUBJID, type: str}
+''')
+        env = {
+            'version': '1.0',
+            'classes': {
+                'root_class': [
+                    {'schema_version': {'type': 'str', 'required': True}},
+                    {'domain': {'type': 'str', 'required': True}},
+                    {'datasets': {
+                        'type': 'dict[str, str]', 'required': True
+                    }},
+                    {'keys': {'type': 'list[str]', 'required': True}},
+                    {'output': {
+                        'type': 'output_class', 'required': True
+                    }},
+                    {'columns': {
+                        'type': 'list[column_class]', 'required': True
+                    }},
+                ],
+                'output_class': [
+                    {'columns': {'type': 'list[str]', 'required': True}}
+                ],
+                'column_class': [
+                    {'name': {'type': 'str', 'required': True}},
+                    {'type': {'type': 'str', 'required': True}},
+                ],
+            },
+            'aliases': {},
+            'registries': {},
+        }
+        spec = {
+            'datasets': {
+                'DM': {'path': 'dm.csv', 'schema': 'dm.schema.yaml'}
+            }
+        }
+
+        errors = VALIDATOR.validate_source_contracts(
+            spec, spec_path, env, self.root_dir
+        )
+        self.assertEqual(errors, [])
+
+    def test_source_contract_rejects_field_map_sidecar(self):
+        spec_path = self.root_dir / 'spec.yaml'
+        producer_path = self.root_dir / 'dm.schema.yaml'
+        spec_path.write_text('placeholder: true\n')
+        producer_path.write_text('''schema_version: "1.0"
+fields:
+  STUDYID: str
+''')
+        env = {
+            'version': '1.0',
+            'classes': {
+                'root_class': [
+                    {'schema_version': {'type': 'str', 'required': True}},
+                    {'domain': {'type': 'str', 'required': True}},
+                ]
+            },
+            'aliases': {},
+            'registries': {},
+        }
+        spec = {
+            'datasets': {
+                'DM': {'path': 'dm.csv', 'schema': 'dm.schema.yaml'}
+            }
+        }
+
+        errors = VALIDATOR.validate_source_contracts(
+            spec, spec_path, env, self.root_dir
+        )
+        joined = '\n'.join(errors)
+        self.assertIn("missing required field 'domain'", joined)
+        self.assertIn("unknown field 'fields'", joined)
+
+    def test_source_contract_rejects_artifact_header_mismatch(self):
+        spec_path = self.root_dir / 'spec.yaml'
+        artifact_path = self.root_dir / 'dm.csv'
+        producer_path = self.root_dir / 'dm.schema.yaml'
+        spec_path.write_text('placeholder: true\n')
+        artifact_path.write_text('USUBJID,STUDYID\nS1-001,S1\n')
+        producer_path.write_text('''schema_version: "1.0"
+output: {columns: [STUDYID, USUBJID]}
+columns:
+  - {name: STUDYID}
+  - {name: USUBJID}
+''')
+        env = {
+            'version': '1.0',
+            'classes': {
+                'root_class': [
+                    {'schema_version': {'type': 'str', 'required': True}},
+                    {'output': {
+                        'type': 'output_class', 'required': True
+                    }},
+                    {'columns': {
+                        'type': 'list[column_class]', 'required': True
+                    }},
+                ],
+                'output_class': [
+                    {'columns': {'type': 'list[str]', 'required': True}}
+                ],
+                'column_class': [
+                    {'name': {'type': 'str', 'required': True}}
+                ],
+            },
+            'aliases': {},
+            'registries': {},
+        }
+        spec = {
+            'datasets': {
+                'DM': {'path': 'dm.csv', 'schema': 'dm.schema.yaml'}
+            }
+        }
+
+        errors = VALIDATOR.validate_source_contracts(
+            spec, spec_path, env, self.root_dir
+        )
+        self.assertIn('artifact columns do not match', '\n'.join(errors))
+
+    def test_source_contract_rejects_inline_types(self):
+        spec_path = self.root_dir / 'spec.yaml'
+        spec_path.write_text('placeholder: true\n')
+        spec = {
+            'datasets': {
+                'DM': {
+                    'path': 'dm.csv',
+                    'schema': 'missing.schema.yaml',
+                    'types': {'RANDDT': 'date'},
+                }
+            }
+        }
+
+        errors = VALIDATOR.validate_source_contracts(
+            spec,
+            spec_path,
+            {'version': '1.0'},
+            self.root_dir,
+        )
+        self.assertIn(
+            'spec.yaml.datasets.DM.types.RANDDT', '\n'.join(errors)
+        )
+
     def test_negative_spec_rejects_unrelated_structural_errors(self):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'negative-unrelated'
         (ex_dir / 'expected').mkdir(parents=True)

@@ -190,7 +190,7 @@ domain_name:
 
 dataset_source:
     type: [path, dataset_class]
-    description: Path to the dataset, or a path with its source schema or field types.
+    description: Path to the dataset, or a path with its producing specification or field types.
 
 dataset_class:
     - path:
@@ -204,7 +204,7 @@ dataset_class:
     - schema:
         type: path
         required: false
-        description: Portable schema sidecar for the source, as defined by R014.
+        description: Specification whose output contract supplies the source fields and types; R014 defines the link.
 
 dataset_id:
     type: str

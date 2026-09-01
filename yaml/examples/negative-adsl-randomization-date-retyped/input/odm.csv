@@ -1,0 +1,2 @@
+StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,StudyEventRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value
+YAMAA-01,MDV.1,YAMAA-01-001,RANDOMIZATION,1,IG.DM,1,IT.DM.RANDDT,2025-01-12

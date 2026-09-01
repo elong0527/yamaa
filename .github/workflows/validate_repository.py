@@ -741,6 +741,174 @@ def validate_grouped_rows(spec, spec_label):
     return errors
 
 
+def validate_spec_document(spec, spec_label, env):
+    if not isinstance(spec, dict) or not spec:
+        return [
+            f"ERROR: {spec_label}: specification is empty or not a mapping"
+        ]
+
+    errors = []
+    if 'schema_version' in spec:
+        spec_version = str(spec['schema_version'])
+        env_version = str(env.get('version', '1.0'))
+        if spec_version != env_version:
+            errors.append(
+                f"ERROR: {spec_label}: schema_version '{spec_version}' "
+                f"does not match bundle version '{env_version}'"
+            )
+
+    errors.extend(validate_type(spec, ['root_class'], env, spec_label))
+    errors.extend(validate_grouped_rows(spec, spec_label))
+    return errors
+
+
+def validate_producer_contract(producer, producer_label):
+    errors = []
+    columns = producer.get('columns')
+    output = producer.get('output')
+    if not isinstance(columns, list) or not isinstance(output, dict):
+        return errors
+
+    output_columns = output.get('columns')
+    if not isinstance(output_columns, list):
+        return errors
+
+    declared = {}
+    for index, column in enumerate(columns):
+        if not isinstance(column, dict):
+            continue
+        name = column.get('name')
+        if not isinstance(name, str):
+            continue
+        if name in declared:
+            errors.append(
+                f"ERROR: {producer_label}.columns[{index}].name: duplicate "
+                f"declared column {name!r}"
+            )
+        else:
+            declared[name] = column
+
+    seen_output = set()
+    for index, name in enumerate(output_columns):
+        if not isinstance(name, str):
+            continue
+        if name in seen_output:
+            errors.append(
+                f"ERROR: {producer_label}.output.columns[{index}]: "
+                f"duplicate artifact column {name!r}"
+            )
+        seen_output.add(name)
+        if name not in declared:
+            errors.append(
+                f"ERROR: {producer_label}.output.columns[{index}]: artifact "
+                f"column {name!r} is not declared"
+            )
+
+    return errors
+
+
+def validate_source_contracts(spec, spec_path, env, root, spec_label=None):
+    errors = []
+    datasets = spec.get('datasets')
+    if not isinstance(datasets, dict):
+        return errors
+
+    if spec_label is None:
+        spec_label = str(spec_path.relative_to(root))
+    for dataset_id, source in datasets.items():
+        if not isinstance(source, dict) or 'schema' not in source:
+            continue
+
+        source_path = f"{spec_label}.datasets.{dataset_id}"
+        inline_types = source.get('types')
+        if isinstance(inline_types, dict) and inline_types:
+            for field in inline_types:
+                errors.append(
+                    f"ERROR: {source_path}.types.{field}: field type is "
+                    "already supplied by the producing specification"
+                )
+        elif 'types' in source:
+            errors.append(
+                f"ERROR: {source_path}.types: types cannot accompany schema"
+            )
+
+        schema_ref = source.get('schema')
+        if not isinstance(schema_ref, str) or not schema_ref:
+            continue
+        producer_path = spec_path.parent / schema_ref
+        producer_label = str(producer_path)
+        try:
+            producer_label = str(producer_path.relative_to(root))
+        except ValueError:
+            pass
+
+        if not producer_path.exists():
+            errors.append(
+                f"ERROR: {source_path}.schema: producing specification "
+                f"not found: {schema_ref}"
+            )
+            continue
+        if producer_path.resolve() == spec_path.resolve():
+            errors.append(
+                f"ERROR: {source_path}.schema: specification cannot name "
+                "itself as its producer"
+            )
+            continue
+
+        try:
+            with open(producer_path, 'r', encoding='utf-8') as f:
+                producer = yaml.load(f, Loader=UniqueKeyLoader)
+        except Exception:
+            continue
+
+        producer_errors = validate_spec_document(
+            producer, producer_label, env
+        )
+        errors.extend(producer_errors)
+        if producer_errors or not isinstance(producer, dict):
+            continue
+        errors.extend(validate_producer_contract(producer, producer_label))
+
+        artifact_ref = source.get('path')
+        if not isinstance(artifact_ref, str) or not artifact_ref:
+            continue
+        artifact_path = spec_path.parent / artifact_ref
+        if not artifact_path.exists():
+            errors.append(
+                f"ERROR: {source_path}.path: source artifact not found: "
+                f"{artifact_ref}"
+            )
+            continue
+
+        output = producer.get('output')
+        output_columns = (
+            output.get('columns') if isinstance(output, dict) else None
+        )
+        if not isinstance(output_columns, list):
+            continue
+        try:
+            with open(artifact_path, 'r', encoding='utf-8', newline='') as f:
+                reader = csv.reader(f)
+                header = next(reader)
+        except StopIteration:
+            header = []
+        except (OSError, UnicodeError, csv.Error) as exc:
+            errors.append(
+                f"ERROR: {source_path}.path: cannot read source artifact: "
+                f"{exc}"
+            )
+            continue
+
+        if header != output_columns:
+            errors.append(
+                f"ERROR: {source_path}.path: artifact columns do not match "
+                f"{producer_label}.output.columns; expected "
+                f"{output_columns!r}, got {header!r}"
+            )
+
+    return errors
+
+
 def validate_examples_structure(root: Path, env, warnings=None):
     errors = []
     if warnings is None:
@@ -764,26 +932,13 @@ def validate_examples_structure(root: Path, env, warnings=None):
                 continue
 
             spec_label = f"{ex_dir.name}/{spec_path.name}"
-            if not isinstance(spec, dict) or not spec:
-                errors.append(
-                    f"ERROR: {spec_label}: spec is empty or not a mapping"
-                )
-                continue
-
-            if 'schema_version' in spec:
-                spec_version = str(spec['schema_version'])
-                env_version = str(env.get('version', '1.0'))
-                if spec_version != env_version:
-                    errors.append(
-                        f"ERROR: {spec_label}: schema_version "
-                        f"'{spec_version}' does not match bundle version "
-                        f"'{env_version}'"
+            spec_errors = validate_spec_document(spec, spec_label, env)
+            if isinstance(spec, dict):
+                spec_errors.extend(
+                    validate_source_contracts(
+                        spec, spec_path, env, root, spec_label
                     )
-
-            spec_errors = validate_type(
-                spec, ['root_class'], env, spec_label
-            )
-            spec_errors.extend(validate_grouped_rows(spec, spec_label))
+                )
             is_negative = ex_dir.name.startswith('negative-')
             if not is_negative:
                 for spec_error in spec_errors:

@@ -1,6 +1,39 @@
 schema_version: "1.0"
-fields:
-  STUDYID: str
-  USUBJID: str
-  RANDDT: date
-  RANDDTTM: datetime
+domain: DM
+datasets:
+  ODM: odm.csv
+base: ODM
+keys: [STUDYID, USUBJID]
+
+output:
+  columns: [STUDYID, USUBJID, RANDDT, RANDDTTM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ODM.SubjectKey
+
+  - name: RANDDT
+    type: date
+    label: Date of Randomization
+    derivation:
+      source: ODM.IT.DM.RANDDT
+
+  - name: RANDDTTM
+    type: datetime
+    label: Date and Time of Randomization
+    derivation:
+      source: ODM.IT.DM.RANDDTTM
+
+rows:
+  - id: subject
+    filter: "ODM.ItemOID = 'IT.DM.RANDDT'"
+    derivations: {}

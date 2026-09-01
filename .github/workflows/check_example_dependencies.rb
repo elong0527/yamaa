@@ -9,6 +9,30 @@ def values(value)
   value.is_a?(Array) ? value : [value]
 end
 
+def specifications_with_source_contracts(specs)
+  pending = specs.dup
+  found = Set.new
+  until pending.empty?
+    spec = File.expand_path(pending.shift)
+    next if found.include?(spec)
+
+    found << spec
+    begin
+      document = YAML.safe_load(File.read(spec))
+    rescue Psych::SyntaxError, Errno::ENOENT
+      next
+    end
+    next unless document.is_a?(Hash) && document["datasets"].is_a?(Hash)
+
+    document["datasets"].each_value do |source|
+      next unless source.is_a?(Hash) && source["schema"].is_a?(String)
+
+      pending << File.expand_path(source["schema"], File.dirname(spec))
+    end
+  end
+  found.to_a.sort
+end
+
 def variable_dependencies(value, declared, lookup_sources, resolving = Set.new)
   values(value).each_with_object(Set.new) do |item, dependencies|
     item = item["variable"] if item.is_a?(Hash)
@@ -420,13 +444,16 @@ end
 
 if __FILE__ == $PROGRAM_NAME
   examples = File.expand_path("../../yaml/examples", __dir__)
-  specs = if ARGV.empty?
-            Dir[File.join(examples, "*", "spec*.yaml")].select do |spec|
-              File.basename(spec).match?(/\Aspec(?:_[a-z][a-z0-9_]*)?\.yaml\z/)
-            end.sort
-          else
-            ARGV.map { |path| File.expand_path(path) }
-          end
+  root_specs = if ARGV.empty?
+                 Dir[File.join(examples, "*", "spec*.yaml")].select do |spec|
+                   File.basename(spec).match?(
+                     /\Aspec(?:_[a-z][a-z0-9_]*)?\.yaml\z/
+                   )
+                 end.sort
+               else
+                 ARGV.map { |path| File.expand_path(path) }
+               end
+  specs = specifications_with_source_contracts(root_specs)
   errors = specs.flat_map do |spec|
     relative = spec.delete_prefix("#{Dir.pwd}/")
     check(spec).map { |problem| "#{relative}: #{problem}" }
