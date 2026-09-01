@@ -4,6 +4,26 @@ require "tempfile"
 require_relative "check_example_dependencies"
 
 class TestExampleDependencies < Minitest::Test
+  def test_implicit_lookup_keys_are_dependencies
+    spec = Tempfile.new(["implicit-lookup-key-dependency", ".yaml"])
+    spec.write(<<~YAML)
+      keys: [STUDYID]
+      record_lookups:
+        - id: EFFECTIVE
+          dataset: TRANSACTIONS
+      output:
+        columns: [AETERM, STUDYID]
+      columns:
+        - {name: AETERM, derivation: {source: EFFECTIVE.AETERM}}
+        - {name: STUDYID, derivation: {literal: STUDY}}
+    YAML
+    spec.close
+
+    assert_includes check(spec.path), "AETERM references later column STUDYID"
+  ensure
+    spec&.unlink
+  end
+
   def test_between_value_is_a_lookup_dependency
     spec = Tempfile.new(["between-dependency", ".yaml"])
     spec.write(<<~YAML)

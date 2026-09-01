@@ -70,8 +70,8 @@ During group-driven row construction, a source field of the row driver is a
 scalar only when that exact qualified variable occurs in the template's
 `group_by`. An aggregate expression may instead reduce the records of the
 current driver group under R007 and R013. Other row expressions consume group
-keys, literals, or earlier row-derived columns in the ordinary dependency
-order.
+keys, literals, earlier row-derived columns, or a record lookup whose matching
+values are already complete, in the ordinary dependency order.
 
 ## Dependency execution
 
@@ -80,7 +80,8 @@ detect cycles. Recursively traverse each expression and collect:
 
 - every unqualified output variable referenced by `source`;
 - the `source` and `between.value` variables of a record lookup any qualified
-  reference names, which R015 defines;
+  reference names, or its applicable output keys when those fields are omitted,
+  which R015 defines;
 - variables in `group_by`, `order_by`, and other fields typed as `variable`;
 - variables referenced by fields whose type contains nested `expression`;
 - current-output identifiers used by an `sql` predicate;
