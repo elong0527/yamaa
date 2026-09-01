@@ -59,26 +59,28 @@ path, resolved relative to the specification like `dataset_class.path`, to a
 YAML document of this exact form:
 
 ```yaml
-version: "1.0"
+schema_version: "1.0"
 fields:
-  STUDYID: string
-  USUBJID: string
-  AGE: integer
-  WEIGHT: number
+  STUDYID: str
+  USUBJID: str
+  AGE: int
+  WEIGHT: float
   RANDDT: date
   RANDDTTM: datetime
 ```
 
-`version` is required and is exactly the string `"1.0"`. `fields` is a
-required, non-empty mapping whose keys are distinct `dataset_column` names and
-whose values come from the closed vocabulary below. No other top-level field,
+The document validates against `schema_source.yaml` under R006, just as a
+derivation specification validates against `schema.yaml`. `schema_version` is
+required and must equal that bundle's version. `fields` is a required,
+non-empty mapping whose keys are distinct `dataset_column` names and whose
+values come from its closed `column_type` vocabulary. No other top-level field,
 field descriptor, or source type is allowed.
 
 | Sidecar type | R011 field type and runtime value |
 |---|---|
-| `string` | `str` |
-| `integer` | `int` |
-| `number` | `float` |
+| `str` | `str` |
+| `int` | `int` |
+| `float` | `float` |
 | `date` | `date` |
 | `datetime` | `datetime` |
 

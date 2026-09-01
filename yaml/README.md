@@ -6,6 +6,8 @@ and SDTM-to-ADaM derivations. The design is under active development.
 ## Contents
 
 - `schema.yaml` is the schema-bundle entry point and defines shared structure.
+- `schema_source.yaml` is the schema-bundle entry point for portable source
+  sidecars.
 - `schema_derivation.yaml`, `schema_expression_*.yaml`, and
   `schema_verification.yaml` register and document closed derivation and
   verification types.
