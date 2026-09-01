@@ -4,12 +4,11 @@ datasets:
   ADSL: input/adsl.csv
   TU: input/tu.csv
 base: ADSL
+keys: [STUDYID, USUBJID, PARAMCD]
 
 record_lookups:
   - id: TU_TARGET
     dataset: TU
-    source: [STUDYID, USUBJID]
-    key: [STUDYID, USUBJID]
     filter: >-
       TU.TUTESTCD = 'TUMIDENT' AND TU.VISIT = 'SCREENING'
       AND TU.TUSTRESC = 'TARGET'
@@ -17,19 +16,8 @@ record_lookups:
     keep: first
     unmatched: missing
 
-keys:
-  - STUDYID
-  - USUBJID
-  - PARAMCD
-
 output:
-  columns:
-    - STUDYID
-    - USUBJID
-    - PARAMCD
-    - PARAM
-    - AVALC
-    - AVAL
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVALC, AVAL]
 
 columns:
   - name: STUDYID
@@ -56,9 +44,9 @@ columns:
     derivation:
       literal: Measurable Disease at Baseline
 
-  - name: _TUSTRESC
+  - name: TUSTRESC
     type: str
-    label: Target Disease Record
+    label: Character Result/Finding in Std Format
     derivation:
       source: TU_TARGET.TUSTRESC
 
@@ -68,20 +56,34 @@ columns:
     derivation:
       case:
         branches:
-          - when: "_TUSTRESC IS NOT NULL"
+          - when: "TUSTRESC IS NOT NULL"
             then:
-              literal: "Y"
+              literal: Y
         otherwise:
-          literal: "N"
+          literal: N
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [Y, N]
 
   - name: AVAL
     type: int
     label: Analysis Value
     derivation:
-      case:
-        branches:
-          - when: "AVALC = 'Y'"
-            then:
-              literal: 1
-        otherwise:
-          literal: 0
+      mapping:
+        source: AVALC
+        dict:
+          Y: 1
+          N: 0
+    verifications:
+      - not_missing: {}
+      - range:
+          min: 0
+          max: 1
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD]
+  - row_count:
+      min: 3
+      max: 3

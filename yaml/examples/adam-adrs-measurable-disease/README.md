@@ -1,7 +1,7 @@
 # ADaM ADRS: derive measurable disease at baseline
 
-Derives a measurable-disease existence flag parameter from tumor identification
-records:
+Derives one measurable-disease existence flag parameter per ADSL subject from
+TU tumor identification records:
 
 - `AVALC`: `Y` when the subject has at least one target disease assessment at
   screening; otherwise `N`
