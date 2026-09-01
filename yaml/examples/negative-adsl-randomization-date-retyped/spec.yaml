@@ -1,0 +1,32 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM:
+    path: input/dm.csv
+    schema: input/dm.schema.yaml
+    # Intentionally invalid: the producing DM specification types RANDDT.
+    types: {RANDDT: date}
+base: DM
+keys: [STUDYID, USUBJID]
+
+output:
+  columns: [STUDYID, USUBJID, RANDDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM.USUBJID
+
+  - name: RANDDT
+    type: date
+    label: Date of Randomization
+    derivation:
+      source: DM.RANDDT

@@ -1160,6 +1160,169 @@ def validate_spec_contracts(spec, spec_label, spec_path=None):
     return errors
 
 
+def validate_spec_document(spec, spec_label, spec_path, env, spec_stack=None):
+    """Validate one complete specification and its producer dependencies."""
+    if not isinstance(spec, dict) or not spec:
+        return [
+            f"ERROR: {spec_label}: spec is empty or not a mapping"
+        ]
+
+    errors = []
+    if 'schema_version' in spec:
+        spec_version = str(spec['schema_version'])
+        env_version = str(env.get('version', '1.0'))
+        if spec_version != env_version:
+            errors.append(
+                f"ERROR: {spec_label}: schema_version '{spec_version}' "
+                f"does not match bundle version '{env_version}'"
+            )
+
+    errors.extend(validate_type(spec, ['root_class'], env, spec_label))
+    errors.extend(validate_grouped_rows(spec, spec_label))
+    errors.extend(validate_spec_names(spec, spec_label))
+    errors.extend(validate_spec_contracts(spec, spec_label, spec_path))
+
+    next_stack = set(spec_stack or ())
+    next_stack.add(spec_path.resolve())
+    errors.extend(
+        validate_producing_specs(
+            spec, spec_label, spec_path, env, next_stack
+        )
+    )
+    return errors
+
+
+def validate_producer_output_contract(producer, path):
+    """Require each stored producer column to carry a usable label."""
+    errors = []
+    output = producer.get('output')
+    output_columns = output.get('columns') if isinstance(output, dict) else None
+    selected = (
+        {name for name in output_columns if isinstance(name, str)}
+        if isinstance(output_columns, list)
+        else set()
+    )
+    columns = producer.get('columns')
+    if not isinstance(columns, list):
+        return errors
+    for index, column in enumerate(columns):
+        if not isinstance(column, dict) or column.get('name') not in selected:
+            continue
+        label = column.get('label')
+        if not isinstance(label, str) or not label.strip():
+            errors.append(
+                f"ERROR: {path}.columns[{index}].label: stored producer "
+                "column requires a non-empty label"
+            )
+    return errors
+
+
+def validate_producing_specs(spec, spec_label, spec_path, env, spec_stack):
+    """Validate producer workflow edges and referenced artifact headers."""
+    errors = []
+    datasets = spec.get('datasets')
+    if not isinstance(datasets, dict):
+        return errors
+
+    for dataset_id, source in datasets.items():
+        if not isinstance(source, dict) or 'schema' not in source:
+            continue
+
+        path = f"{spec_label}.datasets.{dataset_id}"
+        if 'types' in source:
+            types = source['types']
+            if isinstance(types, dict) and types:
+                for field in sorted(types, key=str):
+                    errors.append(
+                        f"ERROR: {path}.types.{field}: field type is already "
+                        "supplied by the producing specification"
+                    )
+            else:
+                errors.append(
+                    f"ERROR: {path}.types: inline types cannot be combined "
+                    "with a producing specification"
+                )
+
+        schema_ref = source.get('schema')
+        if not isinstance(schema_ref, str):
+            continue
+        producer_path = spec_path.parent / schema_ref
+        resolved_producer = producer_path.resolve()
+        if resolved_producer in spec_stack:
+            errors.append(
+                f"ERROR: {path}.schema: producer workflow dependency cycle "
+                f"through {schema_ref}"
+            )
+            continue
+        if not producer_path.is_file():
+            errors.append(
+                f"ERROR: {path}.schema: producing specification does not "
+                f"exist: {schema_ref}"
+            )
+            continue
+
+        try:
+            with open(producer_path, 'r', encoding='utf-8') as f:
+                producer = yaml.load(f, Loader=UniqueKeyLoader)
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
+            errors.append(
+                f"ERROR: {path}.schema: cannot read producing specification "
+                f"{schema_ref}: {exc}"
+            )
+            continue
+
+        producer_errors = validate_spec_document(
+            producer,
+            f"{path}.schema",
+            producer_path,
+            env,
+            spec_stack,
+        )
+        if isinstance(producer, dict):
+            producer_errors.extend(
+                validate_producer_output_contract(producer, f"{path}.schema")
+            )
+        errors.extend(producer_errors)
+        if producer_errors or not isinstance(producer, dict):
+            continue
+
+        source_ref = source.get('path')
+        if not isinstance(source_ref, str):
+            continue
+        source_path = spec_path.parent / source_ref
+        if not source_path.is_file() or source_path.suffix.lower() != '.csv':
+            continue
+        try:
+            with open(source_path, 'r', encoding='utf-8', newline='') as f:
+                header = next(csv.reader(f, strict=True), [])
+        except (OSError, UnicodeError, csv.Error) as exc:
+            errors.append(
+                f"ERROR: {path}.schema: cannot read CSV header for "
+                f"{source_ref}: {exc}"
+            )
+            continue
+
+        if not header:
+            errors.append(
+                f"ERROR: {path}.schema: stored CSV artifact is empty: "
+                f"{source_ref}"
+            )
+            continue
+
+        output = producer.get('output')
+        output_columns = (
+            output.get('columns') if isinstance(output, dict) else None
+        )
+        if isinstance(output_columns, list) and header != output_columns:
+            errors.append(
+                f"ERROR: {path}.schema.output.columns: producer output must "
+                f"match the artifact header exactly; expected "
+                f"{output_columns!r}, got {header!r}"
+            )
+
+    return errors
+
+
 def validate_examples_structure(root: Path, env, warnings=None):
     errors = []
     if warnings is None:
@@ -1183,29 +1346,8 @@ def validate_examples_structure(root: Path, env, warnings=None):
                 continue
 
             spec_label = f"{ex_dir.name}/{spec_path.name}"
-            if not isinstance(spec, dict) or not spec:
-                errors.append(
-                    f"ERROR: {spec_label}: spec is empty or not a mapping"
-                )
-                continue
-
-            if 'schema_version' in spec:
-                spec_version = str(spec['schema_version'])
-                env_version = str(env.get('version', '1.0'))
-                if spec_version != env_version:
-                    errors.append(
-                        f"ERROR: {spec_label}: schema_version "
-                        f"'{spec_version}' does not match bundle version "
-                        f"'{env_version}'"
-                    )
-
-            spec_errors = validate_type(
-                spec, ['root_class'], env, spec_label
-            )
-            spec_errors.extend(validate_grouped_rows(spec, spec_label))
-            spec_errors.extend(validate_spec_names(spec, spec_label))
-            spec_errors.extend(
-                validate_spec_contracts(spec, spec_label, spec_path)
+            spec_errors = validate_spec_document(
+                spec, spec_label, spec_path, env
             )
             is_negative = ex_dir.name.startswith('negative-')
             if not is_negative:

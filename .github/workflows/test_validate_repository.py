@@ -473,6 +473,233 @@ class TestSpecContracts(unittest.TestCase):
         self.assertIn("source path does not exist", message)
 
 
+class TestProducingSpecs(unittest.TestCase):
+    VALID_PRODUCER_SPEC = '''schema_version: "1.0"
+domain: DM
+datasets:
+  RAW: raw.csv
+base: RAW
+keys: [STUDYID]
+output:
+  columns: [STUDYID, AGE]
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: RAW.STUDYID}
+  - name: AGE
+    type: int
+    label: Age
+    derivation: {source: RAW.AGE}
+'''
+
+    def setUp(self):
+        self.env, schema_errors = VALIDATOR.build_schema_env(
+            TOOL_PATH.parents[2]
+        )
+        self.assertEqual(schema_errors, [])
+        self.test_dir = tempfile.TemporaryDirectory()
+        self.example_dir = Path(self.test_dir.name)
+        self.input_dir = self.example_dir / "input"
+        self.input_dir.mkdir()
+        self.spec_path = self.example_dir / "spec.yaml"
+        (self.input_dir / "dm.csv").write_text(
+            "STUDYID,AGE\nSTUDY1,42\n", encoding="utf-8"
+        )
+        (self.input_dir / "raw.csv").write_text(
+            "STUDYID,AGE\nSTUDY1,42\n", encoding="utf-8"
+        )
+
+    def tearDown(self):
+        self.test_dir.cleanup()
+
+    def write_producer_spec(self, content=None):
+        if content is None:
+            content = self.VALID_PRODUCER_SPEC
+        (self.input_dir / "dm.schema.yaml").write_text(
+            content, encoding="utf-8"
+        )
+
+    def validate(self, source=None):
+        if source is None:
+            source = {
+                "path": "input/dm.csv",
+                "schema": "input/dm.schema.yaml",
+            }
+        return VALIDATOR.validate_producing_specs(
+            {"datasets": {"DM": source}},
+            "example/spec.yaml",
+            self.spec_path,
+            self.env,
+            {self.spec_path.resolve()},
+        )
+
+    def test_accepts_complete_producing_spec(self):
+        self.write_producer_spec()
+
+        self.assertEqual(self.validate(), [])
+
+    def test_rejects_inline_types_with_producing_spec(self):
+        self.write_producer_spec()
+
+        errors = self.validate(
+            {
+                "path": "input/dm.csv",
+                "schema": "input/dm.schema.yaml",
+                "types": {"AGE": "int"},
+            }
+        )
+
+        self.assertIn(
+            "example/spec.yaml.datasets.DM.types.AGE", "\n".join(errors)
+        )
+
+        empty_types_errors = self.validate(
+            {
+                "path": "input/dm.csv",
+                "schema": "input/dm.schema.yaml",
+                "types": {},
+            }
+        )
+        self.assertIn(
+            "example/spec.yaml.datasets.DM.types: inline types cannot be "
+            "combined with a producing specification",
+            "\n".join(empty_types_errors),
+        )
+
+    def test_rejects_producer_version_mismatch(self):
+        self.write_producer_spec(
+            self.VALID_PRODUCER_SPEC.replace(
+                'schema_version: "1.0"', 'schema_version: "2.0"'
+            )
+        )
+
+        message = "\n".join(self.validate())
+
+        self.assertIn("does not match bundle version", message)
+
+    def test_rejects_reordered_producer_output(self):
+        self.write_producer_spec(
+            '''schema_version: "1.0"
+domain: DM
+datasets: {RAW: raw.csv}
+base: RAW
+keys: [STUDYID]
+output:
+  columns: [AGE, STUDYID]
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: RAW.STUDYID}
+  - name: AGE
+    type: int
+    label: Age
+    derivation: {source: RAW.AGE}
+'''
+        )
+
+        message = "\n".join(self.validate())
+
+        self.assertIn("match the artifact header exactly", message)
+        self.assertIn("['STUDYID', 'AGE']", message)
+        self.assertIn("['AGE', 'STUDYID']", message)
+
+    def test_rejects_empty_producer_artifact(self):
+        self.write_producer_spec()
+        (self.input_dir / "dm.csv").write_text("", encoding="utf-8")
+
+        message = "\n".join(self.validate())
+
+        self.assertIn("stored CSV artifact is empty", message)
+
+    def test_rejects_legacy_field_map(self):
+        self.write_producer_spec(
+            '''version: "1.0"
+fields: {STUDYID: string, AGE: integer}
+'''
+        )
+
+        message = "\n".join(self.validate())
+
+        self.assertIn("missing required field 'schema_version'", message)
+        self.assertIn("unknown field 'version'", message)
+        self.assertIn("unknown field 'fields'", message)
+
+    def test_rejects_metadata_only_contract(self):
+        self.write_producer_spec(
+            '''schema_version: "1.0"
+domain: DM
+datasets: {}
+keys: [STUDYID]
+output: {columns: [STUDYID, AGE]}
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+  - name: AGE
+    type: int
+    label: Age
+'''
+        )
+
+        message = "\n".join(self.validate())
+
+        self.assertIn("base is required", message)
+        self.assertIn("column has no derivation", message)
+
+    def test_rejects_unlabeled_producer_output(self):
+        self.write_producer_spec(
+            self.VALID_PRODUCER_SPEC.replace("label: Age", "label: ''")
+        )
+
+        message = "\n".join(self.validate())
+
+        self.assertIn(
+            "stored producer column requires a non-empty label", message
+        )
+
+    def test_rejects_missing_producer_input(self):
+        self.write_producer_spec()
+        (self.input_dir / "raw.csv").unlink()
+
+        message = "\n".join(self.validate())
+
+        self.assertIn("source path does not exist: raw.csv", message)
+
+    def test_rejects_producer_dependency_cycle(self):
+        self.write_producer_spec(
+            '''schema_version: "1.0"
+domain: DM
+datasets:
+  LOOP:
+    path: dm.csv
+    schema: ../spec.yaml
+base: LOOP
+keys: [STUDYID]
+output: {columns: [STUDYID, AGE]}
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: LOOP.STUDYID}
+  - name: AGE
+    type: int
+    label: Age
+    derivation: {source: LOOP.AGE}
+'''
+        )
+
+        message = "\n".join(self.validate())
+
+        self.assertIn("producer workflow dependency cycle", message)
+
+    def test_rejects_missing_producing_spec(self):
+        message = "\n".join(self.validate())
+
+        self.assertIn("producing specification does not exist", message)
+
+
 class TestValidatorCLI(unittest.TestCase):
     def setUp(self):
         self.tool_path = Path(__file__).parent / 'validate_repository.py'

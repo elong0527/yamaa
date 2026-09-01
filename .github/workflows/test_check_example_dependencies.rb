@@ -1,9 +1,40 @@
 require "minitest/autorun"
 require "tempfile"
+require "tmpdir"
 
 require_relative "check_example_dependencies"
 
 class TestExampleDependencies < Minitest::Test
+  def test_discovers_linked_producing_specs_recursively
+    Dir.mktmpdir do |examples|
+      example = File.join(examples, "example")
+      input = File.join(example, "input")
+      Dir.mkdir(example)
+      Dir.mkdir(input)
+
+      root = File.join(example, "spec.yaml")
+      producer = File.join(input, "dm.schema.yaml")
+      upstream = File.join(input, "upstream.schema.yaml")
+      File.write(root, <<~YAML)
+        datasets:
+          DM: {path: input/dm.csv, schema: input/dm.schema.yaml}
+      YAML
+      File.write(producer, <<~YAML)
+        datasets:
+          UPSTREAM: {path: upstream.csv, schema: upstream.schema.yaml}
+      YAML
+      File.write(upstream, <<~YAML)
+        datasets:
+          ROOT: {path: dm.csv, schema: ../spec.yaml}
+      YAML
+
+      expected = [root, producer, upstream].map do |path|
+        File.realpath(path)
+      end.sort
+      assert_equal expected, ExampleSpecifications.all_paths(examples)
+    end
+  end
+
   def test_implicit_lookup_keys_are_dependencies
     spec = Tempfile.new(["implicit-lookup-key-dependency", ".yaml"])
     spec.write(<<~YAML)

@@ -190,7 +190,7 @@ domain_name:
 
 dataset_source:
     type: [path, dataset_class]
-    description: Path to the dataset, or a path with the types its fields carry.
+    description: Path to the dataset, or a path with its producing specification or field types.
 
 dataset_class:
     - path:
@@ -201,6 +201,10 @@ dataset_class:
         type: "dict[dataset_column, column_type]"
         required: false
         description: Type each named field carries; R014 types the rest.
+    - schema:
+        type: path
+        required: false
+        description: Producing specification whose output contract supplies the source fields and types; R014 defines the workflow edge.
 
 dataset_id:
     type: str

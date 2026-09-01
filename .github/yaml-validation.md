@@ -22,10 +22,17 @@ The validation ensures:
    `group_by` whose variables are qualified to that row's driver. Static
    cross-field checks enforce base selection, complete and exclusive
    derivation coverage, record-lookup field pairing, verification bounds and
-   IDs, source-file existence, and declared CSV fields. Negative examples
-   (folders prefixed with `negative-`) are structurally validated; structural
-   errors are only suppressed if their named path matches a `spec_path`
-   declared in `expected/error.yaml` with `phase: validation`.
+   IDs, source-file existence, and declared CSV fields. Source-producing
+   specifications linked through `schema` validate recursively
+   against `root_class`; producer source paths must resolve, derivation coverage
+   must be complete, workflow dependencies must be acyclic, every stored
+   producer column must have a non-empty label, and the stored CSV header must
+   match the producer's ordered `output.columns` exactly. A producing
+   specification cannot be combined with inline `types`.
+   Negative examples (folders prefixed with `negative-`) are structurally
+   validated; structural errors are only suppressed if their named path
+   matches a `spec_path` declared in `expected/error.yaml` with
+   `phase: validation`.
 4. **Layout**: All examples have `README.md`, one `spec.yaml` or one or more
    `spec_<variant>.yaml` files, `input/`, and `expected/`. A base spec cannot
    be mixed with variants. Negative examples must provide `expected/error.yaml`
@@ -73,7 +80,8 @@ By default, the script infers the repository root relative to its own path.
 ## Warning Policy
 Warnings are printed to standard output but do not fail validation.
 Column-label and dependency-order policies remain owned by the existing Ruby
-checks under `.github/workflows/`.
+checks under `.github/workflows/`; those checks discover linked producing
+specifications recursively as part of the example workflow.
 
 To treat warnings as errors, run with the `--warnings-as-errors` flag:
 

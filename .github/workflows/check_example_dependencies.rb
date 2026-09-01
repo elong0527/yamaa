@@ -2,6 +2,8 @@ require "csv"
 require "set"
 require "yaml"
 
+require_relative "example_specifications"
+
 IDENTIFIER = /[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/
 SQL_WORDS = Set.new(%w[AND BETWEEN FALSE IN IS LIKE NOT NULL OR TRUE UNKNOWN])
 
@@ -421,9 +423,7 @@ end
 if __FILE__ == $PROGRAM_NAME
   examples = File.expand_path("../../yaml/examples", __dir__)
   specs = if ARGV.empty?
-            Dir[File.join(examples, "*", "spec*.yaml")].select do |spec|
-              File.basename(spec).match?(/\Aspec(?:_[a-z][a-z0-9_]*)?\.yaml\z/)
-            end.sort
+            ExampleSpecifications.all_paths(examples)
           else
             ARGV.map { |path| File.expand_path(path) }
           end
@@ -433,7 +433,8 @@ if __FILE__ == $PROGRAM_NAME
   end
 
   if errors.empty?
-    puts "Checked dependency and output order in #{specs.length} example specs."
+    puts "Checked dependency and output order in #{specs.length} example " \
+         "and producing specs."
   else
     warn errors.join("\n")
     exit 1

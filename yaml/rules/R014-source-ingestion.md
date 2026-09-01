@@ -29,9 +29,10 @@ of the same dataset bind the same field to the same type.
 
 Where the type comes from depends on the container:
 
-- A **self-describing container** supplies it. An ODM `ItemDef` data type, a
-  columnar file's schema, and a transport file's variable types are each the
-  field's type, and the specification does not restate it.
+- A **self-describing source** supplies it. An ODM `ItemDef` data type, a
+  container's embedded schema, and a delimited artifact's producing
+  specification are each the field's type authority, and the consuming
+  specification does not restate it.
 - A **typeless container**, such as a delimited text file, supplies none. Every
   one of its fields is `str` unless the specification declares otherwise.
 
@@ -50,6 +51,47 @@ datasets:
 
 Both forms are the same declaration: a bare path is R006 shorthand for a
 `dataset_class` with no `types`.
+
+## Producing-specification link
+
+`dataset_class.schema` makes a stored artifact carry the output contract and
+workflow provenance of the Yamaa specification that produces it. The path is
+resolved relative to the consuming specification like `dataset_class.path`.
+The referenced document is a complete specification validated against the
+same `root_class` in `schema.yaml`; there is no second source-schema class or
+field-description language.
+
+```yaml
+datasets:
+  DM:
+    path: input/dm.csv
+    schema: input/dm.schema.yaml
+```
+
+The referenced specification is an executable workflow predecessor. Its own
+sources must exist and validate, its derivations must be complete, and any
+`schema` links it declares are validated recursively. The resulting dependency
+graph must be acyclic. The producer completes before the consumer reads the
+artifact named by `path`; a link cannot name the consuming specification or
+any other specification already above it in the workflow.
+
+The producer's `output.columns` names every stored field exactly once and in
+artifact order. Each selected entry in its `columns` supplies that field's R011
+type and label. Declared internal columns omitted from `output.columns` are not
+stored fields. A delimited artifact's header must equal `output.columns`;
+missing, extra, reordered, duplicate, or undeclared fields fail.
+
+The producing specification remains the only type authority. `types` may be
+present only for a typeless source, so it must be absent whenever `schema` is
+present. This rejects even an inline entry that agrees with the producer
+instead of creating two authorities for one type.
+
+The stored cells are still delimited text. After recognizing missing values,
+ingestion applies the `str` row of R011's conversion table to every non-missing
+cell. In particular, a producer column declared `date` or `datetime` uses
+R016's lexical grammar and representations, exactly as an inline `types`
+declaration or a column conversion does; the workflow link does not enable a
+runtime's more permissive temporal parser.
 
 ## Values are never inferred
 
@@ -107,8 +149,12 @@ parse failure, because it holds no text to parse.
 ## Errors
 
 - A `types` entry naming a field the dataset does not have: fail.
-- A `types` entry for a field whose container already supplies a type: fail,
-  rather than override the container.
+- A `types` entry for a field whose container or producing specification
+  already supplies a type: fail, rather than override the source contract.
+- A document named by `schema` that does not validate as a complete Yamaa
+  specification, or whose producer dependency creates a cycle: fail.
+- A stored artifact whose fields do not exactly match the producing
+  specification's `output.columns`: fail.
 - A stored value that does not parse under its field's declared type: fail,
   reporting the dataset, field, and value.
 - Inferring a field type from its values, or treating text as absence: neither

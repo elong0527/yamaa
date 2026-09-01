@@ -82,6 +82,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adsl-mapping`](adam-adsl-mapping/) | translate collected values into a standard vocabulary |
 | [`adam-adsl-new-anticancer-therapy-date`](adam-adsl-new-anticancer-therapy-date/) | date the subject started new anti-cancer therapy |
 | [`adam-adsl-population-flags`](adam-adsl-population-flags/) | derive the safety and intent-to-treat flags |
+| [`adam-adsl-randomization-timing`](adam-adsl-randomization-timing/) | record randomization timing |
 | [`adam-adsl-rescue-medication`](adam-adsl-rescue-medication/) | select the first rescue medication |
 | [`adam-adsl-treatment-selection`](adam-adsl-treatment-selection/) | select actual treatment and its duration from EX |
 | [`adam-adtr-current-nadir`](adam-adtr-current-nadir/) | derive the current nadir |
@@ -102,6 +103,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-adlb-absolute-wbc-duplicate`](negative-adlb-absolute-wbc-duplicate/) | reject duplicate WBC inputs for an absolute differential |
 | [`negative-adlb-computed-parameter`](negative-adlb-computed-parameter/) | reject a parameter computed from the dataset being built |
 | [`negative-adrs-partial-response-after-complete-response`](negative-adrs-partial-response-after-complete-response/) | reject a partial response recorded after a complete response |
+| [`negative-adsl-randomization-date-retyped`](negative-adsl-randomization-date-retyped/) | reject a randomization date described twice |
 | [`negative-adsl-subject-reference`](negative-adsl-subject-reference/) | reject a malformed subject reference |
 | [`negative-advs-overlapping-analysis-windows`](negative-advs-overlapping-analysis-windows/) | reject overlapping analysis windows |
 | [`negative-baseline-flag-tied-date`](negative-baseline-flag-tied-date/) | reject a baseline chosen between two same-day results |

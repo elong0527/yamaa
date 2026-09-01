@@ -1,0 +1,8 @@
+phase: validation
+condition: redundant_field_type
+spec_paths:
+  - datasets.DM.types.RANDDT
+context:
+  dataset: DM
+  field: RANDDT
+  type: date
