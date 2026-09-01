@@ -219,6 +219,78 @@ class TestGroupedRows(unittest.TestCase):
         self.assertIn("duplicate", "\n".join(errors))
 
 
+class TestSpecNames(unittest.TestCase):
+    def test_accepts_resolved_unique_names(self):
+        spec = {
+            "domain": "ADSL",
+            "datasets": {"DM": "dm.csv", "EX": "ex.csv"},
+            "base": "DM",
+            "record_lookups": [{"id": "dose", "dataset": "EX"}],
+            "keys": ["USUBJID"],
+            "output": {"columns": ["USUBJID"]},
+            "columns": [{"name": "USUBJID"}],
+            "rows": [{"id": "subjects", "dataset": "DM"}],
+        }
+
+        self.assertEqual(
+            VALIDATOR.validate_spec_names(spec, "example/spec.yaml"), []
+        )
+
+    def test_rejects_duplicate_and_unresolved_columns(self):
+        spec = {
+            "domain": "ADSL",
+            "datasets": {"DM": "dm.csv"},
+            "keys": ["MISSING", "MISSING"],
+            "output": {"columns": ["USUBJID", "USUBJID"]},
+            "columns": [{"name": "USUBJID"}, {"name": "USUBJID"}],
+        }
+
+        errors = VALIDATOR.validate_spec_names(spec, "example/spec.yaml")
+
+        message = "\n".join(errors)
+        self.assertIn("duplicate column name", message)
+        self.assertIn("duplicate key column", message)
+        self.assertIn("duplicate output column", message)
+        self.assertIn("undeclared column 'MISSING'", message)
+
+    def test_rejects_empty_keys(self):
+        spec = {
+            "domain": "ADSL",
+            "datasets": {"DM": "dm.csv"},
+            "keys": [],
+            "output": {"columns": ["USUBJID"]},
+            "columns": [{"name": "USUBJID"}],
+        }
+
+        errors = VALIDATOR.validate_spec_names(spec, "example/spec.yaml")
+
+        self.assertIn("at least one key column", "\n".join(errors))
+
+    def test_rejects_dataset_and_lookup_namespace_errors(self):
+        spec = {
+            "domain": "ADSL",
+            "datasets": {"ADSL": "input.csv"},
+            "base": "MISSING",
+            "record_lookups": [
+                {"id": "ADSL", "dataset": "MISSING"},
+                {"id": "ADSL", "dataset": "ADSL"},
+            ],
+            "keys": [],
+            "output": {"columns": []},
+            "columns": [],
+            "rows": [{"id": "row"}, {"id": "row", "dataset": "MISSING"}],
+        }
+
+        errors = VALIDATOR.validate_spec_names(spec, "example/spec.yaml")
+
+        message = "\n".join(errors)
+        self.assertIn("must not equal the output domain", message)
+        self.assertIn("undeclared dataset 'MISSING'", message)
+        self.assertIn("duplicate record lookup id", message)
+        self.assertIn("conflicts with a dataset or domain", message)
+        self.assertIn("duplicate row id", message)
+
+
 class TestValidatorCLI(unittest.TestCase):
     def setUp(self):
         self.tool_path = Path(__file__).parent / 'validate_repository.py'
