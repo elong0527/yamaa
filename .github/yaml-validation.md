@@ -16,7 +16,9 @@ The validation ensures:
    constraints.
 3. **Example specs**: Every `spec.yaml` or `spec_<variant>.yaml` validates
    against the schemas, checking required fields, unknown fields, and registry
-   payload shapes. A grouped row must declare a non-empty, duplicate-free
+   payload shapes. Cross-field validation rejects duplicate or unresolved
+   dataset, lookup, column, key, output-column, and row names, including
+   namespace conflicts. A grouped row must declare a non-empty, duplicate-free
    `group_by` whose variables are qualified to that row's driver.
    Negative examples (folders prefixed with `negative-`) are structurally
    validated; structural errors are only suppressed if their named path matches
@@ -54,12 +56,9 @@ By default, the script infers the repository root relative to its own path.
 - Returns non-zero (e.g. `1`) if any errors are encountered.
 
 ## Warning Policy
-Warnings are printed to standard output but do not fail validation. One
-existing DS example warns until its two column verifications are represented as
-a list of one-entry mappings, as R006 requires. This narrowly scoped migration
-warning does not permit the same structural error anywhere else. Column-label
-and dependency-order policies remain owned by the existing Ruby checks under
-`.github/workflows/`.
+Warnings are printed to standard output but do not fail validation.
+Column-label and dependency-order policies remain owned by the existing Ruby
+checks under `.github/workflows/`.
 
 To treat warnings as errors, run with the `--warnings-as-errors` flag:
 
