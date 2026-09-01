@@ -1264,7 +1264,7 @@ def validate_producing_specs(spec, spec_label, spec_path, env, spec_stack):
         try:
             with open(producer_path, 'r', encoding='utf-8') as f:
                 producer = yaml.load(f, Loader=UniqueKeyLoader)
-        except (OSError, yaml.YAMLError) as exc:
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
             errors.append(
                 f"ERROR: {path}.schema: cannot read producing specification "
                 f"{schema_ref}: {exc}"
@@ -1295,10 +1295,17 @@ def validate_producing_specs(spec, spec_label, spec_path, env, spec_stack):
         try:
             with open(source_path, 'r', encoding='utf-8', newline='') as f:
                 header = next(csv.reader(f, strict=True), [])
-        except (OSError, csv.Error) as exc:
+        except (OSError, UnicodeError, csv.Error) as exc:
             errors.append(
                 f"ERROR: {path}.schema: cannot read CSV header for "
                 f"{source_ref}: {exc}"
+            )
+            continue
+
+        if not header:
+            errors.append(
+                f"ERROR: {path}.schema: stored CSV artifact is empty: "
+                f"{source_ref}"
             )
             continue
 

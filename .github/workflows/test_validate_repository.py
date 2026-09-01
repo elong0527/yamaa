@@ -605,6 +605,14 @@ columns:
         self.assertIn("['STUDYID', 'AGE']", message)
         self.assertIn("['AGE', 'STUDYID']", message)
 
+    def test_rejects_empty_producer_artifact(self):
+        self.write_producer_spec()
+        (self.input_dir / "dm.csv").write_text("", encoding="utf-8")
+
+        message = "\n".join(self.validate())
+
+        self.assertIn("stored CSV artifact is empty", message)
+
     def test_rejects_legacy_field_map(self):
         self.write_producer_spec(
             '''version: "1.0"
