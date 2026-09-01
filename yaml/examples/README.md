@@ -49,6 +49,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adae-worst-severity`](adam-adae-worst-severity/) | flag the worst-severity event per preferred term |
 | [`adam-adce-worst-toxicity-grade`](adam-adce-worst-toxicity-grade/) | flag the subject's worst-grade event |
 | [`adam-adcm-on-treatment-flag`](adam-adcm-on-treatment-flag/) | flag a medication during treatment |
+| [`adam-adeg-bazett-qtc`](adam-adeg-bazett-qtc/) | derive a Bazett-corrected QT parameter |
 | [`adam-adeg-fridericia-qtc`](adam-adeg-fridericia-qtc/) | derive a Fridericia-corrected QT parameter |
 | [`adam-adeg-rr-interval`](adam-adeg-rr-interval/) | derive an RR interval |
 | [`adam-adex-cumulative-dose`](adam-adex-cumulative-dose/) | summarize cumulative exposure |
