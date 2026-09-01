@@ -9,7 +9,7 @@ datasets:
 base: ADSL
 expand:
   count: ADSL.PLANCNT
-  as: ASEQ
+  index: ASEQ
 keys: [STUDYID, USUBJID, ASEQ]
 
 record_lookups:

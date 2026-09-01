@@ -1,0 +1,94 @@
+schema_version: "1.0"
+domain: ADLB
+datasets:
+  ADLBIN: {path: input/adlb.csv, types: {AVAL: float}}
+base: ADLBIN
+keys: [USUBJID, VISIT, PARAMCD]
+
+output:
+  columns: [USUBJID, PARAMCD, AVAL, PARAM, VISIT, DTYPE]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  - name: WBCVAL
+    type: float
+    label: White Blood Cell Count
+
+  - name: LYMLEVAL
+    type: float
+    label: Lymphocyte Fraction
+
+  - name: EXISTING_ABS_COUNT
+    type: int
+    label: Existing Absolute Lymphocyte Record Count
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+
+  - name: DTYPE
+    type: str
+    label: Derivation Type
+
+rows:
+  - id: collected
+    derivations:
+      USUBJID: {source: ADLBIN.USUBJID}
+      VISIT: {source: ADLBIN.VISIT}
+      PARAMCD: {source: ADLBIN.PARAMCD}
+      PARAM: {source: ADLBIN.PARAM}
+      WBCVAL: {literal: null}
+      LYMLEVAL: {literal: null}
+      EXISTING_ABS_COUNT: {literal: null}
+      AVAL: {source: ADLBIN.AVAL}
+      DTYPE: {literal: null}
+
+  - id: derived_lymph
+    group_by: [ADLBIN.USUBJID, ADLBIN.VISIT]
+    filter: >-
+      WBCVAL IS NOT NULL
+      AND LYMLEVAL IS NOT NULL
+      AND EXISTING_ABS_COUNT IS NULL
+    derivations:
+      USUBJID: {source: ADLBIN.USUBJID}
+      VISIT: {source: ADLBIN.VISIT}
+      PARAMCD: {literal: LYMPH}
+      PARAM: {literal: Lymphocytes Abs (10^9/L)}
+      WBCVAL:
+        aggregate:
+          filter: "ADLBIN.PARAMCD = 'WBC'"
+          expr: "ONLY(ADLBIN.AVAL)"
+      LYMLEVAL:
+        aggregate:
+          filter: "ADLBIN.PARAMCD = 'LYMLE'"
+          expr: "ONLY(ADLBIN.AVAL)"
+      EXISTING_ABS_COUNT:
+        aggregate:
+          filter: "ADLBIN.PARAMCD = 'LYMPH'"
+          expr: "COUNT(ADLBIN.*)"
+      AVAL:
+        compute:
+          expr: "WBCVAL * LYMLEVAL"
+      DTYPE: {literal: CALCULATION}
+
+verifications:
+  - unique:
+      columns: [USUBJID, VISIT, PARAMCD]
+  - row_count:
+      min: 11
+      max: 11

@@ -3,8 +3,7 @@ domain: ADEX
 datasets:
   TRT: input/subject_treatment.csv
   EX: {path: input/ex.csv, types: {EXDOSE: float}}
-base: EX
-group_by: [EX.STUDYID, EX.USUBJID, EX.EXTRT]
+base: TRT
 keys: [STUDYID, USUBJID, EXTRT]
 
 output:
@@ -15,19 +14,19 @@ columns:
     type: str
     label: Study Identifier
     derivation:
-      source: EX.STUDYID
+      source: TRT.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation:
-      source: EX.USUBJID
+      source: TRT.USUBJID
 
   - name: EXTRT
     type: str
     label: Name of Treatment
     derivation:
-      source: EX.EXTRT
+      source: TRT.EXTRT
 
   - name: EXDOSU
     type: str

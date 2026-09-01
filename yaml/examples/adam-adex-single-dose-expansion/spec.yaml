@@ -8,7 +8,7 @@ datasets:
 base: EX
 expand:
   count: EX.EXDOSCNT
-  as: ADOSEN
+  index: ADOSEN
 keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
 
 output:

@@ -2,8 +2,8 @@
 id: R001
 title: Execution Model
 status: normative
-applies_to: [root.base, root.rows, root.group_by, root.expand, row.dataset,
-  root.columns, derivation]
+applies_to: [root.base, root.rows, root.expand, row.dataset, row.group_by,
+  row.filter, root.columns, derivation]
 depends_on: [R002, R003, R004, R005, R007, R008, R010, R012, R013, R015]
 ---
 
@@ -29,28 +29,44 @@ Derivation has two phases:
 
 Each `rows` entry uses its explicit `dataset` as the row driver. If `dataset`
 is omitted, it uses root `base`. `base` is optional when every row declares a
-dataset. Constructed rows are appended in specification order.
+dataset. A row template has one of two modes:
 
-When `rows` is absent or empty and neither `group_by` nor `expand` is declared,
-row construction produces exactly one output row per `base` record, in
-base-record order. `base` is required in that case.
+1. A template without `group_by` is record-driven. Its `filter`, when present,
+   evaluates against each driver record before any row derivation. Every
+   retained driver record produces one candidate row.
+2. A template with `group_by` is group-driven. Its non-empty list names only
+   qualified variables of its row driver. The complete driver relation is
+   partitioned by equality on those values, with missing values equal to other
+   missing values for grouping. Every group produces one candidate row.
 
-An artifact may replace ordinary `rows` construction with exactly one of two
-other row-construction modes:
+Groups are ordered by the position of their first driver record. Within a
+group, records retain driver order. For each group, evaluate every row
+derivation once and complete stages 1 through 4 of the R005 lifecycle. Then
+evaluate the template's `filter`, when present, over the candidate's completed
+unqualified columns. Append the candidate only when the predicate is `TRUE`;
+`FALSE` or `UNKNOWN` suppresses it. A grouped `filter` therefore corresponds
+to filtering after a group reduction, while an ungrouped `filter` retains its
+existing driver-record meaning.
 
-- `group_by` requires `base` and constructs one row for each distinct tuple of
-  its base variables. Tuples appear in the order their first base record
-  appears. The variables must be qualified fields of that base. They are the
-  only base fields a scalar expression may read directly on the grouped row;
-  an aggregate may reduce the base records in the group normally.
-- `expand` requires `base` and constructs `count` rows for each base record, in
-  base-record order. Within each record, `as` receives the integers from 1
-  through `count` in order. `count` must resolve on the base record to a
-  non-missing, non-negative integer. Zero contributes no row. R005 treats `as`
-  as the row-phase derivation of that declared integer column.
+Constructed rows are appended in specification order, using driver order for
+record-driven templates and first-occurrence group order for group-driven
+templates.
 
-`rows`, `group_by`, and `expand` are mutually exclusive. When all three are
-absent, the ordinary one-row-per-`base` construction applies.
+When `rows` is absent or empty and `expand` is not declared, row construction
+produces exactly one output row per `base` record, in base-record order. `base`
+is required in that case.
+
+An artifact may replace ordinary `rows` construction with `expand`. It
+requires `base`; `count` names a qualified field of that base and constructs
+that many rows for each base record, in base-record order. Within each record,
+`index` receives the integers from 1 through `count` in order. `count` must
+resolve to a non-missing, non-negative integer. Zero contributes no row. R005
+treats `index` as the row-phase derivation of that declared integer column.
+
+`rows` and `expand` are mutually exclusive. When both are absent, the ordinary
+one-row-per-`base` construction applies. Group-driven construction remains a
+mode of an individual row template through `rows[].group_by`; it has no second
+artifact-level spelling.
 
 ## Expression evaluation
 
@@ -61,8 +77,15 @@ evaluated recursively. A `source` or `literal` expression is a leaf. YAML
 mapping order has no execution meaning.
 
 Window expressions evaluate over the partitions declared by their own
-`group_by`. Aggregate expressions evaluate in the two contexts R007 permits.
-All other expressions return one value per current row.
+`group_by`. Aggregate expressions evaluate in the contexts R007 permits. All
+other expressions return one value per current row.
+
+During group-driven row construction, a source field of the row driver is a
+scalar only when that exact qualified variable occurs in the template's
+`group_by`. An aggregate expression may instead reduce the records of the
+current driver group under R007 and R013. Other row expressions consume group
+keys, literals, or earlier row-derived columns in the ordinary dependency
+order.
 
 ## Dependency execution
 
@@ -70,8 +93,8 @@ Implementations must infer dependencies to validate declaration order and
 detect cycles. Recursively traverse each expression and collect:
 
 - every unqualified output variable referenced by `source`;
-- the `source` and `between.value` variables of a record lookup a qualified
-  variable names, which R015 defines;
+- the `source` and `between.value` variables of a record lookup any qualified
+  reference names, which R015 defines;
 - variables in `group_by`, `order_by`, and other fields typed as `variable`;
 - variables referenced by fields whose type contains nested `expression`;
 - current-output identifiers used by an `sql` predicate;
@@ -80,14 +103,20 @@ detect cycles. Recursively traverse each expression and collect:
 - variables used as placeholders in a `string_template`.
 
 Predicates include `case.branches[].when`, `override[].when`, `row.filter`,
-aggregate `filter`, and window `filter`. Identifier extraction requires parsing
-the predicate under the R004 grammar, the numeric expression under the R010
-grammar, the string template under the R012 grammar, and the reducer
-expression under the R013 grammar; an implementation must not treat any of
-them as dependency-free.
+aggregate `filter`, and window `filter`. An ungrouped `row.filter` resolves only
+driver variables and runs before its derivation graph. A grouped `row.filter`
+resolves unqualified columns derived by that row template and runs after the
+whole graph completes. Identifier extraction requires parsing the predicate
+under the R004 grammar, the numeric expression under the R010 grammar, the
+string template under the R012 grammar, and the reducer expression under the
+R013 grammar; an implementation must not treat any of them as dependency-free.
 
 For each row definition, evaluate row derivations using a dependency graph.
 Row derivations cannot depend on values produced only during the column phase.
+Every unqualified identifier in a grouped `row.filter` must resolve to a
+column derived by that same template. The filter itself is not a derivation and
+adds no graph edge between columns because it runs only after all of them have
+completed.
 
 After row construction, build the column dependency graph. Every dependency
 must refer to a column declared earlier. Evaluate columns in declaration order.
@@ -107,15 +136,21 @@ declaration order.
 ## Errors
 
 - A row without an explicit `dataset` or default `base`: fail.
-- A specification with no row-construction declaration and no `base`: fail.
-- More than one of `rows`, `group_by`, and `expand`: fail.
-- An empty `group_by`, or a `group_by` variable that is unqualified, belongs to
-  a dataset other than `base`, is repeated, or does not exist: fail.
-- A scalar expression reading a non-grouped field of the grouped base: fail.
+- A specification with neither `rows` nor `expand` and no `base`: fail.
+- An `expand` declaration without `base`: fail.
+- Both `rows` and `expand`: fail.
+- An `expand.count` that is unqualified, belongs to a dataset other than
+  `base`, or does not exist: fail.
 - An `expand.count` that is missing, non-integer, or negative: fail during row
   construction and report the base record.
-- An `expand.as` that is undeclared, is not `int`, or has another derivation:
-  fail.
+- An `expand.index` that is undeclared, is not `int`, or has another
+  derivation: fail.
+- An empty or duplicate `row.group_by`: fail.
+- A `row.group_by` variable not qualified to that row's driver: fail.
+- A grouped row derivation reading a non-grouped driver field without an
+  aggregate: fail and report the field.
+- An ungrouped `row.filter` naming an output column, or a grouped `row.filter`
+  naming a qualified variable or a column not derived by that template: fail.
 - A row dependency on a later-phase value: fail.
 - An unresolved variable or predicate reference: fail.
 - A reference to a later declared column: fail and report both columns.

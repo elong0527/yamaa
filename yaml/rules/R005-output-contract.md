@@ -75,12 +75,12 @@ output ones:
    missing value.
 4. **A specification with neither `rows` nor `expand` derives every column at
    column level.** Requirement 3 is vacuous when there are no entries, so this
-   states the base-driven and grouped cases directly.
+   states the base-driven case directly.
 5. **A `rows` derivation must target a declared column.** A key in
    `derivations` that names no declared column is an error.
-6. **`expand.as` is one row-phase derivation.** It must name one declared `int`
-   column, and that column must have no column-level or `rows` derivation. Every
-   other column on an expanded artifact is derived at column level.
+6. **`expand.index` is one row-phase derivation.** It must name one declared
+   `int` column, and that column must have no column-level or `rows` derivation.
+   Every other column on an expanded artifact is derived at column level.
 
 Mixing the two placements across different columns is normal and expected: a
 specification with `rows` typically derives the columns that distinguish its
@@ -134,6 +134,12 @@ value of the declared type. This matters because R007 permits no implicit
 conversion between operation inputs: an operation consuming a row-derived
 column must be able to rely on its declared type.
 
+For a grouped row template, R001 evaluates its `filter` after stages 1 to 4
+complete for every value on the candidate row. A discarded candidate never
+enters the completed dataset, so stage 5 column verifications do not include
+it. An error reached while deriving the candidate still fails the run; the
+filter does not retroactively hide a failed derivation.
+
 Conversion must be deterministic and must not silently replace an error with a
 missing value. A conversion failure with no `conversion_failure` handler fails
 the run.
@@ -176,7 +182,7 @@ R006 owns the corresponding requirements for the schema bundle.
 - A column derived in some `rows` entries but not all: fail and report the
   entries that omit it.
 - A `rows` derivation naming an undeclared column: fail.
-- An `expand.as` column that is undeclared, not `int`, or derived anywhere
+- An `expand.index` column that is undeclared, not `int`, or derived anywhere
   else: fail.
 - An internal column named in `keys`: fail and report the column name.
 - A missing `output.columns`, a duplicate entry, or an entry naming an

@@ -32,8 +32,9 @@ results, string concatenation inputs, runtime-function arguments, and final
 
 This is the version 1.0 direction for team review.
 
-An artifact may construct ordinary rows, distinct `group_by` tuples, or a
-counted `expand` set. R001 defines the mutually exclusive forms.
+An artifact may use ordinary row templates or counted `expand`. A row template
+may use `group_by` when its driver records must first form groups. R001 defines
+these forms and their evaluation.
 
 Three closed mini-languages are narrow exceptions to fields that name
 their inputs directly. Registering an operator per arithmetic operation makes a
@@ -63,8 +64,18 @@ becoming a join, a window, or a second spelling of `compute`, and they leave
 where an aggregate may be used with R007 and the join that consumes it with
 R003.
 
+A row template may declare `group_by` when its driver records must first form
+one candidate row per group. Aggregate row derivations reduce the current
+driver group, scalar derivations compose those results, and the template's
+existing `filter` then decides whether the completed candidate is appended.
+Without `group_by`, `row.filter` keeps its original meaning of selecting driver
+records before derivation. R001 owns both modes, and R013's `ONLY` reducer makes
+a required single source record reject duplicates rather than choose one.
+
 `output.columns` keeps binding columns out of the final dataset while retaining
-them as named intermediate values.
+them as named intermediate values. A `compute` formula may also read a numeric
+field directly from a declared record lookup; this avoids a binding column when
+the lookup already gives the selected record a stable name.
 
 A `record_lookups` entry names one record of another dataset so that several
 columns can read it, which no expression can do while each returns one value.
@@ -82,7 +93,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `str_concat` | An ordered list of expressions, because concatenating requires literals beside sources |
 | `str_template` | One closed string template over named variables (R012) |
 | `mapping_from` | One or more named sources paired by position with declared right-side key columns; exceptional results are literals |
-| `compute` | One closed numeric expression over named output columns (R010) |
+| `compute` | One closed numeric expression over named output columns and declared record-lookup fields (R010) |
 | `date_diff`, `study_day` | Named variable operands; `date_diff` declares which endpoints it counts |
 | `date_impute` | One named source plus integer literals for the imputed components; exceptional results are literals |
 | `date_precision` | One named source; exceptional results are literals |

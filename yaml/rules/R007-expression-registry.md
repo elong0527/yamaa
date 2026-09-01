@@ -72,19 +72,22 @@ value is missing.
 
 `aggregate` is the only aggregate expression. R013 defines its grammar, the
 reducers it permits, and what each returns; this rule fixes where it may be
-used. It is valid in exactly two contexts:
+used. It is valid in exactly three contexts:
 
-1. Its identifiers are qualified to a declared dataset. It then reduces that
-   right side before the R003 join, which R003 defines. While constructing a
-   grouped artifact, an aggregate qualified to its base reduces the current
-   group directly; the group is already the right-side partition.
+1. Its identifiers are qualified to another dataset. It then reduces that
+   right side before the R003 join, which R003 defines.
 2. Its identifiers are unqualified. It then declares `group_by`, reduces
    constructed output rows within each partition, and broadcasts the result to
    each row.
+3. It is a row derivation of a grouped row template and every identifier is
+   qualified to that template's row driver. It reduces the records of the
+   current driver group to one candidate-row value. The enclosing
+   `row.group_by` owns the grain, so the aggregate itself omits `group_by`.
 
 Any other aggregate context is an error. A `filter` narrows the records the
 owning expression already works in: right-side records for context 1, and
-constructed output rows for a window or for context 2.
+constructed output rows for a window or for context 2, and current driver-group
+records for context 3.
 
 ## Ordering
 
@@ -186,7 +189,9 @@ behavior and do not affect schema validation.
   columns: fail.
 - A `row_value` whose `offset` is zero: fail. The current row's own value is
   `source`, and a window must not be a second spelling of it.
-- An aggregate outside its two permitted contexts: fail.
+- An aggregate outside its three permitted contexts: fail.
+- A grouped-row aggregate naming a dataset other than its row driver or
+  declaring its own `group_by`: fail.
 - An `aggregate` expression that violates R013: fail.
 - `mapping_from` whose `source` and `key` lists differ in length: fail.
 - An unhandled local missing, mapping, or extraction condition: fail under

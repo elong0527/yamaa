@@ -1,0 +1,9 @@
+phase: validation
+condition: incomparable_range_types
+spec_paths:
+  - record_lookups[0].between
+context:
+  record_lookup: EPOCHDEF
+  value_type: date
+  lower_type: int
+  upper_type: int
