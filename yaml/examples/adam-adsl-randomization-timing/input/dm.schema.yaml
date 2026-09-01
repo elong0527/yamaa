@@ -1,8 +1,8 @@
 schema_version: "1.0"
 domain: DM
 datasets:
-  DM_RAW: dm_raw.csv
-base: DM_RAW
+  ODM: odm.csv
+base: ODM
 keys: [STUDYID, USUBJID]
 
 output:
@@ -13,28 +13,28 @@ columns:
     type: str
     label: Study Identifier
     derivation:
-      source: DM_RAW.STUDYID
+      source: ODM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation:
-      source: DM_RAW.USUBJID
+      source: ODM.USUBJID
 
   - name: RFSTDTC
     type: date
     label: Subject Reference Start Date
     derivation:
-      source: DM_RAW.RFSTDTC
+      source: ODM.RFSTDTC
 
   - name: RANDDT
     type: date
     label: Date of Randomization
     derivation:
-      source: DM_RAW.RANDDT
+      source: ODM.RANDDT
 
   - name: RANDDTTM
     type: datetime
     label: Date and Time of Randomization
     derivation:
-      source: DM_RAW.RANDDTTM
+      source: ODM.RANDDTTM
