@@ -94,8 +94,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AVISIT]
   - row_count:
-      min: 6
-      max: 6
+      min: 7
+      max: 7
   - predicate:
       id: measured-lesions-do-not-exceed-the-target-lesions
       assert: "NMEAS IS NULL OR NMEAS <= NTARGET"

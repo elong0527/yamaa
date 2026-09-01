@@ -198,6 +198,11 @@ def expression_dependencies(expression, declared, lookup_sources)
       variable_dependencies(aggregate["group_by"], declared, lookup_sources)
     )
     dependencies.merge(
+      variable_dependencies(
+        aggregate.dig("between", "value"), declared, lookup_sources
+      )
+    )
+    dependencies.merge(
       identifier_dependencies(aggregate["expr"], declared, lookup_sources)
     )
   when "compute"

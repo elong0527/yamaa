@@ -82,6 +82,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adsl-population-flags`](adam-adsl-population-flags/) | derive the safety and intent-to-treat flags |
 | [`adam-adsl-rescue-medication`](adam-adsl-rescue-medication/) | select the first rescue medication |
 | [`adam-adsl-treatment-selection`](adam-adsl-treatment-selection/) | select actual treatment and its duration from EX |
+| [`adam-adtr-current-nadir`](adam-adtr-current-nadir/) | derive the current nadir |
 | [`adam-adtr-sum-of-target-diameters`](adam-adtr-sum-of-target-diameters/) | sum the target lesion diameters at each assessment |
 | [`adam-adtte-duration-of-response`](adam-adtte-duration-of-response/) | derive the duration of a response |
 | [`adam-adtte-progression-free-survival`](adam-adtte-progression-free-survival/) | derive progression-free survival |

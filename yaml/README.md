@@ -57,7 +57,14 @@ identifier to name one relation, and requires every identifier to sit inside a
 reduction unless the reduction groups on it. Those three limits keep it from
 becoming a join, a window, or a second spelling of `compute`, and they leave
 where an aggregate may be used with R007 and the join that consumes it with
-R003.
+R003. A qualified aggregate may additionally narrow that relation against one
+current-row value through inclusive lower or upper bounds; R013 fixes the
+one-sided and missing-value behavior.
+
+A reduction at one grain followed by a reduction at another remains two
+specifications. The first artifact is a normal stored source of the second, so
+each grain keeps its own identity and validation contract without adding
+in-memory datasets or inferring pipeline order from paths.
 
 A row template may declare `group_by` when its driver records must first form
 one candidate row per group. Aggregate row derivations reduce the current
@@ -96,7 +103,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
 | `row_number`, `rank`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
 | `row_value` | One named source with named grouping and ordering variables, plus a signed integer literal offset along the declared order |
-| `aggregate` | One closed reducer expression over the records of one relation (R013) |
+| `aggregate` | One closed reducer expression over one relation, optionally narrowed by a current-row range (R013) |
 | `case` | Nested result expressions retained because selecting expressions is its purpose |
 | `function` | Named arguments may be variables, non-string literals, or explicit expressions |
 

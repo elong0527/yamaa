@@ -4,8 +4,8 @@ This example uses a schedule of tumour assessments, the lesions measured at
 each of them, and the lesion inventory selected at study entry to derive one
 record per subject and assessment:
 
-- `ADT` is the date of the assessment and `AVISITN` orders the assessments
-  within a subject;
+- `ADT` is the date of the assessment when known, and `AVISITN` orders the
+  assessments within a subject;
 - `AVAL` is the sum of the target lesion diameters measured at it. A lesion
   the assessment did not measure contributes nothing, so the sum is over
   whatever was measured; it is empty only when the assessment produced no

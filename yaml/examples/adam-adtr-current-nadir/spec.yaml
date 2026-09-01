@@ -1,0 +1,93 @@
+schema_version: "1.0"
+domain: ADTR
+datasets:
+  ADTRPRE:
+    path: input/adtr_pre.csv
+    types: {AVISITN: int, ADT: date, AVAL: float, NMEAS: int, NTARGET: int}
+base: ADTRPRE
+keys: [STUDYID, USUBJID, AVISIT]
+
+output:
+  columns: [STUDYID, USUBJID, AVISIT, AVISITN, ADT, PARAMCD, PARAM, AVAL, NMEAS, NTARGET, ANL01FL, NADIR]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: ADTRPRE.STUDYID}
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {source: ADTRPRE.USUBJID}
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation: {source: ADTRPRE.AVISIT}
+
+  - name: AVISITN
+    type: int
+    label: Analysis Visit (N)
+    derivation: {source: ADTRPRE.AVISITN}
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: {source: ADTRPRE.ADT}
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: {source: ADTRPRE.PARAMCD}
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation: {source: ADTRPRE.PARAM}
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: {source: ADTRPRE.AVAL}
+
+  - name: NMEAS
+    type: int
+    label: Number of Measured Target Lesions
+    derivation: {source: ADTRPRE.NMEAS}
+
+  - name: NTARGET
+    type: int
+    label: Number of Target Lesions
+    derivation: {source: ADTRPRE.NTARGET}
+
+  - name: ANL01FL
+    type: str
+    label: Analysis Record Flag 01
+    derivation: {source: ADTRPRE.ANL01FL}
+    verifications:
+      allowed_values:
+        values: [Y]
+
+  - name: NADIR
+    type: float
+    label: Nadir Sum of Target Lesion Diameters
+    derivation:
+      aggregate:
+        filter: "ADTRPRE.ANL01FL = 'Y'"
+        between:
+          value: ADT
+          lower: ADTRPRE.ADT
+        group_by: [ADTRPRE.STUDYID, ADTRPRE.USUBJID]
+        expr: "MIN(ADTRPRE.AVAL)"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AVISIT]
+  - row_count:
+      min: 7
+      max: 7
+  - implies:
+      id: dated-assessment-has-a-nadir
+      when: "ADT IS NOT NULL"
+      then: "NADIR IS NOT NULL"
