@@ -4,7 +4,7 @@ datasets:
   DM:
     path: input/dm.csv
     schema: input/dm.schema.yaml
-    # Intentionally invalid: the producing DM specification types RANDDT.
+    # Intentionally invalid: RANDDT already has this type in the sidecar.
     types: {RANDDT: date}
 base: DM
 keys: [STUDYID, USUBJID]

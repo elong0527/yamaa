@@ -18,9 +18,6 @@ The validation ensures:
    against the schemas, checking required fields, unknown fields, and registry
    payload shapes. A grouped row must declare a non-empty, duplicate-free
    `group_by` whose variables are qualified to that row's driver.
-   A source declaration carrying `schema` must reference another specification
-   that validates against the same bundle, and the source artifact's columns
-   must exactly match that specification's `output.columns`.
    Negative examples (folders prefixed with `negative-`) are structurally
    validated; structural errors are only suppressed if their named path matches
    a `spec_path` declared in `expected/error.yaml` with `phase: validation`.

@@ -29,10 +29,9 @@ of the same dataset bind the same field to the same type.
 
 Where the type comes from depends on the container:
 
-- A **self-describing source** supplies it. An ODM `ItemDef` data type and a
-  container's embedded schema are each the field's type, and the specification
-  does not restate it. A delimited artifact may instead retain the output
-  contract of the Yamaa specification that produced it, as defined below.
+- A **self-describing source** supplies it. An ODM `ItemDef` data type, a
+  container's embedded schema, and a delimited file's portable schema sidecar
+  are each the field's type, and the specification does not restate it.
 - A **typeless container**, such as a delimited text file, supplies none. Every
   one of its fields is `str` unless the specification declares otherwise.
 
@@ -52,46 +51,52 @@ datasets:
 Both forms are the same declaration: a bare path is R006 shorthand for a
 `dataset_class` with no `types`.
 
-## Produced-artifact contract
+## Portable schema sidecar
 
-`dataset_class.schema` links a delimited artifact to the Yamaa specification
-that produced it. It is a path, resolved relative to the consuming
-specification like `dataset_class.path`, and the referenced document validates
-against the same `schema.yaml` bundle under R006. It is not a second schema
-format and does not repeat a field map beside the producing specification.
+`dataset_class.schema` makes a delimited file a self-describing source without
+requiring a binary container or a format-specific runtime dependency. It is a
+path, resolved relative to the specification like `dataset_class.path`, to a
+YAML document of this exact form:
 
 ```yaml
-datasets:
-  DM:
-    path: input/dm.csv
-    schema: input/dm.schema.yaml
+schema_version: "1.0"
+fields:
+  STUDYID: str
+  USUBJID: str
+  AGE: int
+  WEIGHT: float
+  RANDDT: date
+  RANDDTTM: datetime
 ```
 
-The referenced specification's artifact is the complete source contract.
-`output.columns` supplies the stored field names and their order, and each
-selected entry in `columns` supplies its R011 `type`. Declared internal columns
-that `output.columns` omits are not fields of the artifact. The delimited file
-must contain exactly the selected fields in the selected order; a missing,
-extra, or reordered field fails.
+The document validates against `schema_source.yaml` under R006, just as a
+derivation specification validates against `schema.yaml`. `schema_version` is
+required and must equal that bundle's version. `fields` is a required,
+non-empty mapping whose keys are distinct `dataset_column` names and whose
+values come from its closed `column_type` vocabulary. No other top-level field,
+field descriptor, or source type is allowed.
 
-The producing specification remains the one type authority across an
-ODM-to-SDTM or SDTM-to-ADaM boundary. `types` may be present only for a typeless
-source, so it must be absent whenever `schema` is present. This rejects even an
-inline entry that agrees with the producing specification instead of creating
-two authorities for one field.
+| Sidecar type | R011 field type and runtime value |
+|---|---|
+| `str` | `str` |
+| `int` | `int` |
+| `float` | `float` |
+| `date` | `date` |
+| `datetime` | `datetime` |
 
-The link describes an artifact an earlier run completed; it does not execute
-or schedule the producing specification. Cross-specification scheduling belongs
-to the pipeline contract. The artifact named by `path` must already exist when
-the consuming specification runs.
+The sidecar must name every field in the delimited file exactly once, and the
+file must contain every field it names. A missing or extra name fails rather
+than silently becoming `str`; a self-describing source has one complete schema,
+not a typed subset. `types` may be present only for a typeless source, so it
+must be absent whenever `schema` is present. This rejects even an inline entry
+that agrees with the sidecar instead of creating two authorities for one type.
 
-The output contract produces the R011 runtime type directly, but the stored
-cells are still delimited text. After recognizing missing values, ingestion
-applies the `str` row of R011's conversion table to every non-missing cell. In
-particular, a producing column declared `date` or `datetime` uses R016's
-lexical grammar and representations, exactly as an inline `types` declaration
-or a column conversion does; the link does not enable a runtime's more
-permissive temporal parser.
+The mapping produces the R011 runtime type directly, but the stored cells are
+still delimited text. After recognizing missing values, ingestion applies the
+`str` row of R011's conversion table to every non-missing cell. In particular,
+sidecar `date` and `datetime` use R016's lexical grammar and representations,
+exactly as an inline `types` declaration or a column conversion does; the
+sidecar does not enable a runtime's more permissive temporal parser.
 
 ## Values are never inferred
 
@@ -149,12 +154,8 @@ parse failure, because it holds no text to parse.
 ## Errors
 
 - A `types` entry naming a field the dataset does not have: fail.
-- A `types` entry for a field whose container or producing specification
-  already supplies a type: fail, rather than override the source contract.
-- A document named by `schema` that does not validate as a Yamaa specification:
-  fail.
-- A delimited artifact whose fields do not exactly match the producing
-  specification's `output.columns`: fail.
+- A `types` entry for a field whose container already supplies a type: fail,
+  rather than override the container.
 - A stored value that does not parse under its field's declared type: fail,
   reporting the dataset, field, and value.
 - Inferring a field type from its values, or treating text as absence: neither

@@ -17,20 +17,12 @@ tracker, one work item per root cause.
         README.md
         spec.yaml | spec_<variant>.yaml ...
         input/*.csv
-        input/<dataset>.schema.yaml  # optional producing specification
         expected/<domain>.csv
 
 Use `spec.yaml` for one specification. Use one or more `spec_<variant>.yaml`
 files when the example intentionally demonstrates a runtime or design variant
 over shared inputs and an expected artifact. Do not mix the base filename with
 variants.
-
-When a declared source uses `schema`, the referenced document is the complete
-Yamaa specification that produced that source artifact. It validates against
-the existing `schema.yaml` bundle and derives its data from the preceding stage;
-it is not a separate field-map format. Keep it with the source artifact under
-`input/`, and give its columns the same labels and dependency order required of
-the example's consuming specification.
 
 An expected failure before a dataset is completed replaces the CSV with
 `expected/error.yaml`, unless the intended artifact is useful as a forward

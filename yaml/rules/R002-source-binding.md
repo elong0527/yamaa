@@ -25,22 +25,19 @@ type it carries, is R014.
 
 `datasets` maps dataset identifiers to source data declarations. Identifiers
 are used by `base`, `rows.dataset`, qualified source variables, and
-`mapping_from`. A declaration is a path, or a path with inline field types or
-the producing specification whose artifact contract supplies them; R014 owns
-that reading and the shorthand between the forms. Paths are resolved relative
-to the specification file.
+`mapping_from`. A declaration is a path, or a path with the types its fields
+carry; R014 owns that reading and the shorthand between the two forms. Paths
+are resolved relative to the specification file.
 
 Every referenced dataset identifier must exist in `datasets`. A dataset
 identifier must not equal the output `domain`; unqualified names address the
 dataset currently being derived, so reusing the domain would be ambiguous.
 
 A finished dataset an earlier run produced is an ordinary source and is
-declared under a name of its own. Its declaration may retain the producing
-specification as its source contract under R014; that link does not schedule
-the earlier run. Reaching a sibling record of the dataset this run is building
-is a different thing, and no keyed construct reaches it; R001 owns what happens
-when a column reaches its own value through the rows of its partition.
-Addressing a sibling record by key is open work.
+declared under a name of its own. Reaching a sibling record of the dataset this
+run is building is a different thing, and no keyed construct reaches it; R001
+owns what happens when a column reaches its own value through the rows of its
+partition. Addressing a sibling record by key is open work.
 
 ## Source expressions
 

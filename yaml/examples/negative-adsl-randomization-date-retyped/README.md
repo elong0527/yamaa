@@ -1,7 +1,6 @@
 # ADaM ADSL: reject a randomization date described twice
 
-This example uses demographics produced from ODM to produce one record per
-subject:
+This example uses demographics to produce one record per subject:
 
 - `RANDDT` is the subject's randomization date.
 
@@ -12,8 +11,8 @@ accepted.
 
 ## How to fix
 
-Keep the specification that produced DM as the single type authority and
-remove the inline `types` entry:
+Keep the source schema as the single type authority and remove the inline
+`types` entry:
 
 ```yaml
 datasets:
