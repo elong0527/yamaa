@@ -22,8 +22,8 @@ The validation ensures:
    `group_by` whose variables are qualified to that row's driver. Static
    cross-field checks enforce base selection, complete and exclusive
    derivation coverage, record-lookup field pairing, verification bounds and
-   IDs, source-file existence, and declared CSV fields. Referenced source
-   producing specifications referenced through `schema` validate recursively
+   IDs, source-file existence, and declared CSV fields. Source-producing
+   specifications linked through `schema` validate recursively
    against `root_class`; producer paths and derivations must resolve, workflow
    dependencies must be acyclic, every stored producer column must have a
    non-empty label, and the stored CSV header must match the producer's ordered
