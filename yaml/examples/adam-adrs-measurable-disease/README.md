@@ -7,7 +7,7 @@ TU tumor identification records:
   screening; otherwise `N`
 - `AVAL`: `1` for `Y` and `0` for `N`
 
-The derivation follows
+These values follow
 [`pharmaverse/admiral`](https://github.com/pharmaverse/admiral) commit
 `e32e5689d7fd03e224ddbcfc369c332c5df837d9`,
 `R/derive_param_exist_flag.R`.
