@@ -8,7 +8,7 @@ keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
 record_lookups:
   - id: BASE_HEIGHT
     dataset: ADVSIN
-    filter: "PARAMCD = 'HEIGHT'"
+    filter: "ADVSIN.PARAMCD = 'HEIGHT'"
     source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
     unmatched: missing
@@ -72,7 +72,12 @@ rows:
       DTYPE: {literal: null}
 
   - id: derived_bmi
-    group_by: [ADVSIN.STUDYID, ADVSIN.USUBJID, ADVSIN.PARAMCD, ADVSIN.AVISIT, ADVSIN.AVAL]
+    group_by:
+      - ADVSIN.STUDYID
+      - ADVSIN.USUBJID
+      - ADVSIN.PARAMCD
+      - ADVSIN.AVISIT
+      - ADVSIN.AVAL
     filter: "SOURCE_PARAMCD = 'WEIGHT' AND AVAL IS NOT NULL"
     derivations:
       STUDYID: {source: ADVSIN.STUDYID}
@@ -84,7 +89,9 @@ rows:
       PROVENANCE: {literal: DERIVED}
       AVAL:
         compute:
-          expr: "ADVSIN.AVAL / NULLIF((BASE_HEIGHT_VAL / 100) * (BASE_HEIGHT_VAL / 100), 0)"
+          expr: >-
+            ADVSIN.AVAL /
+            NULLIF(BASE_HEIGHT_VAL * BASE_HEIGHT_VAL / 10000, 0)
       AVISIT: {source: ADVSIN.AVISIT}
       DTYPE: {literal: CALCULATION}
 

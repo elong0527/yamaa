@@ -14,9 +14,6 @@ parameter per eligible subject and visit:
 
 Input containing a pre-existing BMI parameter is rejected. The derived BMI
 row is generated for each collected weight record using one height per subject.
-
-## Provenance
-
-- Upstream repository: `pharmaverse/admiral`
-- Source path: `R/derive_param_bmi.R`
-- Immutable commit: `e32e5689d7fd03e224ddbcfc369c332c5df837d9`
+The formula and once-measured-height behavior follow
+[`pharmaverse/admiral`](https://github.com/pharmaverse/admiral) commit
+`e32e5689d7fd03e224ddbcfc369c332c5df837d9`, `R/derive_param_bmi.R`.
