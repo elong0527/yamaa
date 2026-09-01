@@ -1,0 +1,12 @@
+phase: verification
+condition: implication_failed
+spec_paths:
+  - verifications[2].implies
+context:
+  verification_id: reject-pre-existing-rrr
+  failure_count: 1
+  keys:
+    - STUDYID: TEST01
+      USUBJID: SUBJ05
+      PARAMCD: RRR
+      AVISIT: VISIT 1
