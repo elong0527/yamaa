@@ -741,6 +741,84 @@ def validate_grouped_rows(spec, spec_label):
     return errors
 
 
+def validate_expansion(spec, spec_label):
+    errors = []
+    if 'expand' not in spec:
+        return errors
+
+    path = f"{spec_label}.expand"
+    expansion = spec.get('expand')
+    if not isinstance(expansion, dict):
+        return errors
+
+    if 'rows' in spec:
+        errors.append(f"ERROR: {path}: expand is mutually exclusive with rows")
+
+    base = spec.get('base')
+    if base is None:
+        errors.append(f"ERROR: {path}: expand requires base")
+    elif isinstance(base, str):
+        count = expansion.get('count')
+        if isinstance(count, str):
+            qualifier, separator, _ = count.partition('.')
+            if not separator or qualifier != base:
+                errors.append(
+                    f"ERROR: {path}.count: expansion count {count!r} must be "
+                    f"qualified to base {base!r}"
+                )
+
+    index_column = expansion.get('index')
+    columns = spec.get('columns')
+    if not isinstance(index_column, str) or not isinstance(columns, list):
+        return errors
+
+    declared = {
+        column.get('name'): column
+        for column in columns
+        if isinstance(column, dict) and isinstance(column.get('name'), str)
+    }
+    index_definition = declared.get(index_column)
+    if index_definition is None:
+        errors.append(
+            f"ERROR: {path}.index: expansion index {index_column!r} must name "
+            "a declared column"
+        )
+    else:
+        if index_definition.get('type') != 'int':
+            errors.append(
+                f"ERROR: {path}.index: expansion index {index_column!r} must "
+                "have type 'int'"
+            )
+        if 'derivation' in index_definition:
+            errors.append(
+                f"ERROR: {path}.index: expansion index {index_column!r} must "
+                "not declare a column derivation"
+            )
+
+    rows = spec.get('rows')
+    if isinstance(rows, list):
+        has_row_derivation = any(
+            isinstance(row, dict)
+            and isinstance(row.get('derivations'), dict)
+            and index_column in row['derivations']
+            for row in rows
+        )
+        if has_row_derivation:
+            errors.append(
+                f"ERROR: {path}.index: expansion index {index_column!r} must "
+                "not have a row derivation"
+            )
+
+    for name, column in declared.items():
+        if name != index_column and 'derivation' not in column:
+            errors.append(
+                f"ERROR: {spec_label}.columns.{name}: expanded artifact "
+                "column must declare a column derivation"
+            )
+
+    return errors
+
+
 def validate_examples_structure(root: Path, env, warnings=None):
     errors = []
     if warnings is None:
@@ -784,6 +862,7 @@ def validate_examples_structure(root: Path, env, warnings=None):
                 spec, ['root_class'], env, spec_label
             )
             spec_errors.extend(validate_grouped_rows(spec, spec_label))
+            spec_errors.extend(validate_expansion(spec, spec_label))
             is_negative = ex_dir.name.startswith('negative-')
             if not is_negative:
                 for spec_error in spec_errors:

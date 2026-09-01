@@ -131,7 +131,7 @@ expand_class:
     - count:
         type: variable
         required: true
-        description: Qualified base variable whose non-negative integer gives the number of rows to construct.
+        description: Qualified base variable whose non-missing, non-negative int gives the number of rows to construct.
     - index:
         type: column_name
         required: true

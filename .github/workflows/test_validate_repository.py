@@ -219,6 +219,76 @@ class TestGroupedRows(unittest.TestCase):
         self.assertIn("duplicate", "\n".join(errors))
 
 
+class TestExpansion(unittest.TestCase):
+    def valid_spec(self):
+        return {
+            "base": "EX",
+            "expand": {"count": "EX.EXDOSCNT", "index": "ADOSEN"},
+            "columns": [
+                {
+                    "name": "USUBJID",
+                    "type": "str",
+                    "derivation": {"source": "EX.USUBJID"},
+                },
+                {"name": "ADOSEN", "type": "int"},
+            ],
+        }
+
+    def test_accepts_base_qualified_count_and_generated_index(self):
+        errors = VALIDATOR.validate_expansion(
+            self.valid_spec(), "example/spec.yaml"
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_rejects_rows_or_missing_base(self):
+        spec = self.valid_spec()
+        spec.pop("base")
+        spec["rows"] = [
+            {
+                "id": "other",
+                "derivations": {"ADOSEN": {"literal": 1}},
+            }
+        ]
+
+        errors = VALIDATOR.validate_expansion(spec, "example/spec.yaml")
+
+        self.assertEqual(len(errors), 3)
+        self.assertIn("mutually exclusive", "\n".join(errors))
+        self.assertIn("requires base", "\n".join(errors))
+        self.assertIn("row derivation", "\n".join(errors))
+
+    def test_rejects_count_not_qualified_to_base(self):
+        spec = self.valid_spec()
+        spec["expand"]["count"] = "OTHER.EXDOSCNT"
+
+        errors = VALIDATOR.validate_expansion(spec, "example/spec.yaml")
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn("qualified to base 'EX'", errors[0])
+
+    def test_rejects_invalid_index_column(self):
+        spec = self.valid_spec()
+        spec["columns"][1]["type"] = "float"
+        spec["columns"][1]["derivation"] = {"literal": 1}
+
+        errors = VALIDATOR.validate_expansion(spec, "example/spec.yaml")
+
+        self.assertEqual(len(errors), 2)
+        self.assertIn("type 'int'", "\n".join(errors))
+        self.assertIn("must not declare", "\n".join(errors))
+
+    def test_rejects_undeclared_index_and_underived_column(self):
+        spec = self.valid_spec()
+        spec["expand"]["index"] = "MISSING"
+
+        errors = VALIDATOR.validate_expansion(spec, "example/spec.yaml")
+
+        self.assertEqual(len(errors), 2)
+        self.assertIn("declared column", "\n".join(errors))
+        self.assertIn("ADOSEN", "\n".join(errors))
+
+
 class TestValidatorCLI(unittest.TestCase):
     def setUp(self):
         self.tool_path = Path(__file__).parent / 'validate_repository.py'

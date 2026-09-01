@@ -24,7 +24,8 @@ does not define what an expression means (R007), how a name binds to a source
 
 Derivation has two phases:
 
-1. Row construction evaluates `rows` entries and may change row count.
+1. Row construction evaluates `rows` entries or `expand` and may change row
+   count.
 2. Column derivation enriches constructed rows and must not change row count.
 
 Each `rows` entry uses its explicit `dataset` as the row driver. If `dataset`
@@ -60,7 +61,7 @@ An artifact may replace ordinary `rows` construction with `expand`. It
 requires `base`; `count` names a qualified field of that base and constructs
 that many rows for each base record, in base-record order. Within each record,
 `index` receives the integers from 1 through `count` in order. `count` must
-resolve to a non-missing, non-negative integer. Zero contributes no row. R005
+resolve to a non-missing, non-negative `int`. Zero contributes no row. R005
 treats `index` as the row-phase derivation of that declared integer column.
 
 `rows` and `expand` are mutually exclusive. When both are absent, the ordinary
@@ -139,12 +140,8 @@ declaration order.
 - A specification with neither `rows` nor `expand` and no `base`: fail.
 - An `expand` declaration without `base`: fail.
 - Both `rows` and `expand`: fail.
-- An `expand.count` that is unqualified, belongs to a dataset other than
-  `base`, or does not exist: fail.
-- An `expand.count` that is missing, non-integer, or negative: fail during row
+- An `expand.count` that is missing, not `int`, or negative: fail during row
   construction and report the base record.
-- An `expand.index` that is undeclared, is not `int`, or has another
-  derivation: fail.
 - An empty or duplicate `row.group_by`: fail.
 - A `row.group_by` variable not qualified to that row's driver: fail.
 - A grouped row derivation reading a non-grouped driver field without an

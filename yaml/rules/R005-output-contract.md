@@ -73,9 +73,9 @@ output ones:
    in some entries and not others leaves the remaining constructed rows with no
    value for it, so partial row coverage is an error rather than an implied
    missing value.
-4. **A specification with neither `rows` nor `expand` derives every column at
-   column level.** Requirement 3 is vacuous when there are no entries, so this
-   states the base-driven case directly.
+4. **A specification with no row templates and no `expand` derives every
+   column at column level.** Requirement 3 is vacuous when there are no
+   entries, so this states the base-driven case directly.
 5. **A `rows` derivation must target a declared column.** A key in
    `derivations` that names no declared column is an error.
 6. **`expand.index` is one row-phase derivation.** It must name one declared

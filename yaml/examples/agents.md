@@ -112,10 +112,11 @@ following a link out of the repository.
   the sample data happens to show.
 - Prefer no intermediate columns. When one is unavoidable, omit it from
   `output.columns`; it stays available to dependents and to verifications.
-- Use `rows` when row construction changes the row count. A specification whose
-  input already maps one-to-one to its output usually needs columns, not row
-  templates. `sdtm-vs-unit-standardization` is the deliberate exception, and it
-  reorders its output to get per-test separation.
+- Use `rows` when distinct templates construct records or groups, and use
+  `expand` when each base record declares how many rows it contributes. A
+  specification whose input already maps one-to-one to its output usually needs
+  columns, not either form. `sdtm-vs-unit-standardization` is the deliberate
+  exception, and it reorders its output to get per-test separation.
 - Add `row.group_by` only when one candidate row must be constructed from a
   driver group. In that mode aggregate row derivations summarize the group and
   `row.filter` decides whether the completed candidate is emitted; without it,
@@ -156,7 +157,7 @@ say so the same way:
 |---|---|
 | `validation` | the specification itself, before any data is read |
 | `ingest` | a stored value, against the type its field carries |
-| `row_construction` | evaluating a row template |
+| `row_construction` | evaluating row templates or counted expansion |
 | `derivation` | evaluating a column's expression over a row |
 | `output` | output identity, once every column holds its final value |
 | `verification` | a declared assertion |

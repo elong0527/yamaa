@@ -2,7 +2,8 @@
 id: R002
 title: Source Binding
 status: normative
-applies_to: [root.datasets, root.base, row.dataset, row.group_by, expression.source, string_template]
+applies_to: [root.datasets, root.base, root.expand, row.dataset, row.group_by,
+  expression.source, string_template]
 depends_on: [R003, R006, R008, R014, R015]
 ---
 
@@ -62,6 +63,10 @@ variable appears in the enclosing `row.group_by`; it then returns that group's
 key value. Reading any other driver field with a scalar `source` is an error.
 An aggregate expression is how a grouped row reduces non-key fields, as R007
 and R013 define.
+
+`expand.count` is evaluated before an output row exists. Its variable must
+therefore be qualified to `base`; it reads that field from the current base
+record. R001 owns how the resulting count constructs rows.
 
 Operation operand fields typed as `variable` accept a concise source or current
 output variable. Compose operations through an explicitly named derived column:
@@ -144,6 +149,8 @@ absent-item handler.
 - A dataset identifier equal to the output `domain`: fail.
 - A source path that cannot be resolved: fail.
 - An unresolved unqualified reference: fail.
+- An `expand.count` variable that is unqualified, qualified to a dataset other
+  than `base`, or unknown: fail.
 - A scalar source in a grouped row naming a driver field absent from that
   row's `group_by`: fail.
 - An ODM contextual reference with no available context column: fail.
