@@ -1,6 +1,6 @@
-schema_version: "1.0"
+version: "1.0"
 fields:
-  STUDYID: str
-  USUBJID: str
+  STUDYID: string
+  USUBJID: string
   RANDDT: date
   RANDDTTM: datetime

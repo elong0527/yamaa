@@ -1218,14 +1218,14 @@ def validate_source_sidecars(spec, spec_label, spec_path, env):
         if not isinstance(sidecar, dict):
             continue
 
-        schema_version = sidecar.get('schema_version')
+        schema_version = sidecar.get('version')
         bundle_version = env.get('version')
         if (
             isinstance(schema_version, str)
             and schema_version != bundle_version
         ):
             errors.append(
-                f"ERROR: {path}.schema.schema_version: version "
+                f"ERROR: {path}.schema.version: version "
                 f"{schema_version!r} does not match bundle version "
                 f"{bundle_version!r}"
             )

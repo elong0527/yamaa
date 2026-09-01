@@ -207,14 +207,19 @@ dataset_class:
         description: Portable source sidecar matching source_sidecar_class under R014.
 
 source_sidecar_class:
-    - schema_version:
+    - version:
         type: str
         required: true
-        description: Schema bundle version; R014 requires an exact match.
+        description: Portable sidecar version; R014 requires an exact bundle-version match.
     - fields:
-        type: "dict[dataset_column, column_type]"
+        type: "dict[dataset_column, source_sidecar_type]"
         required: true
-        description: Complete mapping from stored field names to R011 types.
+        description: Complete mapping from stored field names to portable source types.
+
+source_sidecar_type:
+    type: str
+    values: [string, integer, number, date, datetime]
+    description: Portable source type mapped to an R011 runtime type by R014.
 
 dataset_id:
     type: str

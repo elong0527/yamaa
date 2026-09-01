@@ -511,18 +511,18 @@ class TestSourceSidecars(unittest.TestCase):
 
     def test_accepts_complete_sidecar_from_main_schema_bundle(self):
         self.write_sidecar(
-            'schema_version: "1.0"\n'
+            'version: "1.0"\n'
             "fields:\n"
-            "  AGE: int\n"
-            "  STUDYID: str\n"
+            "  AGE: integer\n"
+            "  STUDYID: string\n"
         )
 
         self.assertEqual(self.validate(), [])
 
     def test_rejects_inline_types_with_sidecar(self):
         self.write_sidecar(
-            'schema_version: "1.0"\n'
-            "fields: {STUDYID: str, AGE: int}\n"
+            'version: "1.0"\n'
+            "fields: {STUDYID: string, AGE: integer}\n"
         )
 
         errors = self.validate(
@@ -551,7 +551,7 @@ class TestSourceSidecars(unittest.TestCase):
         )
 
     def test_rejects_version_mismatch_and_empty_fields(self):
-        self.write_sidecar('schema_version: "2.0"\nfields: {}\n')
+        self.write_sidecar('version: "2.0"\nfields: {}\n')
 
         message = "\n".join(self.validate())
 
@@ -560,8 +560,8 @@ class TestSourceSidecars(unittest.TestCase):
 
     def test_rejects_nonmatching_csv_header(self):
         self.write_sidecar(
-            'schema_version: "1.0"\n'
-            "fields: {AGE: int, OTHER: str}\n"
+            'version: "1.0"\n'
+            "fields: {AGE: integer, OTHER: string}\n"
         )
 
         message = "\n".join(self.validate())
@@ -570,10 +570,23 @@ class TestSourceSidecars(unittest.TestCase):
         self.assertIn("absent from schema: STUDYID", message)
         self.assertIn("absent from source: OTHER", message)
 
-    def test_rejects_unknown_fields_and_types(self):
+    def test_rejects_yamaa_internal_sidecar_vocabulary(self):
         self.write_sidecar(
             'schema_version: "1.0"\n'
-            "fields: {STUDYID: str, AGE: decimal}\n"
+            "fields: {STUDYID: str, AGE: int}\n"
+        )
+
+        message = "\n".join(self.validate())
+
+        self.assertIn("missing required field 'version'", message)
+        self.assertIn("unknown field 'schema_version'", message)
+        self.assertIn("value 'str'", message)
+        self.assertIn("value 'int'", message)
+
+    def test_rejects_unknown_fields_and_types(self):
+        self.write_sidecar(
+            'version: "1.0"\n'
+            "fields: {STUDYID: string, AGE: decimal}\n"
             "extra: true\n"
         )
 
