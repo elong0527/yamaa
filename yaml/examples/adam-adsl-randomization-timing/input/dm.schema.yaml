@@ -13,28 +13,33 @@ columns:
     type: str
     label: Study Identifier
     derivation:
-      source: ODM.STUDYID
+      source: ODM.StudyOID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
     derivation:
-      source: ODM.USUBJID
+      source: ODM.SubjectKey
 
   - name: RFSTDTC
     type: date
     label: Subject Reference Start Date
     derivation:
-      source: ODM.RFSTDTC
+      source: ODM.IT.DM.RFSTDTC
 
   - name: RANDDT
     type: date
     label: Date of Randomization
     derivation:
-      source: ODM.RANDDT
+      source: ODM.Value
 
   - name: RANDDTTM
     type: datetime
     label: Date and Time of Randomization
     derivation:
-      source: ODM.RANDDTTM
+      source: ODM.IT.DM.RANDDTTM
+
+rows:
+  - id: subject
+    filter: "ODM.ItemOID = 'IT.DM.RANDDT'"
+    derivations: {}
