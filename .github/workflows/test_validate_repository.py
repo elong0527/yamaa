@@ -473,6 +473,121 @@ class TestSpecContracts(unittest.TestCase):
         self.assertIn("source path does not exist", message)
 
 
+class TestSourceSidecars(unittest.TestCase):
+    def setUp(self):
+        self.env, schema_errors = VALIDATOR.build_schema_env(
+            TOOL_PATH.parents[2]
+        )
+        self.assertEqual(schema_errors, [])
+        self.test_dir = tempfile.TemporaryDirectory()
+        self.example_dir = Path(self.test_dir.name)
+        self.input_dir = self.example_dir / "input"
+        self.input_dir.mkdir()
+        self.spec_path = self.example_dir / "spec.yaml"
+        (self.input_dir / "dm.csv").write_text(
+            "STUDYID,AGE\nSTUDY1,42\n", encoding="utf-8"
+        )
+
+    def tearDown(self):
+        self.test_dir.cleanup()
+
+    def write_sidecar(self, content):
+        (self.input_dir / "dm.schema.yaml").write_text(
+            content, encoding="utf-8"
+        )
+
+    def validate(self, source=None):
+        if source is None:
+            source = {
+                "path": "input/dm.csv",
+                "schema": "input/dm.schema.yaml",
+            }
+        return VALIDATOR.validate_source_sidecars(
+            {"datasets": {"DM": source}},
+            "example/spec.yaml",
+            self.spec_path,
+            self.env,
+        )
+
+    def test_accepts_complete_sidecar_from_main_schema_bundle(self):
+        self.write_sidecar(
+            'schema_version: "1.0"\n'
+            "fields:\n"
+            "  AGE: int\n"
+            "  STUDYID: str\n"
+        )
+
+        self.assertEqual(self.validate(), [])
+
+    def test_rejects_inline_types_with_sidecar(self):
+        self.write_sidecar(
+            'schema_version: "1.0"\n'
+            "fields: {STUDYID: str, AGE: int}\n"
+        )
+
+        errors = self.validate(
+            {
+                "path": "input/dm.csv",
+                "schema": "input/dm.schema.yaml",
+                "types": {"AGE": "int"},
+            }
+        )
+
+        self.assertIn(
+            "example/spec.yaml.datasets.DM.types.AGE", "\n".join(errors)
+        )
+
+        empty_types_errors = self.validate(
+            {
+                "path": "input/dm.csv",
+                "schema": "input/dm.schema.yaml",
+                "types": {},
+            }
+        )
+        self.assertIn(
+            "example/spec.yaml.datasets.DM.types: inline types cannot be "
+            "combined with a source schema",
+            "\n".join(empty_types_errors),
+        )
+
+    def test_rejects_version_mismatch_and_empty_fields(self):
+        self.write_sidecar('schema_version: "2.0"\nfields: {}\n')
+
+        message = "\n".join(self.validate())
+
+        self.assertIn("does not match bundle version", message)
+        self.assertIn("fields must not be empty", message)
+
+    def test_rejects_nonmatching_csv_header(self):
+        self.write_sidecar(
+            'schema_version: "1.0"\n'
+            "fields: {AGE: int, OTHER: str}\n"
+        )
+
+        message = "\n".join(self.validate())
+
+        self.assertIn("match the CSV header exactly", message)
+        self.assertIn("absent from schema: STUDYID", message)
+        self.assertIn("absent from source: OTHER", message)
+
+    def test_rejects_unknown_fields_and_types(self):
+        self.write_sidecar(
+            'schema_version: "1.0"\n'
+            "fields: {STUDYID: str, AGE: decimal}\n"
+            "extra: true\n"
+        )
+
+        message = "\n".join(self.validate())
+
+        self.assertIn("allowed values", message)
+        self.assertIn("unknown field 'extra'", message)
+
+    def test_rejects_missing_sidecar(self):
+        message = "\n".join(self.validate())
+
+        self.assertIn("source schema does not exist", message)
+
+
 class TestValidatorCLI(unittest.TestCase):
     def setUp(self):
         self.tool_path = Path(__file__).parent / 'validate_repository.py'

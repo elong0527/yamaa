@@ -204,7 +204,17 @@ dataset_class:
     - schema:
         type: path
         required: false
-        description: Portable schema sidecar for the source, as defined by R014.
+        description: Portable source sidecar matching source_sidecar_class under R014.
+
+source_sidecar_class:
+    - schema_version:
+        type: str
+        required: true
+        description: Schema bundle version; R014 requires an exact match.
+    - fields:
+        type: "dict[dataset_column, column_type]"
+        required: true
+        description: Complete mapping from stored field names to R011 types.
 
 dataset_id:
     type: str

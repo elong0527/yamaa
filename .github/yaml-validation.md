@@ -22,10 +22,14 @@ The validation ensures:
    `group_by` whose variables are qualified to that row's driver. Static
    cross-field checks enforce base selection, complete and exclusive
    derivation coverage, record-lookup field pairing, verification bounds and
-   IDs, source-file existence, and declared CSV fields. Negative examples
-   (folders prefixed with `negative-`) are structurally validated; structural
-   errors are only suppressed if their named path matches a `spec_path`
-   declared in `expected/error.yaml` with `phase: validation`.
+   IDs, source-file existence, and declared CSV fields. Referenced source
+   sidecars validate against `source_sidecar_class` in the main schema bundle;
+   their version must match, their field map must be non-empty and match the
+   CSV header exactly, and they cannot be combined with inline `types`.
+   Negative examples (folders prefixed with `negative-`) are structurally
+   validated; structural errors are only suppressed if their named path
+   matches a `spec_path` declared in `expected/error.yaml` with `phase:
+   validation`.
 4. **Layout**: All examples have `README.md`, one `spec.yaml` or one or more
    `spec_<variant>.yaml` files, `input/`, and `expected/`. A base spec cannot
    be mixed with variants. Negative examples must provide `expected/error.yaml`

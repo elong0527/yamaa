@@ -69,12 +69,12 @@ fields:
   RANDDTTM: datetime
 ```
 
-The document validates against `schema_source.yaml` under R006, just as a
-derivation specification validates against `schema.yaml`. `schema_version` is
-required and must equal that bundle's version. `fields` is a required,
-non-empty mapping whose keys are distinct `dataset_column` names and whose
-values come from its closed `column_type` vocabulary. No other top-level field,
-field descriptor, or source type is allowed.
+The document validates against `source_sidecar_class` in the `schema.yaml`
+bundle, using R006's class and descriptor rules. `schema_version` is required
+and must equal that bundle's version. `fields` is a required, non-empty mapping
+whose keys are distinct `dataset_column` names and whose values come from its
+closed `column_type` vocabulary. No other top-level field, field descriptor,
+or source type is allowed.
 
 | Sidecar type | R011 field type and runtime value |
 |---|---|

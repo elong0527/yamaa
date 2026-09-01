@@ -1160,6 +1160,121 @@ def validate_spec_contracts(spec, spec_label, spec_path=None):
     return errors
 
 
+def validate_source_sidecars(spec, spec_label, spec_path, env):
+    """Validate portable source schemas and their referenced CSV headers."""
+    errors = []
+    datasets = spec.get('datasets')
+    if not isinstance(datasets, dict):
+        return errors
+
+    for dataset_id, source in datasets.items():
+        if not isinstance(source, dict) or 'schema' not in source:
+            continue
+
+        path = f"{spec_label}.datasets.{dataset_id}"
+        if 'types' in source:
+            types = source['types']
+            if isinstance(types, dict) and types:
+                for field in sorted(types, key=str):
+                    errors.append(
+                        f"ERROR: {path}.types.{field}: field type is already "
+                        "supplied by source schema"
+                    )
+            else:
+                errors.append(
+                    f"ERROR: {path}.types: inline types cannot be combined "
+                    "with a source schema"
+                )
+
+        schema_ref = source.get('schema')
+        if not isinstance(schema_ref, str):
+            continue
+        sidecar_path = spec_path.parent / schema_ref
+        if not sidecar_path.is_file():
+            errors.append(
+                f"ERROR: {path}.schema: source schema does not exist: "
+                f"{schema_ref}"
+            )
+            continue
+
+        try:
+            with open(sidecar_path, 'r', encoding='utf-8') as f:
+                sidecar = yaml.load(f, Loader=UniqueKeyLoader)
+        except (OSError, yaml.YAMLError) as exc:
+            errors.append(
+                f"ERROR: {path}.schema: cannot read source schema "
+                f"{schema_ref}: {exc}"
+            )
+            continue
+
+        errors.extend(
+            validate_type(
+                sidecar,
+                ['source_sidecar_class'],
+                env,
+                f"{path}.schema",
+            )
+        )
+        if not isinstance(sidecar, dict):
+            continue
+
+        schema_version = sidecar.get('schema_version')
+        bundle_version = env.get('version')
+        if (
+            isinstance(schema_version, str)
+            and schema_version != bundle_version
+        ):
+            errors.append(
+                f"ERROR: {path}.schema.schema_version: version "
+                f"{schema_version!r} does not match bundle version "
+                f"{bundle_version!r}"
+            )
+
+        fields = sidecar.get('fields')
+        if isinstance(fields, dict) and not fields:
+            errors.append(
+                f"ERROR: {path}.schema.fields: source schema fields must "
+                "not be empty"
+            )
+        if not isinstance(fields, dict) or not fields:
+            continue
+
+        source_ref = source.get('path')
+        if not isinstance(source_ref, str):
+            continue
+        source_path = spec_path.parent / source_ref
+        if not source_path.is_file() or source_path.suffix.lower() != '.csv':
+            continue
+        try:
+            with open(source_path, 'r', encoding='utf-8', newline='') as f:
+                header = next(csv.reader(f, strict=True), [])
+        except (OSError, csv.Error) as exc:
+            errors.append(
+                f"ERROR: {path}.schema: cannot read CSV header for "
+                f"{source_ref}: {exc}"
+            )
+            continue
+
+        absent_from_schema = sorted(set(header) - set(fields))
+        absent_from_source = sorted(set(fields) - set(header))
+        if absent_from_schema or absent_from_source:
+            details = []
+            if absent_from_schema:
+                details.append(
+                    "absent from schema: " + ', '.join(absent_from_schema)
+                )
+            if absent_from_source:
+                details.append(
+                    "absent from source: " + ', '.join(absent_from_source)
+                )
+            errors.append(
+                f"ERROR: {path}.schema.fields: source schema fields must "
+                f"match the CSV header exactly ({'; '.join(details)})"
+            )
+
+    return errors
+
+
 def validate_examples_structure(root: Path, env, warnings=None):
     errors = []
     if warnings is None:
@@ -1206,6 +1321,9 @@ def validate_examples_structure(root: Path, env, warnings=None):
             spec_errors.extend(validate_spec_names(spec, spec_label))
             spec_errors.extend(
                 validate_spec_contracts(spec, spec_label, spec_path)
+            )
+            spec_errors.extend(
+                validate_source_sidecars(spec, spec_label, spec_path, env)
             )
             is_negative = ex_dir.name.startswith('negative-')
             if not is_negative:
