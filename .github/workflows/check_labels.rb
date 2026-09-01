@@ -1,10 +1,10 @@
 require "yaml"
 
+require_relative "example_specifications"
+
 errors = []
 examples = File.expand_path("../../yaml/examples", __dir__)
-specs = Dir[File.join(examples, "*", "spec*.yaml")].select do |spec|
-  File.basename(spec).match?(/\Aspec(?:_[a-z][a-z0-9_]*)?\.yaml\z/)
-end.sort
+specs = ExampleSpecifications.all_paths(examples)
 
 specs.each do |spec|
   relative_spec = spec.delete_prefix("#{Dir.pwd}/")
@@ -37,7 +37,8 @@ specs.each do |spec|
 end
 
 if errors.empty?
-  puts "All #{specs.length} example specs give every column a non-empty label."
+  puts "All #{specs.length} example and producing specs give every column " \
+       "a non-empty label."
 else
   warn errors.join("\n")
   exit 1
