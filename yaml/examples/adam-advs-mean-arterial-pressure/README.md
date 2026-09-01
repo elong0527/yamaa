@@ -12,9 +12,3 @@ record plus one MAP row per complete subject and visit:
 
 Input containing a MAP parameter is rejected. Each contributing parameter must
 occur at most once within a subject and visit; an ambiguous group is rejected.
-
-## Provenance
-
-- Upstream repository: `pharmaverse/admiral`
-- Source path: `R/derive_param_map.R`
-- Immutable commit: `e32e5689d7fd03e224ddbcfc369c332c5df837d9`

@@ -1,22 +1,14 @@
 # SDTM DM: declare the metadata a submission needs
 
-This example uses collected DM data and a `yamaa` specification to derive one
-record per subject. `SITEID`, `AGE`, `AGEU`, `SEX`, and `COUNTRY` are collected
-values copied through, and `USUBJID` is built from study, site, and subject
-number. The derivations are deliberately ordinary so that the subject of the
-example is the metadata declared around them rather than the values
-themselves.
+This example uses collected DM data to produce one record per subject. `SITEID`
+is the collected site identifier:
 
-Every variable declares the label a reviewer sees, where its value came from,
-how long it can be, and, where one applies, the controlled terminology list it
-draws on. The dataset itself declares its label, its class, its structure, and
-the standard version it follows.
+- `USUBJID` combines the study, site, and subject identifiers;
+- `AGE` is the collected age and must fall between 0 and 120;
+- `AGEU` is `YEARS`;
+- `SEX` is the collected sex and must be `F`, `M`, or `U`;
+- `COUNTRY` is the collected three-letter country code.
 
-The labels are governed, and so is how long a `USUBJID` may be: a subject
-identifier longer than the study permits stops the run rather than being
-shortened to fit. The rest is free text. The lengths recorded beside the other
-variables are not connected to their values, nothing checks that a named
-terminology list is the one actually enforced on the values, and nothing
-checks that a variable marked as derived is one. Two studies can describe the
-same dataset in different words and both be accepted, and no file is produced
-that a submission could carry, so most of it is asserted nowhere.
+The dataset and its variables carry the labels, origins, lengths, terminology
+names, class, structure, and standard version needed for submission review. A
+subject identifier longer than 30 characters is rejected rather than shortened.

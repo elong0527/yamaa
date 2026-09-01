@@ -8,9 +8,3 @@ reference randomization date:
 - `AAGE` is the subject's age in whole years between their birth and
   randomization, or missing when either date is absent.
 - `AAGEU` is the unit of the analysis age, fixed to `YEARS`.
-
-## Provenance
-
-- Upstream repository: `pharmaverse/admiral`
-- Source path: `R/derive_vars_aage.R`
-- Immutable commit SHA: `e32e5689d7fd03e224ddbcfc369c332c5df837d9`
