@@ -1,7 +1,13 @@
 schema_version: "1.0"
 domain: FA
 datasets:
-  VS: input/vs.csv
+  VS:
+    path: input/vs.csv
+    types:
+      VSSEQ: int
+      VSSTRESN: float
+      VSDY: int
+      VSTPTNUM: float
 base: VS
 keys: [STUDYID, USUBJID, FASEQ]
 

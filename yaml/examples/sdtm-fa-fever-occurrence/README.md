@@ -1,27 +1,17 @@
 # SDTM FA: fever occurrence
 
-This example uses vital signs data and a specification to derive one fever
-occurrence record for each reactogenicity temperature record:
+Reactogenicity temperature records from VS produce one FA fever-occurrence
+record at the source-record grain:
 
-- `FASEQ` is the collected vital signs sequence number, retaining the original
-  row identity.
-- `FATESTCD` and `FATEST` represent the occurrence indicator.
-- `FACAT` and `FASCAT` represent reactogenicity and systemic event
-  respectively.
-- `FAOBJ` is the observed event, which is fever.
+- `FASEQ` preserves the collected VS sequence number and its row identity.
+- `FATESTCD`, `FATEST`, `FACAT`, `FASCAT`, and `FAOBJ` identify a systemic
+  reactogenicity fever occurrence.
 - `FAORRES` and `FASTRESC` are the occurrence status, which is `Y` when the
-  collected Celsius temperature is 38 or higher, `N` when it is lower, and
-  empty when the temperature was not collected.
-- `FAREASND` is the reason the measurement was not done.
-- `FAEVAL` is the evaluator.
-- `FARFTDTC` is the date and time of reference time point.
-- `FAEVLINT` is the evaluation interval.
-- `FAEVINTX` is the evaluation interval text.
-- `FADTC` is the date and time of collection.
-- `FADY` is the study day of collection.
-- `FATPTREF` is the time point reference.
-- `FATPTNUM` is the time point number.
-- `FALNKID` is the link identifier.
-- `FALNKGRP` is the link group identifier.
-- `FATPT` is the planned time point name.
-- `VSSTRESN` is the collected numeric temperature in standard units.
+  Celsius result is 38 or higher, `N` when it is lower, and missing when the
+  numeric result is missing or its standard unit is not Celsius.
+- `FAREASND`, `FAEVAL`, `FARFTDTC`, `FAEVLINT`, `FAEVINTX`, `FADTC`, `FADY`,
+  `FATPTREF`, `FATPTNUM`, `FALNKID`, `FALNKGRP`, and `FATPT` preserve the
+  collected reason, evaluator, timing, and link context.
+- `VSSTRESN` preserves the collected numeric result used for the threshold.
+
+This covers the upstream branch in which no fever FA record already exists.
