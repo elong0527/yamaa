@@ -83,6 +83,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adtte-duration-of-response`](adam-adtte-duration-of-response/) | derive the duration of a response |
 | [`adam-adtte-progression-free-survival`](adam-adtte-progression-free-survival/) | derive progression-free survival |
 | [`adam-advs-analysis-visit`](adam-advs-analysis-visit/) | assign records to analysis windows |
+| [`adam-advs-analysis-window-table`](adam-advs-analysis-window-table/) | assign analysis windows from the study's window table |
 | [`adam-advs-growth-percentile`](adam-advs-growth-percentile/) | express a measurement as a growth percentile |
 | [`adam-advs-once-measured-carry-forward`](adam-advs-once-measured-carry-forward/) | carry forward a once-measured characteristic |
 | [`negative-adam-adsl-stratification-reconciliation`](negative-adam-adsl-stratification-reconciliation/) | reconcile randomization strata |
@@ -92,7 +93,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-adlb-computed-parameter`](negative-adlb-computed-parameter/) | reject a parameter computed from the dataset being built |
 | [`negative-adrs-partial-response-after-complete-response`](negative-adrs-partial-response-after-complete-response/) | reject a partial response recorded after a complete response |
 | [`negative-adsl-subject-reference`](negative-adsl-subject-reference/) | reject a malformed subject reference |
-| [`negative-advs-analysis-window-table`](negative-advs-analysis-window-table/) | reject an analysis window read from the study's window table |
+| [`negative-advs-overlapping-analysis-windows`](negative-advs-overlapping-analysis-windows/) | reject overlapping analysis windows |
 | [`negative-baseline-flag-tied-date`](negative-baseline-flag-tied-date/) | reject a baseline chosen between two same-day results |
 | [`negative-column-type-unknown`](negative-column-type-unknown/) | reject an analysis value with an ambiguous numeric type |
 | [`negative-compute-aggregate-function`](negative-compute-aggregate-function/) | reject a total written as a formula |
@@ -123,6 +124,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-output-duplicate-subject`](negative-output-duplicate-subject/) | reject a repeated demographics record |
 | [`negative-query-slot-overflow`](negative-query-slot-overflow/) | reject an event belonging to more queries than it has places |
 | [`negative-record-lookup-id-collision`](negative-record-lookup-id-collision/) | reject a first treatment named after its own source |
+| [`negative-record-lookup-incomparable-range`](negative-record-lookup-incomparable-range/) | reject an epoch range with incomparable endpoints |
 | [`negative-record-lookup-incomplete-key`](negative-record-lookup-incomplete-key/) | reject a reference limit chosen without a sex |
 | [`negative-record-lookup-unmatched-key`](negative-record-lookup-unmatched-key/) | reject a result with no reference range |
 | [`negative-record-lookup-unordered-choice`](negative-record-lookup-unordered-choice/) | reject a treatment and dose taken from an unchosen record |
