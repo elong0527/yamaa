@@ -51,6 +51,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adcm-on-treatment-flag`](adam-adcm-on-treatment-flag/) | flag a medication during treatment |
 | [`adam-adeg-fridericia-qtc`](adam-adeg-fridericia-qtc/) | derive a Fridericia-corrected QT parameter |
 | [`adam-adex-cumulative-dose`](adam-adex-cumulative-dose/) | summarize cumulative exposure |
+| [`adam-adex-dose-reduction-flag`](adam-adex-dose-reduction-flag/) | derive a dose reduction flag |
 | [`adam-adex-single-dose-expansion`](adam-adex-single-dose-expansion/) | expand an aggregate dose into its administrations |
 | [`adam-adex-uncollected-exposure`](adam-adex-uncollected-exposure/) | tell an uncollected dose from an absent administration |
 | [`adam-adlb-absolute-wbc-differential`](adam-adlb-absolute-wbc-differential/) | derive absolute WBC differentials |
