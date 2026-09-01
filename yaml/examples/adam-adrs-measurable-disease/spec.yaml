@@ -1,0 +1,89 @@
+schema_version: "1.0"
+domain: ADRS
+datasets:
+  ADSL: input/adsl.csv
+  TU: input/tu.csv
+base: ADSL
+keys: [STUDYID, USUBJID, PARAMCD]
+
+record_lookups:
+  - id: TU_TARGET
+    dataset: TU
+    filter: >-
+      TU.TUTESTCD = 'TUMIDENT' AND TU.VISIT = 'SCREENING'
+      AND TU.TUSTRESC = 'TARGET'
+    order_by: [TU.TUSEQ]
+    keep: first
+    unmatched: missing
+
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVALC, AVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ADSL.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ADSL.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation:
+      literal: MDIS
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation:
+      literal: Measurable Disease at Baseline
+
+  - name: TUSTRESC
+    type: str
+    label: Character Result/Finding in Std Format
+    derivation:
+      source: TU_TARGET.TUSTRESC
+
+  - name: AVALC
+    type: str
+    label: Analysis Value (C)
+    derivation:
+      case:
+        branches:
+          - when: "TUSTRESC IS NOT NULL"
+            then:
+              literal: Y
+        otherwise:
+          literal: N
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [Y, N]
+
+  - name: AVAL
+    type: int
+    label: Analysis Value
+    derivation:
+      mapping:
+        source: AVALC
+        dict:
+          Y: 1
+          N: 0
+    verifications:
+      - not_missing: {}
+      - range:
+          min: 0
+          max: 1
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD]
+  - row_count:
+      min: 3
+      max: 3
