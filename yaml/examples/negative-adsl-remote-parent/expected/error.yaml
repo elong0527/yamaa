@@ -1,0 +1,6 @@
+phase: validation
+condition: invalid_parent_path
+spec_paths:
+  - parents
+context:
+  reason: remote_reference

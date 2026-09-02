@@ -1,0 +1,6 @@
+phase: validation
+condition: invalid_clear
+spec_paths:
+  - columns.USUBJID.type
+context:
+  field: type

@@ -1,0 +1,14 @@
+schema_version: "1.0"
+parents: organization.yaml
+datasets:
+  LB:
+    types:
+      USUBJID: str
+      LBTESTCD: str
+      LBSTRESN: float
+      LBSTRESU: str
+columns:
+  - name: AVAL
+    label: Compound Standardized Result
+metadata:
+  scope: compound

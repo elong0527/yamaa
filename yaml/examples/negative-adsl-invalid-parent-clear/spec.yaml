@@ -1,0 +1,9 @@
+schema_version: "1.0"
+parents: layers/parent.yaml
+domain: ADSL
+keys: [USUBJID]
+output:
+  columns: [USUBJID]
+columns:
+  - name: USUBJID
+    type: null

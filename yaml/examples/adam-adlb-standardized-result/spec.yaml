@@ -1,0 +1,9 @@
+schema_version: "1.0"
+parents: layers/study.yaml
+domain: ADLB
+keys: [USUBJID, PARAMCD]
+output:
+  columns: [USUBJID, PARAMCD, AVAL, AVALU]
+columns:
+  - name: AVAL
+    label: Analysis Value

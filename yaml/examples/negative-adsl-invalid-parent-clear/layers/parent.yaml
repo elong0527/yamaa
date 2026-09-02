@@ -1,0 +1,10 @@
+schema_version: "1.0"
+datasets:
+  DM: ../input/dm.csv
+base: DM
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM.USUBJID

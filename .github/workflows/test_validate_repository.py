@@ -216,6 +216,359 @@ class TestRuleMetadata(unittest.TestCase):
         self.assertTrue(all('normative' in error for error in errors))
 
 
+class TestSpecificationInheritance(unittest.TestCase):
+    def setUp(self):
+        self.env, schema_errors = VALIDATOR.build_schema_env(
+            TOOL_PATH.parents[2]
+        )
+        self.assertEqual(schema_errors, [])
+
+    def resolve(self, path):
+        with open(path, 'r', encoding='utf-8') as handle:
+            spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
+        return VALIDATOR.resolve_spec_inheritance(
+            spec, 'example/spec.yaml', path, self.env
+        )
+
+    def test_resolves_shallow_diamond_and_minimal_ordered_spec(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            layers = root / 'layers'
+            inputs = root / 'input'
+            layers.mkdir()
+            inputs.mkdir()
+            (inputs / 'dm.csv').write_text('USUBJID,AGE\n01,40\n')
+            (layers / 'common.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'datasets:\n'
+                '  DM: ../input/dm.csv\n'
+                '  UNUSED: ../input/missing.csv\n'
+                'base: DM\n'
+                'record_lookups:\n'
+                '  - id: unused_lookup\n'
+                '    dataset: UNUSED\n'
+                'columns:\n'
+                '  - name: RESULT\n'
+                '    type: str\n'
+                '    label: Common label\n'
+                '    metadata: {owner: common}\n'
+                '    derivation: {literal: common}\n'
+                '  - name: DEPENDENT\n'
+                '    type: str\n'
+                '    label: Dependent\n'
+                '    derivation: {source: LATE}\n'
+                '  - name: UNUSED\n'
+                '    type: str\n'
+                '    label: Unused\n'
+                '    derivation: {literal: unused}\n'
+                '  - name: AUDIT\n'
+                '    type: str\n'
+                '    label: Verification input\n'
+                '    derivation: {literal: audit}\n'
+                'verifications:\n'
+                '  unique: {columns: [AUDIT]}\n'
+            )
+            (layers / 'a.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'parents: common.yaml\n'
+                'metadata: {owner: a}\n'
+                'columns:\n'
+                '  - name: RESULT\n'
+                '    label: Parent A label\n'
+            )
+            (layers / 'b.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'parents: common.yaml\n'
+                'metadata: {owner: b}\n'
+                'datasets:\n'
+                '  DM:\n'
+                '    types: {AGE: int}\n'
+                'columns:\n'
+                '  - name: RESULT\n'
+                '    derivation: {literal: parent-b}\n'
+                '    metadata: null\n'
+                '  - name: LATE\n'
+                '    type: str\n'
+                '    label: Late dependency\n'
+                '    derivation: {literal: ready}\n'
+            )
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: [layers/a.yaml, layers/b.yaml]\n'
+                'domain: ADSL\n'
+                'keys: [RESULT]\n'
+                'output: {columns: [RESULT, DEPENDENT]}\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertEqual(errors, [])
+        self.assertNotIn('parents', resolved)
+        self.assertEqual(resolved['metadata'], {'owner': 'b'})
+        self.assertEqual(
+            resolved['datasets'],
+            {'DM': {'path': 'input/dm.csv', 'types': {'AGE': 'int'}}},
+        )
+        self.assertNotIn('record_lookups', resolved)
+        self.assertEqual(
+            [column['name'] for column in resolved['columns']],
+            ['RESULT', 'AUDIT', 'LATE', 'DEPENDENT'],
+        )
+        result = resolved['columns'][0]
+        self.assertEqual(result['label'], 'Parent A label')
+        self.assertNotIn('metadata', result)
+        self.assertEqual(
+            result['derivation'], {'value': {'literal': 'parent-b'}}
+        )
+
+    def test_merges_each_keyed_collection_at_the_member_boundary(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            parent = root / 'parent.yaml'
+            parent.write_text(
+                'schema_version: "1.0"\n'
+                'datasets:\n'
+                '  DM: input/dm.csv\n'
+                '  REF: input/ref.csv\n'
+                'base: DM\n'
+                'record_lookups:\n'
+                '  - id: ref\n'
+                '    dataset: REF\n'
+                '    source: DM.KEY\n'
+                '    key: KEY\n'
+                'columns:\n'
+                '  - name: X\n'
+                '    type: str\n'
+                '    label: Value\n'
+                '    derivation: {source: ref.VALUE}\n'
+                'rows:\n'
+                '  - id: main\n'
+                '    dataset: DM\n'
+                '    derivations:\n'
+                '      X: {literal: parent}\n'
+                '      UNUSED: {literal: parent}\n'
+            )
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: parent.yaml\n'
+                'domain: TEST\n'
+                'keys: [X]\n'
+                'output: {columns: [X]}\n'
+                'record_lookups:\n'
+                '  - id: ref\n'
+                '    unmatched: missing\n'
+                'rows:\n'
+                '  - id: main\n'
+                '    derivations:\n'
+                '      X: {literal: child}\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            resolved['record_lookups'][0],
+            {
+                'id': 'ref',
+                'dataset': 'REF',
+                'source': ['DM.KEY'],
+                'key': ['KEY'],
+                'unmatched': 'missing',
+            },
+        )
+        self.assertEqual(
+            resolved['rows'][0],
+            {
+                'id': 'main',
+                'dataset': 'DM',
+                'derivations': {
+                    'X': {'value': {'literal': 'child'}},
+                },
+            },
+        )
+
+    def test_final_error_names_the_contributing_parent_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            parent = root / 'parent.yaml'
+            parent.write_text(
+                'schema_version: "1.0"\n'
+                'datasets: {DM: input/dm.csv}\n'
+                'base: DM\n'
+                'columns:\n'
+                '  - name: A\n'
+                '    label: Incomplete parent column\n'
+            )
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: parent.yaml\n'
+                'domain: TEST\n'
+                'keys: [A]\n'
+                'output: {columns: [A]}\n'
+            )
+            with open(spec_path, 'r', encoding='utf-8') as handle:
+                spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
+
+            errors = VALIDATOR.validate_spec_document(
+                spec, 'example/spec.yaml', spec_path, self.env
+            )
+
+        self.assertTrue(errors)
+        self.assertIn(
+            f'(contributed by {parent.resolve()})', '\n'.join(errors)
+        )
+
+    def test_resolved_column_requires_a_label(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            parent = root / 'parent.yaml'
+            parent.write_text(
+                'schema_version: "1.0"\n'
+                'datasets: {DM: input/dm.csv}\n'
+                'base: DM\n'
+                'columns:\n'
+                '  - name: A\n'
+                '    type: str\n'
+                '    derivation: {literal: value}\n'
+            )
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: parent.yaml\n'
+                'domain: TEST\n'
+                'keys: [A]\n'
+                'output: {columns: [A]}\n'
+            )
+            with open(spec_path, 'r', encoding='utf-8') as handle:
+                spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
+
+            errors = VALIDATOR.validate_spec_document(
+                spec, 'example/spec.yaml', spec_path, self.env
+            )
+
+        self.assertIn('requires a non-empty label', '\n'.join(errors))
+
+    def test_accepts_an_absolute_parent_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            parent = root / 'parent.yaml'
+            parent.write_text('schema_version: "1.0"\n')
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                f'parents: "{parent.resolve()}"\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(resolved, {'schema_version': '1.0'})
+
+    def test_rejects_parent_url(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: https://example.test/base.yaml\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertIsNone(resolved)
+        self.assertIn('invalid_parent_path', '\n'.join(errors))
+
+    def test_rejects_missing_parent(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\nparents: missing.yaml\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertIsNone(resolved)
+        self.assertIn('parent_not_found', '\n'.join(errors))
+
+    def test_rejects_inheritance_cycle(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            spec_path = root / 'spec.yaml'
+            parent = root / 'parent.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\nparents: parent.yaml\n'
+            )
+            parent.write_text(
+                'schema_version: "1.0"\nparents: spec.yaml\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertIsNone(resolved)
+        self.assertIn('inheritance_cycle', '\n'.join(errors))
+
+    def test_rejects_layer_version_mismatch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            spec_path = root / 'spec.yaml'
+            parent = root / 'parent.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\nparents: parent.yaml\n'
+            )
+            parent.write_text('schema_version: "2.0"\n')
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertIsNone(resolved)
+        self.assertIn('schema_version_mismatch', '\n'.join(errors))
+
+    def test_rejects_clearing_required_or_absent_fields(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            parent = root / 'parent.yaml'
+            parent.write_text(
+                'schema_version: "1.0"\n'
+                'columns:\n'
+                '  - name: A\n'
+                '    type: str\n'
+                '    derivation: {literal: value}\n'
+            )
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: parent.yaml\n'
+                'columns:\n'
+                '  - name: A\n'
+                '    type: null\n'
+                '    label: null\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertIsNone(resolved)
+        message = '\n'.join(errors)
+        self.assertIn('invalid_clear', message)
+        self.assertIn('columns.A.type', message)
+
+    def test_rejects_duplicate_member_within_one_layer(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: []\n'
+                'columns:\n'
+                '  - {name: A}\n'
+                '  - {name: A}\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertIsNone(resolved)
+        self.assertIn('duplicate_identifier', '\n'.join(errors))
+
+
 class TestTypeValidation(unittest.TestCase):
     def test_int_rejects_string(self):
         errors = VALIDATOR.validate_type(

@@ -1,0 +1,6 @@
+phase: validation
+condition: inheritance_cycle
+spec_paths:
+  - parents
+context:
+  reason: parent_chain_returns_to_entry
