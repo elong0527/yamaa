@@ -81,10 +81,15 @@ composition. Inheritance never migrates schema versions.
 
 A layer is a schema-shaped fragment and need not be a complete `root_class`.
 Unknown root fields and invalid values are errors in the layer that writes
-them. Requiredness is deferred for root fields and for direct members of the
-four keyed root collections, because a later contribution may supply their
-missing fields. Every keyed member must still carry its identifier, and two
-members of one layer must not share one identifier.
+them. Requiredness is deferred for root fields other than the entry file's
+`output`, and for direct members of the four keyed root collections, because a
+later contribution may supply their missing fields. The entry file must declare
+its complete, non-null `output`; an inherited layer cannot choose the final
+artifact membership or order.
+
+A `datasets` member is identified by its mapping key. Every member of
+`record_lookups`, `columns`, or `rows` must carry its respective `id`, `name`,
+or `id` field. Two members of one layer must not share one identifier.
 
 A non-null field supplied inside a keyed member is a complete value at that
 field boundary. Its nested classes, mappings, lists, registries, and scalar
@@ -188,8 +193,11 @@ no other declaration names its `id`.
 
 An inherited declaration excluded from `output.columns` may remain as an
 internal column when a derivation or verification uses it. If no semantic path
-reaches it, it and the declarations used only by it are removed. Pruning must
-not leave or conceal an unresolved reference.
+reaches it, it and the declarations used only by it are removed. Structural
+validation still applies to every written layer field, but semantic name and
+reference validation applies after pruning. An unresolved reference reachable
+from a semantic root fails; one contained only in a dead declaration is
+discarded with that declaration and is not an error.
 
 ## Deterministic column order
 
@@ -239,6 +247,7 @@ All inheritance failures occur in the `validation` phase:
   `inheritance_cycle` and reports the complete canonical path cycle.
 - A missing or inconsistent layer version fails with
   `schema_version_mismatch` and reports every implicated file and value.
+- An entry file that omits `output` fails with `missing_entry_output`.
 - A malformed fragment fails under R006 at its contributing file and field.
 - A duplicate identifier within one layer fails with `duplicate_identifier`.
 - An invalid null clearing marker fails with `invalid_clear` and reports the
