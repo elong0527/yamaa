@@ -184,6 +184,11 @@ Within one specification, implementations must reject duplicate YAML mapping
 keys, and dataset identifiers, column names, and row IDs must each be unique.
 R006 owns the corresponding requirements for the schema bundle.
 
+R017 matches identifiers across inheritance layers before this rule applies, so
+a later layer may refine one inherited declaration. Duplicate identifiers
+within a single layer remain an error. The resolved specification contains one
+declaration for each identifier.
+
 ## Errors
 
 - A declared column with no derivation: fail and report the column name.

@@ -120,6 +120,9 @@ completed.
 
 After row construction, build the column dependency graph. Every dependency
 must refer to a column declared earlier. Evaluate columns in declaration order.
+When a specification declares `parents`, R017 composes, prunes, and orders the
+resolved columns before this rule applies; declaration order here is that
+resolved order.
 
 The graph is over columns, not over rows. A column that reads another row of
 its own partition therefore depends on the whole column it names, so a column
