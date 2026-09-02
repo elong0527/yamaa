@@ -2,6 +2,7 @@
 import argparse
 import copy
 import csv
+import datetime as dt
 import re
 import sys
 from pathlib import Path
@@ -123,6 +124,415 @@ def construct_yaml_12_int(loader, node):
 UniqueKeyLoader.add_constructor(
     'tag:yaml.org,2002:int', construct_yaml_12_int
 )
+
+
+class PredicateError(ValueError):
+    """A portable predicate cannot be tokenized or parsed."""
+
+    def __init__(self, message, position):
+        super().__init__(f"{message} at character {position + 1}")
+        self.position = position
+
+
+def tokenize_predicate(text):
+    """Tokenize the closed R004 predicate language."""
+    tokens = []
+    index = 0
+    length = len(text)
+    while index < length:
+        char = text[index]
+        if char.isspace():
+            index += 1
+            continue
+
+        if char == "'":
+            start = index
+            index += 1
+            value = []
+            while index < length:
+                if text[index] != "'":
+                    value.append(text[index])
+                    index += 1
+                    continue
+                if index + 1 < length and text[index + 1] == "'":
+                    value.append("'")
+                    index += 2
+                    continue
+                index += 1
+                tokens.append(('STRING', ''.join(value), start))
+                break
+            else:
+                raise PredicateError('unterminated string literal', start)
+            continue
+
+        number = re.match(
+            r'[+-]?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?',
+            text[index:],
+        )
+        if number is not None:
+            value = number.group(0)
+            tokens.append(('NUMBER', value, index))
+            index += len(value)
+            continue
+
+        name = re.match(r'[A-Za-z_][A-Za-z0-9_]*', text[index:])
+        if name is not None:
+            value = name.group(0)
+            end = index + len(value)
+            if end < length and text[end] == '.':
+                suffix = re.match(
+                    r'[A-Za-z_][A-Za-z0-9_]*', text[end + 1:]
+                )
+                if suffix is None:
+                    raise PredicateError('invalid qualified identifier', index)
+                value += '.' + suffix.group(0)
+                end += 1 + len(suffix.group(0))
+            tokens.append(('NAME', value, index))
+            index = end
+            continue
+
+        two_char = text[index:index + 2]
+        if two_char in {'<>', '<=', '>='}:
+            tokens.append(('OP', two_char, index))
+            index += 2
+            continue
+        if char in {'=', '<', '>'}:
+            tokens.append(('OP', char, index))
+            index += 1
+            continue
+        if char == '(':
+            tokens.append(('LPAREN', char, index))
+            index += 1
+            continue
+        if char == ')':
+            tokens.append(('RPAREN', char, index))
+            index += 1
+            continue
+        if char == ',':
+            tokens.append(('COMMA', char, index))
+            index += 1
+            continue
+
+        raise PredicateError(f"unexpected character {char!r}", index)
+
+    tokens.append(('EOF', '', length))
+    return tokens
+
+
+def valid_temporal_literal(kind, value):
+    if kind == 'date':
+        if re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', value) is None:
+            return False
+        try:
+            dt.date.fromisoformat(value)
+            return True
+        except ValueError:
+            return False
+
+    if re.fullmatch(
+        r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}'
+        r'(?::[0-9]{2})?',
+        value,
+    ) is None:
+        return False
+    completed = value if len(value) == 19 else value + ':00'
+    try:
+        dt.datetime.strptime(completed, '%Y-%m-%dT%H:%M:%S')
+        return True
+    except ValueError:
+        return False
+
+
+def like_pattern_has_dangling_escape(pattern, escape):
+    escaped = False
+    for character in pattern:
+        if escaped:
+            escaped = False
+        elif character == escape:
+            escaped = True
+    return escaped
+
+
+class PredicateParser:
+    def __init__(self, text):
+        self.text = text
+        self.tokens = tokenize_predicate(text)
+        self.index = 0
+
+    @property
+    def token(self):
+        return self.tokens[self.index]
+
+    def advance(self):
+        token = self.token
+        self.index += 1
+        return token
+
+    def keyword(self, value):
+        return self.token[0] == 'NAME' and self.token[1].upper() == value
+
+    def take_keyword(self, value):
+        if self.keyword(value):
+            return self.advance()
+        return None
+
+    def require(self, kind, message):
+        if self.token[0] != kind:
+            raise PredicateError(message, self.token[2])
+        return self.advance()
+
+    def parse(self):
+        node = self.parse_disjunction()
+        if self.token[0] != 'EOF':
+            raise PredicateError('unexpected trailing token', self.token[2])
+        return node
+
+    def parse_disjunction(self):
+        node = self.parse_conjunction()
+        while self.take_keyword('OR') is not None:
+            node = {
+                'kind': 'or',
+                'left': node,
+                'right': self.parse_conjunction(),
+            }
+        return node
+
+    def parse_conjunction(self):
+        node = self.parse_negation()
+        while self.take_keyword('AND') is not None:
+            node = {
+                'kind': 'and',
+                'left': node,
+                'right': self.parse_negation(),
+            }
+        return node
+
+    def parse_negation(self):
+        if self.take_keyword('NOT') is not None:
+            return {'kind': 'not', 'value': self.parse_negation()}
+        return self.parse_boolean()
+
+    def parse_boolean(self):
+        if self.token[0] == 'LPAREN':
+            self.advance()
+            node = self.parse_disjunction()
+            self.require('RPAREN', "expected ')' to close predicate")
+            return node
+        if self.take_keyword('TRUE') is not None:
+            return {'kind': 'boolean', 'value': True}
+        if self.take_keyword('FALSE') is not None:
+            return {'kind': 'boolean', 'value': False}
+
+        left = self.parse_operand()
+        if self.token[0] == 'OP':
+            operator = self.advance()[1]
+            return {
+                'kind': 'comparison',
+                'operator': operator,
+                'left': left,
+                'right': self.parse_operand(),
+            }
+        if self.take_keyword('IS') is not None:
+            negated = self.take_keyword('NOT') is not None
+            if self.take_keyword('NULL') is None:
+                raise PredicateError("expected NULL after IS", self.token[2])
+            return {'kind': 'null_test', 'value': left, 'negated': negated}
+
+        negated = False
+        if self.take_keyword('NOT') is not None:
+            negated = True
+        if self.take_keyword('IN') is not None:
+            self.require('LPAREN', "expected '(' after IN")
+            values = [self.parse_operand()]
+            while self.token[0] == 'COMMA':
+                self.advance()
+                values.append(self.parse_operand())
+            self.require('RPAREN', "expected ')' after IN operands")
+            return {
+                'kind': 'in',
+                'value': left,
+                'values': values,
+                'negated': negated,
+            }
+        if self.take_keyword('BETWEEN') is not None:
+            lower = self.parse_operand()
+            if self.take_keyword('AND') is None:
+                raise PredicateError(
+                    'expected AND in BETWEEN predicate', self.token[2]
+                )
+            return {
+                'kind': 'between',
+                'value': left,
+                'lower': lower,
+                'upper': self.parse_operand(),
+                'negated': negated,
+            }
+        if self.take_keyword('LIKE') is not None:
+            pattern = self.parse_operand()
+            escape = None
+            if self.take_keyword('ESCAPE') is not None:
+                token = self.require(
+                    'STRING', 'ESCAPE requires a string literal'
+                )
+                if len(token[1]) != 1:
+                    raise PredicateError(
+                        'ESCAPE requires exactly one code point', token[2]
+                    )
+                escape = token[1]
+            if (
+                escape is not None
+                and pattern.get('kind') == 'literal'
+                and pattern.get('type') == 'str'
+                and like_pattern_has_dangling_escape(
+                    pattern.get('value', ''), escape
+                )
+            ):
+                raise PredicateError(
+                    'LIKE pattern has a dangling escape', pattern['position']
+                )
+            return {
+                'kind': 'like',
+                'value': left,
+                'pattern': pattern,
+                'escape': escape,
+                'negated': negated,
+            }
+        if negated:
+            raise PredicateError(
+                'NOT must precede IN, BETWEEN, or LIKE', self.token[2]
+            )
+        raise PredicateError(
+            'operand must be followed by a Boolean operator', self.token[2]
+        )
+
+    def parse_operand(self):
+        token = self.token
+        if token[0] == 'NUMBER':
+            self.advance()
+            value_type = (
+                'float'
+                if '.' in token[1] or 'e' in token[1].lower()
+                else 'int'
+            )
+            return {
+                'kind': 'literal',
+                'type': value_type,
+                'value': token[1],
+                'position': token[2],
+            }
+        if token[0] == 'STRING':
+            self.advance()
+            return {
+                'kind': 'literal',
+                'type': 'str',
+                'value': token[1],
+                'position': token[2],
+            }
+        if self.take_keyword('NULL') is not None:
+            return {
+                'kind': 'literal',
+                'type': None,
+                'value': None,
+                'position': token[2],
+            }
+        if self.keyword('DATE') or self.keyword('DATETIME'):
+            value_type = self.advance()[1].lower()
+            text_token = self.require(
+                'STRING', f'{value_type.upper()} requires a string literal'
+            )
+            if not valid_temporal_literal(value_type, text_token[1]):
+                raise PredicateError(
+                    f'invalid {value_type} literal', text_token[2]
+                )
+            return {
+                'kind': 'literal',
+                'type': value_type,
+                'value': text_token[1],
+                'position': token[2],
+            }
+        if token[0] == 'NAME':
+            if token[1].upper() in {
+                'AND', 'BETWEEN', 'ESCAPE', 'FALSE', 'IN', 'IS', 'LIKE',
+                'NOT', 'OR', 'TRUE',
+            }:
+                raise PredicateError('expected operand', token[2])
+            self.advance()
+            return {
+                'kind': 'identifier',
+                'name': token[1],
+                'position': token[2],
+            }
+        raise PredicateError('expected operand', token[2])
+
+
+def parse_predicate(text):
+    if not isinstance(text, str) or not text:
+        raise PredicateError('predicate must be a non-empty string', 0)
+    return PredicateParser(text).parse()
+
+
+def predicate_operand_type(operand, resolver, errors):
+    if operand['kind'] == 'literal':
+        return operand['type']
+    resolved = resolver(operand['name'])
+    if resolved is None:
+        errors.append(f"unknown identifier {operand['name']!r}")
+    return resolved
+
+
+def predicate_types_comparable(left, right):
+    if left is None or right is None:
+        return True
+    if left in {'int', 'float'} and right in {'int', 'float'}:
+        return True
+    return left == right and left in {'str', 'date', 'datetime'}
+
+
+def validate_predicate_types(ast, resolver):
+    """Return static R004 name and operand-type errors for a parsed AST."""
+    errors = []
+
+    def operand_type(operand):
+        return predicate_operand_type(operand, resolver, errors)
+
+    def require_comparable(left_operand, right_operand):
+        left_type = operand_type(left_operand)
+        right_type = operand_type(right_operand)
+        if not predicate_types_comparable(left_type, right_type):
+            errors.append(
+                'incompatible predicate operand types '
+                f'{left_type!r} and {right_type!r}'
+            )
+
+    def visit(node):
+        kind = node['kind']
+        if kind in {'and', 'or'}:
+            visit(node['left'])
+            visit(node['right'])
+        elif kind == 'not':
+            visit(node['value'])
+        elif kind == 'comparison':
+            require_comparable(node['left'], node['right'])
+        elif kind == 'null_test':
+            operand_type(node['value'])
+        elif kind == 'in':
+            for value in node['values']:
+                require_comparable(node['value'], value)
+        elif kind == 'between':
+            require_comparable(node['value'], node['lower'])
+            require_comparable(node['value'], node['upper'])
+        elif kind == 'like':
+            value_type = operand_type(node['value'])
+            pattern_type = operand_type(node['pattern'])
+            for actual in (value_type, pattern_type):
+                if actual is not None and actual != 'str':
+                    errors.append(
+                        'LIKE requires str operands; '
+                        f'found {actual!r}'
+                    )
+
+    visit(ast)
+    return errors
 
 
 def split_type_arguments(inner):
@@ -1160,6 +1570,398 @@ def validate_spec_contracts(spec, spec_label, spec_path=None):
     return errors
 
 
+def specification_column_types(spec):
+    columns = spec.get('columns')
+    if not isinstance(columns, list):
+        return {}
+    return {
+        column['name']: column['type']
+        for column in columns
+        if (
+            isinstance(column, dict)
+            and isinstance(column.get('name'), str)
+            and column.get('type') in {'str', 'int', 'float', 'date', 'datetime'}
+        )
+    }
+
+
+def dataset_type_catalog(spec, spec_path):
+    """Return statically discoverable field types for each dataset."""
+    catalog = {}
+    datasets = spec.get('datasets')
+    if not isinstance(datasets, dict):
+        return catalog
+
+    for dataset_id, source in datasets.items():
+        if not isinstance(dataset_id, str):
+            continue
+        fields = {}
+        source_path = source if isinstance(source, str) else None
+        declared_types = None
+        producer_path = None
+        if isinstance(source, dict):
+            source_path = source.get('path')
+            declared_types = source.get('types')
+            producer_path = source.get('schema')
+
+        if isinstance(producer_path, str) and spec_path is not None:
+            resolved = spec_path.parent / producer_path
+            try:
+                with open(resolved, 'r', encoding='utf-8') as handle:
+                    producer = yaml.load(handle, Loader=UniqueKeyLoader)
+                fields.update(specification_column_types(producer))
+            except (OSError, yaml.YAMLError):
+                pass
+
+        if (
+            isinstance(source_path, str)
+            and spec_path is not None
+            and source_path.lower().endswith(('.csv', '.tsv'))
+        ):
+            resolved = spec_path.parent / source_path
+            delimiter = '\t' if source_path.lower().endswith('.tsv') else ','
+            try:
+                with open(resolved, 'r', encoding='utf-8', newline='') as handle:
+                    header = next(
+                        csv.reader(handle, delimiter=delimiter, strict=True), []
+                    )
+                for field in header:
+                    if isinstance(field, str) and field:
+                        fields.setdefault(field, 'str')
+            except (OSError, csv.Error):
+                pass
+
+        if isinstance(declared_types, dict):
+            for field, value_type in declared_types.items():
+                if (
+                    isinstance(field, str)
+                    and value_type in {'str', 'int', 'float', 'date', 'datetime'}
+                ):
+                    fields[field] = value_type
+        catalog[dataset_id] = fields
+
+    return catalog
+
+
+def predicate_resolver(unqualified=None, qualified=None):
+    unqualified = unqualified or {}
+    qualified = qualified or {}
+
+    def resolve(name):
+        if '.' not in name:
+            return unqualified.get(name)
+        qualifier, field = name.split('.', 1)
+        relation = qualified.get(qualifier)
+        return relation.get(field) if isinstance(relation, dict) else None
+
+    return resolve
+
+
+def validate_predicate_at(text, path, resolver):
+    try:
+        ast = parse_predicate(text)
+    except PredicateError as exc:
+        return [f"ERROR: {path}: invalid predicate: {exc}"]
+    return [
+        f"ERROR: {path}: {message}"
+        for message in dict.fromkeys(validate_predicate_types(ast, resolver))
+    ]
+
+
+def aggregate_filter_resolver(payload, default_resolver, datasets):
+    if not isinstance(payload, dict):
+        return default_resolver
+    expression = payload.get('expr')
+    if not isinstance(expression, str):
+        return default_resolver
+    qualifiers = re.findall(
+        r'(?<![A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*)\.', expression
+    )
+    if not qualifiers:
+        return default_resolver
+    qualifier = qualifiers[0]
+    return predicate_resolver(qualified={qualifier: datasets.get(qualifier, {})})
+
+
+def validate_expression_predicates(
+    expression, path, resolver, datasets
+):
+    errors = []
+    if not isinstance(expression, dict) or len(expression) != 1:
+        return errors
+    keyword, payload = next(iter(expression.items()))
+
+    if keyword == 'case' and isinstance(payload, dict):
+        branches = payload.get('branches')
+        if isinstance(branches, list):
+            for index, branch in enumerate(branches):
+                if not isinstance(branch, dict):
+                    continue
+                branch_path = f"{path}.case.branches[{index}]"
+                if isinstance(branch.get('when'), str):
+                    errors.extend(
+                        validate_predicate_at(
+                            branch['when'], f"{branch_path}.when", resolver
+                        )
+                    )
+                errors.extend(
+                    validate_expression_predicates(
+                        branch.get('then'),
+                        f"{branch_path}.then",
+                        resolver,
+                        datasets,
+                    )
+                )
+        if 'otherwise' in payload:
+            errors.extend(
+                validate_expression_predicates(
+                    payload['otherwise'],
+                    f"{path}.case.otherwise",
+                    resolver,
+                    datasets,
+                )
+            )
+
+    elif keyword == 'source' and isinstance(payload, dict):
+        multiple = payload.get('multiple_matches')
+        variable = payload.get('variable')
+        if (
+            isinstance(multiple, dict)
+            and isinstance(multiple.get('filter'), str)
+        ):
+            qualifier = (
+                variable.split('.', 1)[0]
+                if isinstance(variable, str) and '.' in variable
+                else None
+            )
+            right_resolver = predicate_resolver(
+                qualified={qualifier: datasets.get(qualifier, {})}
+                if qualifier is not None
+                else {}
+            )
+            errors.extend(
+                validate_predicate_at(
+                    multiple['filter'],
+                    f"{path}.source.multiple_matches.filter",
+                    right_resolver,
+                )
+            )
+
+    elif keyword == 'aggregate' and isinstance(payload, dict):
+        if isinstance(payload.get('filter'), str):
+            errors.extend(
+                validate_predicate_at(
+                    payload['filter'],
+                    f"{path}.aggregate.filter",
+                    aggregate_filter_resolver(payload, resolver, datasets),
+                )
+            )
+
+    elif keyword in {'row_number', 'rank'} and isinstance(payload, dict):
+        if isinstance(payload.get('filter'), str):
+            errors.extend(
+                validate_predicate_at(
+                    payload['filter'], f"{path}.{keyword}.filter", resolver
+                )
+            )
+
+    elif keyword == 'str_concat' and isinstance(payload, dict):
+        sources = payload.get('sources')
+        if isinstance(sources, list):
+            for index, source in enumerate(sources):
+                errors.extend(
+                    validate_expression_predicates(
+                        source,
+                        f"{path}.str_concat.sources[{index}]",
+                        resolver,
+                        datasets,
+                    )
+                )
+
+    elif keyword == 'function' and isinstance(payload, dict):
+        arguments = payload.get('args')
+        if isinstance(arguments, dict):
+            for name, argument in arguments.items():
+                if isinstance(argument, dict):
+                    errors.extend(
+                        validate_expression_predicates(
+                            argument,
+                            f"{path}.function.args.{name}",
+                            resolver,
+                            datasets,
+                        )
+                    )
+
+    return errors
+
+
+def validate_derivation_predicates(derivation, path, resolver, datasets):
+    errors = []
+    if not isinstance(derivation, dict):
+        return errors
+    if 'value' not in derivation:
+        return validate_expression_predicates(
+            derivation, path, resolver, datasets
+        )
+
+    errors.extend(
+        validate_expression_predicates(
+            derivation.get('value'), f"{path}.value", resolver, datasets
+        )
+    )
+    overrides = derivation.get('override')
+    if isinstance(overrides, list):
+        for index, override in enumerate(overrides):
+            if not isinstance(override, dict):
+                continue
+            override_path = f"{path}.override[{index}]"
+            if isinstance(override.get('when'), str):
+                errors.extend(
+                    validate_predicate_at(
+                        override['when'], f"{override_path}.when", resolver
+                    )
+                )
+            errors.extend(
+                validate_expression_predicates(
+                    override.get('value'),
+                    f"{override_path}.value",
+                    resolver,
+                    datasets,
+                )
+            )
+    return errors
+
+
+def validate_spec_predicates(spec, spec_label, spec_path=None):
+    """Parse, resolve, and type-check every R004 predicate in a spec."""
+    errors = []
+    datasets = dataset_type_catalog(spec, spec_path)
+    output_types = specification_column_types(spec)
+    lookups = {}
+    lookup_entries = spec.get('record_lookups')
+    if isinstance(lookup_entries, list):
+        for index, lookup in enumerate(lookup_entries):
+            if not isinstance(lookup, dict):
+                continue
+            lookup_id = lookup.get('id')
+            dataset_id = lookup.get('dataset')
+            if isinstance(lookup_id, str) and isinstance(dataset_id, str):
+                lookups[lookup_id] = datasets.get(dataset_id, {})
+            if isinstance(lookup.get('filter'), str):
+                resolver = predicate_resolver(
+                    qualified={dataset_id: datasets.get(dataset_id, {})}
+                    if isinstance(dataset_id, str)
+                    else {}
+                )
+                errors.extend(
+                    validate_predicate_at(
+                        lookup['filter'],
+                        f"{spec_label}.record_lookups[{index}].filter",
+                        resolver,
+                    )
+                )
+
+    column_resolver = predicate_resolver(
+        unqualified=output_types, qualified={**datasets, **lookups}
+    )
+    columns = spec.get('columns')
+    if isinstance(columns, list):
+        for index, column in enumerate(columns):
+            if not isinstance(column, dict):
+                continue
+            name = column.get('name', index)
+            if 'derivation' in column:
+                errors.extend(
+                    validate_derivation_predicates(
+                        column['derivation'],
+                        f"{spec_label}.columns.{name}.derivation",
+                        column_resolver,
+                        datasets,
+                    )
+                )
+
+    rows = spec.get('rows')
+    if isinstance(rows, list):
+        for index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                continue
+            driver = row.get('dataset', spec.get('base'))
+            driver_fields = (
+                datasets.get(driver, {}) if isinstance(driver, str) else {}
+            )
+            derivations = row.get('derivations')
+            row_output = {
+                name: output_types[name]
+                for name in derivations or {}
+                if name in output_types
+            } if isinstance(derivations, dict) else {}
+            is_grouped = isinstance(row.get('group_by'), list)
+            row_resolver = predicate_resolver(
+                unqualified=row_output,
+                qualified={driver: driver_fields}
+                if isinstance(driver, str)
+                else {},
+            )
+            if isinstance(row.get('filter'), str):
+                filter_resolver = (
+                    predicate_resolver(unqualified=row_output)
+                    if is_grouped
+                    else predicate_resolver(
+                        qualified={driver: driver_fields}
+                        if isinstance(driver, str)
+                        else {}
+                    )
+                )
+                errors.extend(
+                    validate_predicate_at(
+                        row['filter'],
+                        f"{spec_label}.rows[{index}].filter",
+                        filter_resolver,
+                    )
+                )
+            if isinstance(derivations, dict):
+                for name, derivation in derivations.items():
+                    errors.extend(
+                        validate_derivation_predicates(
+                            derivation,
+                            f"{spec_label}.rows[{index}].derivations.{name}",
+                            row_resolver,
+                            datasets,
+                        )
+                    )
+
+    verifications = spec.get('verifications')
+    if isinstance(verifications, dict):
+        verifications = [verifications]
+    if isinstance(verifications, list):
+        output_resolver = predicate_resolver(
+            unqualified=output_types, qualified=lookups
+        )
+        for index, verification in enumerate(verifications):
+            if not isinstance(verification, dict) or len(verification) != 1:
+                continue
+            keyword, payload = next(iter(verification.items()))
+            if not isinstance(payload, dict):
+                continue
+            fields = (
+                ('when', 'then') if keyword == 'implies'
+                else ('assert',) if keyword == 'predicate'
+                else ()
+            )
+            for field in fields:
+                if isinstance(payload.get(field), str):
+                    errors.extend(
+                        validate_predicate_at(
+                            payload[field],
+                            f"{spec_label}.verifications[{index}]."
+                            f"{keyword}.{field}",
+                            output_resolver,
+                        )
+                    )
+
+    return errors
+
+
 def validate_spec_document(spec, spec_label, spec_path, env, spec_stack=None):
     """Validate one complete specification and its producer dependencies."""
     if not isinstance(spec, dict) or not spec:
@@ -1181,6 +1983,7 @@ def validate_spec_document(spec, spec_label, spec_path, env, spec_stack=None):
     errors.extend(validate_grouped_rows(spec, spec_label))
     errors.extend(validate_spec_names(spec, spec_label))
     errors.extend(validate_spec_contracts(spec, spec_label, spec_path))
+    errors.extend(validate_spec_predicates(spec, spec_label, spec_path))
 
     next_stack = set(spec_stack or ())
     next_stack.add(spec_path.resolve())
@@ -1647,6 +2450,58 @@ def validate_example_readmes(root: Path):
     return errors
 
 
+def validate_rule_metadata(root: Path):
+    errors = []
+    rules_dir = root / 'yaml' / 'rules'
+    index_path = rules_dir / 'README.md'
+    if not rules_dir.is_dir() or not index_path.is_file():
+        return errors
+    index = index_path.read_text(encoding='utf-8')
+
+    for rule_path in sorted(rules_dir.glob('R[0-9][0-9][0-9]-*.md')):
+        label = rule_path.relative_to(root)
+        text = rule_path.read_text(encoding='utf-8')
+        match = re.match(r'\A---\n(.*?)\n---\n', text, re.DOTALL)
+        if match is None:
+            errors.append(f"ERROR: {label}: missing YAML front matter")
+            continue
+        try:
+            metadata = yaml.load(match.group(1), Loader=UniqueKeyLoader)
+        except yaml.YAMLError as exc:
+            errors.append(f"ERROR: {label}: invalid front matter: {exc}")
+            continue
+        if not isinstance(metadata, dict):
+            errors.append(f"ERROR: {label}: front matter must be a mapping")
+            continue
+
+        expected_id = rule_path.name[:4]
+        if metadata.get('id') != expected_id:
+            errors.append(
+                f"ERROR: {label}: id must be {expected_id!r}, got "
+                f"{metadata.get('id')!r}"
+            )
+        if metadata.get('status') != 'normative':
+            errors.append(
+                f"ERROR: {label}: maintained rule status must be "
+                "'normative'"
+            )
+
+        index_row = re.search(
+            rf'^\| {re.escape(expected_id)} \|.*?\| ([^|]+) \|',
+            index,
+            re.MULTILINE,
+        )
+        if index_row is None:
+            errors.append(f"ERROR: {label}: rule is absent from rules/README.md")
+        elif index_row.group(1).strip() != 'normative':
+            errors.append(
+                f"ERROR: yaml/rules/README.md: {expected_id} status must be "
+                "'normative'"
+            )
+
+    return errors
+
+
 def check_yaml_files(root: Path):
     errors = []
     warnings = []
@@ -1671,6 +2526,7 @@ def check_yaml_files(root: Path):
     errors.extend(validate_expected_error_contracts(root))
     errors.extend(validate_csv_shapes(root))
     errors.extend(validate_example_readmes(root))
+    errors.extend(validate_rule_metadata(root))
 
     csv_errors, csv_warnings = validate_examples_csv(root)
     errors.extend(csv_errors)

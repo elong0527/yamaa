@@ -1,0 +1,6 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - columns.REVIEWFL.derivation.case.branches[0].when
+context:
+  identifier: UNKNOWNDT

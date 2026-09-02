@@ -13,13 +13,17 @@ The validation ensures:
    stay inside `yaml/` and resolve without cycles. Custom types (`list[T]`,
    `dict[K,V]`, unions, classes, aliases, and registries) must resolve. The
    validator also enforces `values`, `pattern`, `min_length`, and `size`
-   constraints.
+   constraints. Every maintained rule must declare `status: normative`, match
+   its stable file ID, and carry the same status in the rule index.
 3. **Example specs**: Every `spec.yaml` or `spec_<variant>.yaml` validates
    against the schemas, checking required fields, unknown fields, and registry
-   payload shapes. Cross-field validation rejects duplicate or unresolved
-   dataset, lookup, column, key, output-column, and row names, including
-   namespace conflicts. A grouped row must declare a non-empty, duplicate-free
-   `group_by` whose variables are qualified to that row's driver. Static
+   payload shapes. Every predicate is parsed under R004, its identifiers are
+   resolved for the predicate site, and statically known operand types are
+   checked without implicit conversion. Cross-field validation also rejects
+   duplicate or unresolved dataset, lookup, column, key, output-column, and row
+   names, including namespace conflicts. A grouped row must declare a non-empty,
+   duplicate-free `group_by` whose variables are qualified to that row's driver.
+   Static
    cross-field checks enforce base selection, complete and exclusive
    derivation coverage, record-lookup field pairing, verification bounds and
    IDs, source-file existence, and declared CSV fields. Source-producing
@@ -59,8 +63,9 @@ listed above. At this time, it **does not**:
 - Execute clinical derivations.
 - Materialize shorthand canonical forms (no transformed document is returned).
 - Reproduce golden output values in the `.csv` files.
-- Parse or type-check the numeric, aggregate, template, or predicate leaf
-  languages; this is tracked in issues #103 and #98.
+- Parse or type-check the numeric, aggregate, or template leaf languages; this
+  is tracked in issue #103. Predicate syntax, names, and statically known types
+  are checked, but predicates are not evaluated against data.
 - Prove that a regular expression behaves identically in R and Python; the
   ECMAScript portability contract is tracked in issue #106.
 

@@ -40,6 +40,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adae-partial-dates`](adam-adae-partial-dates/) | impute partial dates |
 | [`adam-adae-post-dose-onset`](adam-adae-post-dose-onset/) | classify an event by the moment it started |
 | [`adam-adae-post-reference-event`](adam-adae-post-reference-event/) | flag an event after a specific reference event |
+| [`adam-adae-protocol-review-window`](adam-adae-protocol-review-window/) | flag adverse events for protocol review |
 | [`adam-adae-query-flags`](adam-adae-query-flags/) | record which queries a coded event belongs to |
 | [`adam-adae-serious-event-sequence`](adam-adae-serious-event-sequence/) | number a subject's serious events in onset order |
 | [`adam-adae-severity-override`](adam-adae-severity-override/) | apply an approved severity correction |
@@ -96,6 +97,9 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-advs-growth-percentile`](adam-advs-growth-percentile/) | express a measurement as a growth percentile |
 | [`adam-advs-mean-arterial-pressure`](adam-advs-mean-arterial-pressure/) | derive mean arterial pressure |
 | [`adam-advs-once-measured-carry-forward`](adam-advs-once-measured-carry-forward/) | carry forward a once-measured characteristic |
+| [`negative-adae-review-condition-arithmetic`](negative-adae-review-condition-arithmetic/) | reject a review flag whose condition performs arithmetic |
+| [`negative-adae-review-text-date`](negative-adae-review-text-date/) | reject a review flag that compares a date with text |
+| [`negative-adae-review-unknown-date`](negative-adae-review-unknown-date/) | reject a review flag that names an unavailable date |
 | [`negative-adam-adeg-pre-existing-rrr`](negative-adam-adeg-pre-existing-rrr/) | reject a collected RR interval |
 | [`negative-adam-adsl-stratification-reconciliation`](negative-adam-adsl-stratification-reconciliation/) | reconcile randomization strata |
 | [`negative-adex-relative-dose-intensity`](negative-adex-relative-dose-intensity/) | reject a dose intensity measured against a per-record plan |

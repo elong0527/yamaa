@@ -1,0 +1,64 @@
+schema_version: "1.0"
+domain: ADAE
+datasets:
+  AE:
+    path: input/ae.csv
+    types:
+      AESEQ: int
+      AESTDTC: date
+      AESTDTM: datetime
+      SCORE: float
+base: AE
+keys: [STUDYID, USUBJID, AESEQ]
+
+output:
+  columns: [STUDYID, USUBJID, AESEQ, REVIEWFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: AE.STUDYID}
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {source: AE.USUBJID}
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: {source: AE.AESEQ}
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation: {source: AE.AESTDTC}
+  - name: ASTDTM
+    type: datetime
+    label: Analysis Start Datetime
+    derivation: {source: AE.AESTDTM}
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation: {source: AE.AETERM}
+  - name: SCORE
+    type: float
+    label: Protocol Review Score
+    derivation: {source: AE.SCORE}
+  - name: REVIEWFL
+    type: str
+    label: Protocol Review Flag
+    derivation:
+      case:
+        branches:
+          - when: >-
+              (ASTDT BETWEEN DATE '2025-01-01' AND DATE '2025-01-31'
+              OR ASTDTM >= DATETIME '2025-02-01T09:30')
+              AND AETERM LIKE 'INF!_%' ESCAPE '!'
+              AND SCORE >= -1.5
+            then: {literal: Y}
+        otherwise: {literal: N}
+    verifications:
+      allowed_values: {values: [Y, N]}
+
+verifications:
+  - unique: {columns: [STUDYID, USUBJID, AESEQ]}
+  - row_count: {min: 4, max: 4}

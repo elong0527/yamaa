@@ -1,0 +1,6 @@
+phase: validation
+condition: invalid_predicate
+spec_paths:
+  - columns.REVIEWFL.derivation.case.branches[0].when
+context:
+  predicate: "AE.AESEQ + 1 > 1"

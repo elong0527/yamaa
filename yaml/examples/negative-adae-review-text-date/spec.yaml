@@ -1,0 +1,35 @@
+schema_version: "1.0"
+domain: ADAE
+datasets:
+  AE:
+    path: input/ae.csv
+    types: {AESEQ: int, AESTDTC: date}
+base: AE
+keys: [STUDYID, USUBJID, AESEQ]
+output: {columns: [STUDYID, USUBJID, AESEQ, REVIEWFL]}
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: AE.STUDYID}
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {source: AE.USUBJID}
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: {source: AE.AESEQ}
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation: {source: AE.AESTDTC}
+  - name: REVIEWFL
+    type: str
+    label: Protocol Review Flag
+    derivation:
+      case:
+        branches:
+          - when: "ASTDT >= '2025-01-01'"
+            then: {literal: Y}
+        otherwise: {literal: N}

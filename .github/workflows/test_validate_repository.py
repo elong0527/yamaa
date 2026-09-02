@@ -76,6 +76,146 @@ class TestYamlLoader(unittest.TestCase):
             )
 
 
+class TestPredicateLanguage(unittest.TestCase):
+    def test_parses_precedence_compounds_and_all_literal_types(self):
+        predicate = (
+            "NOT FLAG = 'N' OR "
+            "COUNT BETWEEN -1 AND +2.5e1 AND "
+            "TERM LIKE '100!!%' ESCAPE '!' AND "
+            "DAY >= DATE '2025-01-01' AND "
+            "MOMENT < DATETIME '2025-01-02T03:04' AND "
+            "OPTION IN ('A', 'B', NULL)"
+        )
+
+        ast = VALIDATOR.parse_predicate(predicate)
+        types = {
+            'FLAG': 'str',
+            'COUNT': 'int',
+            'TERM': 'str',
+            'DAY': 'date',
+            'MOMENT': 'datetime',
+            'OPTION': 'str',
+        }
+        errors = VALIDATOR.validate_predicate_types(ast, types.get)
+
+        self.assertEqual(ast['kind'], 'or')
+        self.assertEqual(errors, [])
+
+    def test_rejects_syntax_outside_the_closed_grammar(self):
+        invalid = [
+            'VALUE != 1',
+            'VALUE + 1 > 2',
+            'VALUE',
+            'VALUE IN ()',
+            "VALUE = 'unterminated",
+            "DAY = DATE '2025-02-30'",
+            "TERM LIKE 'abc!' ESCAPE '!'",
+        ]
+
+        for predicate in invalid:
+            with self.subTest(predicate=predicate):
+                with self.assertRaises(VALIDATOR.PredicateError):
+                    VALIDATOR.parse_predicate(predicate)
+
+    def test_allows_an_escaped_escape_at_the_end_of_like_pattern(self):
+        ast = VALIDATOR.parse_predicate("TERM LIKE 'abc!!' ESCAPE '!'")
+        errors = VALIDATOR.validate_predicate_types(
+            ast, {'TERM': 'str'}.get
+        )
+        self.assertEqual(errors, [])
+
+    def test_rejects_unknown_and_incompatible_operands(self):
+        ast = VALIDATOR.parse_predicate(
+            "UNKNOWN = 1 OR DAY = '2025-01-01' OR COUNT LIKE '1%'"
+        )
+
+        errors = VALIDATOR.validate_predicate_types(
+            ast, {'DAY': 'date', 'COUNT': 'int'}.get
+        )
+        message = '\n'.join(errors)
+
+        self.assertIn("unknown identifier 'UNKNOWN'", message)
+        self.assertIn("'date' and 'str'", message)
+        self.assertIn("LIKE requires str operands", message)
+
+    def test_validates_predicate_sites_in_a_specification(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            example_dir = Path(temp_dir)
+            source = example_dir / 'dm.csv'
+            source.write_text('USUBJID,AGE\n01,40\n')
+            spec_path = example_dir / 'spec.yaml'
+            spec = {
+                'domain': 'ADSL',
+                'datasets': {
+                    'DM': {
+                        'path': 'dm.csv',
+                        'types': {'AGE': 'int'},
+                    }
+                },
+                'base': 'DM',
+                'keys': ['USUBJID'],
+                'output': {'columns': ['USUBJID', 'AGE']},
+                'columns': [
+                    {
+                        'name': 'USUBJID',
+                        'type': 'str',
+                        'derivation': {'source': 'DM.USUBJID'},
+                    },
+                    {
+                        'name': 'AGE',
+                        'type': 'int',
+                        'derivation': {
+                            'case': {
+                                'branches': [
+                                    {
+                                        'when': 'DM.AGE >= 18',
+                                        'then': {'source': 'DM.AGE'},
+                                    }
+                                ]
+                            }
+                        },
+                    },
+                ],
+                'verifications': [
+                    {
+                        'predicate': {
+                            'id': 'known-age',
+                            'assert': 'MISSING > 0',
+                        }
+                    }
+                ],
+            }
+
+            errors = VALIDATOR.validate_spec_predicates(
+                spec, 'example/spec.yaml', spec_path
+            )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn('verifications[0].predicate.assert', errors[0])
+        self.assertIn("unknown identifier 'MISSING'", errors[0])
+
+
+class TestRuleMetadata(unittest.TestCase):
+    def test_requires_normative_rule_and_index_status(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            rules = root / 'yaml' / 'rules'
+            rules.mkdir(parents=True)
+            (rules / 'README.md').write_text(
+                '| ID | Rule | Status | Owns | Depends on |\n'
+                '|---|---|---|---|---|\n'
+                '| R001 | Rule | proposed | Topic | -- |\n'
+            )
+            (rules / 'R001-rule.md').write_text(
+                '---\nid: R001\ntitle: Rule\nstatus: proposed\n---\n'
+            )
+
+            errors = VALIDATOR.validate_rule_metadata(root)
+
+        self.assertEqual(len(errors), 2)
+        self.assertTrue(all('normative' in error for error in errors))
+
+
 class TestTypeValidation(unittest.TestCase):
     def test_int_rejects_string(self):
         errors = VALIDATOR.validate_type(
