@@ -260,7 +260,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 '  - name: UNUSED\n'
                 '    type: str\n'
                 '    label: Unused\n'
-                '    derivation: {literal: unused}\n'
+                '    derivation: {source: MISSING}\n'
                 '  - name: AUDIT\n'
                 '    type: str\n'
                 '    label: Verification input\n'
@@ -460,12 +460,35 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 f'parents: "{parent.resolve()}"\n'
+                'output: {columns: []}\n'
             )
 
             resolved, errors, _ = self.resolve(spec_path)
 
         self.assertEqual(errors, [])
-        self.assertEqual(resolved, {'schema_version': '1.0'})
+        self.assertEqual(
+            resolved,
+            {'schema_version': '1.0', 'output': {'columns': []}},
+        )
+
+    def test_rejects_entry_that_inherits_output(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            parent = root / 'parent.yaml'
+            parent.write_text(
+                'schema_version: "1.0"\n'
+                'output: {columns: [A]}\n'
+            )
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: parent.yaml\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertIsNone(resolved)
+        self.assertIn('missing_entry_output', '\n'.join(errors))
 
     def test_rejects_parent_url(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -473,6 +496,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: https://example.test/base.yaml\n'
+                'output: {columns: []}\n'
             )
 
             resolved, errors, _ = self.resolve(spec_path)
@@ -484,7 +508,9 @@ class TestSpecificationInheritance(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             spec_path = Path(temp_dir) / 'spec.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\nparents: missing.yaml\n'
+                'schema_version: "1.0"\n'
+                'parents: missing.yaml\n'
+                'output: {columns: []}\n'
             )
 
             resolved, errors, _ = self.resolve(spec_path)
@@ -498,7 +524,9 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path = root / 'spec.yaml'
             parent = root / 'parent.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\nparents: parent.yaml\n'
+                'schema_version: "1.0"\n'
+                'parents: parent.yaml\n'
+                'output: {columns: []}\n'
             )
             parent.write_text(
                 'schema_version: "1.0"\nparents: spec.yaml\n'
@@ -515,7 +543,9 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path = root / 'spec.yaml'
             parent = root / 'parent.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\nparents: parent.yaml\n'
+                'schema_version: "1.0"\n'
+                'parents: parent.yaml\n'
+                'output: {columns: []}\n'
             )
             parent.write_text('schema_version: "2.0"\n')
 
@@ -539,6 +569,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: parent.yaml\n'
+                'output: {columns: [A]}\n'
                 'columns:\n'
                 '  - name: A\n'
                 '    type: null\n'
@@ -558,6 +589,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: []\n'
+                'output: {columns: []}\n'
                 'columns:\n'
                 '  - {name: A}\n'
                 '  - {name: A}\n'

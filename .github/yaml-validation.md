@@ -20,9 +20,10 @@ The validation ensures:
    payload shapes. An entry with `parents` first resolves its ordered local
    inheritance graph under R017. Resolution validates partial layers, rejects
    remote or missing parents, cycles, version mismatches, duplicate layer-local
-   identifiers, and invalid clears; rebases inherited paths; composes shallow
-   keyed members; prunes unreachable declarations; and stably orders columns
-   by dependency. Every predicate is parsed under R004, its identifiers are
+   identifiers, invalid clears, and an entry that does not declare `output`;
+   rebases inherited paths; composes shallow keyed members; prunes unreachable
+   declarations; and stably orders columns by dependency. Every predicate is
+   parsed under R004, its identifiers are
    resolved for the predicate site, and statically known operand types are
    checked without implicit conversion. Cross-field validation also rejects
    duplicate or unresolved dataset, lookup, column, key, output-column, and row

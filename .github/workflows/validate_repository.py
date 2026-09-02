@@ -1317,7 +1317,7 @@ def validate_partial_inheritance_member(
     return normalized, errors
 
 
-def validate_inheritance_layer(layer, label, env):
+def validate_inheritance_layer(layer, label, env, require_output=False):
     """Validate one R017 layer without imposing final requiredness."""
     if not isinstance(layer, dict) or not layer:
         return layer, [
@@ -1332,6 +1332,11 @@ def validate_inheritance_layer(layer, label, env):
         errors.append(
             f"ERROR: {label}.schema_version: schema_version_mismatch: every "
             "inheritance layer must declare schema_version"
+        )
+    if require_output and 'output' not in layer:
+        errors.append(
+            f"ERROR: {label}.parents: missing_entry_output: an inherited "
+            "entry file must declare its complete output"
         )
 
     for name in layer:
@@ -1649,7 +1654,10 @@ def resolve_spec_inheritance(entry_spec, spec_label, spec_path, env):
             raw_layer = supplied
 
         normalized, layer_errors = validate_inheritance_layer(
-            raw_layer, layer_label, env
+            raw_layer,
+            layer_label,
+            env,
+            require_output=canonical == entry_path,
         )
         errors.extend(layer_errors)
         if layer_errors or not isinstance(normalized, dict):

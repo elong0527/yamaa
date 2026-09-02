@@ -1,0 +1,6 @@
+phase: validation
+condition: missing_entry_output
+spec_paths:
+  - parents
+context:
+  inherited_columns: [USUBJID]

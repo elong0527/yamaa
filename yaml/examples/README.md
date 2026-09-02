@@ -109,6 +109,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-adlb-computed-parameter`](negative-adlb-computed-parameter/) | reject a parameter computed from the dataset being built |
 | [`negative-adrs-partial-response-after-complete-response`](negative-adrs-partial-response-after-complete-response/) | reject a partial response recorded after a complete response |
 | [`negative-adsl-cyclic-parent`](negative-adsl-cyclic-parent/) | reject a circular chain of shared definitions |
+| [`negative-adsl-inherited-output`](negative-adsl-inherited-output/) | reject an inherited artifact layout |
 | [`negative-adsl-invalid-parent-clear`](negative-adsl-invalid-parent-clear/) | reject removal of a required variable property |
 | [`negative-adsl-parent-version-mismatch`](negative-adsl-parent-version-mismatch/) | reject shared definitions from another language version |
 | [`negative-adsl-randomization-date-retyped`](negative-adsl-randomization-date-retyped/) | reject a randomization date described twice |
