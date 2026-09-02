@@ -1,0 +1,7 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.REVIEWFL.derivation.case.branches[0].when
+context:
+  left_type: date
+  right_type: str

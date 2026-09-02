@@ -1,7 +1,9 @@
 schema_version: "1.0"
 domain: ADAE
 datasets:
-  AE: input/ae.csv
+  AE:
+    path: input/ae.csv
+    types: {AESEQ: int, AESTDTC: date}
 base: AE
 keys: [STUDYID, USUBJID, AESEQ]
 
