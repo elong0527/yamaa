@@ -3,20 +3,21 @@
 Each file defines one behavior of the derivation language. Rule IDs are stable
 and do not change when files are renamed.
 
-`normative` rules are authoritative for implementations. `draft` rules record
-design intent but are not complete enough for portable implementation.
+Every indexed rule is normative and authoritative for implementations. A
+proposed rule stays outside this index until its schema surface, portable
+semantics, error behavior, and representative examples are complete.
 
 | ID | Rule | Status | Owns | Depends on |
 |---|---|---|---|---|
 | R001 | [Execution model](R001-execution-model.md) | normative | Phases, grouped row construction, dependency inference, evaluation order | R002, R003, R004, R005, R007, R008, R010, R012, R013, R015 |
 | R002 | [Source binding](R002-source-binding.md) | normative | Dataset declaration, name resolution | R003, R006, R008, R014, R015 |
 | R003 | [Cross-dataset left join](R003-cross-dataset-left-join.md) | normative | The implicit join and its right-side reduction | R002, R004, R005, R007, R008, R013 |
-| R004 | [Predicate language](R004-expression-language.md) | draft | The Boolean `sql` primitive | R001, R002, R006 |
+| R004 | [Predicate language](R004-expression-language.md) | normative | The Boolean `sql` primitive | R001, R002, R006, R007, R010, R011, R016 |
 | R005 | [Output contract](R005-output-contract.md) | normative | Column coverage, output membership, the value lifecycle, output identity | R001, R002, R003, R007, R008, R009, R011 |
 | R006 | [Compact schema language](R006-schema-language.md) | normative | Schema notation and structural validation | -- |
 | R007 | [Expression registry](R007-expression-registry.md) | normative | Registration, nesting, evaluation kinds, ordering, input types | R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014, R015, R016 |
 | R008 | [Local error handlers](R008-local-handlers.md) | normative | The handler lifecycle | R001, R002, R003, R005, R006, R007, R011, R012, R016 |
-| R009 | [Verifications](R009-verifications.md) | draft | What each assertion means and when it runs | R004, R005, R006, R011 |
+| R009 | [Verifications](R009-verifications.md) | normative | What each assertion means and when it runs | R004, R005, R006, R011 |
 | R010 | [Scalar numeric computation](R010-scalar-computation.md) | normative | The `numeric_expression` primitive | R001, R004, R005, R006, R007, R011, R014, R015 |
 | R011 | [Column types](R011-column-types.md) | normative | The `column_type` vocabulary and conversion | R005, R006, R007, R008, R010, R016 |
 | R012 | [String templates](R012-string-templates.md) | normative | Interpolation grammar, escaping, and evaluation | R001, R002, R006, R007, R008 |
@@ -25,15 +26,17 @@ design intent but are not complete enough for portable implementation.
 | R015 | [Record lookup](R015-record-lookup.md) | normative | Looking up one record of another dataset and reading it by name | R001, R002, R003, R004, R005, R006, R007, R008, R014 |
 | R016 | [Temporal values](R016-temporal-values.md) | normative | The `date` and `datetime` values: lexical form, zone and precision model, comparison, canonical text, and the operations over them | R005, R006, R007, R008, R010, R011, R014 |
 
-## Draft surface
+## Rule admission
 
-One open question accounts for every draft in the set:
+The maintained rule set has one status: normative. Design proposals may be
+developed in issues or branches, but they become rules only when the repository
+can validate their schema shape, their behavior is closed enough for
+independent R and Python implementations, and examples exercise both success
+and failure.
 
-- **R004** does not close the predicate grammar, coercion, collation, or the
-  literal grammar. R009 is draft only because of this.
-
-R006 is the only rule that depends on nothing. Every other rule reaches R002 or
-R004 transitively, so closing R004 closes the remaining draft surface.
+Normative does not mean immutable. A rule can change through the repository's
+review and versioning process, but an implementation must not substitute an
+open proposal for the indexed text.
 
 ## Rule requirements
 

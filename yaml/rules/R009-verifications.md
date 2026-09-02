@@ -1,7 +1,7 @@
 ---
 id: R009
 title: Verifications
-status: draft
+status: normative
 applies_to: [root.verifications, column.verifications, column_verifications, dataset_verifications]
 depends_on: [R004, R005, R006, R011]
 ---
@@ -107,6 +107,3 @@ bound and fail in another's.
 - An unknown column in `unique`, `all_or_none`, `implies`, or `predicate`:
   fail.
 - Any verification failure: fail and report it.
-
-The SQL grammar remains draft under R004, so `implies` and `predicate` keep
-this rule in draft status.
