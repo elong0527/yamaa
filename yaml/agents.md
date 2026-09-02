@@ -16,9 +16,9 @@ Before reviewing, implementing, or modifying this design:
    output under `examples/`.
 
 Schema comments and descriptions are authoritative for operation-local
-behavior; normative rule files are authoritative for shared behavior. Example
-READMEs explain examples but do not override either. Draft rules record intent
-and must not be treated as a portable implementation contract.
+behavior; indexed rule files are normative for shared behavior. Example
+READMEs explain examples but do not override either. Proposed rules remain
+outside the rule index until their contracts and example coverage are complete.
 
 ## Maintenance rules
 

@@ -44,9 +44,8 @@ Each operation's own parameters are documented beside its registration in
 behavior. This rule states what is shared: the types those parameters carry
 and the value they produce.
 
-R004 owns the predicate grammar and is draft. A predicate comparing two
-temporal values orders them as this rule defines; what else a predicate may
-write is R004's to close.
+R004 owns the predicate grammar. A predicate comparing two temporal values
+orders them as this rule defines; no other predicate behavior is owned here.
 
 ## The two values
 

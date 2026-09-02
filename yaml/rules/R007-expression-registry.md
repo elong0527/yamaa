@@ -113,6 +113,11 @@ on every term preserve row-template order and then base-record order, which
 makes the result total, so ordering has no undefined case and a row's
 neighbours are determined.
 
+Non-missing values use the order their type owns: numeric order under R010,
+code-point sequence order for `str` under R004, and chronological order for
+`date` and `datetime` under R016. An implementation must not substitute host
+locale collation for the R004 order.
+
 That tie-break settles positions, not equality. `row_number`, `row_value`, and
 right-side selection read the positions themselves, so a tie changes which row
 they reach. `rank` compares only the declared terms, so records equal on every
