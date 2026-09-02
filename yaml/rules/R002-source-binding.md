@@ -27,7 +27,9 @@ type it carries, is R014.
 are used by `base`, `rows.dataset`, qualified source variables, and
 `mapping_from`. A declaration is a path, or a path with the types its fields
 carry; R014 owns that reading and the shorthand between the two forms. Paths
-are resolved relative to the specification file.
+are resolved relative to the specification file. R017 preserves that origin
+when a declaration is inherited and rebases the path in a materialized resolved
+specification.
 
 Every referenced dataset identifier must exist in `datasets`. A dataset
 identifier must not equal the output `domain`; unqualified names address the

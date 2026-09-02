@@ -25,6 +25,7 @@ semantics, error behavior, and representative examples are complete.
 | R014 | [Source-format ingestion](R014-source-ingestion.md) | normative | Missing recognition and field typing at the source | R002, R006, R011, R016 |
 | R015 | [Record lookup](R015-record-lookup.md) | normative | Looking up one record of another dataset and reading it by name | R001, R002, R003, R004, R005, R006, R007, R008, R014 |
 | R016 | [Temporal values](R016-temporal-values.md) | normative | The `date` and `datetime` values: lexical form, zone and precision model, comparison, canonical text, and the operations over them | R005, R006, R007, R008, R010, R011, R014 |
+| R017 | [Specification inheritance](R017-specification-inheritance.md) | normative | Parent resolution, shallow composition, pruning, and resolved order | R001, R002, R005, R006, R009, R015 |
 
 ## Rule admission
 

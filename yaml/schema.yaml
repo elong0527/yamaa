@@ -28,7 +28,7 @@ root_class:
     - parents:
         type: [path, "list[path]"]
         required: false
-        description: Specifications this one inherits from; no rule defines the inheritance yet.
+        description: Ordered local specification layers resolved under R017 before validation and execution.
     - record_lookups:
         type: "list[record_lookup_class]"
         required: false
