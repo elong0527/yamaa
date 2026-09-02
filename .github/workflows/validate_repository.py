@@ -3,6 +3,7 @@ import argparse
 import copy
 import csv
 import datetime as dt
+import os
 import re
 import sys
 from pathlib import Path
@@ -1137,6 +1138,1109 @@ def _check_single_type(data, t, env, path):
 
     return [f"ERROR: {path}: unknown type '{t}'"]
 
+
+INHERITANCE_KEYED_COLLECTIONS = {
+    'datasets': ('mapping', None, 'dataset_class'),
+    'record_lookups': ('list', 'id', 'record_lookup_class'),
+    'columns': ('list', 'name', 'column_class'),
+    'rows': ('list', 'id', 'row_class'),
+}
+
+
+def schema_class_fields(env, class_name):
+    """Return a class definition as an insertion-ordered mapping."""
+    return {
+        name: descriptor
+        for entry in env.get('classes', {}).get(class_name, [])
+        for name, descriptor in entry.items()
+    }
+
+
+def _type_members(type_value):
+    if isinstance(type_value, list):
+        return [str(item).strip() for item in type_value]
+    return [str(type_value).strip()]
+
+
+def _type_matches(data, type_ref, env):
+    return not _check_single_type(data, type_ref, env, '<normalization>')
+
+
+def normalize_descriptor_value(data, descriptor, env):
+    """Materialize the canonical R006 form of a descriptor value."""
+    return normalize_type_value(data, descriptor['type'], env)
+
+
+def normalize_type_value(data, type_value, env):
+    """Normalize R006 list and single-required-field class shorthands."""
+    members = _type_members(type_value)
+
+    for member in members:
+        if not (member.startswith('list[') and member.endswith(']')):
+            continue
+        inner = member[5:-1].strip()
+        if inner in members and not isinstance(data, list):
+            if _type_matches(data, inner, env):
+                return [normalize_type_value(data, inner, env)]
+
+    for class_name in members:
+        fields = schema_class_fields(env, class_name)
+        if not fields:
+            continue
+        required = [
+            (name, descriptor)
+            for name, descriptor in fields.items()
+            if descriptor.get('required')
+        ]
+        if len(required) != 1:
+            continue
+        field_name, field_descriptor = required[0]
+        field_types = _type_members(field_descriptor['type'])
+        for member in members:
+            if member == class_name or member not in field_types:
+                continue
+            if not _type_matches(data, member, env):
+                continue
+            expanded = {
+                field_name: normalize_descriptor_value(
+                    data, field_descriptor, env
+                )
+            }
+            for name, descriptor in fields.items():
+                if name not in expanded and 'default' in descriptor:
+                    expanded[name] = copy.deepcopy(descriptor['default'])
+            return expanded
+
+    for member in members:
+        if _type_matches(data, member, env):
+            return normalize_single_type_value(data, member, env)
+    return copy.deepcopy(data)
+
+
+def normalize_inline_class(data, fields, env):
+    if not isinstance(data, dict):
+        return copy.deepcopy(data)
+    normalized = {}
+    descriptors = {
+        name: descriptor
+        for entry in fields
+        for name, descriptor in entry.items()
+    }
+    for name, descriptor in descriptors.items():
+        if name in data:
+            normalized[name] = normalize_descriptor_value(
+                data[name], descriptor, env
+            )
+        elif 'default' in descriptor:
+            normalized[name] = copy.deepcopy(descriptor['default'])
+    for name, value in data.items():
+        if name not in normalized and name not in descriptors:
+            normalized[name] = copy.deepcopy(value)
+    return normalized
+
+
+def normalize_single_type_value(data, type_ref, env):
+    if type_ref.startswith('list[') and type_ref.endswith(']'):
+        inner = type_ref[5:-1].strip()
+        return [normalize_type_value(item, inner, env) for item in data]
+    if type_ref.startswith('dict[') and type_ref.endswith(']'):
+        key_type, value_type = split_type_arguments(type_ref[5:-1])
+        return {
+            normalize_type_value(key, key_type, env): normalize_type_value(
+                value, value_type, env
+            )
+            for key, value in data.items()
+        }
+    if type_ref in env.get('classes', {}):
+        return normalize_inline_class(data, env['classes'][type_ref], env)
+    if type_ref in env.get('aliases', {}):
+        alias = env['aliases'][type_ref]
+        registry_name = alias.get('registry')
+        if registry_name is not None:
+            if not isinstance(data, dict) or len(data) != 1:
+                return copy.deepcopy(data)
+            keyword, payload = next(iter(data.items()))
+            registry = env.get('registries', {}).get(registry_name, {})
+            definition = registry.get(keyword)
+            if isinstance(definition, list):
+                payload = normalize_inline_class(payload, definition, env)
+            elif isinstance(definition, dict) and 'type' in definition:
+                payload = normalize_descriptor_value(payload, definition, env)
+            return {keyword: payload}
+        return normalize_type_value(data, alias['type'], env)
+    return copy.deepcopy(data)
+
+
+def validate_partial_inheritance_member(
+    value, class_name, identity, label, env
+):
+    """Validate and normalize one direct keyed-collection member."""
+    if not isinstance(value, dict):
+        return value, [
+            f"ERROR: {label}: expected mapping for {class_name}"
+        ]
+
+    fields = schema_class_fields(env, class_name)
+    errors = []
+    normalized = {}
+    if identity is not None and identity not in value:
+        errors.append(
+            f"ERROR: {label}.{identity}: missing inheritance identifier"
+        )
+
+    for name in value:
+        if name not in fields:
+            errors.append(
+                f"ERROR: {label}.{name}: unknown field '{name}' for class "
+                f"{class_name}"
+            )
+
+    for name, descriptor in fields.items():
+        if name not in value:
+            continue
+        field_value = value[name]
+        path = f"{label}.{name}"
+        if field_value is None:
+            if descriptor.get('required') or name == identity:
+                errors.append(
+                    f"ERROR: {path}: invalid_clear: cannot clear a required "
+                    "or identity field"
+                )
+            else:
+                normalized[name] = None
+            continue
+        errors.extend(validate_descriptor(field_value, descriptor, env, path))
+        normalized[name] = normalize_descriptor_value(
+            field_value, descriptor, env
+        )
+
+    return normalized, errors
+
+
+def validate_inheritance_layer(layer, label, env, require_output=False):
+    """Validate one R017 layer without imposing final requiredness."""
+    if not isinstance(layer, dict) or not layer:
+        return layer, [
+            f"ERROR: {label}: inheritance layer is empty or not a mapping"
+        ]
+
+    fields = schema_class_fields(env, 'root_class')
+    errors = []
+    normalized = {}
+
+    if 'schema_version' not in layer:
+        errors.append(
+            f"ERROR: {label}.schema_version: schema_version_mismatch: every "
+            "inheritance layer must declare schema_version"
+        )
+    if require_output and 'output' not in layer:
+        errors.append(
+            f"ERROR: {label}.parents: missing_entry_output: an inherited "
+            "entry file must declare its complete output"
+        )
+
+    for name in layer:
+        if name not in fields:
+            errors.append(
+                f"ERROR: {label}.{name}: unknown field '{name}' for class "
+                "root_class"
+            )
+
+    for name, descriptor in fields.items():
+        if name not in layer:
+            continue
+        value = layer[name]
+        path = f"{label}.{name}"
+
+        if name == 'parents':
+            errors.extend(validate_descriptor(value, descriptor, env, path))
+            normalized[name] = normalize_descriptor_value(
+                value, descriptor, env
+            )
+            continue
+
+        collection = INHERITANCE_KEYED_COLLECTIONS.get(name)
+        if collection is None:
+            if value is None:
+                if descriptor.get('required'):
+                    errors.append(
+                        f"ERROR: {path}: invalid_clear: cannot clear a "
+                        "required root field"
+                    )
+                else:
+                    normalized[name] = None
+                continue
+            errors.extend(validate_descriptor(value, descriptor, env, path))
+            normalized[name] = normalize_descriptor_value(
+                value, descriptor, env
+            )
+            continue
+
+        kind, identity, class_name = collection
+        if value is None:
+            if descriptor.get('required'):
+                errors.append(
+                    f"ERROR: {path}: invalid_clear: cannot clear a required "
+                    "root field"
+                )
+            else:
+                normalized[name] = None
+            continue
+
+        if kind == 'mapping':
+            if not isinstance(value, dict):
+                errors.append(f"ERROR: {path}: expected mapping")
+                continue
+            normalized_mapping = {}
+            for member_id, member in value.items():
+                member_path = f"{path}.{member_id}"
+                errors.extend(
+                    validate_type(
+                        member_id, ['dataset_id'], env,
+                        f"{path}.key({member_id})",
+                    )
+                )
+                if isinstance(member, str):
+                    member_errors = validate_type(
+                        member, ['path'], env, member_path
+                    )
+                    errors.extend(member_errors)
+                    normalized_mapping[member_id] = {'path': member}
+                else:
+                    normalized_member, member_errors = (
+                        validate_partial_inheritance_member(
+                            member, class_name, identity, member_path, env
+                        )
+                    )
+                    errors.extend(member_errors)
+                    normalized_mapping[member_id] = normalized_member
+            normalized[name] = normalized_mapping
+            continue
+
+        if not isinstance(value, list):
+            errors.append(f"ERROR: {path}: expected list")
+            continue
+        normalized_list = []
+        seen = set()
+        for index, member in enumerate(value):
+            member_id = (
+                member.get(identity)
+                if isinstance(member, dict) and identity is not None
+                else None
+            )
+            member_path = (
+                f"{path}.{member_id}"
+                if isinstance(member_id, str)
+                else f"{path}[{index}]"
+            )
+            normalized_member, member_errors = (
+                validate_partial_inheritance_member(
+                    member, class_name, identity, member_path, env
+                )
+            )
+            errors.extend(member_errors)
+            if isinstance(member_id, str):
+                if member_id in seen:
+                    errors.append(
+                        f"ERROR: {member_path}.{identity}: "
+                        f"duplicate_identifier: {member_id!r}"
+                    )
+                seen.add(member_id)
+            normalized_list.append(normalized_member)
+        normalized[name] = normalized_list
+
+    version = layer.get('schema_version')
+    bundle_version = env.get('version')
+    if version is not None and str(version) != str(bundle_version):
+        errors.append(
+            f"ERROR: {label}.schema_version: schema_version_mismatch: "
+            f"{version!r} does not match bundle version {bundle_version!r}"
+        )
+
+    return normalized, errors
+
+
+def _is_nonlocal_parent_reference(value):
+    if not isinstance(value, str) or not value:
+        return True
+    if re.match(r'^[A-Za-z]:[\\/]', value):
+        return False
+    return bool(re.match(r'^[A-Za-z][A-Za-z0-9+.-]*:', value))
+
+
+def _rebase_local_path(value, layer_path, entry_path):
+    if not isinstance(value, str) or _is_nonlocal_parent_reference(value):
+        return value
+    written = Path(value)
+    if written.is_absolute():
+        return str(written.resolve())
+    target = (layer_path.parent / written).resolve()
+    try:
+        relative = os.path.relpath(target, entry_path.parent.resolve())
+    except ValueError:
+        return str(target)
+    return Path(relative).as_posix()
+
+
+def rebase_layer_paths(layer, layer_path, entry_path):
+    """Rebase current path-valued dataset fields to the entry file."""
+    rebased = copy.deepcopy(layer)
+    datasets = rebased.get('datasets')
+    if not isinstance(datasets, dict):
+        return rebased
+    for source in datasets.values():
+        if not isinstance(source, dict):
+            continue
+        for field in ('path', 'schema'):
+            if isinstance(source.get(field), str):
+                source[field] = _rebase_local_path(
+                    source[field], layer_path, entry_path
+                )
+    return rebased
+
+
+def _clear_provenance(provenance, prefix):
+    for key in list(provenance):
+        if key == prefix or key.startswith(prefix + '.'):
+            del provenance[key]
+
+
+def _merge_keyed_member(
+    accumulated, incoming, class_name, logical_path, error_source,
+    provenance_source, env, provenance, errors,
+):
+    fields = schema_class_fields(env, class_name)
+    for name, value in incoming.items():
+        if value is None:
+            descriptor = fields.get(name, {})
+            if descriptor.get('required') or name not in accumulated:
+                errors.append(
+                    f"ERROR: {error_source}.{logical_path}.{name}: "
+                    "invalid_clear: "
+                    "field is required or has no inherited value"
+                )
+                continue
+            accumulated.pop(name, None)
+            _clear_provenance(provenance, f"{logical_path}.{name}")
+            continue
+        accumulated[name] = copy.deepcopy(value)
+        _clear_provenance(provenance, f"{logical_path}.{name}")
+        provenance[f"{logical_path}.{name}"] = provenance_source
+
+
+def merge_inheritance_layers(contributions, env):
+    """Apply normalized contributions under the R017 shallow merge."""
+    resolved = {}
+    provenance = {}
+    errors = []
+    root_fields = schema_class_fields(env, 'root_class')
+
+    for canonical_path, source, layer in contributions:
+        provenance_source = str(canonical_path)
+        for name, value in layer.items():
+            if name == 'parents':
+                continue
+            if name == 'schema_version':
+                resolved[name] = value
+                provenance[name] = provenance_source
+                continue
+
+            collection = INHERITANCE_KEYED_COLLECTIONS.get(name)
+            if value is None:
+                descriptor = root_fields.get(name, {})
+                if descriptor.get('required') or name not in resolved:
+                    errors.append(
+                        f"ERROR: {source}.{name}: invalid_clear: root field "
+                        "is required or has no inherited value"
+                    )
+                    continue
+                resolved.pop(name, None)
+                _clear_provenance(provenance, name)
+                continue
+
+            if collection is None:
+                resolved[name] = copy.deepcopy(value)
+                _clear_provenance(provenance, name)
+                provenance[name] = provenance_source
+                continue
+
+            kind, identity, class_name = collection
+            if kind == 'mapping':
+                target = resolved.setdefault(name, {})
+                if not isinstance(target, dict):
+                    target = {}
+                    resolved[name] = target
+                for member_id, member in value.items():
+                    logical_path = f"{name}.{member_id}"
+                    if member_id not in target:
+                        target[member_id] = copy.deepcopy(member)
+                        provenance[logical_path] = provenance_source
+                        for field in member:
+                            provenance[f"{logical_path}.{field}"] = (
+                                provenance_source
+                            )
+                    else:
+                        _merge_keyed_member(
+                            target[member_id], member, class_name,
+                            logical_path, source, provenance_source, env,
+                            provenance, errors,
+                        )
+                continue
+
+            target = resolved.setdefault(name, [])
+            if not isinstance(target, list):
+                target = []
+                resolved[name] = target
+            positions = {
+                member.get(identity): index
+                for index, member in enumerate(target)
+                if isinstance(member, dict)
+            }
+            for member in value:
+                if not isinstance(member, dict):
+                    continue
+                member_id = member.get(identity)
+                logical_path = f"{name}.{member_id}"
+                if member_id not in positions:
+                    positions[member_id] = len(target)
+                    target.append(copy.deepcopy(member))
+                    provenance[logical_path] = provenance_source
+                    for field in member:
+                        provenance[f"{logical_path}.{field}"] = (
+                            provenance_source
+                        )
+                else:
+                    existing = target[positions[member_id]]
+                    _merge_keyed_member(
+                        existing, member, class_name, logical_path, source,
+                        provenance_source, env, provenance, errors,
+                    )
+
+    return resolved, provenance, errors
+
+
+def resolve_spec_inheritance(entry_spec, spec_label, spec_path, env):
+    """Load and compose an R017 graph, returning data, errors, provenance."""
+    entry_path = spec_path.resolve()
+    contributions = []
+    completed = set()
+    active = []
+    errors = []
+
+    def visit(path, layer_label, supplied=None):
+        canonical = path.resolve()
+        if canonical in active:
+            start = active.index(canonical)
+            cycle = active[start:] + [canonical]
+            errors.append(
+                f"ERROR: {layer_label}: inheritance_cycle: "
+                + ' -> '.join(str(item) for item in cycle)
+            )
+            return
+        if canonical in completed:
+            return
+
+        if supplied is None:
+            try:
+                with open(canonical, 'r', encoding='utf-8') as handle:
+                    raw_layer = yaml.load(handle, Loader=UniqueKeyLoader)
+            except (OSError, UnicodeError, yaml.YAMLError) as exc:
+                errors.append(
+                    f"ERROR: {layer_label}: parent_not_found: cannot read "
+                    f"{canonical}: {exc}"
+                )
+                return
+        else:
+            raw_layer = supplied
+
+        normalized, layer_errors = validate_inheritance_layer(
+            raw_layer,
+            layer_label,
+            env,
+            require_output=canonical == entry_path,
+        )
+        errors.extend(layer_errors)
+        if layer_errors or not isinstance(normalized, dict):
+            return
+
+        active.append(canonical)
+        parents = normalized.get('parents', [])
+        if not isinstance(parents, list):
+            parents = []
+        for index, parent in enumerate(parents):
+            parent_label = f"{layer_label}.parents[{index}]"
+            if _is_nonlocal_parent_reference(parent):
+                errors.append(
+                    f"ERROR: {parent_label}: invalid_parent_path: "
+                    f"{parent!r} is not a local filesystem path"
+                )
+                continue
+            candidate = Path(parent)
+            if not candidate.is_absolute():
+                candidate = canonical.parent / candidate
+            if not candidate.is_file():
+                errors.append(
+                    f"ERROR: {parent_label}: parent_not_found: "
+                    f"{parent!r} is missing or is not a regular file"
+                )
+                continue
+            visit(candidate.resolve(), parent_label)
+        active.pop()
+
+        if any(
+            error.startswith(f"ERROR: {layer_label}.parents")
+            for error in errors
+        ):
+            return
+        completed.add(canonical)
+        contributions.append(
+            (
+                canonical,
+                layer_label,
+                rebase_layer_paths(normalized, canonical, entry_path),
+            )
+        )
+
+    visit(entry_path, spec_label, supplied=entry_spec)
+    if errors:
+        return None, errors, {}
+
+    resolved, provenance, merge_errors = merge_inheritance_layers(
+        contributions, env
+    )
+    errors.extend(merge_errors)
+    if errors:
+        return None, errors, provenance
+    resolved, final_errors = finalize_resolved_inheritance(
+        resolved, env
+    )
+    errors.extend(final_errors)
+    if errors:
+        return None, errors, provenance
+    return resolved, errors, provenance
+
+
+def predicate_identifier_names(text):
+    try:
+        ast = parse_predicate(text)
+    except PredicateError:
+        return set()
+
+    names = set()
+
+    def visit(node):
+        if not isinstance(node, dict):
+            return
+        if node.get('kind') == 'identifier':
+            names.add(node['name'])
+        for value in node.values():
+            if isinstance(value, dict):
+                visit(value)
+            elif isinstance(value, list):
+                for item in value:
+                    visit(item)
+
+    visit(ast)
+    return names
+
+
+def closed_expression_identifier_names(text):
+    """Collect identifiers from the R010/R013 closed expression grammars."""
+    if not isinstance(text, str):
+        return set()
+    names = set()
+    pattern = re.compile(
+        r'(?<![A-Za-z0-9_.])'
+        r'([A-Za-z_][A-Za-z0-9_]*(?:\.(?:[A-Za-z_][A-Za-z0-9_]*|\*))?)'
+        r'(?![A-Za-z0-9_.])'
+    )
+    for match in pattern.finditer(text):
+        name = match.group(1)
+        tail = text[match.end():].lstrip()
+        if name.upper() == 'NULL' or tail.startswith('('):
+            continue
+        names.add(name)
+    return names
+
+
+def string_template_identifier_names(text):
+    if not isinstance(text, str):
+        return set()
+    names = set()
+    index = 0
+    while index < len(text):
+        if text.startswith('{{', index) or text.startswith('}}', index):
+            index += 2
+            continue
+        if text[index] != '{':
+            index += 1
+            continue
+        end = text.find('}', index + 1)
+        if end < 0:
+            break
+        candidate = text[index + 1:end]
+        if re.fullmatch(
+            r'[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?',
+            candidate,
+        ):
+            names.add(candidate)
+        index = end + 1
+    return names
+
+
+def collect_descriptor_references(data, descriptor, env):
+    return collect_type_references(data, descriptor['type'], env)
+
+
+def collect_inline_class_references(data, fields, env):
+    if not isinstance(data, dict):
+        return set()
+    references = set()
+    descriptors = {
+        name: descriptor
+        for entry in fields
+        for name, descriptor in entry.items()
+    }
+    for name, value in data.items():
+        descriptor = descriptors.get(name)
+        if descriptor is not None:
+            references.update(
+                collect_descriptor_references(value, descriptor, env)
+            )
+    return references
+
+
+def collect_single_type_references(data, type_ref, env):
+    if type_ref in {'variable', 'column_name'} and isinstance(data, str):
+        return {('variable', data)}
+    if type_ref == 'dataset_id' and isinstance(data, str):
+        return {('dataset', data)}
+    if type_ref == 'sql':
+        return {
+            ('variable', name)
+            for name in predicate_identifier_names(data)
+        }
+    if type_ref in {'numeric_expression', 'aggregate_expression'}:
+        return {
+            ('variable', name)
+            for name in closed_expression_identifier_names(data)
+        }
+    if type_ref == 'string_template':
+        return {
+            ('variable', name)
+            for name in string_template_identifier_names(data)
+        }
+
+    if type_ref.startswith('list[') and type_ref.endswith(']'):
+        if not isinstance(data, list):
+            return set()
+        inner = type_ref[5:-1].strip()
+        references = set()
+        for item in data:
+            references.update(collect_type_references(item, inner, env))
+        return references
+
+    if type_ref.startswith('dict[') and type_ref.endswith(']'):
+        if not isinstance(data, dict):
+            return set()
+        _, value_type = split_type_arguments(type_ref[5:-1])
+        references = set()
+        for value in data.values():
+            references.update(
+                collect_type_references(value, value_type, env)
+            )
+        return references
+
+    if type_ref in env.get('classes', {}):
+        return collect_inline_class_references(
+            data, env['classes'][type_ref], env
+        )
+
+    alias = env.get('aliases', {}).get(type_ref)
+    if alias is None:
+        return set()
+    registry_name = alias.get('registry')
+    if registry_name is None:
+        return collect_type_references(data, alias['type'], env)
+    if not isinstance(data, dict) or len(data) != 1:
+        return set()
+    keyword, payload = next(iter(data.items()))
+    definition = env.get('registries', {}).get(registry_name, {}).get(keyword)
+    if isinstance(definition, list):
+        return collect_inline_class_references(payload, definition, env)
+    if isinstance(definition, dict) and 'type' in definition:
+        return collect_descriptor_references(payload, definition, env)
+    return set()
+
+
+def collect_type_references(data, type_value, env):
+    members = _type_members(type_value)
+    for member in members:
+        if _type_matches(data, member, env):
+            return collect_single_type_references(data, member, env)
+    return set()
+
+
+def collect_member_field_references(member, class_name, fields, env):
+    if not isinstance(member, dict):
+        return set()
+    descriptors = schema_class_fields(env, class_name)
+    references = set()
+    for field in fields:
+        if field in member and field in descriptors:
+            references.update(
+                collect_descriptor_references(
+                    member[field], descriptors[field], env
+                )
+            )
+    return references
+
+
+def _apply_reference(
+    reference, datasets, lookups, live_columns, live_datasets, live_lookups
+):
+    kind, name = reference
+    changed = False
+    if kind == 'dataset':
+        if name not in live_datasets:
+            live_datasets.add(name)
+            changed = True
+        return changed
+    if '.' not in name:
+        if name not in live_columns:
+            live_columns.add(name)
+            changed = True
+        return changed
+    qualifier = name.split('.', 1)[0]
+    if qualifier in datasets and qualifier not in live_datasets:
+        live_datasets.add(qualifier)
+        changed = True
+    elif qualifier in lookups and qualifier not in live_lookups:
+        live_lookups.add(qualifier)
+        changed = True
+    return changed
+
+
+def prune_inheritance_collections(spec, env):
+    """Remove keyed declarations unreachable from R017 semantic roots."""
+    pruned = copy.deepcopy(spec)
+    datasets = pruned.get('datasets')
+    datasets = datasets if isinstance(datasets, dict) else {}
+    columns = pruned.get('columns')
+    column_entries = columns if isinstance(columns, list) else []
+    column_map = {
+        column.get('name'): column
+        for column in column_entries
+        if isinstance(column, dict) and isinstance(column.get('name'), str)
+    }
+    lookups = pruned.get('record_lookups')
+    lookup_entries = lookups if isinstance(lookups, list) else []
+    lookup_map = {
+        lookup.get('id'): lookup
+        for lookup in lookup_entries
+        if isinstance(lookup, dict) and isinstance(lookup.get('id'), str)
+    }
+    rows = pruned.get('rows')
+    row_entries = rows if isinstance(rows, list) else []
+
+    live_columns = set()
+    output = pruned.get('output')
+    if isinstance(output, dict) and isinstance(output.get('columns'), list):
+        live_columns.update(
+            name for name in output['columns'] if isinstance(name, str)
+        )
+    keys = pruned.get('keys')
+    if isinstance(keys, list):
+        live_columns.update(name for name in keys if isinstance(name, str))
+    for name, column in column_map.items():
+        if 'verifications' in column:
+            live_columns.add(name)
+
+    live_datasets = set()
+    base = pruned.get('base')
+    if isinstance(base, str):
+        live_datasets.add(base)
+    live_lookups = set()
+
+    references = set()
+    root_fields = schema_class_fields(env, 'root_class')
+    if 'verifications' in pruned and 'verifications' in root_fields:
+        references.update(
+            collect_descriptor_references(
+                pruned['verifications'], root_fields['verifications'], env
+            )
+        )
+
+    row_fields = schema_class_fields(env, 'row_class')
+    for row in row_entries:
+        if not isinstance(row, dict):
+            continue
+        driver = row.get('dataset', base)
+        if isinstance(driver, str):
+            live_datasets.add(driver)
+        for field in ('group_by', 'filter'):
+            if field in row and field in row_fields:
+                references.update(
+                    collect_descriptor_references(
+                        row[field], row_fields[field], env
+                    )
+                )
+
+    for reference in references:
+        _apply_reference(
+            reference, datasets, lookup_map, live_columns, live_datasets,
+            live_lookups,
+        )
+
+    processed_columns = set()
+    processed_lookups = set()
+    processed_row_targets = set()
+    while True:
+        changed = False
+        for name in list(live_columns - processed_columns):
+            processed_columns.add(name)
+            column = column_map.get(name)
+            if column is None:
+                continue
+            refs = collect_member_field_references(
+                column, 'column_class', ('derivation', 'verifications'), env
+            )
+            for reference in refs:
+                changed |= _apply_reference(
+                    reference, datasets, lookup_map, live_columns,
+                    live_datasets, live_lookups,
+                )
+
+        for row_index, row in enumerate(row_entries):
+            derivations = row.get('derivations') if isinstance(row, dict) else None
+            if not isinstance(derivations, dict):
+                continue
+            for target in list(live_columns):
+                marker = (row_index, target)
+                if marker in processed_row_targets or target not in derivations:
+                    continue
+                processed_row_targets.add(marker)
+                descriptor = row_fields.get('derivations')
+                if descriptor is None:
+                    continue
+                refs = collect_type_references(
+                    derivations[target], 'derivation', env
+                )
+                for reference in refs:
+                    changed |= _apply_reference(
+                        reference, datasets, lookup_map, live_columns,
+                        live_datasets, live_lookups,
+                    )
+
+        lookup_fields = schema_class_fields(env, 'record_lookup_class')
+        for lookup_id in list(live_lookups - processed_lookups):
+            processed_lookups.add(lookup_id)
+            lookup = lookup_map.get(lookup_id)
+            if lookup is None:
+                continue
+            dataset_id = lookup.get('dataset')
+            if isinstance(dataset_id, str) and dataset_id not in live_datasets:
+                live_datasets.add(dataset_id)
+                changed = True
+            for field, value in lookup.items():
+                if field in {'id', 'dataset'} or field not in lookup_fields:
+                    continue
+                refs = collect_descriptor_references(
+                    value, lookup_fields[field], env
+                )
+                for reference in refs:
+                    changed |= _apply_reference(
+                        reference, datasets, lookup_map, live_columns,
+                        live_datasets, live_lookups,
+                    )
+
+        if not changed:
+            break
+
+    if isinstance(pruned.get('columns'), list):
+        pruned['columns'] = [
+            column for column in pruned['columns']
+            if isinstance(column, dict) and column.get('name') in live_columns
+        ]
+    if isinstance(pruned.get('datasets'), dict):
+        pruned['datasets'] = {
+            name: source for name, source in pruned['datasets'].items()
+            if name in live_datasets
+        }
+    if isinstance(pruned.get('record_lookups'), list):
+        pruned['record_lookups'] = [
+            lookup for lookup in pruned['record_lookups']
+            if isinstance(lookup, dict) and lookup.get('id') in live_lookups
+        ]
+        if not pruned['record_lookups']:
+            del pruned['record_lookups']
+    if isinstance(pruned.get('rows'), list):
+        for row in pruned['rows']:
+            derivations = row.get('derivations') if isinstance(row, dict) else None
+            if isinstance(derivations, dict):
+                row['derivations'] = {
+                    name: derivation
+                    for name, derivation in derivations.items()
+                    if name in live_columns
+                }
+        if not pruned['rows']:
+            del pruned['rows']
+    return pruned
+
+
+def column_dependency_names(column, rows, lookups, env):
+    references = set()
+    if isinstance(column, dict) and 'derivation' in column:
+        references.update(
+            collect_type_references(column['derivation'], 'derivation', env)
+        )
+    name = column.get('name') if isinstance(column, dict) else None
+    for row in rows:
+        derivations = row.get('derivations') if isinstance(row, dict) else None
+        if isinstance(derivations, dict) and name in derivations:
+            references.update(
+                collect_type_references(derivations[name], 'derivation', env)
+            )
+
+    dependencies = set()
+    for kind, reference in references:
+        if kind != 'variable':
+            continue
+        if '.' not in reference:
+            dependencies.add(reference)
+            continue
+        qualifier = reference.split('.', 1)[0]
+        lookup = lookups.get(qualifier)
+        if lookup is None:
+            continue
+        lookup_refs = collect_member_field_references(
+            lookup,
+            'record_lookup_class',
+            ('source', 'between', 'filter', 'order_by'),
+            env,
+        )
+        dependencies.update(
+            value for ref_kind, value in lookup_refs
+            if ref_kind == 'variable' and '.' not in value
+        )
+    return dependencies
+
+
+def order_inherited_columns(spec, env):
+    columns = spec.get('columns')
+    if not isinstance(columns, list):
+        return spec, []
+    names = [
+        column.get('name') if isinstance(column, dict) else None
+        for column in columns
+    ]
+    if not all(isinstance(name, str) for name in names):
+        return spec, []
+    positions = {name: index for index, name in enumerate(names)}
+    rows = spec.get('rows')
+    rows = rows if isinstance(rows, list) else []
+    lookup_entries = spec.get('record_lookups')
+    lookup_entries = lookup_entries if isinstance(lookup_entries, list) else []
+    lookups = {
+        lookup.get('id'): lookup
+        for lookup in lookup_entries
+        if isinstance(lookup, dict) and isinstance(lookup.get('id'), str)
+    }
+    dependencies = {}
+    errors = []
+    for column in columns:
+        name = column['name']
+        dependencies[name] = column_dependency_names(
+            column, rows, lookups, env
+        )
+        for dependency in sorted(dependencies[name]):
+            if dependency not in positions:
+                errors.append(
+                    f"ERROR: columns.{name}.derivation: unknown_field: "
+                    f"column dependency {dependency!r} is not declared"
+                )
+    if errors:
+        return spec, errors
+
+    dependents = {name: set() for name in names}
+    indegree = {name: 0 for name in names}
+    for name, required in dependencies.items():
+        for dependency in required:
+            dependents[dependency].add(name)
+            indegree[name] += 1
+
+    ready = [name for name in names if indegree[name] == 0]
+    ready.sort(key=positions.get)
+    ordered = []
+    while ready:
+        name = ready.pop(0)
+        ordered.append(name)
+        for dependent in sorted(dependents[name], key=positions.get):
+            indegree[dependent] -= 1
+            if indegree[dependent] == 0:
+                ready.append(dependent)
+                ready.sort(key=positions.get)
+    if len(ordered) != len(names):
+        cycle = [name for name in names if indegree[name] > 0]
+        return spec, [
+            "ERROR: columns: dependency cycle after inheritance: "
+            + ' -> '.join(cycle)
+        ]
+
+    by_name = {column['name']: column for column in columns}
+    reordered = copy.deepcopy(spec)
+    reordered['columns'] = [by_name[name] for name in ordered]
+    return reordered, []
+
+
+def order_resolved_spec_fields(spec, env):
+    root_fields = schema_class_fields(env, 'root_class')
+    ordered = {}
+    member_classes = {
+        'datasets': 'dataset_class',
+        'record_lookups': 'record_lookup_class',
+        'columns': 'column_class',
+        'rows': 'row_class',
+    }
+    for name in root_fields:
+        if name not in spec or name == 'parents':
+            continue
+        value = spec[name]
+        class_name = member_classes.get(name)
+        if class_name is None:
+            ordered[name] = value
+            continue
+        fields = schema_class_fields(env, class_name)
+        if name == 'datasets' and isinstance(value, dict):
+            ordered[name] = {
+                member_id: {
+                    field: member[field]
+                    for field in fields
+                    if isinstance(member, dict) and field in member
+                }
+                for member_id, member in value.items()
+            }
+        elif isinstance(value, list):
+            ordered[name] = [
+                {
+                    field: member[field]
+                    for field in fields
+                    if isinstance(member, dict) and field in member
+                }
+                for member in value
+            ]
+        else:
+            ordered[name] = value
+    return ordered
+
+
+def finalize_resolved_inheritance(spec, env):
+    resolved = prune_inheritance_collections(spec, env)
+    resolved, errors = order_inherited_columns(resolved, env)
+    if errors:
+        return resolved, errors
+    return order_resolved_spec_fields(resolved, env), []
+
 def validate_schemas(root: Path):
     env, errors = build_schema_env(root)
     return errors
@@ -1314,6 +2418,25 @@ def validate_spec_names(spec, spec_label):
                     f"undeclared dataset {lookup_dataset!r}"
                 )
 
+    return errors
+
+
+def validate_column_labels(spec, spec_label):
+    """Require every surviving declared column to carry a usable label."""
+    errors = []
+    columns = spec.get('columns')
+    if not isinstance(columns, list):
+        return errors
+    for index, column in enumerate(columns):
+        if not isinstance(column, dict):
+            continue
+        label = column.get('label')
+        if isinstance(label, str) and label.strip():
+            continue
+        errors.append(
+            f"ERROR: {spec_label}.columns[{index}].label: declared column "
+            "requires a non-empty label"
+        )
     return errors
 
 
@@ -1585,7 +2708,7 @@ def specification_column_types(spec):
     }
 
 
-def dataset_type_catalog(spec, spec_path):
+def dataset_type_catalog(spec, spec_path, env=None):
     """Return statically discoverable field types for each dataset."""
     catalog = {}
     datasets = spec.get('datasets')
@@ -1609,8 +2732,16 @@ def dataset_type_catalog(spec, spec_path):
             try:
                 with open(resolved, 'r', encoding='utf-8') as handle:
                     producer = yaml.load(handle, Loader=UniqueKeyLoader)
+                if env is not None:
+                    producer, resolution_errors, _ = prepare_spec_document(
+                        producer, str(resolved), resolved, env
+                    )
+                    if resolution_errors:
+                        producer = None
+                if not isinstance(producer, dict):
+                    raise ValueError('producer did not resolve to a mapping')
                 fields.update(specification_column_types(producer))
-            except (OSError, yaml.YAMLError):
+            except (OSError, ValueError, yaml.YAMLError):
                 pass
 
         if (
@@ -1832,10 +2963,10 @@ def validate_derivation_predicates(derivation, path, resolver, datasets):
     return errors
 
 
-def validate_spec_predicates(spec, spec_label, spec_path=None):
+def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
     """Parse, resolve, and type-check every R004 predicate in a spec."""
     errors = []
-    datasets = dataset_type_catalog(spec, spec_path)
+    datasets = dataset_type_catalog(spec, spec_path, env)
     output_types = specification_column_types(spec)
     lookups = {}
     lookup_entries = spec.get('record_lookups')
@@ -1962,6 +3093,60 @@ def validate_spec_predicates(spec, spec_label, spec_path=None):
     return errors
 
 
+def prepare_spec_document(spec, spec_label, spec_path, env):
+    if isinstance(spec, dict) and 'parents' in spec:
+        return resolve_spec_inheritance(spec, spec_label, spec_path, env)
+    return copy.deepcopy(spec), [], {}
+
+
+def inherited_error_logical_path(path, spec):
+    identities = {
+        'record_lookups': 'id',
+        'columns': 'name',
+        'rows': 'id',
+    }
+    for collection, identity in identities.items():
+        match = re.match(rf'^{collection}\[([0-9]+)\]', path)
+        values = spec.get(collection) if isinstance(spec, dict) else None
+        if match is None or not isinstance(values, list):
+            continue
+        index = int(match.group(1))
+        if index >= len(values) or not isinstance(values[index], dict):
+            continue
+        member_id = values[index].get(identity)
+        if isinstance(member_id, str):
+            return (
+                f"{collection}.{member_id}" + path[match.end():]
+            )
+    return path
+
+
+def inherited_error_provenance(
+    error, spec_label, provenance, spec=None, spec_path=None
+):
+    if not provenance or not error.startswith(f"ERROR: {spec_label}."):
+        return error
+    remainder = error[len(f"ERROR: {spec_label}."):]
+    path = remainder.split(':', 1)[0]
+    normalized = inherited_error_logical_path(path, spec)
+    candidates = [
+        key for key in provenance
+        if normalized == key or normalized.startswith(key + '.')
+    ]
+    if not candidates:
+        return error
+    source = provenance[max(candidates, key=len)]
+    if (
+        source == spec_label
+        or (
+            spec_path is not None
+            and source == str(spec_path.resolve())
+        )
+    ):
+        return error
+    return f"{error} (contributed by {source})"
+
+
 def validate_spec_document(spec, spec_label, spec_path, env, spec_stack=None):
     """Validate one complete specification and its producer dependencies."""
     if not isinstance(spec, dict) or not spec:
@@ -1969,7 +3154,13 @@ def validate_spec_document(spec, spec_label, spec_path, env, spec_stack=None):
             f"ERROR: {spec_label}: spec is empty or not a mapping"
         ]
 
-    errors = []
+    has_inheritance = 'parents' in spec
+    spec, errors, provenance = prepare_spec_document(
+        spec, spec_label, spec_path, env
+    )
+    if errors or not isinstance(spec, dict):
+        return errors
+
     if 'schema_version' in spec:
         spec_version = str(spec['schema_version'])
         env_version = str(env.get('version', '1.0'))
@@ -1982,8 +3173,10 @@ def validate_spec_document(spec, spec_label, spec_path, env, spec_stack=None):
     errors.extend(validate_type(spec, ['root_class'], env, spec_label))
     errors.extend(validate_grouped_rows(spec, spec_label))
     errors.extend(validate_spec_names(spec, spec_label))
+    if has_inheritance:
+        errors.extend(validate_column_labels(spec, spec_label))
     errors.extend(validate_spec_contracts(spec, spec_label, spec_path))
-    errors.extend(validate_spec_predicates(spec, spec_label, spec_path))
+    errors.extend(validate_spec_predicates(spec, spec_label, spec_path, env))
 
     next_stack = set(spec_stack or ())
     next_stack.add(spec_path.resolve())
@@ -1992,7 +3185,12 @@ def validate_spec_document(spec, spec_label, spec_path, env, spec_stack=None):
             spec, spec_label, spec_path, env, next_stack
         )
     )
-    return errors
+    return [
+        inherited_error_provenance(
+            error, spec_label, provenance, spec, spec_path
+        )
+        for error in errors
+    ]
 
 
 def validate_producer_output_contract(producer, path):
@@ -2074,8 +3272,15 @@ def validate_producing_specs(spec, spec_label, spec_path, env, spec_stack):
             )
             continue
 
+        producer_entry = producer
+        producer, resolution_errors, _ = prepare_spec_document(
+            producer_entry, f"{path}.schema", producer_path, env
+        )
+        if resolution_errors or not isinstance(producer, dict):
+            errors.extend(resolution_errors)
+            continue
         producer_errors = validate_spec_document(
-            producer,
+            producer_entry,
             f"{path}.schema",
             producer_path,
             env,
@@ -2126,6 +3331,43 @@ def validate_producing_specs(spec, spec_label, spec_path, env, spec_stack):
     return errors
 
 
+def expected_resolved_path(example_dir, spec_path):
+    suffix = spec_path.stem.removeprefix('spec')
+    return example_dir / 'expected' / f"resolved{suffix}.yaml"
+
+
+def validate_expected_resolved_fixture(
+    spec, spec_label, spec_path, example_dir, env
+):
+    """Compare an inherited positive example with its resolved YAML tree."""
+    if not isinstance(spec, dict) or 'parents' not in spec:
+        return []
+    resolved, resolution_errors, _ = prepare_spec_document(
+        spec, spec_label, spec_path, env
+    )
+    if resolution_errors or not isinstance(resolved, dict):
+        return []
+    expected_path = expected_resolved_path(example_dir, spec_path)
+    if not expected_path.is_file():
+        return [
+            f"ERROR: {spec_label}: inherited positive example requires "
+            f"{expected_path.name}"
+        ]
+    try:
+        with open(expected_path, 'r', encoding='utf-8') as handle:
+            expected = yaml.load(handle, Loader=UniqueKeyLoader)
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        return [
+            f"ERROR: {expected_path}: cannot read resolved fixture: {exc}"
+        ]
+    if resolved != expected:
+        return [
+            f"ERROR: {spec_label}: resolved specification differs from "
+            f"expected/{expected_path.name}"
+        ]
+    return []
+
+
 def validate_examples_structure(root: Path, env, warnings=None):
     errors = []
     if warnings is None:
@@ -2149,12 +3391,17 @@ def validate_examples_structure(root: Path, env, warnings=None):
                 continue
 
             spec_label = f"{ex_dir.name}/{spec_path.name}"
+            is_negative = ex_dir.name.startswith('negative-')
             spec_errors = validate_spec_document(
                 spec, spec_label, spec_path, env
             )
-            is_negative = ex_dir.name.startswith('negative-')
             if not is_negative:
                 errors.extend(spec_errors)
+                errors.extend(
+                    validate_expected_resolved_fixture(
+                        spec, spec_label, spec_path, ex_dir, env
+                    )
+                )
                 continue
 
             error_yaml_path = ex_dir / 'expected' / 'error.yaml'
@@ -2528,18 +3775,21 @@ def check_yaml_files(root: Path):
     errors.extend(validate_example_readmes(root))
     errors.extend(validate_rule_metadata(root))
 
-    csv_errors, csv_warnings = validate_examples_csv(root)
+    csv_errors, csv_warnings = validate_examples_csv(root, env)
     errors.extend(csv_errors)
     warnings.extend(csv_warnings)
     return errors, warnings
 
 
-def validate_examples_csv(root: Path):
+def validate_examples_csv(root: Path, env=None):
     errors = []
     warnings = []
     examples_dir = root / 'yaml' / 'examples'
     if not examples_dir.exists():
         return errors, warnings
+    if env is None:
+        candidate_env, _ = build_schema_env(root)
+        env = candidate_env
 
     for ex_dir in sorted(examples_dir.iterdir()):
         if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
@@ -2552,6 +3802,12 @@ def validate_examples_csv(root: Path):
             except Exception:
                 continue
 
+            if env is not None:
+                spec, resolution_errors, _ = prepare_spec_document(
+                    spec, f"{ex_dir.name}/{spec_path.name}", spec_path, env
+                )
+                if resolution_errors:
+                    continue
             if not isinstance(spec, dict) or 'columns' not in spec:
                 continue
 

@@ -16,8 +16,10 @@ tracker, one work item per root cause.
     <standard>-<domain>-<subject>/
         README.md
         spec.yaml | spec_<variant>.yaml ...
+        layers/*.yaml                       # when the entry inherits
         input/*.csv
         expected/<domain>.csv
+        expected/resolved[_<variant>].yaml  # when the entry inherits
 
 Use `spec.yaml` for one specification. Use one or more `spec_<variant>.yaml`
 files when the example intentionally demonstrates a runtime or design variant
@@ -28,6 +30,11 @@ An expected failure before a dataset is completed replaces the CSV with
 `expected/error.yaml`, unless the intended artifact is useful as a forward
 contract. A failure over a completed dataset carries both the expected CSV and
 `expected/error.yaml`.
+
+A positive inherited example also carries the exact resolved YAML data tree.
+Use `expected/resolved.yaml` with `spec.yaml`, or
+`expected/resolved_<variant>.yaml` with `spec_<variant>.yaml`. This fixture
+must be complete, canonical, minimal, and free of `parents`.
 
 Name the directory for what it derives, not for the construct it uses:
 `sdtm-vs-visit-study-day`, not `sdtm-vs-mapping-from`.
@@ -240,6 +247,7 @@ check reports is a variable the README does not explain.
 1. Write `spec.yaml`, or the applicable `spec_<variant>.yaml` files, the input
    data, and either the expected output or the expected error. Add an expected
    CSV beside an error when it makes a blocked or rejected result concrete.
+   For a positive inherited example, also write its expected resolved YAML.
 2. Write the README to the contract above. A negative example must include its
    `## How to fix` section.
 3. Add a row to the index table in `README.md`. Its `Derives` column is the

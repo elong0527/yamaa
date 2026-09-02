@@ -17,7 +17,13 @@ The validation ensures:
    its stable file ID, and carry the same status in the rule index.
 3. **Example specs**: Every `spec.yaml` or `spec_<variant>.yaml` validates
    against the schemas, checking required fields, unknown fields, and registry
-   payload shapes. Every predicate is parsed under R004, its identifiers are
+   payload shapes. An entry with `parents` first resolves its ordered local
+   inheritance graph under R017. Resolution validates partial layers, rejects
+   remote or missing parents, cycles, version mismatches, duplicate layer-local
+   identifiers, invalid clears, and an entry that does not declare `output`;
+   rebases inherited paths; composes shallow keyed members; prunes unreachable
+   declarations; and stably orders columns by dependency. Every predicate is
+   parsed under R004, its identifiers are
    resolved for the predicate site, and statically known operand types are
    checked without implicit conversion. Cross-field validation also rejects
    duplicate or unresolved dataset, lookup, column, key, output-column, and row
@@ -37,6 +43,8 @@ The validation ensures:
    validated; structural errors are only suppressed if their named path
    matches a `spec_path` declared in `expected/error.yaml` with
    `phase: validation`.
+   Each positive inherited example must provide an exact
+   `expected/resolved[_<variant>].yaml` data-tree fixture.
 4. **Layout**: All examples have `README.md`, one `spec.yaml` or one or more
    `spec_<variant>.yaml` files, `input/`, and `expected/`. A base spec cannot
    be mixed with variants. Negative examples must provide `expected/error.yaml`
@@ -61,7 +69,9 @@ The validation ensures:
 The validator ensures structural correctness and the static cross-field checks
 listed above. At this time, it **does not**:
 - Execute clinical derivations.
-- Materialize shorthand canonical forms (no transformed document is returned).
+- Materialize shorthand canonical forms for specifications without `parents`.
+  Inherited specifications are canonicalized as part of producing their
+  resolved data tree.
 - Reproduce golden output values in the `.csv` files.
 - Parse or type-check the numeric, aggregate, or template leaf languages; this
   is tracked in issue #103. Predicate syntax, names, and statically known types
@@ -83,10 +93,11 @@ By default, the script infers the repository root relative to its own path.
 - Returns non-zero (e.g. `1`) if any errors are encountered.
 
 ## Warning Policy
-Warnings are printed to standard output but do not fail validation.
-Column-label and dependency-order policies remain owned by the existing Ruby
-checks under `.github/workflows/`; those checks discover linked producing
-specifications recursively as part of the example workflow.
+Warnings are printed to standard output but do not fail validation. The Python
+validator checks column labels for every resolved specification and orders
+inherited columns by dependency. The existing Ruby checks under
+`.github/workflows/` continue to enforce these policies for non-inherited
+examples and discover linked producing specifications recursively.
 
 To treat warnings as errors, run with the `--warnings-as-errors` flag:
 

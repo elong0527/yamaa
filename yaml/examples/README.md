@@ -61,6 +61,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adlb-closest-visit`](adam-adlb-closest-visit/) | select the record closest to a window's target day |
 | [`adam-adlb-mean`](adam-adlb-mean/) | calculate each subject's mean result |
 | [`adam-adlb-shift-and-criteria`](adam-adlb-shift-and-criteria/) | classify a result, its shift from baseline, and one criterion |
+| [`adam-adlb-standardized-result`](adam-adlb-standardized-result/) | carry standardized results into analysis |
 | [`adam-adoe-study-eye`](adam-adoe-study-eye/) | tell the study eye from the fellow eye |
 | [`adam-adqs-subscale-score`](adam-adqs-subscale-score/) | score a questionnaire subscale from its item records |
 | [`adam-adrs-best-overall-response`](adam-adrs-best-overall-response/) | select the best overall response |
@@ -107,7 +108,12 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-adlb-absolute-wbc-duplicate`](negative-adlb-absolute-wbc-duplicate/) | reject duplicate WBC inputs for an absolute differential |
 | [`negative-adlb-computed-parameter`](negative-adlb-computed-parameter/) | reject a parameter computed from the dataset being built |
 | [`negative-adrs-partial-response-after-complete-response`](negative-adrs-partial-response-after-complete-response/) | reject a partial response recorded after a complete response |
+| [`negative-adsl-cyclic-parent`](negative-adsl-cyclic-parent/) | reject a circular chain of shared definitions |
+| [`negative-adsl-inherited-output`](negative-adsl-inherited-output/) | reject an inherited artifact layout |
+| [`negative-adsl-invalid-parent-clear`](negative-adsl-invalid-parent-clear/) | reject removal of a required variable property |
+| [`negative-adsl-parent-version-mismatch`](negative-adsl-parent-version-mismatch/) | reject shared definitions from another language version |
 | [`negative-adsl-randomization-date-retyped`](negative-adsl-randomization-date-retyped/) | reject a randomization date described twice |
+| [`negative-adsl-remote-parent`](negative-adsl-remote-parent/) | reject shared definitions from a remote location |
 | [`negative-adsl-subject-reference`](negative-adsl-subject-reference/) | reject a malformed subject reference |
 | [`negative-advs-overlapping-analysis-windows`](negative-advs-overlapping-analysis-windows/) | reject overlapping analysis windows |
 | [`negative-baseline-flag-tied-date`](negative-baseline-flag-tied-date/) | reject a baseline chosen between two same-day results |

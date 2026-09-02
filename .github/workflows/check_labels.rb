@@ -16,6 +16,9 @@ specs.each do |spec|
     next
   end
 
+  # R017 entries are checked after resolution by validate_repository.py.
+  next if document.is_a?(Hash) && document.key?("parents")
+
   columns = document.is_a?(Hash) ? document["columns"] : nil
   unless columns.is_a?(Array)
     errors << "#{relative_spec}: columns must be a list"

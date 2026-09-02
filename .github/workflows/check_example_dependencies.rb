@@ -302,6 +302,10 @@ end
 
 def check(spec)
   document = YAML.safe_load(File.read(spec))
+  # R017 resolves and topologically orders inherited entries in the Python
+  # repository validator before this legacy policy would inspect them.
+  return [] if document.is_a?(Hash) && document.key?("parents")
+
   columns = document["columns"]
   return ["columns must be a list"] unless columns.is_a?(Array)
 

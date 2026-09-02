@@ -1,0 +1,41 @@
+schema_version: "1.0"
+datasets:
+  LB: ../input/lb.csv
+  UNUSED: ../input/not-used.csv
+base: LB
+record_lookups:
+  - id: unused_reference
+    dataset: UNUSED
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: LB.USUBJID
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation:
+      source: LB.LBTESTCD
+  - name: AVAL
+    type: float
+    label: Standardized Numeric Result
+    derivation:
+      source: LB.LBSTRESN
+    metadata:
+      role: analysis-value
+  - name: AVALU
+    type: str
+    label: Analysis Value Unit
+    derivation:
+      source: LB.LBSTRESU
+  - name: TEMP
+    type: str
+    label: Unused Intermediate Value
+    derivation:
+      literal: unused
+verifications:
+  unique:
+    columns: [USUBJID, PARAMCD]
+metadata:
+  scope: organization
