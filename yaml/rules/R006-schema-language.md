@@ -57,7 +57,8 @@ unquoted ISO-looking date or datetime is also a string.
 
 Default parser settings do not satisfy this requirement. How an implementation
 meets it is its own choice, but it must not be met by requiring authors to
-quote values.
+quote values. R011's non-finite normalization applies immediately after core-
+schema scalar resolution.
 
 ## Named types
 

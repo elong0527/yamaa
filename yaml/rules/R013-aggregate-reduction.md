@@ -225,10 +225,11 @@ says so with `NULLIF`.
 
 R010's failure conditions apply to the arithmetic unchanged: division by zero,
 `SQRT` of a negative argument, `LN` of a non-positive argument, invalid
-`POWER`, integer overflow, and a non-finite float result each fail the run.
-`SUM` fails on integer overflow for the same reason. Because `MEAN` is defined
-through `SUM`, the same intermediate overflow fails even when the mathematical
-mean would fit.
+`POWER`, and integer overflow each fail the run. R011's non-finite
+normalization applies after every arithmetic or reduction result. `SUM` fails
+on integer overflow for the same reason. Because `MEAN` is defined through
+`SUM`, the same intermediate overflow fails even when the mathematical mean
+would fit.
 
 ## Determinism
 

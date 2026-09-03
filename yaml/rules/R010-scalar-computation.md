@@ -168,6 +168,9 @@ missing input, and a formula that must yield missing rather than fail says so
 with `NULLIF`. Percentage change against a zero base is
 `100 * (VALUE - BASE) / NULLIF(BASE, 0)`.
 
+R011's non-finite normalization applies after every numeric operator or
+function and before the result is used by another part of the expression.
+
 ## Failure conditions
 
 These fail the run. They are not silently converted to missing, consistent with
@@ -180,7 +183,6 @@ R005: an implementation must not replace an error with a missing value.
 - `POWER` with a zero base and a negative exponent, or a negative base and a
   non-integer exponent.
 - Integer overflow of `+`, `-`, or `*` under `int` promotion.
-- A float result that is infinite or not a number.
 
 Floating-point results are not exact decimals. `POWER(x, 2)` and `x * x` are
 permitted to differ in the last place. A specification cannot round that away,
