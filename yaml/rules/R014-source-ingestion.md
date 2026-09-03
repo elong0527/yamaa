@@ -17,8 +17,9 @@ missing, and which type it carries.
 
 This rule owns the step from a stored field to a bound value. R002 owns how a
 name binds to a dataset or an ODM item once that value exists, R011 owns
-conversion of a completed derivation result into a declared column type, and
-R007 owns what each expression requires of an input it receives.
+numeric parsing and non-finite normalization in addition to conversion of a
+completed derivation result, and R007 owns what each expression requires of an
+input it receives.
 
 ## A field's type belongs to the dataset
 
@@ -115,9 +116,9 @@ extract.
 
 A declared field type is applied to the stored text by the `str` row of R011's
 conversion table, which is the same parsing a `str` column uses when it reaches
-a declared type. `int` and `float` accept exactly R010's `number` production
-with an optional sign; `date` and `datetime` accept exactly the lexical forms
-R016 fixes. A value that does not parse fails the run.
+a declared type. `int` and `float` use R011's numeric text parsing, including
+its non-finite normalization; `date` and `datetime` accept exactly the lexical
+forms R016 fixes. A value that does not parse fails the run.
 
 An ingestion failure is not a conversion failure. `conversion_failure` is
 declared on a column and answers for a value the derivation produced, as R005
@@ -137,11 +138,13 @@ field therefore distinguishes an uncollected value from a collected empty one,
 and no other type admits an empty string at all.
 
 **No text is a missing-value sentinel.** `NA`, `NULL`, `.`, `unknown`, and
-every other spelling are ordinary values. A reader that treats them as absence
-loses `NA` as a region, `.` as a separator, and a collected `unknown` as a
-recorded answer, and it does so before any rule in this design can see the
-value. A study that records absence with a code maps that code to a result
-where the specification can be read.
+every other spelling are ordinary string values. A reader that treats them as
+absence loses `NA` as a region, `.` as a separator, and a collected `unknown`
+as a recorded answer, and it does so before any rule in this design can see
+the value. A study that records absence with a code maps that code to a result
+where the specification can be read. R011 separately recognizes the YAML 1.2
+non-finite forms during declared numeric parsing; they remain text when the
+field's type is `str` and normalize only after being parsed as numbers.
 
 An empty field of any declared type other than `str` is missing rather than a
 parse failure, because it holds no text to parse.

@@ -1,32 +1,34 @@
 ---
 id: R011
-title: Column Type Vocabulary and Conversion
+title: Column Type Vocabulary, Missing Normalization, and Conversion
 status: normative
-applies_to: [column.type, column_type, derivation, conversion_failure]
-depends_on: [R005, R006, R007, R008, R010, R016]
+applies_to: [column.type, column_type, literal_value, derivation, conversion_failure]
+depends_on: [R005, R006, R007, R008, R009, R010, R014, R016, R018]
 ---
 
 # Column type vocabulary and conversion
 
 ## Intent
 
-Close the vocabulary a column may declare, and define value conversion into a
-declared type.
+Close the vocabulary a column may declare, normalize non-finite floats, and
+define value conversion into a declared type.
 
 ## Boundaries
 
-This rule owns what a declared type is and which conversions are defined. R005
-owns when conversion happens in the derivation lifecycle and what an unhandled
-failure does to the run. R008 owns `conversion_failure`. R010 owns the
-arithmetic that produces a numeric value in the first place. R014 owns the
-other end: which stored fields are missing and what type a bound value carries
-before any conversion is reached. It applies this rule's `str` row to a field's
-declared type, so text is parsed the same way wherever it is read. R016 owns
-both temporal types. What a `date` and a `datetime` denote, the text each is
-read from and written back to, how two of them order, and which operations
-read them are stated there; the temporal cells below apply that rule rather
-than restating it. R018 owns the function-only Boolean parameter type and
-requires function results to remain in this rule's column vocabulary.
+This rule owns what a declared type is, normalization of any non-finite float
+that enters or is produced by the language, and which conversions are defined.
+R005 owns when conversion happens in the derivation lifecycle and what an
+unhandled failure does to the run. R008 owns `conversion_failure`. R010 owns
+the arithmetic that produces a numeric value in the first place. R014 owns the
+other end: which stored fields are structurally missing and what type a bound
+value carries before conversion or normalization is reached. It applies this
+rule's `str` row to a field's declared type, so text is parsed the same way
+wherever it is read. R016 owns both temporal types. What a `date` and a
+`datetime` denote, the text each is read from and written back to, how two of
+them order, and which operations read them are stated there; the temporal
+cells below apply that rule rather than restating it. R018 owns the
+function-only Boolean parameter type and the result contract applied after
+this rule's normalization.
 
 ## Three type namespaces
 
@@ -75,6 +77,47 @@ There is no Boolean column type; a flag is a `str` column with an
 
 Extending this vocabulary is a rule change, not an implementation choice.
 
+## Non-finite floats are missing
+
+A non-finite float is positive infinity, negative infinity, or any NaN binary64
+value. Every non-finite float is the missing value. It is normalized
+immediately at every boundary where a float enters the language or a numeric
+operation produces one:
+
+- after YAML 1.2 core-schema scalar resolution in a specification, schema,
+  project environment, or conformance document, before a literal or default is
+  validated or used;
+- after a self-describing source supplies a typed value or stored text is
+  parsed as a number;
+- after a built-in expression, mapping, conditional, coalescing operation, or
+  handler selects or substitutes a result;
+- after each numeric operator, scalar numeric function, or aggregate
+  reduction; and
+- after a project binding returns its host scalar, before R018 checks its
+  declared result contract.
+
+Normalization precedes expression dispatch, missing handling, conversion,
+comparison, equality, grouping, ordering, range selection, key validation,
+verification, contract fingerprinting, and artifact rendering. None of those
+operations can observe a non-finite float or fall back to host-runtime
+semantics for one. They observe the missing value and apply their existing
+missing-value behavior. In particular, a normalized output key fails R005's
+non-missing key requirement, `not_missing` fails while verifications that skip
+missing values skip it under R009, and a delimited artifact renders it as an
+empty field under R005. No artifact or canonical value has an infinity or NaN
+spelling.
+
+The policy is value-based rather than a universal text sentinel. An unquoted
+YAML scalar matching a core-schema non-finite form first resolves to a float
+and is therefore normalized; quoting the same characters preserves a `str`.
+A stored or quoted string remains text when its declared destination is `str`.
+Only numeric parsing gives such text a numeric meaning, as defined below.
+
+Normalization does not bypass a constraint that prohibits missing. For
+example, a project binding that returns a non-finite float has returned missing
+after normalization and is valid only when its R018 contract declares
+`may_return_missing: true`.
+
 ## Conversion
 
 Conversion applies the completed derivation result to the declared column type
@@ -98,9 +141,12 @@ A missing value converts to missing in every type. Conversion is not attempted,
 so `conversion_failure` does not fire for a missing input and a missing result
 is not a failure.
 
-Parsing a `str` to a number accepts exactly R010's `number` production with an
-optional leading `+` or `-` and no surrounding whitespace. Any other text
-fails.
+Parsing a `str` to a number accepts R010's `number` production with an optional
+leading `+` or `-` and no surrounding whitespace. It also recognizes exactly
+the YAML 1.2 core-schema non-finite forms: `.inf`, `.Inf`, or `.INF` with an
+optional leading `+` or `-`, and `.nan`, `.NaN`, or `.NAN`. A recognized
+non-finite form is parsed as a float and immediately normalized to missing
+before conversion continues. Any other text fails.
 
 A cell reading **R016** applies that rule: the text a temporal value is parsed
 from, the canonical text it is written back to, and the conversions it does
@@ -128,7 +174,8 @@ specification written under this one.
 
 Conversion from `float` to `str` uses the shortest decimal text that parses
 back to the same binary64 value, with a trailing `.0` omitted for an integral
-value. This conversion preserves the value; it is not display rounding.
+value. Every float reaching this conversion is finite under the normalization
+policy above. This conversion preserves the value; it is not display rounding.
 
 Calculations, comparisons, verifications, and dependent derivations always use
 the unrounded value. Final artifact display precision and its half-away-from-
