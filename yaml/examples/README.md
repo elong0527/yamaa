@@ -83,7 +83,6 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adsl-last-alive-date`](adam-adsl-last-alive-date/) | derive the last known alive date from multiple sources |
 | [`adam-adsl-mapping`](adam-adsl-mapping/) | translate collected values into a standard vocabulary |
 | [`adam-adsl-new-anticancer-therapy-date`](adam-adsl-new-anticancer-therapy-date/) | date the subject started new anti-cancer therapy |
-| [`adam-adsl-non-finite-values`](adam-adsl-non-finite-values/) | normalize non-finite numeric values to missing |
 | [`adam-adsl-population-flags`](adam-adsl-population-flags/) | derive the safety and intent-to-treat flags |
 | [`adam-adsl-randomization-timing`](adam-adsl-randomization-timing/) | record randomization timing |
 | [`adam-adsl-rescue-medication`](adam-adsl-rescue-medication/) | select the first rescue medication |

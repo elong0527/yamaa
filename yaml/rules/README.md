@@ -19,7 +19,7 @@ semantics, error behavior, and representative examples are complete.
 | R008 | [Local error handlers](R008-local-handlers.md) | normative | The handler lifecycle | R001, R002, R003, R005, R006, R007, R011, R012, R016 |
 | R009 | [Verifications](R009-verifications.md) | normative | What each assertion means and when it runs | R004, R005, R006, R011 |
 | R010 | [Scalar numeric computation](R010-scalar-computation.md) | normative | The `numeric_expression` primitive | R001, R004, R005, R006, R007, R011, R014, R015 |
-| R011 | [Column types](R011-column-types.md) | normative | The `column_type` vocabulary, non-finite normalization, and conversion | R005, R006, R007, R008, R009, R010, R014, R016, R018 |
+| R011 | [Column types](R011-column-types.md) | normative | The `column_type` vocabulary and conversion | R005, R006, R007, R008, R010, R016 |
 | R012 | [String templates](R012-string-templates.md) | normative | Interpolation grammar, escaping, and evaluation | R001, R002, R006, R007, R008 |
 | R013 | [Aggregate reduction](R013-aggregate-reduction.md) | normative | The `aggregate_expression` primitive: reducers, row-relative narrowing, grain, and empty-group results | R001, R002, R003, R004, R006, R007, R010, R011, R015 |
 | R014 | [Source-format ingestion](R014-source-ingestion.md) | normative | Missing recognition and field typing at the source | R002, R006, R011, R016 |
