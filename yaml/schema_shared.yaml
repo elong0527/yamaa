@@ -1,0 +1,47 @@
+version: "1.0"
+
+# Types shared by specification and project-environment schema entry points.
+
+column_type:
+    type: str
+    values: [str, int, float, date, datetime]
+
+literal_value:
+    type: [str, int, float, bool, "null"]
+
+path:
+    type: str
+    min_length: 1
+
+function_name:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: Logical name of a function declared by the project environment.
+
+function_contract_version:
+    type: str
+    min_length: 1
+    description: Exact logical contract version required by a function call.
+
+function_parameter_name:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+
+function_param_type:
+    type: str
+    values: [str, int, float, bool, date, datetime]
+
+function_string_literal_class:
+    - literal: {type: str, required: true}
+
+function_date_literal_class:
+    - date: {type: str, required: true}
+
+function_datetime_literal_class:
+    - datetime: {type: str, required: true}
+
+function_value:
+    type:
+        - literal_value
+        - function_date_literal_class
+        - function_datetime_literal_class

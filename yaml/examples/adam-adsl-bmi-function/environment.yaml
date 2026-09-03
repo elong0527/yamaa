@@ -1,0 +1,36 @@
+schema_version: "1.0"
+version: "1.0.0"
+
+runtime:
+  language: r
+  artifact:
+    reference: org.example/yamaa/bmi-r:1.0.0
+    digest: sha256:912ca795a4aba82b4c7776c99d32e76fc874a86d9659266c85b7d9d92c877c79
+
+functions:
+  bmi:
+    contract_version: "1.0.0"
+    implementation_version: "1.0.0"
+    description: Calculate body mass index from kilograms and centimetres.
+    comparison_decimals: 4
+    may_return_missing: false
+    params:
+      - name: weight_kg
+        type: float
+        accepts_missing: false
+      - name: height_cm
+        type: float
+        accepts_missing: false
+      - name: cm_per_m
+        type: int
+        required: false
+        default: 100
+        accepts_missing: false
+    returns: float
+    binding:
+      call: projectbmi::bmi
+      args:
+        weight_kg: weight_kg
+        height_cm: height_cm
+        cm_per_m: cm_per_m
+    conformance: conformance/bmi.yaml

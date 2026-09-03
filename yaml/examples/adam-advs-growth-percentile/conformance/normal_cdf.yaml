@@ -1,0 +1,19 @@
+schema_version: "1.0"
+function: normal_cdf
+contract_version: "1.0.0"
+cases:
+  - id: centre
+    covers: [normal, numeric-comparison]
+    args:
+      q: 0.0
+    result: 0.5
+  - id: lower-tail-boundary
+    covers: [boundary, numeric-comparison]
+    args:
+      q: -8.0
+    result: 6.22096057427178e-16
+  - id: missing-short-circuits
+    covers: [short-circuit-missing:q]
+    args:
+      q: null
+    result: null

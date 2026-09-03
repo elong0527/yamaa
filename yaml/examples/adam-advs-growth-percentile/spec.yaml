@@ -90,9 +90,10 @@ columns:
               literal: null
         otherwise:
           function:
-            name: scipy.stats.norm.cdf
+            name: normal_cdf
+            contract_version: "1.0.0"
             args:
-              x: ZNUM
+              q: ZNUM
 
   - name: AVAL
     type: float

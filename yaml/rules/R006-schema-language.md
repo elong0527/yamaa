@@ -2,7 +2,7 @@
 id: R006
 title: Compact Schema Language
 status: normative
-applies_to: [schema, root.schema_version]
+applies_to: [schema, root.schema_version, environment.schema_version]
 depends_on: []
 ---
 
@@ -23,8 +23,11 @@ specification may declare is R011.
 
 ## Schema bundle
 
-`schema.yaml` is the bundle entry point. Every schema document is a YAML 1.2
-mapping containing `version`, an optional `includes`, and declarations.
+`schema.yaml` is the specification-bundle entry point.
+`schema_environment.yaml` is R018's independent project-environment-bundle
+entry point. Every schema document is a YAML 1.2 mapping containing `version`,
+an optional `includes`, and declarations. A document may be included by both
+entry points; declaration uniqueness applies within each loaded bundle.
 
 `includes` is an ordered list of filenames resolved relative to the including
 file. Included filenames must match `schema_[a-z0-9_]+.yaml`; absolute paths,
@@ -35,11 +38,11 @@ validation or execution meaning.
 Implementations load the complete transitive bundle before resolving names.
 Except for registries, a declaration name may occur only once in the bundle.
 
-A specification declares the bundle it is written against in `schema_version`.
-It must equal the bundle version. A specification declaring any other version
-is an error and is not validated against this bundle, so a later version can be
-introduced without silently reinterpreting a specification written for an
-earlier one.
+A specification or project environment declares the bundle it is written
+against in `schema_version`. It must equal its entry point's bundle version. A
+document declaring any other version is an error and is not validated against
+that bundle, so a later version can be introduced without silently
+reinterpreting a document written for an earlier one.
 
 All schema documents must reject duplicate YAML keys, aliases, merge keys,
 explicit tags, and unknown schema constructs.

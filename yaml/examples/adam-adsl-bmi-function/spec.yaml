@@ -39,6 +39,7 @@ columns:
     derivation:
       function:
         name: bmi
+        contract_version: "1.0.0"
         args:
           weight_kg: WEIGHTKG
           height_cm: HEIGHTCM

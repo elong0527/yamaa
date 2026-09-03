@@ -3,8 +3,13 @@ import argparse
 import copy
 import csv
 import datetime as dt
+import hashlib
+import json
+import keyword
+import math
 import os
 import re
+import struct
 import sys
 from pathlib import Path
 
@@ -684,10 +689,10 @@ def check_descriptor(desc, is_class_field, path):
     return errors
 
 
-def build_schema_env(root: Path):
+def build_schema_env(root: Path, entrypoint='schema.yaml'):
     errors = []
     schema_dir = root / 'yaml'
-    schema_path = schema_dir / 'schema.yaml'
+    schema_path = schema_dir / entrypoint
     if not schema_path.exists():
         return None, [f"ERROR: required schema file not found: {schema_path}"]
 
@@ -700,7 +705,9 @@ def build_schema_env(root: Path):
         'classes': {},
         'aliases': {},
         'registries': {},
-        'defaults_to_validate': []
+        'defaults_to_validate': [],
+        'entrypoint': entrypoint,
+        'root': str(root.resolve()),
     }
     declaration_kinds = {}
 
@@ -734,11 +741,11 @@ def build_schema_env(root: Path):
             continue
 
         version = data.get('version')
-        if current.name == 'schema.yaml':
+        if curr_res == schema_path.resolve():
             env['version'] = version
             if not isinstance(version, str) or not version:
                 errors.append(
-                    "ERROR: schema.yaml: version must be a non-empty string"
+                    f"ERROR: {entrypoint}: version must be a non-empty string"
                 )
         elif version != env.get('version'):
             errors.append(
@@ -2242,8 +2249,11 @@ def finalize_resolved_inheritance(spec, env):
     return order_resolved_spec_fields(resolved, env), []
 
 def validate_schemas(root: Path):
-    env, errors = build_schema_env(root)
-    return errors
+    _, errors = build_schema_env(root)
+    _, environment_errors = build_schema_env(
+        root, 'schema_environment.yaml'
+    )
+    return errors + environment_errors
 
 
 SPEC_FILE_PATTERN = re.compile(r'^spec(?:_[a-z][a-z0-9_]*)?\.yaml$')
@@ -2255,6 +2265,609 @@ def example_spec_paths(example_dir: Path):
         for path in example_dir.iterdir()
         if path.is_file() and SPEC_FILE_PATTERN.fullmatch(path.name)
     )
+
+
+def function_value_type(value):
+    """Return the exact R018 scalar type, or a sentinel for invalid values."""
+    if value is None:
+        return None
+    if type(value) is bool:
+        return 'bool'
+    if type(value) is int:
+        return 'int' if -(2 ** 63) <= value < 2 ** 63 else '<invalid>'
+    if type(value) is float:
+        return 'float'
+    if isinstance(value, str):
+        return 'str'
+    if isinstance(value, dict) and len(value) == 1:
+        kind, text = next(iter(value.items()))
+        if (
+            kind in {'date', 'datetime'}
+            and isinstance(text, str)
+            and valid_temporal_literal(kind, text)
+        ):
+            return kind
+    return '<invalid>'
+
+
+def function_value_matches(value, expected_type, accepts_missing=False):
+    actual_type = function_value_type(value)
+    if actual_type is None:
+        return accepts_missing
+    return actual_type == expected_type
+
+
+def canonical_function_value(value, declared_type):
+    """Encode an R018 value without losing its logical scalar type."""
+    actual_type = function_value_type(value)
+    if actual_type is None:
+        return {'type': 'missing'}
+    if actual_type != declared_type:
+        raise ValueError(
+            f"expected {declared_type!r}, got {actual_type!r}"
+        )
+    if actual_type == 'float':
+        if math.isnan(value):
+            encoded = 'nan'
+        elif math.isinf(value):
+            encoded = (
+                'positive-infinity' if value > 0 else 'negative-infinity'
+            )
+        else:
+            encoded = struct.pack('>d', value).hex()
+    elif actual_type == 'int':
+        encoded = str(value)
+    elif actual_type == 'bool':
+        encoded = value
+    elif actual_type in {'date', 'datetime'}:
+        encoded = value[actual_type]
+    else:
+        encoded = value
+    return {'type': actual_type, 'value': encoded}
+
+
+def function_contract_fingerprint(name, contract):
+    """Return the canonical language-neutral R018 contract identity."""
+    params = []
+    for parameter in contract.get('params', []):
+        if not isinstance(parameter, dict):
+            continue
+        normalized = {
+            'name': parameter.get('name'),
+            'type': parameter.get('type'),
+            'required': parameter.get('required', True),
+            'accepts_missing': parameter.get('accepts_missing', False),
+            'default': {'present': 'default' in parameter},
+        }
+        if 'default' in parameter:
+            normalized['default']['value'] = canonical_function_value(
+                parameter['default'], parameter.get('type')
+            )
+        params.append(normalized)
+    logical = {
+        'format': 'yamaa-r018-contract-v1',
+        'name': name,
+        'contract_version': contract.get('contract_version'),
+        'params': params,
+        'returns': contract.get('returns'),
+        'may_return_missing': contract.get('may_return_missing', False),
+        'comparison_decimals': str(contract.get('comparison_decimals', 4)),
+    }
+    # The normalized form has no JSON numeric values. Compact sorted JSON is
+    # therefore the RFC 8785 representation without host-number formatting.
+    payload = json.dumps(
+        logical,
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(',', ':'),
+    )
+    return 'sha256:' + hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+
+R_RESERVED_NAMES = {
+    'break', 'else', 'FALSE', 'for', 'function', 'if', 'Inf', 'in', 'NA',
+    'NA_character_', 'NA_complex_', 'NA_integer_', 'NA_real_', 'NaN',
+    'next', 'NULL', 'repeat', 'TRUE', 'while',
+}
+
+
+def valid_host_argument_name(language, name):
+    if not isinstance(name, str):
+        return False
+    if language == 'python':
+        return (
+            re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name) is not None
+            and not keyword.iskeyword(name)
+        )
+    if language == 'r':
+        syntactic = re.fullmatch(
+            r'(?:[A-Za-z][A-Za-z0-9._]*|\.(?![0-9])[A-Za-z0-9._]+)',
+            name,
+        )
+        return (
+            syntactic is not None
+            and name not in R_RESERVED_NAMES
+            and name != '...'
+            and not re.fullmatch(r'\.\.[0-9]+', name)
+        )
+    return False
+
+
+def required_conformance_coverage(contract, parameters):
+    required = {'normal', 'boundary'}
+    if contract.get('returns') == 'float':
+        required.add('numeric-comparison')
+    if contract.get('may_return_missing', False):
+        required.add('nullable-output')
+    for parameter in parameters:
+        name = parameter['name']
+        if not parameter.get('required', True):
+            required.add(f'default:{name}')
+        missing_kind = (
+            'accepted-missing'
+            if parameter.get('accepts_missing', False)
+            else 'short-circuit-missing'
+        )
+        required.add(f'{missing_kind}:{name}')
+        if parameter.get('type') == 'bool':
+            required.add(f'boolean-true:{name}')
+            required.add(f'boolean-false:{name}')
+    return required
+
+
+def validate_case_coverage(
+    covers, case_args, result, contract, parameters, short_circuits, path
+):
+    errors = []
+    if not isinstance(covers, list):
+        return errors, set()
+    observed = {tag for tag in covers if isinstance(tag, str)}
+    if not observed:
+        errors.append(f"ERROR: {path}: covers must not be empty")
+    if len(observed) != len(covers):
+        errors.append(f"ERROR: {path}: coverage tags must be unique")
+    by_name = {parameter['name']: parameter for parameter in parameters}
+
+    for tag in observed:
+        if tag in {'normal', 'boundary'}:
+            continue
+        if tag == 'nullable-output':
+            if (
+                not contract.get('may_return_missing', False)
+                or result is not None
+                or short_circuits
+            ):
+                errors.append(
+                    f"ERROR: {path}: {tag!r} requires a missing result from "
+                    "an invoked nullable binding"
+                )
+            continue
+        if tag == 'numeric-comparison':
+            if (
+                contract.get('returns') != 'float'
+                or function_value_type(result) != 'float'
+            ):
+                errors.append(
+                    f"ERROR: {path}: {tag!r} requires a float result"
+                )
+            continue
+
+        kind, _, name = tag.partition(':')
+        parameter = by_name.get(name)
+        if parameter is None:
+            errors.append(
+                f"ERROR: {path}: coverage tag {tag!r} names no parameter"
+            )
+            continue
+        supplied = isinstance(case_args, dict) and name in case_args
+        value = case_args.get(name) if supplied else '<omitted>'
+        valid = False
+        if kind == 'default':
+            valid = not parameter.get('required', True) and not supplied
+        elif kind == 'accepted-missing':
+            valid = parameter.get('accepts_missing', False) and value is None
+        elif kind == 'short-circuit-missing':
+            valid = (
+                not parameter.get('accepts_missing', False)
+                and value is None
+                and result is None
+            )
+        elif kind == 'boolean-true':
+            valid = parameter.get('type') == 'bool' and value is True
+        elif kind == 'boolean-false':
+            valid = parameter.get('type') == 'bool' and value is False
+        if not valid:
+            errors.append(
+                f"ERROR: {path}: case does not demonstrate {tag!r}"
+            )
+    return errors, observed
+
+
+def validate_function_arguments(
+    arguments, parameters, path, resolve_variable=None
+):
+    """Validate a closed logical argument set with exact R018 types."""
+    errors = []
+    if not isinstance(arguments, dict) or not isinstance(parameters, list):
+        return errors
+    declared = {
+        parameter.get('name'): parameter
+        for parameter in parameters
+        if isinstance(parameter, dict) and isinstance(parameter.get('name'), str)
+    }
+    argument_names = {
+        name for name in arguments if isinstance(name, str)
+    }
+    for name in sorted(argument_names - set(declared)):
+        errors.append(
+            f"ERROR: {path}.{name}: invalid_function_argument: unknown "
+            f"argument {name!r}"
+        )
+    for name, parameter in declared.items():
+        required = parameter.get('required', True)
+        if required and name not in arguments:
+            errors.append(
+                f"ERROR: {path}.{name}: invalid_function_argument: missing "
+                "required argument"
+            )
+        if name not in arguments:
+            continue
+        value = arguments[name]
+        expected = parameter.get('type')
+        accepts_missing = parameter.get('accepts_missing', False)
+        if resolve_variable is not None and isinstance(value, str):
+            actual = resolve_variable(value)
+            if actual is None:
+                errors.append(
+                    f"ERROR: {path}.{name}: invalid_function_argument: "
+                    f"unknown variable {value!r}"
+                )
+            elif actual != expected:
+                errors.append(
+                    f"ERROR: {path}.{name}: invalid_function_argument: "
+                    f"expected exact type {expected!r}, got {actual!r} from "
+                    f"variable {value!r}"
+                )
+            continue
+        literal = value
+        if resolve_variable is not None and isinstance(value, dict):
+            if set(value) == {'literal'}:
+                literal = value['literal']
+        if literal is None:
+            # Explicit missing is always valid authoring. A non-accepting
+            # parameter short-circuits without invoking the binding.
+            continue
+        if not function_value_matches(literal, expected, accepts_missing):
+            actual = function_value_type(literal)
+            errors.append(
+                f"ERROR: {path}.{name}: invalid_function_argument: expected "
+                f"exact type {expected!r}, got {actual!r}"
+            )
+    return errors
+
+
+def validate_project_environment(
+    document, label, environment_path, schema_env
+):
+    """Validate one environment and its language-neutral conformance vectors."""
+    errors = []
+    if not isinstance(document, dict):
+        return [f"ERROR: {label}: project environment must be a mapping"]
+    structural_errors = (
+        validate_type(document, ['environment_class'], schema_env, label)
+    )
+    if structural_errors:
+        return structural_errors
+    schema_version = document.get('schema_version')
+    expected_version = str(schema_env.get('version', '1.0'))
+    if str(schema_version) != expected_version:
+        errors.append(
+            f"ERROR: {label}.schema_version: schema_version_mismatch: "
+            f"expected {expected_version!r}, got {schema_version!r}"
+        )
+
+    runtime = document.get('runtime')
+    language = runtime.get('language') if isinstance(runtime, dict) else None
+    functions = document.get('functions')
+    if isinstance(functions, dict) and not functions:
+        errors.append(
+            f"ERROR: {label}.functions: project environment must declare "
+            "at least one function"
+        )
+    if not isinstance(functions, dict):
+        return errors
+
+    callable_patterns = {
+        'r': re.compile(
+            r'^[A-Za-z][A-Za-z0-9.]*::[A-Za-z.][A-Za-z0-9._]*$'
+        ),
+        'python': re.compile(
+            r'^(?:[A-Za-z_][A-Za-z0-9_]*\.)+'
+            r'[A-Za-z_][A-Za-z0-9_]*$'
+        ),
+    }
+    for name, contract in functions.items():
+        if not isinstance(contract, dict):
+            continue
+        contract_path = f"{label}.functions.{name}"
+        try:
+            function_contract_fingerprint(name, contract)
+        except (TypeError, ValueError, UnicodeError, struct.error) as exc:
+            errors.append(
+                f"ERROR: {contract_path}: cannot calculate canonical "
+                f"contract fingerprint: {exc}"
+            )
+        comparison_decimals = contract.get('comparison_decimals', 4)
+        if type(comparison_decimals) is int and comparison_decimals < 0:
+            errors.append(
+                f"ERROR: {contract_path}.comparison_decimals: must be "
+                "non-negative"
+            )
+
+        parameters = contract.get('params')
+        parameter_entries = parameters if isinstance(parameters, list) else []
+        names = [
+            parameter.get('name')
+            for parameter in parameter_entries
+            if isinstance(parameter, dict)
+            and isinstance(parameter.get('name'), str)
+        ]
+        for parameter_name in sorted(set(names)):
+            if names.count(parameter_name) > 1:
+                errors.append(
+                    f"ERROR: {contract_path}.params: duplicate parameter "
+                    f"{parameter_name!r}"
+                )
+        for index, parameter in enumerate(parameter_entries):
+            if not isinstance(parameter, dict):
+                continue
+            parameter_path = f"{contract_path}.params[{index}]"
+            required = parameter.get('required', True)
+            if required is False and 'default' not in parameter:
+                errors.append(
+                    f"ERROR: {parameter_path}.default: optional parameter "
+                    "requires an environment default"
+                )
+            if required is True and 'default' in parameter:
+                errors.append(
+                    f"ERROR: {parameter_path}.default: required parameter "
+                    "must not declare a default"
+                )
+            if 'default' in parameter and not function_value_matches(
+                parameter['default'],
+                parameter.get('type'),
+                parameter.get('accepts_missing', False),
+            ):
+                actual = function_value_type(parameter['default'])
+                errors.append(
+                    f"ERROR: {parameter_path}.default: expected exact type "
+                    f"{parameter.get('type')!r}, got {actual!r}"
+                )
+
+        binding = contract.get('binding')
+        if isinstance(binding, dict):
+            call = binding.get('call')
+            pattern = callable_patterns.get(language)
+            if (
+                isinstance(call, str)
+                and pattern is not None
+                and pattern.fullmatch(call) is None
+            ):
+                errors.append(
+                    f"ERROR: {contract_path}.binding.call: callable {call!r} "
+                    f"is not fully qualified for runtime {language!r}"
+                )
+            binding_args = binding.get('args')
+            if isinstance(binding_args, dict):
+                missing = sorted(set(names) - set(binding_args))
+                extra = sorted(set(binding_args) - set(names))
+                if missing or extra:
+                    errors.append(
+                        f"ERROR: {contract_path}.binding.args: mapping must "
+                        f"cover the closed signature exactly; missing={missing}, "
+                        f"extra={extra}"
+                    )
+                host_names = list(binding_args.values())
+                duplicates = sorted({
+                    host_name for host_name in host_names
+                    if host_names.count(host_name) > 1
+                })
+                if duplicates:
+                    errors.append(
+                        f"ERROR: {contract_path}.binding.args: duplicate host "
+                        f"argument name(s): {', '.join(duplicates)}"
+                    )
+                for logical_name, host_name in binding_args.items():
+                    if not valid_host_argument_name(language, host_name):
+                        errors.append(
+                            f"ERROR: {contract_path}.binding.args."
+                            f"{logical_name}: host argument {host_name!r} is "
+                            f"not a valid non-reserved {language} name"
+                        )
+
+        conformance = contract.get('conformance')
+        if not isinstance(conformance, str):
+            continue
+        vector_path = environment_path.parent / conformance
+        try:
+            resolved_vector = vector_path.resolve()
+            resolved_vector.relative_to(environment_path.parent.resolve())
+        except (OSError, ValueError):
+            errors.append(
+                f"ERROR: {contract_path}.conformance: path must remain inside "
+                "the selected project root"
+            )
+            continue
+        if Path(conformance).is_absolute() or '..' in Path(conformance).parts:
+            errors.append(
+                f"ERROR: {contract_path}.conformance: path must be local and "
+                "must not contain '..'"
+            )
+            continue
+        if not resolved_vector.is_file():
+            errors.append(
+                f"ERROR: {contract_path}.conformance: file does not exist: "
+                f"{conformance}"
+            )
+            continue
+        try:
+            with open(resolved_vector, 'r', encoding='utf-8') as handle:
+                vectors = yaml.load(handle, Loader=UniqueKeyLoader)
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
+            errors.append(
+                f"ERROR: {contract_path}.conformance: cannot read vectors: "
+                f"{exc}"
+            )
+            continue
+        vector_label = str(resolved_vector)
+        vector_structure_errors = validate_type(
+            vectors,
+            ['function_conformance_class'],
+            schema_env,
+            vector_label,
+        )
+        errors.extend(vector_structure_errors)
+        if vector_structure_errors:
+            continue
+        if not isinstance(vectors, dict):
+            continue
+        if vectors.get('schema_version') != schema_version:
+            errors.append(
+                f"ERROR: {vector_label}.schema_version: must match the "
+                "project environment"
+            )
+        if vectors.get('function') != name:
+            errors.append(
+                f"ERROR: {vector_label}.function: expected {name!r}"
+            )
+        if vectors.get('contract_version') != contract.get('contract_version'):
+            errors.append(
+                f"ERROR: {vector_label}.contract_version: must match the "
+                "logical contract"
+            )
+        cases = vectors.get('cases')
+        if isinstance(cases, list) and not cases:
+            errors.append(
+                f"ERROR: {vector_label}.cases: at least one conformance case "
+                "is required"
+            )
+        case_ids = [
+            case.get('id') for case in cases or []
+            if isinstance(case, dict) and isinstance(case.get('id'), str)
+        ] if isinstance(cases, list) else []
+        for case_id in sorted(set(case_ids)):
+            if case_ids.count(case_id) > 1:
+                errors.append(
+                    f"ERROR: {vector_label}.cases: duplicate case id "
+                    f"{case_id!r}"
+                )
+        covered = set()
+        for index, case in enumerate(cases or []):
+            if not isinstance(case, dict):
+                continue
+            case_path = f"{vector_label}.cases[{index}]"
+            case_args = case.get('args')
+            errors.extend(
+                validate_function_arguments(
+                    case_args, parameter_entries, f"{case_path}.args"
+                )
+            )
+            result = case.get('result')
+            short_circuits = False
+            if isinstance(case_args, dict):
+                by_name = {
+                    parameter.get('name'): parameter
+                    for parameter in parameter_entries
+                    if isinstance(parameter, dict)
+                }
+                short_circuits = any(
+                    value is None
+                    and isinstance(by_name.get(argument_name), dict)
+                    and not by_name[argument_name].get(
+                        'accepts_missing', False
+                    )
+                    for argument_name, value in case_args.items()
+                )
+            if short_circuits and result is not None:
+                errors.append(
+                    f"ERROR: {case_path}.result: invalid_function_result: "
+                    "a short-circuiting case must return missing"
+                )
+            elif not short_circuits and not function_value_matches(
+                result,
+                contract.get('returns'),
+                contract.get('may_return_missing', False),
+            ):
+                errors.append(
+                    f"ERROR: {case_path}.result: invalid_function_result: "
+                    f"expected exact type {contract.get('returns')!r}, got "
+                    f"{function_value_type(result)!r}"
+                )
+            coverage_errors, case_coverage = validate_case_coverage(
+                case.get('covers'),
+                case_args,
+                result,
+                contract,
+                parameter_entries,
+                short_circuits,
+                f"{case_path}.covers",
+            )
+            errors.extend(coverage_errors)
+            covered.update(case_coverage)
+        required_coverage = required_conformance_coverage(
+            contract, parameter_entries
+        )
+        missing_coverage = sorted(required_coverage - covered)
+        if missing_coverage:
+            errors.append(
+                f"ERROR: {vector_label}.cases: missing required coverage: "
+                f"{', '.join(missing_coverage)}"
+            )
+    return errors
+
+
+def validate_repository_function_fingerprints(root, schema_env):
+    """Require one logical contract per name/version across project roots."""
+    errors = []
+    examples_dir = root / 'yaml' / 'examples'
+    if not examples_dir.is_dir() or schema_env is None:
+        return errors
+    seen = {}
+    for environment_path in sorted(examples_dir.rglob('environment.yaml')):
+        try:
+            with open(environment_path, 'r', encoding='utf-8') as handle:
+                document = yaml.load(handle, Loader=UniqueKeyLoader)
+        except (OSError, UnicodeError, yaml.YAMLError):
+            continue
+        if validate_type(
+            document,
+            ['environment_class'],
+            schema_env,
+            str(environment_path),
+        ):
+            continue
+        for name, contract in document['functions'].items():
+            try:
+                fingerprint = function_contract_fingerprint(name, contract)
+            except (TypeError, ValueError, UnicodeError, struct.error):
+                # Per-environment validation reports the malformed contract.
+                continue
+            identity = (name, contract['contract_version'])
+            previous = seen.get(identity)
+            if previous is None:
+                seen[identity] = (fingerprint, environment_path)
+                continue
+            previous_fingerprint, previous_path = previous
+            if fingerprint != previous_fingerprint:
+                errors.append(
+                    f"ERROR: {environment_path}.functions.{name}: "
+                    "function_contract_mismatch: logical contract "
+                    f"{name!r} version {identity[1]!r} has fingerprint "
+                    f"{fingerprint}, but {previous_path} declares "
+                    f"{previous_fingerprint}"
+                )
+    return errors
 
 
 def validate_grouped_rows(spec, spec_label):
@@ -2774,6 +3387,143 @@ def dataset_type_catalog(spec, spec_path, env=None):
     return catalog
 
 
+def iter_function_calls(value, path):
+    """Yield function payloads and stable paths from a derivation tree."""
+    if isinstance(value, dict):
+        if len(value) == 1 and 'function' in value:
+            yield value['function'], f"{path}.function"
+            return
+        for key, child in value.items():
+            yield from iter_function_calls(child, f"{path}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from iter_function_calls(child, f"{path}[{index}]")
+
+
+def validate_spec_functions(spec, spec_label, spec_path, schema_env):
+    """Resolve R018 and validate every logical function call statically."""
+    calls = []
+    columns = spec.get('columns')
+    column_types = specification_column_types(spec)
+    if isinstance(columns, list):
+        for index, column in enumerate(columns):
+            if not isinstance(column, dict) or 'derivation' not in column:
+                continue
+            name = column.get('name', index)
+            expected = column.get('type')
+            for payload, path in iter_function_calls(
+                column['derivation'],
+                f"{spec_label}.columns.{name}.derivation",
+            ):
+                calls.append((payload, path, expected))
+    rows = spec.get('rows')
+    if isinstance(rows, list):
+        for index, row in enumerate(rows):
+            derivations = row.get('derivations') if isinstance(row, dict) else None
+            if not isinstance(derivations, dict):
+                continue
+            for name, derivation in derivations.items():
+                expected = column_types.get(name)
+                for payload, path in iter_function_calls(
+                    derivation,
+                    f"{spec_label}.rows[{index}].derivations.{name}",
+                ):
+                    calls.append((payload, path, expected))
+
+    environment_path = spec_path.parent / 'environment.yaml'
+    if not calls and not environment_path.exists():
+        return []
+    if not environment_path.is_file():
+        return [
+            f"ERROR: {spec_label}: project_environment_missing: expected "
+            f"{environment_path}"
+        ]
+    if environment_path.is_symlink():
+        return [
+            f"ERROR: {environment_path}: project environment must not be a "
+            "symlink"
+        ]
+    try:
+        with open(environment_path, 'r', encoding='utf-8') as handle:
+            project_environment = yaml.load(handle, Loader=UniqueKeyLoader)
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        return [f"ERROR: {environment_path}: cannot read environment: {exc}"]
+
+    schema_root = schema_env.get('root')
+    root = (
+        Path(schema_root)
+        if isinstance(schema_root, str)
+        else Path(__file__).resolve().parents[2]
+    )
+    environment_schema, schema_errors = build_schema_env(
+        root, 'schema_environment.yaml'
+    )
+    if schema_errors:
+        return schema_errors
+    errors = validate_project_environment(
+        project_environment,
+        str(environment_path),
+        environment_path,
+        environment_schema,
+    )
+    if not isinstance(project_environment, dict):
+        return errors
+    functions = project_environment.get('functions')
+    if not isinstance(functions, dict):
+        return errors
+
+    datasets = dataset_type_catalog(spec, spec_path, schema_env)
+    lookups = {}
+    lookup_entries = spec.get('record_lookups')
+    if isinstance(lookup_entries, list):
+        for lookup in lookup_entries:
+            if not isinstance(lookup, dict):
+                continue
+            lookup_id = lookup.get('id')
+            dataset_id = lookup.get('dataset')
+            if isinstance(lookup_id, str) and isinstance(dataset_id, str):
+                lookups[lookup_id] = datasets.get(dataset_id, {})
+
+    def resolve_variable(name):
+        if not isinstance(name, str):
+            return None
+        if '.' not in name:
+            return column_types.get(name)
+        qualifier, field = name.split('.', 1)
+        relation = datasets.get(qualifier, lookups.get(qualifier))
+        return relation.get(field) if isinstance(relation, dict) else None
+
+    for payload, path, _expected_return in calls:
+        if not isinstance(payload, dict):
+            continue
+        name = payload.get('name')
+        if not isinstance(name, str) or name not in functions:
+            errors.append(
+                f"ERROR: {path}.name: unknown_project_function: {name!r}"
+            )
+            continue
+        contract = functions[name]
+        if not isinstance(contract, dict):
+            continue
+        requested = payload.get('contract_version')
+        available = contract.get('contract_version')
+        if requested != available:
+            errors.append(
+                f"ERROR: {path}.contract_version: "
+                f"function_contract_mismatch: requested {requested!r}, "
+                f"environment provides {available!r}"
+            )
+        errors.extend(
+            validate_function_arguments(
+                payload.get('args', {}),
+                contract.get('params', []),
+                f"{path}.args",
+                resolve_variable,
+            )
+        )
+    return errors
+
+
 def predicate_resolver(unqualified=None, qualified=None):
     unqualified = unqualified or {}
     qualified = qualified or {}
@@ -2908,20 +3658,6 @@ def validate_expression_predicates(
                         datasets,
                     )
                 )
-
-    elif keyword == 'function' and isinstance(payload, dict):
-        arguments = payload.get('args')
-        if isinstance(arguments, dict):
-            for name, argument in arguments.items():
-                if isinstance(argument, dict):
-                    errors.extend(
-                        validate_expression_predicates(
-                            argument,
-                            f"{path}.function.args.{name}",
-                            resolver,
-                            datasets,
-                        )
-                    )
 
     return errors
 
@@ -3177,6 +3913,7 @@ def validate_spec_document(spec, spec_label, spec_path, env, spec_stack=None):
         errors.extend(validate_column_labels(spec, spec_label))
     errors.extend(validate_spec_contracts(spec, spec_label, spec_path))
     errors.extend(validate_spec_predicates(spec, spec_label, spec_path, env))
+    errors.extend(validate_spec_functions(spec, spec_label, spec_path, env))
 
     next_stack = set(spec_stack or ())
     next_stack.add(spec_path.resolve())
@@ -3767,7 +4504,20 @@ def check_yaml_files(root: Path):
     # Also validate schemas
     env, schema_errors = build_schema_env(root)
     errors.extend(schema_errors)
+    environment_schema = None
+    if (root / 'yaml' / 'schema_environment.yaml').exists():
+        environment_schema, environment_schema_errors = build_schema_env(
+            root, 'schema_environment.yaml'
+        )
+        errors.extend(environment_schema_errors)
+        if environment_schema_errors:
+            environment_schema = None
     errors.extend(validate_examples_structure(root, env, warnings))
+    errors.extend(
+        validate_repository_function_fingerprints(
+            root, environment_schema
+        )
+    )
     errors.extend(validate_examples_layout(root))
     errors.extend(validate_examples_index(root))
     errors.extend(validate_expected_error_contracts(root))

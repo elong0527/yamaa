@@ -1,0 +1,19 @@
+schema_version: "1.0"
+function: project_value
+contract_version: "1.0.0"
+cases:
+  - id: ordinary
+    covers: [normal, numeric-comparison]
+    args:
+      x: 1.5
+    result: 1.5
+  - id: zero-boundary
+    covers: [boundary, numeric-comparison]
+    args:
+      x: 0.0
+    result: 0.0
+  - id: missing-short-circuits
+    covers: [short-circuit-missing:x]
+    args:
+      x: null
+    result: null

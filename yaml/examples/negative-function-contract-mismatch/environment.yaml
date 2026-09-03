@@ -1,0 +1,23 @@
+schema_version: "1.0"
+version: "1.0.0"
+
+runtime:
+  language: python
+  artifact:
+    reference: org.example/yamaa/project-value-python:1.0.0
+    digest: sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+
+functions:
+  project_value:
+    contract_version: "1.0.0"
+    implementation_version: "1.0.0"
+    description: Return the supplied numeric value.
+    params:
+      - name: x
+        type: float
+    returns: float
+    binding:
+      call: projectfunctions.project_value
+      args:
+        x: x
+    conformance: conformance/project_value.yaml
