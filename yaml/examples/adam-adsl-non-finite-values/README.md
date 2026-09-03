@@ -6,10 +6,8 @@ value is stored as missing:
 - `YAML_PINF`, `YAML_NINF`, and `YAML_NAN` receive positive infinity,
   negative infinity, and NaN from values written directly in the plan;
 - `SOURCE_PINF`, `SOURCE_NINF`, and `SOURCE_NAN` receive the same three values
-  from numeric source fields; and
-- `FUNCTION_PINF`, `FUNCTION_NINF`, and `FUNCTION_NAN` receive them from a
-  project calculation.
+  from numeric source fields.
 
-All nine derived numeric values therefore have the same missing value in the
+All six derived numeric values therefore have the same missing value in the
 artifact. A quoted YAML spelling such as `".inf"` would remain text unless it
 were converted to a numeric type.
