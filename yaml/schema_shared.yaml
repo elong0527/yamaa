@@ -18,7 +18,8 @@ path:
 function_name:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Logical name of a function declared by the project environment.
+    description: Logical function resolved by a project environment at the
+        implementation stage.
 
 function_contract_version:
     type: str

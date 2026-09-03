@@ -3413,7 +3413,7 @@ def iter_function_calls(value, path):
 
 
 def validate_spec_functions(spec, spec_label, spec_path, schema_env):
-    """Resolve R018 and validate every logical function call statically."""
+    """Validate calls against R018 when an implementation is supplied."""
     calls = []
     columns = spec.get('columns')
     column_types = specification_column_types(spec)
@@ -3443,11 +3443,14 @@ def validate_spec_functions(spec, spec_label, spec_path, schema_env):
                     calls.append((payload, path, expected))
 
     environment_path = spec_path.parent / 'environment.yaml'
-    if not calls and not environment_path.exists():
+    if not environment_path.exists():
+        # A portable specification can declare logical calls before a project
+        # supplies their implementation. R018 requires this environment when
+        # project code is validated, activated, or executed.
         return []
     if not environment_path.is_file():
         return [
-            f"ERROR: {spec_label}: project_environment_missing: expected "
+            f"ERROR: {spec_label}: project environment path is not a file: "
             f"{environment_path}"
         ]
     if environment_path.is_symlink():

@@ -19,6 +19,9 @@ output:
     - SOURCE_PINF
     - SOURCE_NINF
     - SOURCE_NAN
+    - FUNCTION_PINF
+    - FUNCTION_NINF
+    - FUNCTION_NAN
 
 columns:
   - name: USUBJID
@@ -62,3 +65,33 @@ columns:
     label: Not-a-Number Source Value
     derivation:
       source: DM.NOT_A_NUMBER
+
+  - name: FUNCTION_PINF
+    type: float
+    label: Positive Infinity Function Result
+    derivation:
+      function:
+        name: non_finite_value
+        contract_version: "1.0.0"
+        args:
+          kind: {literal: positive-infinity}
+
+  - name: FUNCTION_NINF
+    type: float
+    label: Negative Infinity Function Result
+    derivation:
+      function:
+        name: non_finite_value
+        contract_version: "1.0.0"
+        args:
+          kind: {literal: negative-infinity}
+
+  - name: FUNCTION_NAN
+    type: float
+    label: Not-a-Number Function Result
+    derivation:
+      function:
+        name: non_finite_value
+        contract_version: "1.0.0"
+        args:
+          kind: {literal: nan}

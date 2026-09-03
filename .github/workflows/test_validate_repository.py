@@ -403,6 +403,33 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
         self.assertIn('function_contract_mismatch', message)
         self.assertIn("expected exact type 'float', got 'int'", message)
 
+    def test_function_call_can_defer_implementation_environment(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / 'spec.yaml'
+            spec = {
+                'columns': [
+                    {
+                        'name': 'RESULT',
+                        'type': 'float',
+                        'derivation': {
+                            'function': {
+                                'name': 'non_finite_value',
+                                'contract_version': '1.0.0',
+                                'args': {
+                                    'kind': {'literal': 'positive-infinity'}
+                                },
+                            }
+                        },
+                    }
+                ]
+            }
+
+            errors = VALIDATOR.validate_spec_functions(
+                spec, 'spec.yaml', spec_path, self.spec_schema
+            )
+
+        self.assertEqual(errors, [])
+
     def test_function_arguments_do_not_admit_nested_expressions(self):
         expression = {
             'function': {

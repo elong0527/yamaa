@@ -1,7 +1,7 @@
 version: "1.0"
 
 expressions:
-    function: # Calls a named project-environment function once per logical row.
+    function: # Calls a logical function once per row when an implementation is supplied.
         # Vectorization is valid only when equivalent to logical row-wise calls.
         # R018 defines environment resolution, validation, and invocation.
         - name:

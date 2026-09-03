@@ -36,15 +36,26 @@ portable security sandbox.
 
 ## Project resolution
 
-The runner receives one explicitly selected project root. It resolves exactly
+A portable specification may declare a logical `function` call before project
+code is implemented. Specification authoring and structural validation do not
+select a project root and do not require an `environment.yaml`. They validate
+the call's closed schema shape, including its logical name, exact requested
+contract version, and permitted argument leaves. Contract existence, signature,
+argument types, missing permissions, and return type are deferred until an
+implementation environment is supplied. Omission does not create or maintain
+an environment implicitly.
+
+When actual project code is validated, activated, or executed, the runner
+receives one explicitly selected project root. It resolves exactly
 `environment.yaml` at that root before reading specification data. A
 specification cannot name, replace, extend, or override that environment.
 
 An environment is validated independently against
 `schema_environment.yaml`. Its `schema_version` selects that schema bundle and
-its separate `version` identifies the complete environment content. Missing,
-unreadable, structurally invalid, or ambiguous environment resolution fails
-before execution when a specification contains a `function` expression.
+its separate `version` identifies the complete environment content. Once an
+implementation stage is requested for a specification containing a `function`
+expression, missing, unreadable, structurally invalid, or ambiguous environment
+resolution fails before code activation or execution.
 
 ## One immutable runtime
 
@@ -138,6 +149,9 @@ extension introduces neither Boolean columns nor Boolean derivation results.
 Every argument and default exactly matches its declared type. There is no
 implicit conversion, including no `int`-to-`float` widening. R011 conversion
 can run only after the function has returned under the R005 lifecycle.
+Argument names, requiredness, and exact types are contract-dependent checks at
+the implementation stage; structural validation before then checks only the
+closed argument-leaf forms below.
 
 A call argument is one of:
 
@@ -245,7 +259,8 @@ projects; `comparison_decimals` is not a tolerance for structural differences.
 
 ## Errors
 
-- No usable `environment.yaml` at the selected root:
+- No usable `environment.yaml` when implementation validation, activation, or
+  execution is requested at the selected root:
   `project_environment_missing`.
 - An invalid environment, contract, binding, vector document, or duplicate
   logical declaration: `project_environment_invalid`.

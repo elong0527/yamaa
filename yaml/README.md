@@ -112,10 +112,12 @@ At the derivation-result level, `conversion_failure` is a literal and
 `override.value` remains an expression because a final correction may select a
 source, literal, or another registered operation.
 
-`function` is the deliberate extensibility boundary. The runner selects one
-project root containing one `environment.yaml`; the specification cannot
-override it. R018 closes its versioned contracts, singular R or Python runtime,
-bindings, and conformance vectors.
+`function` is the deliberate extensibility boundary. A portable specification
+may declare a logical call before project code is implemented. When an actual
+implementation is supplied, the runner selects one project root containing one
+`environment.yaml`; the specification cannot override it. R018 closes its
+versioned contracts, singular R or Python runtime, bindings, and conformance
+vectors at that implementation stage.
 
 ## Review workflow
 
