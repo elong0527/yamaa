@@ -2274,7 +2274,7 @@ def function_value_type(value):
     if type(value) is bool:
         return 'bool'
     if type(value) is int:
-        return 'int'
+        return 'int' if -(2 ** 63) <= value < 2 ** 63 else '<invalid>'
     if type(value) is float:
         return 'float'
     if isinstance(value, str):
