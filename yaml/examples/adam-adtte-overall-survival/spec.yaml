@@ -81,8 +81,19 @@ columns:
     type: date
     label: Analysis Date
     derivation:
-      coalesce:
-        sources: [DEATHDT, CENSORDT1, CENSORDT2]
+      case:
+        branches:
+          - when: "DEATHDT IS NOT NULL AND DEATHDT >= STARTDT"
+            then:
+              source: DEATHDT
+          - when: "DEATHDT IS NOT NULL"
+            then:
+              source: STARTDT
+          - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
+            then:
+              source: CENSORDT1
+        otherwise:
+          source: CENSORDT2
 
   - name: AVAL
     type: int
@@ -115,7 +126,7 @@ columns:
           - when: "DEATHDT IS NOT NULL"
             then:
               literal: Death
-          - when: "CENSORDT1 IS NOT NULL"
+          - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
             then:
               literal: Alive
         otherwise:
@@ -127,10 +138,10 @@ columns:
     derivation:
       case:
         branches:
-          - when: "DEATHDT IS NULL AND CENSORDT1 IS NOT NULL"
+          - when: "DEATHDT IS NULL AND CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
             then:
               literal: Alive During Study
-          - when: "DEATHDT IS NULL AND CENSORDT1 IS NULL"
+          - when: "DEATHDT IS NULL"
             then:
               literal: Randomization
 
@@ -155,7 +166,7 @@ columns:
           - when: "DEATHDT IS NOT NULL"
             then:
               literal: ADT
-          - when: "CENSORDT1 IS NOT NULL"
+          - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
             then:
               literal: LSTALVDT
         otherwise:
