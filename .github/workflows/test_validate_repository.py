@@ -1,5 +1,6 @@
 import copy
 import importlib.util
+import math
 import subprocess
 import sys
 import tempfile
@@ -54,6 +55,24 @@ class TestYamlLoader(unittest.TestCase):
         self.assertEqual(loaded["sexagesimal_value"], "1:20")
         self.assertEqual(loaded["exponent_value"], 1000.0)
         self.assertEqual(loaded["underscored_value"], "1_000")
+
+    def test_non_finite_yaml_floats_normalize_to_missing(self):
+        spellings = [
+            '.inf', '.Inf', '.INF', '+.inf', '+.Inf', '+.INF',
+            '-.inf', '-.Inf', '-.INF', '.nan', '.NaN', '.NAN',
+        ]
+        loaded = yaml.load(
+            ''.join(
+                f"value_{index}: {spelling}\n"
+                for index, spelling in enumerate(spellings)
+            ) + "quoted: '.inf'\n",
+            Loader=VALIDATOR.UniqueKeyLoader,
+        )
+
+        for index, spelling in enumerate(spellings):
+            with self.subTest(spelling=spelling):
+                self.assertIsNone(loaded[f"value_{index}"])
+        self.assertEqual(loaded["quoted"], ".inf")
 
     def test_aliases_are_rejected(self):
         with self.assertRaises(yaml.YAMLError):
@@ -384,6 +403,33 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
         self.assertIn('function_contract_mismatch', message)
         self.assertIn("expected exact type 'float', got 'int'", message)
 
+    def test_function_call_can_defer_implementation_environment(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / 'spec.yaml'
+            spec = {
+                'columns': [
+                    {
+                        'name': 'RESULT',
+                        'type': 'float',
+                        'derivation': {
+                            'function': {
+                                'name': 'non_finite_value',
+                                'contract_version': '1.0.0',
+                                'args': {
+                                    'kind': {'literal': 'positive-infinity'}
+                                },
+                            }
+                        },
+                    }
+                ]
+            }
+
+            errors = VALIDATOR.validate_spec_functions(
+                spec, 'spec.yaml', spec_path, self.spec_schema
+            )
+
+        self.assertEqual(errors, [])
+
     def test_function_arguments_do_not_admit_nested_expressions(self):
         expression = {
             'function': {
@@ -623,6 +669,40 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
         self.assertEqual(
             VALIDATOR.canonical_function_value(1.0, 'float'),
             {'type': 'float', 'value': '3ff0000000000000'},
+        )
+
+    def test_non_finite_function_values_are_missing(self):
+        for value in (math.inf, -math.inf, math.nan):
+            with self.subTest(value=value):
+                self.assertIsNone(VALIDATOR.function_value_type(value))
+                self.assertFalse(
+                    VALIDATOR.function_value_matches(value, 'float')
+                )
+                self.assertTrue(
+                    VALIDATOR.function_value_matches(
+                        value, 'float', accepts_missing=True
+                    )
+                )
+                self.assertEqual(
+                    VALIDATOR.canonical_function_value(value, 'float'),
+                    {'type': 'missing'},
+                )
+
+    def test_non_finite_default_has_the_missing_fingerprint(self):
+        non_finite = self.contract()
+        non_finite['params'][1] = {
+            'name': 'threshold',
+            'type': 'float',
+            'required': False,
+            'default': math.inf,
+            'accepts_missing': True,
+        }
+        missing = copy.deepcopy(non_finite)
+        missing['params'][1]['default'] = None
+
+        self.assertEqual(
+            VALIDATOR.function_contract_fingerprint('score', non_finite),
+            VALIDATOR.function_contract_fingerprint('score', missing),
         )
 
 

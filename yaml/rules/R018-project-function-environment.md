@@ -36,15 +36,26 @@ portable security sandbox.
 
 ## Project resolution
 
-The runner receives one explicitly selected project root. It resolves exactly
+A portable specification may declare a logical `function` call before project
+code is implemented. Specification authoring and structural validation do not
+select a project root and do not require an `environment.yaml`. They validate
+the call's closed schema shape, including its logical name, exact requested
+contract version, and permitted argument leaves. Contract existence, signature,
+argument types, missing permissions, and return type are deferred until an
+implementation environment is supplied. Omission does not create or maintain
+an environment implicitly.
+
+When actual project code is validated, activated, or executed, the runner
+receives one explicitly selected project root. It resolves exactly
 `environment.yaml` at that root before reading specification data. A
 specification cannot name, replace, extend, or override that environment.
 
 An environment is validated independently against
 `schema_environment.yaml`. Its `schema_version` selects that schema bundle and
-its separate `version` identifies the complete environment content. Missing,
-unreadable, structurally invalid, or ambiguous environment resolution fails
-before execution when a specification contains a `function` expression.
+its separate `version` identifies the complete environment content. Once an
+implementation stage is requested for a specification containing a `function`
+expression, missing, unreadable, structurally invalid, or ambiguous environment
+resolution fails before code activation or execution.
 
 ## One immutable runtime
 
@@ -106,10 +117,11 @@ default is `{present: false}`. A present default is
 | `str` | `{type: "str", value: exact-unicode-text}` |
 | `int` | `{type: "int", value: base-10-string}` |
 | finite `float` | `{type: "float", value: 16-lowercase-hex-big-endian-binary64-bits}` |
-| positive or negative infinity | `{type: "float", value: "positive-infinity"}` or `"negative-infinity"` |
-| NaN | `{type: "float", value: "nan"}` |
 | `bool` | `{type: "bool", value: JSON-Boolean}` |
 | `date` or `datetime` | `{type: type-name, value: R016-canonical-text}` |
+
+R011's non-finite normalization runs before a default or other typed value is
+encoded, so this table has no non-finite representation.
 
 `comparison_decimals` is its non-negative base-10 string. The object is
 serialized as UTF-8 JSON under the JSON Canonicalization Scheme in RFC 8785,
@@ -137,6 +149,9 @@ extension introduces neither Boolean columns nor Boolean derivation results.
 Every argument and default exactly matches its declared type. There is no
 implicit conversion, including no `int`-to-`float` widening. R011 conversion
 can run only after the function has returned under the R005 lifecycle.
+Argument names, requiredness, and exact types are contract-dependent checks at
+the implementation stage; structural validation before then checks only the
+closed argument-leaf forms below.
 
 A call argument is one of:
 
@@ -186,7 +201,9 @@ equivalent to independent calls in logical row order.
 An invoked binding may return missing only when `may_return_missing` is true.
 It may not return a vector, collection, table, object wrapper, or value of a
 different type. R005 conversion is not a repair mechanism for an invalid
-function result.
+function result. R011's non-finite normalization runs immediately after the
+host scalar is returned and before these result checks. The normalized missing
+result therefore still requires `may_return_missing: true`.
 
 ## Activation conformance
 
@@ -242,7 +259,8 @@ projects; `comparison_decimals` is not a tolerance for structural differences.
 
 ## Errors
 
-- No usable `environment.yaml` at the selected root:
+- No usable `environment.yaml` when implementation validation, activation, or
+  execution is requested at the selected root:
   `project_environment_missing`.
 - An invalid environment, contract, binding, vector document, or duplicate
   logical declaration: `project_environment_invalid`.
