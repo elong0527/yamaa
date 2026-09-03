@@ -1,0 +1,16 @@
+schema_version: "1.0"
+function: normal_cdf
+contract_version: "1.0.0"
+cases:
+  - id: centre
+    args:
+      q: 0.0
+    result: 0.5
+  - id: one-standard-deviation
+    args:
+      q: 1.0
+    result: 0.8413447460685429
+  - id: missing-short-circuits
+    args:
+      q: null
+    result: null

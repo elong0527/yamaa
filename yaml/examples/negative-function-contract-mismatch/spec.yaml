@@ -1,0 +1,28 @@
+schema_version: "1.0"
+domain: TEST
+datasets:
+  SOURCE:
+    path: input/source.csv
+    types: {VALUE: float}
+base: SOURCE
+keys: [ID]
+
+output:
+  columns: [ID, RESULT]
+
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation:
+      source: SOURCE.ID
+
+  - name: RESULT
+    type: float
+    label: Project Function Result
+    derivation:
+      function:
+        name: project_value
+        contract_version: "2.0.0"
+        args:
+          x: SOURCE.VALUE

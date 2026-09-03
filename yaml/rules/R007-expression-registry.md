@@ -3,7 +3,7 @@ id: R007
 title: Expression Registry
 status: normative
 applies_to: [expression, expressions, schema_expression]
-depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014, R015, R016]
+depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014, R015, R016, R018]
 ---
 
 # Expression registry
@@ -24,7 +24,7 @@ in its owning rule: R002 and R003 for source binding and joins, R008 for local
 handlers, R010 for `compute`, R011 for column types, R012 for string templates,
 R013 for aggregate reduction, R014 for the type a source field carries, R015
 for a record selected once and read by several columns, R016 for dates and
-datetimes, and R004 for predicates.
+datetimes, R018 for project functions, and R004 for predicates.
 
 ## Registration
 
@@ -47,7 +47,6 @@ selecting or composing expressions is the field's purpose:
 |---|---|
 | `case.branches[].then` and `case.otherwise` | Selecting among expressions is what `case` does |
 | `str_concat.sources` | Concatenation places literals beside sources |
-| `function.args` entries | A call site may pass a computed argument |
 | `override[].value` | A final correction may select any expression |
 
 `derivation` and `handled_expression_class.value` also contain `expression`,
@@ -57,8 +56,9 @@ inside an operation, so this policy does not restrict them.
 Fields typed `numeric_expression`, `string_template`, and
 `aggregate_expression` are leaves whose identifiers R010, R012, and R013
 resolve. Plain strings are values unless their schema field is typed as
-`variable`, `function_arg`, `sql`, or `string_template`. A string in
-`function_arg` is a variable; a string literal uses the `literal` expression.
+`variable`, `function_arg`, `sql`, or `string_template`. R018 closes
+`function_arg`: a string is a variable, while string, date, and datetime
+literals use their explicit tagged leaf forms.
 
 ## Evaluation kinds
 
@@ -152,6 +152,7 @@ runtime types:
   `least` do, is where comparability is a requirement rather than a
   consequence;
 - `aggregate` states its own input types in R013.
+- `function` states its exact argument and result types in R018.
 
 **Comparability is a property of the runtime type.** `int` and `float` are
 mutually comparable, because R010 promotes them. Every other type is
@@ -171,8 +172,8 @@ promotes to under R010.
 types R016 gives them. `baseline_flag` returns a string. Mapping, conditional,
 coalescing, extreme, baseline value, and offset row expressions retain the
 selected value type.
-`aggregate` returns the type R013 gives its expression. The `function`
-expression retains the type returned by the project function.
+`aggregate` returns the type R013 gives its expression. R018 gives `function`
+the return type declared by its logical contract.
 
 ## Operation definitions
 
@@ -209,5 +210,5 @@ behavior and do not affect schema validation.
 - A `compute` expression that violates R010: fail.
 - A `str_template` expression that violates R012: fail.
 - A temporal value or operation that violates R016: fail.
-- An unresolved function, failed function call, or non-scalar function result:
-  fail with the function name and original runtime context.
+- A project function that violates its environment, contract, binding, or
+  result requirements: fail under R018.

@@ -1,3 +1,4 @@
+import copy
 import importlib.util
 import subprocess
 import sys
@@ -193,6 +194,195 @@ class TestPredicateLanguage(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn('verifications[0].predicate.assert', errors[0])
         self.assertIn("unknown identifier 'MISSING'", errors[0])
+
+
+class TestProjectFunctionEnvironment(unittest.TestCase):
+    def setUp(self):
+        root = TOOL_PATH.parents[2]
+        self.spec_schema, spec_errors = VALIDATOR.build_schema_env(root)
+        self.environment_schema, environment_errors = (
+            VALIDATOR.build_schema_env(root, 'schema_environment.yaml')
+        )
+        self.assertEqual(spec_errors, [])
+        self.assertEqual(environment_errors, [])
+
+    def contract(self):
+        return {
+            'contract_version': '1.0.0',
+            'implementation_version': '2026.1',
+            'description': 'Test a numeric value.',
+            'params': [
+                {
+                    'name': 'x',
+                    'type': 'float',
+                    'accepts_missing': False,
+                },
+                {
+                    'name': 'enabled',
+                    'type': 'bool',
+                    'required': False,
+                    'default': True,
+                },
+            ],
+            'returns': 'float',
+            'binding': {
+                'call': 'projectstats::test_value',
+                'args': {'x': 'x', 'enabled': 'enabled'},
+            },
+            'conformance': 'conformance/test-value.yaml',
+        }
+
+    def write_project(self, root, contract=None):
+        conformance = root / 'conformance'
+        conformance.mkdir()
+        (conformance / 'test-value.yaml').write_text(
+            'schema_version: "1.0"\n'
+            'function: test_value\n'
+            'contract_version: "1.0.0"\n'
+            'cases:\n'
+            '  - id: ordinary\n'
+            '    args: {x: 1.0}\n'
+            '    result: 1.0\n'
+            '  - id: missing-short-circuits\n'
+            '    args: {x: null}\n'
+            '    result: null\n'
+        )
+        document = {
+            'schema_version': '1.0',
+            'version': '2026.1',
+            'runtime': {
+                'language': 'r',
+                'artifact': {
+                    'reference': 'org.example/test-r:2026.1',
+                    'digest': 'sha256:' + ('0' * 64),
+                },
+            },
+            'functions': {'test_value': contract or self.contract()},
+        }
+        environment_path = root / 'environment.yaml'
+        environment_path.write_text(yaml.safe_dump(document, sort_keys=False))
+        return document, environment_path
+
+    def test_validates_environment_and_missing_short_circuit_vectors(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            document, environment_path = self.write_project(Path(temp_dir))
+
+            errors = VALIDATOR.validate_project_environment(
+                document,
+                'environment.yaml',
+                environment_path,
+                self.environment_schema,
+            )
+
+        self.assertEqual(errors, [])
+
+    def test_rejects_optional_without_default_and_implicit_widening(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            contract = self.contract()
+            contract['params'][0]['required'] = False
+            contract['params'][1]['type'] = 'float'
+            document, environment_path = self.write_project(
+                Path(temp_dir), contract
+            )
+
+            errors = VALIDATOR.validate_project_environment(
+                document,
+                'environment.yaml',
+                environment_path,
+                self.environment_schema,
+            )
+
+        message = '\n'.join(errors)
+        self.assertIn('optional parameter requires', message)
+        self.assertIn("expected exact type 'float', got 'bool'", message)
+
+    def test_rejects_runtime_specific_or_incomplete_binding(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            contract = self.contract()
+            contract['binding'] = {
+                'call': 'projectstats.test_value',
+                'args': {'x': 'x'},
+            }
+            document, environment_path = self.write_project(
+                Path(temp_dir), contract
+            )
+
+            errors = VALIDATOR.validate_project_environment(
+                document,
+                'environment.yaml',
+                environment_path,
+                self.environment_schema,
+            )
+
+        message = '\n'.join(errors)
+        self.assertIn('not fully qualified for runtime', message)
+        self.assertIn("missing=['enabled']", message)
+
+    def test_contract_fingerprint_excludes_implementation_binding(self):
+        first = self.contract()
+        second = copy.deepcopy(first)
+        second['implementation_version'] = '2026.2'
+        second['description'] = 'A differently worded description.'
+        second['binding']['call'] = 'otherproject::test_value'
+
+        first_id = VALIDATOR.function_contract_fingerprint(
+            'test_value', first
+        )
+        second_id = VALIDATOR.function_contract_fingerprint(
+            'test_value', second
+        )
+        second['comparison_decimals'] = 5
+        changed_id = VALIDATOR.function_contract_fingerprint(
+            'test_value', second
+        )
+
+        self.assertEqual(first_id, second_id)
+        self.assertNotEqual(first_id, changed_id)
+
+    def test_call_requires_exact_version_and_argument_type(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = Path(temp_dir)
+            self.write_project(project)
+            spec_path = project / 'spec.yaml'
+            spec = {
+                'columns': [
+                    {'name': 'A', 'type': 'int'},
+                    {
+                        'name': 'B',
+                        'type': 'float',
+                        'derivation': {
+                            'function': {
+                                'name': 'test_value',
+                                'contract_version': '2.0.0',
+                                'args': {'x': 'A'},
+                            }
+                        },
+                    },
+                ]
+            }
+
+            errors = VALIDATOR.validate_spec_functions(
+                spec, 'spec.yaml', spec_path, self.spec_schema
+            )
+
+        message = '\n'.join(errors)
+        self.assertIn('function_contract_mismatch', message)
+        self.assertIn("expected exact type 'float', got 'int'", message)
+
+    def test_function_arguments_do_not_admit_nested_expressions(self):
+        expression = {
+            'function': {
+                'name': 'test_value',
+                'contract_version': '1.0.0',
+                'args': {'x': {'compute': {'expr': '1 + 1'}}},
+            }
+        }
+
+        errors = VALIDATOR.validate_type(
+            expression, ['expression'], self.spec_schema, 'derivation'
+        )
+
+        self.assertTrue(errors)
 
 
 class TestRuleMetadata(unittest.TestCase):

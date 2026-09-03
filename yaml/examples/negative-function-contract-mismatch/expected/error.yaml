@@ -1,0 +1,8 @@
+phase: validation
+condition: function_contract_mismatch
+spec_paths:
+  - columns.RESULT.derivation.function.contract_version
+context:
+  function: project_value
+  requested: "2.0.0"
+  available: "1.0.0"

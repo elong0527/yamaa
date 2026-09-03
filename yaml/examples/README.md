@@ -133,6 +133,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-date-impute-nonexistent-day`](negative-date-impute-nonexistent-day/) | reject an end date completed past the end of its month |
 | [`negative-date-precision-invalid-source`](negative-date-precision-invalid-source/) | reject a completeness flag read from text that is not a date |
 | [`negative-datetime-zone-offset`](negative-datetime-zone-offset/) | reject an event start recorded against another clock |
+| [`negative-function-contract-mismatch`](negative-function-contract-mismatch/) | reject an unavailable project-routine contract |
 | [`negative-greatest-incomparable-sources`](negative-greatest-incomparable-sources/) | reject a last-known-alive date taken from a day number |
 | [`negative-ingest-unparseable-field`](negative-ingest-unparseable-field/) | reject a dose recorded with its unit |
 | [`negative-keys-internal-column`](negative-keys-internal-column/) | reject a site-scoped subject identity |

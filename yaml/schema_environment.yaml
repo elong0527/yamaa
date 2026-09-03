@@ -1,0 +1,129 @@
+version: "1.0"
+
+includes:
+    - schema_shared.yaml
+
+environment_class:
+    - schema_version:
+        type: str
+        required: true
+        description: Schema bundle this environment is written against.
+    - version:
+        type: str
+        required: true
+        min_length: 1
+        description: Version of the complete project-environment content.
+    - runtime:
+        type: project_runtime_class
+        required: true
+        description: One language and immutable artifact used by every binding.
+    - functions:
+        type: "dict[function_name, function_contract_class]"
+        required: true
+        description: Logical contracts and singular bindings available to specifications.
+
+project_runtime_class:
+    - language:
+        type: str
+        required: true
+        values: [r, python]
+        description: Sole implementation language selected by the project.
+    - artifact:
+        type: runtime_artifact_class
+        required: true
+        description: Immutable runtime containing project code and dependencies.
+
+runtime_artifact_class:
+    - reference:
+        type: str
+        required: true
+        min_length: 1
+        description: Organization-resolvable name of the immutable runtime artifact.
+    - digest:
+        type: artifact_digest
+        required: true
+        description: Content identity verified before environment activation.
+
+function_contract_class:
+    - contract_version:
+        type: function_contract_version
+        required: true
+        description: Exact version of the language-neutral logical contract.
+    - implementation_version:
+        type: str
+        required: true
+        min_length: 1
+        description: Version of the selected language implementation.
+    - description:
+        type: str
+        required: true
+        min_length: 1
+        description: Human-readable statement of what the function computes.
+    - comparison_decimals:
+        type: int
+        default: 4
+        description: Decimal places used only for cross-project numeric comparison.
+    - may_return_missing:
+        type: bool
+        default: false
+        description: Whether an invoked binding may deliberately return missing.
+    - params:
+        type: "list[function_parameter_class]"
+        required: true
+        description: Closed ordered logical signature.
+    - returns:
+        type: column_type
+        required: true
+        description: Scalar R011 type returned before column conversion.
+    - binding:
+        type: function_binding_class
+        required: true
+        description: Sole callable binding in the project runtime language.
+    - conformance:
+        type: path
+        required: true
+        description: Language-neutral vectors required for environment activation.
+
+function_parameter_class:
+    - name: {type: function_parameter_name, required: true}
+    - type: {type: function_param_type, required: true}
+    - required: {type: bool, default: true}
+    - default: {type: function_value}
+    - accepts_missing: {type: bool, default: false}
+
+function_binding_class:
+    - call:
+        type: qualified_callable
+        required: true
+        description: Statically written callable inside the immutable runtime.
+    - args:
+        type: "dict[function_parameter_name, host_argument_name]"
+        required: true
+        description: Complete mapping from logical to host argument names.
+
+function_conformance_class:
+    - schema_version: {type: str, required: true}
+    - function: {type: function_name, required: true}
+    - contract_version: {type: function_contract_version, required: true}
+    - cases: {type: "list[function_conformance_case_class]", required: true}
+
+function_conformance_case_class:
+    - id: {type: function_case_id, required: true}
+    - args: {type: "dict[function_parameter_name, function_value]", required: true}
+    - result: {type: function_value, required: true}
+
+artifact_digest:
+    type: str
+    pattern: '^sha256:[0-9a-f]{64}$'
+
+qualified_callable:
+    type: str
+    min_length: 1
+
+host_argument_name:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_.]*$'
+
+function_case_id:
+    type: str
+    pattern: '^[a-z][a-z0-9-]*$'

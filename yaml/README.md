@@ -6,11 +6,13 @@ and SDTM-to-ADaM derivations. The design is under active development.
 ## Contents
 
 - `schema.yaml` is the schema-bundle entry point and defines shared structure.
+- `schema_environment.yaml` is the separately validated project-environment
+  entry point.
 - `schema_derivation.yaml`, `schema_expression_*.yaml`, and
   `schema_verification.yaml` register and document closed derivation and
   verification types.
-- `schema_function.yaml` registers calls to functions resolved by the project's
-  global execution environment.
+- `schema_function.yaml` registers calls to functions resolved by R018's
+  project environment.
 - `rules/` contains shared execution semantics, with one rule per file.
 - `examples/` contains source data, derivation specifications, and exact
   expected outputs.
@@ -26,8 +28,7 @@ Operations consume named variables rather than arbitrary nested expressions.
 This keeps every operation self-contained, exposes dependencies, and avoids
 mixed argument shapes. Multi-step derivations use named columns as intermediate
 values. Nested expressions remain only where nesting is intrinsic: `case`
-results, string concatenation inputs, runtime-function arguments, and final
-`override` values.
+results, string concatenation inputs, and final `override` values.
 
 This is the version 1.0 direction for team review.
 
@@ -105,15 +106,16 @@ The version 1.0 input-shape audit covers every registered expression:
 | `row_value` | One named source with named grouping and ordering variables, plus a signed integer literal offset along the declared order |
 | `aggregate` | One closed reducer expression over one relation, optionally narrowed by a current-row range (R013) |
 | `case` | Nested result expressions retained because selecting expressions is its purpose |
-| `function` | Named arguments may be variables, non-string literals, or explicit expressions |
+| `function` | Closed named arguments are variables or scalar literal leaves; string and temporal literals use explicit tagged forms (R018) |
 
 At the derivation-result level, `conversion_failure` is a literal and
 `override.value` remains an expression because a final correction may select a
 source, literal, or another registered operation.
 
-`function` is the deliberate extensibility boundary. Its environment, available
-functions, and package setup are global project configuration rather than fields
-repeated at each call site.
+`function` is the deliberate extensibility boundary. The runner selects one
+project root containing one `environment.yaml`; the specification cannot
+override it. R018 closes its versioned contracts, singular R or Python runtime,
+bindings, and conformance vectors.
 
 ## Review workflow
 

@@ -5,6 +5,7 @@ version: "1.0"
 # validate it.
 
 includes:
+    - schema_shared.yaml
     - schema_derivation.yaml
     - schema_verification.yaml
 
@@ -171,13 +172,6 @@ row_class:
         required: true
         description: Columns this template derives; R005 owns coverage across templates.
 
-column_type:
-    type: str
-    values: [str, int, float, date, datetime]
-
-literal_value:
-    type: [str, int, float, bool, "null"]
-
 variable:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$'
@@ -235,10 +229,6 @@ regex:
     type: str
     min_length: 1
     description: Regular expression applied to a string value.
-
-path:
-    type: str
-    min_length: 1
 
 sql:
     type: str

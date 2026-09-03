@@ -1,0 +1,20 @@
+schema_version: "1.0"
+function: bmi
+contract_version: "1.0.0"
+cases:
+  - id: explicit-scale
+    args:
+      weight_kg: 70.0
+      height_cm: 175.0
+      cm_per_m: 100
+    result: 22.857142857142858
+  - id: default-scale
+    args:
+      weight_kg: 80.0
+      height_cm: 200.0
+    result: 20.0
+  - id: missing-height-short-circuits
+    args:
+      weight_kg: 70.0
+      height_cm: null
+    result: null

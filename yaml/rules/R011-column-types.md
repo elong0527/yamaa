@@ -25,7 +25,8 @@ declared type, so text is parsed the same way wherever it is read. R016 owns
 both temporal types. What a `date` and a `datetime` denote, the text each is
 read from and written back to, how two of them order, and which operations
 read them are stated there; the temporal cells below apply that rule rather
-than restating it.
+than restating it. R018 owns the function-only Boolean parameter type and
+requires function results to remain in this rule's column vocabulary.
 
 ## Three type namespaces
 
@@ -125,31 +126,15 @@ specification written under this one.
 
 ## Float to text
 
-A `float` becomes text in two places: this conversion, and the decimal text an
-artifact writes for a `float` column. Both use the same form, so a `str` column
-derived from a `float` and the artifact's rendering of that same `float` never
-disagree, and rendering never changes a stored value.
+Conversion from `float` to `str` uses the shortest decimal text that parses
+back to the same binary64 value, with a trailing `.0` omitted for an integral
+value. This conversion preserves the value; it is not display rounding.
 
-**The schema fixes no precision.** How many decimal places a value carries is a
-property of the study and its instruments, not of the derivation language. The
-form is therefore a project setting, resolved from the global project
-configuration in the same way `function` resolves its environment:
-
-- With no project setting, a `float` renders as the shortest decimal text that
-  parses back to the same binary64 value, with a trailing `.0` omitted for an
-  integral value. This is lossless and is the default because it cannot silently
-  discard a derived digit.
-- A project may declare a number of decimal places. The value is then rendered
-  with exactly that many places, trailing zeros removed, and a value with no
-  fractional part written without a decimal point.
-
-Rendering never changes a stored value. A `float` column keeps full binary64
-precision for every comparison, verification, and dependent derivation; only
-its text form is affected. A `str` column derived from a `float` does store the
-rendered text, and from that point it is a string like any other.
-
-The example suite declares **four decimal places**, which is what its committed
-expected outputs record.
+Calculations, comparisons, verifications, and dependent derivations always use
+the unrounded value. Final artifact display precision and its half-away-from-
+zero rounding belong to the output-rendering rule and occur once, after
+calculation. R018's conformance comparison similarly operates on a temporary
+copy and never changes a value used by the specification.
 
 ## Errors
 

@@ -1,0 +1,26 @@
+schema_version: "1.0"
+version: "1.0.0"
+
+runtime:
+  language: r
+  artifact:
+    reference: org.example/yamaa/growth-percentile-r:1.0.0
+    digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+functions:
+  normal_cdf:
+    contract_version: "1.0.0"
+    implementation_version: "1.0.0"
+    description: Calculate the standard normal cumulative probability.
+    comparison_decimals: 4
+    may_return_missing: false
+    params:
+      - name: q
+        type: float
+        accepts_missing: false
+    returns: float
+    binding:
+      call: stats::pnorm
+      args:
+        q: q
+    conformance: conformance/normal_cdf.yaml

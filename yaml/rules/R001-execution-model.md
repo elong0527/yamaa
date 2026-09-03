@@ -96,6 +96,7 @@ detect cycles. Recursively traverse each expression and collect:
   reference names, or its applicable output keys when those fields are omitted,
   which R015 defines;
 - variables in `group_by`, `order_by`, and other fields typed as `variable`;
+- variables passed as leaves in `function.args`;
 - variables referenced by fields whose type contains nested `expression`;
 - current-output identifiers used by an `sql` predicate;
 - current-output identifiers used by a `numeric_expression`;
