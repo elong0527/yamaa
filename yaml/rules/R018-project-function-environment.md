@@ -106,11 +106,10 @@ default is `{present: false}`. A present default is
 | `str` | `{type: "str", value: exact-unicode-text}` |
 | `int` | `{type: "int", value: base-10-string}` |
 | finite `float` | `{type: "float", value: 16-lowercase-hex-big-endian-binary64-bits}` |
+| positive or negative infinity | `{type: "float", value: "positive-infinity"}` or `"negative-infinity"` |
+| NaN | `{type: "float", value: "nan"}` |
 | `bool` | `{type: "bool", value: JSON-Boolean}` |
 | `date` or `datetime` | `{type: type-name, value: R016-canonical-text}` |
-
-R011's non-finite normalization runs before a default or other typed value is
-encoded, so this table has no non-finite representation.
 
 `comparison_decimals` is its non-negative base-10 string. The object is
 serialized as UTF-8 JSON under the JSON Canonicalization Scheme in RFC 8785,
@@ -187,9 +186,7 @@ equivalent to independent calls in logical row order.
 An invoked binding may return missing only when `may_return_missing` is true.
 It may not return a vector, collection, table, object wrapper, or value of a
 different type. R005 conversion is not a repair mechanism for an invalid
-function result. R011's non-finite normalization runs immediately after the
-host scalar is returned and before these result checks. The normalized missing
-result therefore still requires `may_return_missing: true`.
+function result.
 
 ## Activation conformance
 

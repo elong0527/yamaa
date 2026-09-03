@@ -164,7 +164,7 @@ incompatible-input error below rather than a comparison over a coerced
 operand. Each owning rule defines the order its type takes.
 
 `source` retains its source type, which R014 defines, and `literal` retains
-its YAML scalar type after R011's non-finite normalization.
+its YAML scalar type.
 `cut`, `str_extract`, `str_concat`, `str_template`, `str_upper`, and
 `str_lower` return strings. `compute` returns the numeric type its expression
 promotes to under R010.

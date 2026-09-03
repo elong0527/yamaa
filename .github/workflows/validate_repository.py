@@ -132,23 +132,6 @@ UniqueKeyLoader.add_constructor(
 )
 
 
-def normalize_non_finite_float(value):
-    """Apply R011's normalization at a numeric value boundary."""
-    if type(value) is float and not math.isfinite(value):
-        return None
-    return value
-
-
-def construct_yaml_12_float(loader, node):
-    value = yaml.SafeLoader.construct_yaml_float(loader, node)
-    return normalize_non_finite_float(value)
-
-
-UniqueKeyLoader.add_constructor(
-    'tag:yaml.org,2002:float', construct_yaml_12_float
-)
-
-
 class PredicateError(ValueError):
     """A portable predicate cannot be tokenized or parsed."""
 
@@ -2286,7 +2269,6 @@ def example_spec_paths(example_dir: Path):
 
 def function_value_type(value):
     """Return the exact R018 scalar type, or a sentinel for invalid values."""
-    value = normalize_non_finite_float(value)
     if value is None:
         return None
     if type(value) is bool:
@@ -2317,7 +2299,6 @@ def function_value_matches(value, expected_type, accepts_missing=False):
 
 def canonical_function_value(value, declared_type):
     """Encode an R018 value without losing its logical scalar type."""
-    value = normalize_non_finite_float(value)
     actual_type = function_value_type(value)
     if actual_type is None:
         return {'type': 'missing'}
@@ -2326,7 +2307,14 @@ def canonical_function_value(value, declared_type):
             f"expected {declared_type!r}, got {actual_type!r}"
         )
     if actual_type == 'float':
-        encoded = struct.pack('>d', value).hex()
+        if math.isnan(value):
+            encoded = 'nan'
+        elif math.isinf(value):
+            encoded = (
+                'positive-infinity' if value > 0 else 'negative-infinity'
+            )
+        else:
+            encoded = struct.pack('>d', value).hex()
     elif actual_type == 'int':
         encoded = str(value)
     elif actual_type == 'bool':
