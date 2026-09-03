@@ -99,4 +99,26 @@ class TestExampleDependencies < Minitest::Test
   ensure
     spec&.unlink
   end
+
+  def test_date_impute_bound_is_a_dependency
+    spec = Tempfile.new(["date-impute-bound-dependency", ".yaml"])
+    spec.write(<<~YAML)
+      output:
+        columns: [ASTDT, TRTSDT]
+      columns:
+        - name: ASTDT
+          derivation:
+            date_impute:
+              source: ASTDTC
+              month: 1
+              day: first
+              not_before: TRTSDT
+        - {name: TRTSDT, derivation: {literal: "2025-01-01"}}
+    YAML
+    spec.close
+
+    assert_includes check(spec.path), "ASTDT references later column TRTSDT"
+  ensure
+    spec&.unlink
+  end
 end

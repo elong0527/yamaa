@@ -18,10 +18,11 @@ depends_on: [R005, R006, R007, R008, R010, R011, R014]
 ## Intent
 
 Define the two temporal values this design admits, `date` and `datetime`: what
-each denotes, the text it is read from and written back to, how two of them
-order, which operations read them, and what fails. R and Python must produce
-the same value, the same order, the same output text, and the same failures
-from the same input.
+each denotes, how much of it a study collected, the text it is read from and
+written back to, how two of them order, which operations read them, and what
+fails. R and Python must produce the same value, the same collected precision,
+the same order, the same output text, and the same failures from the same
+input.
 
 ## Boundaries
 
@@ -73,11 +74,36 @@ Every combination of fields in range names one day or one civil moment, and
 every day or civil moment in range has one combination of fields. Both value
 spaces are total and gapless.
 
-**Neither carries precision.** A `date` has no month or year precision and a
-`datetime` has no day or minute precision. A value is complete or it is not a
-value of the type, so a truncated collected value stays text until something
-completes it; *Partial collected dates* below defines the one completion this
-design offers.
+**Every value is complete, and every value records how much of it was
+collected.** A value is complete or it is not a value of the type, so a
+truncated collected value stays text until something completes it; *Partial
+collected dates* below defines the one completion this design offers. Beside
+its fields, a value carries one further property: its **collected precision**,
+the finest field the collected source supplied.
+
+For a `date` that property is `year`, `month`, or `day`. For a `datetime` it is
+always `second`, because this rule admits no truncated moment: an omitted `ss`
+names second zero rather than claiming a coarser value, so a `datetime` is
+collected in full or it is not a value.
+
+Where a value gets its collected precision is fixed by where the value came
+from, and only three origins exist:
+
+| Origin | Collected precision |
+|---|---|
+| parsed from text -- the lexical form below, R011's `str` row, an R014 field | `day`, or `second` for a `datetime` |
+| `date_impute` | the precision its source carried |
+| any expression that selects an existing value | unchanged; the property travels with the value |
+
+The first row has no other reachable answer: the grammar below admits only
+complete text, so nothing a parse produces was collected in part. R007 fixes
+the third, for the extreme, conditional, coalescing, and offset expressions
+that return an operand rather than computing one.
+
+**Provenance is read off that one property rather than recorded beside it.** A
+component finer than the collected precision was supplied by `date_impute`, and
+a value whose collected precision is `day` was collected in full. A second flag
+would be a second place to keep correct, and the two could disagree.
 
 ## Lexical form
 
@@ -214,7 +240,18 @@ collected characters unchanged is `str`, which keeps them and still orders
 chronologically under R007.
 
 Unlike `float`, neither form takes a project setting. This rule fixes the
-precision at one day and one second, so a project has nothing left to declare.
+rendered precision at one day and one second, so a project has nothing left to
+declare.
+
+**Canonical text carries the fields alone, so collected precision is not
+observable outside the derivation.** A temporal value converted to `str` under
+R011's row, the artifact's record of a temporal column, and the typed value
+R018 encodes for a function argument all carry the day or the moment and
+nothing about how much of it was collected. This is deliberate: the property
+answers a question about a study's collection, and a reader holding only the
+text has no way to check an answer to it. A specification that must carry
+precision past any of those three boundaries derives a column from
+`date_precision`, which is data the artifact records like any other.
 
 ## Comparison and ordering
 
@@ -228,6 +265,32 @@ Both are comparable types wherever a rule requires mutually comparable values.
 `greatest` and `least` reduce them across a row, an `order_by` term orders by
 one, and R013's `MIN` and `MAX` reduce one; R007 places missing values by the
 term's `nulls`, as it does for every other type.
+
+**Collected precision takes no part in a comparison.** Two values compare by
+the fields above, and precision is not one of them. A value completed from a
+year and a month therefore orders against a fully collected one on the day it
+names, wins a `greatest` it is the latest operand of, and satisfies a
+predicate the day satisfies. Every pair of non-missing values of one type
+stays ordered, which is what keeps an `order_by` term total and R007's
+comparability argument intact.
+
+This is a decision and not an omission, and it is the one the imputed value
+itself forces. A completed date names a day: that is what completing it did.
+An imputed operand that lost a comparison would have to denote something else
+-- the interval its collected components still admit, or a day carrying a rank
+against collected ones -- and either is a different value space with its own
+ordering, its own canonical text, and its own conversions. That is a type this
+design does not have, not a property of the two it does.
+
+The cost is worth stating plainly, because it is the case the property was
+added for: an imputed start still decides whether an event is treatment
+emergent, and precision does not stop it. What precision changes is that the
+specification classifying the event can now see that the day was supplied,
+and can say so in the artifact it writes. A specification that needs a
+supplied day not to reach a classification bounds the imputation with
+`not_before` below, or states the constraint it wants as a verification under
+R009. Neither is a comparison, which is why neither is this section's to
+define.
 
 **A temporal value is comparable only with its own type.** R007 admits no
 implicit conversion between operation inputs, so a source list or an ordering
@@ -269,10 +332,34 @@ and neither is a `date`. Such a value is carried as `str` and completed before
 it becomes one.
 
 `date_impute` performs that completion as a declared rule rather than as
-string surgery. Its result is a `date` like any other, and nothing
-distinguishes it from a fully collected one. `date_precision` reads how much
-of a date the collected text carried, so a specification can record beside the
-date what it supplied; the date value itself still carries no precision.
+string surgery. Its result is a `date` like any other in every respect a
+comparison can see, and it carries the collected precision of the text it
+completed, so which of its components were supplied is a property of the value
+rather than a fact only the specification remembers.
+
+**There is one precision ladder, ordered `year` before `month` before `day`**,
+and it is spelled twice because it appears at two kinds of site. Where a
+specification declares a policy it names a level of that ladder:
+`minimum_source_precision` takes `year` or `month`. Where an operation reports
+a precision it returns that ladder's code: `date_precision` returns `Y`, `M`,
+or `D`. The levels correspond in order and the spellings are not two
+vocabularies.
+
+`date_precision` reads a precision from either kind of source. Given the
+collected text it reports how much of a date that text carries. Given a
+temporal value it reports the collected precision that value carries, which is
+what lets a specification derive an imputation flag from the analysis date
+itself rather than from the text the date was completed from. Reading the date
+binds the flag to the value it describes; reading the text leaves the two in
+step only by convention, and nothing detects it when they drift.
+
+**A known day in an unknown month has no representation, and this rule does
+not invent one.** The collected text admitted above is prefix truncation only:
+a year, or a year and a month. A day known without its month cannot be
+collected in the first place, so there is no value for a precision to
+describe, and the ladder is a prefix ladder for exactly that reason. A study
+that records such a value keeps the collected text as `str`, as it does for
+every other text this rule does not admit.
 
 `minimum_source_precision` bounds how much `date_impute` may invent. Its
 default is `year`, preserving completion of both year-only and year-month
@@ -282,15 +369,49 @@ would exceed the declared policy. A complete source date is always returned
 unchanged. Falling below the minimum is neither a missing source nor invalid
 text, so it does not invoke either R008 handler.
 
-Both read the same source text and answer the same two conditions about it, so
-one handler stage in R008 serves both: a missing source, and a non-missing
-source that is neither a complete date nor a date prefix. Text that is not a
-date is a different defect from an uncollected value, and a specification may
-answer them differently.
+**A `day` may name a position in its month instead of a number.** `first` and
+`last` are resolved after `month` is fixed, against the month the completed
+date lands in, so `last` is 28 or 29 in a February according to the year and
+30 or 31 elsewhere. A study placing a partial date at the end of its month
+therefore declares one rule rather than one rule per month, and the completed
+value is a real calendar date by construction.
+
+**`not_before` bounds the completed date from below, and moves only what
+imputation supplied.** The collected components of a truncated source admit an
+interval of days -- `2025` admits the whole of that year, `2025-01` the whole
+of that January -- and the bound may move the result only inside it. A
+completed date already on or after the bound stands. Otherwise the result is
+the earliest day the interval admits that satisfies the bound, so the bound
+invents no more than it must. When the interval admits no such day the result
+is missing, which like falling below the minimum precision is neither a
+missing source nor invalid text and invokes neither handler. A missing bound
+is no bound.
+
+A complete source date is returned unchanged whatever the bound says, because
+it supplied nothing for the bound to move. This is what makes the bound a rule
+rather than a comparison a specification could write itself: it constrains an
+invented component and never a collected one. A specification constraining
+collected dates states a verification under R009, which is where a claim about
+data a study recorded belongs.
+
+The parameters therefore apply in a fixed order: a missing or invalid source
+answers first, then a source below the minimum precision, then completion from
+`month` and `day`, then the bound.
+
+Where both operations read the same source text they answer the same two
+conditions about it, so one handler stage in R008 serves both: a missing
+source, and a non-missing source that is neither a complete date nor a date
+prefix. Text that is not a date is a different defect from an uncollected
+value, and a specification may answer them differently. A `date_precision`
+reading a value has only the first of the two to answer, because a value that
+exists is already a value of its type.
 
 Neither operation answers about a `datetime`. A truncated moment has no
 agreed completion -- an unknown time of day is not the same claim as an unknown
-day -- so the collected text stays `str`.
+day -- so the collected text stays `str`. A `datetime` value is not a
+`date_precision` source either, for the same reason it is not an operand of
+any other date operation, and there would be nothing for it to report: a
+`datetime` is collected in full or it is not a value.
 
 ## Operations
 
@@ -301,8 +422,8 @@ Their input and result types are:
 |---|---|---|
 | `date_diff` | `start` and `end` are `date` | `int` |
 | `study_day` | `date` and `reference` are `date` | `int`, never zero |
-| `date_impute` | `source` is `str`; `month` and `day` are `int`; `minimum_source_precision` is `year` or `month` | `date` |
-| `date_precision` | `source` is `str` | `str` |
+| `date_impute` | `source` is `str`; `month` is `int`; `day` is `int` or a month position; `minimum_source_precision` is `year` or `month`; `not_before` is `date` | `date` |
+| `date_precision` | `source` is `str` or `date` | `str` |
 
 **Every temporal operation is a date operation.** A `datetime` operand is an
 error rather than a widened one. `date_diff` counts whole calendar units and
@@ -312,10 +433,15 @@ between two moments: `unit: day` between `2025-01-01T23:00:00` and
 make that choice silently, so both stay on `date`. A difference between two
 moments enters the vocabulary when an example needs it.
 
-`date_impute` requires its `month` and `day` to lie within the calendar
-ranges its registration states, and the date it completes to must be a real
-calendar date. The range checks still apply when a component is not used, so a
-specification cannot hide an invalid literal behind a precision policy.
+`date_impute` requires its `month` and a numeric `day` to lie within the
+calendar ranges its registration states, and the date it completes to must be
+a real calendar date. The range checks still apply when a component is not
+used, so a specification cannot hide an invalid literal behind a precision
+policy. A `day` naming a position in its month is not a literal to
+range-check, and the calendar-date requirement cannot fail for one: it names
+whichever day the target month begins or ends with rather than a number that
+month might not have. Any other `day` token is neither a number nor a
+position, and is rejected where the specification is read.
 
 A `datetime` is therefore produced only by converting text and consumed only
 by the comparisons above, which is what the examples need and no more.
@@ -352,8 +478,17 @@ leaves the field `str`, which is what `negative-datetime-zone-offset` does.
 - Comparing or ordering a temporal value against a value of another type:
   fail under R007, which owns comparability.
 - A date operation given a `datetime`: fail rather than widen the operation.
-- `date_impute` whose `month` or `day` is outside the calendar range, or whose
-  completed value is not a real calendar date: fail.
+  This includes a `datetime` reaching `date_precision` as a value source.
+- `date_impute` whose `month` or numeric `day` is outside the calendar range,
+  or whose completed value is not a real calendar date: fail. Neither can
+  arise from a `day` naming a position in its month.
+- `date_impute` whose `day` is a token that is neither a number nor a declared
+  position: rejected where the specification is read, before any data is
+  seen.
+- `date_impute` whose completed value cannot satisfy `not_before` within the
+  interval its collected components admit: missing, not a failure. Like a
+  source below the minimum precision, it is neither a missing source nor
+  invalid text, so no R008 handler answers it.
 - A temporal value used as an operand in a `compute` expression: fail under
   R010, which admits only numeric identifiers.
 - Storing a value an implementation cannot hold exactly, such as a fractional

@@ -1204,6 +1204,74 @@ class TestDateImputeSchema(unittest.TestCase):
         self.assertTrue(errors)
         self.assertIn("allowed values", errors[0])
 
+    def test_accepts_integer_and_month_position_day(self):
+        for day in (15, "first", "last"):
+            with self.subTest(day=day):
+                errors = VALIDATOR.validate_type(
+                    {
+                        "date_impute": {
+                            "source": "AE.AESTDTC",
+                            "month": 6,
+                            "day": day,
+                        }
+                    },
+                    ["expression"],
+                    self.env,
+                    "spec.columns.ASTDT.derivation",
+                )
+
+                self.assertEqual(errors, [])
+
+    def test_rejects_unknown_day_position(self):
+        errors = VALIDATOR.validate_type(
+            {
+                "date_impute": {
+                    "source": "AE.AESTDTC",
+                    "month": 6,
+                    "day": "mid",
+                }
+            },
+            ["expression"],
+            self.env,
+            "spec.columns.ASTDT.derivation",
+        )
+
+        self.assertTrue(errors)
+
+    def test_accepts_not_before_bound(self):
+        errors = VALIDATOR.validate_type(
+            {
+                "date_impute": {
+                    "source": "AE.AESTDTC",
+                    "month": 6,
+                    "day": "last",
+                    "not_before": "TRTSDT",
+                }
+            },
+            ["expression"],
+            self.env,
+            "spec.columns.ASTDT.derivation",
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_rejects_unknown_date_impute_field(self):
+        errors = VALIDATOR.validate_type(
+            {
+                "date_impute": {
+                    "source": "AE.AESTDTC",
+                    "month": 6,
+                    "day": 15,
+                    "not_after": "TRTSDT",
+                }
+            },
+            ["expression"],
+            self.env,
+            "spec.columns.ASTDT.derivation",
+        )
+
+        self.assertTrue(errors)
+
 
 class TestGroupedRows(unittest.TestCase):
     def test_accepts_driver_qualified_group_variables(self):

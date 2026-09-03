@@ -18,6 +18,9 @@ start to derive one record per overall response recorded by the investigator:
 Assessments of an individual lesion, and assessments made by anyone other than
 the investigator, are not overall responses and leave no record here.
 
-Completing a date that was collected without a day leaves no trace: `ADT` on
-such a record is a complete date like any other, and every later comparison
-treats it as one.
+Completing a date that was collected without a day settles which day it names,
+and every later comparison treats `ADT` on such a record as the day it names,
+exactly as it treats a date collected in full. What the completed date does
+keep is how much of it was collected, so a specification that needs to report
+which assessment dates rested on a supplied day can read it from `ADT` itself.
+This example does not report it, because nothing it derives turns on it.

@@ -131,6 +131,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-date-impute-invalid-source`](negative-date-impute-invalid-source/) | reject a start date completed from text that is not a date |
 | [`negative-date-impute-month-out-of-range`](negative-date-impute-month-out-of-range/) | reject a start date completed with no month of the year |
 | [`negative-date-impute-nonexistent-day`](negative-date-impute-nonexistent-day/) | reject an end date completed past the end of its month |
+| [`negative-date-impute-unknown-day-rule`](negative-date-impute-unknown-day-rule/) | reject a start date completed with an unrecognised day |
 | [`negative-date-precision-invalid-source`](negative-date-precision-invalid-source/) | reject a completeness flag read from text that is not a date |
 | [`negative-datetime-zone-offset`](negative-datetime-zone-offset/) | reject an event start recorded against another clock |
 | [`negative-function-contract-mismatch`](negative-function-contract-mismatch/) | reject an unavailable project-routine contract |

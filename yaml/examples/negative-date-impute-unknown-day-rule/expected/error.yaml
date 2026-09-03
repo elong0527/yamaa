@@ -1,0 +1,7 @@
+phase: validation
+condition: value_not_permitted
+spec_paths:
+  - columns.ASTDT.derivation.date_impute.day
+context:
+  value: mid
+  permitted: [first, last]

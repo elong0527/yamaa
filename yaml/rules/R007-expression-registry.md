@@ -156,12 +156,14 @@ runtime types:
 
 **Comparability is a property of the runtime type.** `int` and `float` are
 mutually comparable, because R010 promotes them. Every other type is
-comparable only with itself. A comparable type therefore satisfies any input
-requiring mutually comparable values -- `greatest` and `least`, `mapping_from`
-key pairing, an `order_by` term, and R013's `MIN` and `MAX` -- while a
-`sources` list or one ordering term mixing two types is the
-incompatible-input error below rather than a comparison over a coerced
-operand. Each owning rule defines the order its type takes.
+comparable only with itself. Collected precision, which R016 defines, is not a
+runtime type and so takes no part in comparability: two temporal values of one
+type are comparable whatever precision each carries. A comparable type
+therefore satisfies any input requiring mutually comparable values --
+`greatest` and `least`, `mapping_from` key pairing, an `order_by` term, and
+R013's `MIN` and `MAX` -- while a `sources` list or one ordering term mixing
+two types is the incompatible-input error below rather than a comparison over
+a coerced operand. Each owning rule defines the order its type takes.
 
 `source` retains its source type, which R014 defines, and `literal` retains
 its YAML scalar type.
@@ -171,7 +173,8 @@ promotes to under R010.
 `row_number` and `rank` return integers. The temporal operations return the
 types R016 gives them. `baseline_flag` returns a string. Mapping, conditional,
 coalescing, extreme, baseline value, and offset row expressions retain the
-selected value type.
+selected value type, and a selected temporal value carries its collected
+precision unchanged.
 `aggregate` returns the type R013 gives its expression. R018 gives `function`
 the return type declared by its logical contract.
 

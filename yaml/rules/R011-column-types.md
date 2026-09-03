@@ -104,9 +104,11 @@ fails.
 
 A cell reading **R016** applies that rule: the text a temporal value is parsed
 from, the canonical text it is written back to, and the conversions it does
-not permit are all stated there. Naming the rule rather than repeating its
-grammar is what keeps the form a column conversion applies and the form any
-other reader applies from drifting apart.
+not permit are all stated there. The collected precision a temporal value
+carries is stated there too, and canonical text carries the fields alone, so a
+`date` or `datetime` converted to `str` does not carry it. Naming the rule
+rather than repeating its grammar is what keeps the form a column conversion
+applies and the form any other reader applies from drifting apart.
 
 Converting a numeric value to `int` succeeds only when the value is exactly
 integral and within the 64-bit signed range. A non-integral value fails; it is
