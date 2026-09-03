@@ -1,0 +1,183 @@
+schema_version: "1.0"
+domain: ADTTE
+datasets:
+  ADSL: input/adsl.csv
+  ADRS:
+    path: input/adrs.csv
+    types:
+      ASEQ: int
+base: ADSL
+keys: [STUDYID, USUBJID, PARAMCD]
+
+record_lookups:
+  - id: DEATH_REC
+    dataset: ADRS
+    filter: "ADRS.PARAMCD = 'DEATH' AND ADRS.AVALC = 'Y' AND ADRS.ANL01FL = 'Y'"
+    source: [STUDYID, USUBJID]
+    key: [STUDYID, USUBJID]
+    unmatched: missing
+    order_by: [ADRS.ADT]
+    keep: first
+
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ADSL.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ADSL.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation:
+      literal: OS
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation:
+      literal: Overall Survival
+
+  - name: STARTDT
+    type: date
+    label: Time-to-Event Origin Date
+    derivation:
+      source: ADSL.RANDDT
+
+  - name: DEATHDT
+    type: date
+    label: Death Date
+    derivation:
+      source: DEATH_REC.ADT
+
+  - name: DEATHSEQ
+    type: int
+    label: Death Source Sequence Number
+    derivation:
+      source: DEATH_REC.ASEQ
+
+  - name: CENSORDT1
+    type: date
+    label: Last Known Alive Date
+    derivation:
+      source: ADSL.LSTALVDT
+
+  - name: CENSORDT2
+    type: date
+    label: Randomization Date
+    derivation:
+      source: ADSL.RANDDT
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation:
+      case:
+        branches:
+          - when: "DEATHDT IS NOT NULL AND DEATHDT >= STARTDT"
+            then:
+              source: DEATHDT
+          - when: "DEATHDT IS NOT NULL"
+            then:
+              source: STARTDT
+          - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
+            then:
+              source: CENSORDT1
+        otherwise:
+          source: CENSORDT2
+
+  - name: AVAL
+    type: int
+    label: Analysis Value
+    derivation:
+      date_diff:
+        start: STARTDT
+        end: ADT
+        unit: day
+        bounds: inclusive
+
+  - name: CNSR
+    type: int
+    label: Censor
+    derivation:
+      case:
+        branches:
+          - when: "DEATHDT IS NOT NULL"
+            then:
+              literal: 0
+        otherwise:
+          literal: 1
+
+  - name: EVNTDESC
+    type: str
+    label: Event or Censoring Description
+    derivation:
+      case:
+        branches:
+          - when: "DEATHDT IS NOT NULL"
+            then:
+              literal: Death
+          - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
+            then:
+              literal: Alive
+        otherwise:
+          literal: Randomization
+
+  - name: CNSDTDSC
+    type: str
+    label: Censoring Date Description
+    derivation:
+      case:
+        branches:
+          - when: "DEATHDT IS NULL AND CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
+            then:
+              literal: Alive During Study
+          - when: "DEATHDT IS NULL"
+            then:
+              literal: Randomization
+
+  - name: SRCDOM
+    type: str
+    label: Source Data
+    derivation:
+      case:
+        branches:
+          - when: "DEATHDT IS NOT NULL"
+            then:
+              literal: ADRS
+        otherwise:
+          literal: ADSL
+
+  - name: SRCVAR
+    type: str
+    label: Source Variable
+    derivation:
+      case:
+        branches:
+          - when: "DEATHDT IS NOT NULL"
+            then:
+              literal: ADT
+          - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
+            then:
+              literal: LSTALVDT
+        otherwise:
+          literal: RANDDT
+
+  - name: SRCSEQ
+    type: int
+    label: Source Sequence Number
+    derivation:
+      case:
+        branches:
+          - when: "DEATHDT IS NOT NULL"
+            then:
+              source: DEATHSEQ
