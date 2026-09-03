@@ -5,8 +5,11 @@ import csv
 import datetime as dt
 import hashlib
 import json
+import keyword
+import math
 import os
 import re
+import struct
 import sys
 from pathlib import Path
 
@@ -2294,8 +2297,37 @@ def function_value_matches(value, expected_type, accepts_missing=False):
     return actual_type == expected_type
 
 
+def canonical_function_value(value, declared_type):
+    """Encode an R018 value without losing its logical scalar type."""
+    actual_type = function_value_type(value)
+    if actual_type is None:
+        return {'type': 'missing'}
+    if actual_type != declared_type:
+        raise ValueError(
+            f"expected {declared_type!r}, got {actual_type!r}"
+        )
+    if actual_type == 'float':
+        if math.isnan(value):
+            encoded = 'nan'
+        elif math.isinf(value):
+            encoded = (
+                'positive-infinity' if value > 0 else 'negative-infinity'
+            )
+        else:
+            encoded = struct.pack('>d', value).hex()
+    elif actual_type == 'int':
+        encoded = str(value)
+    elif actual_type == 'bool':
+        encoded = value
+    elif actual_type in {'date', 'datetime'}:
+        encoded = value[actual_type]
+    else:
+        encoded = value
+    return {'type': actual_type, 'value': encoded}
+
+
 def function_contract_fingerprint(name, contract):
-    """Return the language-neutral R018 identity for one logical contract."""
+    """Return the canonical language-neutral R018 contract identity."""
     params = []
     for parameter in contract.get('params', []):
         if not isinstance(parameter, dict):
@@ -2305,22 +2337,151 @@ def function_contract_fingerprint(name, contract):
             'type': parameter.get('type'),
             'required': parameter.get('required', True),
             'accepts_missing': parameter.get('accepts_missing', False),
+            'default': {'present': 'default' in parameter},
         }
         if 'default' in parameter:
-            normalized['default'] = parameter['default']
+            normalized['default']['value'] = canonical_function_value(
+                parameter['default'], parameter.get('type')
+            )
         params.append(normalized)
     logical = {
+        'format': 'yamaa-r018-contract-v1',
         'name': name,
         'contract_version': contract.get('contract_version'),
         'params': params,
         'returns': contract.get('returns'),
         'may_return_missing': contract.get('may_return_missing', False),
-        'comparison_decimals': contract.get('comparison_decimals', 4),
+        'comparison_decimals': str(contract.get('comparison_decimals', 4)),
     }
+    # The normalized form has no JSON numeric values. Compact sorted JSON is
+    # therefore the RFC 8785 representation without host-number formatting.
     payload = json.dumps(
-        logical, ensure_ascii=False, sort_keys=True, separators=(',', ':')
+        logical,
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(',', ':'),
     )
     return 'sha256:' + hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+
+R_RESERVED_NAMES = {
+    'break', 'else', 'FALSE', 'for', 'function', 'if', 'Inf', 'in', 'NA',
+    'NA_character_', 'NA_complex_', 'NA_integer_', 'NA_real_', 'NaN',
+    'next', 'NULL', 'repeat', 'TRUE', 'while',
+}
+
+
+def valid_host_argument_name(language, name):
+    if not isinstance(name, str):
+        return False
+    if language == 'python':
+        return (
+            re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name) is not None
+            and not keyword.iskeyword(name)
+        )
+    if language == 'r':
+        syntactic = re.fullmatch(
+            r'(?:[A-Za-z][A-Za-z0-9._]*|\.(?![0-9])[A-Za-z0-9._]+)',
+            name,
+        )
+        return (
+            syntactic is not None
+            and name not in R_RESERVED_NAMES
+            and name != '...'
+            and not re.fullmatch(r'\.\.[0-9]+', name)
+        )
+    return False
+
+
+def required_conformance_coverage(contract, parameters):
+    required = {'normal', 'boundary'}
+    if contract.get('returns') == 'float':
+        required.add('numeric-comparison')
+    if contract.get('may_return_missing', False):
+        required.add('nullable-output')
+    for parameter in parameters:
+        name = parameter['name']
+        if not parameter.get('required', True):
+            required.add(f'default:{name}')
+        missing_kind = (
+            'accepted-missing'
+            if parameter.get('accepts_missing', False)
+            else 'short-circuit-missing'
+        )
+        required.add(f'{missing_kind}:{name}')
+        if parameter.get('type') == 'bool':
+            required.add(f'boolean-true:{name}')
+            required.add(f'boolean-false:{name}')
+    return required
+
+
+def validate_case_coverage(
+    covers, case_args, result, contract, parameters, short_circuits, path
+):
+    errors = []
+    if not isinstance(covers, list):
+        return errors, set()
+    observed = {tag for tag in covers if isinstance(tag, str)}
+    if not observed:
+        errors.append(f"ERROR: {path}: covers must not be empty")
+    if len(observed) != len(covers):
+        errors.append(f"ERROR: {path}: coverage tags must be unique")
+    by_name = {parameter['name']: parameter for parameter in parameters}
+
+    for tag in observed:
+        if tag in {'normal', 'boundary'}:
+            continue
+        if tag == 'nullable-output':
+            if (
+                not contract.get('may_return_missing', False)
+                or result is not None
+                or short_circuits
+            ):
+                errors.append(
+                    f"ERROR: {path}: {tag!r} requires a missing result from "
+                    "an invoked nullable binding"
+                )
+            continue
+        if tag == 'numeric-comparison':
+            if (
+                contract.get('returns') != 'float'
+                or function_value_type(result) != 'float'
+            ):
+                errors.append(
+                    f"ERROR: {path}: {tag!r} requires a float result"
+                )
+            continue
+
+        kind, _, name = tag.partition(':')
+        parameter = by_name.get(name)
+        if parameter is None:
+            errors.append(
+                f"ERROR: {path}: coverage tag {tag!r} names no parameter"
+            )
+            continue
+        supplied = isinstance(case_args, dict) and name in case_args
+        value = case_args.get(name) if supplied else '<omitted>'
+        valid = False
+        if kind == 'default':
+            valid = not parameter.get('required', True) and not supplied
+        elif kind == 'accepted-missing':
+            valid = parameter.get('accepts_missing', False) and value is None
+        elif kind == 'short-circuit-missing':
+            valid = (
+                not parameter.get('accepts_missing', False)
+                and value is None
+                and result is None
+            )
+        elif kind == 'boolean-true':
+            valid = parameter.get('type') == 'bool' and value is True
+        elif kind == 'boolean-false':
+            valid = parameter.get('type') == 'bool' and value is False
+        if not valid:
+            errors.append(
+                f"ERROR: {path}: case does not demonstrate {tag!r}"
+            )
+    return errors, observed
 
 
 def validate_function_arguments(
@@ -2335,7 +2496,10 @@ def validate_function_arguments(
         for parameter in parameters
         if isinstance(parameter, dict) and isinstance(parameter.get('name'), str)
     }
-    for name in sorted(set(arguments) - set(declared)):
+    argument_names = {
+        name for name in arguments if isinstance(name, str)
+    }
+    for name in sorted(argument_names - set(declared)):
         errors.append(
             f"ERROR: {path}.{name}: invalid_function_argument: unknown "
             f"argument {name!r}"
@@ -2390,9 +2554,11 @@ def validate_project_environment(
     errors = []
     if not isinstance(document, dict):
         return [f"ERROR: {label}: project environment must be a mapping"]
-    errors.extend(
+    structural_errors = (
         validate_type(document, ['environment_class'], schema_env, label)
     )
+    if structural_errors:
+        return structural_errors
     schema_version = document.get('schema_version')
     expected_version = str(schema_env.get('version', '1.0'))
     if str(schema_version) != expected_version:
@@ -2425,6 +2591,13 @@ def validate_project_environment(
         if not isinstance(contract, dict):
             continue
         contract_path = f"{label}.functions.{name}"
+        try:
+            function_contract_fingerprint(name, contract)
+        except (TypeError, ValueError, UnicodeError, struct.error) as exc:
+            errors.append(
+                f"ERROR: {contract_path}: cannot calculate canonical "
+                f"contract fingerprint: {exc}"
+            )
         comparison_decimals = contract.get('comparison_decimals', 4)
         if type(comparison_decimals) is int and comparison_decimals < 0:
             errors.append(
@@ -2505,6 +2678,13 @@ def validate_project_environment(
                         f"ERROR: {contract_path}.binding.args: duplicate host "
                         f"argument name(s): {', '.join(duplicates)}"
                     )
+                for logical_name, host_name in binding_args.items():
+                    if not valid_host_argument_name(language, host_name):
+                        errors.append(
+                            f"ERROR: {contract_path}.binding.args."
+                            f"{logical_name}: host argument {host_name!r} is "
+                            f"not a valid non-reserved {language} name"
+                        )
 
         conformance = contract.get('conformance')
         if not isinstance(conformance, str):
@@ -2541,14 +2721,15 @@ def validate_project_environment(
             )
             continue
         vector_label = str(resolved_vector)
-        errors.extend(
-            validate_type(
-                vectors,
-                ['function_conformance_class'],
-                schema_env,
-                vector_label,
-            )
+        vector_structure_errors = validate_type(
+            vectors,
+            ['function_conformance_class'],
+            schema_env,
+            vector_label,
         )
+        errors.extend(vector_structure_errors)
+        if vector_structure_errors:
+            continue
         if not isinstance(vectors, dict):
             continue
         if vectors.get('schema_version') != schema_version:
@@ -2581,6 +2762,7 @@ def validate_project_environment(
                     f"ERROR: {vector_label}.cases: duplicate case id "
                     f"{case_id!r}"
                 )
+        covered = set()
         for index, case in enumerate(cases or []):
             if not isinstance(case, dict):
                 continue
@@ -2607,16 +2789,83 @@ def validate_project_environment(
                     )
                     for argument_name, value in case_args.items()
                 )
-            allows_missing_result = (
-                contract.get('may_return_missing', False) or short_circuits
-            )
-            if not function_value_matches(
-                result, contract.get('returns'), allows_missing_result
+            if short_circuits and result is not None:
+                errors.append(
+                    f"ERROR: {case_path}.result: invalid_function_result: "
+                    "a short-circuiting case must return missing"
+                )
+            elif not short_circuits and not function_value_matches(
+                result,
+                contract.get('returns'),
+                contract.get('may_return_missing', False),
             ):
                 errors.append(
                     f"ERROR: {case_path}.result: invalid_function_result: "
                     f"expected exact type {contract.get('returns')!r}, got "
                     f"{function_value_type(result)!r}"
+                )
+            coverage_errors, case_coverage = validate_case_coverage(
+                case.get('covers'),
+                case_args,
+                result,
+                contract,
+                parameter_entries,
+                short_circuits,
+                f"{case_path}.covers",
+            )
+            errors.extend(coverage_errors)
+            covered.update(case_coverage)
+        required_coverage = required_conformance_coverage(
+            contract, parameter_entries
+        )
+        missing_coverage = sorted(required_coverage - covered)
+        if missing_coverage:
+            errors.append(
+                f"ERROR: {vector_label}.cases: missing required coverage: "
+                f"{', '.join(missing_coverage)}"
+            )
+    return errors
+
+
+def validate_repository_function_fingerprints(root, schema_env):
+    """Require one logical contract per name/version across project roots."""
+    errors = []
+    examples_dir = root / 'yaml' / 'examples'
+    if not examples_dir.is_dir() or schema_env is None:
+        return errors
+    seen = {}
+    for environment_path in sorted(examples_dir.rglob('environment.yaml')):
+        try:
+            with open(environment_path, 'r', encoding='utf-8') as handle:
+                document = yaml.load(handle, Loader=UniqueKeyLoader)
+        except (OSError, UnicodeError, yaml.YAMLError):
+            continue
+        if validate_type(
+            document,
+            ['environment_class'],
+            schema_env,
+            str(environment_path),
+        ):
+            continue
+        for name, contract in document['functions'].items():
+            try:
+                fingerprint = function_contract_fingerprint(name, contract)
+            except (TypeError, ValueError, UnicodeError, struct.error):
+                # Per-environment validation reports the malformed contract.
+                continue
+            identity = (name, contract['contract_version'])
+            previous = seen.get(identity)
+            if previous is None:
+                seen[identity] = (fingerprint, environment_path)
+                continue
+            previous_fingerprint, previous_path = previous
+            if fingerprint != previous_fingerprint:
+                errors.append(
+                    f"ERROR: {environment_path}.functions.{name}: "
+                    "function_contract_mismatch: logical contract "
+                    f"{name!r} version {identity[1]!r} has fingerprint "
+                    f"{fingerprint}, but {previous_path} declares "
+                    f"{previous_fingerprint}"
                 )
     return errors
 
@@ -4255,12 +4504,20 @@ def check_yaml_files(root: Path):
     # Also validate schemas
     env, schema_errors = build_schema_env(root)
     errors.extend(schema_errors)
+    environment_schema = None
     if (root / 'yaml' / 'schema_environment.yaml').exists():
-        _, environment_schema_errors = build_schema_env(
+        environment_schema, environment_schema_errors = build_schema_env(
             root, 'schema_environment.yaml'
         )
         errors.extend(environment_schema_errors)
+        if environment_schema_errors:
+            environment_schema = None
     errors.extend(validate_examples_structure(root, env, warnings))
+    errors.extend(
+        validate_repository_function_fingerprints(
+            root, environment_schema
+        )
+    )
     errors.extend(validate_examples_layout(root))
     errors.extend(validate_examples_index(root))
     errors.extend(validate_expected_error_contracts(root))

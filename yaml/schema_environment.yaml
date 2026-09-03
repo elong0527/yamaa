@@ -109,6 +109,7 @@ function_conformance_class:
 
 function_conformance_case_class:
     - id: {type: function_case_id, required: true}
+    - covers: {type: "list[function_coverage]", required: true}
     - args: {type: "dict[function_parameter_name, function_value]", required: true}
     - result: {type: function_value, required: true}
 
@@ -122,8 +123,12 @@ qualified_callable:
 
 host_argument_name:
     type: str
-    pattern: '^[A-Za-z_][A-Za-z0-9_.]*$'
+    min_length: 1
 
 function_case_id:
     type: str
     pattern: '^[a-z][a-z0-9-]*$'
+
+function_coverage:
+    type: str
+    pattern: '^(normal|boundary|nullable-output|numeric-comparison|(default|accepted-missing|short-circuit-missing|boolean-true|boolean-false):[A-Za-z_][A-Za-z0-9_]*)$'

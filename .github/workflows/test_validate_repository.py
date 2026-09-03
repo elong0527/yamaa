@@ -233,6 +233,7 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
         }
 
     def write_project(self, root, contract=None):
+        root.mkdir(parents=True, exist_ok=True)
         conformance = root / 'conformance'
         conformance.mkdir()
         (conformance / 'test-value.yaml').write_text(
@@ -241,10 +242,24 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
             'contract_version: "1.0.0"\n'
             'cases:\n'
             '  - id: ordinary\n'
-            '    args: {x: 1.0}\n'
+            '    covers: [normal, numeric-comparison, boolean-true:enabled]\n'
+            '    args: {x: 1.0, enabled: true}\n'
             '    result: 1.0\n'
-            '  - id: missing-short-circuits\n'
-            '    args: {x: null}\n'
+            '  - id: boundary\n'
+            '    covers: [boundary, numeric-comparison, boolean-false:enabled]\n'
+            '    args: {x: 0.0, enabled: false}\n'
+            '    result: 0.0\n'
+            '  - id: default-enabled\n'
+            '    covers: [default:enabled, numeric-comparison]\n'
+            '    args: {x: 2.0}\n'
+            '    result: 2.0\n'
+            '  - id: missing-x-short-circuits\n'
+            '    covers: [short-circuit-missing:x]\n'
+            '    args: {x: null, enabled: true}\n'
+            '    result: null\n'
+            '  - id: missing-enabled-short-circuits\n'
+            '    covers: [short-circuit-missing:enabled]\n'
+            '    args: {x: 1.0, enabled: null}\n'
             '    result: null\n'
         )
         document = {
@@ -383,6 +398,232 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
         )
 
         self.assertTrue(errors)
+
+    def test_malformed_environment_stops_before_semantic_validation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            document, environment_path = self.write_project(Path(temp_dir))
+            document['runtime']['language'] = []
+
+            errors = VALIDATOR.validate_project_environment(
+                document,
+                'environment.yaml',
+                environment_path,
+                self.environment_schema,
+            )
+
+        self.assertTrue(errors)
+        self.assertIn('expected str', '\n'.join(errors))
+
+    def test_malformed_argument_keys_report_without_sorting_crash(self):
+        errors = VALIDATOR.validate_function_arguments(
+            {1: 1.0, 'other': 1.0, 'x': 1.0},
+            [{'name': 'x', 'type': 'float'}],
+            'function.args',
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn("unknown argument 'other'", errors[0])
+
+    def test_short_circuit_vector_must_return_missing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            document, environment_path = self.write_project(root)
+            vector_path = root / 'conformance' / 'test-value.yaml'
+            vectors = yaml.safe_load(vector_path.read_text())
+            vectors['cases'][3]['result'] = 1.0
+            vector_path.write_text(
+                yaml.safe_dump(vectors, sort_keys=False)
+            )
+
+            errors = VALIDATOR.validate_project_environment(
+                document,
+                'environment.yaml',
+                environment_path,
+                self.environment_schema,
+            )
+
+        self.assertIn(
+            'short-circuiting case must return missing', '\n'.join(errors)
+        )
+
+    def test_requires_inferable_conformance_coverage(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            document, environment_path = self.write_project(root)
+            vector_path = root / 'conformance' / 'test-value.yaml'
+            vectors = yaml.safe_load(vector_path.read_text())
+            vectors['cases'] = vectors['cases'][:1]
+            vector_path.write_text(
+                yaml.safe_dump(vectors, sort_keys=False)
+            )
+
+            errors = VALIDATOR.validate_project_environment(
+                document,
+                'environment.yaml',
+                environment_path,
+                self.environment_schema,
+            )
+
+        message = '\n'.join(errors)
+        self.assertIn('missing required coverage', message)
+        self.assertIn('default:enabled', message)
+        self.assertIn('short-circuit-missing:x', message)
+
+    def test_accepting_missing_and_nullable_output_have_distinct_coverage(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            contract = self.contract()
+            contract['params'] = [
+                {'name': 'x', 'type': 'float', 'accepts_missing': True}
+            ]
+            contract['may_return_missing'] = True
+            contract['binding']['args'] = {'x': 'x'}
+            document, environment_path = self.write_project(root, contract)
+            vectors = {
+                'schema_version': '1.0',
+                'function': 'test_value',
+                'contract_version': '1.0.0',
+                'cases': [
+                    {
+                        'id': 'ordinary',
+                        'covers': ['normal', 'numeric-comparison'],
+                        'args': {'x': 1.0},
+                        'result': 1.0,
+                    },
+                    {
+                        'id': 'boundary',
+                        'covers': ['boundary', 'numeric-comparison'],
+                        'args': {'x': 0.0},
+                        'result': 0.0,
+                    },
+                    {
+                        'id': 'accepted-missing',
+                        'covers': ['accepted-missing:x'],
+                        'args': {'x': None},
+                        'result': 0.0,
+                    },
+                    {
+                        'id': 'nullable-result',
+                        'covers': ['nullable-output'],
+                        'args': {'x': 2.0},
+                        'result': None,
+                    },
+                ],
+            }
+            vector_path = root / 'conformance' / 'test-value.yaml'
+            vector_path.write_text(
+                yaml.safe_dump(vectors, sort_keys=False)
+            )
+
+            errors = VALIDATOR.validate_project_environment(
+                document,
+                'environment.yaml',
+                environment_path,
+                self.environment_schema,
+            )
+
+        self.assertEqual(errors, [])
+
+    def test_python_host_arguments_are_identifiers_and_not_keywords(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            document, environment_path = self.write_project(Path(temp_dir))
+            document['runtime']['language'] = 'python'
+            binding = document['functions']['test_value']['binding']
+            binding['call'] = 'projectstats.test_value'
+            binding['args'] = {'x': 'class', 'enabled': 'lower.tail'}
+
+            errors = VALIDATOR.validate_project_environment(
+                document,
+                'environment.yaml',
+                environment_path,
+                self.environment_schema,
+            )
+
+        message = '\n'.join(errors)
+        self.assertIn("host argument 'class'", message)
+        self.assertIn("host argument 'lower.tail'", message)
+        self.assertTrue(
+            VALIDATOR.valid_host_argument_name('r', 'lower.tail')
+        )
+        self.assertFalse(VALIDATOR.valid_host_argument_name('r', 'function'))
+
+    def test_repository_compares_same_name_and_version_fingerprints(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            examples = root / 'yaml' / 'examples'
+            self.write_project(examples / 'project-a')
+            changed = self.contract()
+            changed['comparison_decimals'] = 5
+            self.write_project(examples / 'project-b', changed)
+
+            errors = (
+                VALIDATOR.validate_repository_function_fingerprints(
+                    root, self.environment_schema
+                )
+            )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn('function_contract_mismatch', errors[0])
+
+    def test_fingerprint_distinguishes_exact_default_scalar_types(self):
+        float_contract = self.contract()
+        float_contract['params'][1] = {
+            'name': 'threshold',
+            'type': 'float',
+            'required': False,
+            'default': 1.0,
+        }
+        int_contract = copy.deepcopy(float_contract)
+        int_contract['params'][1]['type'] = 'int'
+        int_contract['params'][1]['default'] = 1
+
+        float_id = VALIDATOR.function_contract_fingerprint(
+            'test_value', float_contract
+        )
+        int_id = VALIDATOR.function_contract_fingerprint(
+            'test_value', int_contract
+        )
+
+        self.assertNotEqual(float_id, int_id)
+
+    def test_fingerprint_has_a_stable_cross_language_golden_value(self):
+        contract = {
+            'contract_version': '1.0.0',
+            'implementation_version': 'ignored',
+            'description': 'Ignored by the logical fingerprint.',
+            'params': [
+                {
+                    'name': 'threshold',
+                    'type': 'float',
+                    'required': False,
+                    'default': 1.0,
+                    'accepts_missing': False,
+                },
+                {
+                    'name': 'enabled',
+                    'type': 'bool',
+                    'required': False,
+                    'default': True,
+                    'accepts_missing': True,
+                },
+            ],
+            'returns': 'float',
+            'comparison_decimals': 4,
+        }
+
+        fingerprint = VALIDATOR.function_contract_fingerprint(
+            'score', contract
+        )
+
+        self.assertEqual(
+            fingerprint,
+            'sha256:7ef6d151e88fe84544f0afbeedaa2239'
+            '2b6ccb74683bb5c4437e57868d8c1bfe',
+        )
+        self.assertEqual(
+            VALIDATOR.canonical_function_value(1.0, 'float'),
+            {'type': 'float', 'value': '3ff0000000000000'},
+        )
 
 
 class TestRuleMetadata(unittest.TestCase):

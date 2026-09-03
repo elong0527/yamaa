@@ -87,11 +87,41 @@ the logical contract changes `implementation_version` and the runtime artifact
 identity instead.
 
 For comparison across projects, implementations calculate a contract
-fingerprint from the logical name, contract version, ordered parameters,
-defaults, missing behavior, return type, `may_return_missing`, and effective
-comparison precision. The runtime language, artifact, binding, description,
-and implementation version are excluded. Two projects do not claim the same
-logical function contract unless these fingerprints are identical.
+fingerprint. The payload is the following logical object, identified by
+`yamaa-r018-contract-v1`:
+
+```text
+format, name, contract_version, params, returns,
+may_return_missing, comparison_decimals
+```
+
+`params` is an array in declared order. Each entry contains `name`, `type`, the
+effective `required` and `accepts_missing` Booleans, and `default`. An absent
+default is `{present: false}`. A present default is
+`{present: true, value: typed-value}`. A typed value is encoded as follows:
+
+| Logical value | Canonical object |
+|---|---|
+| missing | `{type: "missing"}` |
+| `str` | `{type: "str", value: exact-unicode-text}` |
+| `int` | `{type: "int", value: base-10-string}` |
+| finite `float` | `{type: "float", value: 16-lowercase-hex-big-endian-binary64-bits}` |
+| positive or negative infinity | `{type: "float", value: "positive-infinity"}` or `"negative-infinity"` |
+| NaN | `{type: "float", value: "nan"}` |
+| `bool` | `{type: "bool", value: JSON-Boolean}` |
+| `date` or `datetime` | `{type: type-name, value: R016-canonical-text}` |
+
+`comparison_decimals` is its non-negative base-10 string. The object is
+serialized as UTF-8 JSON under the JSON Canonicalization Scheme in RFC 8785,
+then hashed with SHA-256 and prefixed with `sha256:`. Strings are not Unicode-
+normalized. Parameters remain in their declared array order; object member
+order comes only from canonical JSON.
+
+The runtime language, artifact, binding, description, and implementation
+version are excluded. Repository validation requires every discovered pair of
+logical name and contract version to have the same calculated fingerprint.
+Two projects do not claim the same logical function contract unless these
+fingerprints are identical.
 
 ## Parameters and arguments
 
@@ -138,7 +168,9 @@ does not require `may_return_missing: true`.
 runtime: an R package-qualified name such as `projectbmi::bmi`, or a Python
 module-qualified name such as `orgstats.normal_cdf`. The environment also maps
 every logical parameter name to one unique host argument name. The mapping must
-cover the logical signature exactly.
+cover the logical signature exactly. A Python host name is an ASCII Python
+identifier and not a Python keyword. An R host name is an unquoted syntactic R
+name and not a reserved word, `...`, or a `..n` positional name.
 
 Inline code, anonymous functions, evaluation, shell commands, script paths,
 computed callable names, executable argument transforms, and lookup outside
@@ -160,14 +192,33 @@ function result.
 
 Every logical contract names a language-neutral YAML conformance document. It
 identifies the same logical name and contract version and contains uniquely
-named cases. A case supplies logical arguments and one expected scalar result.
-Its arguments obey the same signature, exact-type, default, and missing rules
-as a specification call.
+named cases. A case supplies `covers`, logical arguments, and one expected
+scalar result. Its arguments obey the same signature, exact-type, default, and
+missing rules as a specification call.
 
-Vectors cover every behavior applicable to the contract: normal values,
-boundaries, optional defaults, accepted and short-circuiting missing inputs,
-nullable outputs, Boolean options, and numeric comparison. A project claiming
-the same contract in another language runs the same vector content.
+`covers` is a non-empty list of unique obligations demonstrated by that case:
+
+| Tag | Required evidence |
+|---|---|
+| `normal` | A contract-defined ordinary case |
+| `boundary` | A contract-defined boundary case |
+| `default:name` | The named optional parameter is omitted |
+| `accepted-missing:name` | The named accepting parameter is explicitly missing |
+| `short-circuit-missing:name` | The named non-accepting parameter is missing and the result is missing |
+| `nullable-output` | An invoked nullable binding returns missing |
+| `boolean-true:name`, `boolean-false:name` | The named Boolean parameter is supplied with that value |
+| `numeric-comparison` | A non-missing `float` result exercises decimal comparison |
+
+Every contract covers `normal` and `boundary`. Every optional parameter covers
+its default, every parameter covers its applicable missing behavior, and both
+values of every Boolean parameter are covered. A nullable contract covers
+`nullable-output`, and a float-returning contract covers
+`numeric-comparison`. Static validation checks inferable evidence in each
+tagged case and rejects any missing obligation. The contract author identifies
+which input is its semantic boundary; activation checks the declared result.
+
+A project claiming the same contract in another language runs the same vector
+content.
 
 Activation loads the verified artifact and runs all vectors before any
 specification may execute. Success may be cached only for the exact combination

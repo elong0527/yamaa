@@ -3,18 +3,40 @@ function: bmi
 contract_version: "1.0.0"
 cases:
   - id: explicit-scale
+    covers: [normal, numeric-comparison]
     args:
       weight_kg: 70.0
       height_cm: 175.0
       cm_per_m: 100
     result: 22.857142857142858
   - id: default-scale
+    covers: [default:cm_per_m, numeric-comparison]
     args:
       weight_kg: 80.0
       height_cm: 200.0
     result: 20.0
+  - id: zero-weight-boundary
+    covers: [boundary, numeric-comparison]
+    args:
+      weight_kg: 0.0
+      height_cm: 175.0
+    result: 0.0
+  - id: missing-weight-short-circuits
+    covers: [short-circuit-missing:weight_kg]
+    args:
+      weight_kg: null
+      height_cm: 175.0
+    result: null
   - id: missing-height-short-circuits
+    covers: [short-circuit-missing:height_cm]
     args:
       weight_kg: 70.0
       height_cm: null
+    result: null
+  - id: missing-scale-short-circuits
+    covers: [short-circuit-missing:cm_per_m]
+    args:
+      weight_kg: 70.0
+      height_cm: 175.0
+      cm_per_m: null
     result: null
