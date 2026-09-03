@@ -40,6 +40,12 @@ columns:
     derivation:
       source: AE.AESTDTC
 
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation:
+      source: ADSL.TRTSDT
+
   - name: ASTDT
     type: date
     label: Analysis Start Date
@@ -49,6 +55,7 @@ columns:
         month: 6
         day: 15
         minimum_source_precision: month
+        not_before: TRTSDT
         missing: null
         invalid: null
 
@@ -63,9 +70,8 @@ columns:
     label: Analysis Start Date Precision
     derivation:
       date_precision:
-        source: AESTDTC
+        source: ASTDT
         missing: null
-        invalid: null
 
   - name: ASTDTF
     type: str
@@ -79,12 +85,6 @@ columns:
     verifications:
       allowed_values:
         values: ["D"]
-
-  - name: TRTSDT
-    type: date
-    label: Date of First Exposure to Treatment
-    derivation:
-      source: ADSL.TRTSDT
 
   - name: TRTEMFL
     type: str
@@ -103,8 +103,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 6
-      max: 6
+      min: 10
+      max: 10
   - all_or_none:
       id: analysis-date-completeness
       columns: [ASTDTC, ASTDT]
@@ -112,6 +112,10 @@ verifications:
       id: imputation-flag-requires-an-analysis-date
       when: "ASTDTF IS NOT NULL"
       then: "ASTDT IS NOT NULL"
+  - implies:
+      id: supplied-day-never-precedes-treatment-start
+      when: "ASTDTF = 'D'"
+      then: "ASTDT >= TRTSDT"
   - implies:
       id: treatment-emergent-event-has-an-analysis-date
       when: "TRTEMFL = 'Y'"

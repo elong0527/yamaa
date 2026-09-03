@@ -17,7 +17,7 @@ base: ADSL_IN
 keys: [STUDYID, USUBJID]
 
 output:
-  columns: [STUDYID, USUBJID, TRTEDT, LSTALVDT]
+  columns: [STUDYID, USUBJID, TRTEDT, LSTCNTDC, LSTCNTDT, LSTALVDT]
 
 columns:
   - name: STUDYID
@@ -38,6 +38,23 @@ columns:
     derivation:
       source: ADSL_IN.TRTEDT
 
+  - name: LSTCNTDC
+    type: str
+    label: Date of Last Contact
+    derivation:
+      source: ADSL_IN.LSTCNTDC
+
+  - name: LSTCNTDT
+    type: date
+    label: Analysis Date of Last Contact
+    derivation:
+      date_impute:
+        source: LSTCNTDC
+        month: 12
+        day: last
+        missing: null
+        invalid: null
+
   - name: ADAE_LST
     type: date
     label: Latest Adverse Event Date
@@ -57,4 +74,4 @@ columns:
     label: Last Known Alive Date
     derivation:
       greatest:
-        sources: [TRTEDT, ADAE_LST, ADVS_LST]
+        sources: [TRTEDT, LSTCNTDT, ADAE_LST, ADVS_LST]

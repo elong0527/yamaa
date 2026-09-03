@@ -98,8 +98,8 @@ The version 1.0 input-shape audit covers every registered expression:
 | `mapping_from` | One or more named sources paired by position with declared right-side key columns; exceptional results are literals |
 | `compute` | One closed numeric expression over named output columns and declared record-lookup fields (R010) |
 | `date_diff`, `study_day` | Named variable operands; `date_diff` declares which endpoints it counts |
-| `date_impute` | One named source, integer literals for imputed components, and an optional minimum collected precision; exceptional results are literals |
-| `date_precision` | One named source; exceptional results are literals |
+| `date_impute` | One named source, an integer literal or a month-relative token for each imputed component, an optional minimum collected precision, and an optional named lower bound on the completed date; exceptional results are literals |
+| `date_precision` | One named source, either collected text or a temporal value; exceptional results are literals |
 | `coalesce` | Ordered named variables plus an optional literal default |
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
 | `row_number`, `rank`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |

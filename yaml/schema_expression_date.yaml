@@ -29,7 +29,13 @@ expressions:
     date_impute: # Completes a truncated ISO 8601 date and returns a date.
         # A complete source date is returned unchanged; a source carrying only a
         # year, or a year and month, is completed from month and day unless
-        # minimum_source_precision forbids supplying that much information.
+        # minimum_source_precision forbids supplying that much information. A
+        # day token is resolved after month is fixed, so it names a day in the
+        # month the completed date lands in. not_before is applied last, to the
+        # completed date alone: a date already on or after the bound stands, and
+        # otherwise the result is the earliest day the collected text still
+        # admits that satisfies the bound. When the collected text admits no
+        # such day the result is missing, invoking no handler.
         # A source that is not an ISO 8601 date or an ISO 8601 date prefix is an
         # invalid value, distinct from a missing one; both yield no date unless
         # a handler is declared. R016 governs the resulting date.
@@ -42,9 +48,11 @@ expressions:
             required: true
             description: Month used when the source carries only a year, 1 to 12.
         - day:
-            type: int
+            type: [int, day_rule]
             required: true
-            description: Day used when the source carries no day, 1 to 31.
+            description: >-
+              Day used when the source carries no day: an integer from 1 to 31,
+              or first or last resolved against the month the date lands in.
         - minimum_source_precision:
             type: str
             default: year
@@ -53,21 +61,31 @@ expressions:
               Least precision the collected source must carry before imputation;
               month leaves a year-only source missing instead of supplying both
               month and day.
+        - not_before:
+            type: variable
+            description: >-
+              Date the completed value must not precede; it moves only the
+              components imputation supplied, and never a collected date.
         - missing:
             type: literal_value
             description: Result when the source value is missing.
         - invalid:
             type: literal_value
             description: Result when the source is not an ISO 8601 date or date prefix.
-    date_precision: # Returns how much of a date the collected text carries.
+    date_precision: # Returns how much of a date its source carries.
         # D for a complete date, M for a year and month, and Y for a year alone.
-        # It describes the collected text rather than a completed date, so a
-        # specification records what date_impute supplied by reading the same
-        # source. Invalid text and a missing source behave as they do there.
+        # Collected text reports what the text carries and a date reports the
+        # collected precision that value carries, so a specification records
+        # what date_impute supplied by reading either the same source or the
+        # completed date itself. Invalid text and a missing source behave as
+        # they do there; a date source is never invalid. A datetime is an error
+        # here as in every date operation. R016 governs both source kinds.
         - source:
             type: variable
             required: true
-            description: ISO 8601 date text, complete or truncated to year or month.
+            description: >-
+              ISO 8601 date text, complete or truncated to year or month, or a
+              date whose collected precision is reported.
         - missing:
             type: literal_value
             description: Result when the source value is missing.
@@ -86,3 +104,8 @@ expressions:
             type: variable
             required: true
             description: Reference start date, which is study day 1.
+
+day_rule:
+    type: str
+    values: [first, last]
+    description: Day resolved against the month the completed date lands in.
