@@ -1,0 +1,13 @@
+title: YAMAA
+description: A language-neutral YAML specification for reproducible clinical trial data pipelines
+theme: jekyll-theme-cayman
+show_downloads: false
+
+# Rewrites links between .md pages to their published .html URLs.
+# GitHub Pages enables this by default; declaring it keeps a local
+# `bundle exec jekyll serve` behaving the same way.
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: false
