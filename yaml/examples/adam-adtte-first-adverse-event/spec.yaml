@@ -25,10 +25,14 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
+    derivation:
+      source: ADSL.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation:
+      source: ADSL.USUBJID
 
   - name: PARAMCD
     type: str
@@ -51,6 +55,8 @@ columns:
   - name: AEDT
     type: date
     label: Adverse Event Date
+    derivation:
+      source: AE_REC.ASTDT
 
   - name: AESEQ
     type: int
@@ -61,6 +67,14 @@ columns:
   - name: RAWDT
     type: date
     label: Selected Date Before Clamping
+    derivation:
+      case:
+        branches:
+          - when: "AEDT IS NOT NULL"
+            then:
+              source: AEDT
+        otherwise:
+          source: ADSL.EOSDT
 
   - name: ADT
     type: date
@@ -145,20 +159,4 @@ columns:
 rows:
   - id: TTE
     dataset: ADSL
-    group_by: [ADSL.STUDYID, ADSL.USUBJID]
-    filter: "RAWDT IS NOT NULL"
-    derivations:
-      STUDYID:
-        source: ADSL.STUDYID
-      USUBJID:
-        source: ADSL.USUBJID
-      AEDT:
-        source: AE_REC.ASTDT
-      RAWDT:
-        case:
-          branches:
-            - when: "AEDT IS NOT NULL"
-              then:
-                source: AEDT
-          otherwise:
-            source: ADSL.EOSDT
+    derivations: {}

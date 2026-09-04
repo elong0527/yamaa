@@ -5,8 +5,8 @@ events to derive one time-to-first-adverse-event record per subject:
 
 - `STARTDT` is the treatment start date. `ADT` is the selected adverse event
   date, or the end of study date when no event exists. The selected date is
-  clamped to `STARTDT` when it predates treatment start, and a subject with
-  neither source date produces no output row.
+  clamped to `STARTDT` when it predates treatment start. When neither source
+  date exists, `ADT` is missing and the subject row remains.
 - `AVAL` is the inclusive number of days from treatment start through `ADT`.
 - `CNSR` is zero for an adverse event and one for censoring, while `EVNTDESC`
   states whether the record represents an adverse event or end-of-study
