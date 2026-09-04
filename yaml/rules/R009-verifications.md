@@ -137,26 +137,29 @@ bound and fail in another's.
 
 ## Counting a group
 
-`row_count` counts completed output rows. Two optional fields change which rows
-it counts and how many counts it makes:
+`row_count` counts completed output rows. Two optional fields change how many
+counts it makes and which rows each one counts:
 
-- `filter` is an R004 predicate over one completed output row. A row counts
-  only when the predicate is `TRUE`, so `FALSE` and `UNKNOWN` do not count,
-  which is what `filter` means everywhere else in the language.
-- `group_by` names declared columns and partitions the counted rows by equality
-  on their values, missing values grouping with other missing values as R001
-  partitions a driver relation. The bounds then apply to each group separately.
+- `group_by` names declared columns and partitions **the artifact's rows** by
+  equality on their values, missing values grouping with other missing values
+  as R001 partitions a driver relation. Both bounds then apply to every group.
+- `filter` is an R004 predicate over one completed output row, and a group's
+  count is how many of its rows the predicate admits. A row counts only when
+  the predicate is `TRUE`, so `FALSE` and `UNKNOWN` do not count, which is what
+  `filter` means everywhere else in the language.
 
-Together they state a cardinality no other verification can. At most one
-baseline record for each subject and parameter is a `max` of one over the rows
-whose baseline flag is `Y`, grouped by subject and parameter: `unique` cannot
-state it because it admits no filter, and `predicate` cannot because one row
-cannot see how many others exist. A failure reports the offending groups and
-their counts.
+Grouping the artifact rather than the counted rows is what makes an exact
+cardinality statable. Exactly one baseline record for each subject and
+parameter is a `min` and a `max` of one over the rows whose baseline flag is
+`Y`, grouped by subject and parameter: the group exists because the subject has
+records, so a group holding no flagged record fails the `min` instead of
+disappearing. `unique` cannot state this because it admits no filter, and
+`predicate` cannot because one row cannot see how many others exist. A failure
+reports the offending groups and their counts.
 
-**Bounds apply to the groups the artifact contains.** A group with no rows is
-not a group, so a `min` cannot discover a subject, visit, or parameter absent
-from the artifact entirely. That assertion belongs to the derivation, where the
+**Bounds still apply only to the groups the artifact contains.** A subject,
+visit, or parameter absent from the artifact entirely forms no group, so no
+`min` here can discover it. That assertion belongs to the derivation, where the
 relation defining the expected groups is readable: a record lookup declaring
 `unmatched: fail` under R015 rejects an expected group the data cannot supply,
 and a planning relation at the required grain gives every expected group a
