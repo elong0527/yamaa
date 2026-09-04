@@ -17,22 +17,60 @@ generic function or argument bag.
 
 This rule owns what each verification asserts, when it runs, and how a failure
 is reported. R005 owns key uniqueness, which is checked by the output contract
-rather than declared as a verification, and R004 owns the predicates that
-`implies` and `predicate` evaluate.
+rather than declared as a verification, and it owns the artifact's row order,
+which no verification here observes. R004 owns the predicates that `implies`,
+`predicate`, and a grouped `row_count` evaluate.
 
 Verifications reach across rows only in fixed ways, deliberately. `unique` and
-`row_count` ask one question about the output as a whole; `all_or_none`,
-`implies`, and `predicate` see one completed output row at a time. None of
-them compares rows in an order, so an assertion over an ordered series -- that
-no partial response ever follows a complete response for a subject -- is not a
-shape this rule has. Stating one is a derivation followed by a row-wise
-assertion: `row_value` under R007 places another row's value on the row, and
-`predicate` compares the two.
-`negative-adrs-partial-response-after-complete-response` does that against the
-immediately preceding assessment, so it rejects a partial response adjacent to
-a complete one and passes the same fault with an assessment in between.
-Whether the vocabulary should gain an assertion over a frame of rows is open
-work, not a question this rule answers.
+`row_count` ask one question about the output as a whole, and `row_count` asks
+it once per group when it declares one; `all_or_none`, `implies`, and
+`predicate` see one completed output row at a time. None of them compares rows
+in an order.
+
+## An ordered frame is not a shape this rule has
+
+An assertion over an ordered series -- that no partial response ever follows a
+complete response for a subject -- is a decision against, not an omission.
+Three constructs already state every such case the suite has, each of them a
+derivation followed by a row-wise assertion here:
+
+- **The adjacent row.** `row_value` under R007 places another row's value on
+  the row and `predicate` compares the two.
+  `negative-adrs-partial-response-after-complete-response` does that against
+  the immediately preceding assessment, so it rejects a partial response next
+  to a complete one and passes the same fault with an assessment in between.
+- **A partition, or its history up to the current row.** A qualified aggregate
+  under R013 reduces a source relation, and its `between` narrowing keeps only
+  the records at or before a current-row value, so a cumulative property of
+  collected values reaches the row it must be asserted about.
+- **A derived property at a coarser or earlier grain.** The specification that
+  derives it publishes it, and R014's producing-specification link makes it an
+  ordinary source field of the specification that asserts over it, which is
+  the same split every other change of grain already uses.
+
+What none of them reaches is a cumulative property of a *derived* value inside
+one specification, because R013 admits no `between` on an unqualified aggregate
+and no `CASE` in a reducer. A frame assertion enters this vocabulary when an
+example needs exactly that and cannot be written as a producer and a consumer.
+Until then it would carry its own partition, ordering, frame-bound, and
+missing-value contract for a case no example has, and nothing weaker than all
+four would be portable.
+
+## Referential integrity is proven where the value is produced
+
+A supplemental qualifier record pointing at its parent domain record, like
+every other cross-dataset link, is asserted by the derivation that produces the
+link rather than by a verification over the finished artifact. R015's
+`unmatched: fail` rejects a value matching no record, and a `mapping_from`
+result carried by a column declaring `not_missing` does the same;
+`sdtm-suppmh-parent-linkage` links `IDVARVAL` to its medical-history record
+that way. Restating the match here would duplicate R015's matching, filtering,
+and multiple-match semantics inside an assertion, and that assertion would run
+long after the value it doubts was consumed.
+
+The opposite direction -- every parent record has a supplemental record -- is
+not a property of the artifact, so no verification here can state it. A
+specification that must assert it derives at the parent's grain.
 
 ## Registration and timing
 
@@ -48,10 +86,11 @@ A failed verification fails execution. Implementations must report its stable
 specification path, failure count, and representative offending keys. Reporting
 limits may be implementation options but must not change pass or fail.
 
-`all_or_none`, `implies`, and `predicate` require an `id`. These IDs must be
-unique across the dataset verifications that declare them and should describe
-the asserted business rule. Implementations must include the ID in failure
-reports in addition to the stable specification path.
+`all_or_none`, `implies`, `predicate`, and a `row_count` declaring `group_by`
+require an `id`. These IDs must be unique across the dataset verifications that
+declare them and should describe the asserted business rule. Implementations
+must include the ID in failure reports in addition to the stable specification
+path.
 
 ## Column verifications
 
@@ -93,7 +132,35 @@ bound and fail in another's.
   `TRUE`; `FALSE` and `UNKNOWN` fail. It is the escape hatch for row-wise rules
   that do not match a more specific verification type.
 - `row_count` requires the output count to meet inclusive `min` and `max`
-  bounds. At least one bound is required.
+  bounds. At least one bound is required. `filter` and `group_by` narrow what
+  it counts, as the next section defines.
+
+## Counting a group
+
+`row_count` counts completed output rows. Two optional fields change which rows
+it counts and how many counts it makes:
+
+- `filter` is an R004 predicate over one completed output row. A row counts
+  only when the predicate is `TRUE`, so `FALSE` and `UNKNOWN` do not count,
+  which is what `filter` means everywhere else in the language.
+- `group_by` names declared columns and partitions the counted rows by equality
+  on their values, missing values grouping with other missing values as R001
+  partitions a driver relation. The bounds then apply to each group separately.
+
+Together they state a cardinality no other verification can. At most one
+baseline record for each subject and parameter is a `max` of one over the rows
+whose baseline flag is `Y`, grouped by subject and parameter: `unique` cannot
+state it because it admits no filter, and `predicate` cannot because one row
+cannot see how many others exist. A failure reports the offending groups and
+their counts.
+
+**Bounds apply to the groups the artifact contains.** A group with no rows is
+not a group, so a `min` cannot discover a subject, visit, or parameter absent
+from the artifact entirely. That assertion belongs to the derivation, where the
+relation defining the expected groups is readable: a record lookup declaring
+`unmatched: fail` under R015 rejects an expected group the data cannot supply,
+and a planning relation at the required grain gives every expected group a
+driver record under R001.
 
 ## Errors
 
@@ -103,7 +170,9 @@ bound and fail in another's.
 - `max_length` whose `max` is less than one: fail. A column that admits no
   value at all is a column the specification should not declare.
 - `all_or_none` with fewer than two distinct columns: fail.
+- A `row_count` declaring `group_by` without an `id`: fail.
+- An empty or duplicated `row_count.group_by`: fail.
 - A verification applied to an incompatible column type: fail.
-- An unknown column in `unique`, `all_or_none`, `implies`, or `predicate`:
-  fail.
+- An unknown column in `unique`, `all_or_none`, `implies`, `predicate`, or
+  `row_count.group_by`: fail.
 - Any verification failure: fail and report it.
