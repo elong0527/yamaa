@@ -64,11 +64,13 @@ literals use their explicit tagged leaf forms.
 
 Scalar expressions return one value per row. Window expressions partition
 constructed output rows by their local `group_by` and preserve row count.
-Omitting `group_by` creates one partition. A window that declares `filter`
-still preserves row count: an excluded row receives missing rather than being
-dropped. A window that reads another row of its partition returns missing when
-that row does not exist, which is the same result as a neighbouring row whose
-value is missing.
+Omitting `group_by` creates one partition. Within a declared group, missing
+values equal other missing values, so rows with the same present values and
+missing in the same group positions share one partition. A window that
+declares `filter` still preserves row count: an excluded row receives missing
+rather than being dropped. A window that reads another row of its partition
+returns missing when that row does not exist, which is the same result as a
+neighbouring row whose value is missing.
 
 `aggregate` is the only aggregate expression. R013 defines its grammar, the
 reducers it permits, and what each returns; this rule fixes where it may be
@@ -118,14 +120,14 @@ code-point sequence order for `str` under R004, and chronological order for
 `date` and `datetime` under R016. An implementation must not substitute host
 locale collation for the R004 order.
 
-That tie-break settles positions, not equality. `row_number`, `row_value`, and
-right-side selection read the positions themselves, so a tie changes which row
-they reach. `rank` compares only the declared terms, so records equal on every
-one of them receive a single number rather than the distinct numbers their
-positions would give. Its `competition` method leaves the positions occupied by
-a tie out of the subsequent numbers; its `dense` method numbers distinct values
-consecutively. A specification that wants a tie broken declares the term that
-breaks it, whichever method it uses.
+That tie-break settles positions, not equality. `row_number`, `row_value`,
+`previous_non_missing`, and right-side selection read the positions themselves,
+so a tie changes which row they reach. `rank` compares only the declared terms,
+so records equal on every one of them receive a single number rather than the
+distinct numbers their positions would give. Its `competition` method leaves
+the positions occupied by a tie out of the subsequent numbers; its `dense`
+method numbers distinct values consecutively. A specification that wants a tie
+broken declares the term that breaks it, whichever method it uses.
 
 ## Type behavior
 
@@ -143,7 +145,8 @@ runtime types:
 - `date_diff`, `study_day`, `date_impute`, and `date_precision` state their
   own input types in R016;
 - `greatest` and `least` require mutually comparable `sources`;
-- `row_value` requires an integer `offset` and accepts any `source` type;
+- `row_value` requires an integer `offset`; it and `previous_non_missing`
+  accept any `source` type and perform no coercion;
 - window ordering requires mutually comparable values. One order term names one
   variable, and a variable has exactly one type -- R014
   gives it to a source field and R011 to a declared column -- so the values a
@@ -172,9 +175,9 @@ its YAML scalar type after R011's non-finite normalization.
 promotes to under R010.
 `row_number` and `rank` return integers. The temporal operations return the
 types R016 gives them. `baseline_flag` returns a string. Mapping, conditional,
-coalescing, extreme, baseline value, and offset row expressions retain the
-selected value type, and a selected temporal value carries its collected
-precision unchanged.
+coalescing, extreme, baseline value, offset row, and previous-non-missing
+expressions retain the selected value type, and a selected temporal value
+carries its collected precision unchanged.
 `aggregate` returns the type R013 gives its expression. R018 gives `function`
 the return type declared by its logical contract.
 

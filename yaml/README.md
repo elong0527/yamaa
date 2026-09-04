@@ -111,6 +111,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
 | `row_number`, `rank`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
 | `row_value` | One named source with named grouping and ordering variables, plus a signed integer literal offset along the declared order |
+| `previous_non_missing` | One named source searched strictly backward through named grouping and ordering variables |
 | `aggregate` | One closed reducer expression over one relation, optionally narrowed by a current-row range (R013) |
 | `case` | Nested result expressions retained because selecting expressions is its purpose |
 | `function` | Closed named arguments are variables or scalar literal leaves; string and temporal literals use explicit tagged forms (R018) |

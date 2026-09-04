@@ -62,11 +62,27 @@ columns:
     derivation:
       source: COLLECTED.VSSEQ
 
+  - name: AVALCOL
+    type: float
+    label: Collected Analysis Value
+    derivation:
+      source: COLLECTED.VSSTRESN
+
+  - name: AVALPREV
+    type: float
+    label: Previous Non-Missing Analysis Value
+    derivation:
+      previous_non_missing:
+        source: AVALCOL
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        order_by: [ADT, ASEQ]
+
   - name: AVAL
     type: float
     label: Analysis Value
     derivation:
-      source: COLLECTED.VSSTRESN
+      coalesce:
+        sources: [AVALCOL, AVALPREV]
 
   - name: TRTSDT
     type: date
@@ -80,7 +96,7 @@ columns:
     derivation:
       case:
         branches:
-          - when: "PARAMCD = 'HEIGHT' AND AVAL IS NOT NULL"
+          - when: "PARAMCD = 'HEIGHT' AND AVALCOL IS NOT NULL"
             then: {source: ADT}
 
   - name: HGTBLFL
@@ -98,19 +114,27 @@ columns:
     derivation:
       baseline_value:
         group_by: [STUDYID, USUBJID]
-        value: AVAL
+        value: AVALCOL
         flag: HGTBLFL
 
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, ASEQ]
   - row_count:
-      min: 9
-      max: 9
+      min: 12
+      max: 12
   - all_or_none:
       id: collected-record-carries-sequence-and-value
-      columns: [VSSEQ, AVAL]
+      columns: [VSSEQ, AVALCOL]
   - implies:
       id: height-record-supplies-subject-height
       when: "PARAMCD = 'HEIGHT' AND HGTBLFL = 'Y'"
-      then: "AVAL = HEIGHTBL"
+      then: "AVALCOL = HEIGHTBL"
+  - implies:
+      id: uncollected-filled-value-comes-from-predecessor
+      when: "VSSEQ IS NULL AND AVAL IS NOT NULL"
+      then: "AVAL = AVALPREV"
+  - implies:
+      id: no-predecessor-leaves-uncollected-value-missing
+      when: "VSSEQ IS NULL AND AVALPREV IS NULL"
+      then: "AVAL IS NULL"

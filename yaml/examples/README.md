@@ -102,6 +102,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-advs-growth-percentile`](adam-advs-growth-percentile/) | express a measurement as a growth percentile |
 | [`adam-advs-mean-arterial-pressure`](adam-advs-mean-arterial-pressure/) | derive mean arterial pressure |
 | [`adam-advs-once-measured-carry-forward`](adam-advs-once-measured-carry-forward/) | carry forward a once-measured characteristic |
+| [`adam-advs-prior-character-result`](adam-advs-prior-character-result/) | retain the latest earlier character result |
 | [`negative-adae-review-condition-arithmetic`](negative-adae-review-condition-arithmetic/) | reject a review flag whose condition performs arithmetic |
 | [`negative-adae-review-text-date`](negative-adae-review-text-date/) | reject a review flag that compares a date with text |
 | [`negative-adae-review-unknown-date`](negative-adae-review-unknown-date/) | reject a review flag that names an unavailable date |

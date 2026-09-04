@@ -143,11 +143,11 @@ complementary view -- **which example to open when you want to see a construct
 in use, and which rule governs it.** Rule IDs are the normative pages in
 [`yaml/rules/`](https://github.com/elong0527/yamaa/tree/main/yaml/rules).
 
-Rule coverage across the 48 questions below:
+Rule coverage across the 49 questions below:
 
 | R001 | R002 | R003 | R004 | R005 | R006 | R007 | R008 | R009 | R010 | R011 | R012 | R013 | R014 | R015 | R016 | R017 | R018 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 8 | 3 | 2 | 0 | 1 | 0 | 14 | 3 | 1 | 0 | 1 | 1 | 7 | 0 | 7 | 5 | 2 | 3 |
+| 8 | 3 | 2 | 0 | 1 | 0 | 15 | 3 | 1 | 0 | 1 | 1 | 7 | 0 | 8 | 5 | 2 | 3 |
 
 ### Row construction and value-level metadata
 
@@ -177,7 +177,8 @@ Rule coverage across the 48 questions below:
 | Question | Rule | Example |
 |---|---|---|
 | How do I flag the baseline record and broadcast its value? | R007 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-bds) -- `baseline_flag` then `baseline_value`; also [`adam-adlb-shift-and-criteria`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-shift-and-criteria) |
-| How do I carry a once-measured characteristic onto every record? | R007, R015 | [`adam-advs-once-measured-carry-forward`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-advs-once-measured-carry-forward) -- a record lookup plus `baseline_value` |
+| How do I carry a result through later planned gaps? | R007, R015 | [`adam-advs-once-measured-carry-forward`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-advs-once-measured-carry-forward) -- a record lookup plus `previous_non_missing`; [`adam-advs-prior-character-result`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-advs-prior-character-result) pins missing groups, missing order values, and ties |
+| How do I carry one selected characteristic onto every record? | R007, R015 | [`adam-advs-once-measured-carry-forward`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-advs-once-measured-carry-forward) -- `baseline_value` broadcasts one selected height, rather than following a changing predecessor |
 | How do I number records once they all exist? | R007 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-bds) (`ASEQ`), [`sdtm-ds-disposition-sequence`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-ds-disposition-sequence) |
 | How do I rank with ties? | R007 | [`adam-adae-severity-rank`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adae-severity-rank) |
 | How do I read the neighbouring row's value? | R007 | [`adam-adex-dose-reduction-flag`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adex-dose-reduction-flag) and [`adam-adrs-confirmed-response`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adrs-confirmed-response) use `row_value`; [`negative-adrs-partial-response-after-complete-response`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-adrs-partial-response-after-complete-response) shows the assertion pattern built on it |

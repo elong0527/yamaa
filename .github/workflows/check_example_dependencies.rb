@@ -162,7 +162,7 @@ def expression_dependencies(expression, declared, lookup_sources)
     dependencies.merge(
       identifier_dependencies(payload["filter"], declared, lookup_sources)
     )
-  when "row_value"
+  when "row_value", "previous_non_missing"
     dependencies.merge(
       variable_dependencies(
         [payload["source"], *values(payload["group_by"])],

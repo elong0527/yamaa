@@ -15,16 +15,15 @@ same data, so the run must fail and no artifact is accepted.
 
 ## How to fix
 
-For a one-record fallback, read the prior collected value rather than the prior
-filled value, then coalesce the two named columns:
+Carry from the collected series rather than from the filled output. Search the
+earlier collected values, then coalesce that result with the current value:
 
 ```yaml
 - name: PRIOR
   type: float
   derivation:
-    row_value:
+    previous_non_missing:
       source: AVAL
-      offset: -1
       group_by: [STUDYID, USUBJID, PARAMCD]
       order_by: [ADT, VSSEQ]
 - name: AVALF
@@ -35,7 +34,3 @@ filled value, then coalesce the two named columns:
 ```
 
 Keep `PRIOR` internal by omitting it from `output.columns`.
-
-That deliberately does not cross two consecutive gaps. A true last-observation
-carry-forward needs a separately defined project function or an upstream step;
-it must not be expressed as a dependency cycle.
