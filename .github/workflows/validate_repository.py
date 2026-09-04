@@ -1945,6 +1945,15 @@ def _apply_reference(
     return changed
 
 
+def order_term_variable(term):
+    """Return the variable an R007 order term names, or None."""
+    if isinstance(term, str):
+        return term
+    if isinstance(term, dict) and isinstance(term.get('variable'), str):
+        return term['variable']
+    return None
+
+
 def prune_inheritance_collections(spec, env):
     """Remove keyed declarations unreachable from R017 semantic roots."""
     pruned = copy.deepcopy(spec)
@@ -1972,6 +1981,13 @@ def prune_inheritance_collections(spec, env):
     if isinstance(output, dict) and isinstance(output.get('columns'), list):
         live_columns.update(
             name for name in output['columns'] if isinstance(name, str)
+        )
+    if isinstance(output, dict) and isinstance(output.get('order_by'), list):
+        live_columns.update(
+            variable for variable in (
+                order_term_variable(term) for term in output['order_by']
+            )
+            if variable is not None
         )
     keys = pruned.get('keys')
     if isinstance(keys, list):
@@ -3002,6 +3018,21 @@ def validate_spec_names(spec, spec_label):
                         f"{key!r} is not in output.columns"
                     )
 
+    order_by = output.get('order_by') if isinstance(output, dict) else None
+    if isinstance(order_by, list):
+        order_variables = []
+        for index, term in enumerate(order_by):
+            variable = order_term_variable(term)
+            if variable is None:
+                continue
+            order_variables.append(variable)
+            if variable not in declared_columns:
+                errors.append(
+                    f"ERROR: {spec_label}.output.order_by[{index}]: "
+                    f"undeclared column {variable!r}"
+                )
+        duplicate_errors(order_variables, 'output.order_by', 'order term')
+
     rows = spec.get('rows')
     if isinstance(rows, list):
         row_ids = [
@@ -3190,7 +3221,7 @@ def validate_spec_contracts(spec, spec_label, spec_path=None):
             if not isinstance(payload, dict):
                 continue
             path = f"{spec_label}.verifications[{index}].{keyword}"
-            if keyword in {'all_or_none', 'implies', 'predicate'}:
+            if keyword in {'all_or_none', 'implies', 'predicate', 'row_count'}:
                 verification_id = payload.get('id')
                 if isinstance(verification_id, str):
                     verification_ids.append((verification_id, path))
@@ -3225,6 +3256,36 @@ def validate_spec_contracts(spec, spec_label, spec_path=None):
                     and minimum > maximum
                 ):
                     errors.append(f"ERROR: {path}: min must not exceed max")
+                if 'group_by' in payload:
+                    group_by = payload.get('group_by')
+                    if not isinstance(payload.get('id'), str):
+                        errors.append(
+                            f"ERROR: {path}.id: a grouped row_count requires "
+                            "a verification id"
+                        )
+                    if isinstance(group_by, list):
+                        if not group_by:
+                            errors.append(
+                                f"ERROR: {path}.group_by: requires at least "
+                                "one column"
+                            )
+                        for name in sorted(
+                            {
+                                name for name in group_by
+                                if isinstance(name, str)
+                                and group_by.count(name) > 1
+                            }
+                        ):
+                            errors.append(
+                                f"ERROR: {path}.group_by: duplicate column "
+                                f"{name!r}"
+                            )
+                        for name in group_by:
+                            if isinstance(name, str) and name not in declared:
+                                errors.append(
+                                    f"ERROR: {path}.group_by: unknown column "
+                                    f"{name!r}"
+                                )
 
     seen_ids = set()
     for verification_id, path in verification_ids:

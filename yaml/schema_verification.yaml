@@ -31,7 +31,13 @@ dataset_verifications:
     predicate:
         - id: {type: verification_id, required: true}
         - assert: {type: sql, required: true}
-    row_count:
+    row_count: # Bounds how many output rows a group contains, or the whole output.
+        # A row counts only when filter is TRUE. group_by partitions the counted
+        # rows and applies both bounds to every group; it requires id, which an
+        # ungrouped count does not take.
+        - id: {type: verification_id, required: false}
+        - group_by: {type: "list[variable]", required: false}
+        - filter: {type: sql, required: false}
         - min: {type: int, required: false}
         - max: {type: int, required: false}
 

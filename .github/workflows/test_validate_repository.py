@@ -932,6 +932,53 @@ class TestSpecificationInheritance(unittest.TestCase):
             f'(contributed by {parent.resolve()})', '\n'.join(errors)
         )
 
+    def test_output_order_by_keeps_an_internal_column_live(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            layers = root / 'layers'
+            inputs = root / 'input'
+            layers.mkdir()
+            inputs.mkdir()
+            (inputs / 'dm.csv').write_text('USUBJID,SITEORD\n01,2\n')
+            (layers / 'common.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'datasets:\n'
+                '  DM: ../input/dm.csv\n'
+                'base: DM\n'
+                'columns:\n'
+                '  - name: USUBJID\n'
+                '    type: str\n'
+                '    label: Unique Subject Identifier\n'
+                '    derivation: {source: DM.USUBJID}\n'
+                '  - name: SITEORD\n'
+                '    type: str\n'
+                '    label: Site Sort Order\n'
+                '    derivation: {source: DM.SITEORD}\n'
+                '  - name: UNUSED\n'
+                '    type: str\n'
+                '    label: Unused\n'
+                '    derivation: {literal: idle}\n'
+            )
+            spec_path = root / 'spec.yaml'
+            spec_path.write_text(
+                'schema_version: "1.0"\n'
+                'parents: layers/common.yaml\n'
+                'domain: ADSL\n'
+                'keys: [USUBJID]\n'
+                'output:\n'
+                '  columns: [USUBJID]\n'
+                '  order_by:\n'
+                '    - {variable: SITEORD, direction: desc}\n'
+            )
+
+            resolved, errors, _ = self.resolve(spec_path)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            [column['name'] for column in resolved['columns']],
+            ['USUBJID', 'SITEORD'],
+        )
+
     def test_resolved_column_requires_a_label(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -1461,6 +1508,55 @@ class TestSpecNames(unittest.TestCase):
 
         self.assertIn("at least one key column", "\n".join(errors))
 
+    def test_accepts_output_order_by_over_declared_columns(self):
+        spec = {
+            "domain": "ADSL",
+            "datasets": {"DM": "dm.csv"},
+            "base": "DM",
+            "keys": ["USUBJID"],
+            "output": {
+                "columns": ["USUBJID"],
+                "order_by": [
+                    "USUBJID",
+                    {"variable": "SORTORD", "direction": "desc"},
+                ],
+            },
+            "columns": [{"name": "USUBJID"}, {"name": "SORTORD"}],
+        }
+
+        self.assertEqual(
+            VALIDATOR.validate_spec_names(spec, "example/spec.yaml"), []
+        )
+
+    def test_rejects_unknown_and_repeated_output_order_terms(self):
+        spec = {
+            "domain": "ADSL",
+            "datasets": {"DM": "dm.csv"},
+            "base": "DM",
+            "keys": ["USUBJID"],
+            "output": {
+                "columns": ["USUBJID"],
+                "order_by": [
+                    "USUBJID",
+                    {"variable": "USUBJID", "nulls": "first"},
+                    "DM.USUBJID",
+                    "MISSING",
+                ],
+            },
+            "columns": [{"name": "USUBJID"}],
+        }
+
+        errors = VALIDATOR.validate_spec_names(spec, "example/spec.yaml")
+
+        message = "\n".join(errors)
+        self.assertIn("output.order_by: duplicate order term 'USUBJID'", message)
+        self.assertIn(
+            "output.order_by[2]: undeclared column 'DM.USUBJID'", message
+        )
+        self.assertIn(
+            "output.order_by[3]: undeclared column 'MISSING'", message
+        )
+
     def test_rejects_dataset_and_lookup_namespace_errors(self):
         spec = {
             "domain": "ADSL",
@@ -1540,6 +1636,95 @@ class TestSpecContracts(unittest.TestCase):
         self.assertIn("at least two distinct columns", message)
         self.assertIn("duplicate dataset verification id", message)
         self.assertIn("range requires an int or float column", message)
+
+    def test_accepts_grouped_row_count(self):
+        spec = {
+            "domain": "ADLB",
+            "datasets": {"LB": "lb.csv"},
+            "base": "LB",
+            "keys": ["USUBJID"],
+            "output": {"columns": ["USUBJID"]},
+            "columns": [
+                {"name": "USUBJID", "derivation": {"source": "LB.USUBJID"}},
+                {"name": "ABLFL", "derivation": {"literal": "Y"}},
+            ],
+            "verifications": [
+                {
+                    "row_count": {
+                        "id": "one-baseline-per-subject",
+                        "group_by": ["USUBJID"],
+                        "filter": "ABLFL = 'Y'",
+                        "max": 1,
+                    }
+                }
+            ],
+        }
+
+        self.assertEqual(
+            VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml"), []
+        )
+
+    def test_rejects_grouped_row_count_without_id_or_known_columns(self):
+        spec = {
+            "domain": "ADLB",
+            "datasets": {"LB": "lb.csv"},
+            "base": "LB",
+            "keys": ["USUBJID"],
+            "output": {"columns": ["USUBJID"]},
+            "columns": [
+                {"name": "USUBJID", "derivation": {"source": "LB.USUBJID"}}
+            ],
+            "verifications": [
+                {
+                    "row_count": {
+                        "group_by": ["USUBJID", "USUBJID", "MISSING"],
+                        "max": 1,
+                    }
+                },
+                {"row_count": {"id": "empty-grain", "group_by": [], "max": 1}},
+            ],
+        }
+
+        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+
+        message = "\n".join(errors)
+        self.assertIn("a grouped row_count requires a verification id", message)
+        self.assertIn("group_by: duplicate column 'USUBJID'", message)
+        self.assertIn("group_by: unknown column 'MISSING'", message)
+        self.assertIn("group_by: requires at least one column", message)
+
+    def test_rejects_duplicate_row_count_verification_id(self):
+        spec = {
+            "domain": "ADLB",
+            "datasets": {"LB": "lb.csv"},
+            "base": "LB",
+            "keys": ["USUBJID"],
+            "output": {"columns": ["USUBJID"]},
+            "columns": [
+                {"name": "USUBJID", "derivation": {"source": "LB.USUBJID"}}
+            ],
+            "verifications": [
+                {
+                    "row_count": {
+                        "id": "one-row-per-subject",
+                        "group_by": ["USUBJID"],
+                        "max": 1,
+                    }
+                },
+                {
+                    "predicate": {
+                        "id": "one-row-per-subject",
+                        "assert": "TRUE",
+                    }
+                },
+            ],
+        }
+
+        errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
+
+        self.assertIn(
+            "duplicate dataset verification id", "\n".join(errors)
+        )
 
     def test_rejects_missing_source_and_type_for_absent_csv_field(self):
         with tempfile.TemporaryDirectory() as temp_dir:
