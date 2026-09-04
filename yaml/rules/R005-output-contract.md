@@ -209,7 +209,7 @@ specification declares a term merely to make the result deterministic. One that
 wants a particular tie broken declares the term that breaks it.
 
 **Ordering is presentation.** It happens once, after every value has completed
-the lifecycle below, after key validation, and after every verification R009
+the lifecycle above, after key validation, and after every verification R009
 runs, so it cannot change whether a run passes. It changes nothing about
 evaluation either: R001's dependency order, a window's partitions, and the
 neighbours `row_value` reads are all fixed before this order is applied, and
