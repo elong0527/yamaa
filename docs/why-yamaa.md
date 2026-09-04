@@ -110,6 +110,7 @@ different programs:
 | `AGE` declared numeric, but the source holds `"045"` or `"4.5"` | Parsers differ in strictness; a failure may yield missing or may raise | R011 fixes the conversion table cell by cell |
 | A value the codelist does not contain | Keep the original? Blank it? `UNKNOWN`? Raise? | R008: without an `unmapped` handler the condition is fatal |
 | Two results on the same day, both eligible as baseline | Each programmer picks differently | `baseline_flag` raises rather than choosing |
+| Which order do the rows leave in? | Whatever the last sort in the program happened to be, or the input order | R005: `output.order_by` declares it, and rows equal on every term keep construction order |
 
 The pattern is the same in every row: the divergent behaviors are all
 *defensible*, several are *silent*, and the specification is what should have
@@ -173,7 +174,6 @@ omission; each is a decision recorded in a rule.
 | Repeating a row *n* times from data (e.g. expanding EXDOSFRQ into daily records) | Row construction never invents rows. Supply a planning relation with one driver record per required row; expansion happens upstream | R001 |
 | Mixing R and Python functions in one project | `runtime.language` is project-wide | R018 |
 | Ordering that follows the host locale | Forbidden; `str` orders by code point | R004 / R007 |
-| Submission sort | Not available. R005 records this as open work | R005 |
 
 One more thing worth saying about the rules themselves: **all eighteen indexed
 rules are normative -- none is draft.** The repository's admission policy is
