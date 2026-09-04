@@ -3889,6 +3889,7 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
             fields = (
                 ('when', 'then') if keyword == 'implies'
                 else ('assert',) if keyword == 'predicate'
+                else ('filter',) if keyword == 'row_count'
                 else ()
             )
             for field in fields:

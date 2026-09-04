@@ -214,6 +214,61 @@ class TestPredicateLanguage(unittest.TestCase):
         self.assertIn('verifications[0].predicate.assert', errors[0])
         self.assertIn("unknown identifier 'MISSING'", errors[0])
 
+    def test_validates_a_grouped_row_count_filter(self):
+        spec = {
+            'domain': 'ADLB',
+            'datasets': {'LB': 'lb.csv'},
+            'base': 'LB',
+            'keys': ['USUBJID'],
+            'output': {'columns': ['USUBJID']},
+            'columns': [
+                {
+                    'name': 'USUBJID',
+                    'type': 'str',
+                    'derivation': {'source': 'LB.USUBJID'},
+                },
+                {
+                    'name': 'ABLFL',
+                    'type': 'str',
+                    'derivation': {'literal': 'Y'},
+                },
+            ],
+            'verifications': [
+                {
+                    'row_count': {
+                        'id': 'one-baseline-per-subject',
+                        'group_by': ['USUBJID'],
+                        'filter': "ABLFL = 'Y'",
+                        'max': 1,
+                    }
+                },
+                {
+                    'row_count': {
+                        'id': 'unknown-operand',
+                        'group_by': ['USUBJID'],
+                        'filter': "NOSUCHCOL = 'Y'",
+                        'max': 1,
+                    }
+                },
+                {
+                    'row_count': {
+                        'id': 'malformed-predicate',
+                        'group_by': ['USUBJID'],
+                        'filter': 'ABLFL =',
+                        'max': 1,
+                    }
+                },
+            ],
+        }
+
+        errors = VALIDATOR.validate_spec_predicates(spec, 'example/spec.yaml')
+
+        self.assertEqual(len(errors), 2)
+        self.assertIn('verifications[1].row_count.filter', errors[0])
+        self.assertIn("unknown identifier 'NOSUCHCOL'", errors[0])
+        self.assertIn('verifications[2].row_count.filter', errors[1])
+        self.assertIn('invalid predicate', errors[1])
+
 
 class TestProjectFunctionEnvironment(unittest.TestCase):
     def setUp(self):

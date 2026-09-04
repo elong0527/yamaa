@@ -35,7 +35,7 @@ dataset_verifications:
         # group_by partitions the artifact's rows and applies both bounds to
         # every group; a group's count is how many of its rows filter admits,
         # and a row is admitted only when the predicate is TRUE. A grouped
-        # count requires id, which an ungrouped count does not take.
+        # count requires id, which an ungrouped count does not.
         - id: {type: verification_id, required: false}
         - group_by: {type: "list[variable]", required: false}
         - filter: {type: sql, required: false}
