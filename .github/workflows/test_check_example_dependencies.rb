@@ -121,4 +121,30 @@ class TestExampleDependencies < Minitest::Test
   ensure
     spec&.unlink
   end
+
+  def test_previous_non_missing_inputs_are_dependencies
+    spec = Tempfile.new(["previous-non-missing-dependencies", ".yaml"])
+    spec.write(<<~YAML)
+      output:
+        columns: [PREVIOUS, AVAL, SERIES, AVISITN]
+      columns:
+        - name: PREVIOUS
+          derivation:
+            previous_non_missing:
+              source: AVAL
+              group_by: [SERIES]
+              order_by: [AVISITN]
+        - {name: AVAL, derivation: {literal: 1}}
+        - {name: SERIES, derivation: {literal: A}}
+        - {name: AVISITN, derivation: {literal: 1}}
+    YAML
+    spec.close
+
+    problems = check(spec.path)
+    assert_includes problems, "PREVIOUS references later column AVAL"
+    assert_includes problems, "PREVIOUS references later column SERIES"
+    assert_includes problems, "PREVIOUS references later column AVISITN"
+  ensure
+    spec&.unlink
+  end
 end

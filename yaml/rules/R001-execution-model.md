@@ -127,9 +127,11 @@ resolved order.
 
 The graph is over columns, not over rows. A column that reads another row of
 its own partition therefore depends on the whole column it names, so a column
-that reaches its own value that way is a cycle rather than an iteration. A
-value carried forward from a row that was itself carried forward is outside
-this model.
+that reaches its own value that way is a cycle rather than an iteration.
+`previous_non_missing` crosses any number of missing rows by searching a
+separate completed source column; conventional carry-forward coalesces the
+current source with that result. Searching the column being derived remains a
+cycle rather than an instruction to iterate.
 
 In both phases, a completed derivation runs the R005 lifecycle before anything
 depends on it, so a dependent always reads a value of the declared type.

@@ -395,11 +395,20 @@ standard way to derive an imputation flag. See
 | `row_number` | Number rows from 1 within a partition | ASEQ, AESEQ |
 | `rank` | The same, but ties share a number (`competition` or `dense`) | Severity ordering |
 | `row_value` | Read the value from a row at a given offset in the partition | The previous visit's value |
+| `previous_non_missing` | Read the closest strictly earlier non-missing value | Carry a collected result through later planned gaps |
 | `baseline_flag` | Flag `Y` on the **unique** latest eligible row at or before a reference date | ABLFL |
 | `baseline_value` | Broadcast the flagged row's value to the whole partition | BASE |
 
 A tie for the latest baseline date is an **error** in `baseline_flag`; it does
 not pick one.
+
+`previous_non_missing` is ordered propagation within constructed output rows.
+It differs from `row_value`, which reads one fixed offset and does not skip
+gaps, and from `baseline_value`, which broadcasts one flagged record to the
+whole partition. It neither reduces a group like `aggregate` nor reads another
+dataset like a record lookup. The current row is not a candidate; coalesce its
+source with the earlier result when the artifact should retain a collected
+current value.
 
 Ordering carries two rules that are easy to miss (R007):
 

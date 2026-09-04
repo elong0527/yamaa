@@ -1455,6 +1455,56 @@ class TestDateImputeSchema(unittest.TestCase):
         self.assertTrue(errors)
 
 
+class TestPreviousNonMissingSchema(unittest.TestCase):
+    def setUp(self):
+        self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[2])
+        self.assertEqual(schema_errors, [])
+
+    def validate(self, payload):
+        return VALIDATOR.validate_type(
+            {"previous_non_missing": payload},
+            ["expression"],
+            self.env,
+            "spec.columns.PREVIOUS.derivation",
+        )
+
+    def test_accepts_closed_window_inputs(self):
+        errors = self.validate(
+            {
+                "source": "AVAL",
+                "group_by": ["STUDYID", "USUBJID", "PARAMCD"],
+                "order_by": [
+                    {
+                        "variable": "ADT",
+                        "direction": "asc",
+                        "nulls": "last",
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_allows_one_partition_by_omission(self):
+        self.assertEqual(
+            self.validate({"source": "AVAL", "order_by": ["ADT"]}),
+            [],
+        )
+
+    def test_rejects_missing_source_and_unregistered_filter(self):
+        missing_source = self.validate({"order_by": ["ADT"]})
+        filtered = self.validate(
+            {
+                "source": "AVAL",
+                "order_by": ["ADT"],
+                "filter": "PARAMCD = 'WEIGHT'",
+            }
+        )
+
+        self.assertIn("missing required field 'source'", missing_source[0])
+        self.assertIn("unknown field 'filter'", filtered[0])
+
+
 class TestGroupedRows(unittest.TestCase):
     def test_accepts_driver_qualified_group_variables(self):
         spec = {

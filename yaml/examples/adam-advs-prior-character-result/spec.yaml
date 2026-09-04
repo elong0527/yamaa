@@ -1,0 +1,66 @@
+schema_version: "1.0"
+domain: ADVS
+datasets:
+  VS:
+    path: input/vs.csv
+    types: {VSSEQ: int, AVISITN: int}
+base: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+
+output:
+  columns: [STUDYID, USUBJID, VSSEQ, SERIES, AVISITN, AVALC, PREVAVALC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: VS.USUBJID
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: VS.VSSEQ
+
+  - name: SERIES
+    type: str
+    label: Analysis Series
+    derivation:
+      source: VS.SERIES
+
+  - name: AVISITN
+    type: int
+    label: Analysis Visit Number
+    derivation:
+      source: VS.AVISITN
+
+  - name: AVALC
+    type: str
+    label: Analysis Value (C)
+    derivation:
+      source: VS.AVALC
+
+  - name: PREVAVALC
+    type: str
+    label: Previous Non-Missing Analysis Value (C)
+    derivation:
+      previous_non_missing:
+        source: AVALC
+        group_by: [STUDYID, USUBJID, SERIES]
+        order_by:
+          - variable: AVISITN
+            nulls: last
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, VSSEQ]
+  - row_count:
+      min: 7
+      max: 7

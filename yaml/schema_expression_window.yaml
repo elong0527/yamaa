@@ -59,6 +59,22 @@ expressions:
             type: "list[order_by_term]"
             required: true
             description: Terms ordering rows within each partition.
+    previous_non_missing: # Returns the source from the closest strictly earlier non-missing row.
+        # The current row is never a candidate. Missing source values are
+        # skipped, so one result can cross any number of consecutive gaps. A
+        # row with no earlier non-missing source in its partition yields
+        # missing.
+        - source:
+            type: variable
+            required: true
+            description: Variable searched for the closest earlier non-missing value.
+        - group_by:
+            type: "list[variable]"
+            description: Variables defining partitions; omission uses one partition.
+        - order_by:
+            type: "list[order_by_term]"
+            required: true
+            description: Terms ordering rows within each partition.
     baseline_flag: # Returns Y for the unique latest eligible row, missing elsewhere.
         # An eligible row has a non-missing date at or before reference_date.
         # A tie for the latest eligible date is an error.
