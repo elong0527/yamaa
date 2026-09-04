@@ -4,7 +4,7 @@ title: Why YAMAA
 
 # Why YAMAA looks the way it does
 
-> **YAMAA docs:** [Why](why-yamaa.md) · [Excel to YAMAA](excel-to-yamaa.md) · [Schema concepts](schema-concepts.md) · [Examples walkthrough](yaml-examples-walkthrough.md)
+> **YAMAA docs:** [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Examples walkthrough](yaml-examples-walkthrough.md)
 
 > **Read this if** you want to know what an Excel specification cannot say, why
 > that matters, and what YAMAA refuses to do about it.
@@ -17,9 +17,9 @@ An Excel specification has three layers, but only two of them are written down:
 
 | Layer | What it answers | Where an Excel spec keeps it | Who can read it |
 |---|---|---|---|
-| **Structure** | What exists — which datasets, which variables, which types | Dataset sheet, Variable sheet | People, and machines with effort |
+| **Structure** | What exists -- which datasets, which variables, which types | Dataset sheet, Variable sheet | People, and machines with effort |
 | **Algorithm** | What to compute | The free-text derivation column | People only |
-| **Semantics** | What that computation means **when the data does not cooperate** | **Nowhere.** It lives in each programmer's experience | Nobody — you cannot read what is in someone else's head |
+| **Semantics** | What that computation means **when the data does not cooperate** | **Nowhere.** It lives in each programmer's experience | Nobody -- you cannot read what is in someone else's head |
 
 YAMAA writes each layer into a different kind of file:
 
@@ -28,7 +28,7 @@ YAMAA writes each layer into a different kind of file:
 | **Structure** | `yaml/schema*.yaml` | The **header row** of the Variable sheet |
 | **Algorithm** | your `spec.yaml` | The **body** of the Variable sheet, derivation column included |
 | **Semantics** | `yaml/rules/R0xx-*.md` | The conventions that were never written down |
-| **Worked examples** | `yaml/examples/` | The worked examples in an implementation guide — but every one runs |
+| **Worked examples** | `yaml/examples/` | The worked examples in an implementation guide -- but every one runs |
 
 In one sentence: **an Excel spec is written to be understood; a YAMAA spec is
 written to be executed the same way twice.**
@@ -41,7 +41,7 @@ of derivation verbs ([the verb table](schema-concepts.md)) is how the algorithm 
 
 If the word is too abstract, use the plain version: **the semantics layer is
 the unwritten rules.** Concretely, it is everything that produces this
-situation —
+situation --
 
 > Two programmers read the same specification. Both are certain they
 > understood it. Their programs disagree.
@@ -50,18 +50,18 @@ The disagreement is almost never a misreading. It is that the specification
 never reached the point they disagreed on. The three examples in the table
 above are chosen because they sit at three different levels.
 
-**"What missing means" — the value level.** A specification says
+**"What missing means" -- the value level.** A specification says
 `AVAL = LBSTRESN`. In the source, that cell might be an empty string, `NA`,
 `.`, or `NOT DONE`. Which of those is missing? And one level deeper: *the
 variable does not exist* and *the variable exists but this row is empty* are
-two different situations — the first is usually a broken extract, the second is
-ordinary clinical reality — yet an Excel spec calls both of them "missing".
+two different situations -- the first is usually a broken extract, the second is
+ordinary clinical reality -- yet an Excel spec calls both of them "missing".
 YAMAA separates them: R014 owns which stored fields are missing, and R008 makes
 `missing` on a `source` binding mean "the variable or ODM item does not exist in
 context", while `missing` on any other expression means "the input value is
 missing".
 
-**"What a duplicate means" — the row level.** A specification says
+**"What a duplicate means" -- the row level.** A specification says
 `TRTSDT: Predecessor ADSL.TRTSDT, merge by USUBJID`. What if a subject has two
 ADSL records? A SAS merge will silently keep the last one, or produce a
 cartesian product, depending on whether the programmer wrote `if a and b` and
@@ -73,8 +73,8 @@ directly: multiple matches **fail by default**, and permitting them requires an
 explicit `multiple_matches` that declares the ordering and whether to keep the
 first or the last.
 
-**"How dates compare" — the type level.** `ASTDT >= TRTSDT` happens to work as
-a string comparison while both sides look like `"2024-01-10"` — until one is
+**"How dates compare" -- the type level.** `ASTDT >= TRTSDT` happens to work as
+a string comparison while both sides look like `"2024-01-10"` -- until one is
 `"2024-1-10"`, or a partial date `"2024-01"`. And a date is a number in SAS, a
 `Date` in R, and a `datetime64` in Python, each with its own behavior when a
 missing value enters a comparison. R016 therefore owns both temporal types
@@ -131,19 +131,19 @@ holds:
 
 | Excel workbook | YAMAA |
 |---|---|
-| One `.xlsx` with several sheets | One `spec.yaml` per `domain` — each spec produces exactly **one** dataset |
+| One `.xlsx` with several sheets | One `spec.yaml` per `domain` -- each spec produces exactly **one** dataset |
 | The Variable sheet's header row | `column_class` in `schema.yaml` |
 | A row of the Variable sheet | One entry under `columns:` in `spec.yaml` |
 | Copying the company template and editing it | `parents:` layer inheritance (R017) |
-| `Working-Instruction-fill-in-spec.docx` | `rules/` — normative text an implementation cites, not advice |
+| `Working-Instruction-fill-in-spec.docx` | `rules/` -- normative text an implementation cites, not advice |
 | The company macro library | `environment.yaml` (R018), validated separately from any spec |
-| The worked examples in SDTMIG / ADaMIG | `examples/` — the same illustrative role, except every example runs and its output is fixed byte for byte |
-| "We can't express that one — let's discuss it" | An `examples/negative-*/` directory that pins the rejection |
+| The worked examples in SDTMIG / ADaMIG | `examples/` -- the same illustrative role, except every example runs and its output is fixed byte for byte |
+| "We can't express that one -- let's discuss it" | An `examples/negative-*/` directory that pins the rejection |
 
 The `negative-` directories are worth a slide of their own. They are not bad
 examples; they **declare where the design refuses you**, and
 `expected/error.yaml` fixes exactly which error is raised. An Excel spec has no
-equivalent — a spec that cannot be implemented is discovered by whoever tries.
+equivalent -- a spec that cannot be implemented is discovered by whoever tries.
 
 ---
 
@@ -169,14 +169,14 @@ omission; each is a decision recorded in a rule.
 | A nested expression in an operand field | Nesting exists in three places only (`case.then`, `str_concat.sources`, `override.value`); otherwise name an intermediate column | R007 |
 | A computed argument in `function.args` | Invalid. Arguments are variable names or closed literal leaves | R018 |
 | `MAX(SUM(...))` | Reductions do not nest. Two levels means two specifications with a stored intermediate | R013 |
-| A data-driven column count (SMQ01 … SMQ0n) | The column list is fixed by the spec. A dictionary that outgrows it is a spec change, not a data-dependent artifact schema | R005 |
+| A data-driven column count (SMQ01 ... SMQ0n) | The column list is fixed by the spec. A dictionary that outgrows it is a spec change, not a data-dependent artifact schema | R005 |
 | Repeating a row *n* times from data (e.g. expanding EXDOSFRQ into daily records) | Row construction never invents rows. Supply a planning relation with one driver record per required row; expansion happens upstream | R001 |
 | Mixing R and Python functions in one project | `runtime.language` is project-wide | R018 |
 | Ordering that follows the host locale | Forbidden; `str` orders by code point | R004 / R007 |
 | Submission sort | Not available. R005 records this as open work | R005 |
 
 One more thing worth saying about the rules themselves: **all eighteen indexed
-rules are normative — none is draft.** The repository's admission policy is
+rules are normative -- none is draft.** The repository's admission policy is
 that a design proposal may live in an issue or a branch, but it becomes a rule
 only once its schema shape can be validated, its behavior is closed enough for
 independent R and Python implementations, and examples exercise both success

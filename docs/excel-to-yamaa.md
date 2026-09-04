@@ -4,7 +4,7 @@ title: Excel to YAMAA
 
 # Translating an Excel specification
 
-> **YAMAA docs:** [Why](why-yamaa.md) · [Excel to YAMAA](excel-to-yamaa.md) · [Schema concepts](schema-concepts.md) · [Examples walkthrough](yaml-examples-walkthrough.md)
+> **YAMAA docs:** [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Examples walkthrough](yaml-examples-walkthrough.md)
 
 > **Read this if** you have SDTM or ADaM specifications in Excel and want to
 > know what each cell becomes. It maps every column of a Variable sheet, then
@@ -39,16 +39,16 @@ cells:
 
 ```yaml
 schema_version: "1.0"          # which schema version this spec targets (exact match)
-domain: ADSL                   # Dataset sheet → Dataset
-datasets:                      # ← no cell for this; usually a Comment or a separate sheet
+domain: ADSL                   # Dataset sheet -> Dataset
+datasets:                      # <- no cell for this; usually a Comment or a separate sheet
   SOURCE: input/adsl.csv
-base: SOURCE                   # Dataset sheet → Structure, but as the driver of the row count
-keys: [STUDYID, USUBJID]       # Dataset sheet → Key Variables, and actually checked
+base: SOURCE                   # Dataset sheet -> Structure, but as the driver of the row count
+keys: [STUDYID, USUBJID]       # Dataset sheet -> Key Variables, and actually checked
 
 output:
   columns: [STUDYID, USUBJID, HEIGHTCM, WEIGHTKG, BMI]   # what ships, in which order
 
-columns:                       # ↓ this section is the Variable sheet
+columns:                       # this section (below) is the Variable sheet
   # rows 1-4 each read one source variable:
   #   - name: STUDYID
   #     type: str
@@ -57,11 +57,11 @@ columns:                       # ↓ this section is the Variable sheet
   - name: BMI                  #   Variable
     type: float                #   Type
     label: Body Mass Index (kg/m2)   # Label
-    derivation:                #   Conversion Definition — but executable
+    derivation:                #   Conversion Definition -- but executable
       compute:
         expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
 
-verifications:                 # ← no cell for this either
+verifications:                 # <- no cell for this either
   - unique:
       columns: [STUDYID, USUBJID]
   - implies:
@@ -72,7 +72,7 @@ verifications:                 # ← no cell for this either
 
 ### What the two tables above have no cell for
 
-Line up the two versions and the interesting part is not what moved — it is
+Line up the two versions and the interesting part is not what moved -- it is
 what has no Excel counterpart at all. Four things:
 
 1. **Which file the data comes from.** `Origin` says `Predecessor` and
@@ -80,7 +80,7 @@ what has no Excel counterpart at all. Four things:
    practice the input is fixed in a separate sheet or in the program.
 2. **`NULLIF(HEIGHTCM, 0)`.** `Conversion Definition` gives the formula for the
    normal case. There is no cell that says what happens when height is zero,
-   and the three plausible answers — missing, an error, or `Inf` — are exactly
+   and the three plausible answers -- missing, an error, or `Inf` -- are exactly
    the semantics-layer divergence described in
    [Why YAMAA](why-yamaa.md).
 3. **The distinction between dependency order and delivery order.** There is
@@ -89,8 +89,8 @@ what has no Excel counterpart at all. Four things:
    but it could be delivered anywhere in the artifact. YAMAA splits them into
    `columns` order and `output.columns`.
 4. **The two verifications.** `Key Variables` looks like it asserts uniqueness,
-   but nothing executes it. The `implies` rule — "BMI is empty only when height
-   is unusable" — normally survives as a sentence in a review email.
+   but nothing executes it. The `implies` rule -- "BMI is empty only when height
+   is unusable" -- normally survives as a sentence in a review email.
 
 Going the other way, two of the eleven columns have no YAMAA field at all:
 
@@ -98,7 +98,7 @@ Going the other way, two of the eleven columns have no YAMAA field at all:
   CDISC implementation guide, not a statement about how a value is derived. It
   travels in `column.metadata`.
 - **`Comments for Define`** is documentation by definition. It is
-  `column.metadata` too — and the fact that the template already separates it
+  `column.metadata` too -- and the fact that the template already separates it
   from `Conversion Definition` is the same split YAMAA makes between `metadata`
   and `derivation`. The template got that one right; what it cannot do is stop
   a reader from putting derivation logic in the comment column, because neither
@@ -134,10 +134,10 @@ wording, but the eleven jobs are the same.
 | `Variable Name` | `column.name` | |
 | `Variable Label` | `column.label` | |
 | `Type` (Char / Num) | `column.type` | One closed set of five: `str` `int` `float` `date` `datetime` |
-| `Variable Type` (SDTM / SUPP) | *no field* — it is a **second** `spec.yaml` | `domain` fixes one dataset per specification, so SUPP qualifiers are their own spec |
+| `Variable Type` (SDTM / SUPP) | *no field* -- it is a **second** `spec.yaml` | `domain` fixes one dataset per specification, so SUPP qualifiers are their own spec |
 | `Length` | a `max_length` verification | It is a constraint, so it becomes an executed one; **Length is not a type**. Add `column.metadata.length` when define.xml needs to show it |
 | Significant digits / display format | *project setting* | R011: decimal places belong to the project, not the spec |
-| `Controlled Terms or Format` | `mapping.dict` / `mapping_from` / `allowed_values`, plus `column.metadata.codelist` | See 3.3 — translation and enforcement separate here too |
+| `Controlled Terms or Format` | `mapping.dict` / `mapping_from` / `allowed_values`, plus `column.metadata.codelist` | See 3.3 -- translation and enforcement separate here too |
 | `Origin` = Assigned | `literal: DM` | |
 | `Origin` = Collected (CRF / eDT) | `source: ODM.IT.DM.AGE` | |
 | `Origin` = Predecessor | `source: ADSL.TRTSDT` | A qualified cross-dataset name performs an **automatic left join** (R003) |
@@ -163,7 +163,7 @@ which makes a good teaching moment:
 
 | Situation | YAMAA | Example |
 |---|---|---|
-| Short vocabulary, written in the spec | `mapping` | `M → M, F → F` |
+| Short vocabulary, written in the spec | `mapping` | `M -> M, F -> F` |
 | Vocabulary is an external file (MedDRA, WHODrug, a reference-range table) | `mapping_from` | Example 8 |
 | No translation, only a **check** that the value is one of these | `allowed_values` | `values: [M, F, U]` |
 | Numeric banding (AGEGR1, BMI categories) | `cut` | Example 1 |
@@ -172,7 +172,7 @@ which makes a good teaching moment:
 
 Value-level metadata (VLM) is what a Variable sheet cannot express: when a
 variable's meaning depends on another variable's value, each value needs its
-own derivation. `AVAL` is the standard case — alanine aminotransferase where
+own derivation. `AVAL` is the standard case -- alanine aminotransferase where
 `PARAMCD` is `ALT`, systolic blood pressure where it is `SYSBP`.
 
 | Excel spec | YAMAA |
@@ -182,7 +182,7 @@ own derivation. `AVAL` is the standard case — alanine aminotransferase where
 | "this PARAM is derived from another PARAM" | Another row template with its own `literal` PARAMCD |
 | "one collected record yields several analysis records" | Several row templates, appended in order |
 
-This is where the two formats line up most directly — see example 4.
+This is where the two formats line up most directly -- see example 4.
 
 ---
 
@@ -194,7 +194,7 @@ Each one shows the Excel rows first, then the YAML, then what actually
 differs. All of them are real directories under `yaml/examples/` with fixed
 expected output.
 
-### Example 1 — direct mapping, a codelist, and numeric banding
+### Example 1: direct mapping, a codelist, and numeric banding
 
 *Source: [`adam-adsl-mapping`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-mapping)*
 
@@ -202,7 +202,7 @@ Excel:
 
 | Variable | Label | Type | Length | Origin | Codelist | Comment |
 |---|---|---|---|---|---|---|
-| SEX | Sex | Char | 1 | Predecessor: DM.SEX | SEX | Map to M/F/U, case-insensitive; if not collected or unrecognised → U |
+| SEX | Sex | Char | 1 | Predecessor: DM.SEX | SEX | Map to M/F/U, case-insensitive; if not collected or unrecognised -> U |
 | SEXN | Sex (N) | Num | 8 | Derived | | M=1, F=2, U=0 |
 | AGEGR1 | Pooled Age Group 1 | Char | 5 | Derived | AGEGR1 | <18 / 18-64 / >=65; UNKNOWN if AGE missing |
 
@@ -248,18 +248,18 @@ YAMAA:
 
 What changed:
 
-- Excel packs "if not collected → U" and "if unrecognised → U" into one
+- Excel packs "if not collected -> U" and "if unrecognised -> U" into one
   sentence. YAMAA splits them into `missing` and `unmapped` and requires
   **both to be written**, even when the answer is the same. Two conditions stay
   two conditions.
 - `SEXN` maps `DM.SEX` again rather than deriving from `SEX`. One collected
-  value feeds three output columns, each with its own vocabulary — in Excel
+  value feeds three output columns, each with its own vocabulary -- in Excel
   this is usually implied by a Comment saying "same as SEX".
 - The codelist *name* (`SEX`, `AGEGR1`) has no single home. The translation
   lives in `mapping.dict`, the check lives in `allowed_values`, and the name
   itself goes in `column.metadata.codelist` if you generate define.xml.
 
-### Example 2 — a Comment sentence becomes `compute`
+### Example 2: a Comment sentence becomes `compute`
 
 *Source: [`adam-adsl-bmi-compute`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-bmi-compute)*
 
@@ -289,17 +289,17 @@ verifications:
 
 What changed:
 
-- `NULLIF(HEIGHTCM, 0)` writes the "what if height is zero" case — almost never
-  stated in an Excel spec — **into the formula**. R010 makes division by zero a
+- `NULLIF(HEIGHTCM, 0)` writes the "what if height is zero" case -- almost never
+  stated in an Excel spec -- **into the formula**. R010 makes division by zero a
   failure rather than a silent missing value, so it has to be stated.
 - **"rounded to 1 decimal" has no translation, on purpose.** A derivation does
   not round; decimal places are a project rendering setting (the example suite
   uses four). This is the point that generates the most discussion: rounding
   belongs to the TFL, not to the ADaM value.
 - The `implies` verification turns "BMI is empty exactly when height is
-  unusable" — normally a note to the reviewer — into an executable assertion.
+  unusable" -- normally a note to the reviewer -- into an executable assertion.
 
-### Example 3 — Predecessor and the automatic left join
+### Example 3: Predecessor and the automatic left join
 
 *Source: [`adam-adae-treatment-emergent`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adae-treatment-emergent)*
 
@@ -319,7 +319,7 @@ keys: [STUDYID, USUBJID, AESEQ]
   - name: TRTSDT
     type: date
     derivation:
-      source: ADSL.TRTSDT          # ← no merge statement anywhere
+      source: ADSL.TRTSDT          # <- no merge statement anywhere
 
   - name: TRTEMFL
     type: str
@@ -348,7 +348,7 @@ What changed:
 
 - `source: ADSL.TRTSDT` triggers R003's **automatic left join**. The join keys
   are the *applicable keys*: the output `keys` that also exist on the right
-  side — here `STUDYID` and `USUBJID`, since ADSL has no `AESEQ`. So "merge by
+  side -- here `STUDYID` and `USUBJID`, since ADSL has no `AESEQ`. So "merge by
   STUDYID USUBJID" is not written: it is a consequence of `keys`.
 - That join **requires the right side to be unique on those keys.** Multiple
   matches fail by default; relaxing it requires an explicit
@@ -359,7 +359,7 @@ What changed:
 - `all_or_none` turns "TRTSDT and TRTEDT are either both present or both
   absent" into a check.
 
-### Example 4 — VLM and BDS in one spec
+### Example 4: VLM and BDS in one spec
 
 *Source: [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-bds)*
 
@@ -451,10 +451,10 @@ Take this one slowly:
   two-phase model. In an Excel spec, which step adds records is usually
   inferred from the Structure sentence.
 - `alt` and `alt_si` share a filter, so each ALT record produces **two** rows.
-  A derived parameter is just another row template — no new concept is needed.
+  A derived parameter is just another row template -- no new concept is needed.
 - `PARAMCD` and `AVAL` are **declared without a derivation** in `columns:`,
   because the row templates supply them. R005 requires a column to be derived
-  either at column level or in **every** row template — never in some of them.
+  either at column level or in **every** row template -- never in some of them.
   That turns the classic "one blank VLM cell" into a hard error.
 - `TRTSDT` and `TRT01A` arrive from ADSL through the example-3 join, without
   changing the row count.
@@ -463,7 +463,7 @@ Take this one slowly:
 - `ASEQ` uses `row_number` **after every row exists**, so it is unique by
   construction.
 
-### Example 5 — one-to-many summarization with `aggregate`
+### Example 5: one-to-many summarization with `aggregate`
 
 *Source: [`adam-adex-cumulative-dose`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adex-cumulative-dose)*
 
@@ -509,9 +509,9 @@ keys: [STUDYID, USUBJID, EXTRT]
 What changed:
 
 - `aggregate: "SUM(EX.EXDOSE)"` declares no `group_by`, so it reduces **by the
-  applicable keys** — `STUDYID`, `USUBJID`, `EXTRT`. Omission does not mean
+  applicable keys** -- `STUDYID`, `USUBJID`, `EXTRT`. Omission does not mean
   "reduce all of EX as one group", and the example README says so explicitly.
-- `EX: {path: ..., types: {EXDOSE: float}}` — a CSV is a typeless container, so
+- `EX: {path: ..., types: {EXDOSE: float}}` -- a CSV is a typeless container, so
   R014 makes **every field `str` by default**. A field entering arithmetic must
   declare its type. This is the `input`/`put` conversion an Excel spec never
   mentions but a programmer always writes.
@@ -521,7 +521,7 @@ What changed:
   column. This is the "no nested expressions, use named intermediates" design
   in practice.
 
-### Example 6 — partial dates and the imputation flag
+### Example 6: partial dates and the imputation flag
 
 *Source: [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adae-partial-dates)*
 
@@ -541,7 +541,7 @@ YAMAA:
         source: AESTDTC
         month: 6
         day: 15
-        minimum_source_precision: month     # year only → leave blank
+        minimum_source_precision: month     # year only -> leave blank
         missing: null
         invalid: null
 
@@ -580,7 +580,7 @@ What changed:
   re-reads the same source with `date_precision`, gets `D`/`M`/`Y`, and decides
   with `case`. Two expressions read one variable and the logic is fully
   explicit.
-- `minimum_source_precision: month` *is* the sentence "year only → do not
+- `minimum_source_precision: month` *is* the sentence "year only -> do not
   impute".
 - `missing` and `invalid` are separate: not collected, versus collected but not
   a valid ISO date, are different defects and may get different answers. Excel
@@ -589,7 +589,7 @@ What changed:
   distinction is what makes `ASTDT >= TRTSDT` a date comparison rather than a
   string comparison.
 
-### Example 7 — define.xml metadata versus executable checks
+### Example 7: define.xml metadata versus executable checks
 
 *Source: [`sdtm-dm-metadata-contract`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-dm-metadata-contract)*
 
@@ -628,14 +628,14 @@ The point that gets challenged most often:
   `metadata.length: "30"` is text for define.xml and **nothing validates it**;
   `max_length: {max: 30}` actually runs and fails the whole run when exceeded.
 - So the Excel Length column often becomes **two** statements in YAMAA: one for
-  humans and define.xml, one for the machine. That is not redundancy — it
+  humans and define.xml, one for the machine. That is not redundancy -- it
   separates documentation from contract. The Excel failure mode is precisely
   that the two live in one cell, look like a contract, and are enforced by
   nobody.
 - `str_concat` is the one string operation whose `sources` may mix `source` and
   `literal`, because putting literals between sources is what concatenation is.
 
-### Example 8 — coding against an external dictionary
+### Example 8: coding against an external dictionary
 
 *Source: [`sdtm-ae-dictionary-coding`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-ae-dictionary-coding)*
 
@@ -699,13 +699,13 @@ record_lookups:
 
 R015 argues this directly: an expression returns one value, so every column
 reading another dataset does its own match. Two columns that are supposed to
-describe one record — a date and the sequence number identifying it, a value
-and its unit — therefore state the match twice and agree **only by
+describe one record -- a date and the sequence number identifying it, a value
+and its unit -- therefore state the match twice and agree **only by
 construction**. A reviewer cannot see the agreement, and editing one statement
 and not the other breaks it silently. A record lookup states the match once and
 names the record. Excel has no such concept, but it has the bug.
 
-### Example 9 — organization, compound and study layers
+### Example 9: organization, compound and study layers
 
 *Source: [`adam-adlb-standardized-result`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-standardized-result)*
 
@@ -714,7 +714,7 @@ the parent changes, every copy that has already diverged stays diverged. R017
 turns this into real layers.
 
 ```yaml
-# layers/organization.yaml — corporate layer: data contract and common columns
+# layers/organization.yaml -- corporate layer: data contract and common columns
 schema_version: "1.0"
 datasets:
   LB: ../input/lb.csv
@@ -747,7 +747,7 @@ metadata: {scope: organization}
 ```
 
 ```yaml
-# layers/compound.yaml — compound layer: add types, retitle one column
+# layers/compound.yaml -- compound layer: add types, retitle one column
 schema_version: "1.0"
 parents: organization.yaml
 datasets:
@@ -760,7 +760,7 @@ metadata: {scope: compound}
 ```
 
 ```yaml
-# layers/study.yaml — study layer
+# layers/study.yaml -- study layer
 schema_version: "1.0"
 parents: [organization.yaml, compound.yaml]
 columns:
@@ -770,7 +770,7 @@ metadata: {scope: study}
 ```
 
 ```yaml
-# spec.yaml — the deliverable, and the entry file
+# spec.yaml -- the deliverable, and the entry file
 schema_version: "1.0"
 parents: layers/study.yaml
 domain: ADLB
@@ -785,10 +785,10 @@ columns:
 What to point out:
 
 - **Resolution is depth-first, left to right, and later wins**:
-  `organization → compound → study → spec`. So `AVAL.label` ends as
+  `organization -> compound -> study -> spec`. So `AVAL.label` ends as
   `Analysis Value`. A difference between two parents is settled by their order;
   it is **not** a conflict error.
-- **Composition is shallow — the most commonly misread rule.** Only the four
+- **Composition is shallow -- the most commonly misread rule.** Only the four
   keyed collections (`datasets`, `record_lookups`, `columns`, `rows`) merge
   member fields by identifier. Every other root field is **replaced whole**. So
   a child writing `AVAL.label` changes only the label, but a child writing
@@ -796,7 +796,7 @@ What to point out:
   same expression keyword. Likewise a child `metadata` replaces the inherited
   `metadata` completely.
 - **A YAML null at a composition boundary clears** an inherited optional field.
-  It is not "set to a missing value" — `derivation: {literal: null}` is a null
+  It is not "set to a missing value" -- `derivation: {literal: null}` is a null
   *inside* a field value and still means "derive a missing value".
 - **The entry file must declare a complete `output`.** An inherited layer
   cannot decide the final artifact's membership or order.
@@ -804,7 +804,7 @@ What to point out:
   `unused_reference` lookup and a `TEMP` column in the corporate layer. Nothing
   reachable references them, so they are removed during resolution. **A
   corporate layer can therefore be generous, and a study carries only what it
-  actually uses** — which is exactly what an Excel template cannot do, since
+  actually uses** -- which is exactly what an Excel template cannot do, since
   the rows it brings never leave your copy.
 - Semantic validation runs **after** pruning. An unresolved reference that
   survives only inside a discarded declaration is not an error.

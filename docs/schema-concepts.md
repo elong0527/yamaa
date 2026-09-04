@@ -4,7 +4,7 @@ title: Schema concepts
 
 # The schema: class, type, expression, registry
 
-> **YAMAA docs:** [Why](why-yamaa.md) · [Excel to YAMAA](excel-to-yamaa.md) · [Schema concepts](schema-concepts.md) · [Examples walkthrough](yaml-examples-walkthrough.md)
+> **YAMAA docs:** [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Examples walkthrough](yaml-examples-walkthrough.md)
 
 > **Read this if** you are writing or reviewing a specification and want the
 > language itself: what the four schema words mean, and every derivation verb
@@ -23,7 +23,7 @@ all of them.
 
 You never write the word `class` in a specification. It appears only in the
 schema files, where it decides what you are allowed to write. The relationship
-is exactly the one you already know — **a header row and the rows filled in
+is exactly the one you already know -- **a header row and the rows filled in
 under it.**
 
 **`root_class` is the header for the file.** It declares `schema_version`,
@@ -67,7 +67,7 @@ columns:
 `name` and `type` appear in both rows because the header marks them
 `required: true`. The rest are optional, so each row uses what it needs.
 Writing `units: mg` in either row fails validation, because the header does not
-declare it — the Excel analogue is adding a `My Note` column that no downstream
+declare it -- the Excel analogue is adding a `My Note` column that no downstream
 program reads, except that Excel ignores it silently and YAMAA rejects it.
 
 Every other class works the same way. These are the ones you meet while writing
@@ -90,11 +90,11 @@ a specification:
 | `str_template_class` | a `str_template:` with a handler | [`adam-adsl-identifier-parsing/spec.yaml:55`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adsl-identifier-parsing/spec.yaml#L55) |
 
 Paths are relative to `yaml/examples/`, and each line number is where that
-class is introduced — the key above it, or the first line of the entry itself
+class is introduced -- the key above it, or the first line of the entry itself
 for a list member.
 
 The bundle declares **28 classes** in total. Eight belong to
-`schema_environment.yaml` rather than to a specification — `environment_class`
+`schema_environment.yaml` rather than to a specification -- `environment_class`
 and the contract, parameter, binding and conformance headers under it, which
 [`adam-adsl-bmi-function`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-bmi-function) shows in full. The rest are small headers reached from
 the ones above, such as `aggregate_between_class` and the three function
@@ -119,7 +119,7 @@ roles:
 All three appear in the life of one column. Take `AGE`, written as
 [`adam-adsl-mapping`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-mapping) writes it.
 
-**Role 1 — the descriptor keyword.** In `schema.yaml`, `column_class` declares
+**Role 1 -- the descriptor keyword.** In `schema.yaml`, `column_class` declares
 that a column has a field called `type`, and that whatever you write there must
 be a `column_type`:
 
@@ -133,19 +133,19 @@ column_class:
 The two are unrelated words that happen to be spelled the same, and R006 says
 so explicitly.
 
-**Role 2 — the declared column type.** In your specification you fill that
+**Role 2 -- the declared column type.** In your specification you fill that
 field in with one value from the closed vocabulary:
 
 ```yaml
   - name: AGE
-    type: int              # ← the declared column type
+    type: int              # <- the declared column type
     derivation:
       value:
         source: DM.AGE
       conversion_failure: null
 ```
 
-**Role 3 — the runtime type,** which is never written anywhere. `dm.csv` is a
+**Role 3 -- the runtime type,** which is never written anywhere. `dm.csv` is a
 typeless container, so R014 gives `DM.AGE` the type `str`, and `source` keeps
 the type it read. The value flowing out of the expression is therefore the
 string `"45"`. Only then does R005's stage 2 convert it to the declared `int`.
@@ -158,13 +158,13 @@ that produces it.** A derivation is an expression plus what happens when it
 goes wrong:
 
 ```text
-- name: AGE                       ← a row of column_class
+- name: AGE                       <- a row of column_class
   type: int
-  derivation:                     ← the field: how this column is produced
-    value:                        ←   exactly one expression
-      source: DM.AGE              ←     the registered keyword doing the work
-    conversion_failure: null      ←   what if the result will not convert
-    override: [...]               ←   the final manual correction
+  derivation:                     <- the field: how this column is produced
+    value:                        <-   exactly one expression
+      source: DM.AGE              <-     the registered keyword doing the work
+    conversion_failure: null      <-   what if the result will not convert
+    override: [...]               <-   the final manual correction
 ```
 
 So what is an expression? **A mapping with exactly one entry**: the key is a
@@ -188,7 +188,7 @@ mapping:                       # keyword `mapping`
 ```
 
 **That second `source` is not the `source` expression.** It is the name of one
-of `mapping`'s parameters, and its declared type is `variable` — a name, not a
+of `mapping`'s parameters, and its declared type is `variable` -- a name, not a
 nested expression. The registry keyword is always the outermost key, and
 nothing below it is an expression unless the nesting table below says so.
 
@@ -256,7 +256,7 @@ subjects fell back.
         branches:
           - when: "ASTDT >= TRTSDT AND ASTDT <= TRTEDT"
             then:
-              literal: Y                 # ← a nested expression, permitted here
+              literal: Y                 # <- a nested expression, permitted here
 ```
 
 Everywhere else, bind the value to a named column and reference the name. The
@@ -265,7 +265,7 @@ expression tree to see what a column reads.
 
 ### 1.4 A derivation has three layers
 
-This is where the "if … then …" footnotes of an Excel spec belong.
+This is where the "if ... then ..." footnotes of an Excel spec belong.
 
 ```yaml
 derivation:
@@ -291,7 +291,7 @@ are the small print of an Excel spec:
 | `invalid` | "if the date is not a valid ISO date, leave blank" | The value is present but unusable |
 | `multiple_matches` | "if multiple, take the earliest" | Several right-side records matched |
 | `conversion_failure` | "if not numeric, leave blank" | Conversion to the declared type failed |
-| `override` | "per the data review meeting, subject X is corrected to …" | A final replacement applies |
+| `override` | "per the data review meeting, subject X is corrected to ..." | A final replacement applies |
 
 **The discipline: omit a handler and its condition is fatal.** Nothing quietly
 produces a `.` and a NOTE in the log. This turns silent missing values into
@@ -304,7 +304,7 @@ unrecognised" are always two questions and may be answered differently.
 ### 1.5 A registry is the list of permitted verbs
 
 ```yaml
-expressions:            # ← a registry
+expressions:            # <- a registry
     mapping: ...
     compute: ...
     aggregate: ...
@@ -332,7 +332,7 @@ Two more registries work the same way: `column_verifications` and
 | `literal` | A fixed value | Origin = Assigned | `DOMAIN = "DM";` |
 | `coalesce` | First non-missing, in order | "use A, else B" | `coalesce()` |
 | `greatest` / `least` | Largest or smallest across variables on one row | "the later of X and Y" | `max(of a b)` |
-| `case` | Conditional branches | "if … then … else …" | `if / else if` |
+| `case` | Conditional branches | "if ... then ... else ..." | `if / else if` |
 
 ### 2.2 Vocabulary mapping
 
@@ -347,7 +347,7 @@ Two more registries work the same way: `column_verifications` and
 | Expression | What it does |
 |---|---|
 | `str_extract` | Return one regular-expression group (e.g. the site inside USUBJID) |
-| `str_concat` | Concatenate in order — **the only string operation that may hold literals inline** |
+| `str_concat` | Concatenate in order -- **the only string operation that may hold literals inline** |
 | `str_template` | Interpolate, as in `"{SITEID}:{SUBJID}"` |
 | `str_upper` / `str_lower` | Case conversion |
 
@@ -359,7 +359,7 @@ compute:
 ```
 
 R010 closes the grammar: `+ - * /`, parentheses, and exactly thirteen
-functions —
+functions --
 
 `ABS` `CEIL` `FLOOR` `TRUNC` `SQRT` `POWER` `EXP` `LN` `MOD` `GREATEST`
 `LEAST` `NULLIF` `COALESCE`
@@ -380,13 +380,13 @@ Two points that always come up:
 | Expression | What it does | ADaM variable |
 |---|---|---|
 | `date_diff` | Whole calendar units between two dates; `bounds` declares which endpoints count | AAGE, durations |
-| `study_day` | CDISC study day — the reference date is day 1 and **there is no day zero** | ADY, ASTDY |
+| `study_day` | CDISC study day -- the reference date is day 1 and **there is no day zero** | ADY, ASTDY |
 | `date_impute` | Complete a truncated ISO date | ASTDT |
 | `date_precision` | Report how much of the date the **collected text** carried: `D`, `M` or `Y` | Feeds ASTDTF |
 
 `date_impute` and `date_precision` read the same source; that pairing is the
 standard way to derive an imputation flag. See
-[example 6](excel-to-yamaa.md#example-6--partial-dates-and-the-imputation-flag).
+[example 6](excel-to-yamaa.md#example-6-partial-dates-and-the-imputation-flag).
 
 ### 2.6 Window expressions (over constructed output rows)
 
@@ -403,7 +403,7 @@ not pick one.
 
 Ordering carries two rules that are easy to miss (R007):
 
-- `nulls` defaults to `last` and **does not flip with `direction`** — `last`
+- `nulls` defaults to `last` and **does not flip with `direction`** -- `last`
   means last under both `asc` and `desc`. SQL engines disagree here, so an
   implementation must apply the declared placement.
 - **Non-missing values use the order their type owns**: numeric under R010,
@@ -460,7 +460,7 @@ The spec side ([`adam-adsl-bmi-function/spec.yaml`](https://github.com/elong0527
           cm_per_m: 100            # a numeric literal
 ```
 
-The project side — `environment.yaml` at the project root, validated
+The project side -- `environment.yaml` at the project root, validated
 **separately** against `schema_environment.yaml`:
 
 ```yaml
@@ -502,7 +502,7 @@ what language it is written in, and whether it was validated*:
 
 Semantics worth stating out loud:
 
-- **Signatures are closed and named** — no positional parameters, no varargs,
+- **Signatures are closed and named** -- no positional parameters, no varargs,
   no arbitrary keyword bag. Every optional parameter declares a `default` in
   the environment.
 - **`args` cannot nest an expression.** An argument is a variable name; an
@@ -514,11 +514,11 @@ Semantics worth stating out loud:
   is not a returned value, so it does not require `may_return_missing: true`.
 - **`comparison_decimals` (default 4) is used only for cross-project
   conformance comparison and never mutates a value.** Calculations use the
-  unrounded result — the same position R010 takes on `ROUND`.
+  unrounded result -- the same position R010 takes on `ROUND`.
 - Without a project environment a spec can still be **structurally validated**
   (shape, logical name, contract version, argument leaf forms). Whether the
   contract exists, whether the signature matches, and what it returns are
-  deferred until an implementation is supplied — which makes "write the spec
+  deferred until an implementation is supplied -- which makes "write the spec
   first, the code later" a legitimate workflow.
 
 ---
