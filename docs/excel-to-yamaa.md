@@ -118,11 +118,11 @@ Going the other way, two of the eleven columns have no YAMAA field at all:
 | Dataset Label / Class / Structure | free keys under `metadata:` | **Never validated**; carried along |
 | Standard / IG Version | `metadata.standard` | Same |
 | Key Variables | `keys` | Non-missing and unique are enforced |
-| Sort Order (submission sort) | *not available* | R005 states this is open work |
+| Sort Order (submission sort) | `output.order_by` | R005: a presentation order applied after every check, with ties falling back to construction order. A term may name a working column the artifact does not ship |
 | Input datasets (usually only in a Comment) | `datasets:` | Every input is declared and named |
 | Structure: "one record per subject per visit" | `base` plus `rows` templates | Row count comes from these, not from a sentence |
 | Copy the corporate template and edit | `parents:` | Real layering; a change to the parent flows down (R017) |
-| Dataset-level review checks | `verifications:` | `unique`, `row_count`, `all_or_none`, `implies`, `predicate` |
+| Dataset-level review checks | `verifications:` | `unique`, `row_count`, `all_or_none`, `implies`, `predicate`. A `row_count` may take a `group_by` and a `filter`, which is how "exactly one baseline per subject and parameter" is stated |
 
 ### 2.2 Variable level
 

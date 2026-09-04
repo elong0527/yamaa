@@ -135,7 +135,8 @@ In both phases, a completed derivation runs the R005 lifecycle before anything
 depends on it, so a dependent always reads a value of the declared type.
 
 `output.columns` selects and orders artifact columns independently of
-declaration order.
+declaration order, and `output.order_by` orders the artifact's rows
+independently of the construction order this rule defines. R005 owns both.
 
 ## Errors
 

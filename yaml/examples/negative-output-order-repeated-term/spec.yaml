@@ -1,0 +1,46 @@
+schema_version: "1.0"
+domain: ADAE
+datasets:
+  AE: input/ae.csv
+base: AE
+keys: [STUDYID, USUBJID, ASEQ]
+
+output:
+  columns: [STUDYID, USUBJID, ASEQ, AETERM, ASTDT]
+  order_by:
+    - USUBJID
+    - variable: ASTDT
+      direction: desc
+    - variable: USUBJID
+      direction: desc
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: AE.USUBJID
+
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+    derivation:
+      source: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation:
+      source: AE.AETERM
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation:
+      source: AE.AESTDTC

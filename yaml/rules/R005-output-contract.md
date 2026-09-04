@@ -17,10 +17,11 @@ the completed dataset is uniquely identified.
 ## Boundaries
 
 This rule owns which columns exist, where each one is derived, the order of the
-stages a value passes through, and output identity. It does not own what any
-stage does: R011 defines a declared type and its conversions, R008 defines the
-handlers, R009 defines the assertions, and R001 owns the two phases and the
-dependency order within them.
+stages a value passes through, output identity, and the order the artifact's
+rows are presented in. It does not own what any stage does: R011 defines a
+declared type and its conversions, R008 defines the handlers, R009 defines the
+assertions, and R001 owns the two phases and the dependency order within them.
+R007 owns what an order term means.
 
 ## The artifact
 
@@ -28,15 +29,16 @@ The **artifact** is the single dataset this specification produces. Its columns
 are exactly the declared columns listed by `output.columns`, in that order, and
 its rows are the rows R001 constructs.
 
+Its rows leave in the order `output.order_by` declares, and in R001's
+construction order when it is omitted.
+
 Its serialization is only partly defined. R011 fixes the text form of each
 non-missing value and states that a `float` renders the same way here as it does
 when converted to `str`; the schema does not select a file container. The
-example suite uses CSV and represents a missing value with an empty field. Row
-sequence follows R001, but the language has no separate submission-sort
-control, which is open work rather than a decision this rule makes.
+example suite uses CSV and represents a missing value with an empty field.
 
-Everything below concerns the values themselves, which are fully defined, and
-none of it depends on the unsettled part.
+Everything below concerns the values themselves and their order, which are
+fully defined, and none of it depends on the unsettled container.
 
 ## The column list is declared
 
@@ -178,6 +180,48 @@ Key order is significant to R003, which joins on the output keys a right side
 also carries. That is a subset used for enrichment and does not change the
 identity asserted here.
 
+## Artifact row order
+
+`output.order_by` declares the order the artifact's rows are presented in. It
+is optional, and an artifact whose specification omits it keeps R001's
+construction order: row-template order, and driver or first-occurrence group
+order within each template.
+
+Its terms are R007's order terms, so a bare variable is ascending with missing
+values last, `direction` and `nulls` are declared per term, `nulls` does not
+flip with `direction`, and each non-missing value takes the order its type
+owns. A term may name any declared column, output or internal, because a
+submission order often rests on a working value the artifact does not publish:
+a numeric ordinal beside the text it labels, or a rank. The cost is stated
+rather than hidden -- a reader of such an artifact cannot always reproduce its
+order from the artifact alone -- and it is smaller than publishing a column
+`output.columns` exists to withhold.
+
+Every term must name a declared column, and no variable may be repeated. A
+qualified source variable is not a declared column and has no value on a
+completed row to order by; a repeated term states nothing the first one did
+not.
+
+Rows equal on every declared term keep their construction order, which is the
+tie-break R007 already applies to window ordering. The order is therefore total
+for every input: no tie is an error, no comparison is undefined, and no
+specification declares a term merely to make the result deterministic. One that
+wants a particular tie broken declares the term that breaks it.
+
+**Ordering is presentation.** It happens once, after every value has completed
+the lifecycle above, after key validation, and after every verification R009
+runs, so it cannot change whether a run passes. It changes nothing about
+evaluation either: R001's dependency order, a window's partitions, and the
+neighbours `row_value` reads are all fixed before this order is applied, and
+each keeps construction order for its own tie-break.
+
+Presentation is not the same as unobservable. R001 drives row construction in
+base-record order, and R014's producing-specification link makes a stored
+artifact the source another specification reads that way, so the rows this
+order fixes are the records a consumer receives. A declared order is therefore
+what makes a two-specification workflow reproduce one result, rather than
+leaving the sequence to whichever runtime wrote the file.
+
 ## Specification-wide uniqueness
 
 Within one specification, implementations must reject duplicate YAML mapping
@@ -200,6 +244,9 @@ declaration for each identifier.
 - A missing `output.columns`, a duplicate entry, or an entry naming an
   undeclared column: fail and report the column name.
 - An empty `keys`, an unknown key column, or a repeated key column: fail.
+- An `output.order_by` term naming anything but a declared column: fail and
+  report the term.
+- An `output.order_by` variable declared more than once: fail and report it.
 - A duplicate YAML mapping key, dataset identifier, column name, or row ID:
   fail.
 - A conversion failure with no `conversion_failure` handler: fail.

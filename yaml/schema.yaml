@@ -64,6 +64,10 @@ output_class:
         type: "list[column_name]"
         required: true
         description: Declared columns selected for the artifact, in the order R005 requires.
+    - order_by:
+        type: "list[order_by_term]"
+        required: false
+        description: Terms ordering artifact rows after every verification; omission keeps R001 construction order.
 
 record_lookup_class:
     - id:

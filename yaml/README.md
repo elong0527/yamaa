@@ -80,6 +80,13 @@ them as named intermediate values. A `compute` formula may also read a numeric
 field directly from a declared record lookup; this avoids a binding column when
 the lookup already gives the selected record a stable name.
 
+`output.order_by` is the row counterpart. It declares the order the artifact
+presents its rows in, reusing the order terms every window expression and
+record lookup already declares, and leaves R001's construction order to decide
+how rows are built. A term may name an intermediate column, so a submission
+order can rest on a numeric ordinal the artifact itself does not carry. R005
+defines it.
+
 A `record_lookups` entry names one record of another dataset so that several
 columns can read it, which no expression can do while each returns one value.
 It is not an expression and adds no nesting: its matching, filtering, and

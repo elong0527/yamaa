@@ -170,7 +170,7 @@ After composition, the resolver removes declarations that cannot affect the
 artifact or a declared assertion. Definitions do not make themselves live.
 Reachability begins with:
 
-- columns named by `output.columns` or `keys`;
+- columns named by `output.columns`, `keys`, or `output.order_by`;
 - columns read by dataset verifications;
 - a column carrying its own column verification;
 - every surviving row template, because declaring a row changes the artifact's

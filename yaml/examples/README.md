@@ -42,6 +42,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adae-post-reference-event`](adam-adae-post-reference-event/) | flag an event after a specific reference event |
 | [`adam-adae-protocol-review-window`](adam-adae-protocol-review-window/) | flag adverse events for protocol review |
 | [`adam-adae-query-flags`](adam-adae-query-flags/) | record which queries a coded event belongs to |
+| [`adam-adae-review-order`](adam-adae-review-order/) | present a subject's events in medical-review order |
 | [`adam-adae-serious-event-sequence`](adam-adae-serious-event-sequence/) | number a subject's serious events in onset order |
 | [`adam-adae-severity-override`](adam-adae-severity-override/) | apply an approved severity correction |
 | [`adam-adae-severity-rank`](adam-adae-severity-rank/) | rank a subject's events by severity |
@@ -109,6 +110,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-adex-single-dose-expansion`](negative-adex-single-dose-expansion/) | reject one record per administration built from an aggregate dose |
 | [`negative-adlb-absolute-wbc-duplicate`](negative-adlb-absolute-wbc-duplicate/) | reject duplicate WBC inputs for an absolute differential |
 | [`negative-adlb-computed-parameter`](negative-adlb-computed-parameter/) | reject a parameter computed from the dataset being built |
+| [`negative-adlb-multiple-baseline-records`](negative-adlb-multiple-baseline-records/) | reject a subject with two baseline records for one parameter |
 | [`negative-adrs-partial-response-after-complete-response`](negative-adrs-partial-response-after-complete-response/) | reject a partial response recorded after a complete response |
 | [`negative-adsl-cyclic-parent`](negative-adsl-cyclic-parent/) | reject a circular chain of shared definitions |
 | [`negative-adsl-inherited-output`](negative-adsl-inherited-output/) | reject an inherited artifact layout |
@@ -138,6 +140,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-datetime-zone-offset`](negative-datetime-zone-offset/) | reject an event start recorded against another clock |
 | [`negative-function-contract-mismatch`](negative-function-contract-mismatch/) | reject an unavailable project-routine contract |
 | [`negative-greatest-incomparable-sources`](negative-greatest-incomparable-sources/) | reject a last-known-alive date taken from a day number |
+| [`negative-group-count-without-id`](negative-group-count-without-id/) | reject an unnamed baseline-count rule |
 | [`negative-ingest-unparseable-field`](negative-ingest-unparseable-field/) | reject a dose recorded with its unit |
 | [`negative-keys-internal-column`](negative-keys-internal-column/) | reject a site-scoped subject identity |
 | [`negative-keys-missing-value`](negative-keys-missing-value/) | reject a record that no analysis visit identifies |
@@ -148,6 +151,8 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-mapping-from-unmapped-key`](negative-mapping-from-unmapped-key/) | reject a result with no reference range |
 | [`negative-mapping-unmapped-value`](negative-mapping-unmapped-value/) | reject an unmapped response |
 | [`negative-output-duplicate-subject`](negative-output-duplicate-subject/) | reject a repeated demographics record |
+| [`negative-output-order-repeated-term`](negative-output-order-repeated-term/) | reject an order that places one value twice |
+| [`negative-output-order-unknown-column`](negative-output-order-unknown-column/) | reject a submission order over a value the dataset does not carry |
 | [`negative-query-slot-overflow`](negative-query-slot-overflow/) | reject an event belonging to more queries than it has places |
 | [`negative-record-lookup-id-collision`](negative-record-lookup-id-collision/) | reject a first treatment named after its own source |
 | [`negative-record-lookup-incomparable-range`](negative-record-lookup-incomparable-range/) | reject an epoch range with incomparable endpoints |
