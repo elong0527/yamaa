@@ -21,85 +21,6 @@ record_lookups:
 output:
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, SRCDOM, SRCVAR, SRCSEQ]
 
-rows:
-  - id: TTE
-    dataset: ADSL
-    group_by: [ADSL.STUDYID, ADSL.USUBJID]
-    filter: "ADT IS NOT NULL"
-    derivations:
-      STUDYID:
-        source: ADSL.STUDYID
-      USUBJID:
-        source: ADSL.USUBJID
-      STARTDT:
-        source: ADSL.TRTSDT
-      AEDT:
-        source: AE_REC.ASTDT
-      AESEQ:
-        source: AE_REC.AESEQ
-      CENSORDT:
-        source: ADSL.EOSDT
-      RAWDT:
-        case:
-          branches:
-            - when: "AEDT IS NOT NULL"
-              then:
-                source: AEDT
-          otherwise:
-            source: CENSORDT
-      ADT:
-        case:
-          branches:
-            - when: "STARTDT IS NOT NULL AND STARTDT > RAWDT"
-              then:
-                source: STARTDT
-          otherwise:
-            source: RAWDT
-      AVAL:
-        date_diff:
-          start: STARTDT
-          end: ADT
-          unit: day
-          bounds: inclusive
-      CNSR:
-        case:
-          branches:
-            - when: "AEDT IS NOT NULL"
-              then:
-                literal: 0
-          otherwise:
-            literal: 1
-      EVNTDESC:
-        case:
-          branches:
-            - when: "AEDT IS NOT NULL"
-              then:
-                literal: AE
-          otherwise:
-            literal: END OF STUDY
-      SRCDOM:
-        case:
-          branches:
-            - when: "AEDT IS NOT NULL"
-              then:
-                literal: ADAE
-          otherwise:
-            literal: ADSL
-      SRCVAR:
-        case:
-          branches:
-            - when: "AEDT IS NOT NULL"
-              then:
-                literal: ASTDT
-          otherwise:
-            literal: EOSDT
-      SRCSEQ:
-        case:
-          branches:
-            - when: "AEDT IS NOT NULL"
-              then:
-                source: AESEQ
-
 columns:
   - name: STUDYID
     type: str
@@ -124,6 +45,8 @@ columns:
   - name: STARTDT
     type: date
     label: Time-to-Event Origin Date
+    derivation:
+      source: ADSL.TRTSDT
 
   - name: AEDT
     type: date
@@ -132,10 +55,8 @@ columns:
   - name: AESEQ
     type: int
     label: Adverse Event Source Sequence Number
-
-  - name: CENSORDT
-    type: date
-    label: End of Study Date
+    derivation:
+      source: AE_REC.AESEQ
 
   - name: RAWDT
     type: date
@@ -144,27 +65,100 @@ columns:
   - name: ADT
     type: date
     label: Analysis Date
+    derivation:
+      case:
+        branches:
+          - when: "STARTDT IS NOT NULL AND STARTDT > RAWDT"
+            then:
+              source: STARTDT
+        otherwise:
+          source: RAWDT
 
   - name: AVAL
     type: int
     label: Analysis Value
+    derivation:
+      date_diff:
+        start: STARTDT
+        end: ADT
+        unit: day
+        bounds: inclusive
 
   - name: CNSR
     type: int
     label: Censor
+    derivation:
+      case:
+        branches:
+          - when: "AEDT IS NOT NULL"
+            then:
+              literal: 0
+        otherwise:
+          literal: 1
 
   - name: EVNTDESC
     type: str
     label: Event or Censoring Description
+    derivation:
+      case:
+        branches:
+          - when: "AEDT IS NOT NULL"
+            then:
+              literal: AE
+        otherwise:
+          literal: END OF STUDY
 
   - name: SRCDOM
     type: str
     label: Source Data
+    derivation:
+      case:
+        branches:
+          - when: "AEDT IS NOT NULL"
+            then:
+              literal: ADAE
+        otherwise:
+          literal: ADSL
 
   - name: SRCVAR
     type: str
     label: Source Variable
+    derivation:
+      case:
+        branches:
+          - when: "AEDT IS NOT NULL"
+            then:
+              literal: ASTDT
+        otherwise:
+          literal: EOSDT
 
   - name: SRCSEQ
     type: int
     label: Source Sequence Number
+    derivation:
+      case:
+        branches:
+          - when: "AEDT IS NOT NULL"
+            then:
+              source: AESEQ
+
+rows:
+  - id: TTE
+    dataset: ADSL
+    group_by: [ADSL.STUDYID, ADSL.USUBJID]
+    filter: "RAWDT IS NOT NULL"
+    derivations:
+      STUDYID:
+        source: ADSL.STUDYID
+      USUBJID:
+        source: ADSL.USUBJID
+      AEDT:
+        source: AE_REC.ASTDT
+      RAWDT:
+        case:
+          branches:
+            - when: "AEDT IS NOT NULL"
+              then:
+                source: AEDT
+          otherwise:
+            source: ADSL.EOSDT
