@@ -1,0 +1,74 @@
+schema_version: "1.0"
+domain: ADAE
+datasets:
+  AE: input/ae.csv
+base: AE
+keys: [STUDYID, USUBJID, ASEQ]
+
+output:
+  columns: [STUDYID, USUBJID, ASEQ, AETERM, ASTDT, ASEV]
+  order_by:
+    - USUBJID
+    - variable: SEVORD
+      direction: desc
+    - variable: ASTDT
+      nulls: first
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: AE.USUBJID
+
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+    derivation:
+      source: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation:
+      source: AE.AETERM
+
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation:
+      source: AE.AESTDTC
+
+  - name: ASEV
+    type: str
+    label: Analysis Severity/Intensity
+    derivation:
+      source: AE.AESEV
+    verifications:
+      allowed_values:
+        values: [MILD, MODERATE, SEVERE]
+
+  - name: SEVORD
+    type: int
+    label: Severity Review Order
+    derivation:
+      mapping:
+        source: ASEV
+        missing: null
+        dict:
+          MILD: 1
+          MODERATE: 2
+          SEVERE: 3
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, ASEQ]
+  - row_count:
+      min: 7
+      max: 7

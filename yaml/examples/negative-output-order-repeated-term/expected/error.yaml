@@ -1,0 +1,6 @@
+phase: validation
+condition: duplicate_order_term
+spec_paths:
+  - output.order_by
+context:
+  column: USUBJID

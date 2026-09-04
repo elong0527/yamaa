@@ -1,0 +1,12 @@
+phase: verification
+condition: row_count_failed
+spec_paths:
+  - verifications[1].row_count
+context:
+  verification_id: one-baseline-record-per-subject-and-parameter
+  failure_count: 1
+  keys:
+    - STUDYID: CATH
+      USUBJID: CATH-UCSD-0001
+      PARAMCD: ALT
+  count: 2

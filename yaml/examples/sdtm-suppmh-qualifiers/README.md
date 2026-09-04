@@ -13,5 +13,6 @@ specification to derive one supplemental record per collected qualifier:
 
 Each medical-history record contributes one supplemental record per qualifier
 that was actually collected, so a record with only one of the two qualifiers
-contributes only one. The output is grouped by qualifier rather than by
-subject.
+contributes only one. The records are presented in submission order: by
+subject, then by the medical-history record they point at, then by qualifier
+name.

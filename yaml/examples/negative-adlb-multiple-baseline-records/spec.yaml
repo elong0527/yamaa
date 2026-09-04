@@ -1,0 +1,59 @@
+schema_version: "1.0"
+domain: ADLB
+datasets:
+  ADLBIN: {path: input/adlb_pre.csv, types: {AVAL: float, ADT: date}}
+base: ADLBIN
+keys: [STUDYID, USUBJID, PARAMCD, ADT]
+
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, ADT, AVAL, ABLFL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ADLBIN.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ADLBIN.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation:
+      source: ADLBIN.PARAMCD
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation:
+      source: ADLBIN.ADT
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      source: ADLBIN.AVAL
+
+  - name: ABLFL
+    type: str
+    label: Baseline Record Flag
+    derivation:
+      source: ADLBIN.ABLFL
+    verifications:
+      allowed_values:
+        values: [Y]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD, ADT]
+  - row_count:
+      id: one-baseline-record-per-subject-and-parameter
+      group_by: [STUDYID, USUBJID, PARAMCD]
+      filter: "ABLFL = 'Y'"
+      min: 1
+      max: 1

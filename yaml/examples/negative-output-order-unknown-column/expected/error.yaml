@@ -1,0 +1,6 @@
+phase: validation
+condition: undeclared_column
+spec_paths:
+  - output.order_by[1]
+context:
+  column: VISITNUM
