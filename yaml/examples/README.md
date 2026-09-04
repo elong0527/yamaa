@@ -92,6 +92,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adtr-current-nadir`](adam-adtr-current-nadir/) | derive the current nadir |
 | [`adam-adtr-sum-of-target-diameters`](adam-adtr-sum-of-target-diameters/) | sum the target lesion diameters at each assessment |
 | [`adam-adtte-duration-of-response`](adam-adtte-duration-of-response/) | derive the duration of a response |
+| [`adam-adtte-first-adverse-event`](adam-adtte-first-adverse-event/) | derive the time to first adverse event |
 | [`adam-adtte-overall-survival`](adam-adtte-overall-survival/) | derive overall survival |
 | [`adam-adtte-progression-free-survival`](adam-adtte-progression-free-survival/) | derive progression-free survival |
 | [`adam-advs-analysis-visit`](adam-advs-analysis-visit/) | assign records to analysis windows |

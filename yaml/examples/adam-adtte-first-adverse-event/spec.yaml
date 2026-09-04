@@ -1,0 +1,162 @@
+schema_version: "1.0"
+domain: ADTTE
+datasets:
+  ADSL: input/adsl.csv
+  ADAE:
+    path: input/adae.csv
+    types:
+      AESEQ: int
+base: ADSL
+keys: [STUDYID, USUBJID, PARAMCD]
+
+record_lookups:
+  - id: AE_REC
+    dataset: ADAE
+    source: [STUDYID, USUBJID]
+    key: [STUDYID, USUBJID]
+    unmatched: missing
+    order_by: [ADAE.ASTDT, ADAE.AESEQ]
+    keep: first
+
+output:
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, SRCDOM, SRCVAR, SRCSEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ADSL.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ADSL.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation:
+      literal: TTAE
+
+  - name: PARAM
+    type: str
+    label: Parameter
+    derivation:
+      literal: Time to First Adverse Event
+
+  - name: STARTDT
+    type: date
+    label: Time-to-Event Origin Date
+    derivation:
+      source: ADSL.TRTSDT
+
+  - name: AEDT
+    type: date
+    label: Adverse Event Date
+    derivation:
+      source: AE_REC.ASTDT
+
+  - name: AESEQ
+    type: int
+    label: Adverse Event Source Sequence Number
+    derivation:
+      source: AE_REC.AESEQ
+
+  - name: RAWDT
+    type: date
+    label: Selected Date Before Clamping
+    derivation:
+      case:
+        branches:
+          - when: "AEDT IS NOT NULL"
+            then:
+              source: AEDT
+        otherwise:
+          source: ADSL.EOSDT
+
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation:
+      case:
+        branches:
+          - when: "STARTDT IS NOT NULL AND STARTDT > RAWDT"
+            then:
+              source: STARTDT
+        otherwise:
+          source: RAWDT
+
+  - name: AVAL
+    type: int
+    label: Analysis Value
+    derivation:
+      date_diff:
+        start: STARTDT
+        end: ADT
+        unit: day
+        bounds: inclusive
+
+  - name: CNSR
+    type: int
+    label: Censor
+    derivation:
+      case:
+        branches:
+          - when: "AEDT IS NOT NULL"
+            then:
+              literal: 0
+        otherwise:
+          literal: 1
+
+  - name: EVNTDESC
+    type: str
+    label: Event or Censoring Description
+    derivation:
+      case:
+        branches:
+          - when: "AEDT IS NOT NULL"
+            then:
+              literal: AE
+        otherwise:
+          literal: END OF STUDY
+
+  - name: SRCDOM
+    type: str
+    label: Source Data
+    derivation:
+      case:
+        branches:
+          - when: "AEDT IS NOT NULL"
+            then:
+              literal: ADAE
+        otherwise:
+          literal: ADSL
+
+  - name: SRCVAR
+    type: str
+    label: Source Variable
+    derivation:
+      case:
+        branches:
+          - when: "AEDT IS NOT NULL"
+            then:
+              literal: ASTDT
+        otherwise:
+          literal: EOSDT
+
+  - name: SRCSEQ
+    type: int
+    label: Source Sequence Number
+    derivation:
+      case:
+        branches:
+          - when: "AEDT IS NOT NULL"
+            then:
+              source: AESEQ
+
+rows:
+  - id: TTE
+    dataset: ADSL
+    derivations: {}
