@@ -88,5 +88,5 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID, AESEQ]
   - row_count:
-      min: 4
-      max: 4
+      min: 5
+      max: 5
