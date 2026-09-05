@@ -21,3 +21,15 @@ the specification. A record with no study day, or with a complete day outside
 all declared windows, has no window, target, distance, or analysis flag. The
 sample includes two records equally close to one target to exercise the lower
 sequence-number decision.
+
+A window whose last study day was never stated cannot be used at all, so a
+record whose day sits at or above that window's first day still has no
+window: an absent bound is not an open-ended one. That is a different
+reason from a day falling in the gap between two stated ranges, and both
+differ again from a record that has no study day to place.
+
+A window table belongs to one study, and subject identifiers are unique
+only within a study. The sample reuses one identifier under a second study
+whose table gives `WEEK 2` a different target day, so a record placed
+against the wrong study's table would sit a different distance from its
+target.

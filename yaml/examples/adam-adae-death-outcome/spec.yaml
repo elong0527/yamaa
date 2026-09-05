@@ -15,6 +15,7 @@ record_lookups:
     unmatched: missing
 
 output:
+  path: adae.csv
   columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, DTHFL, DTHCAUS, DTHDT]
 
 columns:

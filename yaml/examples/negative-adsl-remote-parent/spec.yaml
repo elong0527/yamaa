@@ -1,4 +1,5 @@
 schema_version: "1.0"
 parents: https://example.test/organization.yaml
 output:
+  path: adsl.csv
   columns: []

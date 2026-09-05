@@ -43,6 +43,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adae-protocol-review-window`](adam-adae-protocol-review-window/) | flag adverse events for protocol review |
 | [`adam-adae-query-flags`](adam-adae-query-flags/) | record which queries a coded event belongs to |
 | [`adam-adae-review-order`](adam-adae-review-order/) | present a subject's events in medical-review order |
+| [`adam-adae-serious-event-listing`](adam-adae-serious-event-listing/) | list the serious adverse events |
 | [`adam-adae-serious-event-sequence`](adam-adae-serious-event-sequence/) | number a subject's serious events in onset order |
 | [`adam-adae-severity-override`](adam-adae-severity-override/) | apply an approved severity correction |
 | [`adam-adae-severity-rank`](adam-adae-severity-rank/) | rank a subject's events by severity |
@@ -61,6 +62,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adlb-bds`](adam-adlb-bds/) | build a BDS dataset with baseline and change |
 | [`adam-adlb-closest-visit`](adam-adlb-closest-visit/) | select the record closest to a window's target day |
 | [`adam-adlb-mean`](adam-adlb-mean/) | calculate each subject's mean result |
+| [`adam-adlb-reported-precision`](adam-adlb-reported-precision/) | report a result against the lower limit of normal |
 | [`adam-adlb-shift-and-criteria`](adam-adlb-shift-and-criteria/) | classify a result, its shift from baseline, and one criterion |
 | [`adam-adlb-standardized-result`](adam-adlb-standardized-result/) | carry standardized results into analysis |
 | [`adam-adoe-study-eye`](adam-adoe-study-eye/) | tell the study eye from the fellow eye |
@@ -81,6 +83,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adsl-dose-adjustment-flag`](adam-adsl-dose-adjustment-flag/) | derive a dose adjustment flag from multiple sources |
 | [`adam-adsl-geography-normalization`](adam-adsl-geography-normalization/) | normalize collected country and group it into a region |
 | [`adam-adsl-identifier-parsing`](adam-adsl-identifier-parsing/) | parse the site from USUBJID with a collected fallback |
+| [`adam-adsl-investigator-comment`](adam-adsl-investigator-comment/) | keep an investigator comment exactly as collected |
 | [`adam-adsl-last-alive-date`](adam-adsl-last-alive-date/) | derive the last known alive date from multiple sources |
 | [`adam-adsl-mapping`](adam-adsl-mapping/) | translate collected values into a standard vocabulary |
 | [`adam-adsl-new-anticancer-therapy-date`](adam-adsl-new-anticancer-therapy-date/) | date the subject started new anti-cancer therapy |
@@ -175,6 +178,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-source-duplicate-right-key`](negative-source-duplicate-right-key/) | reject duplicate subject enrichment |
 | [`negative-source-output-self-reference`](negative-source-output-self-reference/) | reject a parameter that reads the dataset it is part of |
 | [`negative-sum-non-numeric-source`](negative-sum-non-numeric-source/) | reject a severity burden totalled from severity words |
+| [`negative-to-date-date-source`](negative-to-date-date-source/) | reject extracting a date from a date |
 | [`negative-types-unknown-field`](negative-types-unknown-field/) | reject a total over a field the source does not have |
 | [`negative-usubjid-exceeds-length`](negative-usubjid-exceeds-length/) | reject a subject identifier longer than the study permits |
 | [`negative-variable-nested-expression`](negative-variable-nested-expression/) | reject an uppercased country chosen inside the same step |

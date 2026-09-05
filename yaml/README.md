@@ -27,7 +27,7 @@ may contain Unicode scalar values, casing and case-insensitive mapping affect
 ASCII letters only, no normalization is implicit, and equality and ordering
 operate on the exact scalar sequence.
 
-R020 gives every declared source one resource contract: a run receives one
+R021 gives every declared source one resource contract: a run receives one
 approved project root, a declared path is a relative file inside it with no
 rooted form, URI scheme, parent traversal, or symbolic link, and each accepted
 physical file is read once as one immutable byte snapshot that cannot be
@@ -118,6 +118,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `date_diff`, `study_day` | Named variable operands; `date_diff` declares which endpoints it counts |
 | `date_impute` | One named source, an integer literal or a month-relative token for each imputed component, an optional minimum collected precision, and an optional named lower bound on the completed date; exceptional results are literals |
 | `date_precision` | One named source, either collected text or a temporal value; exceptional results are literals |
+| `to_date` | One named `datetime` source; no literals or nesting |
 | `coalesce` | Ordered named variables plus an optional literal default |
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
 | `row_number`, `rank`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |

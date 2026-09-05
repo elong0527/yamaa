@@ -13,6 +13,7 @@ record_lookups:
     key: [LBTESTCD, SEX]
 
 output:
+  path: lb.csv
   columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTRESN, LBORRESU, LBSTNRLO, LBSTNRHI, LBNRIND]
 
 columns:
@@ -96,8 +97,8 @@ columns:
 
 verifications:
   - row_count:
-      min: 6
-      max: 6
+      min: 7
+      max: 7
   - all_or_none:
       id: reference-dictionary-entry-is-complete
       columns: [LBORRESU, LBSTNRLO, LBSTNRHI]

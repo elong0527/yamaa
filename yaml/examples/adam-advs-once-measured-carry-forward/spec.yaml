@@ -23,6 +23,7 @@ record_lookups:
     unmatched: missing
 
 output:
+  path: advs.csv
   columns: [STUDYID, USUBJID, ASEQ, VSSEQ, PARAMCD, ADT, AVAL, TRTSDT, HEIGHTBL]
 
 columns:

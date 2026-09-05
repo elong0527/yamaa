@@ -35,7 +35,7 @@ The validation ensures:
    cross-field checks enforce base selection, complete and exclusive
    derivation coverage, record-lookup field pairing, verification bounds and
    IDs, and declared CSV fields. Every declared source path and producing
-   specification is resolved under R020: it must be a relative path with no
+   specification is resolved under R021: it must be a relative path with no
    rooted form, URI scheme, parent traversal, `.` or empty segment, or
    trailing separator; no component may be a symbolic link; the file must
    exist, be a regular file, and canonicalize inside the approved project
@@ -53,7 +53,7 @@ The validation ensures:
    validated; structural errors are only suppressed if their named path
    matches a `spec_path` declared in `expected/error.yaml` with
    `phase: validation`. A declared `condition` the validator itself
-   decides, such as an R020 path condition, must be the condition it actually
+   decides, such as an R021 path condition, must be the condition it actually
    reports.
    Each positive inherited example must provide an exact
    `expected/resolved[_<variant>].yaml` data-tree fixture.
@@ -67,7 +67,16 @@ The validation ensures:
 6. **CSV consistency**: Input and expected CSV files must have unique,
    non-empty headers and a consistent field count. Expected output headers
    must match exactly the `output.columns` sequence declared by the
-   specification.
+   specification. `output.path` names the file the specification produces and
+   its extension must be one R020 maps; the expected artifact carries that
+   name. An artifact whose path resolves to the `csv` profile must also carry
+   that profile's bytes: no byte-order mark,
+   `U+000A` terminating every record including the last, and R020's exact
+   quoting condition, which distinguishes a missing value from a collected
+   empty string. An `int` column must carry canonical integer text, and a
+   `float` column the shortest round-trip text, or exactly the width
+   `output.decimals` declares. Static validation checks the form of a golden
+   value, not that a derivation would produce it.
 7. **Example Index**: `yaml/examples/README.md` must accurately list all
    example directories in alphabetical order without stale entries. The
    descriptions must match the contract defined by the first line of the

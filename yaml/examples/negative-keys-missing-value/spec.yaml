@@ -6,6 +6,7 @@ base: ADVSPRE
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 
 output:
+  path: advs.csv
   columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, ADT, ADY, AVAL, AVISIT]
 
 columns:

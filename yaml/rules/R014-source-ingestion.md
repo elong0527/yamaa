@@ -3,7 +3,7 @@ id: R014
 title: Source-Format Ingestion
 status: normative
 applies_to: [root.datasets, dataset_source, dataset_class, expression.source]
-depends_on: [R002, R006, R011, R016, R019, R020]
+depends_on: [R002, R006, R011, R016, R019, R021]
 ---
 
 # Source-format ingestion
@@ -19,7 +19,7 @@ This rule owns the step from a stored field to a bound value. R002 owns how a
 name binds to a dataset or an ODM item once that value exists, R011 owns
 numeric parsing and non-finite normalization in addition to conversion of a
 completed derivation result, and R007 owns what each expression requires of an
-input it receives. R019 owns valid text and failures while decoding it. R020
+input it receives. R019 owns valid text and failures while decoding it. R021
 owns which file `path` and `schema` may reach and the byte snapshot this rule
 reads.
 
@@ -60,7 +60,7 @@ Both forms are the same declaration: a bare path is R006 shorthand for a
 `dataset_class.schema` makes a stored artifact carry the output contract and
 workflow provenance of the Yamaa specification that produces it. It is a
 `project_path` resolved relative to the consuming specification like
-`dataset_class.path`, so R020 confines both. The referenced document is a
+`dataset_class.path`, so R021 confines both. The referenced document is a
 complete specification validated against the same `root_class` in
 `schema.yaml`; there is no second source-schema class or field-description
 language.

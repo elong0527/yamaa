@@ -10,6 +10,7 @@ base: VS
 keys: [STUDYID, USUBJID, FASEQ]
 
 output:
+  path: fa.csv
   columns:
     - STUDYID
     - DOMAIN

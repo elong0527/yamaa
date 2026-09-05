@@ -6,6 +6,7 @@ base: DM
 keys: [STUDYID, USUBJID, SITEID]
 
 output:
+  path: adsl.csv
   columns: [STUDYID, USUBJID, INVID]
 
 columns:

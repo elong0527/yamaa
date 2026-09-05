@@ -8,6 +8,7 @@ base: DM
 keys: [STUDYID, USUBJID]
 
 output:
+  path: adsl.csv
   columns: [STUDYID, USUBJID, RANDDT, RANDDY, RANDDTC]
 
 columns:

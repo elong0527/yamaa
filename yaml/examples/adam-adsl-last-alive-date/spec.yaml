@@ -17,6 +17,7 @@ base: ADSL_IN
 keys: [STUDYID, USUBJID]
 
 output:
+  path: adsl.csv
   columns: [STUDYID, USUBJID, TRTEDT, LSTCNTDC, LSTCNTDT, LSTALVDT]
 
 columns:

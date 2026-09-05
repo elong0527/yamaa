@@ -6,6 +6,7 @@ base: ADRSPRE
 keys: [STUDYID, USUBJID, ASEQ]
 
 output:
+  path: adrs.csv
   columns: [STUDYID, USUBJID, ASEQ, ADT, RANDDY, AVALC, BORCAT, BORPRI, BORSEQ]
 
 columns:
@@ -91,4 +92,4 @@ columns:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, ASEQ]
-  - row_count: {min: 10, max: 10}
+  - row_count: {min: 15, max: 15}

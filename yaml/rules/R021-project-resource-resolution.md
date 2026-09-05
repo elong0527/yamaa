@@ -1,5 +1,5 @@
 ---
-id: R020
+id: R021
 title: Project Resource Resolution
 status: normative
 applies_to: [project_path, dataset_source, dataset_class]
@@ -26,6 +26,9 @@ layer traversal and the rebasing that fixes a resolved specification's written
 paths. R006 owns schema notation and structural validation, including its own
 `includes`. R019 owns the text a written path contains. R018 owns the runtime
 artifact a project function executes and the digest that identifies it.
+
+This rule reaches only the files a run reads. R020 owns `output.path` and the
+artifact a run writes.
 
 This rule does not decide which datasets a specification declares, in which
 order a run reads them, or what a runner does with a rejected run. It does not

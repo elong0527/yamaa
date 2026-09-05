@@ -6,6 +6,7 @@ base: LB
 keys: [STUDYID, USUBJID, ADT, PARAMCD]
 
 output:
+  path: adlb.csv
   columns: [STUDYID, USUBJID, ADT, PARAMCD, PARAM, AVAL]
 
 columns:

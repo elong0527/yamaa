@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   validate:
-    # R020 fixes path resolution, so the same fixtures must decide the same
+    # R021 fixes path resolution, so the same fixtures must decide the same
     # way on a case-sensitive and a case-insensitive filesystem.
     name: repository-validation (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

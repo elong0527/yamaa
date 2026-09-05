@@ -13,6 +13,7 @@ record_lookups:
     unmatched: missing
 
 output:
+  path: adsl.csv
   columns: [STUDYID, USUBJID, TRTSDT, COMPFL]
 
 columns:

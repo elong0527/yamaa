@@ -12,6 +12,7 @@ record_lookups:
     order_by: [EX.EXSTDTC, EX.EXSEQ]
 
 output:
+  path: adsl.csv
   columns: [STUDYID, USUBJID, TRT01A]
 
 columns:

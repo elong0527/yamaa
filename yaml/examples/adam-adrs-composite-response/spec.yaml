@@ -8,6 +8,7 @@ base: ADRSPRE
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 
 output:
+  path: adrs.csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, PCHG, SAEFL, DCSREAS, AVALC, ARSN, AVAL]
 
 columns:

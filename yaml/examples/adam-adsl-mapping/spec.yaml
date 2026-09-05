@@ -6,6 +6,7 @@ base: DM
 keys: [STUDYID, USUBJID]
 
 output:
+  path: adsl.csv
   columns: [STUDYID, USUBJID, SEX, SEXN, SEXDECOD, RACE, RACEN, AGE, AGEGR1]
 
 columns:

@@ -1,0 +1,35 @@
+schema_version: "1.0"
+domain: ADAE
+datasets:
+  AE:
+    path: input/ae.csv
+    types: {AESEQ: int, AESTDTC: date}
+base: AE
+keys: [STUDYID, USUBJID, AESEQ]
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, ASTDT, ASTDT2]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: AE.STUDYID}
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {source: AE.USUBJID}
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation: {source: AE.AESEQ}
+  - name: ASTDT
+    type: date
+    label: Analysis Start Date
+    derivation: {source: AE.AESTDTC}
+  - name: ASTDT2
+    type: date
+    label: Analysis Start Date from Datetime
+    derivation:
+      to_date: {source: ASTDT}

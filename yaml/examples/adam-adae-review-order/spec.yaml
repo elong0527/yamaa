@@ -6,6 +6,7 @@ base: AE
 keys: [STUDYID, USUBJID, ASEQ]
 
 output:
+  path: adae.csv
   columns: [STUDYID, USUBJID, ASEQ, AETERM, ASTDT, ASEV]
   order_by:
     - USUBJID

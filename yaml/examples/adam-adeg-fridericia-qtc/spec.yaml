@@ -14,6 +14,7 @@ record_lookups:
     unmatched: missing
 
 output:
+  path: adeg.csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL, AVALU]
 
 columns:

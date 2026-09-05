@@ -10,6 +10,7 @@ metadata:
   dictionary_version: "26.1"
 
 output:
+  path: ae.csv
   columns: [STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS]
 
 columns:

@@ -11,6 +11,7 @@ base: DM
 keys: [USUBJID]
 
 output:
+  path: adsl.csv
   columns:
     - USUBJID
     - YAML_PINF

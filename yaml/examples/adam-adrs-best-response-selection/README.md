@@ -17,3 +17,12 @@ assessment for the best-response endpoint:
 The ordering fields make the clinical priority an independently testable data
 contract. A downstream endpoint can select the first prepared record without
 repeating the priority rules.
+
+A record whose collected response is neither one of those categories nor
+collected at all supports no category and takes no priority, so it is left
+out of the ordering entirely: it can never be numbered `1`, and it never
+consumes a number that a usable record would otherwise take.
+
+Subject identifiers are unique only within a study. The sample reuses one
+under a second study, and each study's records are ordered on their own, so
+one study's numbering never continues into the other's.

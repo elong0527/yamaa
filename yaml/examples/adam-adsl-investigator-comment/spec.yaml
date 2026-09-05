@@ -1,0 +1,57 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, CMNT, CMNTFL]
+  order_by: [USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM.USUBJID
+
+  - name: REVIEWER
+    type: str
+    label: Reviewer Initials
+    derivation:
+      source: DM.REVIEWER
+
+  - name: CMNT
+    type: str
+    label: Investigator Comment
+    derivation:
+      source: DM.COMMENT
+
+  - name: CMNTFL
+    type: str
+    label: Comment Collected Flag
+    derivation:
+      case:
+        branches:
+          - when: "CMNT IS NULL"
+            then: {literal: "N"}
+        otherwise: {literal: "Y"}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 5
+      max: 5
+  - implies:
+      id: flag-follows-collection
+      when: "CMNTFL = 'N'"
+      then: "CMNT IS NULL"
