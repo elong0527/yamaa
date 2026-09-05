@@ -5425,7 +5425,7 @@ def validate_expected_resolved_fixture(
 
 
 def load_validation_manifest(root: Path):
-    path = root / 'yaml' / 'validation-manifest.yaml'
+    path = root / 'yaml' / 'examples' / 'validation-manifest.yaml'
     if not path.is_file():
         if not validation_phase_contracts(root):
             return {'version': '1.0', 'fixtures': {}}, []
@@ -5464,7 +5464,7 @@ def validation_phase_contracts(root: Path):
 
 def validate_validation_manifest(root: Path, manifest):
     errors = []
-    label = 'yaml/validation-manifest.yaml'
+    label = 'yaml/examples/validation-manifest.yaml'
     if not isinstance(manifest, dict):
         return [f"ERROR: {label}: expected a mapping"]
     if manifest.get('version') != '1.0':
@@ -5607,7 +5607,7 @@ def validate_registered_fixture_diagnostics(
                 matches[expected_path].append(diagnostic)
                 expected_ids.add(id(diagnostic))
 
-    manifest_path = f"yaml/validation-manifest.yaml.fixtures.{name}"
+    manifest_path = f"yaml/examples/validation-manifest.yaml.fixtures.{name}"
     if 'blocked_by' in entry:
         if all(matches.values()):
             return [

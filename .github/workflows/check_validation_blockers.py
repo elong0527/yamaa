@@ -12,7 +12,7 @@ import yaml
 
 
 def load_blockers(root):
-    manifest_path = root / 'yaml' / 'validation-manifest.yaml'
+    manifest_path = root / 'yaml' / 'examples' / 'validation-manifest.yaml'
     with open(manifest_path, 'r', encoding='utf-8') as handle:
         manifest = yaml.safe_load(handle)
     fixtures = (

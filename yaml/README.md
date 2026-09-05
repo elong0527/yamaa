@@ -13,11 +13,11 @@ and SDTM-to-ADaM derivations. The design is under active development.
   verification types.
 - `schema_function.yaml` registers calls to functions resolved by R018's
   project environment.
-- `validation-manifest.yaml` assigns every validation-phase negative fixture
-  to its owning rule and validator family or an open blocking issue.
 - `rules/` contains shared execution semantics, with one rule per file.
-- `examples/` contains source data, derivation specifications, and exact
-  expected outputs.
+- `examples/` contains source data, derivation specifications, exact expected
+  outputs, and `validation-manifest.yaml`, which assigns every validation-phase
+  negative fixture to its owning rule and validator family or an open blocking
+  issue.
 - `agents.md` tells AI coding agents how to discover and maintain the design.
 
 The schema defines shape and operation-local behavior through adjacent comments

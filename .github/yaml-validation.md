@@ -55,7 +55,8 @@ The validation ensures:
    specification cannot be combined with inline `types`.
    Negative examples (folders prefixed with `negative-`) are structurally
    validated. For fixtures with `phase: validation`,
-   `yaml/validation-manifest.yaml` registers every negative example whose
+   `yaml/examples/validation-manifest.yaml` registers every negative example
+   whose
    expected phase is `validation`, its owning rule, primary condition, exact
    specification paths, and implemented validator family or open blocking
    issue. An implemented fixture passes only when that condition is emitted at

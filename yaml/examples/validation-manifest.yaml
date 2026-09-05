@@ -1,6 +1,6 @@
 version: "1.0"
 
-# Every negative fixture whose expected phase is validation appears exactly
+# Every negative example whose expected phase is validation appears exactly
 # once. Implemented entries name the validator family that must emit the
 # registered condition at every declared path. Blocked entries name the open
 # issue that owns the missing diagnostic.
