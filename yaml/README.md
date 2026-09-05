@@ -33,6 +33,14 @@ rooted form, URI scheme, parent traversal, or symbolic link, and each accepted
 physical file is read once as one immutable byte snapshot that cannot be
 substituted between validation and ingestion.
 
+R022 gives every delimited source one syntax: UTF-8 without a byte-order mark,
+a comma between fields, `U+000A` or `U+000D U+000A` between records, and
+double-quote quoting whose doubled quote is one literal quote. It admits the
+second spelling of a terminator and a final record without one, because
+neither changes the records a file holds, and rejects every other difference
+rather than repairing it. A field reaches R014 with its quoting intact, so an
+uncollected value stays distinct from a collected empty one.
+
 ## Version 1.0 design boundary
 
 Operations consume named variables rather than arbitrary nested expressions.

@@ -3,7 +3,7 @@ id: R014
 title: Source-Format Ingestion
 status: normative
 applies_to: [root.datasets, dataset_source, dataset_class, expression.source]
-depends_on: [R002, R006, R011, R016, R019, R021]
+depends_on: [R002, R006, R011, R016, R019, R021, R022]
 ---
 
 # Source-format ingestion
@@ -21,7 +21,9 @@ numeric parsing and non-finite normalization in addition to conversion of a
 completed derivation result, and R007 owns what each expression requires of an
 input it receives. R019 owns valid text and failures while decoding it. R021
 owns which file `path` and `schema` may reach and the byte snapshot this rule
-reads.
+reads. R022 owns the syntax of a delimited source and delivers each field to
+this rule as its text together with whether it was quoted; this rule owns what
+that field then means.
 
 ## A field's type belongs to the dataset
 
@@ -135,10 +137,10 @@ converts it at the column that consumes it, where a handler exists.
 A missing value is the absence of a value, and it is recognized before typing.
 Every type admits it, and R008's handlers answer for it.
 
-In a delimited text file, a field with no characters between its delimiters is
-missing. A quoted empty field is the empty string, which is a value: a `str`
-field therefore distinguishes an uncollected value from a collected empty one,
-and no other type admits an empty string at all.
+In a delimited source, a bare field with no characters is missing. A quoted
+empty field is the empty string, which is a value: a `str` field therefore
+distinguishes an uncollected value from a collected empty one, and no other
+type admits an empty string at all.
 
 **No text is a missing-value sentinel.** `NA`, `NULL`, `.`, `unknown`, and
 every other spelling are ordinary string values. A reader that treats them as

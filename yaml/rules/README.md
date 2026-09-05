@@ -22,7 +22,7 @@ semantics, error behavior, and representative examples are complete.
 | R011 | [Column types](R011-column-types.md) | normative | The `column_type` vocabulary, non-finite normalization, and conversion | R005, R006, R007, R008, R009, R010, R014, R016, R018, R019, R020 |
 | R012 | [String templates](R012-string-templates.md) | normative | Interpolation grammar, escaping, and evaluation | R001, R002, R006, R007, R008, R019 |
 | R013 | [Aggregate reduction](R013-aggregate-reduction.md) | normative | The `aggregate_expression` primitive: reducers, row-relative narrowing, grain, and empty-group results | R001, R002, R003, R004, R006, R007, R010, R011, R015, R019 |
-| R014 | [Source-format ingestion](R014-source-ingestion.md) | normative | Missing recognition and field typing at the source | R002, R006, R011, R016, R019, R021 |
+| R014 | [Source-format ingestion](R014-source-ingestion.md) | normative | Missing recognition and field typing at the source | R002, R006, R011, R016, R019, R021, R022 |
 | R015 | [Record lookup](R015-record-lookup.md) | normative | Looking up one record of another dataset and reading it by name | R001, R002, R003, R004, R005, R006, R007, R008, R010, R014, R019 |
 | R016 | [Temporal values](R016-temporal-values.md) | normative | The `date` and `datetime` values: lexical form, zone and precision model, comparison, canonical text, and the operations over them | R005, R006, R007, R008, R010, R011, R014 |
 | R017 | [Specification inheritance](R017-specification-inheritance.md) | normative | Parent resolution, shallow composition, pruning, and resolved order | R001, R002, R005, R006, R009, R015 |
@@ -30,6 +30,7 @@ semantics, error behavior, and representative examples are complete.
 | R019 | [Text values](R019-text-values.md) | normative | ASCII source, Unicode data, casing, equality, normalization, total order | -- |
 | R020 | [Artifact serialization](R020-artifact-serialization.md) | normative | The `parquet` and `csv` profiles, display precision, and publication | R005, R011, R014, R016, R019 |
 | R021 | [Project resource resolution](R021-project-resource-resolution.md) | normative | The approved project root, written path form, readable file kinds, content identity | R006, R017, R019 |
+| R022 | [Delimited source profile](R022-delimited-source.md) | normative | The `csv` source syntax: encoding, records and fields, header shape, and delivered quoting | R014, R019, R021 |
 
 ## Rule admission
 

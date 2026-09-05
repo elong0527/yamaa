@@ -36,6 +36,10 @@ outside the rule index until their contracts and example coverage are complete.
 - Declare every source path as a relative file inside the example directory.
   R021 confines what a run may read, so a rooted path, a URL, a parent
   traversal, or a symbolic link belongs only in a negative example.
+- Write every fixture under R022's source profile: UTF-8 without a byte-order
+  mark, comma-separated fields, a named non-empty field per column, and the
+  same field count in every record. A file that departs from it belongs only
+  in a negative example that declares the condition it provokes.
 - Do not duplicate normative behavior across schema definitions, rules, or
   examples. Keep operation-local behavior beside its schema entry and shared
   behavior in the applicable rule.
