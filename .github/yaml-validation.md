@@ -136,8 +136,8 @@ listed above. At this time, it **does not**:
   dual-runtime conformance workflow in issue #101.
 
 ## Local Commands
-From the repository root, install the dependencies in a Python 3.11 or later
-environment, run the tests, and validate the repository:
+From the repository root, use a Python 3.14 environment to match CI. Install
+the dependencies, run the tests, and validate the repository:
 
 ```bash
 python3 -m pip install -r .github/scripts/yaml-validation/requirements.txt
