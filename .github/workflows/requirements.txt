@@ -1,1 +1,4 @@
 PyYAML==6.0.2
+# R022 pins one ECMA-262 engine for every regular expression the language
+# admits. This distribution binds Rust crate regress 0.10.4.
+regress==2025.10.1

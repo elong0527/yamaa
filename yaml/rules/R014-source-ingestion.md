@@ -3,7 +3,7 @@ id: R014
 title: Source-Format Ingestion
 status: normative
 applies_to: [root.datasets, dataset_source, dataset_class, expression.source]
-depends_on: [R002, R006, R011, R016, R019, R021, R022]
+depends_on: [R002, R006, R011, R016, R019, R021, R023]
 ---
 
 # Source-format ingestion
@@ -21,7 +21,7 @@ numeric parsing and non-finite normalization in addition to conversion of a
 completed derivation result, and R007 owns what each expression requires of an
 input it receives. R019 owns valid text and failures while decoding it. R021
 owns which file `path` and `schema` may reach and the byte snapshot this rule
-reads. R022 owns the syntax of a delimited source and delivers each field to
+reads. R023 owns the syntax of a delimited source and delivers each field to
 this rule as its text together with whether it was quoted; this rule owns what
 that field then means.
 

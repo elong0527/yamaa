@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADEX
 datasets:
   TRT: input/subject_treatment.csv
-  EX: {path: input/ex.csv, types: {EXDOSEN: float}}
+  EX: {path: input/ex.csv, types: {EXDOSE: float, EXDOSEN: float}}
 base: TRT
 keys: [STUDYID, USUBJID, EXTRT]
 

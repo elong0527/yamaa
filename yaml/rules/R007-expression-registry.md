@@ -172,7 +172,8 @@ a coerced operand. Each owning rule defines the order its type takes.
 its YAML scalar type after R011's non-finite normalization.
 `cut`, `str_extract`, `str_concat`, `str_template`, `str_upper`, and
 `str_lower` return strings. R019 owns the casing and text-preservation behavior
-of those string operations. `compute` returns the numeric type its expression
+of those string operations, and R022 owns `str_extract`'s pattern and the
+match it keeps. `compute` returns the numeric type its expression
 promotes to under R010.
 `row_number` and `rank` return integers. The temporal operations return the
 types R016 gives them. `baseline_flag` returns a string. Mapping, conditional,

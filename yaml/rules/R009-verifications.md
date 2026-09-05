@@ -3,7 +3,7 @@ id: R009
 title: Verifications
 status: normative
 applies_to: [root.verifications, column.verifications, column_verifications, dataset_verifications]
-depends_on: [R004, R005, R006, R011, R019]
+depends_on: [R004, R005, R006, R011, R019, R022]
 ---
 
 # Verifications
@@ -107,8 +107,9 @@ path.
   is invalid. It is declared only on a `str` column: the text a number or a
   temporal value renders as is a property of R011's rendering rather than of
   the value.
-- `matches` requires every non-missing string to match its ECMAScript regular
-  expression. Matching searches unless the pattern is anchored.
+- `matches` requires every non-missing string to match its regular
+  expression. R022 owns the pattern's syntax, the engine that reads it, and
+  whether a match must span the whole value.
 
 R019 scalar count rather than bytes or UTF-16 units is also the unit R006 uses
 for `min_length`, so a supplementary-plane scalar counts once in both R and

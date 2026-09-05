@@ -202,7 +202,7 @@ dataset_class:
     - path:
         type: project_path
         required: true
-        description: Source data path, resolved relative to the specification and confined by R021; R022 selects the delimited profile from its extension.
+        description: Source data path, resolved relative to the specification and confined by R021; R023 selects the delimited profile from its extension.
     - types:
         type: "dict[dataset_column, column_type]"
         required: false
@@ -240,7 +240,7 @@ row_id:
 regex:
     type: str
     min_length: 1
-    description: Regular expression applied to a string value.
+    description: Regular expression applied to a string value under R022.
 
 sql:
     type: str

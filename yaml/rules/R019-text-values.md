@@ -19,10 +19,10 @@ equality, and total order without consulting a host locale or Unicode library.
 This rule owns the language-wide meaning of a string. R002 owns how a string
 source binds, R004 owns predicate grammar and `LIKE`, R006 owns schema
 structure, R007 owns expression dispatch and order terms, R008 owns missing
-handlers, R012 owns template grammar, R013 owns aggregate grammar, and R014
-owns source-format ingestion. Regular expressions retain the common
-ECMAScript contract of their owning operations; this rule does not reinterpret
-their pattern syntax or matching units.
+handlers, R012 owns template grammar, R013 owns aggregate grammar, R014
+owns source-format ingestion, and R022 owns regular expressions. This rule
+does not reinterpret their pattern syntax or matching units, and R022 applies
+them to the scalar values defined here.
 
 ## Source and data boundary
 
@@ -119,8 +119,8 @@ also occur in that sequence.
 Identifier and keyword case behavior comes from the closed ASCII grammars that
 own them and is unaffected by data casing. Predicate `LIKE` remains
 case-sensitive and compares literal scalar values under R004. Schema patterns,
-`str_extract`, and `matches` retain their common ECMAScript behavior and do
-not select a Unicode casing mode through this rule.
+`str_extract`, and `matches` match under R022 and do not select a Unicode
+casing mode through this rule.
 
 Version 1.0 has no environment switch for non-ASCII casing. Adding one requires
 a versioned contract that pins its Unicode data and changes the environment,

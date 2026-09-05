@@ -25,9 +25,19 @@ The validation ensures:
    identifiers, invalid clears, and an entry that does not declare `output`;
    rebases inherited paths; composes shallow keyed members; prunes unreachable
    declarations; and stably orders columns by dependency. Every predicate is
-   parsed under R004, its identifiers are
-   resolved for the predicate site, and statically known operand types are
-   checked without implicit conversion. Cross-field validation also rejects
+   parsed under R004, its identifiers are resolved for the predicate site, and
+   statically known operand types are checked without implicit conversion.
+   Every R010 numeric expression is parsed into a source-spanned syntax tree;
+   function names and argument counts, identifier scope, and numeric input
+   types are validated without executing the formula. The spans are zero-based
+   half-open character offsets into the expression leaf.
+   R012 string templates are scanned under their brace and placeholder grammar,
+   and R013 aggregate expressions are parsed with their closed reducer
+   vocabulary, relation, grain, context, and operand-type rules. Static
+   operation checks also enforce mapping pairs and folded-key uniqueness,
+   comparable extremes and lookup ranges, nonzero row offsets, cut structure,
+   temporal input types and literal ranges, and column dependency cycles.
+   Cross-field validation also rejects
    duplicate or unresolved dataset, lookup, column, key, output-column, and row
    names, including namespace conflicts. A grouped row must declare a non-empty,
    duplicate-free `group_by` whose variables are qualified to that row's driver.
@@ -50,11 +60,15 @@ The validation ensures:
    match the producer's ordered `output.columns` exactly. A producing
    specification cannot be combined with inline `types`.
    Negative examples (folders prefixed with `negative-`) are structurally
-   validated; structural errors are only suppressed if their named path
-   matches a `spec_path` declared in `expected/error.yaml` with
-   `phase: validation`. A declared `condition` the validator itself
-   decides, such as an R021 path condition, must be the condition it actually
-   reports.
+   validated. For fixtures with `phase: validation`,
+   `yaml/examples/validation-manifest.yaml` registers every negative example
+   whose
+   expected phase is `validation`, its owning rule, primary condition, exact
+   specification paths, and implemented validator family or open blocking
+   issue. An implemented fixture passes only when that condition is emitted at
+   every declared path; unrelated diagnostics still fail validation. A blocked
+   entry fails when its expected diagnostic becomes complete, and CI also
+   rejects a blocking issue that is no longer open.
    Each positive inherited example must provide an exact
    `expected/resolved[_<variant>].yaml` data-tree fixture.
 5. **Layout**: All examples have `README.md`, one `spec.yaml` or one or more
@@ -64,7 +78,7 @@ The validation ensures:
    `expected/error.yaml`. Error contracts use the closed phase vocabulary,
    snake-case conditions, existing specification paths, and an optional
    mapping context.
-6. **CSV consistency**: Every input and expected CSV is read under R022's
+6. **CSV consistency**: Every input and expected CSV is read under R023's
    source profile, which preserves quoting, so a bare empty field stays
    distinct from a quoted empty one rather than being normalized to the same
    text. A fixture must decode as UTF-8, carry no byte-order mark, terminate
@@ -93,6 +107,17 @@ The validation ensures:
    avoid schema vocabulary, describe each non-key expected column, and use
    only the remediation or specification-variant sections allowed by
    `yaml/examples/agents.md`.
+9. **Regular expressions**: Every pattern the language admits -- a schema
+   `pattern` descriptor, `str_extract.pattern`, and a `matches` verification
+   -- is compiled by the one ECMA-262 engine R022 pins, with the Unicode flag
+   set. A pattern that engine rejects fails as `invalid_regex` at its
+   declaring path, and a `str_extract` selecting a group its pattern does not
+   declare fails as `regex_group_out_of_range`. The validator replays
+   `yaml/conformance/regex.yaml` against the same engine, so a fixture whose
+   recorded outcome drifts from the engine, or a fixture set that stops
+   covering one of R022's named categories, fails validation. The pinned
+   engine is a required dependency: without it the validator refuses to run
+   rather than falling back to Python `re`.
 
 ## Explicit Non-Goals
 The validator ensures structural correctness and the static cross-field checks
@@ -102,11 +127,10 @@ listed above. At this time, it **does not**:
   Inherited specifications are canonicalized as part of producing their
   resolved data tree.
 - Reproduce golden output values in the `.csv` files.
-- Parse or type-check the numeric, aggregate, or template leaf languages; this
-  is tracked in issue #103. Predicate syntax, names, and statically known types
-  are checked, but predicates are not evaluated against data.
-- Prove that a regular expression behaves identically in R and Python; the
-  ECMAScript portability contract is tracked in issue #106.
+- Prove that a regular expression behaves identically in R and Python. R022
+  pins the engine both runtimes must bind and this validator replays the
+  shared fixtures on the Python side, but executable R parity waits on the
+  dual-runtime conformance workflow in issue #101.
 
 ## Local Commands
 To run the validator locally:
@@ -132,4 +156,12 @@ To treat warnings as errors, run with the `--warnings-as-errors` flag:
 
 ```bash
 python3 .github/workflows/validate_repository.py --warnings-as-errors
+```
+
+CI additionally checks that every `blocked_by` issue in the validation manifest
+remains open. With GitHub credentials available, run the same check locally:
+
+```bash
+GITHUB_REPOSITORY=elong0527/yamaa \
+  python3 .github/workflows/check_validation_blockers.py
 ```

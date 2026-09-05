@@ -1,0 +1,8 @@
+phase: validation
+condition: regex_group_out_of_range
+spec_paths:
+  - columns.SITEID.derivation.str_extract.group
+context:
+  group: 2
+  group_count: 1
+  pattern: '^CATH-([^-]+)-[0-9]{4}$'

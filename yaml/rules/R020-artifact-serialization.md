@@ -28,7 +28,7 @@ failure of ill-formed encoded text, and the order of two strings.
 R014 owns the other direction. It states what a stored field means when a
 specification reads it, and `csv` below is the writing counterpart of the
 delimited form it reads: the two agree on missing and on the empty string, and
-neither restates the other. R022 owns the syntax a specification reads a
+neither restates the other. R023 owns the syntax a specification reads a
 delimited *source* under, and admits the spellings a reader receives that this
 rule never writes.
 

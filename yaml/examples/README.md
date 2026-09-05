@@ -162,6 +162,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-mapping-from-partial-key`](negative-mapping-from-partial-key/) | reject a reference range chosen without a sex |
 | [`negative-mapping-from-unmapped-key`](negative-mapping-from-unmapped-key/) | reject a result with no reference range |
 | [`negative-mapping-unmapped-value`](negative-mapping-unmapped-value/) | reject an unmapped response |
+| [`negative-matches-unreadable-pattern`](negative-matches-unreadable-pattern/) | reject a sex code checked against an unreadable match rule |
 | [`negative-output-duplicate-subject`](negative-output-duplicate-subject/) | reject a repeated demographics record |
 | [`negative-output-order-repeated-term`](negative-output-order-repeated-term/) | reject an order that places one value twice |
 | [`negative-output-order-unknown-column`](negative-output-order-unknown-column/) | reject a submission order over a value the dataset does not carry |
@@ -183,6 +184,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-source-output-self-reference`](negative-source-output-self-reference/) | reject a parameter that reads the dataset it is part of |
 | [`negative-source-record-width`](negative-source-record-width/) | reject a subject listing record with an extra field |
 | [`negative-source-unterminated-quote`](negative-source-unterminated-quote/) | reject a comment whose quoted text never closes |
+| [`negative-str-extract-undeclared-group`](negative-str-extract-undeclared-group/) | reject a site identifier taken from an uncaptured part |
 | [`negative-sum-non-numeric-source`](negative-sum-non-numeric-source/) | reject a severity burden totalled from severity words |
 | [`negative-to-date-date-source`](negative-to-date-date-source/) | reject extracting a date from a date |
 | [`negative-types-unknown-field`](negative-types-unknown-field/) | reject a total over a field the source does not have |

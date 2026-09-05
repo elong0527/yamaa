@@ -155,6 +155,15 @@ which spelling arrived. A leap second is not a value either runtime holds:
 neither R's nor Python's representation has a sixty-first second, so nothing
 could be stored.
 
+`14:00:00` is rejected for a different reason from the rest of the table, and
+the difference is worth naming. Every other row is a spelling of a value one of
+these two types holds; a clock reading carrying no date is not, because both
+types name a position on the calendar. A study that collects one, as the `--TM`
+family does, keeps the collected text as `str`. Admitting it would be a third
+temporal type rather than a widening of `datetime` -- a new entry in R011's
+closed vocabulary -- and it enters when an example needs a time of day that no
+date accompanies.
+
 ## No zone, no offset
 
 A `datetime` carries no timezone and no offset, and text carrying either is
@@ -323,7 +332,11 @@ to `date` would discard a collected one; each would decide silently what a
 specification never stated, which is the same reason a non-integral `float`
 does not become an `int`. `to_date` is the explicit request to discard the
 time of day and return the calendar date. No operation composes a moment from
-a date.
+a date, and one enters the vocabulary when an example needs it: like `to_date`
+it would declare its intent in its registration, naming the time of day it
+supplies. The cell above stays `fail` whether or not such an operation is
+registered, because inventing a component is an operation's to declare and
+never a conversion's to perform.
 
 A temporal value never enters arithmetic. R010's grammar is numeric, and a
 difference between two values is `date_diff` or `study_day` below.

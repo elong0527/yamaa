@@ -2,6 +2,7 @@ import copy
 import importlib.util
 import math
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -17,6 +18,14 @@ SPEC = importlib.util.spec_from_file_location("validate_repository", TOOL_PATH)
 assert SPEC is not None and SPEC.loader is not None
 VALIDATOR = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VALIDATOR)
+
+BLOCKER_PATH = Path(__file__).parent / 'check_validation_blockers.py'
+BLOCKER_SPEC = importlib.util.spec_from_file_location(
+    'check_validation_blockers', BLOCKER_PATH
+)
+assert BLOCKER_SPEC is not None and BLOCKER_SPEC.loader is not None
+BLOCKER_CHECK = importlib.util.module_from_spec(BLOCKER_SPEC)
+BLOCKER_SPEC.loader.exec_module(BLOCKER_CHECK)
 
 
 class TestYamlLoader(unittest.TestCase):
@@ -360,6 +369,587 @@ class TestPredicateLanguage(unittest.TestCase):
         self.assertIn("unknown identifier 'NOSUCHCOL'", errors[0])
         self.assertIn('verifications[2].row_count.filter', errors[1])
         self.assertIn('invalid predicate', errors[1])
+
+
+class TestNumericExpressionLanguage(unittest.TestCase):
+    def test_parses_precedence_and_infers_promoted_type(self):
+        expression = 'A + POWER(B, 2) / -3'
+        ast = VALIDATOR.parse_numeric_expression(expression)
+        resolver = VALIDATOR.numeric_identifier_resolver(
+            unqualified={'A': 'int', 'B': 'float'}
+        )
+
+        result_type, errors = VALIDATOR.validate_numeric_expression_ast(
+            ast, 'spec.columns.RESULT.derivation.compute.expr',
+            expression, resolver
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(result_type, 'float')
+        self.assertEqual(ast['span'], (0, len(expression)))
+
+    def test_reports_prohibited_construct_and_function_with_spans(self):
+        resolver = VALIDATOR.numeric_identifier_resolver(
+            unqualified={'AVAL': 'float', 'ANRHI': 'float'}
+        )
+
+        function_error = VALIDATOR.validate_numeric_expression_at(
+            'SUM(AVAL)', 'spec.columns.TOTAL.derivation.compute.expr',
+            resolver
+        )[0]
+        comparison_error = VALIDATOR.validate_numeric_expression_at(
+            'AVAL > ANRHI', 'spec.columns.FLAG.derivation.compute.expr',
+            resolver
+        )[0]
+        boolean_error = VALIDATOR.validate_numeric_expression_at(
+            'AVAL AND ANRHI', 'spec.columns.FLAG.derivation.compute.expr',
+            resolver
+        )[0]
+
+        self.assertEqual(function_error.condition, 'prohibited_function')
+        self.assertEqual(function_error.span, (0, 3))
+        self.assertEqual(comparison_error.condition, 'prohibited_construct')
+        self.assertEqual(comparison_error.span, (5, 6))
+        self.assertEqual(boolean_error.condition, 'prohibited_construct')
+        self.assertEqual(boolean_error.context['construct'], 'boolean')
+
+    def test_rejects_unknown_qualified_and_non_numeric_identifiers(self):
+        resolver = VALIDATOR.numeric_identifier_resolver(
+            unqualified={'TERM': 'str'},
+            qualified={'PICK': {'VALUE': 'float'}},
+        )
+
+        unknown = VALIDATOR.validate_numeric_expression_at(
+            'MISSING + 1', 'spec.compute.expr', resolver
+        )[0]
+        qualified = VALIDATOR.validate_numeric_expression_at(
+            'DATA.VALUE + 1', 'spec.compute.expr', resolver
+        )[0]
+        non_numeric = VALIDATOR.validate_numeric_expression_at(
+            'TERM + 1', 'spec.compute.expr', resolver
+        )[0]
+        lookup_errors = VALIDATOR.validate_numeric_expression_at(
+            'PICK.VALUE + 1', 'spec.compute.expr', resolver
+        )
+
+        self.assertEqual(unknown.condition, 'unknown_field')
+        self.assertEqual(qualified.condition, 'qualified_identifier')
+        self.assertEqual(non_numeric.condition, 'incompatible_input_type')
+        self.assertEqual(lookup_errors, [])
+
+    def test_accepts_the_complete_function_vocabulary(self):
+        expressions = [
+            'ABS(A)', 'CEIL(A)', 'FLOOR(A)', 'TRUNC(A)', 'SQRT(A)',
+            'POWER(A, 2)', 'EXP(A)', 'LN(A)', 'MOD(A, 2)',
+            'GREATEST(A, B)', 'LEAST(A, B)', 'NULLIF(A, B)',
+            'COALESCE(NULL, A, B)',
+        ]
+        resolver = VALIDATOR.numeric_identifier_resolver(
+            unqualified={'A': 'int', 'B': 'float'}
+        )
+
+        for expression in expressions:
+            with self.subTest(expression=expression):
+                self.assertEqual(
+                    VALIDATOR.validate_numeric_expression_at(
+                        expression, 'spec.compute.expr', resolver
+                    ),
+                    [],
+                )
+
+    def test_rejects_prohibited_function_argument_counts(self):
+        resolver = VALIDATOR.numeric_identifier_resolver(
+            unqualified={'A': 'float'}
+        )
+        for expression in (
+            'ABS()', 'POWER(A)', 'GREATEST(A)', 'COALESCE()'
+        ):
+            with self.subTest(expression=expression):
+                errors = VALIDATOR.validate_numeric_expression_at(
+                    expression, 'spec.compute.expr', resolver
+                )
+                self.assertEqual(len(errors), 1)
+                self.assertEqual(errors[0].condition, 'prohibited_function')
+
+    def test_does_not_execute_runtime_failure_conditions(self):
+        resolver = VALIDATOR.numeric_identifier_resolver()
+        for expression in ('1 / 0', 'SQRT(-1)', 'LN(0)'):
+            with self.subTest(expression=expression):
+                errors = VALIDATOR.validate_numeric_expression_at(
+                    expression, 'spec.compute.expr', resolver
+                )
+                self.assertEqual(errors, [])
+
+    def test_dependency_collection_uses_the_parsed_ast(self):
+        names = VALIDATOR.numeric_expression_identifier_names(
+            'VALUE + POWER(BASE, 2) + PICK.DOSE'
+        )
+        self.assertEqual(names, {'VALUE', 'BASE', 'PICK.DOSE'})
+
+
+class TestAggregateExpressionLanguage(unittest.TestCase):
+    def context(self, **changes):
+        context = {
+            'kind': 'column',
+            'datasets': {
+                'EX': {
+                    'DOSE': 'float',
+                    'PLANDOSE': 'float',
+                    'TERM': 'str',
+                }
+            },
+            'output_types': {'VALUE': 'float', 'TERM': 'str'},
+            'keys': ['STUDYID', 'PLANDOSE'],
+        }
+        context.update(changes)
+        return context
+
+    def test_parses_reducers_functions_and_count_star(self):
+        expression = 'SUM(EX.DOSE) / NULLIF(EX.PLANDOSE, 0)'
+        ast = VALIDATOR.parse_aggregate_expression(expression)
+        resolver = VALIDATOR.numeric_identifier_resolver(
+            qualified=self.context()['datasets']
+        )
+
+        result_type, errors = VALIDATOR.validate_aggregate_expression_ast(
+            ast,
+            'spec.columns.RDI.derivation.aggregate.expr',
+            expression,
+            resolver,
+            {'EX.PLANDOSE'},
+            'EX',
+        )
+        count_errors = VALIDATOR.validate_aggregate_at(
+            'COUNT(EX.*)', 'spec.columns.N.derivation.aggregate',
+            self.context()
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(result_type, 'float')
+        self.assertEqual(count_errors, [])
+        self.assertEqual(
+            VALIDATOR.aggregate_expression_identifier_names(expression),
+            {'EX.DOSE', 'EX.PLANDOSE'},
+        )
+
+    def test_rejects_invalid_grammar_constructs_and_functions(self):
+        path = 'spec.columns.X.derivation.aggregate'
+
+        malformed = VALIDATOR.validate_aggregate_at(
+            'SUM(EX.DOSE', path, self.context()
+        )[0]
+        comparison = VALIDATOR.validate_aggregate_at(
+            'SUM(EX.DOSE) > 0', path, self.context()
+        )[0]
+        function = VALIDATOR.validate_aggregate_at(
+            'MEDIAN(EX.DOSE)', path, self.context()
+        )
+
+        self.assertEqual(malformed.condition, 'invalid_aggregate_expression')
+        self.assertEqual(comparison.condition, 'prohibited_construct')
+        self.assertIn(
+            'prohibited_function',
+            {error.condition for error in function},
+        )
+        self.assertIsNotNone(malformed.span)
+
+    def test_rejects_nested_reductions_and_mixed_relations(self):
+        path = 'spec.columns.X.derivation.aggregate'
+        nested = VALIDATOR.validate_aggregate_at(
+            'MAX(SUM(EX.DOSE))', path, self.context()
+        )
+        mixed = VALIDATOR.validate_aggregate_at(
+            'SUM(EX.DOSE) + SUM(AE.DOSE)', path, self.context()
+        )
+
+        self.assertIn('nested_reduction', {error.condition for error in nested})
+        self.assertEqual(mixed[0].condition, 'mixed_relations')
+
+    def test_enforces_grain_context_and_numeric_reducer_inputs(self):
+        path = 'spec.columns.X.derivation.aggregate'
+        ungrouped = VALIDATOR.validate_aggregate_at(
+            'SUM(EX.DOSE) / EX.PLANDOSE', path, self.context()
+        )
+        non_numeric = VALIDATOR.validate_aggregate_at(
+            {'expr': 'SUM(TERM)', 'group_by': ['VALUE']},
+            path,
+            self.context(),
+        )
+        row_context = self.context(
+            kind='ungrouped_row', driver='EX', row_group_by=None
+        )
+        wrong_row_context = VALIDATOR.validate_aggregate_at(
+            'SUM(EX.DOSE)', path, row_context
+        )
+
+        self.assertEqual(
+            ungrouped[0].condition, 'aggregate_identifier_not_grouped'
+        )
+        self.assertEqual(
+            non_numeric[0].condition, 'incompatible_input_type'
+        )
+        self.assertEqual(
+            wrong_row_context[0].condition, 'invalid_aggregate_context'
+        )
+
+    def test_validates_row_relative_range_bounds_and_types(self):
+        path = 'spec.columns.X.derivation.aggregate'
+        missing = VALIDATOR.validate_aggregate_at(
+            {'expr': 'SUM(EX.DOSE)', 'between': {'value': 'VALUE'}},
+            path,
+            self.context(),
+        )
+        wrong_relation = VALIDATOR.validate_aggregate_at(
+            {
+                'expr': 'SUM(EX.DOSE)',
+                'between': {'value': 'VALUE', 'lower': 'AE.DOSE'},
+            },
+            path,
+            self.context(),
+        )
+        incomparable = VALIDATOR.validate_aggregate_at(
+            {
+                'expr': 'SUM(EX.DOSE)',
+                'between': {'value': 'TERM', 'lower': 'EX.DOSE'},
+            },
+            path,
+            self.context(),
+        )
+
+        self.assertEqual(missing[0].context['reason'], 'missing_between_bound')
+        self.assertEqual(
+            wrong_relation[0].context['reason'],
+            'wrong_between_bound_relation',
+        )
+        self.assertEqual(incomparable[0].condition, 'incompatible_input_type')
+
+
+class TestStringTemplateLanguage(unittest.TestCase):
+    def test_parses_placeholders_and_escaped_braces(self):
+        template = '{{{SITEID}}}:{SUBJID}:{ODM.IT.DM.SEX}'
+        placeholders = VALIDATOR.parse_string_template(template)
+
+        self.assertEqual(
+            [placeholder['name'] for placeholder in placeholders],
+            ['SITEID', 'SUBJID', 'ODM.IT.DM.SEX'],
+        )
+        self.assertEqual(
+            VALIDATOR.string_template_identifier_names(template),
+            {'SITEID', 'SUBJID', 'ODM.IT.DM.SEX'},
+        )
+
+    def test_rejects_operators_empty_and_unmatched_braces(self):
+        for template in ('{A + B}', '{}', '{A', 'A}'):
+            with self.subTest(template=template):
+                errors = VALIDATOR.validate_string_template_at(
+                    template,
+                    'spec.columns.X.derivation.str_template',
+                    lambda _name: 'str',
+                )
+                self.assertEqual(len(errors), 1)
+                self.assertEqual(
+                    errors[0].condition, 'invalid_string_template'
+                )
+                self.assertIsNotNone(errors[0].span)
+
+    def test_resolves_placeholder_names_and_types(self):
+        types = {'SITEID': 'str', 'AGE': 'int'}
+        resolver = types.get
+
+        valid = VALIDATOR.validate_string_template_at(
+            '{SITEID}', 'spec.template', resolver
+        )
+        non_string = VALIDATOR.validate_string_template_at(
+            '{AGE}', 'spec.template', resolver
+        )
+        unknown = VALIDATOR.validate_string_template_at(
+            '{MISSING}', 'spec.template', resolver
+        )
+
+        self.assertEqual(valid, [])
+        self.assertEqual(non_string[0].condition, 'incompatible_input_type')
+        self.assertEqual(unknown[0].condition, 'unknown_field')
+
+
+class TestStaticSemanticContracts(unittest.TestCase):
+    def context(self):
+        output_types = {
+            'A': 'date',
+            'B': 'int',
+            'DTM': 'datetime',
+            'KEY1': 'str',
+            'KEY2': 'str',
+            'TEXT': 'str',
+        }
+        datasets = {'REF': {'K': 'str'}}
+        return {
+            'resolver': VALIDATOR.predicate_resolver(
+                unqualified=output_types
+            ),
+            'datasets': datasets,
+            'aggregate': {
+                'kind': 'column',
+                'datasets': datasets,
+                'output_types': output_types,
+                'keys': ['KEY1'],
+            },
+        }
+
+    def validate(self, expression):
+        return VALIDATOR.validate_expression_static_semantics(
+            expression, 'spec.columns.X.derivation', self.context()
+        )
+
+    def test_mapping_extreme_window_and_cut_contracts(self):
+        collision = self.validate({
+            'mapping': {
+                'source': 'TEXT',
+                'case_sensitive': False,
+                'dict': {'Y': 'Y', 'y': 'Y'},
+            }
+        })
+        length = self.validate({
+            'mapping_from': {
+                'source': ['KEY1', 'KEY2'],
+                'dataset': 'REF',
+                'key': 'K',
+                'value': 'K',
+            }
+        })
+        extreme = self.validate({
+            'greatest': {'sources': ['A', 'B']}
+        })
+        offset = self.validate({
+            'row_value': {
+                'source': 'B', 'offset': 0, 'order_by': ['B']
+            }
+        })
+        cut = self.validate({
+            'cut': {
+                'source': 'B', 'breaks': [10, 5], 'labels': ['a']
+            }
+        })
+
+        self.assertEqual(collision[0].condition, 'ambiguous_dictionary')
+        self.assertEqual(length[0].condition, 'source_key_length_mismatch')
+        self.assertEqual(extreme[0].condition, 'incomparable_sources')
+        self.assertEqual(offset[0].condition, 'zero_offset')
+        self.assertEqual(
+            {error.context['reason'] for error in cut},
+            {'label_count', 'break_order'},
+        )
+
+    def test_rejects_unknown_direct_operation_inputs(self):
+        root = TOOL_PATH.parents[2]
+        env, env_errors = VALIDATOR.build_schema_env(root)
+        self.assertEqual(env_errors, [])
+        context = self.context()
+        context['env'] = env
+
+        errors = VALIDATOR.validate_derivation_static_semantics(
+            {'source': 'MISSING'},
+            'spec.columns.X.derivation',
+            context,
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].condition, 'unknown_field')
+
+    def test_temporal_literal_ranges_and_input_types(self):
+        impute = self.validate({
+            'date_impute': {'source': 'TEXT', 'month': 13, 'day': 0}
+        })
+        valid_to_date = self.validate({
+            'to_date': {'source': 'DTM'}
+        })
+        invalid_to_date = self.validate({
+            'to_date': {'source': 'A'}
+        })
+
+        self.assertEqual(
+            {error.condition for error in impute},
+            {'month_out_of_range', 'day_out_of_range'},
+        )
+        self.assertEqual(valid_to_date, [])
+        self.assertEqual(
+            invalid_to_date[0].condition, 'incompatible_input_type'
+        )
+
+    def test_record_lookup_range_types(self):
+        spec = {
+            'record_lookups': [{
+                'id': 'R',
+                'dataset': 'REF',
+                'between': {'value': 'A', 'lower': 'LO', 'upper': 'HI'},
+            }]
+        }
+        errors = VALIDATOR.validate_record_lookup_static_semantics(
+            spec,
+            'spec.yaml',
+            {'REF': {'LO': 'int', 'HI': 'float'}},
+            {'A': 'date'},
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].condition, 'incomparable_range_types')
+
+    def test_record_lookup_equality_key_types(self):
+        spec = {
+            'record_lookups': [{
+                'id': 'R',
+                'dataset': 'REF',
+                'source': 'A',
+                'key': 'K',
+            }]
+        }
+        errors = VALIDATOR.validate_record_lookup_static_semantics(
+            spec,
+            'spec.yaml',
+            {'REF': {'K': 'str'}},
+            {'A': 'date'},
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].condition, 'incompatible_input_type')
+
+    def test_dependency_cycle_reports_each_participating_derivation(self):
+        root = TOOL_PATH.parents[2]
+        env, env_errors = VALIDATOR.build_schema_env(root)
+        self.assertEqual(env_errors, [])
+        spec = {
+            'columns': [
+                {
+                    'name': 'A', 'type': 'float',
+                    'derivation': {'coalesce': {'sources': ['B']}},
+                },
+                {
+                    'name': 'B', 'type': 'float',
+                    'derivation': {
+                        'row_value': {
+                            'source': 'A', 'offset': -1,
+                            'order_by': ['A'],
+                        }
+                    },
+                },
+            ]
+        }
+
+        cycle = VALIDATOR.find_column_dependency_cycle(spec, env)
+
+        self.assertIsNotNone(cycle)
+        self.assertEqual(set(cycle[:-1]), {'A', 'B'})
+
+
+class TestValidationManifest(unittest.TestCase):
+    def test_repository_manifest_is_complete_and_registered(self):
+        root = TOOL_PATH.parents[2]
+        manifest, load_errors = VALIDATOR.load_validation_manifest(root)
+
+        self.assertEqual(load_errors, [])
+        self.assertEqual(
+            VALIDATOR.validate_validation_manifest(root, manifest), []
+        )
+
+    def test_manifest_rejects_missing_and_stale_fixtures(self):
+        root = TOOL_PATH.parents[2]
+        manifest, _ = VALIDATOR.load_validation_manifest(root)
+        changed = copy.deepcopy(manifest)
+        removed = next(iter(changed['fixtures']))
+        del changed['fixtures'][removed]
+        changed['fixtures']['negative-stale'] = {
+            'rule': 'R010',
+            'condition': 'prohibited_function',
+            'spec_paths': ['columns.X.derivation.compute.expr'],
+            'validator': 'numeric_expression',
+        }
+
+        message = '\n'.join(
+            VALIDATOR.validate_validation_manifest(root, changed)
+        )
+
+        self.assertIn(removed, message)
+        self.assertIn('negative-stale', message)
+
+    def test_implemented_fixture_requires_every_declared_path(self):
+        entry = {
+            'condition': 'duplicate_identifier',
+            'spec_paths': ['datasets.ADLB', 'domain'],
+            'validator': 'name_contract',
+        }
+        diagnostics = [
+            VALIDATOR.validation_diagnostic(
+                'example/spec.yaml.datasets.ADLB',
+                'duplicate_identifier',
+                'duplicate',
+            )
+        ]
+
+        errors = VALIDATOR.validate_registered_fixture_diagnostics(
+            'negative-example', entry, diagnostics, ['example/spec.yaml']
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn("'domain'", errors[0])
+
+    def test_blocked_fixture_fails_when_every_path_is_implemented(self):
+        entry = {
+            'condition': 'dependency_cycle',
+            'spec_paths': ['columns.A', 'columns.B'],
+            'blocked_by': '#103',
+        }
+        diagnostics = [
+            VALIDATOR.validation_diagnostic(
+                f'example/spec.yaml.{path}', 'dependency_cycle', 'cycle'
+            )
+            for path in entry['spec_paths']
+        ]
+
+        errors = VALIDATOR.validate_registered_fixture_diagnostics(
+            'negative-example', entry, diagnostics, ['example/spec.yaml']
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn('stale block', errors[0])
+
+    def test_unrelated_diagnostic_is_not_suppressed(self):
+        entry = {
+            'condition': 'unknown_field',
+            'spec_paths': ['columns.RESULT.derivation.compute.expr'],
+            'validator': 'numeric_expression',
+        }
+        expected = VALIDATOR.validation_diagnostic(
+            'example/spec.yaml.columns.RESULT.derivation.compute.expr',
+            'unknown_field',
+            'unknown identifier',
+        )
+        unrelated = VALIDATOR.validation_diagnostic(
+            'example/spec.yaml.output.columns',
+            'undeclared_column',
+            'unknown output column',
+        )
+
+        errors = VALIDATOR.validate_registered_fixture_diagnostics(
+            'negative-example', entry, [expected, unrelated],
+            ['example/spec.yaml']
+        )
+
+        self.assertEqual(errors, [unrelated])
+
+    def test_closed_blocking_issue_is_rejected(self):
+        blockers = {103: ['negative-one', 'negative-two']}
+
+        errors = BLOCKER_CHECK.validate_blocker_states(
+            blockers, lambda _number: ('closed', False)
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn('#103 is', errors[0])
+        self.assertEqual(
+            BLOCKER_CHECK.validate_blocker_states(
+                blockers, lambda _number: ('open', False)
+            ),
+            [],
+        )
 
 
 class TestProjectFunctionEnvironment(unittest.TestCase):
@@ -1437,6 +2027,26 @@ class TestTypeValidation(unittest.TestCase):
                     ),
                     [],
                 )
+
+    def test_union_prefers_a_matching_outer_type_constraint_error(self):
+        env = {
+            'classes': {},
+            'aliases': {
+                'day_rule': {
+                    'type': 'str',
+                    'values': ['first', 'last'],
+                }
+            },
+            'registries': {},
+        }
+
+        errors = VALIDATOR.validate_type(
+            'middle', ['int', 'day_rule'], env, 'spec.day'
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], VALIDATOR.ValidationDiagnostic)
+        self.assertEqual(errors[0].condition, 'value_not_permitted')
 
 
 class TestDateImputeSchema(unittest.TestCase):
@@ -2548,6 +3158,335 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
         self.assertEqual(catalog.get("REF"), {})
 
 
+class TestRegularExpressionContract(unittest.TestCase):
+    """R022: one pinned ECMA-262 engine reads every pattern."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.root = TOOL_PATH.parents[2]
+        cls.env, schema_errors = VALIDATOR.build_schema_env(cls.root)
+        assert not schema_errors, schema_errors
+
+    # -- the pinned engine -------------------------------------------------
+
+    def test_requirements_install_the_engine_the_validator_pins(self):
+        text = (TOOL_PATH.parent / 'requirements.txt').read_text()
+        self.assertIn(
+            f"{VALIDATOR.REGEX_ENGINE_DISTRIBUTION}=="
+            f"{VALIDATOR.REGEX_ENGINE_DISTRIBUTION_VERSION}",
+            text,
+        )
+
+    def test_missing_engine_fails_rather_than_falling_back(self):
+        saved = VALIDATOR._regex_engine
+        try:
+            VALIDATOR._regex_engine = None
+            with self.assertRaises(VALIDATOR.RegexEngineUnavailable) as caught:
+                VALIDATOR.compile_regex('a')
+        finally:
+            VALIDATOR._regex_engine = saved
+        message = str(caught.exception)
+        self.assertIn('unsupported_regex_engine', message)
+        self.assertIn(VALIDATOR.REGEX_ENGINE_CRATE_VERSION, message)
+
+    def test_patterns_are_read_with_the_unicode_flag_only(self):
+        self.assertEqual(VALIDATOR.REGEX_FLAGS, 'u')
+
+    # -- the engine is not Python re ---------------------------------------
+
+    def test_accepts_ecmascript_syntax_python_re_rejects(self):
+        for pattern in ('(?<name>a)', '(?<=a+)b', r'\p{L}', r'\u{1D400}'):
+            with self.subTest(pattern=pattern):
+                VALIDATOR.compile_regex(pattern)
+
+    def test_rejects_syntax_python_re_accepts(self):
+        for pattern in ('(?P<name>a)', '(?i)a', r'\a', 'a{'):
+            with self.subTest(pattern=pattern):
+                with self.assertRaises(VALIDATOR.InvalidRegex):
+                    VALIDATOR.compile_regex(pattern)
+
+    def test_character_classes_do_not_widen_to_unicode(self):
+        self.assertTrue(VALIDATOR.regex_full_match(r'\d', '5'))
+        self.assertFalse(VALIDATOR.regex_full_match(r'\d', chr(0x0665)))
+        self.assertFalse(VALIDATOR.regex_full_match(r'\w', chr(0x00E9)))
+        self.assertTrue(VALIDATOR.regex_full_match(r'\p{L}', chr(0x00E9)))
+
+    def test_dollar_does_not_match_before_a_trailing_line_feed(self):
+        self.assertTrue(VALIDATOR.regex_full_match('a', 'a'))
+        self.assertFalse(VALIDATOR.regex_full_match('a', 'a\n'))
+        self.assertFalse(VALIDATOR.regex_full_match('a$', 'a\n'))
+
+    def test_a_supplementary_scalar_is_one_character(self):
+        scalar = chr(0x1D400)
+        self.assertTrue(VALIDATOR.regex_full_match('.', scalar))
+        self.assertFalse(VALIDATOR.regex_full_match('..', scalar))
+        self.assertTrue(VALIDATOR.regex_full_match(r'\u{1D400}', scalar))
+
+    def test_matching_applies_no_normalization(self):
+        self.assertFalse(
+            VALIDATOR.regex_full_match(r'\u{00E9}', 'e' + chr(0x0301))
+        )
+
+    # -- full match versus search ------------------------------------------
+
+    def test_the_pattern_keyword_is_a_full_match_and_matches_searches(self):
+        self.assertFalse(VALIDATOR.regex_full_match('[0-9]{3}', 'AE-007-X'))
+        self.assertIsNotNone(VALIDATOR.regex_search('[0-9]{3}', 'AE-007-X'))
+
+    def test_anchoring_adds_no_capture_group(self):
+        source = VALIDATOR.anchored_regex_source('(a)|(b)')
+        self.assertEqual(source, '^(?:(a)|(b))$')
+        self.assertEqual(VALIDATOR.regex_capture_group_count(source), 2)
+        self.assertTrue(VALIDATOR.regex_full_match('a|ab', 'ab'))
+
+    def test_every_fixture_pattern_survives_anchoring(self):
+        document = yaml.safe_load(
+            (self.root / 'yaml' / 'conformance' / 'regex.yaml').read_text()
+        )
+        for case in document['cases']:
+            if case.get('invalid'):
+                continue
+            with self.subTest(case=case['id']):
+                VALIDATOR.compile_regex(
+                    VALIDATOR.anchored_regex_source(case['pattern'])
+                )
+
+    # -- capture groups -----------------------------------------------------
+
+    def test_counts_capturing_groups_by_opening_parenthesis(self):
+        cases = {
+            '^A-([0-9]+)$': 1,
+            '^(?:A)-([0-9]+)$': 1,
+            '^(?<p>[A-Z]+)-(?<s>[0-9]+)$': 2,
+            '^((a)(b))$': 3,
+            '^(?=A)([A-Z]+)$': 1,
+            '(?<!x)(y)': 1,
+            '[(]': 0,
+            r'[\]()]': 0,
+            r'\((a)\)': 1,
+            '((((a))))': 4,
+        }
+        for pattern, expected in cases.items():
+            with self.subTest(pattern=pattern):
+                self.assertEqual(
+                    VALIDATOR.regex_capture_group_count(pattern), expected
+                )
+
+    def test_extract_distinguishes_no_match_from_an_unentered_group(self):
+        self.assertIs(
+            VALIDATOR.regex_extract('^a(b)?$', 'z', 0),
+            VALIDATOR.REGEX_NO_MATCH,
+        )
+        self.assertIsNone(VALIDATOR.regex_extract('^a(b)?$', 'a', 1))
+        self.assertEqual(VALIDATOR.regex_extract('^a(b)?$', 'ab', 1), 'b')
+
+    def test_extract_returns_the_empty_string_for_an_empty_match(self):
+        self.assertEqual(VALIDATOR.regex_extract('x*', 'y', 0), '')
+
+    def test_extract_reads_a_group_by_scalar_not_by_byte(self):
+        subject = 'x' + chr(0x1D400) + '-tail'
+        self.assertEqual(
+            VALIDATOR.regex_extract(r'(\u{1D400})-(\w+)', subject, 2), 'tail'
+        )
+
+    def test_extract_rejects_a_group_the_pattern_does_not_declare(self):
+        for group in (2, -1):
+            with self.subTest(group=group):
+                with self.assertRaises(VALIDATOR.RegexGroupOutOfRange):
+                    VALIDATOR.regex_extract('^A-([0-9]+)$', 'A-1', group)
+
+    # -- the validation surface --------------------------------------------
+
+    def test_both_conditions_are_registered_to_this_rule(self):
+        registry = VALIDATOR.VALIDATION_CONDITION_REGISTRY
+        for condition, required in (
+            # The engine's wording is not a portable fact, so a fixture
+            # states the pattern and the diagnostic adds the reason.
+            ('invalid_regex', {'pattern'}),
+            ('regex_group_out_of_range', {'group', 'group_count', 'pattern'}),
+        ):
+            with self.subTest(condition=condition):
+                registration = registry.get(('R022', condition))
+                self.assertIsNotNone(registration)
+                self.assertEqual(registration['required_context'], required)
+                self.assertEqual(
+                    registration['allowed_phases'], {'validation'}
+                )
+
+    def test_matches_pattern_the_engine_rejects_fails_validation(self):
+        errors = VALIDATOR.validate_type(
+            {'matches': {'pattern': '(?P<name>a)'}},
+            ['column_verification'],
+            self.env,
+            'spec.columns.SEX.verifications[0]',
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].condition, 'invalid_regex')
+        self.assertEqual(
+            errors[0].path,
+            'spec.columns.SEX.verifications[0].matches.pattern',
+        )
+        self.assertEqual(errors[0].context['pattern'], '(?P<name>a)')
+        self.assertIn('reason', errors[0].context)
+
+    def test_matches_pattern_the_engine_accepts_validates(self):
+        errors = VALIDATOR.validate_type(
+            {'matches': {'pattern': '(?<name>a)'}},
+            ['column_verification'],
+            self.env,
+            'spec.columns.SEX.verifications[0]',
+        )
+        self.assertEqual(errors, [])
+
+    def test_str_extract_group_outside_the_pattern_fails_validation(self):
+        errors = VALIDATOR.validate_type(
+            {'str_extract': {
+                'source': 'USUBJID', 'pattern': '^A-([0-9]+)$', 'group': 2,
+            }},
+            ['expression'],
+            self.env,
+            'spec.columns.SITEID.derivation',
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].condition, 'regex_group_out_of_range')
+        self.assertEqual(
+            errors[0].path,
+            'spec.columns.SITEID.derivation.str_extract.group',
+        )
+        self.assertEqual(
+            errors[0].context,
+            {'group': 2, 'group_count': 1, 'pattern': '^A-([0-9]+)$'},
+        )
+
+    def test_str_extract_group_inside_the_pattern_validates(self):
+        errors = VALIDATOR.validate_type(
+            {'str_extract': {
+                'source': 'USUBJID', 'pattern': '^A-([0-9]+)$', 'group': 1,
+            }},
+            ['expression'],
+            self.env,
+            'spec.columns.SITEID.derivation',
+        )
+        self.assertEqual(errors, [])
+
+    def test_a_parenthesis_in_a_class_declares_no_group(self):
+        errors = VALIDATOR.validate_type(
+            {'str_extract': {
+                'source': 'USUBJID', 'pattern': '^[(]x$', 'group': 1,
+            }},
+            ['expression'],
+            self.env,
+            'spec.columns.SITEID.derivation',
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].condition, 'regex_group_out_of_range')
+        self.assertEqual(errors[0].context['group_count'], 0)
+
+    def test_descriptor_pattern_the_engine_rejects_fails_validation(self):
+        errors = VALIDATOR.check_descriptor(
+            {'type': 'str', 'pattern': '(?P<name>a)'}, False, 'schema.name'
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].condition, 'invalid_regex')
+
+    def test_descriptor_pattern_constraint_uses_the_pinned_engine(self):
+        env = {
+            'classes': {},
+            'aliases': {'code': {'type': 'str', 'pattern': '^a$'}},
+            'registries': {},
+        }
+        self.assertEqual(
+            VALIDATOR.validate_type('a', ['code'], env, 'spec.code'), []
+        )
+        # Python re.match would accept the trailing line feed here.
+        self.assertTrue(
+            VALIDATOR.validate_type('a\n', ['code'], env, 'spec.code')
+        )
+
+    # -- the shared fixtures ------------------------------------------------
+
+    def test_shared_fixtures_replay_against_the_pinned_engine(self):
+        self.assertEqual(VALIDATOR.validate_regex_conformance(self.root), [])
+
+    def test_replay_reports_an_outcome_that_drifted_from_the_engine(self):
+        source = self.root / 'yaml' / 'conformance' / 'regex.yaml'
+        original = source.read_text()
+        drifted = original.replace(
+            "    pattern: '^\\d$'\n    subject: \"5\"\n"
+            "    schema_pattern: true",
+            "    pattern: '^\\d$'\n    subject: \"5\"\n"
+            "    schema_pattern: false",
+            1,
+        )
+        self.assertNotEqual(drifted, original)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            target = root / 'yaml' / 'conformance'
+            target.mkdir(parents=True)
+            (target / 'regex.yaml').write_text(drifted)
+            errors = VALIDATOR.validate_regex_conformance(root)
+        self.assertEqual(len(errors), 1)
+        self.assertIn('schema_pattern records False', errors[0])
+
+    def test_replay_reports_a_pattern_the_engine_does_not_reject(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            target = root / 'yaml' / 'conformance'
+            target.mkdir(parents=True)
+            (target / 'regex.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'contract: regex\n'
+                'contract_version: "1.0.0"\n'
+                'engine:\n'
+                f'  crate: {VALIDATOR.REGEX_ENGINE_CRATE}\n'
+                f'  crate_version: "{VALIDATOR.REGEX_ENGINE_CRATE_VERSION}"\n'
+                f'  flags: {VALIDATOR.REGEX_FLAGS}\n'
+                'cases:\n'
+                '  - id: accepted-pattern-recorded-as-invalid\n'
+                '    covers: [unsupported]\n'
+                "    pattern: 'a'\n"
+                '    invalid: true\n'
+            )
+            errors = VALIDATOR.validate_regex_conformance(root)
+        self.assertTrue(
+            any('the pinned engine accepts pattern' in e for e in errors),
+            errors,
+        )
+
+    def test_replay_requires_a_case_for_every_named_category(self):
+        self.assertTrue(VALIDATOR.REGEX_FIXTURE_REQUIRED_COVERS)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            target = root / 'yaml' / 'conformance'
+            target.mkdir(parents=True)
+            (target / 'regex.yaml').write_text(
+                'schema_version: "1.0"\n'
+                'contract: regex\n'
+                'contract_version: "1.0.0"\n'
+                'engine:\n'
+                f'  crate: {VALIDATOR.REGEX_ENGINE_CRATE}\n'
+                f'  crate_version: "{VALIDATOR.REGEX_ENGINE_CRATE_VERSION}"\n'
+                f'  flags: {VALIDATOR.REGEX_FLAGS}\n'
+                'cases:\n'
+                '  - id: only-an-anchor-case\n'
+                '    covers: [anchors]\n'
+                "    pattern: '^a$'\n"
+                '    subject: "a"\n'
+                '    schema_pattern: true\n'
+                '    matches: true\n'
+                '    str_extract: {group: 0, value: "a"}\n'
+            )
+            errors = VALIDATOR.validate_regex_conformance(root)
+        self.assertEqual(len(errors), 1)
+        self.assertIn('no case covers', errors[0])
+
+    def test_missing_fixture_file_fails_validation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            errors = VALIDATOR.validate_regex_conformance(Path(temp_dir))
+        self.assertEqual(len(errors), 1)
+        self.assertIn('missing R022', errors[0])
+
+
 class TestDeclaredValidationErrors(unittest.TestCase):
     """A fixture must fail for the condition it declares."""
 
@@ -2633,6 +3572,14 @@ class TestValidatorCLI(unittest.TestCase):
         self.tool_path = Path(__file__).parent / 'validate_repository.py'
         self.test_dir = tempfile.TemporaryDirectory()
         self.root_dir = Path(self.test_dir.name)
+        # Every repository carries R022's shared fixtures, so a synthetic root
+        # that expects a clean run needs them too.
+        conformance = self.root_dir / 'yaml' / 'conformance'
+        conformance.mkdir(parents=True)
+        shutil.copy(
+            TOOL_PATH.parents[2] / 'yaml' / 'conformance' / 'regex.yaml',
+            conformance / 'regex.yaml',
+        )
 
     def tearDown(self):
         self.test_dir.cleanup()
@@ -2654,7 +3601,7 @@ class TestValidatorCLI(unittest.TestCase):
 
     def test_yaml_duplicate_keys(self):
         yaml_dir = self.root_dir / 'yaml'
-        yaml_dir.mkdir()
+        yaml_dir.mkdir(exist_ok=True)
         bad_yaml = yaml_dir / 'bad.yaml'
         bad_yaml.write_text("a: 1\na: 2\n")
 
@@ -3506,7 +4453,7 @@ class TestCsvProfile(unittest.TestCase):
 
 
 class TestSourceProfile(unittest.TestCase):
-    """R022: what a delimited source may spell, and what it may not."""
+    """R023: what a delimited source may spell, and what it may not."""
 
     def condition(self, data):
         try:
@@ -3661,7 +4608,7 @@ class TestDeclaredSourceCondition(unittest.TestCase):
 
 
 class TestSuiteSourceCoverage(unittest.TestCase):
-    """The suite fixtures that carry R022's admitted spellings.
+    """The suite fixtures that carry R023's admitted spellings.
 
     Both are load-bearing: an editor who normalizes either file removes the
     coverage, so these tests say why the bytes are what they are.

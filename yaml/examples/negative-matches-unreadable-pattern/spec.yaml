@@ -1,0 +1,32 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, SEX]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM.USUBJID
+
+  - name: SEX
+    type: str
+    label: Sex
+    verifications:
+      - matches:
+          pattern: '(?P<code>[MFU])'
+    derivation:
+      source: DM.SEX

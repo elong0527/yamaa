@@ -3,7 +3,7 @@ id: R006
 title: Compact Schema Language
 status: normative
 applies_to: [schema, root.schema_version, environment.schema_version]
-depends_on: [R019]
+depends_on: [R019, R022]
 ---
 
 # Compact schema language
@@ -200,7 +200,8 @@ Only these descriptor keywords are supported:
 - `description` is an optional non-empty string. It documents the declared
   field or value type and has no effect on validation. R007 makes registry
   descriptions part of the operation-local language definition.
-- `pattern` is allowed only for `str` and is an ECMAScript regular expression.
+- `pattern` is allowed only for `str` and carries a regular expression. R022
+  owns its syntax, the engine that reads it, and what satisfying it means.
 - `min_length` is allowed only for `str` and counts R019 scalar values.
 - `size` is allowed only for `list` or `dict` and requires an exact size.
 - `values` is allowed only for `str` and lists permitted values compared by
