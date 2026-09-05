@@ -86,6 +86,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adsl-new-anticancer-therapy-date`](adam-adsl-new-anticancer-therapy-date/) | date the subject started new anti-cancer therapy |
 | [`adam-adsl-non-finite-values`](adam-adsl-non-finite-values/) | normalize non-finite numeric values to missing |
 | [`adam-adsl-population-flags`](adam-adsl-population-flags/) | derive the safety and intent-to-treat flags |
+| [`adam-adsl-portable-text`](adam-adsl-portable-text/) | preserve and compare international text predictably |
 | [`adam-adsl-randomization-timing`](adam-adsl-randomization-timing/) | record randomization timing |
 | [`adam-adsl-rescue-medication`](adam-adsl-rescue-medication/) | select the first rescue medication |
 | [`adam-adsl-treatment-selection`](adam-adsl-treatment-selection/) | select actual treatment and its duration from EX |

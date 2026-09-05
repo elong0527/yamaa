@@ -6,16 +6,18 @@ examples, schemas, and directories are structurally consistent and well-formed.
 
 ## Scope
 The validation ensures:
-1. **YAML syntax**: YAML 1.2 core scalar resolution, no duplicate mapping keys,
+1. **Text source**: Repository-authored source files are ASCII-only. Unicode
+   data remains valid in input and expected-output CSV fixtures.
+2. **YAML syntax**: YAML 1.2 core scalar resolution, no duplicate mapping keys,
    anchors, aliases, merge keys, explicit tags, or syntax errors across any
    repository `.yaml` files outside `.github/`.
-2. **Schema integrity**: `schema.yaml` is required, and included files must
+3. **Schema integrity**: `schema.yaml` is required, and included files must
    stay inside `yaml/` and resolve without cycles. Custom types (`list[T]`,
    `dict[K,V]`, unions, classes, aliases, and registries) must resolve. The
    validator also enforces `values`, `pattern`, `min_length`, and `size`
    constraints. Every maintained rule must declare `status: normative`, match
    its stable file ID, and carry the same status in the rule index.
-3. **Example specs**: Every `spec.yaml` or `spec_<variant>.yaml` validates
+4. **Example specs**: Every `spec.yaml` or `spec_<variant>.yaml` validates
    against the schemas, checking required fields, unknown fields, and registry
    payload shapes. An entry with `parents` first resolves its ordered local
    inheritance graph under R017. Resolution validates partial layers, rejects
@@ -45,22 +47,22 @@ The validation ensures:
    `phase: validation`.
    Each positive inherited example must provide an exact
    `expected/resolved[_<variant>].yaml` data-tree fixture.
-4. **Layout**: All examples have `README.md`, one `spec.yaml` or one or more
+5. **Layout**: All examples have `README.md`, one `spec.yaml` or one or more
    `spec_<variant>.yaml` files, `input/`, and `expected/`. A base spec cannot
    be mixed with variants. Negative examples must provide `expected/error.yaml`
    and exactly one `## How to fix` section. Positive examples must not provide
    `expected/error.yaml`. Error contracts use the closed phase vocabulary,
    snake-case conditions, existing specification paths, and an optional
    mapping context.
-5. **CSV consistency**: Input and expected CSV files must have unique,
+6. **CSV consistency**: Input and expected CSV files must have unique,
    non-empty headers and a consistent field count. Expected output headers
    must match exactly the `output.columns` sequence declared by the
    specification.
-6. **Example Index**: `yaml/examples/README.md` must accurately list all
+7. **Example Index**: `yaml/examples/README.md` must accurately list all
    example directories in alphabetical order without stale entries. The
    descriptions must match the contract defined by the first line of the
    example's `README.md`.
-7. **Example documentation**: Data contracts must stay within 79 columns,
+8. **Example documentation**: Data contracts must stay within 79 columns,
    avoid schema vocabulary, describe each non-key expected column, and use
    only the remediation or specification-variant sections allowed by
    `yaml/examples/agents.md`.

@@ -1,0 +1,135 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+output:
+  columns:
+    - STUDYID
+    - USUBJID
+    - RAWTXT
+    - UPPERTXT
+    - LOWERTXT
+    - EQUALFL
+    - LEASTTXT
+    - GREATESTTXT
+    - MAPCAT
+    - TEXTSEQ
+    - MINTXT
+    - MAXTXT
+  order_by: [RAWTXT, USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM.USUBJID
+
+  - name: RAWTXT
+    type: str
+    label: Raw Text
+    derivation:
+      source: DM.RAWTXT
+    verifications:
+      max_length:
+        max: 6
+
+  - name: PEERTXT
+    type: str
+    label: Comparison Text
+    derivation:
+      source: DM.PEERTXT
+
+  - name: UPPERTXT
+    type: str
+    label: Uppercase ASCII Text
+    derivation:
+      str_upper:
+        source: RAWTXT
+        missing: MISSING
+
+  - name: LOWERTXT
+    type: str
+    label: Lowercase ASCII Text
+    derivation:
+      str_lower:
+        source: RAWTXT
+        missing: MISSING
+
+  - name: EQUALFL
+    type: str
+    label: Exact Text Equality Flag
+    derivation:
+      case:
+        branches:
+          - when: "RAWTXT IS NULL AND PEERTXT IS NULL"
+            then: {literal: "Y"}
+          - when: "RAWTXT = PEERTXT"
+            then: {literal: "Y"}
+        otherwise: {literal: "N"}
+
+  - name: LEASTTXT
+    type: str
+    label: Earlier Text by Scalar Order
+    derivation:
+      least:
+        sources: [RAWTXT, PEERTXT]
+
+  - name: GREATESTTXT
+    type: str
+    label: Later Text by Scalar Order
+    derivation:
+      greatest:
+        sources: [RAWTXT, PEERTXT]
+
+  - name: MAPCAT
+    type: str
+    label: ASCII Folded Mapping Category
+    derivation:
+      mapping:
+        source: RAWTXT
+        case_sensitive: false
+        dict:
+          ABC: ASCII
+          I: ASCII_I
+        missing: MISSING
+        unmapped: OTHER
+
+  - name: TEXTSEQ
+    type: int
+    label: Text Scalar Order Sequence
+    derivation:
+      row_number:
+        order_by: [RAWTXT, USUBJID]
+
+  - name: MINTXT
+    type: str
+    label: Minimum Study Text
+    derivation:
+      aggregate:
+        expr: "MIN(DM.RAWTXT)"
+        group_by: [DM.STUDYID]
+
+  - name: MAXTXT
+    type: str
+    label: Maximum Study Text
+    derivation:
+      aggregate:
+        expr: "MAX(DM.RAWTXT)"
+        group_by: [DM.STUDYID]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 8
+      max: 8

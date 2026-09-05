@@ -3,7 +3,7 @@ id: R012
 title: String Templates
 status: normative
 applies_to: [expression.str_template, string_template]
-depends_on: [R001, R002, R006, R007, R008]
+depends_on: [R001, R002, R006, R007, R008, R019]
 ---
 
 # String templates
@@ -18,7 +18,7 @@ host-language code or a general string-expression language.
 This rule owns the `string_template` grammar, escaping, interpolation, and
 template-specific failures. R002 owns how placeholder names bind, R001 owns
 dependency ordering, R007 owns input and result types, and R008 owns the
-optional missing-value replacement.
+optional missing-value replacement. R019 owns literal and interpolated text.
 
 ## Written forms
 
@@ -47,7 +47,7 @@ Scan a template from left to right under this closed grammar:
 template    := part*
 part        := text | placeholder | "{{" | "}}"
 placeholder := "{" variable "}"
-text        := one or more Unicode code points other than "{" and "}"
+text        := one or more R019 scalar values other than "{" and "}"
 ```
 
 The `variable` contents must satisfy the schema type of that name exactly.
@@ -72,7 +72,7 @@ After its dependencies are complete, replace each placeholder with its string
 value and unescape brace pairs. Placeholder values are not implicitly
 converted. If any value is not a string, evaluation fails under R007. If any
 value is missing, return the declared `missing` literal; without that handler,
-the missing input is fatal under R008. Otherwise the result is the exact
+the missing input is fatal under R008. Otherwise the result is R019's exact
 concatenation of literal text and replacement values, including an empty
 string when the template itself is empty.
 

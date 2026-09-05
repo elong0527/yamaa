@@ -3,7 +3,7 @@ id: R014
 title: Source-Format Ingestion
 status: normative
 applies_to: [root.datasets, dataset_source, dataset_class, expression.source]
-depends_on: [R002, R006, R011, R016]
+depends_on: [R002, R006, R011, R016, R019]
 ---
 
 # Source-format ingestion
@@ -19,7 +19,7 @@ This rule owns the step from a stored field to a bound value. R002 owns how a
 name binds to a dataset or an ODM item once that value exists, R011 owns
 numeric parsing and non-finite normalization in addition to conversion of a
 completed derivation result, and R007 owns what each expression requires of an
-input it receives.
+input it receives. R019 owns valid text and failures while decoding it.
 
 ## A field's type belongs to the dataset
 

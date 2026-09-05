@@ -3367,7 +3367,7 @@ def validate_spec_contracts(spec, spec_label, spec_path=None):
             try:
                 with open(resolved, 'r', encoding='utf-8', newline='') as f:
                     header = next(csv.reader(f, strict=True), [])
-            except (OSError, csv.Error) as exc:
+            except (OSError, UnicodeError, csv.Error) as exc:
                 errors.append(f"ERROR: {path}: cannot read CSV header: {exc}")
                 continue
             for field in sorted(set(types) - set(header)):
@@ -3445,7 +3445,7 @@ def dataset_type_catalog(spec, spec_path, env=None):
                 for field in header:
                     if isinstance(field, str) and field:
                         fields.setdefault(field, 'str')
-            except (OSError, csv.Error):
+            except (OSError, UnicodeError, csv.Error):
                 pass
 
         if isinstance(declared_types, dict):
@@ -4398,6 +4398,9 @@ def validate_csv_shapes(root: Path):
         try:
             with open(csv_path, 'r', encoding='utf-8', newline='') as f:
                 rows = list(csv.reader(f, strict=True))
+        except UnicodeError as exc:
+            errors.append(f"ERROR: {label}: invalid_text: {exc}")
+            continue
         except (OSError, csv.Error) as exc:
             errors.append(f"ERROR: {label}: invalid CSV: {exc}")
             continue
@@ -4497,7 +4500,7 @@ def validate_example_readmes(root: Path):
             try:
                 with open(csv_path, 'r', encoding='utf-8', newline='') as f:
                     header = next(csv.reader(f, strict=True), [])
-            except (OSError, csv.Error):
+            except (OSError, UnicodeError, csv.Error):
                 continue
             missing = [
                 name for name in header
@@ -4563,15 +4566,87 @@ def validate_rule_metadata(root: Path):
     return errors
 
 
+ASCII_SOURCE_SUFFIXES = {
+    '.json', '.md', '.py', '.r', '.rb', '.rd', '.sh', '.toml', '.txt',
+    '.yaml', '.yml',
+}
+ASCII_SOURCE_NAMES = {'DESCRIPTION', 'NAMESPACE'}
+ASCII_SOURCE_IGNORED_PARTS = {
+    '.git', '.pytest_cache', '.venv', '__pycache__', 'venv',
+}
+
+
+def validate_ascii_sources(root: Path):
+    errors = []
+    for path in sorted(root.rglob('*')):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(root)
+        if any(part in ASCII_SOURCE_IGNORED_PARTS for part in relative.parts):
+            continue
+        if (
+            path.suffix.lower() not in ASCII_SOURCE_SUFFIXES
+            and path.name not in ASCII_SOURCE_NAMES
+        ):
+            continue
+
+        try:
+            content = path.read_bytes()
+        except OSError as exc:
+            errors.append(f"ERROR: {relative}: cannot read source: {exc}")
+            continue
+
+        for offset, value in enumerate(content):
+            if value <= 0x7F:
+                continue
+            line = content.count(b'\n', 0, offset) + 1
+            previous_newline = content.rfind(b'\n', 0, offset)
+            column = offset - previous_newline
+            errors.append(
+                f"ERROR: {relative}:{line}:{column}: non_ascii_source "
+                f"byte 0x{value:02X}"
+            )
+            break
+    return errors
+
+
+def validate_unicode_scalars(value, path):
+    errors = []
+    if isinstance(value, str):
+        for index, character in enumerate(value):
+            code_point = ord(character)
+            if 0xD800 <= code_point <= 0xDFFF:
+                errors.append(
+                    f"ERROR: {path}: invalid_text surrogate U+{code_point:04X} "
+                    f"at string offset {index}"
+                )
+                break
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            errors.extend(validate_unicode_scalars(item, f'{path}[{index}]'))
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            errors.extend(validate_unicode_scalars(key, f'{path}.<key>'))
+            errors.extend(validate_unicode_scalars(item, f'{path}.{key}'))
+    return errors
+
+
 def check_yaml_files(root: Path):
     errors = []
     warnings = []
+    errors.extend(validate_ascii_sources(root))
     for yaml_file in sorted(root.rglob('*.yaml')):
         if '.github' in yaml_file.parts:
             continue
         try:
             with open(yaml_file, 'r', encoding='utf-8') as f:
-                yaml.load(f, Loader=UniqueKeyLoader)
+                document = yaml.load(f, Loader=UniqueKeyLoader)
+            errors.extend(
+                validate_unicode_scalars(
+                    document,
+                    str(yaml_file.relative_to(root)),
+                )
+            )
         except Exception as e:
             msg = str(e)
             if hasattr(e, 'problem_mark') and e.problem_mark:
@@ -4660,9 +4735,9 @@ def validate_examples_csv(root: Path, env=None):
                         f"ERROR: {ex_dir.name}/{csv_file.name}: expected "
                         f"artifact name {domain.lower()}.csv"
                     )
-                with open(csv_file, 'r', encoding='utf-8') as f:
-                    reader = csv.reader(f)
-                    try:
+                try:
+                    with open(csv_file, 'r', encoding='utf-8') as f:
+                        reader = csv.reader(f)
                         header = next(reader)
                         if header != expected_cols:
                             errors.append(
@@ -4670,12 +4745,14 @@ def validate_examples_csv(root: Path, env=None):
                                 f"header mismatch for {spec_path.name}. "
                                 f"Expected {expected_cols}, got {header}"
                             )
-                    except StopIteration:
-                        if expected_cols:
-                            errors.append(
-                                f"ERROR: {ex_dir.name}/{csv_file.name} is "
-                                f"empty for {spec_path.name}"
-                            )
+                except StopIteration:
+                    if expected_cols:
+                        errors.append(
+                            f"ERROR: {ex_dir.name}/{csv_file.name} is "
+                            f"empty for {spec_path.name}"
+                        )
+                except (OSError, UnicodeError, csv.Error):
+                    continue
 
     return errors, warnings
 

@@ -3,7 +3,7 @@ id: R003
 title: Cross-Dataset Left Join
 status: normative
 applies_to: [expression.source, expression.aggregate]
-depends_on: [R002, R004, R005, R007, R008, R013]
+depends_on: [R002, R004, R005, R007, R008, R013, R019]
 ---
 
 # Cross-dataset left join
@@ -44,6 +44,7 @@ must:
 
 The join is many-to-one and preserves left row count and order. Right records
 with a missing applicable key cannot match. Key names must match exactly.
+String key equality is R019's.
 
 ## Declared-key lookup
 

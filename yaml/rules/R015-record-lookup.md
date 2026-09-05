@@ -3,7 +3,7 @@ id: R015
 title: Record Lookup
 status: normative
 applies_to: [root.record_lookups, record_lookup_class, expression.source, numeric_expression]
-depends_on: [R001, R002, R003, R004, R005, R006, R007, R008, R010, R014]
+depends_on: [R001, R002, R003, R004, R005, R006, R007, R008, R010, R014, R019]
 ---
 
 # Record lookup
@@ -74,6 +74,7 @@ candidate during grouped row construction:
 
 `source` and `key` are declared together or not at all, and so are `order_by`
 and `keep`.
+String matches in either form use R019 equality.
 
 During grouped row construction, every current-row variable used for matching
 must be derived by that row template. R001 orders those row derivations before

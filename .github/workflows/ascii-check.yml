@@ -19,10 +19,12 @@ jobs:
 
       - name: Check for non-ASCII characters
         run: |
-          # Find files changed in this PR, excluding known binary extensions.
+          # Find source files changed in this PR. Binary assets and example
+          # input or expected-output CSV data are not language source.
           NON_ASCII_FILES=$(
             git diff --name-only origin/${{ github.base_ref }}...HEAD \
               | grep -vE '\.(jpeg|jpg|png|gif|ico|bmp|tiff|webp|svg|pdf|woff|woff2|ttf|eot|otf|zip|tar|gz|bz2|xz|7z|rar|jar|war|ear|class|pyc|pyo|o|so|dylib|dll|exe|bin|dat|db|sqlite|rds|rda|RData|excalidraw|mp4|mp3|wav|avi|mov|flv|ogg|webm)$' \
+              | grep -vE '^yaml/examples/[^/]+/(input|expected)/.*\.csv$' \
               | xargs grep -Prl '[^\x00-\x7F]' 2>/dev/null \
             || true
           )

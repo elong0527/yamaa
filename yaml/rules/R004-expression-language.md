@@ -3,7 +3,7 @@ id: R004
 title: Predicate Language
 status: normative
 applies_to: [sql]
-depends_on: [R001, R002, R006, R007, R010, R011, R016]
+depends_on: [R001, R002, R006, R007, R010, R011, R016, R019]
 ---
 
 # Predicate language
@@ -18,8 +18,9 @@ grammar, literals, comparisons, missing-value behavior, and failures.
 This rule owns the `sql` primitive completely. R006 owns schema structure,
 R007 owns the runtime types and comparability of operation inputs, R010 owns
 the numeric-valued `numeric_expression` primitive, R011 owns the column type
-vocabulary, and R016 owns temporal values. R001 owns the phase in which a
-predicate runs and the names available in that phase.
+vocabulary, R016 owns temporal values, and R019 owns text values and their
+equality and order. R001 owns the phase in which a predicate runs and the names
+available in that phase.
 
 The predicate and numeric primitives share identifier notation and numeric
 literals, but neither grammar admits the other's operators or functions.
@@ -58,7 +59,7 @@ digits      := digit { digit }
 letter      := "A" ... "Z" | "a" ... "z"
 digit       := "0" ... "9"
 string      := "'" { non_quote | "''" } "'"
-non_quote   := any Unicode code point other than "'"
+non_quote   := any R019 string scalar other than "'"
 temporal    := "DATE" string | "DATETIME" string
 ```
 
@@ -83,7 +84,7 @@ otherwise.
 
 A `string` is delimited by single quotes. A doubled quote denotes one quote.
 Backslash has no escape meaning, so `'C:\new'` contains a backslash. The
-literal has runtime type `str`.
+literal has runtime type `str` under R019.
 
 A temporal literal is `DATE '...'` or `DATETIME '...'`. Its text must parse
 under R016 for the named type. The keyword is required: `'2025-06-01'` alone
@@ -100,17 +101,14 @@ their runtime types mutually comparable:
 | Types | Order |
 |---|---|
 | `int` and `float`, in any combination | Numeric after R010 promotion |
-| `str` with `str` | Unicode code-point sequence |
+| `str` with `str` | R019 text order |
 | `date` with `date` | Chronological under R016 |
 | `datetime` with `datetime` | Chronological under R016 |
 
 Every other pair fails. In particular, a temporal value is not comparable to
 text, and a `date` is not comparable to a `datetime`.
 
-Strings compare by Unicode code point, position by position; if one is a
-prefix of the other, the shorter is less. Equality and order apply no locale,
-case folding, or normalization. Consequently, `'B' < 'a'`, and canonically
-equivalent strings with different code-point sequences remain different.
+Strings use the equality and total order R019 defines.
 
 ## Three-valued logic
 
@@ -143,12 +141,12 @@ Compound operators expand into the primitive logic above:
   A missing operand therefore produces `UNKNOWN`, not `TRUE`.
 
 For `LIKE`, both non-missing operands must be `str`. In the pattern, `%`
-matches any sequence of code points, `_` matches exactly one, and every other
-code point matches itself. Matching is case-sensitive.
+matches any sequence of R019 scalar values, `_` matches exactly one, and every
+other scalar matches by R019 equality. Matching is case-sensitive.
 
 No escape character exists by default. `ESCAPE` declares a string literal of
-exactly one code point. That character makes the following pattern code point
-literal; a trailing escape character is invalid.
+exactly one R019 scalar value. That character makes the following pattern
+scalar literal; a trailing escape character is invalid.
 
 ```yaml
 filter: "AEDECOD LIKE '100!%' ESCAPE '!'"
@@ -181,8 +179,9 @@ dependency-free.
 
 Evaluation is deterministic and free of side effects. A conforming
 implementation must not inherit implicit coercion, collation, `LIKE` escape,
-or missing-value behavior from a host SQL engine. It either configures and
-overrides those behaviors to match this rule or evaluates the grammar itself.
+or missing-value behavior from a host SQL engine. String comparison must use
+R019. An implementation either configures and overrides those behaviors to
+match these rules or evaluates the grammar itself.
 
 ## Errors
 

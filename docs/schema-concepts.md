@@ -349,7 +349,11 @@ Two more registries work the same way: `column_verifications` and
 | `str_extract` | Return one regular-expression group (e.g. the site inside USUBJID) |
 | `str_concat` | Concatenate in order -- **the only string operation that may hold literals inline** |
 | `str_template` | Interpolate, as in `"{SITEID}:{SUBJID}"` |
-| `str_upper` / `str_lower` | Case conversion |
+| `str_upper` / `str_lower` | ASCII case conversion; other scalars are unchanged |
+
+R019 keeps language source ASCII while allowing Unicode scalar values in data.
+It applies no implicit normalization, compares strings by their exact scalar
+sequences, and orders them lexicographically by scalar value.
 
 ### 2.4 Arithmetic: one `compute`
 
