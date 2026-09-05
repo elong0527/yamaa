@@ -98,8 +98,8 @@ verifications:
   - unique:
       columns: [STUDYID, USUBJID]
   - row_count:
-      min: 4
-      max: 4
+      min: 5
+      max: 5
   - all_or_none:
       id: exposure-reference-completeness
       columns: [RFXSTDTC, RFXENDTC, RFSTDTC, EXDOSE0]

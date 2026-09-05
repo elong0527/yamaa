@@ -96,8 +96,8 @@ columns:
 
 verifications:
   - row_count:
-      min: 6
-      max: 6
+      min: 7
+      max: 7
   - all_or_none:
       id: reference-dictionary-entry-is-complete
       columns: [LBORRESU, LBSTNRLO, LBSTNRHI]
