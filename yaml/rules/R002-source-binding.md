@@ -3,7 +3,7 @@ id: R002
 title: Source Binding
 status: normative
 applies_to: [root.datasets, root.base, row.dataset, row.group_by, expression.source, string_template]
-depends_on: [R003, R006, R008, R014, R015, R019]
+depends_on: [R003, R006, R008, R014, R015, R019, R021]
 ---
 
 # Source binding
@@ -19,17 +19,18 @@ This rule owns dataset declaration and how a name resolves to a value. What
 happens when a qualified name reaches another dataset is R003. What happens
 when a bound name is absent or matches several records is R008. What a stored
 field becomes before it is bound at all, including when it is missing and which
-type it carries, is R014. R019 owns the text a string value contains.
+type it carries, is R014. R019 owns the text a string value contains. Which
+files a declared path may reach, and the bytes a run reads from one, is R021.
 
 ## Dataset declarations
 
 `datasets` maps dataset identifiers to source data declarations. Identifiers
 are used by `base`, `rows.dataset`, qualified source variables, and
 `mapping_from`. A declaration is a path, or a path with the types its fields
-carry; R014 owns that reading and the shorthand between the two forms. Paths
-are resolved relative to the specification file. R017 preserves that origin
-when a declaration is inherited and rebases the path in a materialized resolved
-specification.
+carry; R014 owns that reading and the shorthand between the two forms. A
+declared path is a `project_path`, resolved relative to the specification file
+and confined by R021. R017 preserves that origin when a declaration is
+inherited and rebases the path in a materialized resolved specification.
 
 Every referenced dataset identifier must exist in `datasets`. A dataset
 identifier must not equal the output `domain`; unqualified names address the
@@ -145,7 +146,7 @@ absent-item handler.
 
 - An unknown dataset identifier or variable: fail.
 - A dataset identifier equal to the output `domain`: fail.
-- A source path that cannot be resolved: fail.
+- A source path that R021 does not accept: fail, under R021's condition.
 - An unresolved unqualified reference: fail.
 - A scalar source in a grouped row naming a driver field absent from that
   row's `group_by`: fail.

@@ -34,7 +34,15 @@ The validation ensures:
    Static
    cross-field checks enforce base selection, complete and exclusive
    derivation coverage, record-lookup field pairing, verification bounds and
-   IDs, source-file existence, and declared CSV fields. Source-producing
+   IDs, and declared CSV fields. Every declared source path and producing
+   specification is resolved under R021: it must be a relative path with no
+   rooted form, URI scheme, parent traversal, `.` or empty segment, or
+   trailing separator; no component may be a symbolic link; the file must
+   exist, be a regular file, and canonicalize inside the approved project
+   root, which defaults to the entry specification's directory. Each accepted
+   physical file is read once as one immutable byte snapshot, shared by every
+   declaration that reaches it, so a header is never re-read from a path that
+   may since have changed. Source-producing
    specifications linked through `schema` validate recursively
    against `root_class`; producer source paths must resolve, derivation coverage
    must be complete, workflow dependencies must be acyclic, every stored
@@ -44,7 +52,9 @@ The validation ensures:
    Negative examples (folders prefixed with `negative-`) are structurally
    validated; structural errors are only suppressed if their named path
    matches a `spec_path` declared in `expected/error.yaml` with
-   `phase: validation`.
+   `phase: validation`. A declared `condition` the validator itself
+   decides, such as an R021 path condition, must be the condition it actually
+   reports.
    Each positive inherited example must provide an exact
    `expected/resolved[_<variant>].yaml` data-tree fixture.
 5. **Layout**: All examples have `README.md`, one `spec.yaml` or one or more

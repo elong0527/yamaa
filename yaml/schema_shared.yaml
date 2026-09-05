@@ -15,6 +15,12 @@ path:
     type: str
     min_length: 1
 
+project_path:
+    type: str
+    min_length: 1
+    description: Stored project resource a run reads; R021 confines it to the
+        approved project root and fixes its written form.
+
 function_name:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'

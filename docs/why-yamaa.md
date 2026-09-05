@@ -111,12 +111,13 @@ different programs:
 | A value the codelist does not contain | Keep the original? Blank it? `UNKNOWN`? Raise? | R008: without an `unmapped` handler the condition is fatal |
 | Two results on the same day, both eligible as baseline | Each programmer picks differently | `baseline_flag` raises rather than choosing |
 | Which order do the rows leave in? | Whatever the last sort in the program happened to be, or the input order | R005: `output.order_by` declares it, and rows equal on every term keep construction order |
+| A source declared as `/data/shared/lb.csv` or a web address | Each host holds something different at that name, and neither run records which bytes it read | R021: a source is a relative file inside the approved project, read once as one immutable snapshot |
 
 The pattern is the same in every row: the divergent behaviors are all
 *defensible*, several are *silent*, and the specification is what should have
 chosen between them.
 
-This is what the nineteen files in `rules/` are, and it is why each of them
+This is what the twenty files in `rules/` are, and it is why each of them
 owns exactly one topic and cross-references the others without restating them.
 A restatement would be a second place to keep correct, which is how an
 unwritten convention starts drifting in the first place.

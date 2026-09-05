@@ -1,0 +1,7 @@
+phase: validation
+condition: resource_path_missing
+spec_paths:
+  - datasets.LBREF.path
+context:
+  dataset: LBREF
+  path: input/lbref.csv

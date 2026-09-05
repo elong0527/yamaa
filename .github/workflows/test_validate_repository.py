@@ -1,6 +1,8 @@
 import copy
 import importlib.util
 import math
+import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -1981,7 +1983,11 @@ class TestSpecContracts(unittest.TestCase):
 
         message = "\n".join(errors)
         self.assertIn("types.AGE", message)
-        self.assertIn("source path does not exist", message)
+        self.assertIn(
+            "datasets.EX.path: resource_path_missing: 'input/missing.csv' "
+            "does not exist",
+            message,
+        )
 
 
 class TestProducingSpecs(unittest.TestCase):
@@ -2178,39 +2184,419 @@ columns:
 
         message = "\n".join(self.validate())
 
-        self.assertIn("source path does not exist: raw.csv", message)
+        self.assertIn(
+            "resource_path_missing: 'raw.csv' does not exist", message
+        )
 
     def test_rejects_producer_dependency_cycle(self):
-        self.write_producer_spec(
-            '''schema_version: "1.0"
-domain: DM
+        looping_producer = '''schema_version: "1.0"
+domain: {domain}
 datasets:
   LOOP:
     path: dm.csv
-    schema: ../spec.yaml
+    schema: {link}
 base: LOOP
 keys: [STUDYID]
-output: {path: out.csv, columns: [STUDYID, AGE]}
+output: {{path: out.csv, columns: [STUDYID, AGE]}}
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {source: LOOP.STUDYID}
+    derivation: {{source: LOOP.STUDYID}}
   - name: AGE
     type: int
     label: Age
-    derivation: {source: LOOP.AGE}
+    derivation: {{source: LOOP.AGE}}
 '''
+        self.write_producer_spec(
+            looping_producer.format(domain="DM", link="other.yaml")
+        )
+        (self.input_dir / "other.yaml").write_text(
+            looping_producer.format(domain="OTHER", link="dm.schema.yaml"),
+            encoding="utf-8",
         )
 
         message = "\n".join(self.validate())
 
         self.assertIn("producer workflow dependency cycle", message)
 
+    def test_rejects_traversing_producer_link(self):
+        self.write_producer_spec(
+            self.VALID_PRODUCER_SPEC.replace(
+                "datasets:\n  RAW: raw.csv",
+                "datasets:\n  RAW: ../input/raw.csv",
+            )
+        )
+
+        message = "\n".join(self.validate())
+
+        self.assertIn(
+            "resource_path_parent_traversal: '../input/raw.csv' traverses a "
+            "parent segment",
+            message,
+        )
+
     def test_rejects_missing_producing_spec(self):
         message = "\n".join(self.validate())
 
-        self.assertIn("producing specification does not exist", message)
+        self.assertIn(
+            "datasets.DM.schema: resource_path_missing: "
+            "'input/dm.schema.yaml' does not exist",
+            message,
+        )
+
+
+class TestProjectResourceBoundary(unittest.TestCase):
+    """R021: confine a declared project path and bind the bytes it names."""
+
+    def setUp(self):
+        self.test_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.test_dir.name)
+        self.input_dir = self.root / "input"
+        self.input_dir.mkdir()
+        self.source = self.input_dir / "dm.csv"
+        self.source.write_text("STUDYID,AGE\nSTUDY1,42\n", encoding="utf-8")
+
+    def tearDown(self):
+        self.test_dir.cleanup()
+
+    def resolve(self, written, base_dir=None, project_root=None):
+        return VALIDATOR.resolve_project_path(
+            written,
+            self.root if base_dir is None else base_dir,
+            self.root if project_root is None else project_root,
+        )
+
+    def test_accepts_nested_in_project_file(self):
+        accepted, condition = self.resolve("input/dm.csv")
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.read_bytes(), self.source.read_bytes())
+
+    def test_rejects_rooted_written_forms(self):
+        for written in ("/etc/passwd", "C:/data/dm.csv", "input\\dm.csv"):
+            with self.subTest(written=written):
+                self.assertEqual(
+                    self.resolve(written)[1], "resource_path_not_relative"
+                )
+
+    def test_rejects_uri_schemes(self):
+        for written in (
+            "https://example.org/dm.csv",
+            "file:///etc/passwd",
+            "s3://bucket/dm.csv",
+        ):
+            with self.subTest(written=written):
+                self.assertEqual(
+                    self.resolve(written)[1], "resource_path_uri_scheme"
+                )
+
+    def test_rejects_parent_traversal(self):
+        for written in ("../dm.csv", "input/../../dm.csv", "..", "a/../b.csv"):
+            with self.subTest(written=written):
+                self.assertEqual(
+                    self.resolve(written)[1], "resource_path_parent_traversal"
+                )
+
+    def test_rejects_unnormalized_written_forms(self):
+        for written in (
+            "./input/dm.csv",
+            "input//dm.csv",
+            "input/./dm.csv",
+            "input/dm.csv/",
+        ):
+            with self.subTest(written=written):
+                self.assertEqual(
+                    self.resolve(written)[1], "resource_path_not_normalized"
+                )
+
+    def test_rejects_symlinked_file_inside_the_project(self):
+        link = self.input_dir / "linked.csv"
+        link.symlink_to("dm.csv")
+
+        self.assertEqual(
+            self.resolve("input/linked.csv")[1], "resource_path_symlink"
+        )
+
+    def test_rejects_symlinked_directory_component(self):
+        (self.input_dir / "nested").mkdir()
+        (self.input_dir / "nested" / "dm.csv").write_text(
+            "STUDYID\nSTUDY1\n", encoding="utf-8"
+        )
+        (self.root / "linked").symlink_to("input/nested")
+
+        self.assertEqual(
+            self.resolve("linked/dm.csv")[1], "resource_path_symlink"
+        )
+
+    def test_rejects_symlink_escaping_the_project(self):
+        outside = Path(self.test_dir.name).parent / "outside_dm.csv"
+        outside.write_text("STUDYID\nSTUDY1\n", encoding="utf-8")
+        self.addCleanup(outside.unlink)
+        (self.input_dir / "escape.csv").symlink_to(outside)
+
+        self.assertEqual(
+            self.resolve("input/escape.csv")[1], "resource_path_symlink"
+        )
+
+    def test_rejects_directory(self):
+        self.assertEqual(
+            self.resolve("input")[1], "resource_path_not_regular_file"
+        )
+
+    def test_rejects_file_used_as_a_directory_component(self):
+        self.assertEqual(
+            self.resolve("input/dm.csv/nested.csv")[1],
+            "resource_path_not_regular_file",
+        )
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "requires POSIX FIFOs")
+    def test_rejects_fifo(self):
+        os.mkfifo(self.input_dir / "stream.csv")
+
+        self.assertEqual(
+            self.resolve("input/stream.csv")[1],
+            "resource_path_not_regular_file",
+        )
+
+    def test_rejects_socket(self):
+        endpoint = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.addCleanup(endpoint.close)
+        endpoint.bind(str(self.input_dir / "socket.csv"))
+
+        self.assertEqual(
+            self.resolve("input/socket.csv")[1],
+            "resource_path_not_regular_file",
+        )
+
+    def test_rejects_missing_file(self):
+        self.assertEqual(
+            self.resolve("input/absent.csv")[1], "resource_path_missing"
+        )
+
+    def test_rejects_file_outside_a_narrower_project_root(self):
+        confined = self.root / "project"
+        confined.mkdir()
+
+        self.assertEqual(
+            self.resolve("input/dm.csv", project_root=confined)[1],
+            "resource_path_outside_project",
+        )
+
+    def test_error_names_the_written_path_and_no_host_path(self):
+        message = VALIDATOR.resource_path_error(
+            "spec.yaml.datasets.DM.path",
+            "input/absent.csv",
+            "resource_path_missing",
+        )
+
+        self.assertIn("resource_path_missing", message)
+        self.assertIn("'input/absent.csv'", message)
+        self.assertNotIn(str(self.root), message)
+
+    def test_repeated_declarations_share_one_snapshot(self):
+        snapshots = VALIDATOR.ProjectSnapshots()
+
+        first, first_condition = snapshots.read(self.source)
+        second, second_condition = snapshots.read(self.source)
+
+        self.assertIsNone(first_condition)
+        self.assertIsNone(second_condition)
+        self.assertIs(first, second)
+        self.assertEqual(snapshots.reads, 1)
+        self.assertEqual(first.csv_header(), ["STUDYID", "AGE"])
+
+    def test_replaced_content_fails_after_validation(self):
+        snapshots = VALIDATOR.ProjectSnapshots()
+        accepted, condition = snapshots.read(self.source)
+        self.assertIsNone(condition)
+
+        self.source.write_text("STUDYID,AGE\nSTUDY2,7\n", encoding="utf-8")
+
+        replaced, condition = snapshots.read(self.source)
+
+        self.assertIsNone(replaced)
+        self.assertEqual(condition, "resource_path_content_changed")
+        self.assertEqual(accepted.csv_header(), ["STUDYID", "AGE"])
+
+
+class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
+    """R021 as the specification validator applies it."""
+
+    def setUp(self):
+        self.env, schema_errors = VALIDATOR.build_schema_env(
+            TOOL_PATH.parents[2]
+        )
+        self.assertEqual(schema_errors, [])
+        self.test_dir = tempfile.TemporaryDirectory()
+        self.example_dir = Path(self.test_dir.name)
+        self.input_dir = self.example_dir / "input"
+        self.input_dir.mkdir()
+        (self.input_dir / "dm.csv").write_text(
+            "STUDYID,USUBJID\nSTUDY1,S1\n", encoding="utf-8"
+        )
+        self.spec_path = self.example_dir / "spec.yaml"
+
+    def tearDown(self):
+        self.test_dir.cleanup()
+
+    def spec(self, source):
+        return {
+            "domain": "ADSL",
+            "datasets": {"DM": "input/dm.csv", "REF": source},
+            "base": "DM",
+            "keys": ["USUBJID"],
+            "output": {"columns": ["USUBJID"]},
+            "columns": [
+                {"name": "USUBJID", "derivation": {"source": "DM.USUBJID"}}
+            ],
+        }
+
+    def contracts(self, source, project_root=None):
+        return VALIDATOR.validate_spec_contracts(
+            self.spec(source),
+            "example/spec.yaml",
+            self.spec_path,
+            project_root,
+        )
+
+    def test_reports_each_rejection_at_the_declaring_field(self):
+        cases = {
+            "/etc/passwd": "resource_path_not_relative",
+            "../dm.csv": "resource_path_parent_traversal",
+            "https://example.org/ref.csv": "resource_path_uri_scheme",
+            "input": "resource_path_not_regular_file",
+            "input/absent.csv": "resource_path_missing",
+        }
+        for written, condition in cases.items():
+            with self.subTest(written=written):
+                message = "\n".join(self.contracts(written))
+                self.assertIn(
+                    f"example/spec.yaml.datasets.REF.path: {condition}: "
+                    f"{written!r}",
+                    message,
+                )
+                self.assertNotIn(str(self.example_dir), message)
+
+    def test_reports_a_symlinked_source(self):
+        (self.input_dir / "ref.csv").symlink_to("dm.csv")
+
+        message = "\n".join(self.contracts("input/ref.csv"))
+
+        self.assertIn(
+            "datasets.REF.path: resource_path_symlink: 'input/ref.csv'",
+            message,
+        )
+
+    def test_accepts_a_nested_in_project_source(self):
+        (self.input_dir / "nested").mkdir()
+        (self.input_dir / "nested" / "ref.csv").write_text(
+            "STUDYID\nSTUDY1\n", encoding="utf-8"
+        )
+
+        self.assertEqual(self.contracts("input/nested/ref.csv"), [])
+
+    def test_accepts_one_file_declared_under_two_identifiers(self):
+        self.assertEqual(self.contracts("input/dm.csv"), [])
+
+    def test_confines_a_source_to_the_approved_root(self):
+        confined = self.example_dir / "project"
+        confined.mkdir()
+
+        message = "\n".join(
+            self.contracts("input/dm.csv", project_root=confined)
+        )
+
+        self.assertIn("resource_path_outside_project", message)
+
+    def test_type_catalog_does_not_read_a_rejected_path(self):
+        outside = self.example_dir / "outside.csv"
+        outside.write_text("SECRET\nvalue\n", encoding="utf-8")
+
+        catalog = VALIDATOR.dataset_type_catalog(
+            self.spec("../outside.csv"), self.spec_path, self.env
+        )
+
+        self.assertEqual(catalog.get("REF"), {})
+
+
+class TestDeclaredValidationErrors(unittest.TestCase):
+    """A fixture must fail for the condition it declares."""
+
+    def check(self, condition, reported):
+        return VALIDATOR.check_declared_validation_error(
+            {"condition": condition, "spec_paths": ["datasets.REF.path"]},
+            reported,
+            "example/spec.yaml",
+            "yaml/examples/example/expected/error.yaml",
+        )
+
+    def test_accepts_a_reported_condition(self):
+        self.assertEqual(
+            self.check(
+                "resource_path_missing",
+                ["resource_path_missing: 'input/ref.csv' does not exist"],
+            ),
+            [],
+        )
+
+    def test_rejects_a_condition_the_validator_did_not_report(self):
+        errors = self.check(
+            "resource_path_missing",
+            ["resource_path_symlink: 'input/ref.csv' passes through a link"],
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn("'resource_path_missing' was not reported", errors[0])
+        self.assertIn("['resource_path_symlink']", errors[0])
+
+    def test_rejects_a_fixture_that_no_longer_fails(self):
+        errors = self.check("resource_path_missing", [])
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn("was not reported", errors[0])
+
+    def test_ignores_a_condition_the_validator_does_not_decide(self):
+        self.assertEqual(self.check("aggregate_over_scalar_source", []), [])
+
+
+class TestDatasetPathExamples(unittest.TestCase):
+    """The committed path fixtures fail for the conditions they declare."""
+
+    def setUp(self):
+        self.root = TOOL_PATH.parents[2]
+        self.env, schema_errors = VALIDATOR.build_schema_env(self.root)
+        self.assertEqual(schema_errors, [])
+
+    def test_each_example_reports_its_declared_condition(self):
+        examples = sorted(
+            (self.root / "yaml" / "examples").glob("negative-dataset-path-*")
+        )
+        self.assertEqual(len(examples), 6)
+
+        for example in examples:
+            with self.subTest(example=example.name):
+                spec_path = example / "spec.yaml"
+                spec = yaml.load(
+                    spec_path.read_text(encoding="utf-8"),
+                    Loader=VALIDATOR.UniqueKeyLoader,
+                )
+                declared = yaml.load(
+                    (example / "expected" / "error.yaml").read_text(
+                        encoding="utf-8"
+                    ),
+                    Loader=VALIDATOR.UniqueKeyLoader,
+                )
+                reported = VALIDATOR.validate_spec_document(
+                    spec, f"{example.name}/spec.yaml", spec_path, self.env
+                )
+
+                self.assertEqual(declared["phase"], "validation")
+                self.assertEqual(len(reported), 1)
+                self.assertIn(
+                    f"datasets.LBREF.path: {declared['condition']}: ",
+                    reported[0],
+                )
+                self.assertIn(repr(declared["context"]["path"]), reported[0])
 
 
 class TestValidatorCLI(unittest.TestCase):
