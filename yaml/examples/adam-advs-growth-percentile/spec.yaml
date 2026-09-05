@@ -1,7 +1,9 @@
 schema_version: "1.0"
 domain: ADVS
 datasets:
-  ADVSPRE: input/advs_pre.csv
+  ADVSPRE:
+    path: input/advs_pre.csv
+    types: {AGE: int}
   LMS:
     path: input/lms_ref.csv
     types: {L: float, M: float, S: float, AGE: int}

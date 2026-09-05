@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADTR
 datasets:
   TRVISIT: input/trvisit.csv
-  TR: input/tr.csv
+  TR: {path: input/tr.csv, types: {TRSTRESN: float}}
   TU: input/tu.csv
 base: TRVISIT
 keys: [STUDYID, USUBJID, AVISIT]

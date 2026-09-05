@@ -31,6 +31,12 @@ The validation ensures:
    function names and argument counts, identifier scope, and numeric input
    types are validated without executing the formula. The spans are zero-based
    half-open character offsets into the expression leaf.
+   R012 string templates are scanned under their brace and placeholder grammar,
+   and R013 aggregate expressions are parsed with their closed reducer
+   vocabulary, relation, grain, context, and operand-type rules. Static
+   operation checks also enforce mapping pairs and folded-key uniqueness,
+   comparable extremes and lookup ranges, nonzero row offsets, cut structure,
+   temporal input types and literal ranges, and column dependency cycles.
    Cross-field validation also rejects
    duplicate or unresolved dataset, lookup, column, key, output-column, and row
    names, including namespace conflicts. A grouped row must declare a non-empty,
@@ -102,10 +108,6 @@ listed above. At this time, it **does not**:
   Inherited specifications are canonicalized as part of producing their
   resolved data tree.
 - Reproduce golden output values in the `.csv` files.
-- Parse or type-check the aggregate or template leaf languages; their remaining
-  work is tracked in issue #103. Numeric and predicate syntax, names, and
-  statically known types are checked, but neither language is evaluated against
-  data.
 - Prove that a regular expression behaves identically in R and Python; the
   ECMAScript portability contract is tracked in issue #106.
 
