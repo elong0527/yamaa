@@ -3263,6 +3263,9 @@ class ProjectSnapshots:
         return accepted, None
 
 
+SOURCE_PROFILES = {'.csv': 'csv'}
+
+
 def validate_spec_contracts(
     spec, spec_label, spec_path=None, project_root=None, snapshots=None,
 ):
@@ -3538,7 +3541,14 @@ def validate_spec_contracts(
                     resource_path_error(f"{path}.path", source_path, condition)
                 )
                 continue
-            if resolved.suffix.lower() != '.csv' or not isinstance(types, dict):
+            profile = SOURCE_PROFILES.get(resolved.suffix.lower())
+            if profile is None:
+                errors.append(
+                    f"ERROR: {path}.path: source_profile_unknown: "
+                    f"{source_path} names no source profile"
+                )
+                continue
+            if not isinstance(types, dict):
                 continue
             try:
                 header = snapshot.csv_header()
@@ -4867,44 +4877,221 @@ def artifact_profile(output):
     return ARTIFACT_PROFILES.get(PurePosixPath(declared).suffix.lower())
 
 
+class SourceProfileError(Exception):
+    """Bytes R022's csv source profile does not admit."""
+
+    def __init__(self, condition, record, field):
+        super().__init__(condition)
+        self.condition = condition
+        self.record = record
+        self.field = field
+
+
+SOURCE_PROFILE_CONDITIONS = {
+    'source_profile_unknown': 'an extension R022 does not map',
+    'source_byte_order_mark': 'source carries a byte-order mark',
+    'source_header_absent': 'source has no header record',
+    'source_field_name_empty': 'header contains an empty name',
+    'source_field_name_duplicate': 'duplicate header(s)',
+    'source_record_width': 'record width is not the header width',
+    'source_quote_unterminated': 'a quoted field has no closing quote',
+    'source_quote_in_bare_field': 'a bare field carries U+0022',
+    'source_text_after_quote': 'a closing quote is followed by ordinary text',
+    'source_carriage_return': 'U+000D does not begin a record terminator',
+}
+SOURCE_READ_CONDITIONS = set(SOURCE_PROFILE_CONDITIONS) | {'invalid_text'}
+
+
+def parse_source_profile(data: str):
+    """Parse a delimited source under R022 into records of (text, quoted).
+
+    A bare empty field parses to a text of None and a quoted empty field to
+    an empty string, so R014's distinction between an uncollected value and
+    a collected empty one survives reading. `U+000D U+000A` terminates a
+    record as `U+000A` does, and the final record may omit its terminator,
+    because neither spelling changes the records a file holds. Every other
+    difference raises rather than being repaired.
+    """
+    if not data:
+        return []
+    records = []
+    record = []
+    index = 0
+    size = len(data)
+    number = 1
+    field_number = 1
+    while True:
+        if data[index:index + 1] == '"':
+            index += 1
+            chunks = []
+            while True:
+                if index >= size:
+                    raise SourceProfileError(
+                        'source_quote_unterminated', number, field_number
+                    )
+                character = data[index]
+                if character == '"':
+                    if data[index + 1:index + 2] == '"':
+                        chunks.append('"')
+                        index += 2
+                        continue
+                    index += 1
+                    break
+                if character == '\r':
+                    raise SourceProfileError(
+                        'source_carriage_return', number, field_number
+                    )
+                chunks.append(character)
+                index += 1
+            field = (''.join(chunks), True)
+            if index < size and data[index] not in ',\r\n':
+                raise SourceProfileError(
+                    'source_text_after_quote', number, field_number
+                )
+        else:
+            start = index
+            while index < size and data[index] not in ',\n':
+                character = data[index]
+                if character == '"':
+                    raise SourceProfileError(
+                        'source_quote_in_bare_field', number, field_number
+                    )
+                if character == '\r':
+                    break
+                index += 1
+            field = (data[start:index] or None, False)
+        record.append(field)
+        if index >= size:
+            records.append(record)
+            break
+        if data[index] == ',':
+            index += 1
+            field_number += 1
+            continue
+        if data[index] == '\r':
+            if data[index + 1:index + 2] != '\n':
+                raise SourceProfileError(
+                    'source_carriage_return', number, field_number
+                )
+            index += 2
+        else:
+            index += 1
+        records.append(record)
+        record = []
+        number += 1
+        field_number = 1
+        if index >= size:
+            break
+    return records
+
+
+def check_source_file(csv_path: Path):
+    """Report every way one fixture departs from R022's source profile.
+
+    Each finding is a condition, the record it was decided at, and the
+    detail a reader needs to find it.
+    """
+    raw = csv_path.read_bytes()
+    try:
+        data = raw.decode('utf-8')
+    except UnicodeDecodeError as exc:
+        return [('invalid_text', 1, str(exc))]
+    if data.startswith(BOM_UTF8):
+        return [('source_byte_order_mark', 1, 'source carries a byte-order mark')]
+    try:
+        records = parse_source_profile(data)
+    except SourceProfileError as exc:
+        return [(
+            exc.condition,
+            exc.record,
+            f"{SOURCE_PROFILE_CONDITIONS[exc.condition]} at field "
+            f"{exc.field}",
+        )]
+    if not records:
+        return [('source_header_absent', 1, 'source has no header record')]
+
+    findings = []
+    header = [text for text, _quoted in records[0]]
+    if any(not name for name in header):
+        findings.append(
+            ('source_field_name_empty', 1, 'header contains an empty name')
+        )
+    duplicates = sorted(
+        {name for name in header if name and header.count(name) > 1}
+    )
+    if duplicates:
+        findings.append((
+            'source_field_name_duplicate',
+            1,
+            'duplicate header(s): ' + ', '.join(duplicates),
+        ))
+    for number, record in enumerate(records[1:], 2):
+        if len(record) != len(header):
+            findings.append((
+                'source_record_width',
+                number,
+                f"expected {len(header)} fields, got {len(record)}",
+            ))
+    return findings
+
+
+def declared_source_condition(example_dir: Path):
+    """The source condition a negative example declares, if any."""
+    if not example_dir.name.startswith('negative-'):
+        return None
+    error_path = example_dir / 'expected' / 'error.yaml'
+    if not error_path.is_file():
+        return None
+    try:
+        contract = yaml.safe_load(error_path.read_text(encoding='utf-8'))
+    except (OSError, UnicodeError, yaml.YAMLError):
+        return None
+    if not isinstance(contract, dict):
+        return None
+    condition = contract.get('condition')
+    return condition if condition in SOURCE_READ_CONDITIONS else None
+
+
 def validate_csv_shapes(root: Path):
+    """Check every fixture against R022's csv source profile.
+
+    The reader preserves quoting, so a bare empty field stays distinct from
+    a quoted empty one rather than being normalized to the same text. A
+    negative example that declares a source condition may carry the fixture
+    that provokes it, and must actually provoke it: a malformed fixture no
+    example asked for is still an error, and a declared condition no fixture
+    reports means the example has stopped failing the way it claims to.
+    """
     errors = []
     examples_dir = root / 'yaml' / 'examples'
     if not examples_dir.exists():
         return errors
-    csv_paths = sorted(examples_dir.glob('*/input/*.csv'))
-    csv_paths.extend(sorted(examples_dir.glob('*/expected/*.csv')))
-    for csv_path in csv_paths:
-        label = csv_path.relative_to(root)
-        try:
-            with open(csv_path, 'r', encoding='utf-8', newline='') as f:
-                rows = list(csv.reader(f, strict=True))
-        except UnicodeError as exc:
-            errors.append(f"ERROR: {label}: invalid_text: {exc}")
-            continue
-        except (OSError, csv.Error) as exc:
-            errors.append(f"ERROR: {label}: invalid CSV: {exc}")
-            continue
-        if not rows:
-            errors.append(f"ERROR: {label}: CSV is empty")
-            continue
-        header = rows[0]
-        if not header or any(not name for name in header):
-            errors.append(f"ERROR: {label}: header contains an empty name")
-        duplicates = sorted(
-            name for name in set(header) if header.count(name) > 1
-        )
-        if duplicates:
-            errors.append(
-                f"ERROR: {label}: duplicate header(s): "
-                + ', '.join(duplicates)
-            )
-        for line_number, row in enumerate(rows[1:], 2):
-            if len(row) != len(header):
+    for example_dir in sorted(
+        path for path in examples_dir.iterdir() if path.is_dir()
+    ):
+        declared = declared_source_condition(example_dir)
+        reported = set()
+        csv_paths = sorted((example_dir / 'input').rglob('*.csv'))
+        csv_paths.extend(sorted((example_dir / 'expected').rglob('*.csv')))
+        for csv_path in csv_paths:
+            label = csv_path.relative_to(root)
+            try:
+                findings = check_source_file(csv_path)
+            except OSError as exc:
+                errors.append(f"ERROR: {label}: cannot read source: {exc}")
+                continue
+            for condition, number, detail in findings:
+                reported.add(condition)
+                if condition == declared:
+                    continue
                 errors.append(
-                    f"ERROR: {label}:{line_number}: expected {len(header)} "
-                    f"fields, got {len(row)}"
+                    f"ERROR: {label}:{number}: {condition}: {detail}"
                 )
+        if declared is not None and declared not in reported:
+            errors.append(
+                f"ERROR: {example_dir.relative_to(root)}: {declared} is "
+                "declared but no source fixture reports it"
+            )
     return errors
 
 
