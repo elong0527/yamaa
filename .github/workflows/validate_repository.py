@@ -22,6 +22,189 @@ from yaml.constructor import ConstructorError
 from yaml.events import AliasEvent
 
 
+# R022 regular expressions. Every pattern the language admits -- a schema
+# `pattern` descriptor, `str_extract.pattern`, and a `matches` verification --
+# is read by one pinned ECMA-262 engine with the Unicode flag set, so that
+# repository validation is not a second dialect. Python `re` is deliberately
+# absent from this section: it accepts and rejects patterns this language does
+# not, and it matches Unicode differently. The `re` uses elsewhere in this file
+# scan the validator's own closed grammars and are not language patterns.
+REGEX_ENGINE_CRATE = 'regress'
+REGEX_ENGINE_CRATE_VERSION = '0.10.4'
+REGEX_ENGINE_DISTRIBUTION = 'regress'
+REGEX_ENGINE_DISTRIBUTION_VERSION = '2025.10.1'
+REGEX_FLAGS = 'u'
+
+try:
+    import regress as _regex_engine
+except ImportError:
+    _regex_engine = None
+
+
+class RegexEngineUnavailable(Exception):
+    """R022 unsupported_regex_engine: the pinned engine is not installed."""
+
+
+class InvalidRegex(Exception):
+    """R022 invalid_regex: the pinned engine rejected a pattern."""
+
+    def __init__(self, reason):
+        super().__init__(reason)
+        self.reason = reason
+
+
+class RegexGroupOutOfRange(Exception):
+    """R022 regex_group_out_of_range: a group the pattern does not declare."""
+
+
+def regex_engine_requirement():
+    """Name the engine and version R022 pins, for a failure to report."""
+    return (
+        f"{REGEX_ENGINE_DISTRIBUTION}=={REGEX_ENGINE_DISTRIBUTION_VERSION} "
+        f"(Rust crate {REGEX_ENGINE_CRATE} {REGEX_ENGINE_CRATE_VERSION})"
+    )
+
+
+def require_regex_engine():
+    """Return the pinned engine, or fail rather than substitute another."""
+    if _regex_engine is None:
+        raise RegexEngineUnavailable(
+            "unsupported_regex_engine under R022: this validator requires "
+            f"{regex_engine_requirement()} and does not fall back to a host "
+            "regular-expression library"
+        )
+    return _regex_engine
+
+
+def compile_regex(pattern):
+    """Compile one R022 pattern source with the pinned engine and flags."""
+    engine = require_regex_engine()
+    if not isinstance(pattern, str):
+        raise InvalidRegex(
+            f"pattern must be a string, got {type(pattern).__name__}"
+        )
+    try:
+        return engine.Regex(pattern, REGEX_FLAGS)
+    except engine.RegressError as exc:
+        raise InvalidRegex(str(exc)) from exc
+
+
+def anchored_regex_source(pattern):
+    """Return the full-match form R022 gives the `pattern` keyword."""
+    return '^(?:' + pattern + ')$'
+
+
+def regex_search(pattern, subject):
+    """Return the leftmost match of an R022 pattern, or None."""
+    return compile_regex(pattern).find(subject)
+
+
+def regex_full_match(pattern, subject):
+    """Return whether an R022 pattern matches the whole subject."""
+    if not isinstance(subject, str):
+        return False
+    anchored = compile_regex(anchored_regex_source(pattern))
+    return anchored.find(subject) is not None
+
+
+def regex_capture_group_count(pattern):
+    """Count the capturing groups an accepted R022 pattern declares.
+
+    Groups are numbered by the order of their opening parenthesis, counting
+    only capturing groups: `(?:`, lookaround, and a parenthesis inside a
+    character class contribute no number, while `(?<name>` does. The engine
+    reports no count of its own, and an out-of-range group index is
+    indistinguishable from one the match did not enter, so the count is read
+    from the pattern source the engine has already accepted.
+    """
+    compile_regex(pattern)
+    count = 0
+    index = 0
+    length = len(pattern)
+    in_class = False
+    while index < length:
+        char = pattern[index]
+        if char == '\\':
+            index += 2
+            continue
+        if in_class:
+            if char == ']':
+                in_class = False
+            index += 1
+            continue
+        if char == '[':
+            in_class = True
+            index += 1
+            continue
+        if char == '(':
+            if not pattern.startswith('(?', index):
+                count += 1
+            else:
+                rest = pattern[index + 2:]
+                if rest.startswith('<') and not rest.startswith(('<=', '<!')):
+                    count += 1
+        index += 1
+    return count
+
+
+REGEX_NO_MATCH = object()
+
+
+def regex_extract(pattern, subject, group=0):
+    """Return the R022 `str_extract` result for one pattern and subject.
+
+    REGEX_NO_MATCH when the pattern matched nowhere, None when the match did
+    not enter the requested group, and the matched text otherwise.
+    """
+    declared = regex_capture_group_count(pattern)
+    if not isinstance(group, int) or group < 0 or group > declared:
+        raise RegexGroupOutOfRange(
+            f"group {group!r} is outside the {declared} capturing "
+            f"{'group' if declared == 1 else 'groups'} the pattern declares"
+        )
+    match = regex_search(pattern, subject)
+    if match is None:
+        return REGEX_NO_MATCH
+    span = match.group(group)
+    if span is None:
+        return None
+    return subject.encode('utf-8')[span.start:span.stop].decode('utf-8')
+
+
+def regex_pattern_errors(pattern, path, full_match=False):
+    """Return the R022 invalid_regex error a pattern produces, if any."""
+    try:
+        compile_regex(pattern)
+        if full_match:
+            compile_regex(anchored_regex_source(pattern))
+    except InvalidRegex as exc:
+        return [f"ERROR: {path}: invalid_regex under R022: {exc.reason}"]
+    return []
+
+
+def regex_group_errors(keyword, payload, path):
+    """Return the R022 regex_group_out_of_range error for a str_extract."""
+    if keyword != 'str_extract' or not isinstance(payload, dict):
+        return []
+    pattern = payload.get('pattern')
+    group = payload.get('group', 0)
+    if not isinstance(pattern, str) or type(group) is not int:
+        return []
+    try:
+        declared = regex_capture_group_count(pattern)
+    except InvalidRegex:
+        # The pattern's own rejection is reported where it is typed `regex`.
+        return []
+    if group < 0 or group > declared:
+        return [
+            f"ERROR: {path}.group: regex_group_out_of_range under R022: "
+            f"group {group} is outside the {declared} capturing "
+            f"{'group' if declared == 1 else 'groups'} pattern "
+            f"{pattern!r} declares"
+        ]
+    return []
+
+
 class UniqueKeyLoader(yaml.SafeLoader):
     yaml_implicit_resolvers = copy.deepcopy(
         yaml.SafeLoader.yaml_implicit_resolvers
@@ -665,10 +848,9 @@ def check_descriptor(desc, is_class_field, path):
         if not isinstance(desc['pattern'], str):
             errors.append(f"ERROR: {path}: pattern must be a string")
         else:
-            try:
-                re.compile(desc['pattern'])
-            except re.error as exc:
-                errors.append(f"ERROR: {path}: invalid pattern: {exc}")
+            errors.extend(
+                regex_pattern_errors(desc['pattern'], path, full_match=True)
+            )
 
     if 'min_length' in desc:
         if not string_only:
@@ -995,11 +1177,19 @@ def validate_constraints(data, descriptor, path):
         )
     if 'pattern' in descriptor:
         pattern = descriptor['pattern']
-        if not isinstance(data, str) or re.fullmatch(pattern, data) is None:
+        try:
+            satisfied = regex_full_match(pattern, data)
+        except InvalidRegex as exc:
+            # The pattern is the defect; do not also blame the value.
             errors.append(
-                f"ERROR: {path}: value {data!r} does not match pattern "
-                f"{pattern!r}"
+                f"ERROR: {path}: invalid_regex under R022: {exc.reason}"
             )
+        else:
+            if not satisfied:
+                errors.append(
+                    f"ERROR: {path}: value {data!r} does not match pattern "
+                    f"{pattern!r}"
+                )
     if 'min_length' in descriptor:
         try:
             actual_length = len(data)
@@ -1154,6 +1344,9 @@ def _check_single_type(data, t, env, path):
                     for k in val:
                         if k not in allowed_keys:
                             errors.append(f"ERROR: {path}.{key}.{k}: unknown field '{k}'")
+                    errors.extend(
+                        regex_group_errors(key, val, f"{path}.{key}")
+                    )
             return errors
 
         else:
@@ -1161,7 +1354,10 @@ def _check_single_type(data, t, env, path):
             errors = validate_type(data, alias['type'], env, path)
             if errors:
                 return errors
-            return validate_constraints(data, alias, path)
+            errors = validate_constraints(data, alias, path)
+            if t == 'regex' and isinstance(data, str):
+                errors = errors + regex_pattern_errors(data, path)
+            return errors
 
     return [f"ERROR: {path}: unknown type '{t}'"]
 
@@ -5134,6 +5330,227 @@ def validate_unicode_scalars(value, path):
     return errors
 
 
+REGEX_CONFORMANCE_PATH = PurePosixPath('yaml/conformance/regex.yaml')
+REGEX_FIXTURE_COVERS = {
+    'anchors',
+    'capture-groups',
+    'dialect',
+    'empty-match',
+    'escaping',
+    'search',
+    'unicode',
+    'unsupported',
+}
+# The categories R022 requires the shared fixtures to exercise. A fixture set
+# that stops covering one of them stops being evidence for that behavior.
+REGEX_FIXTURE_REQUIRED_COVERS = {
+    'anchors',
+    'capture-groups',
+    'empty-match',
+    'escaping',
+    'unicode',
+    'unsupported',
+}
+REGEX_FIXTURE_CASE_KEYS = {
+    'id', 'covers', 'pattern', 'subject', 'schema_pattern', 'matches',
+    'str_extract', 'invalid',
+}
+
+
+def validate_regex_conformance(root: Path):
+    """Replay R022's shared fixtures against the pinned engine.
+
+    Every case records what all three consumers produce for one pattern and
+    subject. Replaying them here keeps the fixtures, this validator, and the
+    pinned engine from drifting apart, and gives the R implementation a file
+    whose expected values are already known to be reachable.
+    """
+    label = str(REGEX_CONFORMANCE_PATH)
+    document_path = root / REGEX_CONFORMANCE_PATH
+    if not document_path.exists():
+        return [f"ERROR: {label}: missing R022 regular-expression fixtures"]
+
+    try:
+        with open(document_path, 'r', encoding='utf-8') as handle:
+            document = yaml.load(handle, Loader=UniqueKeyLoader)
+    except Exception as exc:
+        return [f"ERROR: {label}: {exc}"]
+
+    if not isinstance(document, dict):
+        return [f"ERROR: {label}: expected a mapping"]
+
+    errors = []
+    engine = document.get('engine')
+    expected_engine = {
+        'crate': REGEX_ENGINE_CRATE,
+        'crate_version': REGEX_ENGINE_CRATE_VERSION,
+        'flags': REGEX_FLAGS,
+    }
+    if engine != expected_engine:
+        errors.append(
+            f"ERROR: {label}: engine {engine!r} does not name the engine this "
+            f"validator pins, {expected_engine!r}"
+        )
+
+    cases = document.get('cases')
+    if not isinstance(cases, list) or not cases:
+        errors.append(f"ERROR: {label}: cases must be a non-empty list")
+        return errors
+
+    seen = set()
+    covered = set()
+    for index, case in enumerate(cases):
+        case_label = f"{label}: cases[{index}]"
+        if not isinstance(case, dict):
+            errors.append(f"ERROR: {case_label}: expected a mapping")
+            continue
+        case_id = case.get('id')
+        if not isinstance(case_id, str) or not case_id:
+            errors.append(
+                f"ERROR: {case_label}: id must be a non-empty string"
+            )
+            continue
+        case_label = f"{label}: {case_id}"
+        if case_id in seen:
+            errors.append(f"ERROR: {case_label}: duplicate case id")
+            continue
+        seen.add(case_id)
+
+        unknown = sorted(set(case) - REGEX_FIXTURE_CASE_KEYS)
+        if unknown:
+            errors.append(f"ERROR: {case_label}: unknown keys {unknown}")
+
+        covers = case.get('covers')
+        if not isinstance(covers, list) or not covers:
+            errors.append(
+                f"ERROR: {case_label}: covers must be a non-empty list"
+            )
+        else:
+            outside = sorted(set(covers) - REGEX_FIXTURE_COVERS)
+            if outside:
+                errors.append(f"ERROR: {case_label}: unknown covers {outside}")
+            covered.update(covers)
+
+        pattern = case.get('pattern')
+        if not isinstance(pattern, str):
+            errors.append(f"ERROR: {case_label}: pattern must be a string")
+            continue
+
+        errors.extend(_regex_fixture_case_errors(case, case_label, pattern))
+
+    missing = sorted(REGEX_FIXTURE_REQUIRED_COVERS - covered)
+    if missing:
+        errors.append(
+            f"ERROR: {label}: no case covers {missing}"
+        )
+    return errors
+
+
+def _regex_fixture_case_errors(case, case_label, pattern):
+    """Compare one fixture case with what the pinned engine produces."""
+    errors = []
+    if case.get('invalid') is True:
+        for key in ('subject', 'schema_pattern', 'matches', 'str_extract'):
+            if key in case:
+                errors.append(
+                    f"ERROR: {case_label}: a rejected pattern records no {key}"
+                )
+        try:
+            compile_regex(pattern)
+        except InvalidRegex:
+            return errors
+        errors.append(
+            f"ERROR: {case_label}: the pinned engine accepts pattern "
+            f"{pattern!r} the fixture records as invalid"
+        )
+        return errors
+
+    if 'invalid' in case:
+        errors.append(
+            f"ERROR: {case_label}: invalid must be true or absent"
+        )
+    subject = case.get('subject')
+    if not isinstance(subject, str):
+        errors.append(f"ERROR: {case_label}: subject must be a string")
+        return errors
+
+    try:
+        actual_full = regex_full_match(pattern, subject)
+        actual_search = regex_search(pattern, subject) is not None
+    except InvalidRegex as exc:
+        errors.append(
+            f"ERROR: {case_label}: the pinned engine rejects pattern "
+            f"{pattern!r}: {exc.reason}"
+        )
+        return errors
+
+    for key, actual in (
+        ('schema_pattern', actual_full),
+        ('matches', actual_search),
+    ):
+        recorded = case.get(key)
+        if type(recorded) is not bool:
+            errors.append(f"ERROR: {case_label}: {key} must be true or false")
+        elif recorded is not actual:
+            errors.append(
+                f"ERROR: {case_label}: {key} records {recorded} but the "
+                f"pinned engine produces {actual}"
+            )
+
+    errors.extend(
+        _regex_fixture_extract_errors(case, case_label, pattern, subject)
+    )
+    return errors
+
+
+def _regex_fixture_extract_errors(case, case_label, pattern, subject):
+    """Compare one fixture's recorded str_extract result with the engine."""
+    if 'str_extract' not in case:
+        return [f"ERROR: {case_label}: str_extract is required"]
+    recorded = case['str_extract']
+    if recorded is None:
+        group, expected = 0, REGEX_NO_MATCH
+    elif isinstance(recorded, dict) and set(recorded) == {'group', 'value'}:
+        group = recorded['group']
+        expected = recorded['value']
+        if type(group) is not int:
+            return [f"ERROR: {case_label}: str_extract group must be an int"]
+        if expected is not None and not isinstance(expected, str):
+            return [
+                f"ERROR: {case_label}: str_extract value must be a string "
+                f"or null"
+            ]
+    else:
+        return [
+            f"ERROR: {case_label}: str_extract must be null or a mapping of "
+            f"group and value"
+        ]
+
+    try:
+        actual = regex_extract(pattern, subject, group)
+    except (InvalidRegex, RegexGroupOutOfRange) as exc:
+        return [f"ERROR: {case_label}: str_extract group {group}: {exc}"]
+
+    if actual is REGEX_NO_MATCH and expected is REGEX_NO_MATCH:
+        return []
+    if actual is REGEX_NO_MATCH:
+        return [
+            f"ERROR: {case_label}: str_extract records a match but the "
+            f"pinned engine finds none"
+        ]
+    if expected is REGEX_NO_MATCH:
+        return [
+            f"ERROR: {case_label}: str_extract records no match but the "
+            f"pinned engine matches"
+        ]
+    if actual != expected:
+        return [
+            f"ERROR: {case_label}: str_extract group {group} records "
+            f"{expected!r} but the pinned engine produces {actual!r}"
+        ]
+    return []
+
+
 def check_yaml_files(root: Path):
     errors = []
     warnings = []
@@ -5179,6 +5596,7 @@ def check_yaml_files(root: Path):
     errors.extend(validate_csv_shapes(root))
     errors.extend(validate_example_readmes(root))
     errors.extend(validate_rule_metadata(root))
+    errors.extend(validate_regex_conformance(root))
 
     csv_errors, csv_warnings = validate_examples_csv(root, env)
     errors.extend(csv_errors)
@@ -5403,6 +5821,12 @@ def main():
     parser.add_argument('--warnings-as-errors', action='store_true',
                         help="Treat warnings as errors")
     args = parser.parse_args()
+
+    try:
+        require_regex_engine()
+    except RegexEngineUnavailable as exc:
+        print(f"ERROR: {exc}")
+        return 1
 
     errors, warnings = check_yaml_files(args.root)
 

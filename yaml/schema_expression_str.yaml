@@ -9,7 +9,7 @@ expressions:
         - pattern:
             type: regex
             required: true
-            description: ECMAScript regular expression matched against source.
+            description: Regular expression searched in source under R022.
         - group:
             type: int
             default: 0

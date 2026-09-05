@@ -16,6 +16,8 @@ and SDTM-to-ADaM derivations. The design is under active development.
 - `rules/` contains shared execution semantics, with one rule per file.
 - `examples/` contains source data, derivation specifications, and exact
   expected outputs.
+- `conformance/` contains language-wide fixtures that every implementation
+  must reproduce, one file per contract.
 - `agents.md` tells AI coding agents how to discover and maintain the design.
 
 The schema defines shape and operation-local behavior through adjacent comments
@@ -26,6 +28,14 @@ R019 gives every string one portable contract: language source is ASCII, data
 may contain Unicode scalar values, casing and case-insensitive mapping affect
 ASCII letters only, no normalization is implicit, and equality and ordering
 operate on the exact scalar sequence.
+
+R022 gives every regular expression one executable contract: schema
+`pattern`, `str_extract`, and `matches` are read by one pinned ECMA-262
+engine with the Unicode flag set, each consumer fixes whether it searches or
+must match the whole value, capture groups are numbered by opening
+parenthesis, and a pattern that engine rejects fails validation rather than
+falling back to a host dialect. `conformance/regex.yaml` holds the fixtures
+R and Python must both reproduce.
 
 R021 gives every declared source one resource contract: a run receives one
 approved project root, a declared path is a relative file inside it with no

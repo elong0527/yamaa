@@ -14,10 +14,10 @@ semantics, error behavior, and representative examples are complete.
 | R003 | [Cross-dataset left join](R003-cross-dataset-left-join.md) | normative | The implicit join and its right-side reduction | R002, R004, R005, R007, R008, R013, R019 |
 | R004 | [Predicate language](R004-expression-language.md) | normative | The Boolean `sql` primitive | R001, R002, R006, R007, R010, R011, R016, R019 |
 | R005 | [Output contract](R005-output-contract.md) | normative | Column coverage, output membership, the value lifecycle, output identity, artifact row order | R001, R002, R003, R007, R008, R009, R011, R019, R020 |
-| R006 | [Compact schema language](R006-schema-language.md) | normative | Schema notation and structural validation | R019 |
+| R006 | [Compact schema language](R006-schema-language.md) | normative | Schema notation and structural validation | R019, R022 |
 | R007 | [Expression registry](R007-expression-registry.md) | normative | Registration, nesting, evaluation kinds, ordering, input types | R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014, R015, R016, R018, R019 |
 | R008 | [Local error handlers](R008-local-handlers.md) | normative | The handler lifecycle | R001, R002, R003, R005, R006, R007, R011, R012, R016 |
-| R009 | [Verifications](R009-verifications.md) | normative | What each assertion means, including group cardinality, and when it runs | R004, R005, R006, R011, R019 |
+| R009 | [Verifications](R009-verifications.md) | normative | What each assertion means, including group cardinality, and when it runs | R004, R005, R006, R011, R019, R022 |
 | R010 | [Scalar numeric computation](R010-scalar-computation.md) | normative | The `numeric_expression` primitive | R001, R004, R005, R006, R007, R011, R014, R015 |
 | R011 | [Column types](R011-column-types.md) | normative | The `column_type` vocabulary, non-finite normalization, and conversion | R005, R006, R007, R008, R009, R010, R014, R016, R018, R019, R020 |
 | R012 | [String templates](R012-string-templates.md) | normative | Interpolation grammar, escaping, and evaluation | R001, R002, R006, R007, R008, R019 |
@@ -30,6 +30,7 @@ semantics, error behavior, and representative examples are complete.
 | R019 | [Text values](R019-text-values.md) | normative | ASCII source, Unicode data, casing, equality, normalization, total order | -- |
 | R020 | [Artifact serialization](R020-artifact-serialization.md) | normative | The `parquet` and `csv` profiles, display precision, and publication | R005, R011, R014, R016, R019 |
 | R021 | [Project resource resolution](R021-project-resource-resolution.md) | normative | The approved project root, written path form, readable file kinds, content identity | R006, R017, R019 |
+| R022 | [Regular expressions](R022-regular-expressions.md) | normative | The pinned engine and flag set, full-match and search behavior per consumer, capture-group numbering | R006, R007, R008, R009, R019 |
 
 ## Rule admission
 
