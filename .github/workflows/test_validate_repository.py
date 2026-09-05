@@ -96,6 +96,60 @@ class TestYamlLoader(unittest.TestCase):
             )
 
 
+class TestTextSourceBoundary(unittest.TestCase):
+    def test_rejects_non_ascii_source_but_allows_unicode_csv_data(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / 'rule.md'
+            source.write_bytes(
+                b'# Rule\ntext ' + bytes([0xC3, 0xA9]) + b'\n'
+            )
+            data = root / 'yaml' / 'examples' / 'example' / 'input'
+            data.mkdir(parents=True)
+            (data / 'values.csv').write_text(
+                'VALUE\n' + chr(0x00E9) + '\n',
+                encoding='utf-8',
+            )
+
+            errors = VALIDATOR.validate_ascii_sources(root)
+            csv_errors = VALIDATOR.validate_csv_shapes(root)
+
+        self.assertEqual(
+            errors,
+            ['ERROR: rule.md:2:6: non_ascii_source byte 0xC3'],
+        )
+        self.assertEqual(csv_errors, [])
+
+    def test_rejects_a_decoded_surrogate(self):
+        document = {'value': chr(0xD800)}
+
+        errors = VALIDATOR.validate_unicode_scalars(document, 'spec.yaml')
+
+        self.assertEqual(
+            errors,
+            [
+                'ERROR: spec.yaml.value: invalid_text surrogate U+D800 '
+                'at string offset 0'
+            ],
+        )
+
+    def test_rejects_ill_formed_utf8_data(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data = (
+                Path(temp_dir)
+                / 'yaml' / 'examples' / 'example' / 'input'
+            )
+            data.mkdir(parents=True)
+            (data / 'values.csv').write_bytes(
+                b'VALUE\n' + bytes([0xFF]) + b'\n'
+            )
+
+            errors = VALIDATOR.validate_csv_shapes(Path(temp_dir))
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn('invalid_text', errors[0])
+
+
 class TestPredicateLanguage(unittest.TestCase):
     def test_parses_precedence_compounds_and_all_literal_types(self):
         predicate = (

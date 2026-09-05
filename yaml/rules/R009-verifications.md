@@ -3,7 +3,7 @@ id: R009
 title: Verifications
 status: normative
 applies_to: [root.verifications, column.verifications, column_verifications, dataset_verifications]
-depends_on: [R004, R005, R006, R011]
+depends_on: [R004, R005, R006, R011, R019]
 ---
 
 # Verifications
@@ -20,6 +20,7 @@ is reported. R005 owns key uniqueness, which is checked by the output contract
 rather than declared as a verification, and it owns the artifact's row order,
 which no verification here observes. R004 owns the predicates that `implies`,
 `predicate`, and a grouped `row_count` evaluate.
+R019 owns string equality and scalar counting.
 
 Verifications reach across rows only in fixed ways, deliberately. `unique` and
 `row_count` ask one question about the output as a whole, and `row_count` asks
@@ -95,26 +96,26 @@ path.
 ## Column verifications
 
 - `not_missing` passes only when every value is non-missing.
-- `allowed_values` requires every non-missing value to equal one listed value.
-  Missing values pass; combine with `not_missing` when absence is invalid.
+- `allowed_values` requires every non-missing value to equal one listed value
+  under its type's equality, including R019 for strings. Missing values pass;
+  combine with `not_missing` when absence is invalid.
 - `range` requires every non-missing numeric value to be greater than or equal
   to `min` and less than or equal to `max`, for whichever bounds are supplied.
   At least one bound is required.
-- `max_length` requires every non-missing string to be at most `max` Unicode
-  code points long. Missing values pass; combine with `not_missing` when
-  absence is invalid. It is declared only on a `str` column: a length counts
-  the characters of a stored string, and the text a number or a temporal value
-  renders as is a property of R011's rendering rather than of the value.
+- `max_length` requires every non-missing string to contain at most `max` R019
+  scalar values. Missing values pass; combine with `not_missing` when absence
+  is invalid. It is declared only on a `str` column: the text a number or a
+  temporal value renders as is a property of R011's rendering rather than of
+  the value.
 - `matches` requires every non-missing string to match its ECMAScript regular
   expression. Matching searches unless the pattern is anchored.
 
-`max_length` counts code points rather than bytes or UTF-16 units, which is
-the unit R006 already fixes for its own `min_length`, so one character is one
-count in both R and Python whatever plane it comes from. A length is therefore
-a check of its own rather than an anchored `matches` pattern: `.` in an
-ECMAScript regular expression counts UTF-16 code units and excludes line
-terminators, so the same value could pass in one runtime's spelling of the
-bound and fail in another's.
+R019 scalar count rather than bytes or UTF-16 units is also the unit R006 uses
+for `min_length`, so a supplementary-plane scalar counts once in both R and
+Python. A length is therefore a check of its own rather than an anchored
+`matches` pattern: `.` in an ECMAScript regular expression counts UTF-16 code
+units and excludes line terminators, so the two checks deliberately have
+different units.
 
 ## Dataset verifications
 
@@ -141,8 +142,9 @@ bound and fail in another's.
 counts it makes and which rows each one counts:
 
 - `group_by` names declared columns and partitions **the artifact's rows** by
-  equality on their values, missing values grouping with other missing values
-  as R001 partitions a driver relation. Both bounds then apply to every group.
+  the equality each value's type owns, including R019 for strings. Missing
+  values group with other missing values as R001 partitions a driver relation.
+  Both bounds then apply to every group.
 - `filter` is an R004 predicate over one completed output row, and a group's
   count is how many of its rows the predicate admits. A row counts only when
   the predicate is `TRUE`, so `FALSE` and `UNKNOWN` do not count, which is what

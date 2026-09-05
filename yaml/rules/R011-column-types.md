@@ -3,7 +3,7 @@ id: R011
 title: Column Type Vocabulary, Missing Normalization, and Conversion
 status: normative
 applies_to: [column.type, column_type, literal_value, derivation, conversion_failure]
-depends_on: [R005, R006, R007, R008, R009, R010, R014, R016, R018]
+depends_on: [R005, R006, R007, R008, R009, R010, R014, R016, R018, R019]
 ---
 
 # Column type vocabulary and conversion
@@ -28,7 +28,8 @@ wherever it is read. R016 owns both temporal types. What a `date` and a
 them order, and which operations read them are stated there; the temporal
 cells below apply that rule rather than restating it. R018 owns the
 function-only Boolean parameter type and the result contract applied after
-this rule's normalization.
+this rule's normalization. R019 owns the contents, equality, order, and
+normalization policy of `str`.
 
 ## Three type namespaces
 
@@ -58,7 +59,7 @@ values. `date` and `datetime` are column types and not schema types. `bool`,
 
 | Type | Values |
 |---|---|
-| `str` | A sequence of Unicode code points |
+| `str` | A text value defined by R019 |
 | `int` | A 64-bit signed integer, as defined by R010 |
 | `float` | An IEEE 754 binary64 value, as defined by R010 |
 | `date` | A calendar date, as defined by R016 |
@@ -130,7 +131,7 @@ column is the declared type:
 | From | to `str` | to `int` | to `float` | to `date` | to `datetime` |
 |---|---|---|---|---|---|
 | missing | missing | missing | missing | missing | missing |
-| `str` | identity | parse, then numeric to `int` | parse | R016 | R016 |
+| `str` | R019 identity | parse, then numeric to `int` | parse | R016 | R016 |
 | `int` | decimal text | identity | widen | fail | fail |
 | `float` | decimal text, see below | integral only | identity | fail | fail |
 | `date` | R016 | fail | fail | identity | fail |

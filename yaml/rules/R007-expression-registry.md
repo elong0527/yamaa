@@ -3,7 +3,7 @@ id: R007
 title: Expression Registry
 status: normative
 applies_to: [expression, expressions, schema_expression]
-depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014, R015, R016, R018]
+depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014, R015, R016, R018, R019]
 ---
 
 # Expression registry
@@ -25,6 +25,7 @@ handlers, R010 for `compute`, R011 for column types, R012 for string templates,
 R013 for aggregate reduction, R014 for the type a source field carries, R015
 for a record selected once and read by several columns, R016 for dates and
 datetimes, R018 for project functions, and R004 for predicates.
+R019 owns string values, casing, equality, and order.
 
 ## Registration
 
@@ -116,9 +117,8 @@ makes the result total, so ordering has no undefined case and a row's
 neighbours are determined.
 
 Non-missing values use the order their type owns: numeric order under R010,
-code-point sequence order for `str` under R004, and chronological order for
-`date` and `datetime` under R016. An implementation must not substitute host
-locale collation for the R004 order.
+text order under R019, and chronological order for `date` and `datetime` under
+R016.
 
 That tie-break settles positions, not equality. `row_number`, `row_value`,
 `previous_non_missing`, and right-side selection read the positions themselves,
@@ -171,7 +171,8 @@ a coerced operand. Each owning rule defines the order its type takes.
 `source` retains its source type, which R014 defines, and `literal` retains
 its YAML scalar type after R011's non-finite normalization.
 `cut`, `str_extract`, `str_concat`, `str_template`, `str_upper`, and
-`str_lower` return strings. `compute` returns the numeric type its expression
+`str_lower` return strings. R019 owns the casing and text-preservation behavior
+of those string operations. `compute` returns the numeric type its expression
 promotes to under R010.
 `row_number` and `rank` return integers. The temporal operations return the
 types R016 gives them. `baseline_flag` returns a string. Mapping, conditional,

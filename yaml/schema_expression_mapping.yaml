@@ -2,7 +2,8 @@ version: "1.0"
 
 expressions:
     mapping: # Looks up a string source in an inline dictionary.
-        # Case-insensitive lookup folds only ASCII A-Z; folded keys must be unique.
+        # Case-insensitive lookup folds ASCII a-z to A-Z under R019; folded keys
+        # must be unique.
         - source:
             type: variable
             required: true
@@ -14,7 +15,7 @@ expressions:
         - case_sensitive:
             type: bool
             default: true
-            description: Compare exactly when true; fold ASCII case when false.
+            description: Compare exactly when true; use R019 ASCII folding when false.
         - missing:
             type: literal_value
             description: Value returned when source is missing.

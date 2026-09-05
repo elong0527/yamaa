@@ -22,6 +22,11 @@ The schema defines shape and operation-local behavior through adjacent comments
 and validation-neutral parameter descriptions. Rule files define behavior
 shared across operations. Examples demonstrate both without redefining them.
 
+R019 gives every string one portable contract: language source is ASCII, data
+may contain Unicode scalar values, casing and case-insensitive mapping affect
+ASCII letters only, no normalization is implicit, and equality and ordering
+operate on the exact scalar sequence.
+
 ## Version 1.0 design boundary
 
 Operations consume named variables rather than arbitrary nested expressions.

@@ -4,7 +4,7 @@ title: Aggregate Reduction
 status: normative
 applies_to: [expression.aggregate, aggregate_class.between,
   aggregate_expression]
-depends_on: [R001, R002, R003, R004, R006, R007, R010, R011, R015]
+depends_on: [R001, R002, R003, R004, R006, R007, R010, R011, R015, R019]
 ---
 
 # Aggregate reduction
@@ -20,7 +20,7 @@ This rule owns the `aggregate_expression` primitive: its grammar, reducer
 vocabulary, grain rule, result semantics, and failure conditions. It does not
 own the three contexts an aggregate is valid in, which is R007, the join that
 consumes a right-side reduction, which is R003, or the Boolean `filter`, which
-is R004.
+is R004. String reductions use R019's text equality and total order.
 
 Arithmetic outside a reduction is R010's, reused by reference: its operators,
 precedence, function table, numeric types, promotion, and failure conditions
@@ -186,7 +186,8 @@ is declared in `group_by`.
   promotion rules give the result type.
 - `SUM` and `MEAN` require a numeric argument. `MIN` and `MAX` require mutually
   comparable values; a column mixing incomparable types is an error rather
-  than an implementation-defined order. `COUNT` and `ONLY` accept any type.
+  than an implementation-defined order. Their string order is R019's.
+  `COUNT` and `ONLY` accept any type.
 
 R011 converts the completed derivation result, as it does for every other
 expression. No implicit conversion happens inside this grammar.

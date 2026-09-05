@@ -31,19 +31,19 @@ expressions:
     str_template: # Interpolates string variables under R012.
         type: [string_template, str_template_class]
         description: Portable string template, concise or with missing handling.
-    str_upper: # Converts every character in a string to uppercase.
+    str_upper: # Converts ASCII a-z to A-Z and preserves every other scalar.
         - source:
             type: variable
             required: true
-            description: String variable to convert to uppercase.
+            description: String variable whose ASCII letters are uppercased under R019.
         - missing:
             type: literal_value
             description: Value returned when source is missing.
-    str_lower: # Converts every character in a string to lowercase.
+    str_lower: # Converts ASCII A-Z to a-z and preserves every other scalar.
         - source:
             type: variable
             required: true
-            description: String variable to convert to lowercase.
+            description: String variable whose ASCII letters are lowercased under R019.
         - missing:
             type: literal_value
             description: Value returned when source is missing.

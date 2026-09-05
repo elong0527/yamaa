@@ -106,7 +106,7 @@ different programs:
 | `100 * (AVAL - BASE) / BASE` when `BASE` is 0 | SAS yields missing plus one NOTE in the log; SQL raises; R yields `Inf` | R010 makes division by zero a failure; write `NULLIF(BASE, 0)` if missing is the intended answer |
 | "Rounded to 1 decimal", at exactly `.5` | SAS `round()` is half-up; R `round()` defaults to banker's rounding | R010 provides no `ROUND` at all |
 | A filter `"AESER = 'Y'"` when `AESER` is missing | SQL three-valued logic drops the row; SAS `if` has its own missing-value rules | R004: only `TRUE` retains a row |
-| Sorting a character column with accents, mixed case, or non-Latin script | Collation follows the host locale, so the same code changes answer on a different machine | R007: code-point order, and host locale collation **must not** be substituted |
+| Sorting a character column with accents, mixed case, or non-Latin script | Collation follows the host locale, so the same code changes answer on a different machine | R019: scalar-value order, and host locale collation **must not** be substituted |
 | `AGE` declared numeric, but the source holds `"045"` or `"4.5"` | Parsers differ in strictness; a failure may yield missing or may raise | R011 fixes the conversion table cell by cell |
 | A value the codelist does not contain | Keep the original? Blank it? `UNKNOWN`? Raise? | R008: without an `unmapped` handler the condition is fatal |
 | Two results on the same day, both eligible as baseline | Each programmer picks differently | `baseline_flag` raises rather than choosing |
@@ -116,7 +116,7 @@ The pattern is the same in every row: the divergent behaviors are all
 *defensible*, several are *silent*, and the specification is what should have
 chosen between them.
 
-This is what the eighteen files in `rules/` are, and it is why each of them
+This is what the nineteen files in `rules/` are, and it is why each of them
 owns exactly one topic and cross-references the others without restating them.
 A restatement would be a second place to keep correct, which is how an
 unwritten convention starts drifting in the first place.
@@ -173,9 +173,9 @@ omission; each is a decision recorded in a rule.
 | A data-driven column count (SMQ01 ... SMQ0n) | The column list is fixed by the spec. A dictionary that outgrows it is a spec change, not a data-dependent artifact schema | R005 |
 | Repeating a row *n* times from data (e.g. expanding EXDOSFRQ into daily records) | Row construction never invents rows. Supply a planning relation with one driver record per required row; expansion happens upstream | R001 |
 | Mixing R and Python functions in one project | `runtime.language` is project-wide | R018 |
-| Ordering that follows the host locale | Forbidden; `str` orders by code point | R004 / R007 |
+| Ordering that follows the host locale | Forbidden; `str` uses R019 scalar-value order | R019 |
 
-One more thing worth saying about the rules themselves: **all eighteen indexed
+One more thing worth saying about the rules themselves: **all nineteen indexed
 rules are normative -- none is draft.** The repository's admission policy is
 that a design proposal may live in an issue or a branch, but it becomes a rule
 only once its schema shape can be validated, its behavior is closed enough for

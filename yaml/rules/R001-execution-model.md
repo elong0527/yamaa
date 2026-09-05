@@ -3,7 +3,7 @@ id: R001
 title: Execution Model
 status: normative
 applies_to: [root.base, root.rows, row.dataset, row.group_by, row.filter, root.columns, derivation]
-depends_on: [R002, R003, R004, R005, R007, R008, R010, R012, R013, R015]
+depends_on: [R002, R003, R004, R005, R007, R008, R010, R012, R013, R015, R019]
 ---
 
 # Execution model
@@ -35,8 +35,9 @@ dataset. A row template has one of two modes:
    retained driver record produces one candidate row.
 2. A template with `group_by` is group-driven. Its non-empty list names only
    qualified variables of its row driver. The complete driver relation is
-   partitioned by equality on those values, with missing values equal to other
-   missing values for grouping. Every group produces one candidate row.
+   partitioned by the equality each value's type owns, including R019 for
+   strings, with missing values equal to other missing values for grouping.
+   Every group produces one candidate row.
 
 Groups are ordered by the position of their first driver record. Within a
 group, records retain driver order. For each group, evaluate every row

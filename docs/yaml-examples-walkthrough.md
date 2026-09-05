@@ -143,11 +143,11 @@ complementary view -- **which example to open when you want to see a construct
 in use, and which rule governs it.** Rule IDs are the normative pages in
 [`yaml/rules/`](https://github.com/elong0527/yamaa/tree/main/yaml/rules).
 
-Rule coverage across the 49 questions below:
+Rule coverage across the 50 questions below:
 
-| R001 | R002 | R003 | R004 | R005 | R006 | R007 | R008 | R009 | R010 | R011 | R012 | R013 | R014 | R015 | R016 | R017 | R018 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 8 | 3 | 2 | 0 | 1 | 0 | 15 | 3 | 1 | 0 | 1 | 1 | 7 | 0 | 8 | 5 | 2 | 3 |
+| R001 | R002 | R003 | R004 | R005 | R006 | R007 | R008 | R009 | R010 | R011 | R012 | R013 | R014 | R015 | R016 | R017 | R018 | R019 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 8 | 3 | 2 | 0 | 1 | 0 | 15 | 3 | 1 | 0 | 1 | 1 | 7 | 0 | 8 | 5 | 2 | 3 | 1 |
 
 ### Row construction and value-level metadata
 
@@ -215,6 +215,7 @@ Rule coverage across the 49 questions below:
 | How do I build USUBJID from parts? | R007 | [`sdtm-dm-metadata-contract`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-dm-metadata-contract) -- `str_concat` mixing sources and literals |
 | How do I clean text and reject a malformed identifier? | R007, R008 | [`adam-adae-string-handlers`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adae-string-handlers) |
 | How do I normalize a country and group it into a region? | R007 | [`adam-adsl-geography-normalization`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-geography-normalization) |
+| How are international strings cased, compared and ordered? | R019 | [`adam-adsl-portable-text`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-portable-text) |
 | How do I classify a result, its shift, and a criterion flag? | R007 | [`adam-adlb-shift-and-criteria`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-shift-and-criteria) |
 
 ### Contracts, metadata and checks

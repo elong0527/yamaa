@@ -3,7 +3,7 @@ id: R005
 title: Output Contract
 status: normative
 applies_to: [root.keys, root.output, root.columns, column.type, row.derivations, derivation]
-depends_on: [R001, R002, R003, R007, R008, R009, R011]
+depends_on: [R001, R002, R003, R007, R008, R009, R011, R019]
 ---
 
 # Output contract
@@ -21,7 +21,7 @@ stages a value passes through, output identity, and the order the artifact's
 rows are presented in. It does not own what any stage does: R011 defines a
 declared type and its conversions, R008 defines the handlers, R009 defines the
 assertions, and R001 owns the two phases and the dependency order within them.
-R007 owns what an order term means.
+R007 owns what an order term means. R019 owns string equality and order.
 
 ## The artifact
 
@@ -175,6 +175,7 @@ least one. A column must not be listed twice.
 Once every column's lifecycle is complete, the combined key values of each row
 must be non-missing and unique across the artifact. Key validation happens
 before dataset verifications, which R009 runs last.
+String key values use R019 equality.
 
 Key order is significant to R003, which joins on the output keys a right side
 also carries. That is a subset used for enrichment and does not change the

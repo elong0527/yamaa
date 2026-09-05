@@ -3,7 +3,7 @@ id: R006
 title: Compact Schema Language
 status: normative
 applies_to: [schema, root.schema_version, environment.schema_version]
-depends_on: []
+depends_on: [R019]
 ---
 
 # Compact schema language
@@ -46,6 +46,10 @@ reinterpreting a document written for an earlier one.
 
 All schema documents must reject duplicate YAML keys, aliases, merge keys,
 explicit tags, and unknown schema constructs.
+
+Schema documents and the documents they validate use R019's ASCII source
+boundary. A decoded string value follows R019 even when ASCII escape notation
+was used to write it.
 
 ## Scalar resolution
 
@@ -197,9 +201,10 @@ Only these descriptor keywords are supported:
   field or value type and has no effect on validation. R007 makes registry
   descriptions part of the operation-local language definition.
 - `pattern` is allowed only for `str` and is an ECMAScript regular expression.
-- `min_length` is allowed only for `str` and counts Unicode code points.
+- `min_length` is allowed only for `str` and counts R019 scalar values.
 - `size` is allowed only for `list` or `dict` and requires an exact size.
-- `values` is allowed only for `str` and lists exact permitted values.
+- `values` is allowed only for `str` and lists permitted values compared by
+  R019 equality.
 - `default` is allowed only when `required` is false or absent and must satisfy
   the same descriptor.
 

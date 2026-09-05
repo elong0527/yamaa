@@ -3,7 +3,7 @@ id: R018
 title: Project Function Environment
 status: normative
 applies_to: [environment, function, function_contract, function_binding]
-depends_on: [R001, R005, R006, R011, R016]
+depends_on: [R001, R005, R006, R011, R016, R019]
 ---
 
 # Project function environment
@@ -114,7 +114,7 @@ default is `{present: false}`. A present default is
 | Logical value | Canonical object |
 |---|---|
 | missing | `{type: "missing"}` |
-| `str` | `{type: "str", value: exact-unicode-text}` |
+| `str` | `{type: "str", value: R019-text}` |
 | `int` | `{type: "int", value: base-10-string}` |
 | finite `float` | `{type: "float", value: 16-lowercase-hex-big-endian-binary64-bits}` |
 | `bool` | `{type: "bool", value: JSON-Boolean}` |
@@ -125,9 +125,9 @@ encoded, so this table has no non-finite representation.
 
 `comparison_decimals` is its non-negative base-10 string. The object is
 serialized as UTF-8 JSON under the JSON Canonicalization Scheme in RFC 8785,
-then hashed with SHA-256 and prefixed with `sha256:`. Strings are not Unicode-
-normalized. Parameters remain in their declared array order; object member
-order comes only from canonical JSON.
+then hashed with SHA-256 and prefixed with `sha256:`. Strings retain their R019
+value. Parameters remain in their declared array order; object member order
+comes only from canonical JSON.
 
 The runtime language, artifact, binding, description, and implementation
 version are excluded. Repository validation requires every discovered pair of
@@ -245,8 +245,9 @@ invalidates the cache and requires activation again.
 
 ## Numeric conformance and rounding
 
-Nonnumeric expected results and missingness compare exactly. Numeric results
-compare temporary decimal copies at the contract's non-negative
+Nonnumeric expected results and missingness compare by their type's equality,
+including R019 for strings. Numeric results compare temporary decimal copies
+at the contract's non-negative
 `comparison_decimals`; the default is four. At an exact decimal tie the copy is
 rounded to the nearest value away from zero. For example, at four places,
 `1.23445` becomes `1.2345` and `-1.23445` becomes `-1.2345`.

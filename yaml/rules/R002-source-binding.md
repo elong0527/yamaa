@@ -3,7 +3,7 @@ id: R002
 title: Source Binding
 status: normative
 applies_to: [root.datasets, root.base, row.dataset, row.group_by, expression.source, string_template]
-depends_on: [R003, R006, R008, R014, R015]
+depends_on: [R003, R006, R008, R014, R015, R019]
 ---
 
 # Source binding
@@ -19,7 +19,7 @@ This rule owns dataset declaration and how a name resolves to a value. What
 happens when a qualified name reaches another dataset is R003. What happens
 when a bound name is absent or matches several records is R008. What a stored
 field becomes before it is bound at all, including when it is missing and which
-type it carries, is R014.
+type it carries, is R014. R019 owns the text a string value contains.
 
 ## Dataset declarations
 
@@ -91,7 +91,8 @@ the braces and escaping; the placeholder's complete name binds here exactly as
 if it appeared in a field typed as `variable`. Text outside placeholders is
 literal text.
 
-Plain strings outside fields typed as `variable` are literal strings.
+Plain strings outside fields typed as `variable` are literal strings under
+R019.
 Implementations must not infer same-named source variables when an output
 column has no derivation.
 
