@@ -486,6 +486,359 @@ class TestNumericExpressionLanguage(unittest.TestCase):
         self.assertEqual(names, {'VALUE', 'BASE', 'PICK.DOSE'})
 
 
+class TestAggregateExpressionLanguage(unittest.TestCase):
+    def context(self, **changes):
+        context = {
+            'kind': 'column',
+            'datasets': {
+                'EX': {
+                    'DOSE': 'float',
+                    'PLANDOSE': 'float',
+                    'TERM': 'str',
+                }
+            },
+            'output_types': {'VALUE': 'float', 'TERM': 'str'},
+            'keys': ['STUDYID', 'PLANDOSE'],
+        }
+        context.update(changes)
+        return context
+
+    def test_parses_reducers_functions_and_count_star(self):
+        expression = 'SUM(EX.DOSE) / NULLIF(EX.PLANDOSE, 0)'
+        ast = VALIDATOR.parse_aggregate_expression(expression)
+        resolver = VALIDATOR.numeric_identifier_resolver(
+            qualified=self.context()['datasets']
+        )
+
+        result_type, errors = VALIDATOR.validate_aggregate_expression_ast(
+            ast,
+            'spec.columns.RDI.derivation.aggregate.expr',
+            expression,
+            resolver,
+            {'EX.PLANDOSE'},
+            'EX',
+        )
+        count_errors = VALIDATOR.validate_aggregate_at(
+            'COUNT(EX.*)', 'spec.columns.N.derivation.aggregate',
+            self.context()
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(result_type, 'float')
+        self.assertEqual(count_errors, [])
+        self.assertEqual(
+            VALIDATOR.aggregate_expression_identifier_names(expression),
+            {'EX.DOSE', 'EX.PLANDOSE'},
+        )
+
+    def test_rejects_invalid_grammar_constructs_and_functions(self):
+        path = 'spec.columns.X.derivation.aggregate'
+
+        malformed = VALIDATOR.validate_aggregate_at(
+            'SUM(EX.DOSE', path, self.context()
+        )[0]
+        comparison = VALIDATOR.validate_aggregate_at(
+            'SUM(EX.DOSE) > 0', path, self.context()
+        )[0]
+        function = VALIDATOR.validate_aggregate_at(
+            'MEDIAN(EX.DOSE)', path, self.context()
+        )
+
+        self.assertEqual(malformed.condition, 'invalid_aggregate_expression')
+        self.assertEqual(comparison.condition, 'prohibited_construct')
+        self.assertIn(
+            'prohibited_function',
+            {error.condition for error in function},
+        )
+        self.assertIsNotNone(malformed.span)
+
+    def test_rejects_nested_reductions_and_mixed_relations(self):
+        path = 'spec.columns.X.derivation.aggregate'
+        nested = VALIDATOR.validate_aggregate_at(
+            'MAX(SUM(EX.DOSE))', path, self.context()
+        )
+        mixed = VALIDATOR.validate_aggregate_at(
+            'SUM(EX.DOSE) + SUM(AE.DOSE)', path, self.context()
+        )
+
+        self.assertIn('nested_reduction', {error.condition for error in nested})
+        self.assertEqual(mixed[0].condition, 'mixed_relations')
+
+    def test_enforces_grain_context_and_numeric_reducer_inputs(self):
+        path = 'spec.columns.X.derivation.aggregate'
+        ungrouped = VALIDATOR.validate_aggregate_at(
+            'SUM(EX.DOSE) / EX.PLANDOSE', path, self.context()
+        )
+        non_numeric = VALIDATOR.validate_aggregate_at(
+            {'expr': 'SUM(TERM)', 'group_by': ['VALUE']},
+            path,
+            self.context(),
+        )
+        row_context = self.context(
+            kind='ungrouped_row', driver='EX', row_group_by=None
+        )
+        wrong_row_context = VALIDATOR.validate_aggregate_at(
+            'SUM(EX.DOSE)', path, row_context
+        )
+
+        self.assertEqual(
+            ungrouped[0].condition, 'aggregate_identifier_not_grouped'
+        )
+        self.assertEqual(
+            non_numeric[0].condition, 'incompatible_input_type'
+        )
+        self.assertEqual(
+            wrong_row_context[0].condition, 'invalid_aggregate_context'
+        )
+
+    def test_validates_row_relative_range_bounds_and_types(self):
+        path = 'spec.columns.X.derivation.aggregate'
+        missing = VALIDATOR.validate_aggregate_at(
+            {'expr': 'SUM(EX.DOSE)', 'between': {'value': 'VALUE'}},
+            path,
+            self.context(),
+        )
+        wrong_relation = VALIDATOR.validate_aggregate_at(
+            {
+                'expr': 'SUM(EX.DOSE)',
+                'between': {'value': 'VALUE', 'lower': 'AE.DOSE'},
+            },
+            path,
+            self.context(),
+        )
+        incomparable = VALIDATOR.validate_aggregate_at(
+            {
+                'expr': 'SUM(EX.DOSE)',
+                'between': {'value': 'TERM', 'lower': 'EX.DOSE'},
+            },
+            path,
+            self.context(),
+        )
+
+        self.assertEqual(missing[0].context['reason'], 'missing_between_bound')
+        self.assertEqual(
+            wrong_relation[0].context['reason'],
+            'wrong_between_bound_relation',
+        )
+        self.assertEqual(incomparable[0].condition, 'incompatible_input_type')
+
+
+class TestStringTemplateLanguage(unittest.TestCase):
+    def test_parses_placeholders_and_escaped_braces(self):
+        template = '{{{SITEID}}}:{SUBJID}:{ODM.IT.DM.SEX}'
+        placeholders = VALIDATOR.parse_string_template(template)
+
+        self.assertEqual(
+            [placeholder['name'] for placeholder in placeholders],
+            ['SITEID', 'SUBJID', 'ODM.IT.DM.SEX'],
+        )
+        self.assertEqual(
+            VALIDATOR.string_template_identifier_names(template),
+            {'SITEID', 'SUBJID', 'ODM.IT.DM.SEX'},
+        )
+
+    def test_rejects_operators_empty_and_unmatched_braces(self):
+        for template in ('{A + B}', '{}', '{A', 'A}'):
+            with self.subTest(template=template):
+                errors = VALIDATOR.validate_string_template_at(
+                    template,
+                    'spec.columns.X.derivation.str_template',
+                    lambda _name: 'str',
+                )
+                self.assertEqual(len(errors), 1)
+                self.assertEqual(
+                    errors[0].condition, 'invalid_string_template'
+                )
+                self.assertIsNotNone(errors[0].span)
+
+    def test_resolves_placeholder_names_and_types(self):
+        types = {'SITEID': 'str', 'AGE': 'int'}
+        resolver = types.get
+
+        valid = VALIDATOR.validate_string_template_at(
+            '{SITEID}', 'spec.template', resolver
+        )
+        non_string = VALIDATOR.validate_string_template_at(
+            '{AGE}', 'spec.template', resolver
+        )
+        unknown = VALIDATOR.validate_string_template_at(
+            '{MISSING}', 'spec.template', resolver
+        )
+
+        self.assertEqual(valid, [])
+        self.assertEqual(non_string[0].condition, 'incompatible_input_type')
+        self.assertEqual(unknown[0].condition, 'unknown_field')
+
+
+class TestStaticSemanticContracts(unittest.TestCase):
+    def context(self):
+        output_types = {
+            'A': 'date',
+            'B': 'int',
+            'DTM': 'datetime',
+            'KEY1': 'str',
+            'KEY2': 'str',
+            'TEXT': 'str',
+        }
+        datasets = {'REF': {'K': 'str'}}
+        return {
+            'resolver': VALIDATOR.predicate_resolver(
+                unqualified=output_types
+            ),
+            'datasets': datasets,
+            'aggregate': {
+                'kind': 'column',
+                'datasets': datasets,
+                'output_types': output_types,
+                'keys': ['KEY1'],
+            },
+        }
+
+    def validate(self, expression):
+        return VALIDATOR.validate_expression_static_semantics(
+            expression, 'spec.columns.X.derivation', self.context()
+        )
+
+    def test_mapping_extreme_window_and_cut_contracts(self):
+        collision = self.validate({
+            'mapping': {
+                'source': 'TEXT',
+                'case_sensitive': False,
+                'dict': {'Y': 'Y', 'y': 'Y'},
+            }
+        })
+        length = self.validate({
+            'mapping_from': {
+                'source': ['KEY1', 'KEY2'],
+                'dataset': 'REF',
+                'key': 'K',
+                'value': 'K',
+            }
+        })
+        extreme = self.validate({
+            'greatest': {'sources': ['A', 'B']}
+        })
+        offset = self.validate({
+            'row_value': {
+                'source': 'B', 'offset': 0, 'order_by': ['B']
+            }
+        })
+        cut = self.validate({
+            'cut': {
+                'source': 'B', 'breaks': [10, 5], 'labels': ['a']
+            }
+        })
+
+        self.assertEqual(collision[0].condition, 'ambiguous_dictionary')
+        self.assertEqual(length[0].condition, 'source_key_length_mismatch')
+        self.assertEqual(extreme[0].condition, 'incomparable_sources')
+        self.assertEqual(offset[0].condition, 'zero_offset')
+        self.assertEqual(
+            {error.context['reason'] for error in cut},
+            {'label_count', 'break_order'},
+        )
+
+    def test_rejects_unknown_direct_operation_inputs(self):
+        root = TOOL_PATH.parents[2]
+        env, env_errors = VALIDATOR.build_schema_env(root)
+        self.assertEqual(env_errors, [])
+        context = self.context()
+        context['env'] = env
+
+        errors = VALIDATOR.validate_derivation_static_semantics(
+            {'source': 'MISSING'},
+            'spec.columns.X.derivation',
+            context,
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].condition, 'unknown_field')
+
+    def test_temporal_literal_ranges_and_input_types(self):
+        impute = self.validate({
+            'date_impute': {'source': 'TEXT', 'month': 13, 'day': 0}
+        })
+        valid_to_date = self.validate({
+            'to_date': {'source': 'DTM'}
+        })
+        invalid_to_date = self.validate({
+            'to_date': {'source': 'A'}
+        })
+
+        self.assertEqual(
+            {error.condition for error in impute},
+            {'month_out_of_range', 'day_out_of_range'},
+        )
+        self.assertEqual(valid_to_date, [])
+        self.assertEqual(
+            invalid_to_date[0].condition, 'incompatible_input_type'
+        )
+
+    def test_record_lookup_range_types(self):
+        spec = {
+            'record_lookups': [{
+                'id': 'R',
+                'dataset': 'REF',
+                'between': {'value': 'A', 'lower': 'LO', 'upper': 'HI'},
+            }]
+        }
+        errors = VALIDATOR.validate_record_lookup_static_semantics(
+            spec,
+            'spec.yaml',
+            {'REF': {'LO': 'int', 'HI': 'float'}},
+            {'A': 'date'},
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].condition, 'incomparable_range_types')
+
+    def test_record_lookup_equality_key_types(self):
+        spec = {
+            'record_lookups': [{
+                'id': 'R',
+                'dataset': 'REF',
+                'source': 'A',
+                'key': 'K',
+            }]
+        }
+        errors = VALIDATOR.validate_record_lookup_static_semantics(
+            spec,
+            'spec.yaml',
+            {'REF': {'K': 'str'}},
+            {'A': 'date'},
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].condition, 'incompatible_input_type')
+
+    def test_dependency_cycle_reports_each_participating_derivation(self):
+        root = TOOL_PATH.parents[2]
+        env, env_errors = VALIDATOR.build_schema_env(root)
+        self.assertEqual(env_errors, [])
+        spec = {
+            'columns': [
+                {
+                    'name': 'A', 'type': 'float',
+                    'derivation': {'coalesce': {'sources': ['B']}},
+                },
+                {
+                    'name': 'B', 'type': 'float',
+                    'derivation': {
+                        'row_value': {
+                            'source': 'A', 'offset': -1,
+                            'order_by': ['A'],
+                        }
+                    },
+                },
+            ]
+        }
+
+        cycle = VALIDATOR.find_column_dependency_cycle(spec, env)
+
+        self.assertIsNotNone(cycle)
+        self.assertEqual(set(cycle[:-1]), {'A', 'B'})
+
+
 class TestValidationManifest(unittest.TestCase):
     def test_repository_manifest_is_complete_and_registered(self):
         root = TOOL_PATH.parents[2]

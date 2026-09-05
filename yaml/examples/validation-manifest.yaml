@@ -24,14 +24,14 @@ fixtures:
     rule: R013
     condition: aggregate_identifier_not_grouped
     spec_paths: [columns.RDI.derivation.aggregate]
-    blocked_by: "#103"
+    validator: aggregate_expression
   negative-adlb-computed-parameter:
     rule: R001
     condition: dependency_cycle
     spec_paths:
       - columns.AVAL.derivation.case
       - columns.ALTVAL.derivation.aggregate
-    blocked_by: "#103"
+    validator: dependency_graph
   negative-adsl-cyclic-parent:
     rule: R017
     condition: inheritance_cycle
@@ -66,7 +66,7 @@ fixtures:
     rule: R012
     condition: invalid_string_template
     spec_paths: [columns.SUBJREF.derivation.str_template]
-    blocked_by: "#103"
+    validator: string_template
   negative-column-type-unknown:
     rule: R011
     condition: value_not_permitted
@@ -121,7 +121,7 @@ fixtures:
     rule: R016
     condition: month_out_of_range
     spec_paths: [columns.ASTDT.derivation.date_impute.month]
-    blocked_by: "#103"
+    validator: temporal_contract
   negative-date-impute-unknown-day-rule:
     rule: R016
     condition: value_not_permitted
@@ -137,7 +137,7 @@ fixtures:
     rule: R007
     condition: incomparable_sources
     spec_paths: [columns.LSTALVDT.derivation.greatest]
-    blocked_by: "#103"
+    validator: expression_contract
   negative-group-count-without-id:
     rule: R009
     condition: missing_verification_id
@@ -152,12 +152,12 @@ fixtures:
     rule: R007
     condition: ambiguous_dictionary
     spec_paths: [columns.SMOKEFL.derivation.mapping.dict]
-    blocked_by: "#103"
+    validator: mapping_contract
   negative-mapping-from-key-length-mismatch:
     rule: R007
     condition: source_key_length_mismatch
     spec_paths: [columns.ANRHI.derivation.mapping_from]
-    blocked_by: "#103"
+    validator: mapping_contract
   negative-output-order-repeated-term:
     rule: R005
     condition: duplicate_order_term
@@ -177,7 +177,7 @@ fixtures:
     rule: R015
     condition: incomparable_range_types
     spec_paths: ["record_lookups[0].between"]
-    blocked_by: "#103"
+    validator: record_lookup
   negative-record-lookup-unordered-keep:
     rule: R015
     condition: unpaired_fields
@@ -194,12 +194,12 @@ fixtures:
     spec_paths:
       - columns.AVALF.derivation.coalesce
       - columns.PRIORF.derivation.row_value
-    blocked_by: "#103"
+    validator: dependency_graph
   negative-row-value-zero-offset:
     rule: R007
     condition: zero_offset
     spec_paths: [columns.PREVAL.derivation.row_value.offset]
-    blocked_by: "#103"
+    validator: window_contract
   negative-source-output-self-reference:
     rule: R002
     condition: duplicate_identifier
@@ -209,12 +209,12 @@ fixtures:
     rule: R013
     condition: incompatible_input_type
     spec_paths: [columns.SEVTOT.derivation.aggregate.expr]
-    blocked_by: "#103"
+    validator: aggregate_expression
   negative-to-date-date-source:
     rule: R016
     condition: incompatible_input_type
     spec_paths: [columns.ASTDT2.derivation.to_date.source]
-    blocked_by: "#103"
+    validator: temporal_contract
   negative-types-unknown-field:
     rule: R014
     condition: unknown_field

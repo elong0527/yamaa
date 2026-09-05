@@ -4,7 +4,9 @@ datasets:
   PLAN:
     path: input/plan.csv
     types: {ASEQ: int}
-  VS: input/vs.csv
+  VS:
+    path: input/vs.csv
+    types: {VSDTC: date}
   ADSL: input/adsl.csv
 
 base: PLAN
