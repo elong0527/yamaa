@@ -1,0 +1,3 @@
+# Example input and expected output CSV data may contain Unicode text
+/yaml/examples/*/input/**/*.csv
+/yaml/examples/*/expected/**/*.csv
