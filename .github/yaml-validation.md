@@ -99,6 +99,17 @@ The validation ensures:
    avoid schema vocabulary, describe each non-key expected column, and use
    only the remediation or specification-variant sections allowed by
    `yaml/examples/agents.md`.
+9. **Regular expressions**: Every pattern the language admits -- a schema
+   `pattern` descriptor, `str_extract.pattern`, and a `matches` verification
+   -- is compiled by the one ECMA-262 engine R022 pins, with the Unicode flag
+   set. A pattern that engine rejects fails as `invalid_regex` at its
+   declaring path, and a `str_extract` selecting a group its pattern does not
+   declare fails as `regex_group_out_of_range`. The validator replays
+   `yaml/conformance/regex.yaml` against the same engine, so a fixture whose
+   recorded outcome drifts from the engine, or a fixture set that stops
+   covering one of R022's named categories, fails validation. The pinned
+   engine is a required dependency: without it the validator refuses to run
+   rather than falling back to Python `re`.
 
 ## Explicit Non-Goals
 The validator ensures structural correctness and the static cross-field checks
@@ -108,8 +119,10 @@ listed above. At this time, it **does not**:
   Inherited specifications are canonicalized as part of producing their
   resolved data tree.
 - Reproduce golden output values in the `.csv` files.
-- Prove that a regular expression behaves identically in R and Python; the
-  ECMAScript portability contract is tracked in issue #106.
+- Prove that a regular expression behaves identically in R and Python. R022
+  pins the engine both runtimes must bind and this validator replays the
+  shared fixtures on the Python side, but executable R parity waits on the
+  dual-runtime conformance workflow in issue #101.
 
 ## Local Commands
 To run the validator locally:
