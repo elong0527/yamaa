@@ -1,0 +1,8 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.ASTDT2.derivation.to_date.source
+context:
+  source: ASTDT
+  expected: datetime
+  actual: date
