@@ -8,6 +8,7 @@ base: ADSL_RAW
 keys: [STUDYID, USUBJID]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, TRTSDT, NACTDT, NACTDY, NACTFL]
 
 columns:

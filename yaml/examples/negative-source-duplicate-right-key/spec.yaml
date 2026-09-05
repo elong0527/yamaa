@@ -7,6 +7,7 @@ base: DM
 keys: [STUDYID, USUBJID]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, TRT01A]
 
 columns:

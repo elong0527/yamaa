@@ -7,6 +7,7 @@ base: AE
 keys: [STUDYID, USUBJID, AESEQ]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, AESEQ, ASTDT, TRTSDT, TRTEDT, TRTA, TRTEMFL]
 
 columns:

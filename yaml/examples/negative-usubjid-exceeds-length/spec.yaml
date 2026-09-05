@@ -6,6 +6,7 @@ base: DM_RAW
 keys: [STUDYID, USUBJID]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, SUBJID, SITEID]
 
 columns:

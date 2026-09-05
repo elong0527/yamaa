@@ -11,6 +11,7 @@ metadata:
   standard: SDTMIG 3.4
 
 output:
+  profile: csv-v1
   columns: [STUDYID, DOMAIN, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, COUNTRY]
 
 columns:

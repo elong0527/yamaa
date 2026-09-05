@@ -6,6 +6,7 @@ base: ADSLPRE
 keys: [STUDYID, USUBJID]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, ARMCD, TRTSDT, SAFFL, ITTFL]
 
 columns:

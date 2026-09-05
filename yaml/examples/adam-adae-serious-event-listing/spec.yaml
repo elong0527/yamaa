@@ -1,0 +1,54 @@
+schema_version: "1.0"
+domain: ADAE
+datasets:
+  AE: {path: input/ae.csv, types: {AESEQ: int}}
+base: AE
+keys: [STUDYID, USUBJID, AESEQ]
+
+output:
+  profile: csv-v1
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AESER]
+  order_by: [USUBJID, AESEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: AE.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation:
+      source: AE.AETERM
+
+  - name: AESER
+    type: str
+    label: Serious Event
+
+rows:
+  - id: serious
+    filter: "AE.AESER = 'Y'"
+    derivations:
+      AESER:
+        literal: "Y"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 0
+      max: 0

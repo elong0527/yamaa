@@ -1,0 +1,7 @@
+STUDYID,USUBJID,COMMENT,REVIEWER
+CTX,CTX-01,"Dose reduced, per protocol",AB
+CTX,CTX-02,"Subject said ""felt fine""",AB
+CTX,CTX-03,"Visit missed
+rescheduled",CD
+CTX,CTX-04,"",CD
+CTX,CTX-05,,EF

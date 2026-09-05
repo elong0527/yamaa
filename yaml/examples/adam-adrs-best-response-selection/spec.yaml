@@ -6,6 +6,7 @@ base: ADRSPRE
 keys: [STUDYID, USUBJID, ASEQ]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, ASEQ, ADT, RANDDY, AVALC, BORCAT, BORPRI, BORSEQ]
 
 columns:

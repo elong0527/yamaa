@@ -6,6 +6,7 @@ base: AE
 keys: [STUDYID, USUBJID, ASEQ]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, ASEQ, AETERM, ASTDT, ASEV]
   order_by:
     - USUBJID

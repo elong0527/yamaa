@@ -18,6 +18,7 @@ record_lookups:
     unmatched: missing
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, AFTCOVFL]
 
 columns:

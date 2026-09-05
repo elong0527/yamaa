@@ -9,6 +9,7 @@ base: ADSL_PRE
 keys: [STUDYID, USUBJID]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, DOSADJFL]
 
 columns:

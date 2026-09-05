@@ -8,6 +8,7 @@ base: SOURCE
 keys: [ID]
 
 output:
+  profile: csv-v1
   columns: [ID, RESULT]
 
 columns:

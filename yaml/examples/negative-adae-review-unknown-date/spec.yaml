@@ -6,7 +6,7 @@ datasets:
     types: {AESEQ: int, AESTDTC: date}
 base: AE
 keys: [STUDYID, USUBJID, AESEQ]
-output: {columns: [STUDYID, USUBJID, AESEQ, REVIEWFL]}
+output: {profile: csv-v1, columns: [STUDYID, USUBJID, AESEQ, REVIEWFL]}
 columns:
   - name: STUDYID
     type: str

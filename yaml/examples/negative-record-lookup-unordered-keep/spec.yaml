@@ -12,6 +12,7 @@ record_lookups:
     order_by: [EX.EXSTDTC, EX.EXSEQ]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, TRT01A]
 
 columns:

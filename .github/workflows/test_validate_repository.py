@@ -2821,6 +2821,7 @@ bad_field: "what"
         self.assertIn('unsupported level-two section', message)
 
     def test_integration_full_corpus(self):
+
         real_root = self.tool_path.parent.parent.parent
         result = subprocess.run(
             [sys.executable, str(self.tool_path), '--root', str(real_root)],
@@ -2829,6 +2830,172 @@ bad_field: "what"
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('PASS', result.stdout)
+
+
+class TestCsvV1Profile(unittest.TestCase):
+    def parse_render(self, data):
+        return VALIDATOR.render_csv_v1(VALIDATOR.parse_csv_v1(data))
+
+    def test_missing_and_empty_string_are_distinct(self):
+        records = VALIDATOR.parse_csv_v1('A,B\n1,\n2,""\n')
+        self.assertEqual(records[1][1], (None, False))
+        self.assertEqual(records[2][1], ('', True))
+
+    def test_quoted_field_carries_delimiter_quote_and_newline(self):
+        data = 'A\n"x, y"\n"say ""hi"""\n"two\nlines"\n'
+        records = VALIDATOR.parse_csv_v1(data)
+        self.assertEqual(
+            [record[0][0] for record in records[1:]],
+            ['x, y', 'say "hi"', 'two\nlines'],
+        )
+        self.assertEqual(self.parse_render(data), data)
+
+    def test_carriage_return_terminator_is_rejected(self):
+        with self.assertRaises(ValueError) as caught:
+            VALIDATOR.parse_csv_v1('A,B\r\n1,2\r\n')
+        self.assertIn('U+000D', str(caught.exception))
+
+    def test_unterminated_final_record_is_rejected(self):
+        with self.assertRaises(ValueError) as caught:
+            VALIDATOR.parse_csv_v1('A,B\n1,2')
+        self.assertIn('U+000A', str(caught.exception))
+
+    def test_unterminated_quote_is_rejected(self):
+        with self.assertRaises(ValueError):
+            VALIDATOR.parse_csv_v1('A,B\n1,"open\n')
+
+    def test_needless_quoting_does_not_render_back(self):
+        data = 'A,B\n"1",2\n'
+        self.assertNotEqual(self.parse_render(data), data)
+
+    def test_zero_row_artifact_is_the_header_alone(self):
+        data = 'STUDYID,USUBJID\n'
+        self.assertEqual(len(VALIDATOR.parse_csv_v1(data)), 1)
+        self.assertEqual(self.parse_render(data), data)
+
+    def test_float_text_omits_a_trailing_zero_decimal(self):
+        self.assertIsNone(VALIDATOR.canonical_float_text('10'))
+        self.assertIn('10', VALIDATOR.canonical_float_text('10.0'))
+        self.assertIsNone(VALIDATOR.canonical_float_text('73.66666666666667'))
+
+    def test_declared_precision_fixes_the_written_width(self):
+        self.assertIsNone(VALIDATOR.canonical_float_text('25.0000', 4))
+        self.assertIsNone(VALIDATOR.canonical_float_text('0', 0))
+        self.assertIsNotNone(VALIDATOR.canonical_float_text('25', 4))
+        self.assertIsNotNone(VALIDATOR.canonical_float_text('25.000', 4))
+
+    def test_exact_ties_round_away_from_zero(self):
+        quantize = VALIDATOR.decimal.Decimal(1).scaleb(-2)
+        rounding = VALIDATOR.decimal.ROUND_HALF_UP
+        self.assertEqual(
+            str(VALIDATOR.decimal.Decimal(0.125).quantize(quantize, rounding)),
+            '0.13',
+        )
+        self.assertEqual(
+            str(VALIDATOR.decimal.Decimal(-0.125).quantize(quantize, rounding)),
+            '-0.13',
+        )
+
+    def test_an_unrepresentable_tie_rounds_on_the_exact_value(self):
+        # 2.675 is stored below the decimal it is written as, so there is no
+        # tie to break and the value rounds down. Rounding the shortened text
+        # instead would report 2.68.
+        self.assertEqual(
+            str(
+                VALIDATOR.decimal.Decimal(2.675).quantize(
+                    VALIDATOR.decimal.Decimal(1).scaleb(-2),
+                    VALIDATOR.decimal.ROUND_HALF_UP,
+                )
+            ),
+            '2.67',
+        )
+
+    def test_non_canonical_int_text_is_reported(self):
+        self.assertTrue(VALIDATOR.CANONICAL_INT.fullmatch('0'))
+        self.assertTrue(VALIDATOR.CANONICAL_INT.fullmatch('-12'))
+        self.assertFalse(VALIDATOR.CANONICAL_INT.fullmatch('007'))
+        self.assertFalse(VALIDATOR.CANONICAL_INT.fullmatch('+1'))
+        self.assertFalse(VALIDATOR.CANONICAL_INT.fullmatch('-0'))
+
+    def test_artifact_check_reports_bytes_and_values(self):
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / 'adsl.csv'
+            path.write_bytes(b'STUDYID,AVAL\r\nS1,10.0\r\n')
+            spec = {
+                'output': {'profile': 'csv-v1', 'columns': ['STUDYID', 'AVAL']},
+                'columns': [
+                    {'name': 'STUDYID', 'type': 'str'},
+                    {'name': 'AVAL', 'type': 'float'},
+                ],
+            }
+            errors = VALIDATOR.validate_csv_v1_artifact(path, 'ex/adsl.csv', spec)
+        self.assertTrue(any('U+000D' in error for error in errors), errors)
+
+    def test_artifact_check_accepts_a_conforming_artifact(self):
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / 'adsl.csv'
+            path.write_bytes(b'STUDYID,COMMENT,AVAL\nS1,"has, comma",10\nS1,"",\n')
+            spec = {
+                'output': {'profile': 'csv-v1',
+                           'columns': ['STUDYID', 'COMMENT', 'AVAL']},
+                'columns': [
+                    {'name': 'STUDYID', 'type': 'str'},
+                    {'name': 'COMMENT', 'type': 'str'},
+                    {'name': 'AVAL', 'type': 'float'},
+                ],
+            }
+            errors = VALIDATOR.validate_csv_v1_artifact(path, 'ex/adsl.csv', spec)
+        self.assertEqual(errors, [])
+
+    def test_decimals_needs_the_csv_profile(self):
+        base = {
+            'schema_version': '1.0',
+            'domain': 'ADSL',
+            'datasets': {'SRC': 'input/adsl.csv'},
+            'base': 'SRC',
+            'keys': ['USUBJID'],
+            'columns': [
+                {'name': 'USUBJID', 'type': 'str', 'label': 'Subject',
+                 'derivation': {'source': 'SRC.USUBJID'}},
+            ],
+        }
+
+        def check(output):
+            spec = copy.deepcopy(base)
+            spec['output'] = output
+            return '\n'.join(
+                VALIDATOR.validate_spec_names(spec, 'ex/spec.yaml')
+            )
+
+        self.assertIn(
+            'decimals_not_applicable',
+            check({'decimals': 4, 'columns': ['USUBJID']}),
+        )
+        self.assertIn(
+            'decimals_not_applicable',
+            check({'profile': 'parquet-v1', 'decimals': 4,
+                   'columns': ['USUBJID']}),
+        )
+        self.assertNotIn(
+            'decimals_not_applicable',
+            check({'profile': 'csv-v1', 'decimals': 4,
+                   'columns': ['USUBJID']}),
+        )
+        self.assertIn(
+            'non-negative integer',
+            check({'profile': 'csv-v1', 'decimals': -1,
+                   'columns': ['USUBJID']}),
+        )
+
+    def test_byte_order_mark_is_rejected(self):
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / 'adsl.csv'
+            path.write_bytes(b'\xef\xbb\xbfSTUDYID\nS1\n')
+            errors = VALIDATOR.validate_csv_v1_artifact(
+                path, 'ex/adsl.csv', {'output': {}, 'columns': []}
+            )
+        self.assertTrue(any('byte-order mark' in error for error in errors), errors)
+
 
 if __name__ == '__main__':
     unittest.main()

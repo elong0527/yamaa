@@ -3,7 +3,7 @@ id: R005
 title: Output Contract
 status: normative
 applies_to: [root.keys, root.output, root.columns, column.type, row.derivations, derivation]
-depends_on: [R001, R002, R003, R007, R008, R009, R011, R019]
+depends_on: [R001, R002, R003, R007, R008, R009, R011, R019, R020]
 ---
 
 # Output contract
@@ -22,6 +22,8 @@ rows are presented in. It does not own what any stage does: R011 defines a
 declared type and its conversions, R008 defines the handlers, R009 defines the
 assertions, and R001 owns the two phases and the dependency order within them.
 R007 owns what an order term means. R019 owns string equality and order.
+R020 owns the bytes the artifact becomes once this rule has completed and
+ordered it.
 
 ## The artifact
 
@@ -32,13 +34,15 @@ its rows are the rows R001 constructs.
 Its rows leave in the order `output.order_by` declares, and in R001's
 construction order when it is omitted.
 
-Its serialization is only partly defined. R011 fixes the text form of each
-non-missing value and states that a `float` renders the same way here as it does
-when converted to `str`; the schema does not select a file container. The
-example suite uses CSV and represents a missing value with an empty field.
+Its serialization is defined by R020, which fixes two versioned profiles:
+`parquet-v1`, which `output.profile` selects by default, and `csv-v1`, which
+the example suite declares. That rule owns the container, the bytes each value
+becomes, the distinction between a missing value and a collected empty string,
+the one display precision a `float` may take, and the replacement of the target
+by a completed artifact.
 
-Everything below concerns the values themselves and their order, which are
-fully defined, and none of it depends on the unsettled container.
+Everything below concerns the values themselves and their order, which the
+profiles carry rather than decide.
 
 ## The column list is declared
 

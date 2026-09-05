@@ -13,6 +13,7 @@ record_lookups:
     unmatched: missing
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, TRTSDT, COMPFL]
 
 columns:

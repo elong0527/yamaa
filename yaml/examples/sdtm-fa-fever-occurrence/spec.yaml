@@ -10,6 +10,7 @@ base: VS
 keys: [STUDYID, USUBJID, FASEQ]
 
 output:
+  profile: csv-v1
   columns:
     - STUDYID
     - DOMAIN

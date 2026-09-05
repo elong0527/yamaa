@@ -23,6 +23,7 @@ record_lookups:
     unmatched: missing
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, ASEQ, VSSEQ, PARAMCD, ADT, AVAL, TRTSDT, HEIGHTBL]
 
 columns:

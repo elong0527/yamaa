@@ -71,10 +71,14 @@ base: ODM
 keys: [STUDYID, USUBJID]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, DOMAIN, USUBJID, SUBJID, SEX, AGE, ARM, ACTARM]
 ```
 
-One input, one driver, two keys, eight delivered columns.
+One input, one driver, two keys, eight delivered columns, written as the
+delimited text the suite compares byte for byte. A specification that says
+nothing about a profile is written as Parquet instead, which is why every
+example here declares one.
 
 **Step 3 -- the bottom of the file, for row count.**
 

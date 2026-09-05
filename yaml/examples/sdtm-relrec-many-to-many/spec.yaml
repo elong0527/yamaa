@@ -6,6 +6,7 @@ datasets:
 keys: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID]
 
 columns:

@@ -6,6 +6,7 @@ base: BX_RAW
 keys: [STUDYID, USUBJID, LBSEQ]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESN, LBSTAT]
 
 columns:

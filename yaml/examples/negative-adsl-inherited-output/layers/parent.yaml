@@ -1,3 +1,4 @@
 schema_version: "1.0"
 output:
+  profile: csv-v1
   columns: [USUBJID]

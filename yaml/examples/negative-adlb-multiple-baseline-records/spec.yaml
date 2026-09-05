@@ -6,6 +6,7 @@ base: ADLBIN
 keys: [STUDYID, USUBJID, PARAMCD, ADT]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, PARAMCD, ADT, AVAL, ABLFL]
 
 columns:

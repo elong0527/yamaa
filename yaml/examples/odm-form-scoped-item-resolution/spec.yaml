@@ -6,6 +6,7 @@ base: ODM
 keys: [STUDYID, USUBJID, LBSEQ]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBCAT, LBORRES, LBDTC]
 
 columns:

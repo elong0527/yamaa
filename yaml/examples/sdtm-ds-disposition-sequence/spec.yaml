@@ -6,6 +6,7 @@ base: DS_RAW
 keys: [STUDYID, USUBJID, DSSEQ]
 
 output:
+  profile: csv-v1
   columns: [STUDYID, DOMAIN, USUBJID, DSSEQ, DSDECOD, DSCAT, DSDTC]
 
 columns:

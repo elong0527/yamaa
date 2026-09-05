@@ -25,6 +25,7 @@ record_lookups:
     keep: last
 
 output:
+  profile: csv-v1
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, SRCDOM, SRCVAR, SRCSEQ]
 
 columns:
