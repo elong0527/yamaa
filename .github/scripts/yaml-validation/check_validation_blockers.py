@@ -68,7 +68,9 @@ def main():
     parser = argparse.ArgumentParser(
         description='Reject closed issues in the validation manifest.'
     )
-    parser.add_argument('--root', type=Path, default=Path(__file__).parents[2])
+    parser.add_argument(
+        '--root', type=Path, default=Path(__file__).resolve().parents[3]
+    )
     parser.add_argument(
         '--repository', default=os.environ.get('GITHUB_REPOSITORY')
     )

@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Test dependency checker
-        run: ruby .github/workflows/test_check_example_dependencies.rb
+        run: ruby .github/scripts/examples/test_check_example_dependencies.rb
       - name: Check example dependency and output order
-        run: ruby .github/workflows/check_example_dependencies.rb
+        run: ruby .github/scripts/examples/check_example_dependencies.rb

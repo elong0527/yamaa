@@ -136,13 +136,24 @@ listed above. At this time, it **does not**:
   dual-runtime conformance workflow in issue #101.
 
 ## Local Commands
-To run the validator locally:
+From the repository root, use a Python 3.14 environment to match CI. Install
+the dependencies, run the tests, and validate the repository:
 
 ```bash
-python3 .github/workflows/validate_repository.py --root .
+python3 -m pip install -r .github/scripts/yaml-validation/requirements.txt
+python3 .github/scripts/yaml-validation/test_validate_repository.py
+python3 .github/scripts/yaml-validation/validate_repository.py --root .
 ```
 
 By default, the script infers the repository root relative to its own path.
+
+The Ruby example checks and their tests can also run locally:
+
+```bash
+ruby .github/scripts/examples/test_check_example_dependencies.rb
+ruby .github/scripts/examples/check_example_dependencies.rb
+ruby .github/scripts/examples/check_labels.rb
+```
 
 ## Exit Behavior
 - Returns `0` if the repository structure is completely valid (no errors).
@@ -152,13 +163,13 @@ By default, the script infers the repository root relative to its own path.
 Warnings are printed to standard output but do not fail validation. The Python
 validator checks column labels for every resolved specification and orders
 inherited columns by dependency. The existing Ruby checks under
-`.github/workflows/` continue to enforce these policies for non-inherited
+`.github/scripts/examples/` continue to enforce these policies for non-inherited
 examples and discover linked producing specifications recursively.
 
 To treat warnings as errors, run with the `--warnings-as-errors` flag:
 
 ```bash
-python3 .github/workflows/validate_repository.py --warnings-as-errors
+python3 .github/scripts/yaml-validation/validate_repository.py --warnings-as-errors
 ```
 
 CI additionally checks that every `blocked_by` issue in the validation manifest
@@ -166,5 +177,5 @@ remains open. With GitHub credentials available, run the same check locally:
 
 ```bash
 GITHUB_REPOSITORY=elong0527/yamaa \
-  python3 .github/workflows/check_validation_blockers.py
+  python3 .github/scripts/yaml-validation/check_validation_blockers.py
 ```

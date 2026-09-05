@@ -3,7 +3,7 @@ require "yaml"
 require_relative "example_specifications"
 
 errors = []
-examples = File.expand_path("../../yaml/examples", __dir__)
+examples = File.expand_path("../../../yaml/examples", __dir__)
 specs = ExampleSpecifications.all_paths(examples)
 
 specs.each do |spec|
