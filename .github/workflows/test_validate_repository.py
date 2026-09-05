@@ -2561,6 +2561,7 @@ class TestSpecContracts(unittest.TestCase):
         )
 
     def test_rejects_a_source_extension_that_names_no_profile(self):
+        snapshots = VALIDATOR.ProjectSnapshots()
         with tempfile.TemporaryDirectory() as temp_dir:
             example_dir = Path(temp_dir)
             input_dir = example_dir / "input"
@@ -2582,12 +2583,21 @@ class TestSpecContracts(unittest.TestCase):
             }
 
             errors = VALIDATOR.validate_spec_contracts(
-                spec, "example/spec.yaml", spec_path
+                spec, "example/spec.yaml", spec_path, snapshots=snapshots
             )
 
         message = "\n".join(errors)
         self.assertIn("source_profile_unknown", message)
         self.assertIn("input/dm.txt", message)
+        # R023 decides the profile from the written path, so the source is
+        # never opened to reject it.
+        self.assertEqual(snapshots.reads, 0)
+        diagnostic = next(
+            error for error in errors
+            if getattr(error, 'condition', None) == 'source_profile_unknown'
+        )
+        self.assertEqual(diagnostic.path, "example/spec.yaml.datasets.DM.path")
+        self.assertEqual(diagnostic.context, {'path': 'input/dm.txt'})
 
     def test_rejects_missing_source_and_type_for_absent_csv_field(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -4646,6 +4656,72 @@ class TestSuiteSourceCoverage(unittest.TestCase):
             comments,
             'a comment carrying the delimiter',
         )
+
+
+class TestSourceProfileDiagnostics(unittest.TestCase):
+    """Where a rejected source says the defect is, and which files are read."""
+
+    def test_ill_formed_bytes_report_their_own_record_and_field(self):
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / 'dm.csv'
+            path.write_bytes(
+                b'STUDYID,USUBJID,SITENM\n'
+                b'CTX,CTX-01,Royal Infirmary\n'
+                b'CTX,CTX-02,H\xf4pital Saint-Antoine\n'
+            )
+            findings = VALIDATOR.check_source_file(path)
+        self.assertEqual(len(findings), 1)
+        condition, record, detail = findings[0]
+        self.assertEqual(condition, 'invalid_text')
+        self.assertEqual(record, 3)
+        self.assertIn('field 3', detail)
+
+    def test_coordinates_count_a_quoted_field_as_one_field(self):
+        self.assertEqual(
+            VALIDATOR.source_coordinates('A,B\n"x,y",'), (2, 2)
+        )
+        self.assertEqual(
+            VALIDATOR.source_coordinates('A,B\n"two\nlines",'), (2, 2)
+        )
+
+    def test_an_uppercase_extension_is_scanned(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / 'yaml' / 'examples' / 'upper' / 'input').mkdir(
+                parents=True
+            )
+            (
+                root / 'yaml' / 'examples' / 'upper' / 'input' / 'DM.CSV'
+            ).write_bytes(b'A,A\n1\n')
+            errors = VALIDATOR.validate_csv_shapes(root)
+        message = '\n'.join(errors)
+        self.assertIn('source_field_name_duplicate', message)
+        self.assertIn('source_record_width', message)
+
+    def test_a_unicode_fixture_keeps_its_exemption_when_shouted(self):
+        self.assertTrue(
+            VALIDATOR.is_unicode_fixture_csv(
+                Path('yaml/examples/ex/input/DM.CSV')
+            )
+        )
+
+    def test_the_validation_condition_is_not_asked_of_a_fixture(self):
+        # A negative example declares source_profile_unknown against its
+        # specification, so the fixture scan must not demand that some file
+        # provoke it.
+        self.assertNotIn(
+            'source_profile_unknown', VALIDATOR.SOURCE_READ_CONDITIONS
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            example = root / 'yaml' / 'examples' / 'negative-source-profile'
+            (example / 'input').mkdir(parents=True)
+            (example / 'expected').mkdir(parents=True)
+            (example / 'input' / 'dm.txt').write_bytes(b'A\n1\n')
+            (example / 'expected' / 'error.yaml').write_text(
+                'phase: validation\ncondition: source_profile_unknown\n'
+            )
+            self.assertEqual(VALIDATOR.validate_csv_shapes(root), [])
 
 
 if __name__ == '__main__':

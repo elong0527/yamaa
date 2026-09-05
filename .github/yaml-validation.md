@@ -49,10 +49,12 @@ The validation ensures:
    rooted form, URI scheme, parent traversal, `.` or empty segment, or
    trailing separator; no component may be a symbolic link; the file must
    exist, be a regular file, and canonicalize inside the approved project
-   root, which defaults to the entry specification's directory. Each accepted
-   physical file is read once as one immutable byte snapshot, shared by every
-   declaration that reaches it, so a header is never re-read from a path that
-   may since have changed. Source-producing
+   root, which defaults to the entry specification's directory. A dataset
+   path whose extension names no R023 profile is rejected from the written
+   path, before the source is read. Each accepted physical file is read once
+   as one immutable byte snapshot, shared by every declaration that reaches
+   it, so a header is never re-read from a path that may since have
+   changed. Source-producing
    specifications linked through `schema` validate recursively
    against `root_class`; producer source paths must resolve, derivation coverage
    must be complete, workflow dependencies must be acyclic, every stored
@@ -78,11 +80,12 @@ The validation ensures:
    `expected/error.yaml`. Error contracts use the closed phase vocabulary,
    snake-case conditions, existing specification paths, and an optional
    mapping context.
-6. **CSV consistency**: Every input and expected CSV is read under R023's
-   source profile, which preserves quoting, so a bare empty field stays
-   distinct from a quoted empty one rather than being normalized to the same
-   text. A fixture must decode as UTF-8, carry no byte-order mark, terminate
-   its records with `U+000A` or `U+000D U+000A`, close every quoted field,
+6. **CSV consistency**: Every input and expected fixture whose extension is
+   `.csv` in any case is read under R023's source profile, which preserves
+   quoting, so a bare empty field stays distinct from a quoted empty one
+   rather than being normalized to the same text. A fixture must decode as
+   UTF-8, carry no byte-order mark, terminate its records with `U+000A` or
+   `U+000D U+000A`, close every quoted field,
    name each field of a unique, non-empty header, and carry the header's
    field count in every record. A negative example may carry the fixture that
    provokes the source condition its `expected/error.yaml` declares, and must
