@@ -4567,13 +4567,24 @@ def validate_rule_metadata(root: Path):
 
 
 ASCII_SOURCE_SUFFIXES = {
-    '.json', '.md', '.py', '.r', '.rb', '.rd', '.sh', '.toml', '.txt',
-    '.yaml', '.yml',
+    '.csv', '.json', '.md', '.py', '.r', '.rb', '.rd', '.sh', '.toml',
+    '.txt', '.yaml', '.yml',
 }
 ASCII_SOURCE_NAMES = {'DESCRIPTION', 'NAMESPACE'}
 ASCII_SOURCE_IGNORED_PARTS = {
     '.git', '.pytest_cache', '.venv', '__pycache__', 'venv',
 }
+
+
+def is_unicode_fixture_csv(relative: Path):
+    parts = relative.parts
+    return (
+        relative.suffix == '.csv'
+        and len(parts) >= 5
+        and parts[0] == 'yaml'
+        and parts[1] == 'examples'
+        and parts[3] in {'input', 'expected'}
+    )
 
 
 def validate_ascii_sources(root: Path):
@@ -4583,6 +4594,8 @@ def validate_ascii_sources(root: Path):
             continue
         relative = path.relative_to(root)
         if any(part in ASCII_SOURCE_IGNORED_PARTS for part in relative.parts):
+            continue
+        if is_unicode_fixture_csv(relative):
             continue
         if (
             path.suffix.lower() not in ASCII_SOURCE_SUFFIXES
@@ -4610,6 +4623,10 @@ def validate_ascii_sources(root: Path):
     return errors
 
 
+def diagnostic_path_key(key):
+    return str(key).encode('unicode_escape').decode('ascii')
+
+
 def validate_unicode_scalars(value, path):
     errors = []
     if isinstance(value, str):
@@ -4627,7 +4644,12 @@ def validate_unicode_scalars(value, path):
     elif isinstance(value, dict):
         for key, item in value.items():
             errors.extend(validate_unicode_scalars(key, f'{path}.<key>'))
-            errors.extend(validate_unicode_scalars(item, f'{path}.{key}'))
+            errors.extend(
+                validate_unicode_scalars(
+                    item,
+                    f'{path}.{diagnostic_path_key(key)}',
+                )
+            )
     return errors
 
 

@@ -104,12 +104,15 @@ class TestTextSourceBoundary(unittest.TestCase):
             source.write_bytes(
                 b'# Rule\ntext ' + bytes([0xC3, 0xA9]) + b'\n'
             )
-            data = root / 'yaml' / 'examples' / 'example' / 'input'
-            data.mkdir(parents=True)
-            (data / 'values.csv').write_text(
-                'VALUE\n' + chr(0x00E9) + '\n',
-                encoding='utf-8',
-            )
+            for fixture_type in ('input', 'expected'):
+                data = (
+                    root / 'yaml' / 'examples' / 'example' / fixture_type
+                )
+                data.mkdir(parents=True)
+                (data / 'values.csv').write_text(
+                    'VALUE\n' + chr(0x00E9) + '\n',
+                    encoding='utf-8',
+                )
 
             errors = VALIDATOR.validate_ascii_sources(root)
             csv_errors = VALIDATOR.validate_csv_shapes(root)
@@ -119,6 +122,21 @@ class TestTextSourceBoundary(unittest.TestCase):
             ['ERROR: rule.md:2:6: non_ascii_source byte 0xC3'],
         )
         self.assertEqual(csv_errors, [])
+
+    def test_rejects_non_ascii_csv_outside_fixture_directories(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / 'reference.csv').write_text(
+                'VALUE\n' + chr(0x00E9) + '\n',
+                encoding='utf-8',
+            )
+
+            errors = VALIDATOR.validate_ascii_sources(root)
+
+        self.assertEqual(
+            errors,
+            ['ERROR: reference.csv:2:1: non_ascii_source byte 0xC3'],
+        )
 
     def test_rejects_a_decoded_surrogate(self):
         document = {'value': chr(0xD800)}
@@ -132,6 +150,24 @@ class TestTextSourceBoundary(unittest.TestCase):
                 'at string offset 0'
             ],
         )
+
+    def test_escapes_a_surrogate_mapping_key_in_value_diagnostics(self):
+        key = chr(0xD800)
+        document = {key: chr(0xD801)}
+
+        errors = VALIDATOR.validate_unicode_scalars(document, 'spec.yaml')
+
+        self.assertEqual(
+            errors,
+            [
+                'ERROR: spec.yaml.<key>: invalid_text surrogate U+D800 '
+                'at string offset 0',
+                'ERROR: spec.yaml.\\ud800: invalid_text surrogate U+D801 '
+                'at string offset 0',
+            ],
+        )
+        for error in errors:
+            error.encode('ascii')
 
     def test_rejects_ill_formed_utf8_data(self):
         with tempfile.TemporaryDirectory() as temp_dir:
