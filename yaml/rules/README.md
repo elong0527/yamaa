@@ -43,6 +43,10 @@ Normative does not mean immutable. A rule can change through the repository's
 review and versioning process, but an implementation must not substitute an
 open proposal for the indexed text.
 
+Issue and branch proposals do not reserve rule IDs. An ID becomes authoritative
+only when its rule is admitted to this index; until then, refer to a proposal by
+its issue or branch rather than by its provisional rule number.
+
 ## Rule requirements
 
 Every rule file contains stable metadata, an intent, a `Boundaries` section
