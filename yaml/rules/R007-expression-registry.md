@@ -142,8 +142,8 @@ runtime types:
 - `compute` requires every identifier in its expression to be numeric;
 - `str_extract`, `str_concat`, `str_template`, `str_upper`, and `str_lower`
   require string sources;
-- `date_diff`, `study_day`, `date_impute`, and `date_precision` state their
-  own input types in R016;
+- `date_diff`, `study_day`, `date_impute`, `date_precision`, and `to_date`
+  state their own input types in R016;
 - `greatest` and `least` require mutually comparable `sources`;
 - `row_value` requires an integer `offset`; it and `previous_non_missing`
   accept any `source` type and perform no coercion;

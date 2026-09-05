@@ -10,6 +10,7 @@ applies_to:
   - study_day
   - date_impute
   - date_precision
+  - to_date
 depends_on: [R005, R006, R007, R008, R010, R011, R014]
 ---
 
@@ -87,17 +88,18 @@ names second zero rather than claiming a coarser value, so a `datetime` is
 collected in full or it is not a value.
 
 Where a value gets its collected precision is fixed by where the value came
-from, and only three origins exist:
+from, and only four origins exist:
 
 | Origin | Collected precision |
 |---|---|
 | parsed from text -- the lexical form below, R011's `str` row, an R014 field | `day`, or `second` for a `datetime` |
 | `date_impute` | the precision its source carried |
+| `to_date` | `day` |
 | any expression that selects an existing value | unchanged; the property travels with the value |
 
 The first row has no other reachable answer: the grammar below admits only
 complete text, so nothing a parse produces was collected in part. R007 fixes
-the third, for the extreme, conditional, coalescing, and offset expressions
+the fourth, for the extreme, conditional, coalescing, and offset expressions
 that return an operand rather than computing one.
 
 **Provenance is read off that one property rather than recorded beside it.** A
@@ -310,7 +312,7 @@ apply is:
 | `str` to `date`, `str` to `datetime` | parse the lexical form above; anything else fails |
 | `date` to `str`, `datetime` to `str` | the canonical text above |
 | `date` to `date`, `datetime` to `datetime` | identity |
-| `date` to `datetime`, `datetime` to `date` | fail |
+| `date` to `datetime`, `datetime` to `date` | fail; use an explicit registered operation where one exists |
 | `int`, `float`, or `bool` to either | fail |
 | either to `int` or `float` | fail |
 | missing to either | missing |
@@ -319,8 +321,9 @@ apply is:
 direction.** `date` to `datetime` would invent a time of day, and `datetime`
 to `date` would discard a collected one; each would decide silently what a
 specification never stated, which is the same reason a non-integral `float`
-does not become an `int`. An operation that extracts a day or composes a
-moment states that intent explicitly, and none is registered.
+does not become an `int`. `to_date` is the explicit request to discard the
+time of day and return the calendar date. No operation composes a moment from
+a date.
 
 A temporal value never enters arithmetic. R010's grammar is numeric, and a
 difference between two values is `date_diff` or `study_day` below.
@@ -424,9 +427,11 @@ Their input and result types are:
 | `study_day` | `date` and `reference` are `date` | `int`, never zero |
 | `date_impute` | `source` is `str`; `month` is `int`; `day` is `int` or a month position; `minimum_source_precision` is `year` or `month`; `not_before` is `date` | `date` |
 | `date_precision` | `source` is `str` or `date` | `str` |
+| `to_date` | `source` is `datetime` | `date` with collected precision `day` |
 
-**Every temporal operation is a date operation.** A `datetime` operand is an
-error rather than a widened one. `date_diff` counts whole calendar units and
+Every temporal operation other than `to_date` is a date operation. A
+`datetime` operand to one of those operations is an error rather than a
+widened one. `date_diff` counts whole calendar units and
 its `bounds` field counts endpoints of a day range, and neither has a meaning
 between two moments: `unit: day` between `2025-01-01T23:00:00` and
 `2025-01-02T01:00:00` could defend `1` or `0`. Widening either operation would
@@ -443,8 +448,11 @@ whichever day the target month begins or ends with rather than a number that
 month might not have. Any other `day` token is neither a number nor a
 position, and is rejected where the specification is read.
 
-A `datetime` is therefore produced only by converting text and consumed only
-by the comparisons above, which is what the examples need and no more.
+A `datetime` is produced only by converting text. It is consumed by the
+comparisons above or by `to_date`, which copies its calendar fields and drops
+its time fields. A missing source returns a missing date. Any other source type
+is the incompatible-input error R007 defines; in particular, a `date` is not
+accepted as an identity spelling.
 
 ## Ingestion
 
@@ -477,8 +485,11 @@ leaves the field `str`, which is what `negative-datetime-zone-offset` does.
   and `datetime` to `date`: fail rather than choose a representation.
 - Comparing or ordering a temporal value against a value of another type:
   fail under R007, which owns comparability.
-- A date operation given a `datetime`: fail rather than widen the operation.
-  This includes a `datetime` reaching `date_precision` as a value source.
+- A date operation other than `to_date` given a `datetime`: fail rather than
+  widen the operation. This includes a `datetime` reaching `date_precision` as
+  a value source.
+- `to_date` given anything other than a `datetime`: fail as an incompatible
+  input. A missing `datetime` yields a missing date instead.
 - `date_impute` whose `month` or numeric `day` is outside the calendar range,
   or whose completed value is not a real calendar date: fail. Neither can
   arise from a `day` naming a position in its month.
