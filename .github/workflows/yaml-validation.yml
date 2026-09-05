@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  issues: read
 
 jobs:
   validate:
@@ -42,3 +43,9 @@ jobs:
       - name: Run repository validation
         run: |
           python3 .github/workflows/validate_repository.py
+
+      - name: Check validation blocker issues
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 .github/workflows/check_validation_blockers.py

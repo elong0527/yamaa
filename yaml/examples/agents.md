@@ -156,6 +156,11 @@ An implementation may report additional context and may word its human-readable
 message differently. The expected fields and values must match. Stack traces
 and implementation-specific exception classes do not belong in this artifact.
 
+Register every validation-phase negative fixture exactly once in
+`validation-manifest.yaml`. An implemented entry must match its primary
+condition at every declared specification path; an unimplemented entry must
+name its open blocking issue.
+
 `phase` comes from the two closed tables below, so two examples that stop at
 the same point say so the same way. Whole-run evaluation failures use:
 
