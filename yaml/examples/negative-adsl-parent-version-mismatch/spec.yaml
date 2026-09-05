@@ -1,5 +1,5 @@
 schema_version: "1.0"
 parents: layers/parent.yaml
 output:
-  profile: csv-v1
+  profile: csv
   columns: []

@@ -11,7 +11,7 @@ base: DM
 keys: [USUBJID]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns:
     - USUBJID
     - YAML_PINF

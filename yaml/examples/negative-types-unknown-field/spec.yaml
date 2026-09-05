@@ -7,7 +7,7 @@ base: TRT
 keys: [STUDYID, USUBJID, EXTRT]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, EXTRT, DOSECUM]
 
 columns:

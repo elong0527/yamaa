@@ -3,7 +3,7 @@ parents: layers/parent.yaml
 domain: ADSL
 keys: [USUBJID]
 output:
-  profile: csv-v1
+  profile: csv
   columns: [USUBJID]
 columns:
   - name: USUBJID

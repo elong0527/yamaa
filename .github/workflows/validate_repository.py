@@ -3006,7 +3006,7 @@ def validate_spec_names(spec, spec_label):
 
     if isinstance(output, dict) and 'decimals' in output:
         decimals = output.get('decimals')
-        profile = output.get('profile', 'parquet-v1')
+        profile = output.get('profile', 'parquet')
         if isinstance(decimals, bool) or not isinstance(decimals, int):
             errors.append(
                 f"ERROR: {spec_label}.output.decimals: must be a "
@@ -3017,11 +3017,11 @@ def validate_spec_names(spec, spec_label):
                 f"ERROR: {spec_label}.output.decimals: must be a "
                 f"non-negative integer, got {decimals!r}"
             )
-        if profile != 'csv-v1':
+        if profile != 'csv':
             errors.append(
                 f"ERROR: {spec_label}.output.decimals: "
                 f"decimals_not_applicable under profile {profile!r}; R020 "
-                "renders a display precision only under csv-v1"
+                "renders a display precision only under csv"
             )
     if isinstance(output_columns, list):
         for index, name in enumerate(output_columns):
@@ -4411,8 +4411,8 @@ BOM_UTF8 = '\ufeff'
 CANONICAL_INT = re.compile(r'0|-?[1-9][0-9]*')
 
 
-def parse_csv_v1(data: str):
-    """Parse R020 csv-v1 text into records of (text, quoted) fields.
+def parse_csv_profile(data: str):
+    """Parse R020's csv profile text into records of (text, quoted) fields.
 
     A bare empty field is missing and parses to a text of None; a quoted
     empty field is the collected empty string. Raises ValueError for text
@@ -4466,7 +4466,7 @@ def parse_csv_v1(data: str):
     return records
 
 
-def render_csv_v1(records):
+def render_csv_profile(records):
     """Render records back under R020's exact quoting condition."""
     lines = []
     for record in records:
@@ -4499,28 +4499,73 @@ def canonical_float_text(value: str, decimals=None):
     if math.isnan(number) or math.isinf(number):
         return 'a non-finite float is the missing value'
     if decimals is None:
-        canonical = repr(number)
+        # repr supplies the shortest round-tripping digits but places them in
+        # exponential notation past its own thresholds; R011 writes the same
+        # digits positionally, so one value keeps one spelling.
+        canonical = format(decimal.Decimal(repr(number)), 'f')
         if canonical.endswith('.0'):
             canonical = canonical[:-2]
         if value != canonical:
             return f'expected the shortest round-trip text {canonical}'
         return None
-    exact = decimal.Decimal(number).quantize(
-        decimal.Decimal(1).scaleb(-decimals),
-        rounding=decimal.ROUND_HALF_UP,
-    )
-    if not exact:
-        exact = exact.copy_abs()
-    if value != format(exact, 'f'):
+    # Rounding reads the exact binary64 value, which for an extreme magnitude
+    # or a large declared precision needs more digits than the default context.
+    exact = decimal.Decimal(number)
+    try:
+        with decimal.localcontext() as context:
+            context.prec = max(28, exact.adjusted() + decimals + 3)
+            rounded = exact.quantize(
+                decimal.Decimal(1).scaleb(-decimals),
+                rounding=decimal.ROUND_HALF_UP,
+            )
+    except decimal.InvalidOperation:
+        return f'cannot be rendered at decimals {decimals}'
+    if not rounded:
+        rounded = rounded.copy_abs()
+    if value != format(rounded, 'f'):
         return (
             f'expected exactly {decimals} digit(s) after the decimal point '
-            'in plain notation'
+            'in positional notation'
         )
     return None
 
 
-def validate_csv_v1_artifact(csv_path: Path, label: str, spec):
-    """Check one expected artifact against R020's csv-v1 profile."""
+CANONICAL_DATE = re.compile(r'(\d{4})-(\d{2})-(\d{2})')
+CANONICAL_DATETIME = re.compile(
+    r'(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})'
+)
+
+
+def canonical_temporal_text(value: str, declared: str):
+    """Return why value is not R016's canonical text for its type, or None.
+
+    R016 fixes exactly one written form per temporal type, so the check is the
+    shape and then the calendar: a zone, an offset, a fractional second, a
+    truncated form, and an unpadded field are all outside the grammar, and a
+    field combination no calendar admits fails even when the shape matches.
+    """
+    if declared == 'date':
+        match = CANONICAL_DATE.fullmatch(value)
+        if match is None:
+            return 'expected YYYY-MM-DD'
+        try:
+            dt.date(*(int(part) for part in match.groups()))
+        except ValueError as exc:
+            return f'not a date on the calendar: {exc}'
+        return None
+
+    match = CANONICAL_DATETIME.fullmatch(value)
+    if match is None:
+        return 'expected YYYY-MM-DDThh:mm:ss'
+    try:
+        dt.datetime(*(int(part) for part in match.groups()))
+    except ValueError as exc:
+        return f'not a moment on the calendar: {exc}'
+    return None
+
+
+def validate_csv_artifact(csv_path: Path, label: str, spec):
+    """Check one expected artifact against R020's csv profile."""
     errors = []
     try:
         raw = csv_path.read_bytes()
@@ -4531,16 +4576,16 @@ def validate_csv_v1_artifact(csv_path: Path, label: str, spec):
     except UnicodeError as exc:
         return [f"ERROR: {label}: invalid_text: {exc}"]
     if data.startswith(BOM_UTF8):
-        return [f"ERROR: {label}: csv-v1 carries a byte-order mark"]
+        return [f"ERROR: {label}: csv carries a byte-order mark"]
     try:
-        records = parse_csv_v1(data)
+        records = parse_csv_profile(data)
     except ValueError as exc:
-        return [f"ERROR: {label}: csv-v1: {exc}"]
+        return [f"ERROR: {label}: csv: {exc}"]
     if not records:
-        return [f"ERROR: {label}: csv-v1 carries no header record"]
-    if render_csv_v1(records) != data:
+        return [f"ERROR: {label}: csv carries no header record"]
+    if render_csv_profile(records) != data:
         errors.append(
-            f"ERROR: {label}: csv-v1 quoting is not the exact condition R020 "
+            f"ERROR: {label}: csv quoting is not the exact condition R020 "
             "states, or a record is not terminated by U+000A"
         )
 
@@ -4573,8 +4618,15 @@ def validate_csv_v1_artifact(csv_path: Path, label: str, spec):
                         f"ERROR: {label}: record {number}: {name} is not "
                         f"R020's float text: {text!r}, {problem}"
                     )
+            elif declared in ('date', 'datetime'):
+                problem = canonical_temporal_text(text, declared)
+                if problem is not None:
+                    errors.append(
+                        f"ERROR: {label}: record {number}: {name} is not "
+                        f"R016's {declared} text: {text!r}, {problem}"
+                    )
             if len(errors) >= 6:
-                errors.append(f"ERROR: {label}: further csv-v1 errors elided")
+                errors.append(f"ERROR: {label}: further csv errors elided")
                 return errors
     return errors
 
@@ -4970,11 +5022,11 @@ def validate_examples_csv(root: Path, env=None):
                 except (OSError, UnicodeError, csv.Error):
                     continue
 
-                profile = output.get('profile', 'parquet-v1')
-                if profile == 'csv-v1' and csv_file not in profile_checked:
+                profile = output.get('profile', 'parquet')
+                if profile == 'csv' and csv_file not in profile_checked:
                     profile_checked.add(csv_file)
                     errors.extend(
-                        validate_csv_v1_artifact(
+                        validate_csv_artifact(
                             csv_file,
                             f"{ex_dir.name}/{csv_file.name}",
                             spec,

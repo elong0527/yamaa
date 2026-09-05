@@ -24,7 +24,7 @@ record_lookups:
     unmatched: missing
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, AESEQ, AETERM, AEDECOD, SMQ01NAM, SMQ01CD, SMQ02NAM, SMQ02CD]
 
 columns:

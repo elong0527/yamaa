@@ -6,7 +6,7 @@ base: EX
 keys: [STUDYID, USUBJID, EXSEQ]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, EXSEQ, EXSTDTM, EXDOSE, DOSREDFL]
 
 columns:

@@ -20,7 +20,7 @@ record_lookups:
     keep: first
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ]
 
 columns:

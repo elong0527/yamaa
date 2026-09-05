@@ -6,7 +6,7 @@ base: VS_RAW
 keys: [STUDYID, USUBJID, VSSEQ]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, VSSEQ, VSTESTCD, VSSTRESN]
   order_by: [USUBJID, VISITNUM]
 

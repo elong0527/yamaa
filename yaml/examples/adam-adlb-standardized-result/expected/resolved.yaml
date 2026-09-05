@@ -13,7 +13,7 @@ keys:
   - USUBJID
   - PARAMCD
 output:
-  profile: csv-v1
+  profile: csv
   columns:
     - USUBJID
     - PARAMCD

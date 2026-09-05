@@ -26,7 +26,7 @@ text of a `date` and a `datetime`. R019 owns the contents of a string, the
 failure of ill-formed encoded text, and the order of two strings.
 
 R014 owns the other direction. It states what a stored field means when a
-specification reads it, and `csv-v1` below is the writing counterpart of the
+specification reads it, and `csv` below is the writing counterpart of the
 delimited form it reads: the two agree on missing and on the empty string, and
 neither restates the other. The profile a specification reads a delimited
 *source* under is not settled by either rule.
@@ -38,26 +38,35 @@ is not settled here.
 ## Two profiles
 
 `output.profile` names the profile an artifact is written under. Version 1.0
-defines exactly two, and omitting the field selects `parquet-v1`.
+defines exactly two, and omitting the field selects `parquet`, so a
+specification that says nothing about serialization still has one contract
+rather than a host default.
 
 | Profile | Container | What two runtimes must agree on |
 |---|---|---|
-| `parquet-v1` | Apache Parquet | the schema, column order, row order, and values that read back |
-| `csv-v1` | delimited text | the bytes |
+| `parquet` | Apache Parquet | the schema, column order, row order, and values that read back |
+| `csv` | delimited text | the bytes |
 
-The two exist for different readers. `parquet-v1` is the production container:
+The two exist for different readers. `parquet` is the production container:
 it carries its own types, so an artifact read by another specification needs no
 declaration to be understood, and a large one does not pay for decimal text.
-`csv-v1` is the reviewable container: a human can read it, a diff can show what
+`csv` is the reviewable container: a human can read it, a diff can show what
 moved in it, and its bytes are fixed exactly, which is what makes it usable as
 a golden contract.
 
-A profile is a versioned name rather than a container name. A later release
-that changes any byte-level or mapping decision below issues a new profile
-rather than redefining one, so an artifact written under a named profile keeps
-its meaning.
+A profile names a container, and the specification's `schema_version` fixes
+which release's contract it was written under. The two together identify the
+bytes exactly, and a consumer reading a stored artifact receives both, because
+the producing-specification link R014 defines carries the whole producer
+document rather than the profile alone.
 
-## The csv-v1 profile
+A later release that changes any byte-level or mapping decision below therefore
+changes what a profile means at that schema version, and an artifact keeps the
+meaning its producer's version gives it. A profile that ever has to diverge
+from the schema version is added as a further name rather than by redefining
+one of these two.
+
+## The csv profile
 
 ### Bytes
 
@@ -117,10 +126,12 @@ collected empty string, and the first row's is missing.
 
 An `int` is written without a leading `U+002B`, without digit grouping, and
 without a leading zero; zero is `0`. A `float` that takes no display precision
-is written by R011's conversion to `str`, which is the shortest decimal that
-reads back as the same value and which omits a trailing `.0`.
+is written by R011's conversion to `str`: the shortest round-tripping digits in
+positional notation, with a trailing `.0` omitted. That conversion carries no
+exponent, which is what lets this profile promise bytes -- a value with two
+admissible spellings would leave two runtimes both conforming and different.
 
-## The parquet-v1 profile
+## The parquet profile
 
 ### Column mapping
 
@@ -141,7 +152,7 @@ field is optional, because every column type admits a missing value.
 
 A missing value is a Parquet null. A collected empty string is a present
 `BYTE_ARRAY` of zero length, which is not null. This is the same distinction
-`csv-v1` draws between a bare field and two quote characters, carried by the
+`csv` draws between a bare field and two quote characters, carried by the
 container instead of by a convention.
 
 ### Temporal values
@@ -178,7 +189,7 @@ selects, and the statistics it records are properties of the library rather
 than of this design. Requiring identical bytes would require every conforming
 implementation to abandon its ecosystem's writer, which buys less than it
 costs. An artifact whose bytes must be compared directly is written under
-`csv-v1`, whose byte guarantee is exactly that.
+`csv`, whose byte guarantee is exactly that.
 
 ### Floats are stored, not rendered
 
@@ -190,7 +201,7 @@ once, at a display.
 
 ## Display precision
 
-`output.decimals` is an optional non-negative integer. It applies to `csv-v1`
+`output.decimals` is an optional non-negative integer. It applies to `csv`
 alone, and to every `float` column of the artifact.
 
 When it is absent, a `float` is written as R011's float text. When it is
@@ -273,7 +284,7 @@ midway would already have published part of it.
 - An `output.profile` naming a profile this version does not define: fail
   validation with `unknown_artifact_profile` and report the value.
 - An `output.decimals` that is not a non-negative integer: fail validation.
-- An `output.decimals` declared with `parquet-v1`: fail validation with
+- An `output.decimals` declared with `parquet`: fail validation with
   `decimals_not_applicable`. A display precision that cannot take effect is a
   defect in the specification rather than a setting to ignore.
 - A value that cannot be written under its column's mapping: fail and report
@@ -281,7 +292,7 @@ midway would already have published part of it.
 - A failed atomic replacement: fail and report the target. The run produces no
   artifact, and the previous one is unchanged.
 - Writing a byte-order mark, a `U+000D` record terminator, or a quoting that
-  differs from the `csv-v1` condition: none is an implementation option.
+  differs from the `csv` condition: none is an implementation option.
 - Rounding with a host routine whose ties do not go away from zero, or
   rounding a value any other stage can observe: neither is an implementation
   option.

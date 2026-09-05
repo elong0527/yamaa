@@ -11,7 +11,7 @@ record_lookups:
     dataset: EX
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, TRT01A, TRT01DOSE]
 
 columns:

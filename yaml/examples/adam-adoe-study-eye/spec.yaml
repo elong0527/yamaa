@@ -7,7 +7,7 @@ base: OE
 keys: [STUDYID, USUBJID, OESEQ]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, OESEQ, PARAMCD, OELAT, AVAL, AFEYE]
 
 columns:

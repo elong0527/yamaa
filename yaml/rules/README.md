@@ -28,7 +28,7 @@ semantics, error behavior, and representative examples are complete.
 | R017 | [Specification inheritance](R017-specification-inheritance.md) | normative | Parent resolution, shallow composition, pruning, and resolved order | R001, R002, R005, R006, R009, R015 |
 | R018 | [Project function environment](R018-project-function-environment.md) | normative | Project resolution, logical function contracts, singular runtime binding, activation conformance | R001, R005, R006, R011, R016, R019, R020 |
 | R019 | [Text values](R019-text-values.md) | normative | ASCII source, Unicode data, casing, equality, normalization, total order | -- |
-| R020 | [Artifact serialization](R020-artifact-serialization.md) | normative | The `parquet-v1` and `csv-v1` profiles, display precision, and publication | R005, R011, R014, R016, R019 |
+| R020 | [Artifact serialization](R020-artifact-serialization.md) | normative | The `parquet` and `csv` profiles, display precision, and publication | R005, R011, R014, R016, R019 |
 
 ## Rule admission
 

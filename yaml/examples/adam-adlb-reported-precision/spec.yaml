@@ -6,7 +6,7 @@ base: LB
 keys: [STUDYID, USUBJID, PARAMCD]
 
 output:
-  profile: csv-v1
+  profile: csv
   decimals: 4
   columns: [STUDYID, USUBJID, PARAMCD, AVAL, ANRLO, R2ANRLO]
   order_by: [USUBJID]

@@ -13,7 +13,7 @@ record_lookups:
     key: [LBTESTCD, SEX]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTNRHI]
 
 columns:

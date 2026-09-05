@@ -10,7 +10,7 @@ metadata:
   dictionary_version: "26.1"
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS]
 
 columns:

@@ -8,7 +8,7 @@ base: ADRSPRE
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, PCHG, SAEFL, DCSREAS, AVALC, ARSN, AVAL]
 
 columns:

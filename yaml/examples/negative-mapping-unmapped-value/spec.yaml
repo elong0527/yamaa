@@ -6,7 +6,7 @@ base: RS
 keys: [STUDYID, USUBJID, RSSEQ]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, RSSEQ, AVALC]
 
 columns:

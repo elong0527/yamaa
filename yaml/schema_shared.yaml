@@ -8,8 +8,8 @@ column_type:
 
 artifact_profile:
     type: str
-    values: [parquet-v1, csv-v1]
-    description: Versioned artifact serialization profile defined by R020.
+    values: [parquet, csv]
+    description: Artifact serialization profile; R020 defines each one at this schema version.
 
 literal_value:
     type: [str, int, float, bool, "null"]

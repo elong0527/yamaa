@@ -3,7 +3,7 @@ parents: layers/study.yaml
 domain: ADLB
 keys: [USUBJID, PARAMCD]
 output:
-  profile: csv-v1
+  profile: csv
   columns: [USUBJID, PARAMCD, AVAL, AVALU]
 columns:
   - name: AVAL

@@ -7,7 +7,7 @@ base: MH_SUPP_RAW
 keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL]
 
 columns:

@@ -176,10 +176,18 @@ specification written under this one.
 
 ## Float to text
 
-Conversion from `float` to `str` uses the shortest decimal text that parses
-back to the same binary64 value, with a trailing `.0` omitted for an integral
-value. Every float reaching this conversion is finite under the normalization
-policy above. This conversion preserves the value; it is not display rounding.
+Conversion from `float` to `str` uses the shortest sequence of significant
+decimal digits that parses back to the same binary64 value, written in
+positional notation with a trailing `.0` omitted for an integral value. Every
+float reaching this conversion is finite under the normalization policy above.
+This conversion preserves the value; it is not display rounding.
+
+The text never carries an exponent, so one value has exactly one spelling:
+`0.0001` and not `1e-4`, and a large magnitude is written out in full. Shortest
+selects the digits, not the characters, because a rule that preferred the
+shorter string would make the spelling depend on which of two forms a runtime
+reaches for. R020 writes this same text into an artifact and states the bytes
+two runtimes must agree on, which they can only do if one value has one text.
 
 Calculations, comparisons, verifications, and dependent derivations always use
 the unrounded value. Final artifact display precision and its half-away-from-

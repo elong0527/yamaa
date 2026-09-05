@@ -6,7 +6,7 @@ base: ADVSPRE
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, ADT, ADY, AVAL, AVISIT]
 
 columns:

@@ -35,7 +35,7 @@ Its rows leave in the order `output.order_by` declares, and in R001's
 construction order when it is omitted.
 
 Its serialization is defined by R020, which fixes two versioned profiles:
-`parquet-v1`, which `output.profile` selects by default, and `csv-v1`, which
+`parquet`, which `output.profile` selects by default, and `csv`, which
 the example suite declares. That rule owns the container, the bytes each value
 becomes, the distinction between a missing value and a collected empty string,
 the one display precision a `float` may take, and the replacement of the target

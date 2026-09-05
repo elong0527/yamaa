@@ -8,7 +8,7 @@ base: ADTRPRE
 keys: [STUDYID, USUBJID, AVISIT]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, AVISIT, AVISITN, ADT, PARAMCD, PARAM, AVAL, NMEAS, NTARGET, ANL01FL, NADIR]
 
 columns:

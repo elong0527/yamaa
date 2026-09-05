@@ -7,7 +7,7 @@ base: LB
 keys: [STUDYID, USUBJID, PARAMCD, LBSEQ]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, PARAMCD, LBSEQ, ADT, TRTSDT, AVAL, ABLFL, BASE]
 
 columns:

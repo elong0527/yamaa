@@ -8,7 +8,7 @@ base: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, VSSEQ, SERIES, AVISITN, AVALC, PREVAVALC]
 
 columns:

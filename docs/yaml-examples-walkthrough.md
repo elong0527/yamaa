@@ -71,7 +71,7 @@ base: ODM
 keys: [STUDYID, USUBJID]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, DOMAIN, USUBJID, SUBJID, SEX, AGE, ARM, ACTARM]
 ```
 

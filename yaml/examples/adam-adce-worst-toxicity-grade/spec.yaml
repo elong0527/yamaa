@@ -6,7 +6,7 @@ base: CE
 keys: [STUDYID, USUBJID, CESEQ]
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, CESEQ, CETERM, ASTDT, ASEV, ASEVN, ATOXGRN, AOCCFL]
 
 columns:

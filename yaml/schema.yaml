@@ -63,11 +63,11 @@ output_class:
     - profile:
         type: artifact_profile
         required: false
-        description: Serialization profile the artifact is written under; R020 selects parquet-v1 when omitted.
+        description: Serialization profile the artifact is written under; R020 selects parquet when omitted.
     - decimals:
         type: int
         required: false
-        description: Fixed display digits for every float column under csv-v1; R020 defines the rounding and rejects it with parquet-v1.
+        description: Fixed display digits for every float column under csv; R020 defines the rounding and rejects it with parquet.
     - columns:
         type: "list[column_name]"
         required: true

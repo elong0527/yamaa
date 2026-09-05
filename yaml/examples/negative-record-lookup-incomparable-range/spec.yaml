@@ -18,7 +18,7 @@ record_lookups:
     between: {value: VSDTC, lower: DYLO, upper: DYHI}
 
 output:
-  profile: csv-v1
+  profile: csv
   columns: [STUDYID, USUBJID, VSSEQ, VSDTC, EPOCH]
 
 columns:

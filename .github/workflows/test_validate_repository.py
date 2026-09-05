@@ -2858,18 +2858,18 @@ bad_field: "what"
         self.assertIn('PASS', result.stdout)
 
 
-class TestCsvV1Profile(unittest.TestCase):
+class TestCsvProfile(unittest.TestCase):
     def parse_render(self, data):
-        return VALIDATOR.render_csv_v1(VALIDATOR.parse_csv_v1(data))
+        return VALIDATOR.render_csv_profile(VALIDATOR.parse_csv_profile(data))
 
     def test_missing_and_empty_string_are_distinct(self):
-        records = VALIDATOR.parse_csv_v1('A,B\n1,\n2,""\n')
+        records = VALIDATOR.parse_csv_profile('A,B\n1,\n2,""\n')
         self.assertEqual(records[1][1], (None, False))
         self.assertEqual(records[2][1], ('', True))
 
     def test_quoted_field_carries_delimiter_quote_and_newline(self):
         data = 'A\n"x, y"\n"say ""hi"""\n"two\nlines"\n'
-        records = VALIDATOR.parse_csv_v1(data)
+        records = VALIDATOR.parse_csv_profile(data)
         self.assertEqual(
             [record[0][0] for record in records[1:]],
             ['x, y', 'say "hi"', 'two\nlines'],
@@ -2878,17 +2878,17 @@ class TestCsvV1Profile(unittest.TestCase):
 
     def test_carriage_return_terminator_is_rejected(self):
         with self.assertRaises(ValueError) as caught:
-            VALIDATOR.parse_csv_v1('A,B\r\n1,2\r\n')
+            VALIDATOR.parse_csv_profile('A,B\r\n1,2\r\n')
         self.assertIn('U+000D', str(caught.exception))
 
     def test_unterminated_final_record_is_rejected(self):
         with self.assertRaises(ValueError) as caught:
-            VALIDATOR.parse_csv_v1('A,B\n1,2')
+            VALIDATOR.parse_csv_profile('A,B\n1,2')
         self.assertIn('U+000A', str(caught.exception))
 
     def test_unterminated_quote_is_rejected(self):
         with self.assertRaises(ValueError):
-            VALIDATOR.parse_csv_v1('A,B\n1,"open\n')
+            VALIDATOR.parse_csv_profile('A,B\n1,"open\n')
 
     def test_needless_quoting_does_not_render_back(self):
         data = 'A,B\n"1",2\n'
@@ -2896,13 +2896,61 @@ class TestCsvV1Profile(unittest.TestCase):
 
     def test_zero_row_artifact_is_the_header_alone(self):
         data = 'STUDYID,USUBJID\n'
-        self.assertEqual(len(VALIDATOR.parse_csv_v1(data)), 1)
+        self.assertEqual(len(VALIDATOR.parse_csv_profile(data)), 1)
         self.assertEqual(self.parse_render(data), data)
 
     def test_float_text_omits_a_trailing_zero_decimal(self):
         self.assertIsNone(VALIDATOR.canonical_float_text('10'))
         self.assertIn('10', VALIDATOR.canonical_float_text('10.0'))
         self.assertIsNone(VALIDATOR.canonical_float_text('73.66666666666667'))
+
+    def test_float_text_is_positional_and_never_exponential(self):
+        # A shorter string that round-trips is not the text: the digits are
+        # shortest, the notation is fixed, so one value has one spelling.
+        self.assertIsNone(VALIDATOR.canonical_float_text('0.0001'))
+        self.assertIn('0.0001', VALIDATOR.canonical_float_text('1e-4'))
+        self.assertIsNone(
+            VALIDATOR.canonical_float_text('100000000000000000000')
+        )
+        self.assertIn(
+            '100000000000000000000',
+            VALIDATOR.canonical_float_text('1e+20'),
+        )
+        self.assertIsNone(VALIDATOR.canonical_float_text('0.0000001'))
+
+    def test_extreme_precision_and_magnitude_do_not_raise(self):
+        # The default decimal context is too small for either, and an
+        # uncaught InvalidOperation would abort the whole run.
+        self.assertIsNotNone(
+            VALIDATOR.canonical_float_text('0.1' + '0' * 27, 29)
+        )
+        self.assertIsNotNone(VALIDATOR.canonical_float_text('1e300', 4))
+        self.assertIsNone(VALIDATOR.canonical_float_text('0.0313', 4))
+
+    def test_temporal_text_follows_the_r016_grammar(self):
+        self.assertIsNone(
+            VALIDATOR.canonical_temporal_text('2025-01-15', 'date')
+        )
+        self.assertIsNone(
+            VALIDATOR.canonical_temporal_text(
+                '2024-01-01T08:00:00', 'datetime'
+            )
+        )
+        for value, kind in [
+            ('2025-1-2', 'date'),
+            ('2025-99-99', 'date'),
+            ('2025-02-30', 'date'),
+            ('totally invalid', 'date'),
+            ('2025-01-12T14:00:00Z', 'datetime'),
+            ('2025-01-12T14:00:00+02:00', 'datetime'),
+            ('2025-01-12T14:00:00.5', 'datetime'),
+            ('2025-01-12T23:59:60', 'datetime'),
+            ('2025-01-12', 'datetime'),
+        ]:
+            self.assertIsNotNone(
+                VALIDATOR.canonical_temporal_text(value, kind),
+                f'{value!r} should not be canonical {kind} text',
+            )
 
     def test_declared_precision_fixes_the_written_width(self):
         self.assertIsNone(VALIDATOR.canonical_float_text('25.0000', 4))
@@ -2948,13 +2996,13 @@ class TestCsvV1Profile(unittest.TestCase):
             path = Path(raw) / 'adsl.csv'
             path.write_bytes(b'STUDYID,AVAL\r\nS1,10.0\r\n')
             spec = {
-                'output': {'profile': 'csv-v1', 'columns': ['STUDYID', 'AVAL']},
+                'output': {'profile': 'csv', 'columns': ['STUDYID', 'AVAL']},
                 'columns': [
                     {'name': 'STUDYID', 'type': 'str'},
                     {'name': 'AVAL', 'type': 'float'},
                 ],
             }
-            errors = VALIDATOR.validate_csv_v1_artifact(path, 'ex/adsl.csv', spec)
+            errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', spec)
         self.assertTrue(any('U+000D' in error for error in errors), errors)
 
     def test_artifact_check_accepts_a_conforming_artifact(self):
@@ -2962,7 +3010,7 @@ class TestCsvV1Profile(unittest.TestCase):
             path = Path(raw) / 'adsl.csv'
             path.write_bytes(b'STUDYID,COMMENT,AVAL\nS1,"has, comma",10\nS1,"",\n')
             spec = {
-                'output': {'profile': 'csv-v1',
+                'output': {'profile': 'csv',
                            'columns': ['STUDYID', 'COMMENT', 'AVAL']},
                 'columns': [
                     {'name': 'STUDYID', 'type': 'str'},
@@ -2970,7 +3018,7 @@ class TestCsvV1Profile(unittest.TestCase):
                     {'name': 'AVAL', 'type': 'float'},
                 ],
             }
-            errors = VALIDATOR.validate_csv_v1_artifact(path, 'ex/adsl.csv', spec)
+            errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', spec)
         self.assertEqual(errors, [])
 
     def test_decimals_needs_the_csv_profile(self):
@@ -2999,17 +3047,17 @@ class TestCsvV1Profile(unittest.TestCase):
         )
         self.assertIn(
             'decimals_not_applicable',
-            check({'profile': 'parquet-v1', 'decimals': 4,
+            check({'profile': 'parquet', 'decimals': 4,
                    'columns': ['USUBJID']}),
         )
         self.assertNotIn(
             'decimals_not_applicable',
-            check({'profile': 'csv-v1', 'decimals': 4,
+            check({'profile': 'csv', 'decimals': 4,
                    'columns': ['USUBJID']}),
         )
         self.assertIn(
             'non-negative integer',
-            check({'profile': 'csv-v1', 'decimals': -1,
+            check({'profile': 'csv', 'decimals': -1,
                    'columns': ['USUBJID']}),
         )
 
@@ -3017,7 +3065,7 @@ class TestCsvV1Profile(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / 'adsl.csv'
             path.write_bytes(b'\xef\xbb\xbfSTUDYID\nS1\n')
-            errors = VALIDATOR.validate_csv_v1_artifact(
+            errors = VALIDATOR.validate_csv_artifact(
                 path, 'ex/adsl.csv', {'output': {}, 'columns': []}
             )
         self.assertTrue(any('byte-order mark' in error for error in errors), errors)
