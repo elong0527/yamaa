@@ -1545,6 +1545,32 @@ class TestDateImputeSchema(unittest.TestCase):
         self.assertTrue(errors)
 
 
+class TestToDateSchema(unittest.TestCase):
+    def setUp(self):
+        self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[2])
+        self.assertEqual(schema_errors, [])
+
+    def validate(self, payload):
+        return VALIDATOR.validate_type(
+            {"to_date": payload},
+            ["expression"],
+            self.env,
+            "spec.columns.ASTDT2.derivation",
+        )
+
+    def test_accepts_source_variable_shape(self):
+        self.assertEqual(self.validate({"source": "ASTDTM"}), [])
+
+    def test_rejects_missing_source_and_unknown_fields(self):
+        missing_source = self.validate({})
+        unknown_field = self.validate(
+            {"source": "ASTDTM", "timezone": "UTC"}
+        )
+
+        self.assertIn("missing required field 'source'", missing_source[0])
+        self.assertIn("unknown field 'timezone'", unknown_field[0])
+
+
 class TestPreviousNonMissingSchema(unittest.TestCase):
     def setUp(self):
         self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[2])

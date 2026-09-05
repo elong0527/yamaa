@@ -13,7 +13,7 @@ keys: [STUDYID, USUBJID, AESEQ]
 
 output:
   profile: csv-v1
-  columns: [STUDYID, USUBJID, AESEQ, REVIEWFL]
+  columns: [STUDYID, USUBJID, AESEQ, ASTDT, ASTDT2, REVIEWFL]
 
 columns:
   - name: STUDYID
@@ -36,6 +36,11 @@ columns:
     type: datetime
     label: Analysis Start Datetime
     derivation: {source: AE.AESTDTM}
+  - name: ASTDT2
+    type: date
+    label: Analysis Start Date from Datetime
+    derivation:
+      to_date: {source: ASTDTM}
   - name: AETERM
     type: str
     label: Reported Term for the Adverse Event

@@ -92,6 +92,13 @@ expressions:
         - invalid:
             type: literal_value
             description: Result when the source is not an ISO 8601 date or date prefix.
+    to_date: # Extracts the calendar date from a datetime.
+        # A missing datetime yields a missing date. Other source types are an
+        # incompatible input error under R016.
+        - source:
+            type: variable
+            required: true
+            description: Datetime whose calendar date is returned.
     study_day: # Returns the CDISC study day of a date against a reference date.
         # The reference date is day 1 and there is no day zero: a date on or
         # after the reference counts forward from 1, and an earlier date counts
