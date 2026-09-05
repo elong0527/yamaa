@@ -113,9 +113,8 @@ path.
 R019 scalar count rather than bytes or UTF-16 units is also the unit R006 uses
 for `min_length`, so a supplementary-plane scalar counts once in both R and
 Python. A length is therefore a check of its own rather than an anchored
-`matches` pattern: `.` in an ECMAScript regular expression counts UTF-16 code
-units and excludes line terminators, so the two checks deliberately have
-different units.
+`matches` pattern: `max_length` counts scalar values directly, independently
+of regular-expression matching behavior.
 
 ## Dataset verifications
 
