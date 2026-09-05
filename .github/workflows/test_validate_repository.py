@@ -18,6 +18,14 @@ assert SPEC is not None and SPEC.loader is not None
 VALIDATOR = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VALIDATOR)
 
+BLOCKER_PATH = Path(__file__).parent / 'check_validation_blockers.py'
+BLOCKER_SPEC = importlib.util.spec_from_file_location(
+    'check_validation_blockers', BLOCKER_PATH
+)
+assert BLOCKER_SPEC is not None and BLOCKER_SPEC.loader is not None
+BLOCKER_CHECK = importlib.util.module_from_spec(BLOCKER_SPEC)
+BLOCKER_SPEC.loader.exec_module(BLOCKER_CHECK)
+
 
 class TestYamlLoader(unittest.TestCase):
     def test_yaml_12_boolean_resolution(self):
@@ -360,6 +368,234 @@ class TestPredicateLanguage(unittest.TestCase):
         self.assertIn("unknown identifier 'NOSUCHCOL'", errors[0])
         self.assertIn('verifications[2].row_count.filter', errors[1])
         self.assertIn('invalid predicate', errors[1])
+
+
+class TestNumericExpressionLanguage(unittest.TestCase):
+    def test_parses_precedence_and_infers_promoted_type(self):
+        expression = 'A + POWER(B, 2) / -3'
+        ast = VALIDATOR.parse_numeric_expression(expression)
+        resolver = VALIDATOR.numeric_identifier_resolver(
+            unqualified={'A': 'int', 'B': 'float'}
+        )
+
+        result_type, errors = VALIDATOR.validate_numeric_expression_ast(
+            ast, 'spec.columns.RESULT.derivation.compute.expr',
+            expression, resolver
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(result_type, 'float')
+        self.assertEqual(ast['span'], (0, len(expression)))
+
+    def test_reports_prohibited_construct_and_function_with_spans(self):
+        resolver = VALIDATOR.numeric_identifier_resolver(
+            unqualified={'AVAL': 'float', 'ANRHI': 'float'}
+        )
+
+        function_error = VALIDATOR.validate_numeric_expression_at(
+            'SUM(AVAL)', 'spec.columns.TOTAL.derivation.compute.expr',
+            resolver
+        )[0]
+        comparison_error = VALIDATOR.validate_numeric_expression_at(
+            'AVAL > ANRHI', 'spec.columns.FLAG.derivation.compute.expr',
+            resolver
+        )[0]
+        boolean_error = VALIDATOR.validate_numeric_expression_at(
+            'AVAL AND ANRHI', 'spec.columns.FLAG.derivation.compute.expr',
+            resolver
+        )[0]
+
+        self.assertEqual(function_error.condition, 'prohibited_function')
+        self.assertEqual(function_error.span, (0, 3))
+        self.assertEqual(comparison_error.condition, 'prohibited_construct')
+        self.assertEqual(comparison_error.span, (5, 6))
+        self.assertEqual(boolean_error.condition, 'prohibited_construct')
+        self.assertEqual(boolean_error.context['construct'], 'boolean')
+
+    def test_rejects_unknown_qualified_and_non_numeric_identifiers(self):
+        resolver = VALIDATOR.numeric_identifier_resolver(
+            unqualified={'TERM': 'str'},
+            qualified={'PICK': {'VALUE': 'float'}},
+        )
+
+        unknown = VALIDATOR.validate_numeric_expression_at(
+            'MISSING + 1', 'spec.compute.expr', resolver
+        )[0]
+        qualified = VALIDATOR.validate_numeric_expression_at(
+            'DATA.VALUE + 1', 'spec.compute.expr', resolver
+        )[0]
+        non_numeric = VALIDATOR.validate_numeric_expression_at(
+            'TERM + 1', 'spec.compute.expr', resolver
+        )[0]
+        lookup_errors = VALIDATOR.validate_numeric_expression_at(
+            'PICK.VALUE + 1', 'spec.compute.expr', resolver
+        )
+
+        self.assertEqual(unknown.condition, 'unknown_field')
+        self.assertEqual(qualified.condition, 'qualified_identifier')
+        self.assertEqual(non_numeric.condition, 'incompatible_input_type')
+        self.assertEqual(lookup_errors, [])
+
+    def test_accepts_the_complete_function_vocabulary(self):
+        expressions = [
+            'ABS(A)', 'CEIL(A)', 'FLOOR(A)', 'TRUNC(A)', 'SQRT(A)',
+            'POWER(A, 2)', 'EXP(A)', 'LN(A)', 'MOD(A, 2)',
+            'GREATEST(A, B)', 'LEAST(A, B)', 'NULLIF(A, B)',
+            'COALESCE(NULL, A, B)',
+        ]
+        resolver = VALIDATOR.numeric_identifier_resolver(
+            unqualified={'A': 'int', 'B': 'float'}
+        )
+
+        for expression in expressions:
+            with self.subTest(expression=expression):
+                self.assertEqual(
+                    VALIDATOR.validate_numeric_expression_at(
+                        expression, 'spec.compute.expr', resolver
+                    ),
+                    [],
+                )
+
+    def test_rejects_prohibited_function_argument_counts(self):
+        resolver = VALIDATOR.numeric_identifier_resolver(
+            unqualified={'A': 'float'}
+        )
+        for expression in (
+            'ABS()', 'POWER(A)', 'GREATEST(A)', 'COALESCE()'
+        ):
+            with self.subTest(expression=expression):
+                errors = VALIDATOR.validate_numeric_expression_at(
+                    expression, 'spec.compute.expr', resolver
+                )
+                self.assertEqual(len(errors), 1)
+                self.assertEqual(errors[0].condition, 'prohibited_function')
+
+    def test_does_not_execute_runtime_failure_conditions(self):
+        resolver = VALIDATOR.numeric_identifier_resolver()
+        for expression in ('1 / 0', 'SQRT(-1)', 'LN(0)'):
+            with self.subTest(expression=expression):
+                errors = VALIDATOR.validate_numeric_expression_at(
+                    expression, 'spec.compute.expr', resolver
+                )
+                self.assertEqual(errors, [])
+
+    def test_dependency_collection_uses_the_parsed_ast(self):
+        names = VALIDATOR.numeric_expression_identifier_names(
+            'VALUE + POWER(BASE, 2) + PICK.DOSE'
+        )
+        self.assertEqual(names, {'VALUE', 'BASE', 'PICK.DOSE'})
+
+
+class TestValidationManifest(unittest.TestCase):
+    def test_repository_manifest_is_complete_and_registered(self):
+        root = TOOL_PATH.parents[2]
+        manifest, load_errors = VALIDATOR.load_validation_manifest(root)
+
+        self.assertEqual(load_errors, [])
+        self.assertEqual(
+            VALIDATOR.validate_validation_manifest(root, manifest), []
+        )
+
+    def test_manifest_rejects_missing_and_stale_fixtures(self):
+        root = TOOL_PATH.parents[2]
+        manifest, _ = VALIDATOR.load_validation_manifest(root)
+        changed = copy.deepcopy(manifest)
+        removed = next(iter(changed['fixtures']))
+        del changed['fixtures'][removed]
+        changed['fixtures']['negative-stale'] = {
+            'rule': 'R010',
+            'condition': 'prohibited_function',
+            'spec_paths': ['columns.X.derivation.compute.expr'],
+            'validator': 'numeric_expression',
+        }
+
+        message = '\n'.join(
+            VALIDATOR.validate_validation_manifest(root, changed)
+        )
+
+        self.assertIn(removed, message)
+        self.assertIn('negative-stale', message)
+
+    def test_implemented_fixture_requires_every_declared_path(self):
+        entry = {
+            'condition': 'duplicate_identifier',
+            'spec_paths': ['datasets.ADLB', 'domain'],
+            'validator': 'name_contract',
+        }
+        diagnostics = [
+            VALIDATOR.validation_diagnostic(
+                'example/spec.yaml.datasets.ADLB',
+                'duplicate_identifier',
+                'duplicate',
+            )
+        ]
+
+        errors = VALIDATOR.validate_registered_fixture_diagnostics(
+            'negative-example', entry, diagnostics, ['example/spec.yaml']
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn("'domain'", errors[0])
+
+    def test_blocked_fixture_fails_when_every_path_is_implemented(self):
+        entry = {
+            'condition': 'dependency_cycle',
+            'spec_paths': ['columns.A', 'columns.B'],
+            'blocked_by': '#103',
+        }
+        diagnostics = [
+            VALIDATOR.validation_diagnostic(
+                f'example/spec.yaml.{path}', 'dependency_cycle', 'cycle'
+            )
+            for path in entry['spec_paths']
+        ]
+
+        errors = VALIDATOR.validate_registered_fixture_diagnostics(
+            'negative-example', entry, diagnostics, ['example/spec.yaml']
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn('stale block', errors[0])
+
+    def test_unrelated_diagnostic_is_not_suppressed(self):
+        entry = {
+            'condition': 'unknown_field',
+            'spec_paths': ['columns.RESULT.derivation.compute.expr'],
+            'validator': 'numeric_expression',
+        }
+        expected = VALIDATOR.validation_diagnostic(
+            'example/spec.yaml.columns.RESULT.derivation.compute.expr',
+            'unknown_field',
+            'unknown identifier',
+        )
+        unrelated = VALIDATOR.validation_diagnostic(
+            'example/spec.yaml.output.columns',
+            'undeclared_column',
+            'unknown output column',
+        )
+
+        errors = VALIDATOR.validate_registered_fixture_diagnostics(
+            'negative-example', entry, [expected, unrelated],
+            ['example/spec.yaml']
+        )
+
+        self.assertEqual(errors, [unrelated])
+
+    def test_closed_blocking_issue_is_rejected(self):
+        blockers = {103: ['negative-one', 'negative-two']}
+
+        errors = BLOCKER_CHECK.validate_blocker_states(
+            blockers, lambda _number: ('closed', False)
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn('#103 is', errors[0])
+        self.assertEqual(
+            BLOCKER_CHECK.validate_blocker_states(
+                blockers, lambda _number: ('open', False)
+            ),
+            [],
+        )
 
 
 class TestProjectFunctionEnvironment(unittest.TestCase):
@@ -1437,6 +1673,26 @@ class TestTypeValidation(unittest.TestCase):
                     ),
                     [],
                 )
+
+    def test_union_prefers_a_matching_outer_type_constraint_error(self):
+        env = {
+            'classes': {},
+            'aliases': {
+                'day_rule': {
+                    'type': 'str',
+                    'values': ['first', 'last'],
+                }
+            },
+            'registries': {},
+        }
+
+        errors = VALIDATOR.validate_type(
+            'middle', ['int', 'day_rule'], env, 'spec.day'
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], VALIDATOR.ValidationDiagnostic)
+        self.assertEqual(errors[0].condition, 'value_not_permitted')
 
 
 class TestDateImputeSchema(unittest.TestCase):

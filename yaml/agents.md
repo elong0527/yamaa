@@ -42,5 +42,8 @@ outside the rule index until their contracts and example coverage are complete.
 - Do not infer unspecified behavior. Record it as an unresolved design question
   or propose a new rule.
 - Update or add examples whenever a normative rule changes behavior.
+- Register every validation-phase negative fixture exactly once in
+  `validation-manifest.yaml`; implemented entries must match their primary
+  condition at every declared specification path.
 - Preserve deterministic behavior and require equivalent results from R and
   Python implementations.

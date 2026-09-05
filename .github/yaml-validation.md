@@ -25,9 +25,13 @@ The validation ensures:
    identifiers, invalid clears, and an entry that does not declare `output`;
    rebases inherited paths; composes shallow keyed members; prunes unreachable
    declarations; and stably orders columns by dependency. Every predicate is
-   parsed under R004, its identifiers are
-   resolved for the predicate site, and statically known operand types are
-   checked without implicit conversion. Cross-field validation also rejects
+   parsed under R004, its identifiers are resolved for the predicate site, and
+   statically known operand types are checked without implicit conversion.
+   Every R010 numeric expression is parsed into a source-spanned syntax tree;
+   function names and argument counts, identifier scope, and numeric input
+   types are validated without executing the formula. The spans are zero-based
+   half-open character offsets into the expression leaf.
+   Cross-field validation also rejects
    duplicate or unresolved dataset, lookup, column, key, output-column, and row
    names, including namespace conflicts. A grouped row must declare a non-empty,
    duplicate-free `group_by` whose variables are qualified to that row's driver.
@@ -50,11 +54,14 @@ The validation ensures:
    match the producer's ordered `output.columns` exactly. A producing
    specification cannot be combined with inline `types`.
    Negative examples (folders prefixed with `negative-`) are structurally
-   validated; structural errors are only suppressed if their named path
-   matches a `spec_path` declared in `expected/error.yaml` with
-   `phase: validation`. A declared `condition` the validator itself
-   decides, such as an R021 path condition, must be the condition it actually
-   reports.
+   validated. For fixtures with `phase: validation`,
+   `yaml/validation-manifest.yaml` registers every negative example whose
+   expected phase is `validation`, its owning rule, primary condition, exact
+   specification paths, and implemented validator family or open blocking
+   issue. An implemented fixture passes only when that condition is emitted at
+   every declared path; unrelated diagnostics still fail validation. A blocked
+   entry fails when its expected diagnostic becomes complete, and CI also
+   rejects a blocking issue that is no longer open.
    Each positive inherited example must provide an exact
    `expected/resolved[_<variant>].yaml` data-tree fixture.
 5. **Layout**: All examples have `README.md`, one `spec.yaml` or one or more
@@ -94,9 +101,10 @@ listed above. At this time, it **does not**:
   Inherited specifications are canonicalized as part of producing their
   resolved data tree.
 - Reproduce golden output values in the `.csv` files.
-- Parse or type-check the numeric, aggregate, or template leaf languages; this
-  is tracked in issue #103. Predicate syntax, names, and statically known types
-  are checked, but predicates are not evaluated against data.
+- Parse or type-check the aggregate or template leaf languages; their remaining
+  work is tracked in issue #103. Numeric and predicate syntax, names, and
+  statically known types are checked, but neither language is evaluated against
+  data.
 - Prove that a regular expression behaves identically in R and Python; the
   ECMAScript portability contract is tracked in issue #106.
 
@@ -124,4 +132,12 @@ To treat warnings as errors, run with the `--warnings-as-errors` flag:
 
 ```bash
 python3 .github/workflows/validate_repository.py --warnings-as-errors
+```
+
+CI additionally checks that every `blocked_by` issue in the validation manifest
+remains open. With GitHub credentials available, run the same check locally:
+
+```bash
+GITHUB_REPOSITORY=elong0527/yamaa \
+  python3 .github/workflows/check_validation_blockers.py
 ```

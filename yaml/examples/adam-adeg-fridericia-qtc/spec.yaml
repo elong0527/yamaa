@@ -1,17 +1,9 @@
 schema_version: "1.0"
 domain: ADEG
 datasets:
-  ADEG_IN: input/adeg.csv
+  ADEG_IN: {path: input/adeg.csv, types: {AVAL: float}}
 base: ADEG_IN
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
-
-record_lookups:
-  - id: RR_REC
-    dataset: ADEG_IN
-    filter: "ADEG_IN.PARAMCD = 'RR'"
-    source: [ADEG_IN.STUDYID, ADEG_IN.USUBJID, ADEG_IN.AVISIT]
-    key: [STUDYID, USUBJID, AVISIT]
-    unmatched: missing
 
 output:
   path: adeg.csv
@@ -44,6 +36,14 @@ columns:
     derivation:
       source: ADEG_IN.AVISIT
 
+  - name: QTVAL
+    type: float
+    label: QT Interval
+
+  - name: RRVAL
+    type: float
+    label: RR Interval
+
   - name: AVAL
     type: float
     label: Analysis Value
@@ -61,18 +61,31 @@ rows:
         source: ADEG_IN.PARAM
       AVAL:
         source: ADEG_IN.AVAL
+      QTVAL:
+        literal: null
+      RRVAL:
+        literal: null
       AVALU:
         source: ADEG_IN.AVALU
   - id: qtcfr
-    filter: "ADEG_IN.PARAMCD = 'QT'"
+    group_by: [ADEG_IN.STUDYID, ADEG_IN.USUBJID, ADEG_IN.AVISIT]
+    filter: "QTVAL IS NOT NULL AND RRVAL IS NOT NULL"
     derivations:
       PARAMCD:
         literal: QTCFR
       PARAM:
         literal: "QTcF - Fridericia's Correction Formula Rederived (ms)"
+      QTVAL:
+        aggregate:
+          filter: "ADEG_IN.PARAMCD = 'QT'"
+          expr: "ONLY(ADEG_IN.AVAL)"
+      RRVAL:
+        aggregate:
+          filter: "ADEG_IN.PARAMCD = 'RR'"
+          expr: "ONLY(ADEG_IN.AVAL)"
       AVAL:
         compute:
-          expr: "ADEG_IN.AVAL / POWER(RR_REC.AVAL / 1000, 1 / 3)"
+          expr: "QTVAL / POWER(RRVAL / 1000, 1 / 3)"
       AVALU:
         literal: ms
 

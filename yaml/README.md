@@ -13,6 +13,8 @@ and SDTM-to-ADaM derivations. The design is under active development.
   verification types.
 - `schema_function.yaml` registers calls to functions resolved by R018's
   project environment.
+- `validation-manifest.yaml` assigns every validation-phase negative fixture
+  to its owning rule and validator family or an open blocking issue.
 - `rules/` contains shared execution semantics, with one rule per file.
 - `examples/` contains source data, derivation specifications, and exact
   expected outputs.
