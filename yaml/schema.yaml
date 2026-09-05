@@ -1,4 +1,4 @@
-version: "1.0"
+version: "1.0.0-rc.1"
 
 # R006 defines this notation: classes, descriptors, type expressions, and
 # registries. Every field description here documents the field and does not

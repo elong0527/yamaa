@@ -1,0 +1,12 @@
+schema_version: "1.0"
+domain: EMPTY
+datasets: {}
+keys:
+    - USUBJID
+output:
+    path: empty.csv
+    columns:
+        - USUBJID
+columns:
+    - name: USUBJID
+      type: str

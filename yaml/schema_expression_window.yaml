@@ -1,4 +1,4 @@
-version: "1.0"
+version: "1.0.0-rc.1"
 
 expressions:
     row_number: # Numbers eligible rows from 1 within each partition.

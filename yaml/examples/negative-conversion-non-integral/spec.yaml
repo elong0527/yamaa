@@ -1,4 +1,4 @@
-schema_version: "1.0"
+schema_version: "1.0.0-rc.1"
 domain: ADVS
 datasets:
   VS: {path: input/vs.csv, types: {VSSTRESN: float}}

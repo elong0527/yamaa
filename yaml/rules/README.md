@@ -30,6 +30,7 @@ semantics, error behavior, and representative examples are complete.
 | R019 | [Text values](R019-text-values.md) | normative | ASCII source, Unicode data, casing, equality, normalization, total order | -- |
 | R020 | [Artifact serialization](R020-artifact-serialization.md) | normative | The `parquet` and `csv` profiles, display precision, and publication | R005, R011, R014, R016, R019 |
 | R021 | [Project resource resolution](R021-project-resource-resolution.md) | normative | The approved project root, written path form, readable file kinds, content identity | R006, R017, R019 |
+| R022 | [Schema release and compatibility](R022-schema-release-policy.md) | normative | Bundle versions, compatibility, publication, capabilities, migration, release CI | R006 |
 
 ## Rule admission
 

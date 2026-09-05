@@ -1,4 +1,4 @@
-version: "1.0"
+version: "1.0.0-rc.1"
 
 expressions:
     mapping: # Looks up a string source in an inline dictionary.

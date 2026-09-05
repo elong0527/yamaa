@@ -1,0 +1,8 @@
+version: "1.0.0-rc.1"
+status: prerelease
+tag: null
+entrypoints:
+    - yaml/schema.yaml
+    - yaml/schema_environment.yaml
+migration_from:
+    - "1.0"

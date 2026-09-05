@@ -639,7 +639,7 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
         conformance = root / 'conformance'
         conformance.mkdir()
         (conformance / 'test-value.yaml').write_text(
-            'schema_version: "1.0"\n'
+            'schema_version: "1.0.0-rc.1"\n'
             'function: test_value\n'
             'contract_version: "1.0.0"\n'
             'cases:\n'
@@ -665,7 +665,7 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
             '    result: null\n'
         )
         document = {
-            'schema_version': '1.0',
+            'schema_version': '1.0.0-rc.1',
             'version': '2026.1',
             'runtime': {
                 'language': 'r',
@@ -909,7 +909,7 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
             contract['binding']['args'] = {'x': 'x'}
             document, environment_path = self.write_project(root, contract)
             vectors = {
-                'schema_version': '1.0',
+                'schema_version': '1.0.0-rc.1',
                 'function': 'test_value',
                 'contract_version': '1.0.0',
                 'cases': [
@@ -1133,7 +1133,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             inputs.mkdir()
             (inputs / 'dm.csv').write_text('USUBJID,AGE\n01,40\n')
             (layers / 'common.yaml').write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'datasets:\n'
                 '  DM: ../input/dm.csv\n'
                 '  UNUSED: ../input/missing.csv\n'
@@ -1163,7 +1163,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 '  unique: {columns: [AUDIT]}\n'
             )
             (layers / 'a.yaml').write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'parents: common.yaml\n'
                 'metadata: {owner: a}\n'
                 'columns:\n'
@@ -1171,7 +1171,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 '    label: Parent A label\n'
             )
             (layers / 'b.yaml').write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'parents: common.yaml\n'
                 'metadata: {owner: b}\n'
                 'datasets:\n'
@@ -1188,7 +1188,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             )
             spec_path = root / 'spec.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'parents: [layers/a.yaml, layers/b.yaml]\n'
                 'domain: ADSL\n'
                 'keys: [RESULT]\n'
@@ -1221,7 +1221,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             root = Path(temp_dir)
             parent = root / 'parent.yaml'
             parent.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'datasets:\n'
                 '  DM: input/dm.csv\n'
                 '  REF: input/ref.csv\n'
@@ -1245,7 +1245,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             )
             spec_path = root / 'spec.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'parents: parent.yaml\n'
                 'domain: TEST\n'
                 'keys: [X]\n'
@@ -1288,7 +1288,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             root = Path(temp_dir)
             parent = root / 'parent.yaml'
             parent.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'datasets: {DM: input/dm.csv}\n'
                 'base: DM\n'
                 'columns:\n'
@@ -1297,7 +1297,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             )
             spec_path = root / 'spec.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'parents: parent.yaml\n'
                 'domain: TEST\n'
                 'keys: [A]\n'
@@ -1324,7 +1324,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             inputs.mkdir()
             (inputs / 'dm.csv').write_text('USUBJID,SITEORD\n01,2\n')
             (layers / 'common.yaml').write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'datasets:\n'
                 '  DM: ../input/dm.csv\n'
                 'base: DM\n'
@@ -1344,7 +1344,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             )
             spec_path = root / 'spec.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'parents: layers/common.yaml\n'
                 'domain: ADSL\n'
                 'keys: [USUBJID]\n'
@@ -1368,7 +1368,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             root = Path(temp_dir)
             parent = root / 'parent.yaml'
             parent.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'datasets: {DM: input/dm.csv}\n'
                 'base: DM\n'
                 'columns:\n'
@@ -1378,7 +1378,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             )
             spec_path = root / 'spec.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'parents: parent.yaml\n'
                 'domain: TEST\n'
                 'keys: [A]\n'
@@ -1397,10 +1397,10 @@ class TestSpecificationInheritance(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             parent = root / 'parent.yaml'
-            parent.write_text('schema_version: "1.0"\n')
+            parent.write_text('schema_version: "1.0.0-rc.1"\n')
             spec_path = root / 'spec.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 f'parents: "{parent.resolve()}"\n'
                 'output: {path: out.csv, columns: []}\n'
             )
@@ -1410,7 +1410,7 @@ class TestSpecificationInheritance(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(
             resolved,
-            {'schema_version': '1.0', 'output': {'path': 'out.csv', 'columns': []}},
+            {'schema_version': '1.0.0-rc.1', 'output': {'path': 'out.csv', 'columns': []}},
         )
 
     def test_rejects_entry_that_inherits_output(self):
@@ -1418,12 +1418,12 @@ class TestSpecificationInheritance(unittest.TestCase):
             root = Path(temp_dir)
             parent = root / 'parent.yaml'
             parent.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'output: {path: out.csv, columns: [A]}\n'
             )
             spec_path = root / 'spec.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'parents: parent.yaml\n'
             )
 
@@ -1436,7 +1436,7 @@ class TestSpecificationInheritance(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             spec_path = Path(temp_dir) / 'spec.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'parents: https://example.test/base.yaml\n'
                 'output: {path: out.csv, columns: []}\n'
             )
@@ -1450,7 +1450,7 @@ class TestSpecificationInheritance(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             spec_path = Path(temp_dir) / 'spec.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'parents: missing.yaml\n'
                 'output: {path: out.csv, columns: []}\n'
             )
@@ -1466,12 +1466,12 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path = root / 'spec.yaml'
             parent = root / 'parent.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'parents: parent.yaml\n'
                 'output: {path: out.csv, columns: []}\n'
             )
             parent.write_text(
-                'schema_version: "1.0"\nparents: spec.yaml\n'
+                'schema_version: "1.0.0-rc.1"\nparents: spec.yaml\n'
             )
 
             resolved, errors, _ = self.resolve(spec_path)
@@ -1485,7 +1485,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path = root / 'spec.yaml'
             parent = root / 'parent.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'parents: parent.yaml\n'
                 'output: {path: out.csv, columns: []}\n'
             )
@@ -1501,7 +1501,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             root = Path(temp_dir)
             parent = root / 'parent.yaml'
             parent.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'columns:\n'
                 '  - name: A\n'
                 '    type: str\n'
@@ -1509,7 +1509,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             )
             spec_path = root / 'spec.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'parents: parent.yaml\n'
                 'output: {path: out.csv, columns: [A]}\n'
                 'columns:\n'
@@ -1529,7 +1529,7 @@ class TestSpecificationInheritance(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             spec_path = Path(temp_dir) / 'spec.yaml'
             spec_path.write_text(
-                'schema_version: "1.0"\n'
+                'schema_version: "1.0.0-rc.1"\n'
                 'parents: []\n'
                 'output: {path: out.csv, columns: []}\n'
                 'columns:\n'
@@ -2247,7 +2247,7 @@ class TestSpecContracts(unittest.TestCase):
 
 
 class TestProducingSpecs(unittest.TestCase):
-    VALID_PRODUCER_SPEC = '''schema_version: "1.0"
+    VALID_PRODUCER_SPEC = '''schema_version: "1.0.0-rc.1"
 domain: DM
 datasets:
   RAW: raw.csv
@@ -2344,7 +2344,7 @@ columns:
     def test_rejects_producer_version_mismatch(self):
         self.write_producer_spec(
             self.VALID_PRODUCER_SPEC.replace(
-                'schema_version: "1.0"', 'schema_version: "2.0"'
+                'schema_version: "1.0.0-rc.1"', 'schema_version: "2.0"'
             )
         )
 
@@ -2354,7 +2354,7 @@ columns:
 
     def test_rejects_reordered_producer_output(self):
         self.write_producer_spec(
-            '''schema_version: "1.0"
+            '''schema_version: "1.0.0-rc.1"
 domain: DM
 datasets: {RAW: raw.csv}
 base: RAW
@@ -2403,7 +2403,7 @@ fields: {STUDYID: string, AGE: integer}
 
     def test_rejects_metadata_only_contract(self):
         self.write_producer_spec(
-            '''schema_version: "1.0"
+            '''schema_version: "1.0.0-rc.1"
 domain: DM
 datasets: {}
 keys: [STUDYID]
@@ -2445,7 +2445,7 @@ columns:
         )
 
     def test_rejects_producer_dependency_cycle(self):
-        looping_producer = '''schema_version: "1.0"
+        looping_producer = '''schema_version: "1.0.0-rc.1"
 domain: {domain}
 datasets:
   LOOP:
@@ -3269,7 +3269,7 @@ root_class:
 ''')
         (ex_dir / 'README.md').write_text('# Bad: field')
         # Missing domain and datasets which are required, and has an unknown field 'bad_field'
-        (ex_dir / 'spec.yaml').write_text('''schema_version: "1.0"
+        (ex_dir / 'spec.yaml').write_text('''schema_version: "1.0.0-rc.1"
 domain: "test"
 datasets: {}
 keys: []
@@ -3668,7 +3668,7 @@ class TestCsvProfile(unittest.TestCase):
 
     def test_decimals_needs_a_csv_artifact_path(self):
         base = {
-            'schema_version': '1.0',
+            'schema_version': '1.0.0-rc.1',
             'domain': 'ADSL',
             'datasets': {'SRC': 'input/adsl.csv'},
             'base': 'SRC',

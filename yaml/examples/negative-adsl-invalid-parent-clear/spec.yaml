@@ -1,4 +1,4 @@
-schema_version: "1.0"
+schema_version: "1.0.0-rc.1"
 parents: layers/parent.yaml
 domain: ADSL
 keys: [USUBJID]

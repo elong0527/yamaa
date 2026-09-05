@@ -1,4 +1,4 @@
-version: "1.0"
+version: "1.0.0-rc.1"
 
 includes:
     - schema_shared.yaml

@@ -44,6 +44,9 @@ document declaring any other version is an error and is not validated against
 that bundle, so a later version can be introduced without silently
 reinterpreting a document written for an earlier one.
 
+R022 defines the version format, compatibility and publication policy,
+implementation support reporting, and migration requirements.
+
 All schema documents must reject duplicate YAML keys, aliases, merge keys,
 explicit tags, and unknown schema constructs.
 

@@ -14,6 +14,10 @@ and SDTM-to-ADaM derivations. The design is under active development.
 - `schema_function.yaml` registers calls to functions resolved by R018's
   project environment.
 - `rules/` contains shared execution semantics, with one rule per file.
+- `rules/R022-schema-release-policy.md` defines versioning, compatibility,
+  immutable publication, implementation support reporting, and migration.
+- `releases/`, `implementations/`, and `migrations/` contain the corresponding
+  machine-readable release record, capability reports, and canonical fixtures.
 - `examples/` contains source data, derivation specifications, exact expected
   outputs, and `validation-manifest.yaml`, which assigns every validation-phase
   negative fixture to its owning rule and validator family or an open blocking
@@ -36,6 +40,11 @@ physical file is read once as one immutable byte snapshot that cannot be
 substituted between validation and ingestion.
 
 ## Version 1.0 design boundary
+
+The bundle is currently the `1.0.0-rc.1` prerelease. The earlier `1.0` value
+was an unissued design label and is represented only by the migration fixture;
+it was never an immutable production release. R022 is the normative release
+and compatibility policy.
 
 Operations consume named variables rather than arbitrary nested expressions.
 This keeps every operation self-contained, exposes dependencies, and avoids
