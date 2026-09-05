@@ -19,7 +19,7 @@ record_lookups:
     keep: first
 
 output:
-  profile: csv
+  path: adtte.csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, SRCDOM, SRCVAR, SRCSEQ]
 
 columns:

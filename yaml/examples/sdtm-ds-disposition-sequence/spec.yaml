@@ -6,7 +6,7 @@ base: DS_RAW
 keys: [STUDYID, USUBJID, DSSEQ]
 
 output:
-  profile: csv
+  path: ds.csv
   columns: [STUDYID, DOMAIN, USUBJID, DSSEQ, DSDECOD, DSCAT, DSDTC]
 
 columns:

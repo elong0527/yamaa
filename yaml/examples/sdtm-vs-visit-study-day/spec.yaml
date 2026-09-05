@@ -29,7 +29,7 @@ record_lookups:
     unmatched: fail
 
 output:
-  profile: csv
+  path: vs.csv
   columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, VISIT, VISITNUM, EPOCH, VSDY]
 
 columns:

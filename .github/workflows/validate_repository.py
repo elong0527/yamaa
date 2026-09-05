@@ -12,7 +12,7 @@ import os
 import re
 import struct
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import yaml
 from yaml.composer import ComposerError
@@ -3004,9 +3004,18 @@ def validate_spec_names(spec, spec_label):
     output_columns = output.get('columns') if isinstance(output, dict) else None
     duplicate_errors(output_columns, 'output.columns', 'output column')
 
+    if isinstance(output, dict):
+        declared_path = output.get('path')
+        if isinstance(declared_path, str) and artifact_profile(output) is None:
+            errors.append(
+                f"ERROR: {spec_label}.output.path: "
+                f"unknown_artifact_profile for {declared_path!r}; R020 maps "
+                + ', '.join(sorted(ARTIFACT_PROFILES)) + " and nothing else"
+            )
+
     if isinstance(output, dict) and 'decimals' in output:
         decimals = output.get('decimals')
-        profile = output.get('profile', 'parquet')
+        profile = artifact_profile(output)
         if isinstance(decimals, bool) or not isinstance(decimals, int):
             errors.append(
                 f"ERROR: {spec_label}.output.decimals: must be a "
@@ -3017,11 +3026,11 @@ def validate_spec_names(spec, spec_label):
                 f"ERROR: {spec_label}.output.decimals: must be a "
                 f"non-negative integer, got {decimals!r}"
             )
-        if profile != 'csv':
+        if profile is not None and profile != 'csv':
             errors.append(
                 f"ERROR: {spec_label}.output.decimals: "
                 f"decimals_not_applicable under profile {profile!r}; R020 "
-                "renders a display precision only under csv"
+                "renders a display precision only for a csv artifact"
             )
     if isinstance(output_columns, list):
         for index, name in enumerate(output_columns):
@@ -4631,6 +4640,23 @@ def validate_csv_artifact(csv_path: Path, label: str, spec):
     return errors
 
 
+ARTIFACT_PROFILES = {'.csv': 'csv', '.parquet': 'parquet'}
+
+
+def artifact_profile(output):
+    """Return R020's profile for a declared output.path, or None.
+
+    The mapping is closed: an extension outside it names no profile, which is
+    a validation failure rather than a fallback to a default.
+    """
+    if not isinstance(output, dict):
+        return None
+    declared = output.get('path')
+    if not isinstance(declared, str):
+        return None
+    return ARTIFACT_PROFILES.get(PurePosixPath(declared).suffix.lower())
+
+
 def validate_csv_shapes(root: Path):
     errors = []
     examples_dir = root / 'yaml' / 'examples'
@@ -4994,15 +5020,18 @@ def validate_examples_csv(root: Path, env=None):
             if not expected_dir.exists():
                 continue
             for csv_file in sorted(expected_dir.glob('*.csv')):
-                domain = spec.get('domain')
-                if (
-                    isinstance(domain, str)
-                    and csv_file.name != f"{domain.lower()}.csv"
-                ):
-                    errors.append(
-                        f"ERROR: {ex_dir.name}/{csv_file.name}: expected "
-                        f"artifact name {domain.lower()}.csv"
-                    )
+                # The golden file is the artifact the specification says it
+                # produces, so its name comes from output.path rather than a
+                # convention over the domain.
+                declared_path = output.get('path')
+                if isinstance(declared_path, str):
+                    declared_name = PurePosixPath(declared_path).name
+                    if csv_file.name != declared_name:
+                        errors.append(
+                            f"ERROR: {ex_dir.name}/{csv_file.name}: expected "
+                            f"artifact name {declared_name}, which "
+                            f"output.path declares"
+                        )
                 try:
                     with open(csv_file, 'r', encoding='utf-8') as f:
                         reader = csv.reader(f)
@@ -5022,7 +5051,7 @@ def validate_examples_csv(root: Path, env=None):
                 except (OSError, UnicodeError, csv.Error):
                     continue
 
-                profile = output.get('profile', 'parquet')
+                profile = artifact_profile(output)
                 if profile == 'csv' and csv_file not in profile_checked:
                     profile_checked.add(csv_file)
                     errors.extend(

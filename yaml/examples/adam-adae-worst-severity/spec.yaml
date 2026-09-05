@@ -6,7 +6,7 @@ base: ADAEPRE
 keys: [STUDYID, USUBJID, AESEQ]
 
 output:
-  profile: csv
+  path: adae.csv
   columns: [STUDYID, USUBJID, AESEQ, AEBODSYS, AEDECOD, ASTDT, AESEV, TRTEMFL, AESEVN, AWSEVFL]
 
 columns:

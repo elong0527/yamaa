@@ -7,7 +7,7 @@ base: OE
 keys: [STUDYID, USUBJID, OESEQ]
 
 output:
-  profile: csv
+  path: adoe.csv
   columns: [STUDYID, USUBJID, OESEQ, PARAMCD, OELAT, AVAL, AFEYE]
 
 columns:

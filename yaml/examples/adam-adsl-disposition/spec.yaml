@@ -7,7 +7,7 @@ base: DM
 keys: [STUDYID, USUBJID]
 
 output:
-  profile: csv
+  path: adsl.csv
   columns: [STUDYID, USUBJID, EOSDT, EOSDECOD, EOSREAS, EOSSTT, DCSREAS]
 
 columns:

@@ -8,7 +8,7 @@ base: SOURCE
 keys: [ID]
 
 output:
-  profile: csv
+  path: test.csv
   columns: [ID, RESULT]
 
 columns:

@@ -106,7 +106,8 @@ semantics for one. They observe the missing value and apply their existing
 missing-value behavior. In particular, a normalized output key fails R005's
 non-missing key requirement, `not_missing` fails while verifications that skip
 missing values skip it under R009, and an artifact carries it as the missing
-value its profile writes under R020. No artifact or canonical value has an infinity or NaN
+value its profile writes under R020. No artifact or canonical value has an
+infinity or NaN
 spelling.
 
 The policy is value-based rather than a universal text sentinel. An unquoted
@@ -191,9 +192,9 @@ two runtimes must agree on, which they can only do if one value has one text.
 
 Calculations, comparisons, verifications, and dependent derivations always use
 the unrounded value. Final artifact display precision and its half-away-from-
-zero rounding belong to R020's `output.decimals` and occur once, when a field is
-written. R018's conformance comparison similarly operates on a temporary copy
-and never changes a value used by the specification.
+zero rounding belong to R020's `output.decimals` and occur once, when a field
+is written. R018's conformance comparison similarly operates on a temporary
+copy and never changes a value used by the specification.
 
 ## Errors
 

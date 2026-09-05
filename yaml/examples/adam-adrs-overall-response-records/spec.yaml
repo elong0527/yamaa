@@ -7,7 +7,7 @@ base: RS
 keys: [STUDYID, USUBJID, RSSEQ]
 
 output:
-  profile: csv
+  path: adrs.csv
   columns: [STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADY, AVALC, AVAL, ANL01FL]
 
 columns:

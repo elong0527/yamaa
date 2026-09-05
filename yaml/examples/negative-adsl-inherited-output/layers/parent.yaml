@@ -1,4 +1,4 @@
 schema_version: "1.0"
 output:
-  profile: csv
+  path: adsl.csv
   columns: [USUBJID]

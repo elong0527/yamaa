@@ -6,11 +6,6 @@ column_type:
     type: str
     values: [str, int, float, date, datetime]
 
-artifact_profile:
-    type: str
-    values: [parquet, csv]
-    description: Artifact serialization profile; R020 defines each one at this schema version.
-
 literal_value:
     type: [str, int, float, bool, "null"]
     description: Scalar literal after R011 normalizes any non-finite float to

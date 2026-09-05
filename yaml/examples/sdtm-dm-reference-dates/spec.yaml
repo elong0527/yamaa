@@ -16,7 +16,7 @@ record_lookups:
     keep: last
 
 output:
-  profile: csv
+  path: dm.csv
   columns: [STUDYID, DOMAIN, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC, RFENDTC]
 
 columns:

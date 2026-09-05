@@ -2,7 +2,7 @@
 id: R020
 title: Artifact Serialization
 status: normative
-applies_to: [root.output, output.profile, output.decimals, artifact_profile]
+applies_to: [root.output, output.path, output.decimals]
 depends_on: [R005, R011, R014, R016, R019]
 ---
 
@@ -31,28 +31,49 @@ delimited form it reads: the two agree on missing and on the empty string, and
 neither restates the other. The profile a specification reads a delimited
 *source* under is not settled by either rule.
 
-This rule owns writing the artifact and replacing the target with it. How that
-target's path is resolved is a property of the specification's resolution and
-is not settled here.
+This rule owns which file a specification declares it produces, the bytes that
+file receives, and the replacement of it. It does not own how that path is
+resolved against a project or which locations a run may write to: R002 owns
+resolution and containment for the paths a specification names, and an artifact
+path is written rather than read, so a boundary that admits a source does not
+by itself admit a target.
 
-## Two profiles
+## The artifact's path selects its profile
 
-`output.profile` names the profile an artifact is written under. Version 1.0
-defines exactly two, and omitting the field selects `parquet`, so a
-specification that says nothing about serialization still has one contract
-rather than a host default.
+`output.path` names the file the specification produces. It is required: a
+specification that derives an artifact says what it produces, and there is no
+default name for one.
 
-| Profile | Container | What two runtimes must agree on |
-|---|---|---|
-| `parquet` | Apache Parquet | the schema, column order, row order, and values that read back |
-| `csv` | delimited text | the bytes |
+The path's extension selects the profile. The mapping is closed, so an
+extension outside it names no profile and fails validation rather than falling
+back to one. The extension is matched without regard to case, because a study
+that stores `ADSL.CSV` names the same container as one that stores `adsl.csv`
+and two runtimes must not disagree about which.
 
-The two exist for different readers. `parquet` is the production container:
-it carries its own types, so an artifact read by another specification needs no
-declaration to be understood, and a large one does not pay for decimal text.
-`csv` is the reviewable container: a human can read it, a diff can show what
-moved in it, and its bytes are fixed exactly, which is what makes it usable as
-a golden contract.
+| Extension | Profile | Container | What two runtimes must agree on |
+|---|---|---|---|
+| `.csv` | `csv` | delimited text | the bytes |
+| `.parquet` | `parquet` | Apache Parquet | the schema, column order, row order, and values that read back |
+
+One field carries both facts because a specification that produces an artifact
+needs a path regardless, and a separate profile beside it could disagree with
+the name it writes -- an `adsl.csv` declared `parquet` is a file whose name
+lies about its contents. The cost is stated rather than hidden: renaming the
+artifact changes the container, so a rename is a change to the contract and
+not only to a filename.
+
+Deriving is not guessing. The extension is read from the specification, where
+a reviewer sees it, against a closed mapping this rule fixes; an unrecognized
+extension stops the run. A reader that instead sniffed a file's contents, or
+accepted an unknown extension under a default, could read a conforming
+artifact wrongly without failing, and neither is permitted.
+
+The two profiles exist for different readers. `parquet` is the production
+container: it carries its own types, so an artifact read by another
+specification needs no declaration to be understood, and a large one does not
+pay for decimal text. `csv` is the reviewable container: a human can read it, a
+diff can show what moved in it, and its bytes are fixed exactly, which is what
+makes it usable as a golden contract.
 
 A profile names a container, and the specification's `schema_version` fixes
 which release's contract it was written under. The two together identify the
@@ -248,10 +269,11 @@ the exact scaling above rather than delegating.
 
 A specification that reads an artifact another specification produced learns
 how those bytes are encoded from the producer, through the producing
-specification link R014 defines: the producer's `output.profile` states the
-profile, exactly as its `output.columns` states the fields. A consumer does not
-infer a profile from a file's name or extension, and a reader that guesses one
-can read a conforming artifact wrongly without failing.
+specification link R014 defines: the producer's `output.path` states the
+profile by its extension, exactly as its `output.columns` states the fields.
+The consumer reads that from the producing specification rather than from the
+name it happens to know the file by, so a copy stored under another name is
+still read under the profile its producer wrote it with.
 
 ## Publication
 
@@ -281,12 +303,15 @@ midway would already have published part of it.
 
 ## Errors
 
-- An `output.profile` naming a profile this version does not define: fail
-  validation with `unknown_artifact_profile` and report the value.
+- A missing `output.path`: fail validation and report the specification.
+- An `output.path` whose extension is outside the mapping above, or that has
+  none: fail validation with `unknown_artifact_profile` and report the path.
+  No extension is treated as a default.
 - An `output.decimals` that is not a non-negative integer: fail validation.
-- An `output.decimals` declared with `parquet`: fail validation with
-  `decimals_not_applicable`. A display precision that cannot take effect is a
-  defect in the specification rather than a setting to ignore.
+- An `output.decimals` declared on a path the mapping resolves to `parquet`:
+  fail validation with `decimals_not_applicable`. A display precision that
+  cannot take effect is a defect in the specification rather than a setting to
+  ignore.
 - A value that cannot be written under its column's mapping: fail and report
   the column, the row's key, and the value.
 - A failed atomic replacement: fail and report the target. The run produces no

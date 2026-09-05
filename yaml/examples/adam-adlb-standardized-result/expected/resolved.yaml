@@ -13,7 +13,7 @@ keys:
   - USUBJID
   - PARAMCD
 output:
-  profile: csv
+  path: adlb.csv
   columns:
     - USUBJID
     - PARAMCD

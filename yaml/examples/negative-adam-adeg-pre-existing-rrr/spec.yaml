@@ -8,7 +8,7 @@ base: ADEG_IN
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 
 output:
-  profile: csv
+  path: adeg.csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL, AVALU]
 
 columns:

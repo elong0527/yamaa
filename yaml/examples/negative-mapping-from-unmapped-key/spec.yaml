@@ -7,7 +7,7 @@ base: LB
 keys: [STUDYID, USUBJID, PARAMCD]
 
 output:
-  profile: csv
+  path: adlb.csv
   columns: [STUDYID, USUBJID, PARAMCD, SEX, AVAL, ANRHI]
 
 columns:

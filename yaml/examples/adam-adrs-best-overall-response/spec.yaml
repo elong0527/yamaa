@@ -15,7 +15,7 @@ record_lookups:
     unmatched: missing
 
 output:
-  profile: csv
+  path: adrs.csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, RANDDT, AVALC, AVAL, ADT]
 
 columns:

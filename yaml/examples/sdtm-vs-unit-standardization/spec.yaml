@@ -6,7 +6,7 @@ base: VS_RAW
 keys: [STUDYID, USUBJID, VSSEQ]
 
 output:
-  profile: csv
+  path: vs.csv
   columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU]
 
 columns:

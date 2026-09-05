@@ -264,7 +264,7 @@ class TestPredicateLanguage(unittest.TestCase):
                 },
                 'base': 'DM',
                 'keys': ['USUBJID'],
-                'output': {'columns': ['USUBJID', 'AGE']},
+                'output': {'path': 'out.csv', 'columns': ['USUBJID', 'AGE']},
                 'columns': [
                     {
                         'name': 'USUBJID',
@@ -310,7 +310,7 @@ class TestPredicateLanguage(unittest.TestCase):
             'datasets': {'LB': 'lb.csv'},
             'base': 'LB',
             'keys': ['USUBJID'],
-            'output': {'columns': ['USUBJID']},
+            'output': {'path': 'out.csv', 'columns': ['USUBJID']},
             'columns': [
                 {
                     'name': 'USUBJID',
@@ -954,7 +954,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'parents: [layers/a.yaml, layers/b.yaml]\n'
                 'domain: ADSL\n'
                 'keys: [RESULT]\n'
-                'output: {columns: [RESULT, DEPENDENT]}\n'
+                'output: {path: out.csv, columns: [RESULT, DEPENDENT]}\n'
             )
 
             resolved, errors, _ = self.resolve(spec_path)
@@ -1011,7 +1011,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'parents: parent.yaml\n'
                 'domain: TEST\n'
                 'keys: [X]\n'
-                'output: {columns: [X]}\n'
+                'output: {path: out.csv, columns: [X]}\n'
                 'record_lookups:\n'
                 '  - id: ref\n'
                 '    unmatched: missing\n'
@@ -1063,7 +1063,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'parents: parent.yaml\n'
                 'domain: TEST\n'
                 'keys: [A]\n'
-                'output: {columns: [A]}\n'
+                'output: {path: out.csv, columns: [A]}\n'
             )
             with open(spec_path, 'r', encoding='utf-8') as handle:
                 spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
@@ -1111,6 +1111,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'domain: ADSL\n'
                 'keys: [USUBJID]\n'
                 'output:\n'
+                '  path: out.csv\n'
                 '  columns: [USUBJID]\n'
                 '  order_by:\n'
                 '    - {variable: SITEORD, direction: desc}\n'
@@ -1143,7 +1144,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'parents: parent.yaml\n'
                 'domain: TEST\n'
                 'keys: [A]\n'
-                'output: {columns: [A]}\n'
+                'output: {path: out.csv, columns: [A]}\n'
             )
             with open(spec_path, 'r', encoding='utf-8') as handle:
                 spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
@@ -1163,7 +1164,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 f'parents: "{parent.resolve()}"\n'
-                'output: {columns: []}\n'
+                'output: {path: out.csv, columns: []}\n'
             )
 
             resolved, errors, _ = self.resolve(spec_path)
@@ -1171,7 +1172,7 @@ class TestSpecificationInheritance(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(
             resolved,
-            {'schema_version': '1.0', 'output': {'columns': []}},
+            {'schema_version': '1.0', 'output': {'path': 'out.csv', 'columns': []}},
         )
 
     def test_rejects_entry_that_inherits_output(self):
@@ -1180,7 +1181,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             parent = root / 'parent.yaml'
             parent.write_text(
                 'schema_version: "1.0"\n'
-                'output: {columns: [A]}\n'
+                'output: {path: out.csv, columns: [A]}\n'
             )
             spec_path = root / 'spec.yaml'
             spec_path.write_text(
@@ -1199,7 +1200,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: https://example.test/base.yaml\n'
-                'output: {columns: []}\n'
+                'output: {path: out.csv, columns: []}\n'
             )
 
             resolved, errors, _ = self.resolve(spec_path)
@@ -1213,7 +1214,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: missing.yaml\n'
-                'output: {columns: []}\n'
+                'output: {path: out.csv, columns: []}\n'
             )
 
             resolved, errors, _ = self.resolve(spec_path)
@@ -1229,7 +1230,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: parent.yaml\n'
-                'output: {columns: []}\n'
+                'output: {path: out.csv, columns: []}\n'
             )
             parent.write_text(
                 'schema_version: "1.0"\nparents: spec.yaml\n'
@@ -1248,7 +1249,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: parent.yaml\n'
-                'output: {columns: []}\n'
+                'output: {path: out.csv, columns: []}\n'
             )
             parent.write_text('schema_version: "2.0"\n')
 
@@ -1272,7 +1273,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: parent.yaml\n'
-                'output: {columns: [A]}\n'
+                'output: {path: out.csv, columns: [A]}\n'
                 'columns:\n'
                 '  - name: A\n'
                 '    type: null\n'
@@ -1292,7 +1293,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: []\n'
-                'output: {columns: []}\n'
+                'output: {path: out.csv, columns: []}\n'
                 'columns:\n'
                 '  - {name: A}\n'
                 '  - {name: A}\n'
@@ -1991,6 +1992,7 @@ datasets:
 base: RAW
 keys: [STUDYID]
 output:
+  path: dm.csv
   columns: [STUDYID, AGE]
 columns:
   - name: STUDYID
@@ -2096,6 +2098,7 @@ datasets: {RAW: raw.csv}
 base: RAW
 keys: [STUDYID]
 output:
+  path: dm.csv
   columns: [AGE, STUDYID]
 columns:
   - name: STUDYID
@@ -2142,7 +2145,7 @@ fields: {STUDYID: string, AGE: integer}
 domain: DM
 datasets: {}
 keys: [STUDYID]
-output: {columns: [STUDYID, AGE]}
+output: {path: out.csv, columns: [STUDYID, AGE]}
 columns:
   - name: STUDYID
     type: str
@@ -2187,7 +2190,7 @@ datasets:
     schema: ../spec.yaml
 base: LOOP
 keys: [STUDYID]
-output: {columns: [STUDYID, AGE]}
+output: {path: out.csv, columns: [STUDYID, AGE]}
 columns:
   - name: STUDYID
     type: str
@@ -2583,7 +2586,7 @@ class TestValidatorCLI(unittest.TestCase):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'csv-output'
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'spec.yaml').write_text(
-            'output:\n  columns: [c, a]\n'
+            'output:\n  path: out.csv\n  columns: [c, a]\n'
             'columns:\n  - name: a\n  - name: b\n  - name: c\n'
         )
         (ex_dir / 'expected').mkdir()
@@ -2598,7 +2601,7 @@ class TestValidatorCLI(unittest.TestCase):
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'README.md').write_text('# CSV: bad header')
         (ex_dir / 'spec.yaml').write_text(
-            'output:\n  columns: [a, c]\n'
+            'output:\n  path: out.csv\n  columns: [a, c]\n'
             'columns:\n  - name: a\n  - name: b\n  - name: c\n'
         )
         (ex_dir / 'input').mkdir()
@@ -3021,7 +3024,7 @@ class TestCsvProfile(unittest.TestCase):
             errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', spec)
         self.assertEqual(errors, [])
 
-    def test_decimals_needs_the_csv_profile(self):
+    def test_decimals_needs_a_csv_artifact_path(self):
         base = {
             'schema_version': '1.0',
             'domain': 'ADSL',
@@ -3043,23 +3046,39 @@ class TestCsvProfile(unittest.TestCase):
 
         self.assertIn(
             'decimals_not_applicable',
-            check({'decimals': 4, 'columns': ['USUBJID']}),
-        )
-        self.assertIn(
-            'decimals_not_applicable',
-            check({'profile': 'parquet', 'decimals': 4,
+            check({'path': 'adsl.parquet', 'decimals': 4,
                    'columns': ['USUBJID']}),
         )
         self.assertNotIn(
             'decimals_not_applicable',
-            check({'profile': 'csv', 'decimals': 4,
+            check({'path': 'adsl.csv', 'decimals': 4,
                    'columns': ['USUBJID']}),
         )
         self.assertIn(
             'non-negative integer',
-            check({'profile': 'csv', 'decimals': -1,
+            check({'path': 'adsl.csv', 'decimals': -1,
                    'columns': ['USUBJID']}),
         )
+
+    def test_unknown_extension_names_no_profile(self):
+        # The mapping is closed: an unrecognized extension is a failure, not
+        # a fall back to the other profile.
+        self.assertEqual(
+            VALIDATOR.artifact_profile({'path': 'adsl.csv'}), 'csv'
+        )
+        self.assertEqual(
+            VALIDATOR.artifact_profile({'path': 'out/adsl.parquet'}),
+            'parquet',
+        )
+        self.assertEqual(
+            VALIDATOR.artifact_profile({'path': 'adsl.CSV'}), 'csv'
+        )
+        for path in ['adsl.txt', 'adsl', 'adsl.csv.gz', '']:
+            self.assertIsNone(
+                VALIDATOR.artifact_profile({'path': path}),
+                f'{path!r} should name no profile',
+            )
+        self.assertIsNone(VALIDATOR.artifact_profile({}))
 
     def test_byte_order_mark_is_rejected(self):
         with tempfile.TemporaryDirectory() as raw:

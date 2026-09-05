@@ -8,7 +8,7 @@ base: ADLBPRE
 keys: [STUDYID, USUBJID, PARAMCD, ASEQ]
 
 output:
-  profile: csv
+  path: adlb.csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, ASEQ, AVISIT, AVAL, ANRLO, ANRHI, ANRIND, ABLFL, BASE, BNRIND, SHIFT1, R2BASE, CRIT1, CRIT1FL]
 
 columns:

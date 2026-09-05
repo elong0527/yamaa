@@ -57,8 +57,10 @@ The validation ensures:
 6. **CSV consistency**: Input and expected CSV files must have unique,
    non-empty headers and a consistent field count. Expected output headers
    must match exactly the `output.columns` sequence declared by the
-   specification. An expected artifact whose specification declares the
-   `csv` profile must also carry that profile's bytes: no byte-order mark,
+   specification. `output.path` names the file the specification produces and
+   its extension must be one R020 maps; the expected artifact carries that
+   name. An artifact whose path resolves to the `csv` profile must also carry
+   that profile's bytes: no byte-order mark,
    `U+000A` terminating every record including the last, and R020's exact
    quoting condition, which distinguishes a missing value from a collected
    empty string. An `int` column must carry canonical integer text, and a

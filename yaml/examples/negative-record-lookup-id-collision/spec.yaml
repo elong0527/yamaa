@@ -13,7 +13,7 @@ record_lookups:
     keep: first
 
 output:
-  profile: csv
+  path: adsl.csv
   columns: [STUDYID, USUBJID, TRT01A]
 
 columns:

@@ -12,7 +12,7 @@ base: AE
 keys: [STUDYID, USUBJID, AESEQ]
 
 output:
-  profile: csv
+  path: adae.csv
   columns: [STUDYID, USUBJID, AESEQ, ASTDT, ASTDT2, REVIEWFL]
 
 columns:

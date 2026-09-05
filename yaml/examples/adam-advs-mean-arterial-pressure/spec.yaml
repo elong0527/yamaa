@@ -6,7 +6,7 @@ base: ADVSIN
 keys: [STUDYID, USUBJID, VISIT, PARAMCD]
 
 output:
-  profile: csv
+  path: advs.csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVAL, VISIT, DTYPE]
 
 columns:

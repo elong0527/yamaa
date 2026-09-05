@@ -3,7 +3,8 @@ id: R005
 title: Output Contract
 status: normative
 applies_to: [root.keys, root.output, root.columns, column.type, row.derivations, derivation]
-depends_on: [R001, R002, R003, R007, R008, R009, R011, R019, R020]
+depends_on: [R001, R002, R003, R007, R008, R009, R011, R019,
+  R020]
 ---
 
 # Output contract
@@ -34,12 +35,12 @@ its rows are the rows R001 constructs.
 Its rows leave in the order `output.order_by` declares, and in R001's
 construction order when it is omitted.
 
-Its serialization is defined by R020, which fixes two versioned profiles:
-`parquet`, which `output.profile` selects by default, and `csv`, which
-the example suite declares. That rule owns the container, the bytes each value
-becomes, the distinction between a missing value and a collected empty string,
-the one display precision a `float` may take, and the replacement of the target
-by a completed artifact.
+Its serialization is defined by R020. `output.path` names the file this
+specification produces and its extension selects one of two profiles,
+`parquet` or `csv`. That rule owns the container, the bytes each value becomes,
+the distinction between a missing value and a collected empty string, the one
+display precision a `float` may take, and the replacement of that file by a
+completed artifact.
 
 Everything below concerns the values themselves and their order, which the
 profiles carry rather than decide.

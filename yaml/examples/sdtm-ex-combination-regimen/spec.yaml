@@ -6,7 +6,7 @@ base: EX_RAW
 keys: [STUDYID, USUBJID, EXSEQ]
 
 output:
-  profile: csv
+  path: ex.csv
   columns: [STUDYID, DOMAIN, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC, EXENDTC, EXADJ]
 
 columns:

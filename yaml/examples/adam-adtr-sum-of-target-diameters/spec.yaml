@@ -8,7 +8,7 @@ base: TRVISIT
 keys: [STUDYID, USUBJID, AVISIT]
 
 output:
-  profile: csv
+  path: adtr.csv
   columns: [STUDYID, USUBJID, AVISIT, AVISITN, ADT, PARAMCD, PARAM, AVAL, NMEAS, NTARGET, ANL01FL]
 
 columns:

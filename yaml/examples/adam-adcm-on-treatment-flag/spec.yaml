@@ -7,7 +7,7 @@ base: CM
 keys: [STUDYID, USUBJID, CMSEQ]
 
 output:
-  profile: csv
+  path: adcm.csv
   columns: [STUDYID, USUBJID, CMSEQ, CMTRT, ASTDT, AENDT, TRTSDT, TRTEDT, ONTRTFL]
 
 columns:

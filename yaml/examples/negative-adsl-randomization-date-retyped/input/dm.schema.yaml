@@ -6,6 +6,7 @@ base: ODM
 keys: [STUDYID, USUBJID]
 
 output:
+  path: dm.csv
   columns: [STUDYID, USUBJID, RANDDT]
 
 columns:

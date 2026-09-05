@@ -46,7 +46,7 @@ base: SOURCE                   # Dataset sheet -> Structure, but as the driver o
 keys: [STUDYID, USUBJID]       # Dataset sheet -> Key Variables, and actually checked
 
 output:
-  profile: csv              # <- no cell for this; how the artifact is written
+  path: adsl.csv             # <- no cell for this; the file, and its format
   columns: [STUDYID, USUBJID, HEIGHTCM, WEIGHTKG, BMI]   # what ships, in which order
 
 columns:                       # this section (below) is the Variable sheet
