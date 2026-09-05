@@ -264,7 +264,7 @@ class TestPredicateLanguage(unittest.TestCase):
                 },
                 'base': 'DM',
                 'keys': ['USUBJID'],
-                'output': {'columns': ['USUBJID', 'AGE']},
+                'output': {'path': 'out.csv', 'columns': ['USUBJID', 'AGE']},
                 'columns': [
                     {
                         'name': 'USUBJID',
@@ -310,7 +310,7 @@ class TestPredicateLanguage(unittest.TestCase):
             'datasets': {'LB': 'lb.csv'},
             'base': 'LB',
             'keys': ['USUBJID'],
-            'output': {'columns': ['USUBJID']},
+            'output': {'path': 'out.csv', 'columns': ['USUBJID']},
             'columns': [
                 {
                     'name': 'USUBJID',
@@ -954,7 +954,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'parents: [layers/a.yaml, layers/b.yaml]\n'
                 'domain: ADSL\n'
                 'keys: [RESULT]\n'
-                'output: {columns: [RESULT, DEPENDENT]}\n'
+                'output: {path: out.csv, columns: [RESULT, DEPENDENT]}\n'
             )
 
             resolved, errors, _ = self.resolve(spec_path)
@@ -1011,7 +1011,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'parents: parent.yaml\n'
                 'domain: TEST\n'
                 'keys: [X]\n'
-                'output: {columns: [X]}\n'
+                'output: {path: out.csv, columns: [X]}\n'
                 'record_lookups:\n'
                 '  - id: ref\n'
                 '    unmatched: missing\n'
@@ -1063,7 +1063,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'parents: parent.yaml\n'
                 'domain: TEST\n'
                 'keys: [A]\n'
-                'output: {columns: [A]}\n'
+                'output: {path: out.csv, columns: [A]}\n'
             )
             with open(spec_path, 'r', encoding='utf-8') as handle:
                 spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
@@ -1111,6 +1111,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'domain: ADSL\n'
                 'keys: [USUBJID]\n'
                 'output:\n'
+                '  path: out.csv\n'
                 '  columns: [USUBJID]\n'
                 '  order_by:\n'
                 '    - {variable: SITEORD, direction: desc}\n'
@@ -1143,7 +1144,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'parents: parent.yaml\n'
                 'domain: TEST\n'
                 'keys: [A]\n'
-                'output: {columns: [A]}\n'
+                'output: {path: out.csv, columns: [A]}\n'
             )
             with open(spec_path, 'r', encoding='utf-8') as handle:
                 spec = yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
@@ -1163,7 +1164,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 f'parents: "{parent.resolve()}"\n'
-                'output: {columns: []}\n'
+                'output: {path: out.csv, columns: []}\n'
             )
 
             resolved, errors, _ = self.resolve(spec_path)
@@ -1171,7 +1172,7 @@ class TestSpecificationInheritance(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(
             resolved,
-            {'schema_version': '1.0', 'output': {'columns': []}},
+            {'schema_version': '1.0', 'output': {'path': 'out.csv', 'columns': []}},
         )
 
     def test_rejects_entry_that_inherits_output(self):
@@ -1180,7 +1181,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             parent = root / 'parent.yaml'
             parent.write_text(
                 'schema_version: "1.0"\n'
-                'output: {columns: [A]}\n'
+                'output: {path: out.csv, columns: [A]}\n'
             )
             spec_path = root / 'spec.yaml'
             spec_path.write_text(
@@ -1199,7 +1200,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: https://example.test/base.yaml\n'
-                'output: {columns: []}\n'
+                'output: {path: out.csv, columns: []}\n'
             )
 
             resolved, errors, _ = self.resolve(spec_path)
@@ -1213,7 +1214,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: missing.yaml\n'
-                'output: {columns: []}\n'
+                'output: {path: out.csv, columns: []}\n'
             )
 
             resolved, errors, _ = self.resolve(spec_path)
@@ -1229,7 +1230,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: parent.yaml\n'
-                'output: {columns: []}\n'
+                'output: {path: out.csv, columns: []}\n'
             )
             parent.write_text(
                 'schema_version: "1.0"\nparents: spec.yaml\n'
@@ -1248,7 +1249,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: parent.yaml\n'
-                'output: {columns: []}\n'
+                'output: {path: out.csv, columns: []}\n'
             )
             parent.write_text('schema_version: "2.0"\n')
 
@@ -1272,7 +1273,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: parent.yaml\n'
-                'output: {columns: [A]}\n'
+                'output: {path: out.csv, columns: [A]}\n'
                 'columns:\n'
                 '  - name: A\n'
                 '    type: null\n'
@@ -1292,7 +1293,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec_path.write_text(
                 'schema_version: "1.0"\n'
                 'parents: []\n'
-                'output: {columns: []}\n'
+                'output: {path: out.csv, columns: []}\n'
                 'columns:\n'
                 '  - {name: A}\n'
                 '  - {name: A}\n'
@@ -1991,6 +1992,7 @@ datasets:
 base: RAW
 keys: [STUDYID]
 output:
+  path: dm.csv
   columns: [STUDYID, AGE]
 columns:
   - name: STUDYID
@@ -2096,6 +2098,7 @@ datasets: {RAW: raw.csv}
 base: RAW
 keys: [STUDYID]
 output:
+  path: dm.csv
   columns: [AGE, STUDYID]
 columns:
   - name: STUDYID
@@ -2142,7 +2145,7 @@ fields: {STUDYID: string, AGE: integer}
 domain: DM
 datasets: {}
 keys: [STUDYID]
-output: {columns: [STUDYID, AGE]}
+output: {path: out.csv, columns: [STUDYID, AGE]}
 columns:
   - name: STUDYID
     type: str
@@ -2187,7 +2190,7 @@ datasets:
     schema: ../spec.yaml
 base: LOOP
 keys: [STUDYID]
-output: {columns: [STUDYID, AGE]}
+output: {path: out.csv, columns: [STUDYID, AGE]}
 columns:
   - name: STUDYID
     type: str
@@ -2583,7 +2586,7 @@ class TestValidatorCLI(unittest.TestCase):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'csv-output'
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'spec.yaml').write_text(
-            'output:\n  columns: [c, a]\n'
+            'output:\n  path: out.csv\n  columns: [c, a]\n'
             'columns:\n  - name: a\n  - name: b\n  - name: c\n'
         )
         (ex_dir / 'expected').mkdir()
@@ -2598,7 +2601,7 @@ class TestValidatorCLI(unittest.TestCase):
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'README.md').write_text('# CSV: bad header')
         (ex_dir / 'spec.yaml').write_text(
-            'output:\n  columns: [a, c]\n'
+            'output:\n  path: out.csv\n  columns: [a, c]\n'
             'columns:\n  - name: a\n  - name: b\n  - name: c\n'
         )
         (ex_dir / 'input').mkdir()
@@ -2847,6 +2850,7 @@ bad_field: "what"
         self.assertIn('unsupported level-two section', message)
 
     def test_integration_full_corpus(self):
+
         real_root = self.tool_path.parent.parent.parent
         result = subprocess.run(
             [sys.executable, str(self.tool_path), '--root', str(real_root)],
@@ -2855,6 +2859,236 @@ bad_field: "what"
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('PASS', result.stdout)
+
+
+class TestCsvProfile(unittest.TestCase):
+    def parse_render(self, data):
+        return VALIDATOR.render_csv_profile(VALIDATOR.parse_csv_profile(data))
+
+    def test_missing_and_empty_string_are_distinct(self):
+        records = VALIDATOR.parse_csv_profile('A,B\n1,\n2,""\n')
+        self.assertEqual(records[1][1], (None, False))
+        self.assertEqual(records[2][1], ('', True))
+
+    def test_quoted_field_carries_delimiter_quote_and_newline(self):
+        data = 'A\n"x, y"\n"say ""hi"""\n"two\nlines"\n'
+        records = VALIDATOR.parse_csv_profile(data)
+        self.assertEqual(
+            [record[0][0] for record in records[1:]],
+            ['x, y', 'say "hi"', 'two\nlines'],
+        )
+        self.assertEqual(self.parse_render(data), data)
+
+    def test_carriage_return_terminator_is_rejected(self):
+        with self.assertRaises(ValueError) as caught:
+            VALIDATOR.parse_csv_profile('A,B\r\n1,2\r\n')
+        self.assertIn('U+000D', str(caught.exception))
+
+    def test_unterminated_final_record_is_rejected(self):
+        with self.assertRaises(ValueError) as caught:
+            VALIDATOR.parse_csv_profile('A,B\n1,2')
+        self.assertIn('U+000A', str(caught.exception))
+
+    def test_unterminated_quote_is_rejected(self):
+        with self.assertRaises(ValueError):
+            VALIDATOR.parse_csv_profile('A,B\n1,"open\n')
+
+    def test_needless_quoting_does_not_render_back(self):
+        data = 'A,B\n"1",2\n'
+        self.assertNotEqual(self.parse_render(data), data)
+
+    def test_zero_row_artifact_is_the_header_alone(self):
+        data = 'STUDYID,USUBJID\n'
+        self.assertEqual(len(VALIDATOR.parse_csv_profile(data)), 1)
+        self.assertEqual(self.parse_render(data), data)
+
+    def test_float_text_omits_a_trailing_zero_decimal(self):
+        self.assertIsNone(VALIDATOR.canonical_float_text('10'))
+        self.assertIn('10', VALIDATOR.canonical_float_text('10.0'))
+        self.assertIsNone(VALIDATOR.canonical_float_text('73.66666666666667'))
+
+    def test_float_text_is_positional_and_never_exponential(self):
+        # A shorter string that round-trips is not the text: the digits are
+        # shortest, the notation is fixed, so one value has one spelling.
+        self.assertIsNone(VALIDATOR.canonical_float_text('0.0001'))
+        self.assertIn('0.0001', VALIDATOR.canonical_float_text('1e-4'))
+        self.assertIsNone(
+            VALIDATOR.canonical_float_text('100000000000000000000')
+        )
+        self.assertIn(
+            '100000000000000000000',
+            VALIDATOR.canonical_float_text('1e+20'),
+        )
+        self.assertIsNone(VALIDATOR.canonical_float_text('0.0000001'))
+
+    def test_extreme_precision_and_magnitude_do_not_raise(self):
+        # The default decimal context is too small for either, and an
+        # uncaught InvalidOperation would abort the whole run.
+        self.assertIsNotNone(
+            VALIDATOR.canonical_float_text('0.1' + '0' * 27, 29)
+        )
+        self.assertIsNotNone(VALIDATOR.canonical_float_text('1e300', 4))
+        self.assertIsNone(VALIDATOR.canonical_float_text('0.0313', 4))
+
+    def test_temporal_text_follows_the_r016_grammar(self):
+        self.assertIsNone(
+            VALIDATOR.canonical_temporal_text('2025-01-15', 'date')
+        )
+        self.assertIsNone(
+            VALIDATOR.canonical_temporal_text(
+                '2024-01-01T08:00:00', 'datetime'
+            )
+        )
+        for value, kind in [
+            ('2025-1-2', 'date'),
+            ('2025-99-99', 'date'),
+            ('2025-02-30', 'date'),
+            ('totally invalid', 'date'),
+            ('2025-01-12T14:00:00Z', 'datetime'),
+            ('2025-01-12T14:00:00+02:00', 'datetime'),
+            ('2025-01-12T14:00:00.5', 'datetime'),
+            ('2025-01-12T23:59:60', 'datetime'),
+            ('2025-01-12', 'datetime'),
+        ]:
+            self.assertIsNotNone(
+                VALIDATOR.canonical_temporal_text(value, kind),
+                f'{value!r} should not be canonical {kind} text',
+            )
+
+    def test_declared_precision_fixes_the_written_width(self):
+        self.assertIsNone(VALIDATOR.canonical_float_text('25.0000', 4))
+        self.assertIsNone(VALIDATOR.canonical_float_text('0', 0))
+        self.assertIsNotNone(VALIDATOR.canonical_float_text('25', 4))
+        self.assertIsNotNone(VALIDATOR.canonical_float_text('25.000', 4))
+
+    def test_exact_ties_round_away_from_zero(self):
+        quantize = VALIDATOR.decimal.Decimal(1).scaleb(-2)
+        rounding = VALIDATOR.decimal.ROUND_HALF_UP
+        self.assertEqual(
+            str(VALIDATOR.decimal.Decimal(0.125).quantize(quantize, rounding)),
+            '0.13',
+        )
+        self.assertEqual(
+            str(VALIDATOR.decimal.Decimal(-0.125).quantize(quantize, rounding)),
+            '-0.13',
+        )
+
+    def test_an_unrepresentable_tie_rounds_on_the_exact_value(self):
+        # 2.675 is stored below the decimal it is written as, so there is no
+        # tie to break and the value rounds down. Rounding the shortened text
+        # instead would report 2.68.
+        self.assertEqual(
+            str(
+                VALIDATOR.decimal.Decimal(2.675).quantize(
+                    VALIDATOR.decimal.Decimal(1).scaleb(-2),
+                    VALIDATOR.decimal.ROUND_HALF_UP,
+                )
+            ),
+            '2.67',
+        )
+
+    def test_non_canonical_int_text_is_reported(self):
+        self.assertTrue(VALIDATOR.CANONICAL_INT.fullmatch('0'))
+        self.assertTrue(VALIDATOR.CANONICAL_INT.fullmatch('-12'))
+        self.assertFalse(VALIDATOR.CANONICAL_INT.fullmatch('007'))
+        self.assertFalse(VALIDATOR.CANONICAL_INT.fullmatch('+1'))
+        self.assertFalse(VALIDATOR.CANONICAL_INT.fullmatch('-0'))
+
+    def test_artifact_check_reports_bytes_and_values(self):
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / 'adsl.csv'
+            path.write_bytes(b'STUDYID,AVAL\r\nS1,10.0\r\n')
+            spec = {
+                'output': {'profile': 'csv', 'columns': ['STUDYID', 'AVAL']},
+                'columns': [
+                    {'name': 'STUDYID', 'type': 'str'},
+                    {'name': 'AVAL', 'type': 'float'},
+                ],
+            }
+            errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', spec)
+        self.assertTrue(any('U+000D' in error for error in errors), errors)
+
+    def test_artifact_check_accepts_a_conforming_artifact(self):
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / 'adsl.csv'
+            path.write_bytes(b'STUDYID,COMMENT,AVAL\nS1,"has, comma",10\nS1,"",\n')
+            spec = {
+                'output': {'profile': 'csv',
+                           'columns': ['STUDYID', 'COMMENT', 'AVAL']},
+                'columns': [
+                    {'name': 'STUDYID', 'type': 'str'},
+                    {'name': 'COMMENT', 'type': 'str'},
+                    {'name': 'AVAL', 'type': 'float'},
+                ],
+            }
+            errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', spec)
+        self.assertEqual(errors, [])
+
+    def test_decimals_needs_a_csv_artifact_path(self):
+        base = {
+            'schema_version': '1.0',
+            'domain': 'ADSL',
+            'datasets': {'SRC': 'input/adsl.csv'},
+            'base': 'SRC',
+            'keys': ['USUBJID'],
+            'columns': [
+                {'name': 'USUBJID', 'type': 'str', 'label': 'Subject',
+                 'derivation': {'source': 'SRC.USUBJID'}},
+            ],
+        }
+
+        def check(output):
+            spec = copy.deepcopy(base)
+            spec['output'] = output
+            return '\n'.join(
+                VALIDATOR.validate_spec_names(spec, 'ex/spec.yaml')
+            )
+
+        self.assertIn(
+            'decimals_not_applicable',
+            check({'path': 'adsl.parquet', 'decimals': 4,
+                   'columns': ['USUBJID']}),
+        )
+        self.assertNotIn(
+            'decimals_not_applicable',
+            check({'path': 'adsl.csv', 'decimals': 4,
+                   'columns': ['USUBJID']}),
+        )
+        self.assertIn(
+            'non-negative integer',
+            check({'path': 'adsl.csv', 'decimals': -1,
+                   'columns': ['USUBJID']}),
+        )
+
+    def test_unknown_extension_names_no_profile(self):
+        # The mapping is closed: an unrecognized extension is a failure, not
+        # a fall back to the other profile.
+        self.assertEqual(
+            VALIDATOR.artifact_profile({'path': 'adsl.csv'}), 'csv'
+        )
+        self.assertEqual(
+            VALIDATOR.artifact_profile({'path': 'out/adsl.parquet'}),
+            'parquet',
+        )
+        self.assertEqual(
+            VALIDATOR.artifact_profile({'path': 'adsl.CSV'}), 'csv'
+        )
+        for path in ['adsl.txt', 'adsl', 'adsl.csv.gz', '']:
+            self.assertIsNone(
+                VALIDATOR.artifact_profile({'path': path}),
+                f'{path!r} should name no profile',
+            )
+        self.assertIsNone(VALIDATOR.artifact_profile({}))
+
+    def test_byte_order_mark_is_rejected(self):
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / 'adsl.csv'
+            path.write_bytes(b'\xef\xbb\xbfSTUDYID\nS1\n')
+            errors = VALIDATOR.validate_csv_artifact(
+                path, 'ex/adsl.csv', {'output': {}, 'columns': []}
+            )
+        self.assertTrue(any('byte-order mark' in error for error in errors), errors)
+
 
 if __name__ == '__main__':
     unittest.main()

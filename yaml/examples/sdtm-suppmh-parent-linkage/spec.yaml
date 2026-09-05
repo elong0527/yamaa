@@ -7,6 +7,7 @@ base: MH_SUPP_RAW
 keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 
 output:
+  path: suppmh.csv
   columns: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL]
 
 columns:

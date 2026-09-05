@@ -3,7 +3,7 @@ id: R018
 title: Project Function Environment
 status: normative
 applies_to: [environment, function, function_contract, function_binding]
-depends_on: [R001, R005, R006, R011, R016, R019]
+depends_on: [R001, R005, R006, R011, R016, R019, R020]
 ---
 
 # Project function environment
@@ -253,8 +253,8 @@ rounded to the nearest value away from zero. For example, at four places,
 `1.23445` becomes `1.2345` and `-1.23445` becomes `-1.2345`.
 
 The comparator never replaces or mutates the runtime result. Calculations use
-the unrounded result, and rounding for final display occurs once under the
-output-rendering contract. Predicate outcomes, keys, row membership and order,
+the unrounded result, and rounding for final display occurs once under R020's
+`output.decimals`. Predicate outcomes, keys, row membership and order,
 conditions, and final displayed artifacts must still agree exactly across
 projects; `comparison_decimals` is not a tolerance for structural differences.
 

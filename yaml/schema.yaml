@@ -60,6 +60,14 @@ root_class:
         description: Free-form annotations carried with the specification; nothing validates their content.
 
 output_class:
+    - path:
+        type: path
+        required: true
+        description: File this specification produces; R020 selects the serialization profile from its extension.
+    - decimals:
+        type: int
+        required: false
+        description: Fixed display digits for every float column of a csv artifact; R020 defines the rounding and rejects it for parquet.
     - columns:
         type: "list[column_name]"
         required: true

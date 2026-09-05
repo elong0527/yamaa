@@ -6,6 +6,7 @@ base: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 
 output:
+  path: advs.csv
   columns: [STUDYID, USUBJID, VSSEQ, AVAL]
 
 columns:

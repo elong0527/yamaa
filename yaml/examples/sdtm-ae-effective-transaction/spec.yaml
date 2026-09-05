@@ -13,6 +13,7 @@ record_lookups:
     keep: last
 
 output:
+  path: ae.csv
   columns: [STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AESEV, TXNTYPE, AUDITDTC]
 
 columns:

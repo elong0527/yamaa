@@ -8,6 +8,7 @@ base: SOURCE
 keys: [ID]
 
 output:
+  path: test.csv
   columns: [ID, RESULT]
 
 columns:

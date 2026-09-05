@@ -3,6 +3,7 @@ import argparse
 import copy
 import csv
 import datetime as dt
+import decimal
 import hashlib
 import json
 import keyword
@@ -11,7 +12,7 @@ import os
 import re
 import struct
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import yaml
 from yaml.composer import ComposerError
@@ -3002,6 +3003,35 @@ def validate_spec_names(spec, spec_label):
     output = spec.get('output')
     output_columns = output.get('columns') if isinstance(output, dict) else None
     duplicate_errors(output_columns, 'output.columns', 'output column')
+
+    if isinstance(output, dict):
+        declared_path = output.get('path')
+        if isinstance(declared_path, str) and artifact_profile(output) is None:
+            errors.append(
+                f"ERROR: {spec_label}.output.path: "
+                f"unknown_artifact_profile for {declared_path!r}; R020 maps "
+                + ', '.join(sorted(ARTIFACT_PROFILES)) + " and nothing else"
+            )
+
+    if isinstance(output, dict) and 'decimals' in output:
+        decimals = output.get('decimals')
+        profile = artifact_profile(output)
+        if isinstance(decimals, bool) or not isinstance(decimals, int):
+            errors.append(
+                f"ERROR: {spec_label}.output.decimals: must be a "
+                f"non-negative integer, got {decimals!r}"
+            )
+        elif decimals < 0:
+            errors.append(
+                f"ERROR: {spec_label}.output.decimals: must be a "
+                f"non-negative integer, got {decimals!r}"
+            )
+        if profile is not None and profile != 'csv':
+            errors.append(
+                f"ERROR: {spec_label}.output.decimals: "
+                f"decimals_not_applicable under profile {profile!r}; R020 "
+                "renders a display precision only for a csv artifact"
+            )
     if isinstance(output_columns, list):
         for index, name in enumerate(output_columns):
             if isinstance(name, str) and name not in declared_columns:
@@ -4386,6 +4416,247 @@ def validate_expected_error_contracts(root: Path):
     return errors
 
 
+BOM_UTF8 = '\ufeff'
+CANONICAL_INT = re.compile(r'0|-?[1-9][0-9]*')
+
+
+def parse_csv_profile(data: str):
+    """Parse R020's csv profile text into records of (text, quoted) fields.
+
+    A bare empty field is missing and parses to a text of None; a quoted
+    empty field is the collected empty string. Raises ValueError for text
+    the profile does not admit.
+    """
+    records = []
+    record = []
+    index = 0
+    size = len(data)
+    while index < size:
+        if data[index] == '"':
+            index += 1
+            chunks = []
+            while True:
+                if index >= size:
+                    raise ValueError('unterminated quoted field')
+                character = data[index]
+                if character == '"':
+                    if data[index + 1:index + 2] == '"':
+                        chunks.append('"')
+                        index += 2
+                        continue
+                    index += 1
+                    break
+                chunks.append(character)
+                index += 1
+            field = (''.join(chunks), True)
+        else:
+            start = index
+            while index < size and data[index] not in ',\n':
+                index += 1
+            raw = data[start:index]
+            if '"' in raw:
+                raise ValueError('a bare field carries U+0022')
+            if '\r' in raw:
+                raise ValueError('U+000D outside a quoted field')
+            field = (raw or None, False)
+        record.append(field)
+        if index >= size:
+            raise ValueError('the final record is not terminated by U+000A')
+        if data[index] == ',':
+            index += 1
+            continue
+        if data[index] != '\n':
+            raise ValueError('a quoted field is followed by ordinary text')
+        index += 1
+        records.append(record)
+        record = []
+    if record:
+        raise ValueError('the final record is not terminated by U+000A')
+    return records
+
+
+def render_csv_profile(records):
+    """Render records back under R020's exact quoting condition."""
+    lines = []
+    for record in records:
+        fields = []
+        for text, _quoted in record:
+            if text is None:
+                fields.append('')
+            elif text == '' or any(c in text for c in '",\r\n'):
+                fields.append('"' + text.replace('"', '""') + '"')
+            else:
+                fields.append(text)
+        lines.append(','.join(fields) + '\n')
+    return ''.join(lines)
+
+
+def canonical_float_text(value: str, decimals=None):
+    """Return why value is not R020's text for its float, or None.
+
+    Static validation reads a golden file rather than running a derivation,
+    so it checks the form of the text and not the value behind it. With no
+    declared precision that is the whole contract, because R011's shortest
+    round-trip text is unique per value. With a declared precision it is the
+    written width: proving that the digits are the ones the derivation would
+    have produced needs the executable suite.
+    """
+    try:
+        number = float(value)
+    except ValueError:
+        return 'not a number'
+    if math.isnan(number) or math.isinf(number):
+        return 'a non-finite float is the missing value'
+    if decimals is None:
+        # repr supplies the shortest round-tripping digits but places them in
+        # exponential notation past its own thresholds; R011 writes the same
+        # digits positionally, so one value keeps one spelling.
+        canonical = format(decimal.Decimal(repr(number)), 'f')
+        if canonical.endswith('.0'):
+            canonical = canonical[:-2]
+        if value != canonical:
+            return f'expected the shortest round-trip text {canonical}'
+        return None
+    # Rounding reads the exact binary64 value, which for an extreme magnitude
+    # or a large declared precision needs more digits than the default context.
+    exact = decimal.Decimal(number)
+    try:
+        with decimal.localcontext() as context:
+            context.prec = max(28, exact.adjusted() + decimals + 3)
+            rounded = exact.quantize(
+                decimal.Decimal(1).scaleb(-decimals),
+                rounding=decimal.ROUND_HALF_UP,
+            )
+    except decimal.InvalidOperation:
+        return f'cannot be rendered at decimals {decimals}'
+    if not rounded:
+        rounded = rounded.copy_abs()
+    if value != format(rounded, 'f'):
+        return (
+            f'expected exactly {decimals} digit(s) after the decimal point '
+            'in positional notation'
+        )
+    return None
+
+
+CANONICAL_DATE = re.compile(r'(\d{4})-(\d{2})-(\d{2})')
+CANONICAL_DATETIME = re.compile(
+    r'(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})'
+)
+
+
+def canonical_temporal_text(value: str, declared: str):
+    """Return why value is not R016's canonical text for its type, or None.
+
+    R016 fixes exactly one written form per temporal type, so the check is the
+    shape and then the calendar: a zone, an offset, a fractional second, a
+    truncated form, and an unpadded field are all outside the grammar, and a
+    field combination no calendar admits fails even when the shape matches.
+    """
+    if declared == 'date':
+        match = CANONICAL_DATE.fullmatch(value)
+        if match is None:
+            return 'expected YYYY-MM-DD'
+        try:
+            dt.date(*(int(part) for part in match.groups()))
+        except ValueError as exc:
+            return f'not a date on the calendar: {exc}'
+        return None
+
+    match = CANONICAL_DATETIME.fullmatch(value)
+    if match is None:
+        return 'expected YYYY-MM-DDThh:mm:ss'
+    try:
+        dt.datetime(*(int(part) for part in match.groups()))
+    except ValueError as exc:
+        return f'not a moment on the calendar: {exc}'
+    return None
+
+
+def validate_csv_artifact(csv_path: Path, label: str, spec):
+    """Check one expected artifact against R020's csv profile."""
+    errors = []
+    try:
+        raw = csv_path.read_bytes()
+    except OSError as exc:
+        return [f"ERROR: {label}: cannot read artifact: {exc}"]
+    try:
+        data = raw.decode('utf-8')
+    except UnicodeError as exc:
+        return [f"ERROR: {label}: invalid_text: {exc}"]
+    if data.startswith(BOM_UTF8):
+        return [f"ERROR: {label}: csv carries a byte-order mark"]
+    try:
+        records = parse_csv_profile(data)
+    except ValueError as exc:
+        return [f"ERROR: {label}: csv: {exc}"]
+    if not records:
+        return [f"ERROR: {label}: csv carries no header record"]
+    if render_csv_profile(records) != data:
+        errors.append(
+            f"ERROR: {label}: csv quoting is not the exact condition R020 "
+            "states, or a record is not terminated by U+000A"
+        )
+
+    output = spec.get('output') if isinstance(spec, dict) else None
+    output = output if isinstance(output, dict) else {}
+    decimals = output.get('decimals')
+    if isinstance(decimals, bool) or not isinstance(decimals, int):
+        decimals = None
+    types = {}
+    for column in (spec.get('columns') if isinstance(spec, dict) else None) or []:
+        if isinstance(column, dict) and isinstance(column.get('name'), str):
+            types[column['name']] = column.get('type')
+
+    header = [text for text, _quoted in records[0]]
+    for number, record in enumerate(records[1:], 2):
+        for name, (text, _quoted) in zip(header, record):
+            if text is None:
+                continue
+            declared = types.get(name)
+            if declared == 'int':
+                if not CANONICAL_INT.fullmatch(text):
+                    errors.append(
+                        f"ERROR: {label}: record {number}: {name} is not "
+                        f"R020's int text: {text!r}"
+                    )
+            elif declared == 'float':
+                problem = canonical_float_text(text, decimals)
+                if problem is not None:
+                    errors.append(
+                        f"ERROR: {label}: record {number}: {name} is not "
+                        f"R020's float text: {text!r}, {problem}"
+                    )
+            elif declared in ('date', 'datetime'):
+                problem = canonical_temporal_text(text, declared)
+                if problem is not None:
+                    errors.append(
+                        f"ERROR: {label}: record {number}: {name} is not "
+                        f"R016's {declared} text: {text!r}, {problem}"
+                    )
+            if len(errors) >= 6:
+                errors.append(f"ERROR: {label}: further csv errors elided")
+                return errors
+    return errors
+
+
+ARTIFACT_PROFILES = {'.csv': 'csv', '.parquet': 'parquet'}
+
+
+def artifact_profile(output):
+    """Return R020's profile for a declared output.path, or None.
+
+    The mapping is closed: an extension outside it names no profile, which is
+    a validation failure rather than a fallback to a default.
+    """
+    if not isinstance(output, dict):
+        return None
+    declared = output.get('path')
+    if not isinstance(declared, str):
+        return None
+    return ARTIFACT_PROFILES.get(PurePosixPath(declared).suffix.lower())
+
+
 def validate_csv_shapes(root: Path):
     errors = []
     examples_dir = root / 'yaml' / 'examples'
@@ -4715,6 +4986,7 @@ def validate_examples_csv(root: Path, env=None):
         candidate_env, _ = build_schema_env(root)
         env = candidate_env
 
+    profile_checked = set()
     for ex_dir in sorted(examples_dir.iterdir()):
         if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
             continue
@@ -4748,15 +5020,18 @@ def validate_examples_csv(root: Path, env=None):
             if not expected_dir.exists():
                 continue
             for csv_file in sorted(expected_dir.glob('*.csv')):
-                domain = spec.get('domain')
-                if (
-                    isinstance(domain, str)
-                    and csv_file.name != f"{domain.lower()}.csv"
-                ):
-                    errors.append(
-                        f"ERROR: {ex_dir.name}/{csv_file.name}: expected "
-                        f"artifact name {domain.lower()}.csv"
-                    )
+                # The golden file is the artifact the specification says it
+                # produces, so its name comes from output.path rather than a
+                # convention over the domain.
+                declared_path = output.get('path')
+                if isinstance(declared_path, str):
+                    declared_name = PurePosixPath(declared_path).name
+                    if csv_file.name != declared_name:
+                        errors.append(
+                            f"ERROR: {ex_dir.name}/{csv_file.name}: expected "
+                            f"artifact name {declared_name}, which "
+                            f"output.path declares"
+                        )
                 try:
                     with open(csv_file, 'r', encoding='utf-8') as f:
                         reader = csv.reader(f)
@@ -4775,6 +5050,17 @@ def validate_examples_csv(root: Path, env=None):
                         )
                 except (OSError, UnicodeError, csv.Error):
                     continue
+
+                profile = artifact_profile(output)
+                if profile == 'csv' and csv_file not in profile_checked:
+                    profile_checked.add(csv_file)
+                    errors.extend(
+                        validate_csv_artifact(
+                            csv_file,
+                            f"{ex_dir.name}/{csv_file.name}",
+                            spec,
+                        )
+                    )
 
     return errors, warnings
 

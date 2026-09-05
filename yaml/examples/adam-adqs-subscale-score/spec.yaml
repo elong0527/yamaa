@@ -6,6 +6,7 @@ base: QS
 keys: [STUDYID, USUBJID, VISIT, PARAMCD]
 
 output:
+  path: adqs.csv
   columns: [STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVAL]
 
 columns:

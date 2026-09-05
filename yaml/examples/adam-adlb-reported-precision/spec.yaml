@@ -1,0 +1,61 @@
+schema_version: "1.0"
+domain: ADLB
+datasets:
+  LB: {path: input/lb.csv, types: {AVAL: float, ANRLO: float}}
+base: LB
+keys: [STUDYID, USUBJID, PARAMCD]
+
+output:
+  path: adlb.csv
+  decimals: 4
+  columns: [STUDYID, USUBJID, PARAMCD, AVAL, ANRLO, R2ANRLO]
+  order_by: [USUBJID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation:
+      source: LB.PARAMCD
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      source: LB.AVAL
+
+  - name: ANRLO
+    type: float
+    label: Analysis Normal Range Lower Limit
+    derivation:
+      source: LB.ANRLO
+
+  - name: R2ANRLO
+    type: float
+    label: Ratio to Lower Limit of Normal
+    derivation:
+      compute:
+        expr: "AVAL / NULLIF(ANRLO, 0)"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, PARAMCD]
+  - row_count:
+      min: 5
+      max: 5
+  - implies:
+      id: ratio-needs-a-usable-lower-limit
+      when: "R2ANRLO IS NULL"
+      then: "AVAL IS NULL OR ANRLO IS NULL OR ANRLO = 0"

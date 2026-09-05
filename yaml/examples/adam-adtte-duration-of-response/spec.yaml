@@ -8,6 +8,7 @@ base: ADSL
 keys: [STUDYID, USUBJID, PARAMCD]
 
 output:
+  path: adtte.csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ]
 
 columns:

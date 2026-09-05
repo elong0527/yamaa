@@ -18,6 +18,7 @@ record_lookups:
     between: {value: ADY, lower: AWLO, upper: AWHI}
 
 output:
+  path: advs.csv
   columns: [STUDYID, USUBJID, PARAMCD, VSSEQ, ADY, AVISIT]
 
 columns:

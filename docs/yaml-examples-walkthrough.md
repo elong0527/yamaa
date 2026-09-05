@@ -71,10 +71,14 @@ base: ODM
 keys: [STUDYID, USUBJID]
 
 output:
+  path: dm.csv
   columns: [STUDYID, DOMAIN, USUBJID, SUBJID, SEX, AGE, ARM, ACTARM]
 ```
 
-One input, one driver, two keys, eight delivered columns.
+One input, one driver, two keys, eight delivered columns, and one produced
+file. The `.csv` extension is what makes it the delimited text this suite
+compares byte for byte; naming `dm.parquet` instead would write the same rows
+into the other container.
 
 **Step 3 -- the bottom of the file, for row count.**
 

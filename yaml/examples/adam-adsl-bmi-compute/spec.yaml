@@ -6,6 +6,7 @@ base: SOURCE
 keys: [STUDYID, USUBJID]
 
 output:
+  path: adsl.csv
   columns: [STUDYID, USUBJID, HEIGHTCM, WEIGHTKG, BMI]
 
 columns:

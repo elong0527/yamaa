@@ -6,6 +6,7 @@ base: ADLBIN
 keys: [USUBJID, VISIT, PARAMCD]
 
 output:
+  path: adlb.csv
   columns: [USUBJID, PARAMCD, AVAL, PARAM, VISIT, DTYPE]
 
 columns:

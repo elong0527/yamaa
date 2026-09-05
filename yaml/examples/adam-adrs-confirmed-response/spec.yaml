@@ -6,6 +6,7 @@ base: RS
 keys: [STUDYID, USUBJID, RSSEQ]
 
 output:
+  path: adrs.csv
   columns: [STUDYID, USUBJID, PARAMCD, RSSEQ, ADT, AVALC, CONFIRMED]
 
 columns:
