@@ -740,7 +740,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
         )
 
     def test_rejects_unknown_direct_operation_inputs(self):
-        root = TOOL_PATH.parents[2]
+        root = TOOL_PATH.parents[3]
         env, env_errors = VALIDATOR.build_schema_env(root)
         self.assertEqual(env_errors, [])
         context = self.context()
@@ -813,7 +813,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
         self.assertEqual(errors[0].condition, 'incompatible_input_type')
 
     def test_dependency_cycle_reports_each_participating_derivation(self):
-        root = TOOL_PATH.parents[2]
+        root = TOOL_PATH.parents[3]
         env, env_errors = VALIDATOR.build_schema_env(root)
         self.assertEqual(env_errors, [])
         spec = {
@@ -842,7 +842,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
 
 class TestValidationManifest(unittest.TestCase):
     def test_repository_manifest_is_complete_and_registered(self):
-        root = TOOL_PATH.parents[2]
+        root = TOOL_PATH.parents[3]
         manifest, load_errors = VALIDATOR.load_validation_manifest(root)
 
         self.assertEqual(load_errors, [])
@@ -851,7 +851,7 @@ class TestValidationManifest(unittest.TestCase):
         )
 
     def test_manifest_rejects_missing_and_stale_fixtures(self):
-        root = TOOL_PATH.parents[2]
+        root = TOOL_PATH.parents[3]
         manifest, _ = VALIDATOR.load_validation_manifest(root)
         changed = copy.deepcopy(manifest)
         removed = next(iter(changed['fixtures']))
@@ -954,7 +954,7 @@ class TestValidationManifest(unittest.TestCase):
 
 class TestProjectFunctionEnvironment(unittest.TestCase):
     def setUp(self):
-        root = TOOL_PATH.parents[2]
+        root = TOOL_PATH.parents[3]
         self.spec_schema, spec_errors = VALIDATOR.build_schema_env(root)
         self.environment_schema, environment_errors = (
             VALIDATOR.build_schema_env(root, 'schema_environment.yaml')
@@ -1467,7 +1467,7 @@ class TestRuleMetadata(unittest.TestCase):
 class TestSpecificationInheritance(unittest.TestCase):
     def setUp(self):
         self.env, schema_errors = VALIDATOR.build_schema_env(
-            TOOL_PATH.parents[2]
+            TOOL_PATH.parents[3]
         )
         self.assertEqual(schema_errors, [])
 
@@ -2051,7 +2051,7 @@ class TestTypeValidation(unittest.TestCase):
 
 class TestDateImputeSchema(unittest.TestCase):
     def setUp(self):
-        self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[2])
+        self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
         self.assertEqual(schema_errors, [])
 
     def test_accepts_month_minimum_source_precision(self):
@@ -2160,7 +2160,7 @@ class TestDateImputeSchema(unittest.TestCase):
 
 class TestToDateSchema(unittest.TestCase):
     def setUp(self):
-        self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[2])
+        self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
         self.assertEqual(schema_errors, [])
 
     def validate(self, payload):
@@ -2186,7 +2186,7 @@ class TestToDateSchema(unittest.TestCase):
 
 class TestPreviousNonMissingSchema(unittest.TestCase):
     def setUp(self):
-        self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[2])
+        self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
         self.assertEqual(schema_errors, [])
 
     def validate(self, payload):
@@ -2662,7 +2662,7 @@ columns:
 
     def setUp(self):
         self.env, schema_errors = VALIDATOR.build_schema_env(
-            TOOL_PATH.parents[2]
+            TOOL_PATH.parents[3]
         )
         self.assertEqual(schema_errors, [])
         self.test_dir = tempfile.TemporaryDirectory()
@@ -3073,7 +3073,7 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
 
     def setUp(self):
         self.env, schema_errors = VALIDATOR.build_schema_env(
-            TOOL_PATH.parents[2]
+            TOOL_PATH.parents[3]
         )
         self.assertEqual(schema_errors, [])
         self.test_dir = tempfile.TemporaryDirectory()
@@ -3173,7 +3173,7 @@ class TestRegularExpressionContract(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.root = TOOL_PATH.parents[2]
+        cls.root = TOOL_PATH.parents[3]
         cls.env, schema_errors = VALIDATOR.build_schema_env(cls.root)
         assert not schema_errors, schema_errors
 
@@ -3541,7 +3541,7 @@ class TestDatasetPathExamples(unittest.TestCase):
     """The committed path fixtures fail for the conditions they declare."""
 
     def setUp(self):
-        self.root = TOOL_PATH.parents[2]
+        self.root = TOOL_PATH.parents[3]
         self.env, schema_errors = VALIDATOR.build_schema_env(self.root)
         self.assertEqual(schema_errors, [])
 
@@ -3587,7 +3587,7 @@ class TestValidatorCLI(unittest.TestCase):
         conformance = self.root_dir / 'yaml' / 'conformance'
         conformance.mkdir(parents=True)
         shutil.copy(
-            TOOL_PATH.parents[2] / 'yaml' / 'conformance' / 'regex.yaml',
+            TOOL_PATH.parents[3] / 'yaml' / 'conformance' / 'regex.yaml',
             conformance / 'regex.yaml',
         )
 
@@ -4223,7 +4223,7 @@ bad_field: "what"
 
     def test_integration_full_corpus(self):
 
-        real_root = self.tool_path.parent.parent.parent
+        real_root = self.tool_path.parents[3]
         result = subprocess.run(
             [sys.executable, str(self.tool_path), '--root', str(real_root)],
             capture_output=True,
@@ -4624,7 +4624,7 @@ class TestSuiteSourceCoverage(unittest.TestCase):
     coverage, so these tests say why the bytes are what they are.
     """
 
-    root = TOOL_PATH.parent.parent.parent
+    root = TOOL_PATH.parents[3]
 
     def test_a_crlf_source_is_read_as_its_lf_twin(self):
         path = (

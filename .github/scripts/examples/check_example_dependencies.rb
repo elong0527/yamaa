@@ -431,7 +431,7 @@ rescue StandardError => error
 end
 
 if __FILE__ == $PROGRAM_NAME
-  examples = File.expand_path("../../yaml/examples", __dir__)
+  examples = File.expand_path("../../../yaml/examples", __dir__)
   specs = if ARGV.empty?
             ExampleSpecifications.all_paths(examples)
           else

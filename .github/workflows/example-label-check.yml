@@ -19,4 +19,4 @@ jobs:
           persist-credentials: false
 
       - name: Check example column labels
-        run: ruby .github/workflows/check_labels.rb
+        run: ruby .github/scripts/examples/check_labels.rb

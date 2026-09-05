@@ -5035,7 +5035,7 @@ def validate_spec_functions(spec, spec_label, spec_path, schema_env):
     root = (
         Path(schema_root)
         if isinstance(schema_root, str)
-        else Path(__file__).resolve().parents[2]
+        else Path(__file__).resolve().parents[3]
     )
     environment_schema, schema_errors = build_schema_env(
         root, 'schema_environment.yaml'
@@ -9059,7 +9059,7 @@ def validate_examples_layout(root: Path):
 
 def main():
     parser = argparse.ArgumentParser(description="Validate yamaa repository structure and specs.")
-    parser.add_argument('--root', type=Path, default=Path(__file__).parent.parent.parent,
+    parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[3],
                         help="Repository root directory")
     parser.add_argument('--warnings-as-errors', action='store_true',
                         help="Treat warnings as errors")

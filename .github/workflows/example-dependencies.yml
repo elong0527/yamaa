@@ -18,6 +18,6 @@ jobs:
         with:
           persist-credentials: false
       - name: Test dependency checker
-        run: ruby .github/workflows/test_check_example_dependencies.rb
+        run: ruby .github/scripts/examples/test_check_example_dependencies.rb
       - name: Check example dependency and output order
-        run: ruby .github/workflows/check_example_dependencies.rb
+        run: ruby .github/scripts/examples/check_example_dependencies.rb

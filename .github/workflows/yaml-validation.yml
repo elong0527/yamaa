@@ -34,18 +34,18 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python3 -m pip install -r .github/workflows/requirements.txt
+          python3 -m pip install -r .github/scripts/yaml-validation/requirements.txt
 
       - name: Run unit tests
         run: |
-          python3 .github/workflows/test_validate_repository.py
+          python3 .github/scripts/yaml-validation/test_validate_repository.py
 
       - name: Run repository validation
         run: |
-          python3 .github/workflows/validate_repository.py
+          python3 .github/scripts/yaml-validation/validate_repository.py
 
       - name: Check validation blocker issues
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python3 .github/workflows/check_validation_blockers.py
+          python3 .github/scripts/yaml-validation/check_validation_blockers.py
