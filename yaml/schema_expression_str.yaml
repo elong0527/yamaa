@@ -1,4 +1,4 @@
-version: "1.0.0-rc.1"
+version: "1.0"
 
 expressions:
     str_extract: # Extracts one regular-expression match group from a string.

@@ -1,5 +1,5 @@
 implementation: r
 implementation_version: "0.0.0"
 supported_bundle_versions:
-    - "1.0.0-rc.1"
-default_bundle_version: "1.0.0-rc.1"
+    - "1.0"
+default_bundle_version: "1.0"

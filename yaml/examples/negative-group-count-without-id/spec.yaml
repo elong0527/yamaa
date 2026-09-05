@@ -1,4 +1,4 @@
-schema_version: "1.0.0-rc.1"
+schema_version: "1.0"
 domain: ADLB
 datasets:
   ADLBIN: {path: input/adlb_pre.csv, types: {AVAL: float, ADT: date}}

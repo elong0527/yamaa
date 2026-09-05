@@ -1,2 +1,2 @@
-schema_version: "1.0.0-rc.1"
+schema_version: "1.0"
 parents: ../spec.yaml

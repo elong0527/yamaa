@@ -1,4 +1,4 @@
-schema_version: "1.0.0-rc.1"
+schema_version: "1.0"
 domain: SUPPMH
 datasets:
   MH_SUPP_RAW: input/mh_supp_raw.csv

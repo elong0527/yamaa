@@ -37,6 +37,23 @@ def schema_version_at(revision=None):
     return str(load(YAML_DIR / "schema.yaml")["version"])
 
 
+def development_revision_at(revision=None):
+    """Read the change counter for the unreleased development bundle."""
+    path = "yaml/releases/development.yaml"
+    if revision:
+        result = subprocess.run(
+            ["git", "show", f"{revision}:{path}"], cwd=ROOT,
+            text=True, capture_output=True,
+        )
+        if result.returncode:
+            return None
+        document = yaml.safe_load(result.stdout)
+    else:
+        document = load(ROOT / path)
+    revision_value = document.get("development_revision")
+    return revision_value if type(revision_value) is int else None
+
+
 def changed_paths(base):
     result = subprocess.run(
         ["git", "diff", "--name-only", f"{base}...HEAD"], cwd=ROOT,
@@ -48,7 +65,8 @@ def changed_paths(base):
 def validate(base=None):
     errors = []
     version = schema_version_at()
-    if not SEMVER.fullmatch(version):
+    development = version == "1.0"
+    if not development and not SEMVER.fullmatch(version):
         errors.append(f"bundle version {version!r} is not Semantic Versioning")
 
     modules = sorted(YAML_DIR.glob("schema*.yaml"))
@@ -57,16 +75,21 @@ def validate(base=None):
         if actual != version:
             errors.append(f"{module.relative_to(ROOT)} has version {actual!r}, expected {version!r}")
 
-    manifest_path = YAML_DIR / "releases" / f"{version}.yaml"
+    manifest_name = "development.yaml" if development else f"{version}.yaml"
+    manifest_path = YAML_DIR / "releases" / manifest_name
     if not manifest_path.is_file():
         errors.append(f"missing release manifest {manifest_path.relative_to(ROOT)}")
     else:
         manifest = load(manifest_path)
-        if str(manifest.get("version")) != version:
-            errors.append("release manifest version does not match bundle")
+        manifest_version = manifest.get("bundle_version", manifest.get("version"))
+        if str(manifest_version) != version:
+            errors.append("release manifest bundle version does not match bundle")
         status = manifest.get("status")
-        if status not in ("prerelease", "released"):
-            errors.append("release manifest status must be prerelease or released")
+        statuses = ("development",) if development else ("prerelease", "released")
+        if status not in statuses:
+            errors.append(f"release manifest status must be one of {statuses}")
+        if development and development_revision_at() is None:
+            errors.append("development manifest requires an integer development_revision")
         expected_tag = f"schema-v{version}" if status == "released" else None
         if manifest.get("tag") != expected_tag:
             errors.append(f"release manifest tag must be {expected_tag!r}")
@@ -98,10 +121,19 @@ def validate(base=None):
         else:
             sensitive = [p for p in paths if p.startswith(SENSITIVE_PREFIXES)]
             if sensitive and base_version == version:
-                errors.append(
-                    "release-sensitive paths changed without a bundle version "
-                    f"change from {base_version}: {', '.join(sensitive)}"
-                )
+                if development:
+                    base_revision = development_revision_at(base)
+                    current_revision = development_revision_at()
+                    unchanged = base_revision is not None and base_revision == current_revision
+                    action = "development revision"
+                else:
+                    unchanged = True
+                    action = "bundle version"
+                if unchanged:
+                    errors.append(
+                        f"release-sensitive paths changed without a {action} "
+                        f"change from {base_version}: {', '.join(sensitive)}"
+                    )
     return errors
 
 

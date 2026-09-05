@@ -17,13 +17,15 @@ class SchemaReleaseTest(unittest.TestCase):
         self.assertEqual([], MODULE.validate())
 
     def test_unchanged_version_rejects_sensitive_diff(self):
-        with mock.patch.object(MODULE, "schema_version_at", side_effect=["1.0.0-rc.1", "1.0.0-rc.1"]), \
+        with mock.patch.object(MODULE, "schema_version_at", side_effect=["1.0", "1.0"]), \
+             mock.patch.object(MODULE, "development_revision_at", return_value=1), \
              mock.patch.object(MODULE, "changed_paths", return_value=["yaml/rules/R001-execution-model.md"]):
             errors = MODULE.validate("base")
-        self.assertTrue(any("without a bundle version" in error for error in errors))
+        self.assertTrue(any("without a development revision" in error for error in errors))
 
-    def test_version_change_allows_sensitive_diff(self):
-        with mock.patch.object(MODULE, "schema_version_at", side_effect=["1.0.0-rc.1", "1.0.0-rc.0"]), \
+    def test_development_revision_change_allows_sensitive_diff(self):
+        with mock.patch.object(MODULE, "schema_version_at", side_effect=["1.0", "1.0"]), \
+             mock.patch.object(MODULE, "development_revision_at", side_effect=[1, 0, 1]), \
              mock.patch.object(MODULE, "changed_paths", return_value=["yaml/schema.yaml"]):
             self.assertEqual([], MODULE.validate("base"))
 

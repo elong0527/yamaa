@@ -1,4 +1,4 @@
-schema_version: "1.0.0-rc.1"
+schema_version: "1.0"
 domain: ADVS
 datasets:
   ADVSIN: {path: input/advs.csv, types: {AVAL: float}}
