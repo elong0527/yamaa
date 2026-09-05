@@ -3268,6 +3268,22 @@ class TestRegularExpressionContract(unittest.TestCase):
 
     # -- the validation surface --------------------------------------------
 
+    def test_both_conditions_are_registered_to_this_rule(self):
+        registry = VALIDATOR.VALIDATION_CONDITION_REGISTRY
+        for condition, required in (
+            # The engine's wording is not a portable fact, so a fixture
+            # states the pattern and the diagnostic adds the reason.
+            ('invalid_regex', {'pattern'}),
+            ('regex_group_out_of_range', {'group', 'group_count', 'pattern'}),
+        ):
+            with self.subTest(condition=condition):
+                registration = registry.get(('R022', condition))
+                self.assertIsNotNone(registration)
+                self.assertEqual(registration['required_context'], required)
+                self.assertEqual(
+                    registration['allowed_phases'], {'validation'}
+                )
+
     def test_matches_pattern_the_engine_rejects_fails_validation(self):
         errors = VALIDATOR.validate_type(
             {'matches': {'pattern': '(?P<name>a)'}},
@@ -3276,13 +3292,13 @@ class TestRegularExpressionContract(unittest.TestCase):
             'spec.columns.SEX.verifications[0]',
         )
         self.assertEqual(len(errors), 1)
-        self.assertIn('invalid_regex under R022', errors[0])
-        self.assertTrue(
-            errors[0].startswith(
-                'ERROR: spec.columns.SEX.verifications[0].matches.pattern:'
-            ),
-            errors[0],
+        self.assertEqual(errors[0].condition, 'invalid_regex')
+        self.assertEqual(
+            errors[0].path,
+            'spec.columns.SEX.verifications[0].matches.pattern',
         )
+        self.assertEqual(errors[0].context['pattern'], '(?P<name>a)')
+        self.assertIn('reason', errors[0].context)
 
     def test_matches_pattern_the_engine_accepts_validates(self):
         errors = VALIDATOR.validate_type(
@@ -3303,12 +3319,14 @@ class TestRegularExpressionContract(unittest.TestCase):
             'spec.columns.SITEID.derivation',
         )
         self.assertEqual(len(errors), 1)
-        self.assertIn('regex_group_out_of_range under R022', errors[0])
-        self.assertTrue(
-            errors[0].startswith(
-                'ERROR: spec.columns.SITEID.derivation.str_extract.group:'
-            ),
-            errors[0],
+        self.assertEqual(errors[0].condition, 'regex_group_out_of_range')
+        self.assertEqual(
+            errors[0].path,
+            'spec.columns.SITEID.derivation.str_extract.group',
+        )
+        self.assertEqual(
+            errors[0].context,
+            {'group': 2, 'group_count': 1, 'pattern': '^A-([0-9]+)$'},
         )
 
     def test_str_extract_group_inside_the_pattern_validates(self):
@@ -3332,14 +3350,15 @@ class TestRegularExpressionContract(unittest.TestCase):
             'spec.columns.SITEID.derivation',
         )
         self.assertEqual(len(errors), 1)
-        self.assertIn('regex_group_out_of_range under R022', errors[0])
+        self.assertEqual(errors[0].condition, 'regex_group_out_of_range')
+        self.assertEqual(errors[0].context['group_count'], 0)
 
     def test_descriptor_pattern_the_engine_rejects_fails_validation(self):
         errors = VALIDATOR.check_descriptor(
             {'type': 'str', 'pattern': '(?P<name>a)'}, False, 'schema.name'
         )
         self.assertEqual(len(errors), 1)
-        self.assertIn('invalid_regex under R022', errors[0])
+        self.assertEqual(errors[0].condition, 'invalid_regex')
 
     def test_descriptor_pattern_constraint_uses_the_pinned_engine(self):
         env = {

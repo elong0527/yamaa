@@ -178,7 +178,12 @@ def regex_pattern_errors(pattern, path, full_match=False):
         if full_match:
             compile_regex(anchored_regex_source(pattern))
     except InvalidRegex as exc:
-        return [f"ERROR: {path}: invalid_regex under R022: {exc.reason}"]
+        return [validation_diagnostic(
+            path,
+            'invalid_regex',
+            f"the R022 engine rejects {pattern!r}: {exc.reason}",
+            context={'pattern': pattern, 'reason': exc.reason},
+        )]
     return []
 
 
@@ -196,12 +201,17 @@ def regex_group_errors(keyword, payload, path):
         # The pattern's own rejection is reported where it is typed `regex`.
         return []
     if group < 0 or group > declared:
-        return [
-            f"ERROR: {path}.group: regex_group_out_of_range under R022: "
+        return [validation_diagnostic(
+            f"{path}.group",
+            'regex_group_out_of_range',
             f"group {group} is outside the {declared} capturing "
-            f"{'group' if declared == 1 else 'groups'} pattern "
-            f"{pattern!r} declares"
-        ]
+            f"{'group' if declared == 1 else 'groups'} {pattern!r} declares",
+            context={
+                'group': group,
+                'group_count': declared,
+                'pattern': pattern,
+            },
+        )]
     return []
 
 
@@ -317,6 +327,12 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R021', 'resource_path_parent_traversal'): {'path'},
     ('R021', 'resource_path_symlink'): {'path'},
     ('R021', 'resource_path_uri_scheme'): {'path'},
+    # The engine's wording is additional context an implementation may
+    # report; the pattern is the portable fact a fixture must state.
+    ('R022', 'invalid_regex'): {'pattern'},
+    ('R022', 'regex_group_out_of_range'): {
+        'group', 'group_count', 'pattern',
+    },
 }
 VALIDATION_CONDITION_REGISTRY = {
     key: {
@@ -2067,9 +2083,12 @@ def validate_constraints(data, descriptor, path):
             satisfied = regex_full_match(pattern, data)
         except InvalidRegex as exc:
             # The pattern is the defect; do not also blame the value.
-            errors.append(
-                f"ERROR: {path}: invalid_regex under R022: {exc.reason}"
-            )
+            errors.append(validation_diagnostic(
+                path,
+                'invalid_regex',
+                f"the R022 engine rejects {pattern!r}: {exc.reason}",
+                context={'pattern': pattern, 'reason': exc.reason},
+            ))
         else:
             if not satisfied:
                 errors.append(

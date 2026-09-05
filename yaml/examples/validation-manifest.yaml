@@ -158,6 +158,11 @@ fixtures:
     condition: source_key_length_mismatch
     spec_paths: [columns.ANRHI.derivation.mapping_from]
     validator: mapping_contract
+  negative-matches-unreadable-pattern:
+    rule: R022
+    condition: invalid_regex
+    spec_paths: ["columns.SEX.verifications[0].matches.pattern"]
+    validator: regex
   negative-output-order-repeated-term:
     rule: R005
     condition: duplicate_order_term
@@ -205,6 +210,11 @@ fixtures:
     condition: duplicate_identifier
     spec_paths: [datasets.ADLB, domain]
     validator: name_contract
+  negative-str-extract-undeclared-group:
+    rule: R022
+    condition: regex_group_out_of_range
+    spec_paths: ["columns.SITEID.derivation.str_extract.group"]
+    validator: regex
   negative-sum-non-numeric-source:
     rule: R013
     condition: incompatible_input_type

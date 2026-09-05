@@ -1,0 +1,6 @@
+phase: validation
+condition: invalid_regex
+spec_paths:
+  - columns.SEX.verifications[0].matches.pattern
+context:
+  pattern: '(?P<code>[MFU])'
