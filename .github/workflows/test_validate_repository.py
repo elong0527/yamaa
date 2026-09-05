@@ -2560,6 +2560,35 @@ class TestSpecContracts(unittest.TestCase):
             "duplicate dataset verification id", "\n".join(errors)
         )
 
+    def test_rejects_a_source_extension_that_names_no_profile(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            example_dir = Path(temp_dir)
+            input_dir = example_dir / "input"
+            input_dir.mkdir()
+            (input_dir / "dm.txt").write_text("USUBJID\n01\n")
+            spec_path = example_dir / "spec.yaml"
+            spec = {
+                "domain": "ADSL",
+                "datasets": {"DM": "input/dm.txt"},
+                "base": "DM",
+                "keys": ["USUBJID"],
+                "output": {"columns": ["USUBJID"]},
+                "columns": [
+                    {
+                        "name": "USUBJID",
+                        "derivation": {"source": "DM.USUBJID"},
+                    }
+                ],
+            }
+
+            errors = VALIDATOR.validate_spec_contracts(
+                spec, "example/spec.yaml", spec_path
+            )
+
+        message = "\n".join(errors)
+        self.assertIn("source_profile_unknown", message)
+        self.assertIn("input/dm.txt", message)
+
     def test_rejects_missing_source_and_type_for_absent_csv_field(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             example_dir = Path(temp_dir)
@@ -4421,6 +4450,202 @@ class TestCsvProfile(unittest.TestCase):
                 path, 'ex/adsl.csv', {'output': {}, 'columns': []}
             )
         self.assertTrue(any('byte-order mark' in error for error in errors), errors)
+
+
+class TestSourceProfile(unittest.TestCase):
+    """R023: what a delimited source may spell, and what it may not."""
+
+    def condition(self, data):
+        try:
+            VALIDATOR.parse_source_profile(data)
+        except VALIDATOR.SourceProfileError as exc:
+            return exc.condition, exc.record, exc.field
+        return None
+
+    def test_both_terminators_deliver_the_same_records(self):
+        self.assertEqual(
+            VALIDATOR.parse_source_profile('A,B\n1,2\n'),
+            VALIDATOR.parse_source_profile('A,B\r\n1,2\r\n'),
+        )
+
+    def test_final_record_may_omit_its_terminator(self):
+        self.assertEqual(
+            VALIDATOR.parse_source_profile('A,B\n1,2'),
+            VALIDATOR.parse_source_profile('A,B\n1,2\n'),
+        )
+
+    def test_missing_and_empty_string_reach_r014_apart(self):
+        records = VALIDATOR.parse_source_profile('A,B\n"",\n')
+        self.assertEqual(records[1][0], ('', True))
+        self.assertEqual(records[1][1], (None, False))
+
+    def test_quoted_field_carries_delimiter_quote_and_newline(self):
+        records = VALIDATOR.parse_source_profile(
+            'A\n"x, y"\n"say ""hi"""\n"two\nlines"\n'
+        )
+        self.assertEqual(
+            [record[0][0] for record in records[1:]],
+            ['x, y', 'say "hi"', 'two\nlines'],
+        )
+
+    def test_nothing_is_trimmed(self):
+        records = VALIDATOR.parse_source_profile('A,B\n x , y \n')
+        self.assertEqual(records[1], [(' x ', False), (' y ', False)])
+
+    def test_carriage_return_outside_a_terminator_is_rejected(self):
+        for data in ['A\n"x\ry"\n', 'A\nx\ry\n', 'A\n1\r']:
+            self.assertEqual(
+                self.condition(data)[0], 'source_carriage_return', data
+            )
+
+    def test_malformed_quoting_is_rejected_with_coordinates(self):
+        self.assertEqual(
+            self.condition('A,B\n1,"x\n'),
+            ('source_quote_unterminated', 2, 2),
+        )
+        self.assertEqual(
+            self.condition('A,B\n1,x"y\n'),
+            ('source_quote_in_bare_field', 2, 2),
+        )
+        self.assertEqual(
+            self.condition('A,B\n1,"x"y\n'),
+            ('source_text_after_quote', 2, 2),
+        )
+
+    def test_an_empty_file_has_no_header(self):
+        self.assertEqual(VALIDATOR.parse_source_profile(''), [])
+
+    def test_header_alone_is_a_source_with_no_records(self):
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / 'dm.csv'
+            path.write_bytes(b'STUDYID,USUBJID\n')
+            self.assertEqual(VALIDATOR.check_source_file(path), [])
+
+    def test_header_and_width_conditions_are_reported(self):
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / 'dm.csv'
+            path.write_bytes(b'A,A,\n1,2,3\n1,2\n')
+            conditions = [
+                condition for condition, _n, _d
+                in VALIDATOR.check_source_file(path)
+            ]
+        self.assertEqual(
+            conditions,
+            [
+                'source_field_name_empty',
+                'source_field_name_duplicate',
+                'source_record_width',
+            ],
+        )
+
+    def test_byte_order_mark_and_ill_formed_bytes_are_reported(self):
+        with tempfile.TemporaryDirectory() as raw:
+            mark = Path(raw) / 'mark.csv'
+            mark.write_bytes(b'\xef\xbb\xbfA\n1\n')
+            ill = Path(raw) / 'ill.csv'
+            ill.write_bytes(b'A\n\xff\n')
+            self.assertEqual(
+                VALIDATOR.check_source_file(mark)[0][0],
+                'source_byte_order_mark',
+            )
+            self.assertEqual(
+                VALIDATOR.check_source_file(ill)[0][0], 'invalid_text'
+            )
+
+
+class TestDeclaredSourceCondition(unittest.TestCase):
+    """A negative example owns the malformed fixture it declares."""
+
+    def setUp(self):
+        self._temp = tempfile.TemporaryDirectory()
+        self.root = Path(self._temp.name)
+        self.addCleanup(self._temp.cleanup)
+
+    def example(self, name, csv_bytes, condition=None):
+        example_dir = self.root / 'yaml' / 'examples' / name
+        (example_dir / 'input').mkdir(parents=True)
+        (example_dir / 'expected').mkdir(parents=True)
+        (example_dir / 'input' / 'dm.csv').write_bytes(csv_bytes)
+        if condition is not None:
+            (example_dir / 'expected' / 'error.yaml').write_text(
+                f'phase: ingest\ncondition: {condition}\n'
+            )
+        return example_dir
+
+    def test_declared_condition_excuses_its_own_fixture(self):
+        self.example(
+            'negative-source-quote', b'A,B\n1,"x\n', 'source_quote_unterminated'
+        )
+        self.assertEqual(VALIDATOR.validate_csv_shapes(self.root), [])
+
+    def test_an_undeclared_malformed_fixture_still_fails(self):
+        self.example('positive-source', b'A,B\n1,"x\n')
+        errors = VALIDATOR.validate_csv_shapes(self.root)
+        self.assertTrue(
+            any('source_quote_unterminated' in error for error in errors),
+            errors,
+        )
+
+    def test_a_declared_condition_no_fixture_reports_fails(self):
+        self.example(
+            'negative-source-quote', b'A,B\n1,2\n', 'source_quote_unterminated'
+        )
+        errors = VALIDATOR.validate_csv_shapes(self.root)
+        self.assertTrue(
+            any('declared but no source fixture' in error for error in errors),
+            errors,
+        )
+
+    def test_a_different_condition_than_declared_fails(self):
+        self.example(
+            'negative-source-quote', b'A,A\n1,2\n', 'source_quote_unterminated'
+        )
+        errors = VALIDATOR.validate_csv_shapes(self.root)
+        self.assertTrue(
+            any('source_field_name_duplicate' in error for error in errors),
+            errors,
+        )
+
+
+class TestSuiteSourceCoverage(unittest.TestCase):
+    """The suite fixtures that carry R023's admitted spellings.
+
+    Both are load-bearing: an editor who normalizes either file removes the
+    coverage, so these tests say why the bytes are what they are.
+    """
+
+    root = TOOL_PATH.parent.parent.parent
+
+    def test_a_crlf_source_is_read_as_its_lf_twin(self):
+        path = (
+            self.root / 'yaml' / 'examples'
+            / 'adam-adrs-best-overall-response' / 'input' / 'adsl.csv'
+        )
+        raw = path.read_bytes()
+        self.assertIn(b'\r\n', raw, 'the suite needs one CRLF source')
+        self.assertEqual(VALIDATOR.check_source_file(path), [])
+        crlf = raw.decode('utf-8')
+        self.assertEqual(
+            VALIDATOR.parse_source_profile(crlf),
+            VALIDATOR.parse_source_profile(crlf.replace('\r\n', '\n')),
+        )
+
+    def test_a_suite_source_keeps_missing_apart_from_empty(self):
+        path = (
+            self.root / 'yaml' / 'examples'
+            / 'adam-adsl-investigator-comment' / 'input' / 'dm.csv'
+        )
+        records = VALIDATOR.parse_source_profile(
+            path.read_text(encoding='utf-8')
+        )
+        comments = [record[2] for record in records[1:]]
+        self.assertIn(('', True), comments, 'a collected empty comment')
+        self.assertIn((None, False), comments, 'no comment collected')
+        self.assertIn(
+            ('Dose reduced, per protocol', True),
+            comments,
+            'a comment carrying the delimiter',
+        )
 
 
 if __name__ == '__main__':

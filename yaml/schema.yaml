@@ -202,7 +202,7 @@ dataset_class:
     - path:
         type: project_path
         required: true
-        description: Source data path, resolved relative to the specification and confined by R021.
+        description: Source data path, resolved relative to the specification and confined by R021; R023 selects the delimited profile from its extension.
     - types:
         type: "dict[dataset_column, column_type]"
         required: false
