@@ -333,6 +333,7 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R022', 'regex_group_out_of_range'): {
         'group', 'group_count', 'pattern',
     },
+    ('R023', 'source_profile_unknown'): {'path'},
 }
 VALIDATION_CONDITION_REGISTRY = {
     key: {
@@ -4835,18 +4836,25 @@ def validate_spec_contracts(
             resolved, condition = resolve_project_path(
                 source_path, spec_path.parent, project_root
             )
-            if condition is None:
-                snapshot, condition = snapshots.read(resolved)
             if condition is not None:
                 errors.append(
                     resource_path_error(f"{path}.path", source_path, condition)
                 )
                 continue
-            profile = SOURCE_PROFILES.get(resolved.suffix.lower())
-            if profile is None:
+            # R023 selects the profile from the written path, so an extension
+            # it does not map is rejected before the source is read.
+            if SOURCE_PROFILES.get(resolved.suffix.lower()) is None:
+                errors.append(validation_diagnostic(
+                    f"{path}.path",
+                    'source_profile_unknown',
+                    f"{source_path!r} names no source profile",
+                    context={'path': source_path},
+                ))
+                continue
+            snapshot, condition = snapshots.read(resolved)
+            if condition is not None:
                 errors.append(
-                    f"ERROR: {path}.path: source_profile_unknown: "
-                    f"{source_path} names no source profile"
+                    resource_path_error(f"{path}.path", source_path, condition)
                 )
                 continue
             if not isinstance(types, dict):
@@ -8085,7 +8093,12 @@ SOURCE_PROFILE_CONDITIONS = {
     'source_text_after_quote': 'a closing quote is followed by ordinary text',
     'source_carriage_return': 'U+000D does not begin a record terminator',
 }
-SOURCE_READ_CONDITIONS = set(SOURCE_PROFILE_CONDITIONS) | {'invalid_text'}
+# What reading one fixture can decide. `source_profile_unknown` is settled
+# from the written path while a specification is validated, so no fixture
+# provokes it and a negative example that declares it is answered there.
+SOURCE_READ_CONDITIONS = (
+    set(SOURCE_PROFILE_CONDITIONS) - {'source_profile_unknown'}
+) | {'invalid_text'}
 
 
 def parse_source_profile(data: str):
@@ -8171,6 +8184,38 @@ def parse_source_profile(data: str):
     return records
 
 
+def source_coordinates(prefix: str):
+    """The record and field a reader stands at after reading `prefix`.
+
+    Records and fields are counted from one, and the header is record one,
+    so a failure names the same coordinates R023 requires of a runtime.
+    """
+    record = 1
+    field = 1
+    index = 0
+    size = len(prefix)
+    while index < size:
+        character = prefix[index]
+        if character == '"':
+            index += 1
+            while index < size:
+                if prefix[index] == '"':
+                    if prefix[index + 1:index + 2] == '"':
+                        index += 2
+                        continue
+                    index += 1
+                    break
+                index += 1
+            continue
+        if character == ',':
+            field += 1
+        elif character == '\n':
+            record += 1
+            field = 1
+        index += 1
+    return record, field
+
+
 def check_source_file(csv_path: Path):
     """Report every way one fixture departs from R023's source profile.
 
@@ -8181,7 +8226,14 @@ def check_source_file(csv_path: Path):
     try:
         data = raw.decode('utf-8')
     except UnicodeDecodeError as exc:
-        return [('invalid_text', 1, str(exc))]
+        # Everything before the offending byte decoded, so the reader's
+        # position in the source is exactly what that prefix spells.
+        record, field = source_coordinates(raw[:exc.start].decode('utf-8'))
+        return [(
+            'invalid_text',
+            record,
+            f"ill-formed encoded text at field {field}: {exc.reason}",
+        )]
     if data.startswith(BOM_UTF8):
         return [('source_byte_order_mark', 1, 'source carries a byte-order mark')]
     try:
@@ -8257,8 +8309,12 @@ def validate_csv_shapes(root: Path):
     ):
         declared = declared_source_condition(example_dir)
         reported = set()
-        csv_paths = sorted((example_dir / 'input').rglob('*.csv'))
-        csv_paths.extend(sorted((example_dir / 'expected').rglob('*.csv')))
+        csv_paths = []
+        for directory in ('input', 'expected'):
+            csv_paths.extend(sorted(
+                path for path in (example_dir / directory).rglob('*')
+                if path.is_file() and path.suffix.lower() == '.csv'
+            ))
         for csv_path in csv_paths:
             label = csv_path.relative_to(root)
             try:
@@ -8433,7 +8489,7 @@ ASCII_SOURCE_IGNORED_PARTS = {
 def is_unicode_fixture_csv(relative: Path):
     parts = relative.parts
     return (
-        relative.suffix == '.csv'
+        relative.suffix.lower() == '.csv'
         and len(parts) >= 5
         and parts[0] == 'yaml'
         and parts[1] == 'examples'

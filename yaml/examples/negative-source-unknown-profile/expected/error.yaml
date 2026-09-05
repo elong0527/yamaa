@@ -1,0 +1,7 @@
+phase: validation
+condition: source_profile_unknown
+spec_paths:
+  - datasets.DM.path
+context:
+  dataset: DM
+  path: input/dm.txt
