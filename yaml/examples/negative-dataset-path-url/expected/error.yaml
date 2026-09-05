@@ -1,0 +1,7 @@
+phase: validation
+condition: resource_path_uri_scheme
+spec_paths:
+  - datasets.LBREF.path
+context:
+  dataset: LBREF
+  path: https://reference.example.org/limits/lbref.csv

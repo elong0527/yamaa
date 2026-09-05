@@ -135,6 +135,12 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-conversion-incomplete-date`](negative-conversion-incomplete-date/) | reject an event start date that names no day |
 | [`negative-conversion-non-integral`](negative-conversion-non-integral/) | reject a pulse rate recorded between whole beats |
 | [`negative-conversion-unparseable-number`](negative-conversion-unparseable-number/) | reject a viral load reported below the assay limit |
+| [`negative-dataset-path-absolute`](negative-dataset-path-absolute/) | reject reference limits named by a machine location |
+| [`negative-dataset-path-directory`](negative-dataset-path-directory/) | reject reference limits that name a folder |
+| [`negative-dataset-path-missing`](negative-dataset-path-missing/) | reject reference limits the study does not hold |
+| [`negative-dataset-path-parent-escape`](negative-dataset-path-parent-escape/) | reject reference limits stored above the study |
+| [`negative-dataset-path-symlink`](negative-dataset-path-symlink/) | reject reference limits reached through a stand-in name |
+| [`negative-dataset-path-url`](negative-dataset-path-url/) | reject reference limits named by a web address |
 | [`negative-date-impute-invalid-source`](negative-date-impute-invalid-source/) | reject a start date completed from text that is not a date |
 | [`negative-date-impute-month-out-of-range`](negative-date-impute-month-out-of-range/) | reject a start date completed with no month of the year |
 | [`negative-date-impute-nonexistent-day`](negative-date-impute-nonexistent-day/) | reject an end date completed past the end of its month |

@@ -33,6 +33,9 @@ outside the rule index until their contracts and example coverage are complete.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.
+- Declare every source path as a relative file inside the example directory.
+  R020 confines what a run may read, so a rooted path, a URL, a parent
+  traversal, or a symbolic link belongs only in a negative example.
 - Do not duplicate normative behavior across schema definitions, rules, or
   examples. Keep operation-local behavior beside its schema entry and shared
   behavior in the applicable rule.

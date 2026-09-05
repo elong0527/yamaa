@@ -11,8 +11,14 @@ permissions:
 
 jobs:
   validate:
-    name: repository-validation
-    runs-on: ubuntu-latest
+    # R020 fixes path resolution, so the same fixtures must decide the same
+    # way on a case-sensitive and a case-insensitive filesystem.
+    name: repository-validation (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     timeout-minutes: 10
     steps:
       - name: Checkout repository

@@ -4,11 +4,13 @@ import copy
 import csv
 import datetime as dt
 import hashlib
+import io
 import json
 import keyword
 import math
 import os
 import re
+import stat
 import struct
 import sys
 from pathlib import Path
@@ -1426,7 +1428,7 @@ def validate_inheritance_layer(layer, label, env, require_output=False):
                 )
                 if isinstance(member, str):
                     member_errors = validate_type(
-                        member, ['path'], env, member_path
+                        member, ['project_path'], env, member_path
                     )
                     errors.extend(member_errors)
                     normalized_mapping[member_id] = {'path': member}
@@ -3096,7 +3098,144 @@ def validate_column_labels(spec, spec_label):
     return errors
 
 
-def validate_spec_contracts(spec, spec_label, spec_path=None):
+# R020 project resource resolution. A declared project path is confined to the
+# approved project root, its written form is fixed before the filesystem is
+# consulted, and every accepted physical file is read once as one immutable
+# byte snapshot.
+
+RESOURCE_PATH_MESSAGES = {
+    'resource_path_not_relative': 'is not a relative project path',
+    'resource_path_uri_scheme': 'declares a URI scheme',
+    'resource_path_parent_traversal': 'traverses a parent segment',
+    'resource_path_not_normalized': 'is not normalized',
+    'resource_path_symlink': 'passes through a symbolic link',
+    'resource_path_outside_project': 'resolves outside the project root',
+    'resource_path_missing': 'does not exist',
+    'resource_path_not_regular_file': 'is not a regular file',
+    'resource_path_content_changed': 'changed after it was validated',
+}
+
+URI_SCHEME_PATTERN = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]*:')
+DRIVE_LETTER_PATTERN = re.compile(r'^[A-Za-z]:')
+
+
+def classify_written_project_path(written):
+    """Return the R020 condition a written project path violates, if any."""
+    if not isinstance(written, str) or not written:
+        return 'resource_path_not_relative'
+    if written.startswith('/') or '\\' in written:
+        return 'resource_path_not_relative'
+    if DRIVE_LETTER_PATTERN.match(written):
+        return 'resource_path_not_relative'
+    if URI_SCHEME_PATTERN.match(written):
+        return 'resource_path_uri_scheme'
+    segments = written.split('/')
+    if '..' in segments:
+        return 'resource_path_parent_traversal'
+    if any(segment in ('', '.') for segment in segments):
+        return 'resource_path_not_normalized'
+    return None
+
+
+def resolve_project_path(written, base_dir, project_root):
+    """Walk a written project path under R020.
+
+    Returns the accepted path and no condition, or no path and the stable
+    condition that rejected it. Nothing about the host is returned.
+    """
+    condition = classify_written_project_path(written)
+    if condition is not None:
+        return None, condition
+
+    try:
+        root = Path(project_root).resolve(strict=True)
+    except OSError:
+        return None, 'resource_path_outside_project'
+
+    segments = written.split('/')
+    current = Path(base_dir)
+    for index, segment in enumerate(segments):
+        current = current / segment
+        if current.is_symlink():
+            return None, 'resource_path_symlink'
+        if not current.exists():
+            return None, 'resource_path_missing'
+        is_last = index == len(segments) - 1
+        if is_last:
+            if not current.is_file():
+                return None, 'resource_path_not_regular_file'
+        elif not current.is_dir():
+            return None, 'resource_path_not_regular_file'
+
+    try:
+        current.resolve(strict=True).relative_to(root)
+    except (OSError, ValueError):
+        return None, 'resource_path_outside_project'
+    return current, None
+
+
+def resource_path_error(path, written, condition):
+    """Report one R020 rejection without naming a host location."""
+    message = RESOURCE_PATH_MESSAGES[condition]
+    return f"ERROR: {path}: {condition}: {written!r} {message}"
+
+
+class ProjectSnapshot:
+    """One immutable byte snapshot of one accepted physical file."""
+
+    def __init__(self, digest, content):
+        self.digest = digest
+        self.content = content
+
+    def csv_header(self, delimiter=','):
+        """Return the artifact header read from this snapshot's bytes."""
+        text = self.content.decode('utf-8')
+        reader = csv.reader(
+            io.StringIO(text, newline=''), delimiter=delimiter, strict=True
+        )
+        return next(reader, [])
+
+
+class ProjectSnapshots:
+    """The byte snapshots one validation run has accepted.
+
+    A file is opened once and read through that same handle, so no check is
+    made against one path and then used against another. Two declarations
+    that reach one physical file share the snapshot, and content that changed
+    after the first read fails the run.
+    """
+
+    def __init__(self):
+        self._by_identity = {}
+        self.reads = 0
+
+    def read(self, path):
+        """Return (snapshot, condition) for an already accepted path."""
+        try:
+            with open(path, 'rb') as handle:
+                status = os.fstat(handle.fileno())
+                if not stat.S_ISREG(status.st_mode):
+                    return None, 'resource_path_not_regular_file'
+                content = handle.read()
+        except OSError:
+            return None, 'resource_path_missing'
+
+        identity = (status.st_dev, status.st_ino)
+        digest = hashlib.sha256(content).hexdigest()
+        accepted = self._by_identity.get(identity)
+        if accepted is None:
+            self.reads += 1
+            snapshot = ProjectSnapshot(digest, content)
+            self._by_identity[identity] = snapshot
+            return snapshot, None
+        if accepted.digest != digest:
+            return None, 'resource_path_content_changed'
+        return accepted, None
+
+
+def validate_spec_contracts(
+    spec, spec_label, spec_path=None, project_root=None, snapshots=None,
+):
     """Validate static cross-field contracts from normative rules."""
     errors = []
 
@@ -3346,6 +3485,10 @@ def validate_spec_contracts(spec, spec_label, spec_path=None):
 
     datasets = spec.get('datasets')
     if spec_path is not None and isinstance(datasets, dict):
+        if project_root is None:
+            project_root = spec_path.parent
+        if snapshots is None:
+            snapshots = ProjectSnapshots()
         for dataset_id, source in datasets.items():
             source_path = source if isinstance(source, str) else None
             types = None
@@ -3354,20 +3497,22 @@ def validate_spec_contracts(spec, spec_label, spec_path=None):
                 types = source.get('types')
             if not isinstance(source_path, str):
                 continue
-            resolved = spec_path.parent / source_path
             path = f"{spec_label}.datasets.{dataset_id}"
-            if not resolved.is_file():
+            resolved, condition = resolve_project_path(
+                source_path, spec_path.parent, project_root
+            )
+            if condition is None:
+                snapshot, condition = snapshots.read(resolved)
+            if condition is not None:
                 errors.append(
-                    f"ERROR: {path}: source path does not exist: "
-                    f"{source_path}"
+                    resource_path_error(f"{path}.path", source_path, condition)
                 )
                 continue
             if resolved.suffix.lower() != '.csv' or not isinstance(types, dict):
                 continue
             try:
-                with open(resolved, 'r', encoding='utf-8', newline='') as f:
-                    header = next(csv.reader(f, strict=True), [])
-            except (OSError, UnicodeError, csv.Error) as exc:
+                header = snapshot.csv_header()
+            except (UnicodeError, csv.Error) as exc:
                 errors.append(f"ERROR: {path}: cannot read CSV header: {exc}")
                 continue
             for field in sorted(set(types) - set(header)):
@@ -3413,7 +3558,11 @@ def dataset_type_catalog(spec, spec_path, env=None):
             declared_types = source.get('types')
             producer_path = source.get('schema')
 
-        if isinstance(producer_path, str) and spec_path is not None:
+        if (
+            isinstance(producer_path, str)
+            and spec_path is not None
+            and classify_written_project_path(producer_path) is None
+        ):
             resolved = spec_path.parent / producer_path
             try:
                 with open(resolved, 'r', encoding='utf-8') as handle:
@@ -3434,6 +3583,7 @@ def dataset_type_catalog(spec, spec_path, env=None):
             isinstance(source_path, str)
             and spec_path is not None
             and source_path.lower().endswith(('.csv', '.tsv'))
+            and classify_written_project_path(source_path) is None
         ):
             resolved = spec_path.parent / source_path
             delimiter = '\t' if source_path.lower().endswith('.tsv') else ','
@@ -3960,7 +4110,10 @@ def inherited_error_provenance(
     return f"{error} (contributed by {source})"
 
 
-def validate_spec_document(spec, spec_label, spec_path, env, spec_stack=None):
+def validate_spec_document(
+    spec, spec_label, spec_path, env, spec_stack=None, project_root=None,
+    snapshots=None,
+):
     """Validate one complete specification and its producer dependencies."""
     if not isinstance(spec, dict) or not spec:
         return [
@@ -3968,6 +4121,10 @@ def validate_spec_document(spec, spec_label, spec_path, env, spec_stack=None):
         ]
 
     has_inheritance = 'parents' in spec
+    if project_root is None:
+        project_root = spec_path.parent
+    if snapshots is None:
+        snapshots = ProjectSnapshots()
     spec, errors, provenance = prepare_spec_document(
         spec, spec_label, spec_path, env
     )
@@ -3988,7 +4145,11 @@ def validate_spec_document(spec, spec_label, spec_path, env, spec_stack=None):
     errors.extend(validate_spec_names(spec, spec_label))
     if has_inheritance:
         errors.extend(validate_column_labels(spec, spec_label))
-    errors.extend(validate_spec_contracts(spec, spec_label, spec_path))
+    errors.extend(
+        validate_spec_contracts(
+            spec, spec_label, spec_path, project_root, snapshots
+        )
+    )
     errors.extend(validate_spec_predicates(spec, spec_label, spec_path, env))
     errors.extend(validate_spec_functions(spec, spec_label, spec_path, env))
 
@@ -3996,7 +4157,8 @@ def validate_spec_document(spec, spec_label, spec_path, env, spec_stack=None):
     next_stack.add(spec_path.resolve())
     errors.extend(
         validate_producing_specs(
-            spec, spec_label, spec_path, env, next_stack
+            spec, spec_label, spec_path, env, next_stack, project_root,
+            snapshots,
         )
     )
     return [
@@ -4032,12 +4194,19 @@ def validate_producer_output_contract(producer, path):
     return errors
 
 
-def validate_producing_specs(spec, spec_label, spec_path, env, spec_stack):
+def validate_producing_specs(
+    spec, spec_label, spec_path, env, spec_stack, project_root=None,
+    snapshots=None,
+):
     """Validate producer workflow edges and referenced artifact headers."""
     errors = []
     datasets = spec.get('datasets')
     if not isinstance(datasets, dict):
         return errors
+    if project_root is None:
+        project_root = spec_path.parent
+    if snapshots is None:
+        snapshots = ProjectSnapshots()
 
     for dataset_id, source in datasets.items():
         if not isinstance(source, dict) or 'schema' not in source:
@@ -4061,18 +4230,18 @@ def validate_producing_specs(spec, spec_label, spec_path, env, spec_stack):
         schema_ref = source.get('schema')
         if not isinstance(schema_ref, str):
             continue
-        producer_path = spec_path.parent / schema_ref
-        resolved_producer = producer_path.resolve()
-        if resolved_producer in spec_stack:
+        producer_path, condition = resolve_project_path(
+            schema_ref, spec_path.parent, project_root
+        )
+        if condition is not None:
+            errors.append(
+                resource_path_error(f"{path}.schema", schema_ref, condition)
+            )
+            continue
+        if producer_path.resolve() in spec_stack:
             errors.append(
                 f"ERROR: {path}.schema: producer workflow dependency cycle "
                 f"through {schema_ref}"
-            )
-            continue
-        if not producer_path.is_file():
-            errors.append(
-                f"ERROR: {path}.schema: producing specification does not "
-                f"exist: {schema_ref}"
             )
             continue
 
@@ -4099,6 +4268,8 @@ def validate_producing_specs(spec, spec_label, spec_path, env, spec_stack):
             producer_path,
             env,
             spec_stack,
+            project_root,
+            snapshots,
         )
         if isinstance(producer, dict):
             producer_errors.extend(
@@ -4111,13 +4282,19 @@ def validate_producing_specs(spec, spec_label, spec_path, env, spec_stack):
         source_ref = source.get('path')
         if not isinstance(source_ref, str):
             continue
-        source_path = spec_path.parent / source_ref
-        if not source_path.is_file() or source_path.suffix.lower() != '.csv':
+        source_path, condition = resolve_project_path(
+            source_ref, spec_path.parent, project_root
+        )
+        if condition is not None:
+            continue
+        if source_path.suffix.lower() != '.csv':
+            continue
+        snapshot, condition = snapshots.read(source_path)
+        if condition is not None:
             continue
         try:
-            with open(source_path, 'r', encoding='utf-8', newline='') as f:
-                header = next(csv.reader(f, strict=True), [])
-        except (OSError, UnicodeError, csv.Error) as exc:
+            header = snapshot.csv_header()
+        except (UnicodeError, csv.Error) as exc:
             errors.append(
                 f"ERROR: {path}.schema: cannot read CSV header for "
                 f"{source_ref}: {exc}"
@@ -4238,6 +4415,7 @@ def validate_examples_structure(root: Path, env, warnings=None):
                     expected_paths = [expected_paths]
 
                 filtered_errors = []
+                matched_errors = []
                 for err in spec_errors:
                     parts = err.split(': ', 2)
                     if len(parts) < 2:
@@ -4256,13 +4434,45 @@ def validate_examples_structure(root: Path, env, warnings=None):
                         or norm_path.startswith(f"{expected_path}[")
                         for expected_path in expected_paths
                     )
-                    if not path_matches:
+                    if path_matches:
+                        matched_errors.append(
+                            parts[2] if len(parts) > 2 else ''
+                        )
+                    else:
                         filtered_errors.append(err)
                 errors.extend(filtered_errors)
+                errors.extend(
+                    check_declared_validation_error(
+                        err_spec, matched_errors, spec_label,
+                        error_yaml_path.relative_to(root),
+                    )
+                )
             except Exception:
                 errors.extend(spec_errors)
 
     return errors
+
+
+def check_declared_validation_error(
+    err_spec, matched_errors, spec_label, label,
+):
+    """Require a declared condition this validator decides to be reported.
+
+    A negative example may declare a condition the validator does not yet
+    decide; its non-goals list which. A condition the validator does decide
+    must actually be the one it reports, so a fixture cannot go on passing
+    once it stops failing the way it claims to.
+    """
+    condition = err_spec.get('condition')
+    if condition not in RESOURCE_PATH_MESSAGES:
+        return []
+    reported = {message.split(': ', 1)[0] for message in matched_errors}
+    if condition in reported:
+        return []
+    return [
+        f"ERROR: {label}.condition: {condition!r} was not reported for "
+        f"{spec_label}; got {sorted(reported)!r}"
+    ]
 
 
 EXPECTED_ERROR_PHASES = {
@@ -4429,7 +4639,7 @@ def validate_csv_shapes(root: Path):
 
 README_FORBIDDEN_PATTERN = re.compile(
     r'\b(?:derivation|schema|handler|verification)s?\b'
-    r'|R0[01][0-9]|output\.columns',
+    r'|R0[0-9][0-9]|output\.columns',
     re.IGNORECASE,
 )
 README_KEY_COLUMNS = {

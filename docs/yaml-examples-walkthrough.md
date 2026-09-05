@@ -143,11 +143,11 @@ complementary view -- **which example to open when you want to see a construct
 in use, and which rule governs it.** Rule IDs are the normative pages in
 [`yaml/rules/`](https://github.com/elong0527/yamaa/tree/main/yaml/rules).
 
-Rule coverage across the 50 questions below:
+Rule coverage across the 51 questions below:
 
-| R001 | R002 | R003 | R004 | R005 | R006 | R007 | R008 | R009 | R010 | R011 | R012 | R013 | R014 | R015 | R016 | R017 | R018 | R019 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 8 | 3 | 2 | 0 | 1 | 0 | 15 | 3 | 1 | 0 | 1 | 1 | 7 | 0 | 8 | 5 | 2 | 3 | 1 |
+| R001 | R002 | R003 | R004 | R005 | R006 | R007 | R008 | R009 | R010 | R011 | R012 | R013 | R014 | R015 | R016 | R017 | R018 | R019 | R020 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 8 | 3 | 2 | 0 | 1 | 0 | 15 | 3 | 1 | 0 | 1 | 1 | 7 | 0 | 8 | 5 | 2 | 3 | 1 | 1 |
 
 ### Row construction and value-level metadata
 
@@ -226,6 +226,7 @@ Rule coverage across the 50 questions below:
 | How do I chain population flags in dependency order? | R001 | [`adam-adsl-dependency-order`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-dependency-order) -- each flag reads the previous one, and `RANDFL` stays internal |
 | What happens to a non-finite number? | R011 | [`adam-adsl-non-finite-values`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-non-finite-values) -- nine derived values from YAML, source fields and a project function, all normalized to missing |
 | How do I distinguish an uncollected value from an inapplicable one? | R008 | [`adam-adex-uncollected-exposure`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adex-uncollected-exposure), [`sdtm-lb-conditional-compartments`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-lb-conditional-compartments) |
+| Which files may a specification read? | R020 | The six `negative-dataset-path-*` examples -- a machine location, a folder above the study, a web address, a stand-in name, a folder, and a table the study does not hold, each rejected before any data is read |
 
 ### Inheritance
 

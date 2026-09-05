@@ -210,7 +210,7 @@ check merely to make the sample pass.
     # and every negative example has exactly one remediation section
     python3 - <<'PY'
     import glob, re
-    pattern = re.compile(r"R0[01][0-9]|output\.columns|handler|verification")
+    pattern = re.compile(r"R0[0-9][0-9]|output\.columns|handler|verification")
     for f in sorted(glob.glob("*/README.md")):
         text = open(f).read()
         contract = text.split("\n## How to fix\n", 1)[0]

@@ -187,20 +187,20 @@ domain_name:
     description: Name of the dataset this specification derives.
 
 dataset_source:
-    type: [path, dataset_class]
+    type: [project_path, dataset_class]
     description: Path to the dataset, or a path with its producing specification or field types.
 
 dataset_class:
     - path:
-        type: path
+        type: project_path
         required: true
-        description: Source data path, resolved relative to the specification.
+        description: Source data path, resolved relative to the specification and confined by R020.
     - types:
         type: "dict[dataset_column, column_type]"
         required: false
         description: Type each named field carries; R014 types the rest.
     - schema:
-        type: path
+        type: project_path
         required: false
         description: Producing specification whose output contract supplies the source fields and types; R014 defines the workflow edge.
 

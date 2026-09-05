@@ -164,6 +164,9 @@ If the local platform cannot express that file relative to the entry file, the
 canonical absolute local path is used. An absolute contributed path remains an
 absolute path. `parents` paths are not materialized.
 
+Rebasing states where a file is, not whether a run may read it. A rebased
+`project_path` is accepted or rejected by R020 in its rebased form.
+
 ## Minimal resolved specification
 
 After composition, the resolver removes declarations that cannot affect the

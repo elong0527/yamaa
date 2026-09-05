@@ -27,6 +27,12 @@ may contain Unicode scalar values, casing and case-insensitive mapping affect
 ASCII letters only, no normalization is implicit, and equality and ordering
 operate on the exact scalar sequence.
 
+R020 gives every declared source one resource contract: a run receives one
+approved project root, a declared path is a relative file inside it with no
+rooted form, URI scheme, parent traversal, or symbolic link, and each accepted
+physical file is read once as one immutable byte snapshot that cannot be
+substituted between validation and ingestion.
+
 ## Version 1.0 design boundary
 
 Operations consume named variables rather than arbitrary nested expressions.
