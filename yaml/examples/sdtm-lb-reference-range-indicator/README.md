@@ -11,3 +11,7 @@ dictionary to derive one record per result:
 
 Units and ranges are not present in the collected laboratory source. The
 test-and-sex combination must have one and only one reference entry.
+
+The sample includes a result that was not collected. Its indicator stays
+empty rather than falling through to `NORMAL`, while the unit and both
+limits for its test and sex are still read.

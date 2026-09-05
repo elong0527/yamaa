@@ -20,3 +20,8 @@ derive one row per subject, parameter, and visit:
 
 A collected result with no numeric value produces no record, so it contributes
 neither its own parameter nor any parameter derived from it.
+
+A subject listed in ADSL with no collected result produces no record at
+all. The treatment start date and treatment carried across from ADSL
+enrich records that already exist and never bring one into being, so the
+row count follows the collected lab data alone.

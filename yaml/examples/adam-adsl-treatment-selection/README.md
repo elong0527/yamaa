@@ -15,3 +15,7 @@ one row per subject:
   of one;
 - `SAFFL` is `Y` for a subject who has a treatment start date and `N`
   otherwise.
+
+One row per subject means one row per subject collected in DM. An exposure
+record whose subject is absent from DM has no row to contribute to and
+creates none, so the row count never grows with the exposure source.

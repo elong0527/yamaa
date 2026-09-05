@@ -7,6 +7,10 @@ TU tumor identification records:
   screening; otherwise `N`
 - `AVAL`: `1` for `Y` and `0` for `N`
 
+One row per subject means one row per subject in ADSL. A tumor record
+collected for a subject who is not in ADSL has no row to contribute to
+and creates none, so an unenrolled subject never reaches the output.
+
 These values follow
 [`pharmaverse/admiral`](https://github.com/pharmaverse/admiral) commit
 `e32e5689d7fd03e224ddbcfc369c332c5df837d9`,
