@@ -22,6 +22,115 @@ from yaml.constructor import ConstructorError
 from yaml.events import AliasEvent
 
 
+class ValidationDiagnostic(str):
+    """Rendered validation error with stable machine-readable identity."""
+
+    def __new__(
+        cls, path, condition, message, *, context=None, span=None,
+        rendered=None,
+    ):
+        location = (
+            f" at characters [{span[0]}, {span[1]})"
+            if span is not None
+            else ""
+        )
+        if rendered is None:
+            rendered = f"ERROR: {path}: {message}{location} [{condition}]"
+        value = super().__new__(cls, rendered)
+        value.path = path
+        value.condition = condition
+        value.message = message
+        value.context = dict(context or {})
+        value.span = tuple(span) if span is not None else None
+        return value
+
+
+def validation_diagnostic(
+    path, condition, message, *, context=None, span=None
+):
+    return ValidationDiagnostic(
+        path,
+        condition,
+        message,
+        context=context,
+        span=span,
+    )
+
+
+# A condition is registered in the rule that owns its validation semantics.
+# The same portable condition name may be registered by more than one rule
+# when its required context differs by operation family.
+VALIDATION_CONTEXT_FIELDS = {
+    ('R001', 'dependency_cycle'): {'cycle'},
+    ('R002', 'duplicate_identifier'): {'identifier'},
+    ('R004', 'invalid_predicate'): {'predicate'},
+    ('R004', 'incompatible_input_type'): {'left_type', 'right_type'},
+    ('R004', 'unknown_field'): {'identifier'},
+    ('R005', 'duplicate_order_term'): {'column'},
+    ('R005', 'internal_column_in_keys'): {'column'},
+    ('R005', 'undeclared_column'): {'column'},
+    ('R006', 'invalid_field_type'): {'actual', 'expected'},
+    ('R007', 'ambiguous_dictionary'): {'entries', 'folded_key'},
+    ('R007', 'incomparable_sources'): {'sources', 'types'},
+    ('R007', 'source_key_length_mismatch'): {
+        'key', 'key_count', 'source', 'source_count',
+    },
+    ('R007', 'zero_offset'): {'offset'},
+    ('R009', 'missing_verification_id'): set(),
+    ('R010', 'incompatible_input_type'): {
+        'actual', 'expected', 'expr', 'source',
+    },
+    ('R010', 'invalid_numeric_expression'): {'expr'},
+    ('R010', 'prohibited_construct'): {'construct', 'expr'},
+    ('R010', 'prohibited_function'): {'expr', 'function'},
+    ('R010', 'qualified_identifier'): {'expr', 'identifier'},
+    ('R010', 'unknown_field'): {'expr', 'identifier'},
+    ('R011', 'value_not_permitted'): {'permitted', 'value'},
+    ('R012', 'invalid_string_template'): {'placeholder', 'reason'},
+    ('R013', 'aggregate_identifier_not_grouped'): {
+        'dataset', 'identifier',
+    },
+    ('R013', 'incompatible_input_type'): {
+        'actual', 'expected', 'source',
+    },
+    ('R014', 'unknown_field'): {'dataset', 'field'},
+    ('R015', 'duplicate_identifier'): {'identifier'},
+    ('R015', 'incomparable_range_types'): {
+        'lower_type', 'record_lookup', 'upper_type', 'value_type',
+    },
+    ('R015', 'unpaired_fields'): {
+        'declared', 'missing', 'record_lookup',
+    },
+    ('R016', 'month_out_of_range'): {'month'},
+    ('R016', 'incompatible_input_type'): {'actual', 'expected', 'source'},
+    ('R016', 'value_not_permitted'): {'permitted', 'value'},
+    ('R017', 'inheritance_cycle'): {'reason'},
+    ('R017', 'invalid_clear'): {'field'},
+    ('R017', 'invalid_parent_path'): {'reason'},
+    ('R017', 'missing_entry_output'): {'inherited_columns'},
+    ('R017', 'redundant_field_type'): {'dataset', 'field', 'type'},
+    ('R017', 'schema_version_mismatch'): {
+        'entry_version', 'parent_version',
+    },
+    ('R018', 'function_contract_mismatch'): {
+        'available', 'function', 'requested',
+    },
+    ('R021', 'resource_path_missing'): {'path'},
+    ('R021', 'resource_path_not_regular_file'): {'path'},
+    ('R021', 'resource_path_not_relative'): {'path'},
+    ('R021', 'resource_path_parent_traversal'): {'path'},
+    ('R021', 'resource_path_symlink'): {'path'},
+    ('R021', 'resource_path_uri_scheme'): {'path'},
+}
+VALIDATION_CONDITION_REGISTRY = {
+    key: {
+        'allowed_phases': {'validation'},
+        'required_context': required_context,
+    }
+    for key, required_context in VALIDATION_CONTEXT_FIELDS.items()
+}
+
+
 class UniqueKeyLoader(yaml.SafeLoader):
     yaml_implicit_resolvers = copy.deepcopy(
         yaml.SafeLoader.yaml_implicit_resolvers
@@ -158,6 +267,15 @@ class PredicateError(ValueError):
     def __init__(self, message, position):
         super().__init__(f"{message} at character {position + 1}")
         self.position = position
+
+
+class PredicateSemanticIssue(str):
+    def __new__(cls, message, condition, context, span):
+        value = super().__new__(cls, message)
+        value.condition = condition
+        value.context = dict(context)
+        value.span = tuple(span)
+        return value
 
 
 def tokenize_predicate(text):
@@ -502,7 +620,17 @@ def predicate_operand_type(operand, resolver, errors):
         return operand['type']
     resolved = resolver(operand['name'])
     if resolved is None:
-        errors.append(f"unknown identifier {operand['name']!r}")
+        errors.append(
+            PredicateSemanticIssue(
+                f"unknown identifier {operand['name']!r}",
+                'unknown_field',
+                {'identifier': operand['name']},
+                (
+                    operand['position'],
+                    operand['position'] + len(operand['name']),
+                ),
+            )
+        )
     return resolved
 
 
@@ -526,8 +654,29 @@ def validate_predicate_types(ast, resolver):
         right_type = operand_type(right_operand)
         if not predicate_types_comparable(left_type, right_type):
             errors.append(
-                'incompatible predicate operand types '
-                f'{left_type!r} and {right_type!r}'
+                PredicateSemanticIssue(
+                    'incompatible predicate operand types '
+                    f'{left_type!r} and {right_type!r}',
+                    'incompatible_input_type',
+                    {
+                        'left_type': left_type,
+                        'right_type': right_type,
+                    },
+                    (
+                        left_operand['position'],
+                        right_operand['position'] + max(
+                            1,
+                            len(
+                                str(
+                                    right_operand.get(
+                                        'name', right_operand.get('value', '')
+                                    )
+                                    or ''
+                                )
+                            ),
+                        ),
+                    ),
+                )
             )
 
     def visit(node):
@@ -553,12 +702,454 @@ def validate_predicate_types(ast, resolver):
             for actual in (value_type, pattern_type):
                 if actual is not None and actual != 'str':
                     errors.append(
-                        'LIKE requires str operands; '
-                        f'found {actual!r}'
+                        PredicateSemanticIssue(
+                            'LIKE requires str operands; '
+                            f'found {actual!r}',
+                            'incompatible_input_type',
+                            {'expected': 'str', 'actual': actual},
+                            (
+                                node['value']['position'],
+                                node['pattern']['position'] + max(
+                                    1,
+                                    len(
+                                        str(
+                                            node['pattern'].get(
+                                                'name',
+                                                node['pattern'].get('value', ''),
+                                            )
+                                            or ''
+                                        )
+                                    ),
+                                ),
+                            ),
+                        )
                     )
 
     visit(ast)
     return errors
+
+
+class NumericExpressionError(ValueError):
+    """An R010 expression cannot be tokenized or parsed."""
+
+    def __init__(
+        self,
+        message,
+        start,
+        end=None,
+        *,
+        condition='invalid_numeric_expression',
+        context=None,
+    ):
+        self.message = message
+        self.span = (start, start + 1 if end is None else end)
+        self.condition = condition
+        self.context = dict(context or {})
+        super().__init__(
+            f"{message} at characters [{self.span[0]}, {self.span[1]})"
+        )
+
+
+NUMERIC_FUNCTION_ARITIES = {
+    'ABS': (1, 1),
+    'CEIL': (1, 1),
+    'FLOOR': (1, 1),
+    'TRUNC': (1, 1),
+    'SQRT': (1, 1),
+    'POWER': (2, 2),
+    'EXP': (1, 1),
+    'LN': (1, 1),
+    'MOD': (2, 2),
+    'GREATEST': (2, None),
+    'LEAST': (2, None),
+    'NULLIF': (2, 2),
+    'COALESCE': (1, None),
+}
+
+
+PROHIBITED_NUMERIC_KEYWORDS = {
+    'AND': 'boolean',
+    'BETWEEN': 'comparison',
+    'CASE': 'conditional',
+    'ELSE': 'conditional',
+    'END': 'conditional',
+    'FALSE': 'boolean',
+    'IN': 'comparison',
+    'IS': 'comparison',
+    'LIKE': 'comparison',
+    'NOT': 'boolean',
+    'OR': 'boolean',
+    'OVER': 'window',
+    'THEN': 'conditional',
+    'TRUE': 'boolean',
+    'WHEN': 'conditional',
+}
+
+
+def tokenize_numeric_expression(text):
+    """Tokenize the closed R010 scalar numeric language."""
+    tokens = []
+    index = 0
+    length = len(text)
+    while index < length:
+        char = text[index]
+        if char.isspace():
+            index += 1
+            continue
+
+        number = re.match(
+            r'[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?',
+            text[index:],
+        )
+        if number is not None:
+            value = number.group(0)
+            end = index + len(value)
+            tokens.append(('NUMBER', value, index, end))
+            index = end
+            continue
+
+        name = re.match(r'[A-Za-z_][A-Za-z0-9_]*', text[index:])
+        if name is not None:
+            value = name.group(0)
+            end = index + len(value)
+            if end < length and text[end] == '.':
+                suffix = re.match(
+                    r'[A-Za-z_][A-Za-z0-9_]*', text[end + 1:]
+                )
+                if suffix is None:
+                    raise NumericExpressionError(
+                        'invalid qualified identifier', index, end + 1
+                    )
+                value += '.' + suffix.group(0)
+                end += 1 + len(suffix.group(0))
+            construct = PROHIBITED_NUMERIC_KEYWORDS.get(value.upper())
+            if '.' not in value and construct is not None:
+                raise NumericExpressionError(
+                    f'{construct} construct is not permitted in a '
+                    'numeric expression',
+                    index,
+                    end,
+                    condition='prohibited_construct',
+                    context={'construct': construct},
+                )
+            tokens.append(('NAME', value, index, end))
+            index = end
+            continue
+
+        token_kinds = {
+            '+': 'PLUS',
+            '-': 'MINUS',
+            '*': 'STAR',
+            '/': 'SLASH',
+            '(': 'LPAREN',
+            ')': 'RPAREN',
+            ',': 'COMMA',
+        }
+        if char in token_kinds:
+            tokens.append((token_kinds[char], char, index, index + 1))
+            index += 1
+            continue
+
+        if char in "<>=!":
+            end = index + 1
+            if end < length and text[end] == '=':
+                end += 1
+            raise NumericExpressionError(
+                'comparison is not permitted in a numeric expression',
+                index,
+                end,
+                condition='prohibited_construct',
+                context={'construct': 'comparison'},
+            )
+        if char == "'":
+            end = index + 1
+            while end < length:
+                if text[end] != "'":
+                    end += 1
+                    continue
+                if end + 1 < length and text[end + 1] == "'":
+                    end += 2
+                    continue
+                end += 1
+                break
+            raise NumericExpressionError(
+                'string literals are not permitted in a numeric expression',
+                index,
+                end,
+                condition='prohibited_construct',
+                context={'construct': 'string'},
+            )
+        raise NumericExpressionError(
+            f"unexpected character {char!r}", index, index + 1
+        )
+
+    tokens.append(('EOF', '', length, length))
+    return tokens
+
+
+class NumericExpressionParser:
+    def __init__(self, text):
+        self.text = text
+        self.tokens = tokenize_numeric_expression(text)
+        self.index = 0
+
+    @property
+    def token(self):
+        return self.tokens[self.index]
+
+    def advance(self):
+        token = self.token
+        self.index += 1
+        return token
+
+    def require(self, kind, message):
+        if self.token[0] != kind:
+            raise NumericExpressionError(
+                message, self.token[2], self.token[3]
+            )
+        return self.advance()
+
+    def parse(self):
+        node = self.parse_expression()
+        if self.token[0] != 'EOF':
+            raise NumericExpressionError(
+                'unexpected trailing token', self.token[2], self.token[3]
+            )
+        return node
+
+    def parse_expression(self):
+        node = self.parse_term()
+        while self.token[0] in {'PLUS', 'MINUS'}:
+            operator = self.advance()
+            right = self.parse_term()
+            node = {
+                'kind': 'binary',
+                'operator': operator[1],
+                'left': node,
+                'right': right,
+                'operator_span': (operator[2], operator[3]),
+                'span': (node['span'][0], right['span'][1]),
+            }
+        return node
+
+    def parse_term(self):
+        node = self.parse_factor()
+        while self.token[0] in {'STAR', 'SLASH'}:
+            operator = self.advance()
+            right = self.parse_factor()
+            node = {
+                'kind': 'binary',
+                'operator': operator[1],
+                'left': node,
+                'right': right,
+                'operator_span': (operator[2], operator[3]),
+                'span': (node['span'][0], right['span'][1]),
+            }
+        return node
+
+    def parse_factor(self):
+        if self.token[0] in {'PLUS', 'MINUS'}:
+            operator = self.advance()
+            value = self.parse_primary()
+            return {
+                'kind': 'unary',
+                'operator': operator[1],
+                'value': value,
+                'operator_span': (operator[2], operator[3]),
+                'span': (operator[2], value['span'][1]),
+            }
+        return self.parse_primary()
+
+    def parse_primary(self):
+        token = self.token
+        if token[0] == 'NUMBER':
+            self.advance()
+            value_type = (
+                'float'
+                if '.' in token[1] or 'e' in token[1].lower()
+                else 'int'
+            )
+            return {
+                'kind': 'number',
+                'type': value_type,
+                'value': token[1],
+                'span': (token[2], token[3]),
+            }
+        if token[0] == 'NAME':
+            self.advance()
+            keyword = token[1].upper()
+            if self.token[0] != 'LPAREN':
+                if keyword == 'NULL':
+                    return {
+                        'kind': 'null',
+                        'span': (token[2], token[3]),
+                    }
+                if keyword in PROHIBITED_NUMERIC_KEYWORDS:
+                    construct = PROHIBITED_NUMERIC_KEYWORDS[keyword]
+                    raise NumericExpressionError(
+                        f'{construct} construct is not permitted in a '
+                        'numeric expression',
+                        token[2],
+                        token[3],
+                        condition='prohibited_construct',
+                        context={'construct': construct},
+                    )
+                return {
+                    'kind': 'identifier',
+                    'name': token[1],
+                    'span': (token[2], token[3]),
+                }
+
+            self.advance()
+            arguments = []
+            if self.token[0] != 'RPAREN':
+                arguments.append(self.parse_expression())
+                while self.token[0] == 'COMMA':
+                    self.advance()
+                    arguments.append(self.parse_expression())
+            close = self.require('RPAREN', "expected ')' to close function")
+            return {
+                'kind': 'call',
+                'name': token[1],
+                'arguments': arguments,
+                'name_span': (token[2], token[3]),
+                'span': (token[2], close[3]),
+            }
+        if token[0] == 'LPAREN':
+            open_token = self.advance()
+            node = self.parse_expression()
+            close = self.require('RPAREN', "expected ')' to close expression")
+            node = dict(node)
+            node['span'] = (open_token[2], close[3])
+            return node
+        raise NumericExpressionError(
+            'expected a number, identifier, function, NULL, or parenthesis',
+            token[2],
+            token[3],
+        )
+
+
+def parse_numeric_expression(text):
+    if not isinstance(text, str) or not text:
+        raise NumericExpressionError(
+            'numeric expression must be a non-empty string', 0, 0
+        )
+    return NumericExpressionParser(text).parse()
+
+
+def promote_numeric_types(types):
+    concrete = [value_type for value_type in types if value_type is not None]
+    if not concrete:
+        return None
+    return 'float' if 'float' in concrete else 'int'
+
+
+def validate_numeric_expression_ast(ast, path, expression, resolver):
+    """Resolve and type-check a parsed R010 expression."""
+    errors = []
+
+    def infer(node):
+        kind = node['kind']
+        if kind == 'number':
+            return node['type']
+        if kind == 'null':
+            return None
+        if kind == 'identifier':
+            value_type, issue = resolver(node['name'])
+            if issue is not None:
+                condition, message, context = issue
+                errors.append(
+                    validation_diagnostic(
+                        path,
+                        condition,
+                        message,
+                        context={'expr': expression, **context},
+                        span=node['span'],
+                    )
+                )
+                return '<invalid>'
+            if value_type not in {'int', 'float'}:
+                errors.append(
+                    validation_diagnostic(
+                        path,
+                        'incompatible_input_type',
+                        f"identifier {node['name']!r} has non-numeric type "
+                        f"{value_type!r}",
+                        context={
+                            'expr': expression,
+                            'source': node['name'],
+                            'expected': 'numeric',
+                            'actual': value_type,
+                        },
+                        span=node['span'],
+                    )
+                )
+                return '<invalid>'
+            return value_type
+        if kind == 'unary':
+            return infer(node['value'])
+        if kind == 'binary':
+            left_type = infer(node['left'])
+            right_type = infer(node['right'])
+            if '<invalid>' in {left_type, right_type}:
+                return '<invalid>'
+            if node['operator'] == '/':
+                return 'float'
+            return promote_numeric_types([left_type, right_type])
+        if kind == 'call':
+            argument_types = [infer(argument) for argument in node['arguments']]
+            name = node['name'].upper()
+            arity = NUMERIC_FUNCTION_ARITIES.get(name)
+            if arity is None:
+                errors.append(
+                    validation_diagnostic(
+                        path,
+                        'prohibited_function',
+                        f"function {node['name']!r} is not permitted by R010",
+                        context={
+                            'expr': expression,
+                            'function': node['name'],
+                        },
+                        span=node['name_span'],
+                    )
+                )
+                return '<invalid>'
+            minimum, maximum = arity
+            actual = len(node['arguments'])
+            if actual < minimum or (
+                maximum is not None and actual > maximum
+            ):
+                expected = (
+                    str(minimum)
+                    if maximum == minimum
+                    else f'at least {minimum}'
+                )
+                errors.append(
+                    validation_diagnostic(
+                        path,
+                        'prohibited_function',
+                        f"function {node['name']!r} requires {expected} "
+                        f"argument(s), got {actual}",
+                        context={
+                            'expr': expression,
+                            'function': node['name'],
+                            'argument_count': actual,
+                        },
+                        span=node['span'],
+                    )
+                )
+                return '<invalid>'
+            if '<invalid>' in argument_types:
+                return '<invalid>'
+            if name in {'SQRT', 'POWER', 'EXP', 'LN'}:
+                return 'float'
+            if name in {'CEIL', 'FLOOR', 'TRUNC'}:
+                return 'float'
+            return promote_numeric_types(argument_types)
+        raise AssertionError(f"unknown numeric AST node {kind!r}")
+
+    result_type = infer(ast)
+    return result_type, list(dict.fromkeys(errors))
 
 
 def split_type_arguments(inner):
@@ -974,24 +1565,66 @@ def validate_type(data, t_refs, env, path):
     if 'null' in t_refs and data is None:
         return []
 
-    # Check if data matches ANY of the t_refs
+    attempted = []
     for t in t_refs:
         errors = _check_single_type(data, t, env, path)
-        if not errors: # Matches one type successfully
+        if not errors:
             return []
+        attempted.append((t, errors))
 
-    # If none matched, run against the first one again to generate errors to return
-    if t_refs:
-        return _check_single_type(data, t_refs[0], env, path)
+    # Prefer a union branch whose outer runtime shape matched and whose
+    # failure came from a narrower constraint. This keeps an int/string-enum
+    # union from reporting only the first primitive mismatch.
+    for t, errors in attempted:
+        if _outer_type_matches(data, t, env):
+            return errors
+    if attempted:
+        return attempted[0][1]
     return []
+
+
+def _outer_type_matches(data, type_ref, env):
+    if type_ref == 'str':
+        return isinstance(data, str)
+    if type_ref == 'int':
+        return type(data) is int
+    if type_ref == 'float':
+        return type(data) in (int, float)
+    if type_ref == 'bool':
+        return type(data) is bool
+    if type_ref == 'null':
+        return data is None
+    if type_ref == 'list' or type_ref.startswith('list['):
+        return isinstance(data, list)
+    if type_ref == 'dict' or type_ref.startswith('dict['):
+        return isinstance(data, dict)
+    if type_ref in env.get('classes', {}):
+        return isinstance(data, dict)
+    alias = env.get('aliases', {}).get(type_ref)
+    if alias is None:
+        return False
+    if 'registry' in alias:
+        return isinstance(data, dict)
+    return any(
+        _outer_type_matches(data, member, env)
+        for member in _type_members(alias['type'])
+    )
 
 
 def validate_constraints(data, descriptor, path):
     errors = []
     if 'values' in descriptor and data not in descriptor['values']:
         errors.append(
-            f"ERROR: {path}: value {data!r} is not one of the allowed values "
-            f"{descriptor['values']!r}"
+            validation_diagnostic(
+                path,
+                'value_not_permitted',
+                f"value {data!r} is not one of the allowed values "
+                f"{descriptor['values']!r}",
+                context={
+                    'value': data,
+                    'permitted': descriptor['values'],
+                },
+            )
         )
     if 'pattern' in descriptor:
         pattern = descriptor['pattern']
@@ -1034,21 +1667,43 @@ def validate_descriptor(data, descriptor, env, path):
 
 def _check_single_type(data, t, env, path):
     if t == 'str':
-        return [] if isinstance(data, str) else [f"ERROR: {path}: expected str, got {type(data).__name__}"]
+        return [] if isinstance(data, str) else [
+            validation_diagnostic(
+                path,
+                'invalid_field_type',
+                f"expected str, got {type(data).__name__}",
+                context={'expected': 'str', 'actual': type(data).__name__},
+            )
+        ]
     if t == 'int':
         # In python bool is a subclass of int. So isinstance(True, int) is True!
         # So we should exclude bools from int.
         if type(data) is int:
             return []
-        return [f"ERROR: {path}: expected int, got {type(data).__name__}"]
+        return [validation_diagnostic(
+            path,
+            'invalid_field_type',
+            f"expected int, got {type(data).__name__}",
+            context={'expected': 'int', 'actual': type(data).__name__},
+        )]
     if t == 'float':
         if type(data) in (float, int):
             return []
-        return [f"ERROR: {path}: expected float, got {type(data).__name__}"]
+        return [validation_diagnostic(
+            path,
+            'invalid_field_type',
+            f"expected float, got {type(data).__name__}",
+            context={'expected': 'float', 'actual': type(data).__name__},
+        )]
     if t == 'bool':
         if type(data) is bool:
             return []
-        return [f"ERROR: {path}: expected bool, got {type(data).__name__}"]
+        return [validation_diagnostic(
+            path,
+            'invalid_field_type',
+            f"expected bool, got {type(data).__name__}",
+            context={'expected': 'bool', 'actual': type(data).__name__},
+        )]
     if t == 'list':
         return [] if isinstance(data, list) else [
             f"ERROR: {path}: expected list, got {type(data).__name__}"
@@ -1330,8 +1985,12 @@ def validate_partial_inheritance_member(
         if field_value is None:
             if descriptor.get('required') or name == identity:
                 errors.append(
-                    f"ERROR: {path}: invalid_clear: cannot clear a required "
-                    "or identity field"
+                    validation_diagnostic(
+                        path,
+                        'invalid_clear',
+                        'cannot clear a required or identity field',
+                        context={'field': name},
+                    )
                 )
             else:
                 normalized[name] = None
@@ -1362,8 +2021,11 @@ def validate_inheritance_layer(layer, label, env, require_output=False):
         )
     if require_output and 'output' not in layer:
         errors.append(
-            f"ERROR: {label}.parents: missing_entry_output: an inherited "
-            "entry file must declare its complete output"
+            validation_diagnostic(
+                f"{label}.parents",
+                'missing_entry_output',
+                'an inherited entry file must declare its complete output',
+            )
         )
 
     for name in layer:
@@ -1391,8 +2053,12 @@ def validate_inheritance_layer(layer, label, env, require_output=False):
             if value is None:
                 if descriptor.get('required'):
                     errors.append(
-                        f"ERROR: {path}: invalid_clear: cannot clear a "
-                        "required root field"
+                        validation_diagnostic(
+                            path,
+                            'invalid_clear',
+                            'cannot clear a required root field',
+                            context={'field': name},
+                        )
                     )
                 else:
                     normalized[name] = None
@@ -1407,8 +2073,12 @@ def validate_inheritance_layer(layer, label, env, require_output=False):
         if value is None:
             if descriptor.get('required'):
                 errors.append(
-                    f"ERROR: {path}: invalid_clear: cannot clear a required "
-                    "root field"
+                    validation_diagnostic(
+                        path,
+                        'invalid_clear',
+                        'cannot clear a required root field',
+                        context={'field': name},
+                    )
                 )
             else:
                 normalized[name] = None
@@ -1480,8 +2150,16 @@ def validate_inheritance_layer(layer, label, env, require_output=False):
     bundle_version = env.get('version')
     if version is not None and str(version) != str(bundle_version):
         errors.append(
-            f"ERROR: {label}.schema_version: schema_version_mismatch: "
-            f"{version!r} does not match bundle version {bundle_version!r}"
+            validation_diagnostic(
+                f"{label}.schema_version",
+                'schema_version_mismatch',
+                f"{version!r} does not match bundle version "
+                f"{bundle_version!r}",
+                context={
+                    'entry_version': bundle_version,
+                    'parent_version': version,
+                },
+            )
         )
 
     return normalized, errors
@@ -1660,8 +2338,12 @@ def resolve_spec_inheritance(entry_spec, spec_label, spec_path, env):
             start = active.index(canonical)
             cycle = active[start:] + [canonical]
             errors.append(
-                f"ERROR: {layer_label}: inheritance_cycle: "
-                + ' -> '.join(str(item) for item in cycle)
+                validation_diagnostic(
+                    layer_label,
+                    'inheritance_cycle',
+                    ' -> '.join(str(item) for item in cycle),
+                    context={'reason': 'parent_chain_returns_to_entry'},
+                )
             )
             return
         if canonical in completed:
@@ -1698,8 +2380,12 @@ def resolve_spec_inheritance(entry_spec, spec_label, spec_path, env):
             parent_label = f"{layer_label}.parents[{index}]"
             if _is_nonlocal_parent_reference(parent):
                 errors.append(
-                    f"ERROR: {parent_label}: invalid_parent_path: "
-                    f"{parent!r} is not a local filesystem path"
+                    validation_diagnostic(
+                        parent_label,
+                        'invalid_parent_path',
+                        f"{parent!r} is not a local filesystem path",
+                        context={'reason': 'remote_reference'},
+                    )
                 )
                 continue
             candidate = Path(parent)
@@ -1790,6 +2476,31 @@ def closed_expression_identifier_names(text):
     return names
 
 
+def numeric_expression_identifier_names(text):
+    if not isinstance(text, str):
+        return set()
+    try:
+        ast = parse_numeric_expression(text)
+    except NumericExpressionError:
+        return set()
+
+    names = set()
+
+    def visit(node):
+        if node.get('kind') == 'identifier':
+            names.add(node['name'])
+        for value in node.values():
+            if isinstance(value, dict):
+                visit(value)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict):
+                        visit(item)
+
+    visit(ast)
+    return names
+
+
 def string_template_identifier_names(text):
     if not isinstance(text, str):
         return set()
@@ -1847,7 +2558,12 @@ def collect_single_type_references(data, type_ref, env):
             ('variable', name)
             for name in predicate_identifier_names(data)
         }
-    if type_ref in {'numeric_expression', 'aggregate_expression'}:
+    if type_ref == 'numeric_expression':
+        return {
+            ('variable', name)
+            for name in numeric_expression_identifier_names(data)
+        }
+    if type_ref == 'aggregate_expression':
         return {
             ('variable', name)
             for name in closed_expression_identifier_names(data)
@@ -2967,10 +3683,15 @@ def validate_spec_names(spec, spec_label):
     dataset_names = set(datasets) if isinstance(datasets, dict) else set()
     domain = spec.get('domain')
     if isinstance(domain, str) and domain in dataset_names:
-        errors.append(
-            f"ERROR: {spec_label}.datasets.{domain}: dataset identifier "
-            "must not equal the output domain"
-        )
+        for path in (f"datasets.{domain}", 'domain'):
+            errors.append(
+                validation_diagnostic(
+                    f"{spec_label}.{path}",
+                    'duplicate_identifier',
+                    'dataset identifier must not equal the output domain',
+                    context={'identifier': domain},
+                )
+            )
 
     base = spec.get('base')
     if isinstance(base, str) and base not in dataset_names:
@@ -3045,10 +3766,16 @@ def validate_spec_names(spec, spec_label):
         if isinstance(keys, list):
             for index, key in enumerate(keys):
                 if isinstance(key, str) and key not in output_names:
-                    errors.append(
-                        f"ERROR: {spec_label}.keys[{index}]: key column "
-                        f"{key!r} is not in output.columns"
-                    )
+                    for path in (f"keys[{index}]", 'output.columns'):
+                        errors.append(
+                            validation_diagnostic(
+                                f"{spec_label}.{path}",
+                                'internal_column_in_keys',
+                                f"key column {key!r} is not in "
+                                'output.columns',
+                                context={'column': key},
+                            )
+                        )
 
     order_by = output.get('order_by') if isinstance(output, dict) else None
     if isinstance(order_by, list):
@@ -3060,10 +3787,23 @@ def validate_spec_names(spec, spec_label):
             order_variables.append(variable)
             if variable not in declared_columns:
                 errors.append(
-                    f"ERROR: {spec_label}.output.order_by[{index}]: "
-                    f"undeclared column {variable!r}"
+                    validation_diagnostic(
+                        f"{spec_label}.output.order_by[{index}]",
+                        'undeclared_column',
+                        f"undeclared column {variable!r}",
+                        context={'column': variable},
+                    )
                 )
-        duplicate_errors(order_variables, 'output.order_by', 'order term')
+        for variable in sorted(set(order_variables)):
+            if order_variables.count(variable) > 1:
+                errors.append(
+                    validation_diagnostic(
+                        f"{spec_label}.output.order_by",
+                        'duplicate_order_term',
+                        f"duplicate order term {variable!r}",
+                        context={'column': variable},
+                    )
+                )
 
     rows = spec.get('rows')
     if isinstance(rows, list):
@@ -3095,10 +3835,23 @@ def validate_spec_names(spec, spec_label):
                 continue
             lookup_id = lookup.get('id')
             if isinstance(lookup_id, str) and lookup_id in reserved_names:
-                errors.append(
-                    f"ERROR: {spec_label}.record_lookups[{index}].id: "
-                    f"identifier {lookup_id!r} conflicts with a dataset or domain"
+                conflict_path = (
+                    f"datasets.{lookup_id}"
+                    if lookup_id in dataset_names
+                    else 'domain'
                 )
+                for path in (
+                    f"record_lookups[{index}].id", conflict_path
+                ):
+                    errors.append(
+                        validation_diagnostic(
+                            f"{spec_label}.{path}",
+                            'duplicate_identifier',
+                            f"identifier {lookup_id!r} conflicts with a "
+                            'dataset or domain',
+                            context={'identifier': lookup_id},
+                        )
+                    )
             lookup_dataset = lookup.get('dataset')
             if isinstance(lookup_dataset, str) and lookup_dataset not in dataset_names:
                 errors.append(
@@ -3207,7 +3960,14 @@ def resolve_project_path(written, base_dir, project_root):
 def resource_path_error(path, written, condition):
     """Report one R021 rejection without naming a host location."""
     message = RESOURCE_PATH_MESSAGES[condition]
-    return f"ERROR: {path}: {condition}: {written!r} {message}"
+    rendered = f"ERROR: {path}: {condition}: {written!r} {message}"
+    return ValidationDiagnostic(
+        path,
+        condition,
+        f"{written!r} {message}",
+        context={'path': written},
+        rendered=rendered,
+    )
 
 
 class ProjectSnapshot:
@@ -3354,8 +4114,19 @@ def validate_spec_contracts(
             has_source = 'source' in lookup
             has_key = 'key' in lookup
             if has_source != has_key:
+                declared_fields = ['source'] if has_source else ['key']
+                missing = ['key'] if has_source else ['source']
                 errors.append(
-                    f"ERROR: {path}: source and key must be declared together"
+                    validation_diagnostic(
+                        path,
+                        'unpaired_fields',
+                        'source and key must be declared together',
+                        context={
+                            'record_lookup': lookup.get('id'),
+                            'declared': declared_fields,
+                            'missing': missing,
+                        },
+                    )
                 )
             elif has_source:
                 sources = (
@@ -3373,9 +4144,18 @@ def validate_spec_contracts(
                         f"ERROR: {path}: source and key must have equal length"
                     )
             if ('order_by' in lookup) != ('keep' in lookup):
+                has_order = 'order_by' in lookup
                 errors.append(
-                    f"ERROR: {path}: order_by and keep must be declared "
-                    "together"
+                    validation_diagnostic(
+                        path,
+                        'unpaired_fields',
+                        'order_by and keep must be declared together',
+                        context={
+                            'record_lookup': lookup.get('id'),
+                            'declared': ['order_by'] if has_order else ['keep'],
+                            'missing': ['keep'] if has_order else ['order_by'],
+                        },
+                    )
                 )
 
     verification_ids = []
@@ -3429,8 +4209,12 @@ def validate_spec_contracts(
                     group_by = payload.get('group_by')
                     if not isinstance(payload.get('id'), str):
                         errors.append(
-                            f"ERROR: {path}.id: a grouped row_count requires "
-                            "a verification id"
+                            validation_diagnostic(
+                                path,
+                                'missing_verification_id',
+                                'a grouped row_count requires a verification '
+                                'id',
+                            )
                         )
                     if isinstance(group_by, list):
                         if not group_by:
@@ -3547,8 +4331,15 @@ def validate_spec_contracts(
                 continue
             for field in sorted(set(types) - set(header)):
                 errors.append(
-                    f"ERROR: {path}.types.{field}: field is absent from "
-                    f"{source_path}"
+                    validation_diagnostic(
+                        f"{path}.types.{field}",
+                        'unknown_field',
+                        f"field is absent from {source_path}",
+                        context={
+                            'dataset': dataset_id,
+                            'field': field,
+                        },
+                    )
                 )
 
     return errors
@@ -3765,9 +4556,17 @@ def validate_spec_functions(spec, spec_label, spec_path, schema_env):
         available = contract.get('contract_version')
         if requested != available:
             errors.append(
-                f"ERROR: {path}.contract_version: "
-                f"function_contract_mismatch: requested {requested!r}, "
-                f"environment provides {available!r}"
+                validation_diagnostic(
+                    f"{path}.contract_version",
+                    'function_contract_mismatch',
+                    f"requested {requested!r}, environment provides "
+                    f"{available!r}",
+                    context={
+                        'function': name,
+                        'requested': requested,
+                        'available': available,
+                    },
+                )
             )
         errors.extend(
             validate_function_arguments(
@@ -3798,10 +4597,24 @@ def validate_predicate_at(text, path, resolver):
     try:
         ast = parse_predicate(text)
     except PredicateError as exc:
-        return [f"ERROR: {path}: invalid predicate: {exc}"]
+        return [
+            validation_diagnostic(
+                path,
+                'invalid_predicate',
+                f"invalid predicate: {exc}",
+                context={'predicate': text},
+                span=(exc.position, min(len(text), exc.position + 1)),
+            )
+        ]
     return [
-        f"ERROR: {path}: {message}"
-        for message in dict.fromkeys(validate_predicate_types(ast, resolver))
+        validation_diagnostic(
+            path,
+            issue.condition,
+            str(issue),
+            context=issue.context,
+            span=issue.span,
+        )
+        for issue in dict.fromkeys(validate_predicate_types(ast, resolver))
     ]
 
 
@@ -4086,6 +4899,216 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
     return errors
 
 
+def numeric_identifier_resolver(unqualified=None, qualified=None):
+    unqualified = unqualified or {}
+    qualified = qualified or {}
+
+    def resolve(name):
+        if '.' not in name:
+            if name not in unqualified:
+                return None, (
+                    'unknown_field',
+                    f"unknown identifier {name!r}",
+                    {'identifier': name},
+                )
+            return unqualified[name], None
+
+        qualifier, field = name.split('.', 1)
+        relation = qualified.get(qualifier)
+        if relation is None:
+            return None, (
+                'qualified_identifier',
+                f"qualified identifier {name!r} is not available here",
+                {'identifier': name},
+            )
+        if field not in relation:
+            return None, (
+                'unknown_field',
+                f"unknown field {field!r} in {qualifier!r}",
+                {'identifier': name},
+            )
+        return relation[field], None
+
+    return resolve
+
+
+def validate_numeric_expression_at(text, path, resolver):
+    try:
+        ast = parse_numeric_expression(text)
+    except NumericExpressionError as exc:
+        return [
+            validation_diagnostic(
+                path,
+                exc.condition,
+                exc.message,
+                context={'expr': text, **exc.context},
+                span=exc.span,
+            )
+        ]
+    _, errors = validate_numeric_expression_ast(ast, path, text, resolver)
+    return errors
+
+
+def validate_expression_numeric(expression, path, resolver):
+    errors = []
+    if not isinstance(expression, dict) or len(expression) != 1:
+        return errors
+    keyword, payload = next(iter(expression.items()))
+
+    if keyword == 'compute' and isinstance(payload, dict):
+        text = payload.get('expr')
+        if isinstance(text, str):
+            errors.extend(
+                validate_numeric_expression_at(
+                    text, f"{path}.compute.expr", resolver
+                )
+            )
+        return errors
+
+    if keyword == 'case' and isinstance(payload, dict):
+        branches = payload.get('branches')
+        if isinstance(branches, list):
+            for index, branch in enumerate(branches):
+                if not isinstance(branch, dict):
+                    continue
+                errors.extend(
+                    validate_expression_numeric(
+                        branch.get('then'),
+                        f"{path}.case.branches[{index}].then",
+                        resolver,
+                    )
+                )
+        if 'otherwise' in payload:
+            errors.extend(
+                validate_expression_numeric(
+                    payload['otherwise'],
+                    f"{path}.case.otherwise",
+                    resolver,
+                )
+            )
+    elif keyword == 'str_concat' and isinstance(payload, dict):
+        sources = payload.get('sources')
+        if isinstance(sources, list):
+            for index, source in enumerate(sources):
+                errors.extend(
+                    validate_expression_numeric(
+                        source,
+                        f"{path}.str_concat.sources[{index}]",
+                        resolver,
+                    )
+                )
+    return errors
+
+
+def validate_derivation_numeric(derivation, path, resolver):
+    if not isinstance(derivation, dict):
+        return []
+    if 'value' not in derivation:
+        return validate_expression_numeric(derivation, path, resolver)
+
+    errors = validate_expression_numeric(
+        derivation.get('value'), f"{path}.value", resolver
+    )
+    overrides = derivation.get('override')
+    if isinstance(overrides, list):
+        for index, override in enumerate(overrides):
+            if not isinstance(override, dict):
+                continue
+            errors.extend(
+                validate_expression_numeric(
+                    override.get('value'),
+                    f"{path}.override[{index}].value",
+                    resolver,
+                )
+            )
+    return errors
+
+
+def validate_spec_numeric_expressions(
+    spec, spec_label, spec_path=None, env=None
+):
+    """Parse, resolve, and type-check every R010 expression in a spec."""
+    errors = []
+    datasets = dataset_type_catalog(spec, spec_path, env)
+    output_types = specification_column_types(spec)
+    lookups = {}
+    lookup_entries = spec.get('record_lookups')
+    if isinstance(lookup_entries, list):
+        for lookup in lookup_entries:
+            if not isinstance(lookup, dict):
+                continue
+            lookup_id = lookup.get('id')
+            dataset_id = lookup.get('dataset')
+            if isinstance(lookup_id, str) and isinstance(dataset_id, str):
+                lookups[lookup_id] = datasets.get(dataset_id, {})
+
+    column_resolver = numeric_identifier_resolver(
+        unqualified=output_types, qualified=lookups
+    )
+    columns = spec.get('columns')
+    if isinstance(columns, list):
+        for index, column in enumerate(columns):
+            if not isinstance(column, dict) or 'derivation' not in column:
+                continue
+            name = column.get('name', index)
+            errors.extend(
+                validate_derivation_numeric(
+                    column['derivation'],
+                    f"{spec_label}.columns.{name}.derivation",
+                    column_resolver,
+                )
+            )
+
+    rows = spec.get('rows')
+    if isinstance(rows, list):
+        for index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                continue
+            driver = row.get('dataset', spec.get('base'))
+            driver_fields = (
+                datasets.get(driver, {}) if isinstance(driver, str) else {}
+            )
+            if isinstance(row.get('group_by'), list):
+                grouped_fields = {
+                    variable.split('.', 1)[1]: driver_fields.get(
+                        variable.split('.', 1)[1]
+                    )
+                    for variable in row['group_by']
+                    if (
+                        isinstance(variable, str)
+                        and isinstance(driver, str)
+                        and variable.startswith(driver + '.')
+                        and variable.split('.', 1)[1] in driver_fields
+                    )
+                }
+                qualified = {driver: grouped_fields}
+            else:
+                qualified = (
+                    {driver: driver_fields}
+                    if isinstance(driver, str)
+                    else {}
+                )
+            derivations = row.get('derivations')
+            row_output = {
+                name: output_types[name]
+                for name in derivations or {}
+                if name in output_types
+            } if isinstance(derivations, dict) else {}
+            row_resolver = numeric_identifier_resolver(
+                unqualified=row_output, qualified=qualified
+            )
+            if isinstance(derivations, dict):
+                for name, derivation in derivations.items():
+                    errors.extend(
+                        validate_derivation_numeric(
+                            derivation,
+                            f"{spec_label}.rows[{index}].derivations.{name}",
+                            row_resolver,
+                        )
+                    )
+    return errors
+
+
 def prepare_spec_document(spec, spec_label, spec_path, env):
     if isinstance(spec, dict) and 'parents' in spec:
         return resolve_spec_inheritance(spec, spec_label, spec_path, env)
@@ -4181,6 +5204,9 @@ def validate_spec_document(
         )
     )
     errors.extend(validate_spec_predicates(spec, spec_label, spec_path, env))
+    errors.extend(
+        validate_spec_numeric_expressions(spec, spec_label, spec_path, env)
+    )
     errors.extend(validate_spec_functions(spec, spec_label, spec_path, env))
 
     next_stack = set(spec_stack or ())
@@ -4248,8 +5274,17 @@ def validate_producing_specs(
             if isinstance(types, dict) and types:
                 for field in sorted(types, key=str):
                     errors.append(
-                        f"ERROR: {path}.types.{field}: field type is already "
-                        "supplied by the producing specification"
+                        validation_diagnostic(
+                            f"{path}.types.{field}",
+                            'redundant_field_type',
+                            'field type is already supplied by the producing '
+                            'specification',
+                            context={
+                                'dataset': dataset_id,
+                                'field': field,
+                                'type': types[field],
+                            },
+                        )
                     )
             else:
                 errors.append(
@@ -4389,7 +5424,223 @@ def validate_expected_resolved_fixture(
     return []
 
 
-def validate_examples_structure(root: Path, env, warnings=None):
+def load_validation_manifest(root: Path):
+    path = root / 'yaml' / 'examples' / 'validation-manifest.yaml'
+    if not path.is_file():
+        if not validation_phase_contracts(root):
+            return {'version': '1.0', 'fixtures': {}}, []
+        return None, [
+            f"ERROR: {path.relative_to(root)}: validation manifest is missing"
+        ]
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            manifest = yaml.load(handle, Loader=UniqueKeyLoader)
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        return None, [f"ERROR: {path.relative_to(root)}: {exc}"]
+    return manifest, []
+
+
+def validation_phase_contracts(root: Path):
+    contracts = {}
+    examples_dir = root / 'yaml' / 'examples'
+    if not examples_dir.is_dir():
+        return contracts
+    for example_dir in sorted(examples_dir.glob('negative-*')):
+        error_path = example_dir / 'expected' / 'error.yaml'
+        if not error_path.is_file():
+            continue
+        try:
+            with open(error_path, 'r', encoding='utf-8') as handle:
+                contract = yaml.load(handle, Loader=UniqueKeyLoader)
+        except (OSError, UnicodeError, yaml.YAMLError):
+            continue
+        if (
+            isinstance(contract, dict)
+            and contract.get('phase') == 'validation'
+        ):
+            contracts[example_dir.name] = contract
+    return contracts
+
+
+def validate_validation_manifest(root: Path, manifest):
+    errors = []
+    label = 'yaml/examples/validation-manifest.yaml'
+    if not isinstance(manifest, dict):
+        return [f"ERROR: {label}: expected a mapping"]
+    if manifest.get('version') != '1.0':
+        errors.append(f"ERROR: {label}.version: expected '1.0'")
+    unknown_root = sorted(set(manifest) - {'version', 'fixtures'})
+    for field in unknown_root:
+        errors.append(f"ERROR: {label}.{field}: unknown field")
+    fixtures = manifest.get('fixtures')
+    if not isinstance(fixtures, dict):
+        errors.append(f"ERROR: {label}.fixtures: expected a mapping")
+        return errors
+
+    contracts = validation_phase_contracts(root)
+    missing = sorted(set(contracts) - set(fixtures))
+    stale = sorted(set(fixtures) - set(contracts))
+    for name in missing:
+        errors.append(
+            f"ERROR: {label}.fixtures: missing validation fixture {name!r}"
+        )
+    for name in stale:
+        errors.append(
+            f"ERROR: {label}.fixtures.{name}: stale or non-validation fixture"
+        )
+
+    for name in sorted(set(fixtures) & set(contracts)):
+        entry = fixtures[name]
+        path = f"{label}.fixtures.{name}"
+        if not isinstance(entry, dict):
+            errors.append(f"ERROR: {path}: expected a mapping")
+            continue
+        unknown = sorted(
+            set(entry)
+            - {'rule', 'condition', 'spec_paths', 'validator', 'blocked_by'}
+        )
+        for field in unknown:
+            errors.append(f"ERROR: {path}.{field}: unknown field")
+        rule = entry.get('rule')
+        condition = entry.get('condition')
+        spec_paths = entry.get('spec_paths')
+        contract = contracts[name]
+        if not isinstance(rule, str) or re.fullmatch(r'R[0-9]{3}', rule) is None:
+            errors.append(f"ERROR: {path}.rule: expected a rule id")
+        registration = VALIDATION_CONDITION_REGISTRY.get((rule, condition))
+        if registration is None:
+            errors.append(
+                f"ERROR: {path}.condition: unregistered condition "
+                f"{condition!r} for {rule!r}"
+            )
+        elif contract.get('phase') not in registration['allowed_phases']:
+            errors.append(
+                f"ERROR: {path}.condition: condition {condition!r} is not "
+                f"allowed during phase {contract.get('phase')!r}"
+            )
+        if not (
+            isinstance(spec_paths, list)
+            and spec_paths
+            and len(spec_paths) == len(set(spec_paths))
+            and all(isinstance(item, str) and item for item in spec_paths)
+        ):
+            errors.append(
+                f"ERROR: {path}.spec_paths: expected unique non-empty paths"
+            )
+        if condition != contract.get('condition'):
+            errors.append(
+                f"ERROR: {path}.condition: does not match expected/error.yaml"
+            )
+        if spec_paths != contract.get('spec_paths'):
+            errors.append(
+                f"ERROR: {path}.spec_paths: do not match expected/error.yaml"
+            )
+        required_context = (
+            registration['required_context']
+            if registration is not None
+            else set()
+        )
+        context = contract.get('context', {})
+        if not isinstance(context, dict):
+            context = {}
+        absent = sorted(required_context - set(context))
+        if absent:
+            errors.append(
+                f"ERROR: {path}: expected/error.yaml context is missing "
+                f"{absent!r}"
+            )
+
+        has_validator = 'validator' in entry
+        has_blocker = 'blocked_by' in entry
+        if has_validator == has_blocker:
+            errors.append(
+                f"ERROR: {path}: declare exactly one of validator or "
+                'blocked_by'
+            )
+        if has_validator and not (
+            isinstance(entry['validator'], str)
+            and re.fullmatch(
+                r'[a-z][a-z0-9]*(?:_[a-z0-9]+)*', entry['validator']
+            )
+        ):
+            errors.append(f"ERROR: {path}.validator: expected snake case")
+        if has_blocker and not (
+            isinstance(entry['blocked_by'], str)
+            and re.fullmatch(r'#[1-9][0-9]*', entry['blocked_by'])
+        ):
+            errors.append(
+                f"ERROR: {path}.blocked_by: expected a GitHub issue '#N'"
+            )
+    return errors
+
+
+def diagnostic_matches_path(diagnostic, spec_labels, expected_path):
+    actual = diagnostic.path
+    for spec_label in spec_labels:
+        prefix = f"{spec_label}."
+        if actual.startswith(prefix):
+            actual = actual[len(prefix):]
+            break
+    return (
+        actual == expected_path
+        or actual.startswith(expected_path + '.')
+        or actual.startswith(expected_path + '[')
+    )
+
+
+def validate_registered_fixture_diagnostics(
+    name, entry, spec_errors, spec_labels
+):
+    expected_condition = entry['condition']
+    expected_paths = entry['spec_paths']
+    matches = {path: [] for path in expected_paths}
+    expected_ids = set()
+    for diagnostic in spec_errors:
+        if not isinstance(diagnostic, ValidationDiagnostic):
+            continue
+        if diagnostic.condition != expected_condition:
+            continue
+        for expected_path in expected_paths:
+            if diagnostic_matches_path(
+                diagnostic, spec_labels, expected_path
+            ):
+                matches[expected_path].append(diagnostic)
+                expected_ids.add(id(diagnostic))
+
+    manifest_path = f"yaml/examples/validation-manifest.yaml.fixtures.{name}"
+    if 'blocked_by' in entry:
+        if all(matches.values()):
+            return [
+                f"ERROR: {manifest_path}.blocked_by: stale block; "
+                f"{expected_condition!r} is emitted at every declared path"
+            ]
+        return [
+            error for error in spec_errors
+            if (
+                not isinstance(error, ValidationDiagnostic)
+                or id(error) not in expected_ids
+            )
+        ]
+
+    errors = []
+    for expected_path, diagnostics in matches.items():
+        if not diagnostics:
+            errors.append(
+                f"ERROR: {manifest_path}.spec_paths: condition "
+                f"{expected_condition!r} was not emitted at "
+                f"{expected_path!r}"
+            )
+    errors.extend(
+        error for error in spec_errors
+        if (
+            not isinstance(error, ValidationDiagnostic)
+            or id(error) not in expected_ids
+        )
+    )
+    return errors
+
+
+def validate_examples_structure(root: Path, env, warnings=None, manifest=None):
     errors = []
     if warnings is None:
         warnings = []
@@ -4400,10 +5651,15 @@ def validate_examples_structure(root: Path, env, warnings=None):
     if not examples_dir.exists():
         return errors
 
+    manifest_fixtures = (
+        manifest.get('fixtures', {}) if isinstance(manifest, dict) else {}
+    )
     for ex_dir in sorted(examples_dir.iterdir()):
         if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
             continue
 
+        example_errors = []
+        spec_labels = []
         for spec_path in example_spec_paths(ex_dir):
             try:
                 with open(spec_path, 'r', encoding='utf-8') as f:
@@ -4412,6 +5668,7 @@ def validate_examples_structure(root: Path, env, warnings=None):
                 continue
 
             spec_label = f"{ex_dir.name}/{spec_path.name}"
+            spec_labels.append(spec_label)
             is_negative = ex_dir.name.startswith('negative-')
             spec_errors = validate_spec_document(
                 spec, spec_label, spec_path, env
@@ -4425,60 +5682,62 @@ def validate_examples_structure(root: Path, env, warnings=None):
                 )
                 continue
 
-            error_yaml_path = ex_dir / 'expected' / 'error.yaml'
-            if not error_yaml_path.exists():
-                errors.extend(spec_errors)
-                continue
+            example_errors.extend(spec_errors)
 
-            try:
-                with open(error_yaml_path, 'r', encoding='utf-8') as f:
-                    err_spec = yaml.load(f, Loader=UniqueKeyLoader)
-                if not (
-                    isinstance(err_spec, dict)
-                    and err_spec.get('phase') == 'validation'
-                ):
-                    errors.extend(spec_errors)
-                    continue
+        if not ex_dir.name.startswith('negative-'):
+            continue
 
-                expected_paths = err_spec.get('spec_paths', [])
-                if not isinstance(expected_paths, list):
-                    expected_paths = [expected_paths]
+        error_yaml_path = ex_dir / 'expected' / 'error.yaml'
+        if not error_yaml_path.exists():
+            errors.extend(example_errors)
+            continue
 
-                filtered_errors = []
-                matched_errors = []
-                for err in spec_errors:
-                    parts = err.split(': ', 2)
-                    if len(parts) < 2:
-                        filtered_errors.append(err)
-                        continue
-                    path_part = parts[1]
-                    prefix = f"{spec_label}."
-                    norm_path = (
-                        path_part[len(prefix):]
-                        if path_part.startswith(prefix)
-                        else path_part
-                    )
-                    path_matches = any(
-                        norm_path == expected_path
-                        or norm_path.startswith(f"{expected_path}.")
-                        or norm_path.startswith(f"{expected_path}[")
-                        for expected_path in expected_paths
-                    )
-                    if path_matches:
-                        matched_errors.append(
-                            parts[2] if len(parts) > 2 else ''
-                        )
-                    else:
-                        filtered_errors.append(err)
-                errors.extend(filtered_errors)
-                errors.extend(
-                    check_declared_validation_error(
-                        err_spec, matched_errors, spec_label,
-                        error_yaml_path.relative_to(root),
-                    )
+        try:
+            with open(error_yaml_path, 'r', encoding='utf-8') as f:
+                err_spec = yaml.load(f, Loader=UniqueKeyLoader)
+        except Exception:
+            errors.extend(example_errors)
+            continue
+        if not (
+            isinstance(err_spec, dict)
+            and err_spec.get('phase') == 'validation'
+        ):
+            errors.extend(example_errors)
+            continue
+
+        entry = manifest_fixtures.get(ex_dir.name)
+        if isinstance(entry, dict):
+            errors.extend(
+                validate_registered_fixture_diagnostics(
+                    ex_dir.name, entry, example_errors, spec_labels
                 )
-            except Exception:
-                errors.extend(spec_errors)
+            )
+            continue
+
+        # Compatibility path for focused unit tests without a repository
+        # validation manifest.
+        expected_paths = err_spec.get('spec_paths', [])
+        if not isinstance(expected_paths, list):
+            expected_paths = [expected_paths]
+        for err in example_errors:
+            parts = err.split(': ', 2)
+            if len(parts) < 2:
+                errors.append(err)
+                continue
+            path_part = parts[1]
+            norm_path = path_part
+            for spec_label in spec_labels:
+                prefix = f"{spec_label}."
+                if norm_path.startswith(prefix):
+                    norm_path = norm_path[len(prefix):]
+                    break
+            if not any(
+                norm_path == expected_path
+                or norm_path.startswith(f"{expected_path}.")
+                or norm_path.startswith(f"{expected_path}[")
+                for expected_path in expected_paths
+            ):
+                errors.append(err)
 
     return errors
 
@@ -5167,7 +6426,17 @@ def check_yaml_files(root: Path):
         errors.extend(environment_schema_errors)
         if environment_schema_errors:
             environment_schema = None
-    errors.extend(validate_examples_structure(root, env, warnings))
+    validation_manifest, manifest_load_errors = load_validation_manifest(root)
+    errors.extend(manifest_load_errors)
+    if validation_manifest is not None:
+        errors.extend(
+            validate_validation_manifest(root, validation_manifest)
+        )
+    errors.extend(
+        validate_examples_structure(
+            root, env, warnings, validation_manifest
+        )
+    )
     errors.extend(
         validate_repository_function_fingerprints(
             root, environment_schema
