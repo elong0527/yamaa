@@ -1,0 +1,9 @@
+phase: ingest
+condition: field_parse_failed
+spec_paths:
+  - datasets.DM.types.AGE
+context:
+  dataset: DM
+  field: AGE
+  type: int
+  value: "NA"

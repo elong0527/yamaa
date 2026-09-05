@@ -1,0 +1,29 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: {path: input/dm.csv, types: {AGE: int}}
+base: DM
+keys: [STUDYID, USUBJID]
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation:
+      source: DM.AGE

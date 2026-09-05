@@ -78,9 +78,17 @@ The validation ensures:
    `expected/error.yaml`. Error contracts use the closed phase vocabulary,
    snake-case conditions, existing specification paths, and an optional
    mapping context.
-6. **CSV consistency**: Input and expected CSV files must have unique,
-   non-empty headers and a consistent field count. Expected output headers
-   must match exactly the `output.columns` sequence declared by the
+6. **CSV consistency**: Every input and expected CSV is read under R023's
+   source profile, which preserves quoting, so a bare empty field stays
+   distinct from a quoted empty one rather than being normalized to the same
+   text. A fixture must decode as UTF-8, carry no byte-order mark, terminate
+   its records with `U+000A` or `U+000D U+000A`, close every quoted field,
+   name each field of a unique, non-empty header, and carry the header's
+   field count in every record. A negative example may carry the fixture that
+   provokes the source condition its `expected/error.yaml` declares, and must
+   actually provoke it: a malformed fixture no example declares is an error,
+   and so is a declared source condition no fixture reports. Expected output
+   headers must match exactly the `output.columns` sequence declared by the
    specification. `output.path` names the file the specification produces and
    its extension must be one R020 maps; the expected artifact carries that
    name. An artifact whose path resolves to the `csv` profile must also carry
