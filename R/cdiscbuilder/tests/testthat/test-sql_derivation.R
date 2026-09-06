@@ -34,3 +34,18 @@ test_that("execute_closest works correctly", {
   )
   expect_equal(res, c("120", "130"))
 })
+
+test_that("build_aggregation_sql builds closest marker", {
+  sql <- cdiscbuilder:::.build_aggregation_sql(
+    "VS.VSSTRESN",
+    list(function_ = "closest", target = "TARGET_DATE"),
+    NULL,
+    "USUBJID"
+  )
+
+  expect_equal(
+    grepl("CLOSEST:VS.VSSTRESN:TARGET_DATE:", sql, fixed = TRUE),
+    TRUE
+  )
+  expect_equal(grepl("GROUP BY USUBJID", sql, fixed = TRUE), TRUE)
+})

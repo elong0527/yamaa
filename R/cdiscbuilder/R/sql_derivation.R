@@ -328,7 +328,7 @@ NULL
   } else if (func == "closest") {
     target <- agg_spec$target
     if (is.null(target)) stop("'closest' aggregation requires 'target' field")
-    paste0(
+    agg_expr <- paste0(
       "CLOSEST:", source_col, ":", target, ":",
       if (!is.null(filter_expr)) filter_expr else ""
     )
