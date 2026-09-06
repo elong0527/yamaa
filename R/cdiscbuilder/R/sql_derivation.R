@@ -328,10 +328,13 @@ NULL
   } else if (func == "closest") {
     target <- agg_spec$target
     if (is.null(target)) stop("'closest' aggregation requires 'target' field")
-    agg_expr <- paste0(
+    # Return the bare marker: .execute_sql() dispatches to .execute_closest()
+    # only when the string starts with "CLOSEST:", so it must not be wrapped
+    # in a SELECT statement here.
+    return(paste0(
       "CLOSEST:", source_col, ":", target, ":",
       if (!is.null(filter_expr)) filter_expr else ""
-    )
+    ))
   } else {
     stop("Unknown aggregation function: ", func)
   }
