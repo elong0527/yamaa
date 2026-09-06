@@ -113,11 +113,13 @@ build_adam_dataset <- function(spec_yaml_path, source_data) {
         }
       } else if (!is.null(derivation$function_)) {
         fn_name <- derivation$function_
-        fn <- try(get(fn_name, mode = "function"), silent = TRUE)
-        if (!inherits(fn, "try-error")) {
-          # In complete port, arguments need to be mapped
-          series <- rep(NA, nrow(target_df))
+        if (!exists(fn_name, mode = "function")) {
+          stop("Unable to resolve function: ", fn_name)
         }
+        fn <- get(fn_name, mode = "function")
+        series <- fn()
+      } else {
+        stop("Unsupported derivation operation for column: ", col_name)
       }
     }
     series <- .apply_adam_mapping(series, col_spec)

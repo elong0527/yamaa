@@ -34,3 +34,16 @@ test_that("execute_closest works correctly", {
   )
   expect_equal(res, c("120", "130"))
 })
+
+test_that("build_aggregation_sql returns a dispatchable closest marker", {
+  sql <- cdiscbuilder:::.build_aggregation_sql(
+    "VS.VSSTRESN",
+    list(function_ = "closest", target = "TARGET_DATE"),
+    NULL,
+    "USUBJID"
+  )
+
+  # .execute_sql() routes to .execute_closest() only on the bare marker.
+  expect_equal(sql, "CLOSEST:VS.VSSTRESN:TARGET_DATE:")
+  expect_equal(startsWith(sql, "CLOSEST:"), TRUE)
+})

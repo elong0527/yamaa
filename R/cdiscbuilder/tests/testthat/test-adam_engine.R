@@ -56,3 +56,57 @@ columns:
 
   unlink(tmp_file)
 })
+
+test_that("build_adam_dataset invokes function derivations", {
+  function_name <- ".issue180_adam_values"
+  assign(
+    function_name,
+    function() c("derived-S1", "derived-S2"),
+    envir = .GlobalEnv
+  )
+  on.exit(rm(list = function_name, envir = .GlobalEnv), add = TRUE)
+
+  source_data <- list(
+    ADSL = data.frame(
+      USUBJID = c("S1", "S2"),
+      stringsAsFactors = FALSE
+    )
+  )
+  yaml_content <- '
+domain: ADSL
+key: ["USUBJID"]
+data_dependency:
+  - adam_variable: "USUBJID"
+    sdtm_data: "ADSL"
+columns:
+  - name: "RESULT"
+    derivation:
+      function_: ".issue180_adam_values"
+  '
+  tmp_file <- tempfile(fileext = ".yaml")
+  on.exit(unlink(tmp_file), add = TRUE)
+  writeLines(yaml_content, tmp_file)
+
+  res <- build_adam_dataset(tmp_file, source_data)
+
+  expect_equal(
+    res,
+    data.frame(
+      USUBJID = c("S1", "S2"),
+      RESULT = c("derived-S1", "derived-S2"),
+      stringsAsFactors = FALSE
+    )
+  )
+
+  writeLines(
+    sub(
+      ".issue180_adam_values", ".issue180_missing", yaml_content,
+      fixed = TRUE
+    ),
+    tmp_file
+  )
+  expect_error(
+    build_adam_dataset(tmp_file, source_data),
+    "Unable to resolve function: .issue180_missing"
+  )
+})
