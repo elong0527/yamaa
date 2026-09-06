@@ -4,7 +4,7 @@ version: "1.0"
 
 column_type:
     type: str
-    values: [str, int, float, date, datetime]
+    values: [str, int, float, date, time, datetime]
 
 literal_value:
     type: [str, int, float, bool, "null"]
@@ -38,13 +38,16 @@ function_parameter_name:
 
 function_param_type:
     type: str
-    values: [str, int, float, bool, date, datetime]
+    values: [str, int, float, bool, date, time, datetime]
 
 function_string_literal_class:
     - literal: {type: str, required: true}
 
 function_date_literal_class:
     - date: {type: str, required: true}
+
+function_time_literal_class:
+    - time: {type: str, required: true}
 
 function_datetime_literal_class:
     - datetime: {type: str, required: true}
@@ -53,4 +56,5 @@ function_value:
     type:
         - literal_value
         - function_date_literal_class
+        - function_time_literal_class
         - function_datetime_literal_class

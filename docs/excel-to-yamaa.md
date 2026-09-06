@@ -134,7 +134,7 @@ wording, but the eleven jobs are the same.
 |---|---|---|
 | `Variable Name` | `column.name` | |
 | `Variable Label` | `column.label` | |
-| `Type` (Char / Num) | `column.type` | One closed set of five: `str` `int` `float` `date` `datetime` |
+| `Type` (Char / Num) | `column.type` | One closed set of six: `str` `int` `float` `date` `time` `datetime` |
 | `Variable Type` (SDTM / SUPP) | *no field* -- it is a **second** `spec.yaml` | `domain` fixes one dataset per specification, so SUPP qualifiers are their own spec |
 | `Length` | a `max_length` verification | It is a constraint, so it becomes an executed one; **Length is not a type**. Add `column.metadata.length` when define.xml needs to show it |
 | Significant digits / display format | *project setting* | R011: decimal places belong to the project, not the spec |

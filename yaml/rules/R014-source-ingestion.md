@@ -94,7 +94,7 @@ instead of creating two authorities for one type.
 
 The stored cells are still delimited text. After recognizing missing values,
 ingestion applies the `str` row of R011's conversion table to every non-missing
-cell. In particular, a producer column declared `date` or `datetime` uses
+cell. In particular, a producer column declared `date`, `time`, or `datetime` uses
 R016's lexical grammar and representations, exactly as an inline `types`
 declaration or a column conversion does; the workflow link does not enable a
 runtime's more permissive temporal parser.
@@ -122,7 +122,7 @@ extract.
 A declared field type is applied to the stored text by the `str` row of R011's
 conversion table, which is the same parsing a `str` column uses when it reaches
 a declared type. `int` and `float` use R011's numeric text parsing, including
-its non-finite normalization; `date` and `datetime` accept exactly the lexical
+its non-finite normalization; `date`, `time`, and `datetime` accept exactly the lexical
 forms R016 fixes. A value that does not parse fails the run.
 
 An ingestion failure is not a conversion failure. `conversion_failure` is

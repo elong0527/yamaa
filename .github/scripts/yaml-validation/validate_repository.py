@@ -577,6 +577,16 @@ def tokenize_predicate(text):
 
 
 def valid_temporal_literal(kind, value):
+    if kind == 'time':
+        if re.fullmatch(r'[0-9]{2}:[0-9]{2}(?::[0-9]{2})?', value) is None:
+            return False
+        completed = value if len(value) == 8 else value + ':00'
+        try:
+            dt.datetime.strptime(completed, '%H:%M:%S')
+            return True
+        except ValueError:
+            return False
+
     if kind == 'date':
         if re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', value) is None:
             return False
@@ -792,7 +802,11 @@ class PredicateParser:
                 'value': None,
                 'position': token[2],
             }
-        if self.keyword('DATE') or self.keyword('DATETIME'):
+        if (
+            self.keyword('DATE')
+            or self.keyword('DATETIME')
+            or self.keyword('TIME')
+        ):
             value_type = self.advance()[1].lower()
             text_token = self.require(
                 'STRING', f'{value_type.upper()} requires a string literal'
@@ -852,7 +866,7 @@ def predicate_types_comparable(left, right):
         return True
     if left in {'int', 'float'} and right in {'int', 'float'}:
         return True
-    return left == right and left in {'str', 'date', 'datetime'}
+    return left == right and left in {'str', 'date', 'datetime', 'time'}
 
 
 def validate_predicate_types(ast, resolver):
@@ -3553,7 +3567,7 @@ def function_value_type(value):
     if isinstance(value, dict) and len(value) == 1:
         kind, text = next(iter(value.items()))
         if (
-            kind in {'date', 'datetime'}
+            kind in {'date', 'time', 'datetime'}
             and isinstance(text, str)
             and valid_temporal_literal(kind, text)
         ):
@@ -3584,6 +3598,10 @@ def canonical_function_value(value, declared_type):
         encoded = str(value)
     elif actual_type == 'bool':
         encoded = value
+    elif actual_type == 'time':
+        encoded = value['time']
+        if len(encoded) == 5:
+            encoded += ':00'
     elif actual_type in {'date', 'datetime'}:
         encoded = value[actual_type]
     else:
@@ -4890,7 +4908,8 @@ def specification_column_types(spec):
         if (
             isinstance(column, dict)
             and isinstance(column.get('name'), str)
-            and column.get('type') in {'str', 'int', 'float', 'date', 'datetime'}
+            and column.get('type')
+            in {'str', 'int', 'float', 'date', 'time', 'datetime'}
         )
     }
 
@@ -4958,7 +4977,8 @@ def dataset_type_catalog(spec, spec_path, env=None):
             for field, value_type in declared_types.items():
                 if (
                     isinstance(field, str)
-                    and value_type in {'str', 'int', 'float', 'date', 'datetime'}
+                    and value_type
+                    in {'str', 'int', 'float', 'date', 'time', 'datetime'}
                 ):
                     fields[field] = value_type
         catalog[dataset_id] = fields
@@ -6565,6 +6585,14 @@ def validate_expression_static_semantics(expression, path, context):
         'to_date': {
             'source': ({'datetime'}, 'datetime'),
         },
+        'to_datetime': {
+            'date': ({'date'}, 'date'),
+            'time': ({'time'}, 'time'),
+        },
+        'datetime_diff': {
+            'start': ({'datetime'}, 'datetime'),
+            'end': ({'datetime'}, 'datetime'),
+        },
     }
     if keyword in temporal_inputs and isinstance(payload, dict):
         operation_path = f"{path}.{keyword}"
@@ -7954,6 +7982,7 @@ def canonical_float_text(value: str, decimals=None):
 
 
 CANONICAL_DATE = re.compile(r'(\d{4})-(\d{2})-(\d{2})')
+CANONICAL_TIME = re.compile(r'(\d{2}):(\d{2}):(\d{2})')
 CANONICAL_DATETIME = re.compile(
     r'(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})'
 )
@@ -7975,6 +8004,16 @@ def canonical_temporal_text(value: str, declared: str):
             dt.date(*(int(part) for part in match.groups()))
         except ValueError as exc:
             return f'not a date on the calendar: {exc}'
+        return None
+
+    if declared == 'time':
+        match = CANONICAL_TIME.fullmatch(value)
+        if match is None:
+            return 'expected hh:mm:ss'
+        try:
+            dt.time(*(int(part) for part in match.groups()))
+        except ValueError as exc:
+            return f'not a time of day: {exc}'
         return None
 
     match = CANONICAL_DATETIME.fullmatch(value)
@@ -8041,7 +8080,7 @@ def validate_csv_artifact(csv_path: Path, label: str, spec):
                         f"ERROR: {label}: record {number}: {name} is not "
                         f"R020's float text: {text!r}, {problem}"
                     )
-            elif declared in ('date', 'datetime'):
+            elif declared in ('date', 'time', 'datetime'):
                 problem = canonical_temporal_text(text, declared)
                 if problem is not None:
                     errors.append(

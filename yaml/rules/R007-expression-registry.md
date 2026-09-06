@@ -23,8 +23,8 @@ operation is documented beside its registry entry. Cross-cutting behavior stays
 in its owning rule: R002 and R003 for source binding and joins, R008 for local
 handlers, R010 for `compute`, R011 for column types, R012 for string templates,
 R013 for aggregate reduction, R014 for the type a source field carries, R015
-for a record selected once and read by several columns, R016 for dates and
-datetimes, R018 for project functions, and R004 for predicates.
+for a record selected once and read by several columns, R016 for dates, times,
+and datetimes, R018 for project functions, and R004 for predicates.
 R019 owns string values, casing, equality, and order.
 
 ## Registration
@@ -58,7 +58,7 @@ Fields typed `numeric_expression`, `string_template`, and
 `aggregate_expression` are leaves whose identifiers R010, R012, and R013
 resolve. Plain strings are values unless their schema field is typed as
 `variable`, `function_arg`, `sql`, or `string_template`. R018 closes
-`function_arg`: a string is a variable, while string, date, and datetime
+`function_arg`: a string is a variable, while string, date, time, and datetime
 literals use their explicit tagged leaf forms.
 
 ## Evaluation kinds
@@ -117,8 +117,8 @@ makes the result total, so ordering has no undefined case and a row's
 neighbours are determined.
 
 Non-missing values use the order their type owns: numeric order under R010,
-text order under R019, and chronological order for `date` and `datetime` under
-R016.
+text order under R019, and chronological order for `date`, `time`, and
+`datetime` under R016.
 
 That tie-break settles positions, not equality. `row_number`, `row_value`,
 `previous_non_missing`, and right-side selection read the positions themselves,
@@ -142,7 +142,8 @@ runtime types:
 - `compute` requires every identifier in its expression to be numeric;
 - `str_extract`, `str_concat`, `str_template`, `str_upper`, and `str_lower`
   require string sources;
-- `date_diff`, `study_day`, `date_impute`, `date_precision`, and `to_date`
+- `date_diff`, `study_day`, `date_impute`, `date_precision`, `to_date`,
+  `to_datetime`, and `datetime_diff`
   state their own input types in R016;
 - `greatest` and `least` require mutually comparable `sources`;
 - `row_value` requires an integer `offset`; it and `previous_non_missing`

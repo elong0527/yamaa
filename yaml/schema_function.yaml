@@ -26,5 +26,6 @@ function_arg:
         - "null"
         - function_string_literal_class
         - function_date_literal_class
+        - function_time_literal_class
         - function_datetime_literal_class
     description: Named variable or scalar literal leaf; arbitrary nesting is not allowed.

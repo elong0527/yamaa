@@ -77,9 +77,10 @@ first or the last.
 a string comparison while both sides look like `"2024-01-10"` -- until one is
 `"2024-1-10"`, or a partial date `"2024-01"`. And a date is a number in SAS, a
 `Date` in R, and a `datetime64` in Python, each with its own behavior when a
-missing value enters a comparison. R016 therefore owns both temporal types
-completely: which text becomes a date, how two of them order, what canonical
-text they are written back as, and which operations may read them.
+missing value enters a comparison. R016 therefore owns all temporal types
+completely: which text becomes each one, how two values of one type order,
+what canonical text they are written back as, and which operations may read
+them.
 
 #### "Nobody can read it" is precise
 

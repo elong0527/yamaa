@@ -22,7 +22,7 @@ their order, which rows it holds, and the order those rows leave in; nothing
 here can change any of them. R011 owns what value a column holds and the text a
 value carries when it is converted to `str`, and defers to this rule the one
 display rounding that happens after every calculation. R016 owns the canonical
-text of a `date` and a `datetime`. R019 owns the contents of a string, the
+text of a `date`, `time`, and `datetime`. R019 owns the contents of a string, the
 failure of ill-formed encoded text, and the order of two strings.
 
 R014 owns the other direction. It states what a stored field means when a
@@ -144,6 +144,7 @@ collected empty string, and the first row's is missing.
 | `int` | its decimal digits, with a leading `U+002D` when negative |
 | `float` | R011's float text, or the fixed-point form below |
 | `date` | R016's canonical `date` text |
+| `time` | R016's canonical `time` text |
 | `datetime` | R016's canonical `datetime` text |
 
 An `int` is written without a leading `U+002B`, without digit grouping, and
@@ -165,6 +166,7 @@ Each declared type maps to exactly one Parquet physical and logical type.
 | `int` | `INT64` | none |
 | `float` | `DOUBLE` | none |
 | `date` | `INT32` | `Date` |
+| `time` | `INT64` | `Time`, microseconds, not adjusted to UTC |
 | `datetime` | `INT64` | `Timestamp`, microseconds, not adjusted to UTC |
 
 The schema's fields are the names in `output.columns`, in that order. Every
@@ -179,8 +181,9 @@ container instead of by a convention.
 
 ### Temporal values
 
-A `date` is the count of days from 1970-01-01, and a `datetime` the count of
-microseconds from 1970-01-01T00:00:00 on the same wall clock the value names.
+A `date` is the count of days from 1970-01-01. A `time` is the count of
+microseconds since local midnight. A `datetime` is the count of microseconds
+from 1970-01-01T00:00:00 on the same wall clock the value names.
 
 R016's `datetime` is a reading on a wall clock and carries no zone and no
 offset, so its Timestamp is not adjusted to UTC and an implementation must not
@@ -190,10 +193,10 @@ still write and read this column so that the same wall clock survives; shifting
 a value into or out of a machine timezone changes it, and two runtimes that
 each shift by their own offset do not agree.
 
-A `datetime` is resolved to a whole second, so its microsecond part is always
-zero. Microseconds are chosen because the format offers no second unit and
-because both ecosystems' readers agree on this one; the finer resolution is
-never used.
+A `time` and `datetime` are resolved to a whole second, so their microsecond
+parts are always zero. Microseconds are chosen because the format offers no
+second unit and because both ecosystems' readers agree on this one; the finer
+resolution is never used.
 
 ### Determinism
 

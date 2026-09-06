@@ -24,7 +24,7 @@ the arithmetic that produces a numeric value in the first place. R014 owns the
 other end: which stored fields are structurally missing and what type a bound
 value carries before conversion or normalization is reached. It applies this
 rule's `str` row to a field's declared type, so text is parsed the same way
-wherever it is read. R016 owns both temporal types. What a `date` and a
+wherever it is read. R016 owns all temporal types. What a `date`, `time`, and
 `datetime` denote, the text each is read from and written back to, how two of
 them order, and which operations read them are stated there; the temporal
 cells below apply that rule rather than restating it. R018 owns the
@@ -51,7 +51,7 @@ R006 resolves the two without ambiguity.
 
 The schema vocabulary and the column vocabulary are not the same set. `str`,
 `int`, and `float` are spelled the same in both and mean the same runtime
-values. `date` and `datetime` are column types and not schema types. `bool`,
+values. `date`, `time`, and `datetime` are column types and not schema types. `bool`,
 `"null"`, `list`, and `dict` are schema types and not column types.
 
 ## Closed column vocabulary
@@ -64,15 +64,16 @@ values. `date` and `datetime` are column types and not schema types. `bool`,
 | `int` | A 64-bit signed integer, as defined by R010 |
 | `float` | An IEEE 754 binary64 value, as defined by R010 |
 | `date` | A calendar date, as defined by R016 |
+| `time` | A local time of day, as defined by R016 |
 | `datetime` | A local civil datetime, as defined by R016 |
 
 Every type additionally admits the missing value.
 
-`date` and `datetime` are the two temporal types, and R016 defines both: what
-each admits, the text it is read from and written back to, how two of them
+`date`, `time`, and `datetime` are the temporal types, and R016 defines them:
+what each admits, the text it is read from and written back to, how two of them
 order, and which operations read them. This rule adds nothing to that
-definition. A value neither type admits is a `str` like any other, and ISO
-8601 text orders chronologically under R007 comparison.
+definition. A value none of these types admits is a `str` like any other, and
+ISO 8601 text orders chronologically under R007 comparison.
 
 There is no Boolean column type; a flag is a `str` column with an
 `allowed_values` verification, as the examples write it.
@@ -130,15 +131,16 @@ is not defined below fails rather than producing a substitute value.
 A table row is the runtime type of the value being converted and a table
 column is the declared type:
 
-| From | to `str` | to `int` | to `float` | to `date` | to `datetime` |
-|---|---|---|---|---|---|
-| missing | missing | missing | missing | missing | missing |
-| `str` | R019 identity | parse, then numeric to `int` | parse | R016 | R016 |
-| `int` | decimal text | identity | widen | fail | fail |
-| `float` | decimal text, see below | integral only | identity | fail | fail |
-| `date` | R016 | fail | fail | identity | fail |
-| `datetime` | R016 | fail | fail | fail | identity |
-| `bool` | fail | fail | fail | fail | fail |
+| From | to `str` | to `int` | to `float` | to `date` | to `time` | to `datetime` |
+|---|---|---|---|---|---|---|
+| missing | missing | missing | missing | missing | missing | missing |
+| `str` | R019 identity | parse, then numeric to `int` | parse | R016 | R016 | R016 |
+| `int` | decimal text | identity | widen | fail | fail | fail |
+| `float` | decimal text, see below | integral only | identity | fail | fail | fail |
+| `date` | R016 | fail | fail | identity | fail | fail |
+| `time` | R016 | fail | fail | fail | identity | fail |
+| `datetime` | R016 | fail | fail | fail | fail | identity |
+| `bool` | fail | fail | fail | fail | fail | fail |
 
 A missing value converts to missing in every type. Conversion is not attempted,
 so `conversion_failure` does not fire for a missing input and a missing result
@@ -155,7 +157,8 @@ A cell reading **R016** applies that rule: the text a temporal value is parsed
 from, the canonical text it is written back to, and the conversions it does
 not permit are all stated there. The collected precision a temporal value
 carries is stated there too, and canonical text carries the fields alone, so a
-`date` or `datetime` converted to `str` does not carry it. Naming the rule
+`date`, `time`, or `datetime` converted to `str` does not carry it. Naming the
+rule
 rather than repeating its grammar is what keeps the form a column conversion
 applies and the form any other reader applies from drifting apart.
 

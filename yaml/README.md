@@ -135,10 +135,12 @@ The version 1.0 input-shape audit covers every registered expression:
 | `str_template` | One closed string template over named variables (R012) |
 | `mapping_from` | One or more named sources paired by position with declared right-side key columns; exceptional results are literals |
 | `compute` | One closed numeric expression over named output columns and declared record-lookup fields (R010) |
-| `date_diff`, `study_day` | Named variable operands; `date_diff` declares which endpoints it counts |
+| `date_diff`, `study_day` | Named date operands; `date_diff` declares which endpoints it counts |
 | `date_impute` | One named source, an integer literal or a month-relative token for each imputed component, an optional minimum collected precision, and an optional named lower bound on the completed date; exceptional results are literals |
-| `date_precision` | One named source, either collected text or a temporal value; exceptional results are literals |
+| `date_precision` | One named source, either collected text or a `date` value; exceptional results are literals |
 | `to_date` | One named `datetime` source; no literals or nesting |
+| `to_datetime` | One named `date` and one named `time`; no literals or nesting |
+| `datetime_diff` | Two named `datetime` operands; returns signed whole seconds |
 | `coalesce` | Ordered named variables plus an optional literal default |
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
 | `row_number`, `rank`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |

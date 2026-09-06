@@ -66,6 +66,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adlb-shift-and-criteria`](adam-adlb-shift-and-criteria/) | classify a result, its shift from baseline, and one criterion |
 | [`adam-adlb-standardized-result`](adam-adlb-standardized-result/) | carry standardized results into analysis |
 | [`adam-adoe-study-eye`](adam-adoe-study-eye/) | tell the study eye from the fellow eye |
+| [`adam-adpc-sample-timing`](adam-adpc-sample-timing/) | derive sample timing |
 | [`adam-adqs-subscale-score`](adam-adqs-subscale-score/) | score a questionnaire subscale from its item records |
 | [`adam-adrs-best-overall-response`](adam-adrs-best-overall-response/) | select the best overall response |
 | [`adam-adrs-best-response-selection`](adam-adrs-best-response-selection/) | prepare assessments for best overall response |
@@ -117,6 +118,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-adlb-absolute-wbc-duplicate`](negative-adlb-absolute-wbc-duplicate/) | reject duplicate WBC inputs for an absolute differential |
 | [`negative-adlb-computed-parameter`](negative-adlb-computed-parameter/) | reject a parameter computed from the dataset being built |
 | [`negative-adlb-multiple-baseline-records`](negative-adlb-multiple-baseline-records/) | reject a subject with two baseline records for one parameter |
+| [`negative-adpc-invalid-time`](negative-adpc-invalid-time/) | reject a sample time outside the day |
 | [`negative-adrs-partial-response-after-complete-response`](negative-adrs-partial-response-after-complete-response/) | reject a partial response recorded after a complete response |
 | [`negative-adsl-cyclic-parent`](negative-adsl-cyclic-parent/) | reject a circular chain of shared definitions |
 | [`negative-adsl-inherited-output`](negative-adsl-inherited-output/) | reject an inherited artifact layout |
@@ -149,6 +151,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-date-impute-nonexistent-day`](negative-date-impute-nonexistent-day/) | reject an end date completed past the end of its month |
 | [`negative-date-impute-unknown-day-rule`](negative-date-impute-unknown-day-rule/) | reject a start date completed with an unrecognised day |
 | [`negative-date-precision-invalid-source`](negative-date-precision-invalid-source/) | reject a completeness flag read from text that is not a date |
+| [`negative-datetime-diff-date-source`](negative-datetime-diff-date-source/) | reject elapsed seconds from a date alone |
 | [`negative-datetime-zone-offset`](negative-datetime-zone-offset/) | reject an event start recorded against another clock |
 | [`negative-function-contract-mismatch`](negative-function-contract-mismatch/) | reject an unavailable project-routine contract |
 | [`negative-greatest-incomparable-sources`](negative-greatest-incomparable-sources/) | reject a last-known-alive date taken from a day number |
@@ -188,6 +191,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-str-extract-undeclared-group`](negative-str-extract-undeclared-group/) | reject a site identifier taken from an uncaptured part |
 | [`negative-sum-non-numeric-source`](negative-sum-non-numeric-source/) | reject a severity burden totalled from severity words |
 | [`negative-to-date-date-source`](negative-to-date-date-source/) | reject extracting a date from a date |
+| [`negative-to-datetime-text-time`](negative-to-datetime-text-time/) | reject a sample moment composed from unchecked text |
 | [`negative-types-unknown-field`](negative-types-unknown-field/) | reject a total over a field the source does not have |
 | [`negative-usubjid-exceeds-length`](negative-usubjid-exceeds-length/) | reject a subject identifier longer than the study permits |
 | [`negative-variable-nested-expression`](negative-variable-nested-expression/) | reject an uppercased country chosen inside the same step |

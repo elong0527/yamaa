@@ -22,4 +22,5 @@ are impossible; otherwise use `float`:
     source: LB.LBSTRESN
 ```
 
-The allowed column types are `str`, `int`, `float`, `date`, and `datetime`.
+The allowed column types are `str`, `int`, `float`, `date`, `time`, and
+`datetime`.

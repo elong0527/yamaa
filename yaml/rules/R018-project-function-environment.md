@@ -118,7 +118,7 @@ default is `{present: false}`. A present default is
 | `int` | `{type: "int", value: base-10-string}` |
 | finite `float` | `{type: "float", value: 16-lowercase-hex-big-endian-binary64-bits}` |
 | `bool` | `{type: "bool", value: JSON-Boolean}` |
-| `date` or `datetime` | `{type: type-name, value: R016-canonical-text}` |
+| `date`, `time`, or `datetime` | `{type: type-name, value: R016-canonical-text}` |
 
 R011's non-finite normalization runs before a default or other typed value is
 encoded, so this table has no non-finite representation.
@@ -158,7 +158,8 @@ A call argument is one of:
 - a named variable, written as a plain string;
 - an `int`, `float`, `bool`, or missing YAML scalar;
 - a string literal written as `{literal: text}`;
-- a date literal written as `{date: YYYY-MM-DD}`; or
+- a date literal written as `{date: YYYY-MM-DD}`;
+- a time literal written as `{time: hh:mm[:ss]}`; or
 - a datetime literal written as `{datetime: YYYY-MM-DDThh:mm[:ss]}`.
 
 The temporal text must be an R016 value. No argument may contain another

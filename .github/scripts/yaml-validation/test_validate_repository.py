@@ -222,6 +222,18 @@ class TestPredicateLanguage(unittest.TestCase):
         self.assertEqual(ast['kind'], 'or')
         self.assertEqual(errors, [])
 
+    def test_parses_and_compares_time_literal(self):
+        ast = VALIDATOR.parse_predicate("ATM = TIME '09:30'")
+
+        errors = VALIDATOR.validate_predicate_types(ast, {'ATM': 'time'}.get)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(ast['right']['type'], 'time')
+
+    def test_rejects_invalid_time_literal(self):
+        with self.assertRaises(VALIDATOR.PredicateError):
+            VALIDATOR.parse_predicate("ATM = TIME '24:00'")
+
     def test_rejects_syntax_outside_the_closed_grammar(self):
         invalid = [
             'VALUE != 1',
@@ -1167,6 +1179,21 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
 
         self.assertEqual(errors, [])
 
+    def test_function_arguments_accept_time_literals(self):
+        expression = {
+            'function': {
+                'name': 'sample_window',
+                'contract_version': '1.0.0',
+                'args': {'scheduled': {'time': '09:30'}},
+            }
+        }
+
+        errors = VALIDATOR.validate_type(
+            expression, ['expression'], self.spec_schema, 'derivation'
+        )
+
+        self.assertEqual(errors, [])
+
     def test_function_arguments_do_not_admit_nested_expressions(self):
         expression = {
             'function': {
@@ -1406,6 +1433,15 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
         self.assertEqual(
             VALIDATOR.canonical_function_value(1.0, 'float'),
             {'type': 'float', 'value': '3ff0000000000000'},
+        )
+
+    def test_time_function_value_uses_canonical_seconds(self):
+        value = {'time': '09:30'}
+
+        self.assertEqual(VALIDATOR.function_value_type(value), 'time')
+        self.assertEqual(
+            VALIDATOR.canonical_function_value(value, 'time'),
+            {'type': 'time', 'value': '09:30:00'},
         )
 
     def test_non_finite_function_values_are_missing(self):
@@ -1898,6 +1934,21 @@ class TestSpecificationInheritance(unittest.TestCase):
 
 
 class TestTypeValidation(unittest.TestCase):
+    def test_time_is_a_column_and_function_parameter_type(self):
+        env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
+
+        self.assertEqual(schema_errors, [])
+        self.assertEqual(
+            VALIDATOR.validate_type('time', ['column_type'], env, 'type'),
+            [],
+        )
+        self.assertEqual(
+            VALIDATOR.validate_type(
+                'time', ['function_param_type'], env, 'param.type'
+            ),
+            [],
+        )
+
     def test_int_rejects_string(self):
         errors = VALIDATOR.validate_type(
             "not-an-int",
@@ -2182,6 +2233,58 @@ class TestToDateSchema(unittest.TestCase):
 
         self.assertIn("missing required field 'source'", missing_source[0])
         self.assertIn("unknown field 'timezone'", unknown_field[0])
+
+
+class TestToDatetimeSchema(unittest.TestCase):
+    def setUp(self):
+        self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
+        self.assertEqual(schema_errors, [])
+
+    def validate(self, payload):
+        return VALIDATOR.validate_type(
+            {"to_datetime": payload},
+            ["expression"],
+            self.env,
+            "spec.columns.ADTM.derivation",
+        )
+
+    def test_accepts_named_date_and_time_operands(self):
+        self.assertEqual(self.validate({"date": "ADT", "time": "ATM"}), [])
+
+    def test_rejects_missing_or_unknown_operands(self):
+        missing_time = self.validate({"date": "ADT"})
+        unknown_field = self.validate(
+            {"date": "ADT", "time": "ATM", "timezone": "UTC"}
+        )
+
+        self.assertIn("missing required field 'time'", missing_time[0])
+        self.assertIn("unknown field 'timezone'", unknown_field[0])
+
+
+class TestDatetimeDiffSchema(unittest.TestCase):
+    def setUp(self):
+        self.env, schema_errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
+        self.assertEqual(schema_errors, [])
+
+    def validate(self, payload):
+        return VALIDATOR.validate_type(
+            {"datetime_diff": payload},
+            ["expression"],
+            self.env,
+            "spec.columns.ELTM.derivation",
+        )
+
+    def test_accepts_named_start_and_end_operands(self):
+        self.assertEqual(self.validate({"start": "REFDTM", "end": "ADTM"}), [])
+
+    def test_rejects_missing_or_unknown_operands(self):
+        missing_end = self.validate({"start": "REFDTM"})
+        unknown_field = self.validate(
+            {"start": "REFDTM", "end": "ADTM", "unit": "minute"}
+        )
+
+        self.assertIn("missing required field 'end'", missing_end[0])
+        self.assertIn("unknown field 'unit'", unknown_field[0])
 
 
 class TestPreviousNonMissingSchema(unittest.TestCase):
@@ -4311,6 +4414,7 @@ class TestCsvProfile(unittest.TestCase):
                 '2024-01-01T08:00:00', 'datetime'
             )
         )
+        self.assertIsNone(VALIDATOR.canonical_temporal_text('08:00:00', 'time'))
         for value, kind in [
             ('2025-1-2', 'date'),
             ('2025-99-99', 'date'),
@@ -4321,6 +4425,9 @@ class TestCsvProfile(unittest.TestCase):
             ('2025-01-12T14:00:00.5', 'datetime'),
             ('2025-01-12T23:59:60', 'datetime'),
             ('2025-01-12', 'datetime'),
+            ('08:00', 'time'),
+            ('24:00:00', 'time'),
+            ('23:59:60', 'time'),
         ]:
             self.assertIsNotNone(
                 VALIDATOR.canonical_temporal_text(value, kind),

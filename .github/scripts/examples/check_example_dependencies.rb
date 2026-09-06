@@ -5,7 +5,9 @@ require "yaml"
 require_relative "example_specifications"
 
 IDENTIFIER = /[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/
-SQL_WORDS = Set.new(%w[AND BETWEEN FALSE IN IS LIKE NOT NULL OR TRUE UNKNOWN])
+SQL_WORDS = Set.new(
+  %w[AND BETWEEN DATE DATETIME ESCAPE FALSE IN IS LIKE NOT NULL OR TIME TRUE UNKNOWN]
+)
 
 def values(value)
   value.is_a?(Array) ? value : [value]
@@ -129,10 +131,16 @@ def expression_dependencies(expression, declared, lookup_sources)
         [payload["source"], payload["not_before"]], declared, lookup_sources
       )
     )
-  when "date_diff"
+  when "date_diff", "datetime_diff"
     dependencies.merge(
       variable_dependencies(
         [payload["start"], payload["end"]], declared, lookup_sources
+      )
+    )
+  when "to_datetime"
+    dependencies.merge(
+      variable_dependencies(
+        [payload["date"], payload["time"]], declared, lookup_sources
       )
     )
   when "study_day"
@@ -224,6 +232,8 @@ def expression_dependencies(expression, declared, lookup_sources)
           variable_dependencies(argument, declared, lookup_sources)
         )
       elsif argument.is_a?(Hash)
+        # R018 scalar literals carry no column dependencies.
+        next if argument.length == 1 && %w[date time datetime literal].include?(argument.keys.first)
         dependencies.merge(
           expression_dependencies(argument, declared, lookup_sources)
         )

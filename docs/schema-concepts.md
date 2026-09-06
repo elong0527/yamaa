@@ -113,7 +113,7 @@ roles:
 | Role | Written where | Vocabulary |
 |---|---|---|
 | **Schema descriptor keyword** | inside a descriptor in `schema*.yaml` | `str` `int` `float` `bool` `"null"` `list` `dict` plus named types |
-| **Declared column type** | `column.type` in your spec | `str` `int` `float` `date` `datetime` (closed) |
+| **Declared column type** | `column.type` in your spec | `str` `int` `float` `date` `time` `datetime` (closed) |
 | **Runtime value type** | **never written** | the type a value carries while it is evaluated |
 
 All three appear in the life of one column. Take `AGE`, written as
@@ -379,7 +379,7 @@ Two points that always come up:
 - **There is no `LOG`,** because its base differs between dialects. Write
   `LN(x)`, or `LN(x) / LN(b)`.
 
-### 2.5 Dates (R016 owns both temporal types)
+### 2.5 Temporal values (R016 owns all three temporal types)
 
 | Expression | What it does | ADaM variable |
 |---|---|---|
@@ -387,6 +387,9 @@ Two points that always come up:
 | `study_day` | CDISC study day -- the reference date is day 1 and **there is no day zero** | ADY, ASTDY |
 | `date_impute` | Complete a truncated ISO date | ASTDT |
 | `date_precision` | Report how much of the date the **collected text** carried: `D`, `M` or `Y` | Feeds ASTDTF |
+| `to_date` | Extract the date from a local datetime | ADT |
+| `to_datetime` | Compose a local datetime from one date and one time | ADTM |
+| `datetime_diff` | Signed whole seconds from one local datetime to another | ELTM |
 
 `date_impute` and `date_precision` read the same source; that pairing is the
 standard way to derive an imputation flag. See
@@ -420,8 +423,9 @@ Ordering carries two rules that are easy to miss (R007):
   means last under both `asc` and `desc`. SQL engines disagree here, so an
   implementation must apply the declared placement.
 - **Non-missing values use the order their type owns**: numeric under R010,
-  **code-point sequence** for `str` under R004, chronological for `date` and
-  `datetime` under R016. **Host locale collation must not be substituted.** For
+  **code-point sequence** for `str` under R004, chronological for `date`,
+  `time`, and `datetime` under R016. **Host locale collation must not be
+  substituted.** For
   values with accents, mixed case, or non-Latin script, this is what stops R
   and Python from producing two different orders.
 
@@ -519,8 +523,9 @@ Semantics worth stating out loud:
   no arbitrary keyword bag. Every optional parameter declares a `default` in
   the environment.
 - **`args` cannot nest an expression.** An argument is a variable name; an
-  `int`, `float`, `bool` or missing scalar; or one of three explicit literal
-  forms: `{literal: text}`, `{date: YYYY-MM-DD}`, `{datetime: ...}`. To pass a
+  `int`, `float`, `bool` or missing scalar; or one of four explicit literal
+  forms: `{literal: text}`, `{date: YYYY-MM-DD}`, `{time: hh:mm[:ss]}`, or
+  `{datetime: ...}`. To pass a
   computed value, declare it as an internal column and pass it by name.
 - **`accepts_missing` defaults to `false`:** when such an argument is missing
   the function **is not invoked** and the result is missing. That short circuit

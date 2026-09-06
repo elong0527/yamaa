@@ -1,0 +1,30 @@
+schema_version: "1.0"
+domain: ADPC
+datasets:
+  PC:
+    path: input/pc.csv
+    types: {PCSEQ: int, PCTIM: time}
+base: PC
+keys: [STUDYID, USUBJID, PCSEQ]
+
+output:
+  path: adpc.csv
+  columns: [STUDYID, USUBJID, PCSEQ, PCTM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: PC.STUDYID}
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {source: PC.USUBJID}
+  - name: PCSEQ
+    type: int
+    label: Sequence Number
+    derivation: {source: PC.PCSEQ}
+  - name: PCTM
+    type: time
+    label: Specimen Collection Time
+    derivation: {source: PC.PCTIM}

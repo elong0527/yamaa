@@ -60,14 +60,14 @@ letter      := "A" ... "Z" | "a" ... "z"
 digit       := "0" ... "9"
 string      := "'" { non_quote | "''" } "'"
 non_quote   := any R019 string scalar other than "'"
-temporal    := "DATE" string | "DATETIME" string
+temporal    := "DATE" string | "TIME" string | "DATETIME" string
 ```
 
 Whitespace may separate tokens but cannot occur inside a number, identifier,
 or keyword. Precedence is `NOT`, then `AND`, then `OR`. Repeated binary
 operators associate from the left; parentheses override precedence. Keywords,
 `NULL`, `TRUE`, and `FALSE` are case-insensitive. Identifiers are
-case-sensitive. `AND`, `BETWEEN`, `DATE`, `DATETIME`, `ESCAPE`, `FALSE`, `IN`,
+case-sensitive. `AND`, `BETWEEN`, `DATE`, `TIME`, `DATETIME`, `ESCAPE`, `FALSE`, `IN`,
 `IS`, `LIKE`, `NOT`, `NULL`, `OR`, and `TRUE` are reserved as bare names. A
 qualified field may use one of those spellings after its qualifier.
 
@@ -86,7 +86,7 @@ A `string` is delimited by single quotes. A doubled quote denotes one quote.
 Backslash has no escape meaning, so `'C:\new'` contains a backslash. The
 literal has runtime type `str` under R019.
 
-A temporal literal is `DATE '...'` or `DATETIME '...'`. Its text must parse
+A temporal literal is `DATE '...'`, `TIME '...'`, or `DATETIME '...'`. Its text must parse
 under R016 for the named type. The keyword is required: `'2025-06-01'` alone
 is a `str`, not a date.
 
@@ -103,6 +103,7 @@ their runtime types mutually comparable:
 | `int` and `float`, in any combination | Numeric after R010 promotion |
 | `str` with `str` | R019 text order |
 | `date` with `date` | Chronological under R016 |
+| `time` with `time` | Chronological under R016 |
 | `datetime` with `datetime` | Chronological under R016 |
 
 Every other pair fails. In particular, a temporal value is not comparable to

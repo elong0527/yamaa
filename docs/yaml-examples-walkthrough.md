@@ -18,16 +18,16 @@ title: YAML examples walkthrough
 
 ## 1. What the suite is
 
-`yaml/examples/` holds **149 directories**. Each one is a complete, runnable
+`yaml/examples/` holds **165 directories**. Each one is a complete, runnable
 specification with its input data and the exact output an implementation must
 reproduce:
 
 | Group | Count | What it is |
 |---|---|---|
-| `adam-*` | 65 | ADaM derivations |
+| `adam-*` | 73 | ADaM derivations |
 | `sdtm-*` | 18 | SDTM derivations |
 | `odm-*` | 1 | An ODM resolution behavior |
-| `negative-*` | 65 | Specifications the design **must reject**, with the exact error |
+| `negative-*` | 73 | Specifications the design **must reject**, with the exact error |
 
 Almost half the suite is negative. That ratio is the point: a portable
 specification language is defined as much by what it refuses as by what it
@@ -206,6 +206,7 @@ Rule coverage across the 51 questions below:
 | How do I impute a partial date and flag what was imputed? | R016, R008 | [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adae-partial-dates) -- `date_impute` beside `date_precision` reading the same source |
 | How do I compute an age in whole years? | R016 | [`adam-adsl-analysis-age`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-analysis-age) -- `date_diff` with `unit: year` and explicit `bounds` |
 | How do I compute a study day? | R016 | [`sdtm-vs-visit-study-day`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-vs-visit-study-day), [`adam-adsl-randomization-timing`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-randomization-timing) |
+| How do I combine a date and local time, then measure signed seconds? | R016 | [`adam-adpc-sample-timing`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adpc-sample-timing) -- `to_datetime` followed by `datetime_diff`, including cross-midnight and missing values |
 | How do I derive a time-to-event endpoint? | R016 | [`adam-adtte-overall-survival`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adtte-overall-survival), [`adam-adtte-progression-free-survival`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adtte-progression-free-survival), [`adam-adtte-duration-of-response`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adtte-duration-of-response) |
 | How do I scope treatments and dates to a period across a washout? | R013, R016 | [`adam-adsl-crossover-periods`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-crossover-periods) |
 
@@ -273,7 +274,7 @@ Reading them by family is faster than reading them alphabetically:
 | Closed `compute` grammar | `negative-compute-*` (7) | Aggregate functions, comparison operators, qualified identifiers, division by zero, integer overflow, `LN(0)`, `SQRT(-1)` |
 | Predicate grammar | [`negative-adae-review-condition-arithmetic`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-adae-review-condition-arithmetic), `-review-text-date`, `-review-unknown-date` | An operand is a name or a literal; types must be comparable; names must resolve |
 | Type conversion | `negative-conversion-*`, [`negative-ingest-unparseable-field`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-ingest-unparseable-field), [`negative-column-type-unknown`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-column-type-unknown) | Conversion fails loudly rather than substituting a value |
-| Partial dates | `negative-date-impute-*` (4), [`negative-date-precision-invalid-source`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-date-precision-invalid-source), [`negative-datetime-zone-offset`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-datetime-zone-offset) | Every unusable temporal input has one defined outcome |
+| Temporal values | `negative-date-impute-*` (4), [`negative-date-precision-invalid-source`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-date-precision-invalid-source), [`negative-datetime-zone-offset`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-datetime-zone-offset), [`negative-adpc-invalid-time`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-adpc-invalid-time), [`negative-to-datetime-text-time`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-to-datetime-text-time), [`negative-datetime-diff-date-source`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-datetime-diff-date-source) | Every unusable temporal input has one defined outcome |
 | Lookups and joins | `negative-record-lookup-*` (7), `negative-mapping-from-*` (4), [`negative-source-duplicate-right-key`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-source-duplicate-right-key) | Matching must be complete, paired, unique, and ordered when it chooses |
 | Output identity | `negative-keys-*`, [`negative-output-duplicate-subject`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-output-duplicate-subject), [`negative-usubjid-exceeds-length`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-usubjid-exceeds-length) | Keys are an assertion, not documentation |
 | Inheritance | `negative-adsl-*parent*` (4), [`negative-adsl-inherited-output`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-adsl-inherited-output) | Cycles, version mismatches, remote paths, invalid clears, and who owns `output` |

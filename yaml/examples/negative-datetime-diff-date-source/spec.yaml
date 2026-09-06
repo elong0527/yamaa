@@ -1,0 +1,39 @@
+schema_version: "1.0"
+domain: ADPC
+datasets:
+  PC:
+    path: input/pc.csv
+    types: {PCSEQ: int, PCDAT: date, REFDATM: datetime}
+base: PC
+keys: [STUDYID, USUBJID, PCSEQ]
+
+output:
+  path: adpc.csv
+  columns: [STUDYID, USUBJID, PCSEQ, PCDT, REFDATM, ELTM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: PC.STUDYID}
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {source: PC.USUBJID}
+  - name: PCSEQ
+    type: int
+    label: Sequence Number
+    derivation: {source: PC.PCSEQ}
+  - name: PCDT
+    type: date
+    label: Specimen Collection Date
+    derivation: {source: PC.PCDAT}
+  - name: REFDATM
+    type: datetime
+    label: Reference Date/Time
+    derivation: {source: PC.REFDATM}
+  - name: ELTM
+    type: int
+    label: Elapsed Time in Seconds
+    derivation:
+      datetime_diff: {start: REFDATM, end: PCDT}

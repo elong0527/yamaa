@@ -1,0 +1,9 @@
+phase: ingest
+condition: field_parse_failed
+spec_paths:
+  - datasets.PC.types.PCTIM
+context:
+  dataset: PC
+  field: PCTIM
+  type: time
+  value: "24:00"

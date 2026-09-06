@@ -99,6 +99,28 @@ expressions:
             type: variable
             required: true
             description: Datetime whose calendar date is returned.
+    to_datetime: # Composes a local civil datetime from a date and time.
+        # A missing operand yields a missing datetime. Other operand types are
+        # incompatible input errors under R016.
+        - date:
+            type: variable
+            required: true
+            description: Calendar date supplying the year, month, and day.
+        - time:
+            type: variable
+            required: true
+            description: Local time supplying the hour, minute, and second.
+    datetime_diff: # Returns signed whole seconds between two datetimes.
+        # The result is end minus start over the local civil fields. A missing
+        # operand yields a missing result; no timezone or offset is involved.
+        - start:
+            type: variable
+            required: true
+            description: Starting local civil datetime.
+        - end:
+            type: variable
+            required: true
+            description: Ending local civil datetime; an earlier end is negative.
     study_day: # Returns the CDISC study day of a date against a reference date.
         # The reference date is day 1 and there is no day zero: a date on or
         # after the reference counts forward from 1, and an earlier date counts

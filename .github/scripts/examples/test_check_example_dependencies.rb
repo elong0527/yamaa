@@ -122,6 +122,77 @@ class TestExampleDependencies < Minitest::Test
     spec&.unlink
   end
 
+  def test_temporal_operation_operands_are_dependencies
+    spec = Tempfile.new(["temporal-operation-dependencies", ".yaml"])
+    spec.write(<<~YAML)
+      output:
+        columns: [ADTM, ELTM, ADT, ATM, REFDTM]
+      columns:
+        - name: ELTM
+          derivation:
+            datetime_diff: {start: REFDTM, end: ADTM}
+        - name: ADTM
+          derivation:
+            to_datetime: {date: ADT, time: ATM}
+        - {name: ADT, derivation: {literal: "2025-01-01"}}
+        - {name: ATM, derivation: {literal: "09:30:00"}}
+        - {name: REFDTM, derivation: {literal: "2025-01-01T09:00:00"}}
+    YAML
+    spec.close
+
+    problems = check(spec.path)
+    assert_includes problems, "ADTM references later column ADT"
+    assert_includes problems, "ADTM references later column ATM"
+    assert_includes problems, "ELTM references later column ADTM"
+    assert_includes problems, "ELTM references later column REFDTM"
+  ensure
+    spec&.unlink
+  end
+
+  def test_time_literal_keyword_is_not_a_dependency
+    spec = Tempfile.new(["time-literal-dependency", ".yaml"])
+    spec.write(<<~YAML)
+      output:
+        columns: [ATM, FLAG, TIME]
+      columns:
+        - {name: ATM, derivation: {source: PC.PCTIM}}
+        - name: FLAG
+          derivation:
+            case:
+              branches:
+                - when: "ATM >= TIME '09:30'"
+                  then: {literal: Y}
+              otherwise: {literal: N}
+        - {name: TIME, derivation: {literal: reserved}}
+    YAML
+    spec.close
+
+    refute_includes check(spec.path), "FLAG references later column TIME"
+  ensure
+    spec&.unlink
+  end
+
+  def test_function_temporal_literals_carry_no_dependencies
+    spec = Tempfile.new(["function-temporal-literal-dependency", ".yaml"])
+    spec.write(<<~YAML)
+      output:
+        columns: [FLAG, ATM]
+      columns:
+        - name: FLAG
+          derivation:
+            function:
+              name: sample_window
+              contract_version: 1.0.0
+              args: {sample_time: {time: "09:30"}, sample_date: {date: "2025-01-01"}}
+        - {name: ATM, derivation: {literal: "09:30:00"}}
+    YAML
+    spec.close
+
+    refute_includes check(spec.path), "FLAG references later column ATM"
+  ensure
+    spec&.unlink
+  end
+
   def test_previous_non_missing_inputs_are_dependencies
     spec = Tempfile.new(["previous-non-missing-dependencies", ".yaml"])
     spec.write(<<~YAML)

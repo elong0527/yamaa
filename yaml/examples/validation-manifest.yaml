@@ -230,6 +230,16 @@ fixtures:
     condition: incompatible_input_type
     spec_paths: [columns.ASTDT2.derivation.to_date.source]
     validator: temporal_contract
+  negative-datetime-diff-date-source:
+    rule: R016
+    condition: incompatible_input_type
+    spec_paths: [columns.ELTM.derivation.datetime_diff.end]
+    validator: temporal_contract
+  negative-to-datetime-text-time:
+    rule: R016
+    condition: incompatible_input_type
+    spec_paths: [columns.ADTM.derivation.to_datetime.time]
+    validator: temporal_contract
   negative-types-unknown-field:
     rule: R014
     condition: unknown_field
