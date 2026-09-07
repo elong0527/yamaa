@@ -3,6 +3,12 @@
 #' @import purrr
 #' @import stringr
 NULL
+.require_single_value <- function(x) {
+  if (length(x) > 1) {
+    stop("Duplicate ItemOID values for one complete key", call. = FALSE)
+  }
+  x
+}
 #' Extract dependencies from domain configuration
 #' @noRd
 .extract_dependencies <- function(domain_name, sources) {
@@ -283,7 +289,8 @@ process_findings_domain <- function(domain_name, config, df_long, default_keys, 
     pivoted <- source_df |>
       select(all_of(keys), "ItemOID", "Value") |>
       pivot_wider(
-        names_from = "ItemOID", values_from = "Value", values_fn = first
+        names_from = "ItemOID", values_from = "Value",
+        values_fn = .require_single_value
       )
     final_df <- tibble::tibble(.rows = nrow(pivoted))
     for (k in keys) {
@@ -392,7 +399,10 @@ process_domain <- function(
     keys <- intersect(keys, names(source_df))
     pivoted <- source_df |>
       select(all_of(keys), ItemOID, Value) |> # nolint: object_usage_linter
-      pivot_wider(names_from = ItemOID, values_from = Value, values_fn = first)
+      pivot_wider(
+        names_from = ItemOID, values_from = Value,
+        values_fn = .require_single_value
+      )
     # Map columns
     final_df <- tibble::tibble(.rows = nrow(pivoted))
     # Add keys to final_df first to allow cross-domain joins
@@ -772,7 +782,9 @@ create_sdtm_datasets <- function(config_dir, input_csv, output_dir) {
   }
   df_long <- .read_delimited_source(input_csv)
   default_keys <- c(
-    "StudyOID", "SubjectKey", "ItemGroupRepeatKey", "StudyEventOID"
+    "StudyOID", "MetaDataVersionOID", "SubjectKey", "StudyEventOID",
+    "StudyEventRepeatKey", "FormOID", "FormRepeatKey", "ItemGroupOID",
+    "ItemGroupRepeatKey"
   )
   domains_order <- topological_sort(config$domains)
   cat("Build order:", paste(domains_order, collapse = " -> "), "\n")
