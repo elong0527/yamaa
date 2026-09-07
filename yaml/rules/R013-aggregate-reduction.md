@@ -4,7 +4,8 @@ title: Aggregate Reduction
 status: normative
 applies_to: [expression.aggregate, aggregate_class.between,
   aggregate_expression]
-depends_on: [R001, R002, R003, R004, R006, R007, R010, R011, R015, R019]
+depends_on: [R001, R002, R003, R004, R006, R007, R010, R011, R014, R015,
+  R019]
 ---
 
 # Aggregate reduction
@@ -142,6 +143,16 @@ For a group with at least one non-missing value, `MEAN(x)` is evaluated as
 This fixes its result and failure behavior across runtimes instead of inheriting
 a host language's mean implementation.
 
+`SUM(x)` is a left fold of the non-missing argument values in relation record
+order. The accumulator starts with the first such value, and each later value
+is added to it using R010's `+` semantics; implementations must not reorder,
+reassociate, partition, or use a compensated or correctly rounded summation.
+The `filter`, when present, removes records without changing the order of those
+that remain. R014 defines stored-source record order, and R001 defines
+constructed-output and grouped-driver record order. `MEAN` uses this same
+ordered `SUM`, followed by division by `COUNT`, so it inherits the fold's
+binary64 rounding behavior.
+
 `AVG` is not an alias; the portable reducer name is `MEAN`. A median would
 additionally have to fix its interpolation rule before two runtimes could
 agree, so it is not registered by default.
@@ -239,10 +250,11 @@ must produce identical results for every example. R010's determinism
 requirements apply unchanged, including that an implementation must not
 reassociate or algebraically simplify a written expression.
 
-A reduction imposes no order on the records it reads, so its result must not
-depend on record order. This is what keeps ordering out of this grammar:
-a rule that needs a record chosen by order uses a window or
-`multiple_matches`, where the order is declared.
+A reduction does not sort the records it reads. `SUM` and therefore `MEAN`
+consume relation record order as specified above; `COUNT`, `MIN`, and `MAX`
+are independent of that order, while `ONLY` accepts no group in which an order
+could choose among records. A rule that needs one record chosen by value order
+still uses a window or `multiple_matches`, where that order is declared.
 
 ## Errors
 

@@ -25,6 +25,21 @@ reads. R023 owns the syntax of a delimited source and delivers each field to
 this rule as its text together with whether it was quoted; this rule owns what
 that field then means.
 
+## Source record order
+
+The sequence of records in a stored source is part of the input contract. A
+reader must deliver records in their stored order and must preserve that order
+after field decoding and typing; parallel reads, batches, partitions, or an
+engine's scan plan must not reorder them. Filtering preserves the relative
+order of the records that remain. R001 uses this sequence as base-record and
+grouped-driver order, R007 uses it to break window ties, and R013 consumes it
+for ordered floating-point reduction.
+
+Record order is not a substitute for a business key or a declared sort. It is
+the stable sequence of this particular artifact: replacing an artifact with
+the same records in another order changes the input and can therefore change
+an order-sensitive result.
+
 ## A field's type belongs to the dataset
 
 Every field of a source dataset has exactly one type, drawn from `column_type`,
@@ -167,3 +182,5 @@ parse failure, because it holds no text to parse.
   reporting the dataset, field, and value.
 - Inferring a field type from its values, or treating text as absence: neither
   is an implementation option.
+- Reordering source records while reading, decoding, typing, filtering, or
+  assembling parallel batches: fail.
