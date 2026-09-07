@@ -26,6 +26,22 @@ NULL
       }
     }
   }
+  aliased_datasets <- character()
+  for (dataset_name in names(source_data)) {
+    if (str_detect(sql, paste0("\\b", dataset_name, "\\."))) {
+      if (!(dataset_name %in% aliased_datasets)) {
+        for (k in key_vars) {
+          if (k %in% names(merged_df)) {
+            alias <- paste0(dataset_name, ".", k)
+            if (!(alias %in% names(merged_df))) {
+              merged_df[[alias]] <- merged_df[[k]]
+            }
+          }
+        }
+        aliased_datasets <- c(aliased_datasets, dataset_name)
+      }
+    }
+  }
   # Ensure dataset is named 'merged' for the SQL query
   merged <- merged_df # nolint
   # Execute using sqldf
@@ -75,6 +91,16 @@ NULL
         new_names <- paste0(ds_name, ".", cols_to_rename) # nolint: object_usage_linter
         df <- df |> rename_with(~new_names, all_of(cols_to_rename))
         merged_df <- merged_df |> left_join(df, by = available_keys)
+      }
+    }
+  }
+  for (ds_name in names(source_data)) {
+    for (k in key_vars) {
+      if (k %in% names(merged_df)) {
+        alias <- paste0(ds_name, ".", k)
+        if (!(alias %in% names(merged_df))) {
+          merged_df[[alias]] <- merged_df[[k]]
+        }
       }
     }
   }

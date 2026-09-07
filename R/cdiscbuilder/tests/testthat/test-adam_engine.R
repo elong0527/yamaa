@@ -54,6 +54,11 @@ columns:
   expect_true(is.numeric(res$AVAL))
   expect_equal(res$AVAL, as.numeric(source_data$VS$VSSTRESN))
 
+  expect_true("PARAMCD" %in% names(res))
+  expect_equal(res$PARAMCD, c("SYSBP", "DIABP", "SYSBP"))
+  expect_false(any(is.na(res$PARAMCD)))
+  expect_equal(res$VSTESTCD, c("SYSBP", "DIABP", "SYSBP"))
+
   unlink(tmp_file)
 })
 
