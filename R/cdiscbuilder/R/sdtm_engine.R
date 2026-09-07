@@ -428,6 +428,182 @@ process_domain <- function(
   combined <- bind_rows(domain_dfs)
   combined
 }
+.read_delimited_source <- function(path) {
+  connection <- file(path, "rb")
+  on.exit(close(connection))
+  size <- file.info(path)$size
+  bytes <- readBin(connection, what = "raw", n = size)
+  fail <- function(code, record = record_number, field = field_number) {
+    stop(
+      sprintf("%s: %s at record %d, field %d", code, path, record, field),
+      call. = FALSE
+    )
+  }
+  if (length(bytes) == 0) {
+    fail("source_header_absent", 1L, 1L)
+  }
+  if (
+    length(bytes) >= 3 &&
+      identical(bytes[seq_len(3)], as.raw(c(0xef, 0xbb, 0xbf)))
+  ) {
+    fail("source_byte_order_mark", 1L, 1L)
+  }
+  text <- tryCatch(
+    iconv(
+      rawToChar(bytes),
+      from = "UTF-8",
+      to = "UTF-8",
+      sub = NA_character_
+    ),
+    error = function(error) NA_character_
+  )
+  if (is.na(text)) {
+    fail("invalid_text", 1L, 1L)
+  }
+  code_points <- utf8ToInt(text)
+  records <- list()
+  current_record <- list()
+  field_text <- integer()
+  field_quoted <- FALSE
+  state <- "start"
+  record_number <- 1L
+  field_number <- 1L
+  append_field <- function() {
+    current_record[[length(current_record) + 1L]] <<- list(
+      text = intToUtf8(field_text),
+      quoted = field_quoted
+    )
+    field_text <<- integer()
+    field_quoted <<- FALSE
+  }
+  append_record <- function() {
+    append_field()
+    records[[length(records) + 1L]] <<- current_record
+    current_record <<- list()
+    record_number <<- record_number + 1L
+    field_number <<- 1L
+  }
+  index <- 1L
+  while (index <= length(code_points)) {
+    code_point <- code_points[[index]]
+    if (state == "quoted") {
+      if (code_point == 13L) {
+        fail("source_carriage_return")
+      }
+      if (code_point == 34L) {
+        if (
+          index < length(code_points) &&
+            code_points[[index + 1L]] == 34L
+        ) {
+          field_text <- c(field_text, 34L)
+          index <- index + 2L
+        } else {
+          state <- "after_quote"
+          index <- index + 1L
+        }
+      } else {
+        field_text <- c(field_text, code_point)
+        index <- index + 1L
+      }
+      next
+    }
+    if (code_point == 13L) {
+      if (
+        index == length(code_points) ||
+          code_points[[index + 1L]] != 10L
+      ) {
+        fail("source_carriage_return")
+      }
+      append_record()
+      state <- "start"
+      index <- index + 2L
+      next
+    }
+    if (code_point == 10L) {
+      append_record()
+      state <- "start"
+      index <- index + 1L
+      next
+    }
+    if (state == "start") {
+      if (code_point == 34L) {
+        field_quoted <- TRUE
+        state <- "quoted"
+      } else if (code_point == 44L) {
+        append_field()
+        field_number <- field_number + 1L
+      } else {
+        field_text <- c(field_text, code_point)
+        state <- "bare"
+      }
+      index <- index + 1L
+      next
+    }
+    if (state == "bare") {
+      if (code_point == 34L) {
+        fail("source_quote_in_bare_field")
+      }
+      if (code_point == 44L) {
+        append_field()
+        field_number <- field_number + 1L
+        state <- "start"
+      } else {
+        field_text <- c(field_text, code_point)
+      }
+      index <- index + 1L
+      next
+    }
+    if (code_point != 44L) {
+      fail("source_text_after_quote")
+    }
+    append_field()
+    field_number <- field_number + 1L
+    state <- "start"
+    index <- index + 1L
+  }
+  if (state == "quoted") {
+    fail("source_quote_unterminated")
+  }
+  if (tail(code_points, 1L) != 10L) {
+    append_record()
+  }
+  header <- vapply(records[[1L]], `[[`, character(1), "text")
+  empty_name <- which(header == "")[1L]
+  if (!is.na(empty_name)) {
+    fail("source_field_name_empty", 1L, empty_name)
+  }
+  duplicate_name <- anyDuplicated(header)
+  if (duplicate_name != 0L) {
+    fail("source_field_name_duplicate", 1L, duplicate_name)
+  }
+  data_records <- records[-1L]
+  for (record_index in seq_along(data_records)) {
+    if (length(data_records[[record_index]]) != length(header)) {
+      fail(
+        "source_record_width",
+        record_index + 1L,
+        min(length(data_records[[record_index]]), length(header)) + 1L
+      )
+    }
+  }
+  columns <- lapply(seq_along(header), function(column_index) {
+    vapply(data_records, function(record) {
+      field <- record[[column_index]]
+      if (!field$quoted && identical(field$text, "")) {
+        NA_character_
+      } else {
+        field$text
+      }
+    }, character(1))
+  })
+  names(columns) <- header
+  as.data.frame(
+    columns,
+    stringsAsFactors = FALSE,
+    check.names = FALSE,
+    optional = TRUE
+  )
+}
 #' Build all SDTM datasets from specifications
 #'
 #' @description Orchestrates the entire SDTM build process
@@ -456,7 +632,7 @@ create_sdtm_datasets <- function(config_dir, input_csv, output_dir) {
       config$domains[[d]] <- parsed[[d]]
     }
   }
-  df_long <- read.csv(input_csv, stringsAsFactors = FALSE)
+  df_long <- .read_delimited_source(input_csv)
   default_keys <- c(
     "StudyOID", "SubjectKey", "ItemGroupRepeatKey", "StudyEventOID"
   )
