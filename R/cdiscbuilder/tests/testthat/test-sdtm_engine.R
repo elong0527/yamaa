@@ -105,3 +105,72 @@ test_that("process_domain handles FINDINGS domains", {
   expect_equal(res$VSTEST, "WEIGHT")
   expect_equal(res$VSORRES, "75")
 })
+
+test_that("cross-domain mappings require every declared lookup key", {
+  pivoted <- data.frame(
+    USUBJID = "S1",
+    VISITNUM = 1,
+    stringsAsFactors = FALSE
+  )
+  col_cfg <- list(
+    source = "REF.VALUE",
+    merge_on = c("USUBJID", "VISITNUM")
+  )
+
+  expect_error(
+    .apply_column_mapping(
+      pivoted,
+      "RESULT",
+      col_cfg,
+      list(REF = data.frame(
+        USUBJID = "S1",
+        VALUE = "matched",
+        stringsAsFactors = FALSE
+      )),
+      pivoted
+    ),
+    "Lookup keys not found in REF: VISITNUM",
+    fixed = TRUE
+  )
+
+  target_without_visit <- pivoted["USUBJID"]
+  expect_error(
+    .apply_column_mapping(
+      target_without_visit,
+      "RESULT",
+      col_cfg,
+      list(REF = data.frame(
+        USUBJID = "S1",
+        VISITNUM = 1,
+        VALUE = "matched",
+        stringsAsFactors = FALSE
+      )),
+      target_without_visit
+    ),
+    "Lookup keys not found in target dataset: VISITNUM",
+    fixed = TRUE
+  )
+})
+
+test_that("cross-domain mappings reject ambiguous right-side matches", {
+  target <- data.frame(USUBJID = "S1", stringsAsFactors = FALSE)
+  reference <- data.frame(
+    USUBJID = c("S1", "S1"),
+    VALUE = c(20, 10),
+    stringsAsFactors = FALSE
+  )
+
+  for (row_order in list(1:2, 2:1)) {
+    expect_error(
+      .apply_column_mapping(
+        target,
+        "RESULT",
+        list(source = "REF.VALUE", merge_on = "USUBJID"),
+        list(REF = reference[row_order, ]),
+        target
+      ),
+      "Lookup source REF has multiple matches for keys: USUBJID",
+      fixed = TRUE
+    )
+  }
+})

@@ -192,17 +192,33 @@ topological_sort <- function(domains_config) {
       if (!is.null(built_domains[[ref_domain]]) && ref_col %in% names(built_domains[[ref_domain]])) { # nolint: line_length_linter
         ref_df <- built_domains[[ref_domain]]
         merge_keys <- if (!is.null(col_cfg$merge_on)) col_cfg$merge_on else "USUBJID" # nolint: line_length_linter
-        # Simple left join
-        valid_keys <- intersect(merge_keys, intersect(names(final_df), names(ref_df))) # nolint: line_length_linter
-        if (length(valid_keys) > 0) {
-          ref_subset <- ref_df |>
-            select(all_of(c(valid_keys, ref_col))) |>
-            distinct(across(all_of(valid_keys)), .keep_all = TRUE)
-          merged <- final_df |>
-            select(all_of(valid_keys)) |>
-            left_join(ref_subset, by = valid_keys)
-          series <- merged[[ref_col]]
+        missing_target_keys <- setdiff(merge_keys, names(final_df))
+        if (length(missing_target_keys) > 0) {
+          stop(
+            "Lookup keys not found in target dataset: ",
+            paste(missing_target_keys, collapse = ", ")
+          )
         }
+        missing_reference_keys <- setdiff(merge_keys, names(ref_df))
+        if (length(missing_reference_keys) > 0) {
+          stop(
+            "Lookup keys not found in ", ref_domain, ": ",
+            paste(missing_reference_keys, collapse = ", ")
+          )
+        }
+        if (anyDuplicated(ref_df[merge_keys]) > 0) {
+          stop(
+            "Lookup source ", ref_domain,
+            " has multiple matches for keys: ",
+            paste(merge_keys, collapse = ", ")
+          )
+        }
+        ref_subset <- ref_df |>
+          select(all_of(c(merge_keys, ref_col)))
+        merged <- final_df |>
+          select(all_of(merge_keys)) |>
+          left_join(ref_subset, by = merge_keys)
+        series <- merged[[ref_col]]
       }
     } else if (src %in% names(pivoted)) {
       series <- pivoted[[src]]
