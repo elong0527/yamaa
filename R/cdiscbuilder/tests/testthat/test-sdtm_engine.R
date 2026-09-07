@@ -119,16 +119,21 @@ test_that("create_sdtm_datasets preserves ODM record identity keys", {
     file.path(config_dir, "vs.yaml")
   )
   input_csv <- file.path(config_dir, "input.csv")
-  identity_keys <- c("StudyEventRepeatKey", "FormOID", "ItemGroupOID")
+  identity_keys <- c(
+    "MetaDataVersionOID", "StudyEventRepeatKey", "FormOID",
+    "FormRepeatKey", "ItemGroupOID"
+  )
   for (identity_key in identity_keys) {
     input <- data.frame(
       StudyOID = rep("S1", 3),
+      MetaDataVersionOID = rep("MDV1", 3),
       SubjectKey = rep("SUBJ1", 3),
-      ItemGroupRepeatKey = rep("1", 3),
       StudyEventOID = rep("SE1", 3),
       StudyEventRepeatKey = rep("1", 3),
       FormOID = rep("F1", 3),
+      FormRepeatKey = rep("1", 3),
       ItemGroupOID = rep("IG1", 3),
+      ItemGroupRepeatKey = rep("1", 3),
       ItemOID = rep("RES", 3),
       Value = c("100", "200", "300")
     )

@@ -782,8 +782,9 @@ create_sdtm_datasets <- function(config_dir, input_csv, output_dir) {
   }
   df_long <- .read_delimited_source(input_csv)
   default_keys <- c(
-    "StudyOID", "SubjectKey", "ItemGroupRepeatKey", "StudyEventOID",
-    "StudyEventRepeatKey", "FormOID", "ItemGroupOID"
+    "StudyOID", "MetaDataVersionOID", "SubjectKey", "StudyEventOID",
+    "StudyEventRepeatKey", "FormOID", "FormRepeatKey", "ItemGroupOID",
+    "ItemGroupRepeatKey"
   )
   domains_order <- topological_sort(config$domains)
   cat("Build order:", paste(domains_order, collapse = " -> "), "\n")
