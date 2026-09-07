@@ -173,4 +173,21 @@ test_that("cross-domain mappings reject ambiguous right-side matches", {
       fixed = TRUE
     )
   }
+
+  incomplete_target <- data.frame(USUBJID = c("S1", NA), stringsAsFactors = FALSE)
+  incomplete_reference <- data.frame(
+    USUBJID = c("S1", NA, NA),
+    VALUE = c("matched", "unused-a", "unused-b"),
+    stringsAsFactors = FALSE
+  )
+  expect_equal(
+    .apply_column_mapping(
+      incomplete_target,
+      "RESULT",
+      list(source = "REF.VALUE", merge_on = "USUBJID"),
+      list(REF = incomplete_reference),
+      incomplete_target
+    ),
+    c("matched", NA_character_)
+  )
 })

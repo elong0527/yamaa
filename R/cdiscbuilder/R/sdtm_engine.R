@@ -206,18 +206,20 @@ topological_sort <- function(domains_config) {
             paste(missing_reference_keys, collapse = ", ")
           )
         }
-        if (anyDuplicated(ref_df[merge_keys]) > 0) {
+        complete_reference_keys <- complete.cases(ref_df[merge_keys])
+        complete_reference <- ref_df[complete_reference_keys, , drop = FALSE]
+        if (anyDuplicated(complete_reference[merge_keys]) > 0) {
           stop(
             "Lookup source ", ref_domain,
             " has multiple matches for keys: ",
             paste(merge_keys, collapse = ", ")
           )
         }
-        ref_subset <- ref_df |>
+        ref_subset <- complete_reference |>
           select(all_of(c(merge_keys, ref_col)))
         merged <- final_df |>
           select(all_of(merge_keys)) |>
-          left_join(ref_subset, by = merge_keys)
+          left_join(ref_subset, by = merge_keys, na_matches = "never")
         series <- merged[[ref_col]]
       }
     } else if (src %in% names(pivoted)) {
