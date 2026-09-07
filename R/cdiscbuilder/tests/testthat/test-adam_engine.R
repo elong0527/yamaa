@@ -54,9 +54,6 @@ columns:
   expect_true(is.numeric(res$AVAL))
   expect_equal(res$AVAL, as.numeric(source_data$VS$VSSTRESN))
 
-  # Bug 182: PARAMCD derives from VS.VSTESTCD which is also a key;
-  # previously this returned NA due to missing qualified alias and was
-  # hidden because no assertion covered it. Assert every output column.
   expect_true("PARAMCD" %in% names(res))
   expect_equal(res$PARAMCD, c("SYSBP", "DIABP", "SYSBP"))
   expect_false(any(is.na(res$PARAMCD)))
