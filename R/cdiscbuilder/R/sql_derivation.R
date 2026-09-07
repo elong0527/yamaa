@@ -26,6 +26,31 @@ NULL
       }
     }
   }
+  # Alias key columns under qualified names so that e.g. VS.VSTESTCD
+  # resolves to the unprefixed key VSTESTCD that already lives in
+  # merged_df. Keys are not renamed during the join, so without this
+  # alias a SQL fragment referencing a key as DATASET.KEY would fail
+  # with "no such column".
+  aliased_datasets <- character()
+  for (dataset_name in names(source_data)) {
+    if (str_detect(sql, paste0("\\b", dataset_name, "\\."))) {
+      if (!(dataset_name %in% aliased_datasets)) {
+        for (k in key_vars) {
+          if (k %in% names(merged_df)) {
+            alias <- paste0(dataset_name, ".", k)
+            if (!(alias %in% names(merged_df))) {
+              merged_df[[alias]] <- merged_df[[k]]
+            }
+          }
+        }
+        aliased_datasets <- c(aliased_datasets, dataset_name)
+      }
+    }
+  }
+  # Also alias keys for datasets whose prefixed non-key columns were
+  # joined (covers the case where the join happened but the loop above
+  # didn't trigger the dataset detection due to order).
+  # No-op if already aliased.
   # Ensure dataset is named 'merged' for the SQL query
   merged <- merged_df # nolint
   # Execute using sqldf
@@ -75,6 +100,19 @@ NULL
         new_names <- paste0(ds_name, ".", cols_to_rename) # nolint: object_usage_linter
         df <- df |> rename_with(~new_names, all_of(cols_to_rename))
         merged_df <- merged_df |> left_join(df, by = available_keys)
+      }
+    }
+  }
+  # Alias key columns under qualified names for closest path as well,
+  # so that DATASET.KEY references resolve even though keys live
+  # unprefixed in merged_df.
+  for (ds_name in names(source_data)) {
+    for (k in key_vars) {
+      if (k %in% names(merged_df)) {
+        alias <- paste0(ds_name, ".", k)
+        if (!(alias %in% names(merged_df))) {
+          merged_df[[alias]] <- merged_df[[k]]
+        }
       }
     }
   }
