@@ -448,6 +448,126 @@ process_domain <- function(
   ) {
     fail("source_byte_order_mark", 1L, 1L)
   }
+  invalid_pos <- {
+    n <- length(bytes)
+    pos <- NA_integer_
+    i <- 1L
+    while (i <= n && is.na(pos)) {
+      b <- as.integer(bytes[i])
+      if (b <= 0x7fL) {
+        i <- i + 1L
+        next
+      }
+      expected <- if (b >= 0xc2L && b <= 0xdfL) 1L else if (b >= 0xe0L && b <= 0xefL) 2L else if (b >= 0xf0L && b <= 0xf4L) 3L else NA_integer_
+      if (is.na(expected)) {
+        pos <- i
+        break
+      }
+      if (i + expected > n) {
+        pos <- i
+        break
+      }
+      continuation_ok <- TRUE
+      for (k in seq_len(expected)) {
+        cb <- as.integer(bytes[i + k])
+        if (cb < 0x80L || cb > 0xbfL) {
+          continuation_ok <- FALSE
+          break
+        }
+      }
+      if (!continuation_ok) {
+        pos <- i
+        break
+      }
+      if (expected == 2L) {
+        b2 <- as.integer(bytes[i + 1L])
+        if (b == 0xe0L && b2 < 0xa0L) pos <- i
+        if (b == 0xedL && b2 > 0x9fL) pos <- i
+      } else if (expected == 3L) {
+        b2 <- as.integer(bytes[i + 1L])
+        if (b == 0xf0L && b2 < 0x90L) pos <- i
+        if (b == 0xf4L && b2 > 0x8fL) pos <- i
+      }
+      if (!is.na(pos)) break
+      i <- i + expected + 1L
+    }
+    pos
+  }
+  if (!is.na(invalid_pos)) {
+    scan_record <- 1L
+    scan_field <- 1L
+    scan_state <- "start"
+    scan_index <- 1L
+    while (scan_index < invalid_pos) {
+      b <- as.integer(bytes[scan_index])
+      if (scan_state == "quoted") {
+        if (b == 0x22L) {
+          if (
+            scan_index + 1L < invalid_pos &&
+              as.integer(bytes[scan_index + 1L]) == 0x22L
+          ) {
+            scan_index <- scan_index + 2L
+            next
+          }
+          scan_state <- "after_quote"
+          scan_index <- scan_index + 1L
+          next
+        }
+        scan_index <- scan_index + 1L
+        next
+      }
+      if (b == 0x0dL) {
+        if (
+          scan_index + 1L < invalid_pos &&
+            as.integer(bytes[scan_index + 1L]) == 0x0aL
+        ) {
+          scan_record <- scan_record + 1L
+          scan_field <- 1L
+          scan_state <- "start"
+          scan_index <- scan_index + 2L
+          next
+        }
+        if (scan_index + 1L == invalid_pos) {
+          scan_index <- scan_index + 1L
+          next
+        }
+        scan_index <- scan_index + 1L
+        next
+      }
+      if (b == 0x0aL) {
+        scan_record <- scan_record + 1L
+        scan_field <- 1L
+        scan_state <- "start"
+        scan_index <- scan_index + 1L
+        next
+      }
+      if (scan_state == "start") {
+        if (b == 0x22L) {
+          scan_state <- "quoted"
+        } else if (b == 0x2cL) {
+          scan_field <- scan_field + 1L
+        } else {
+          scan_state <- "bare"
+        }
+        scan_index <- scan_index + 1L
+        next
+      }
+      if (scan_state == "bare") {
+        if (b == 0x2cL) {
+          scan_field <- scan_field + 1L
+          scan_state <- "start"
+        }
+        scan_index <- scan_index + 1L
+        next
+      }
+      if (b == 0x2cL) {
+        scan_field <- scan_field + 1L
+        scan_state <- "start"
+      }
+      scan_index <- scan_index + 1L
+    }
+    fail("invalid_text", scan_record, scan_field)
+  }
   text <- tryCatch(
     iconv(
       rawToChar(bytes),
