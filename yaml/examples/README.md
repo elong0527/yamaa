@@ -5,6 +5,12 @@ outputs. They are intended for human review, automated tests, and AI-assisted
 implementation. Each holds a specification, its source CSVs, the exact expected
 CSV or error, and a README describing what the result means.
 
+CSV is used here because these are small, reviewable illustrations. Examples
+do not duplicate each CSV fixture with an equivalent Parquet file: the two
+copies would express the same rows while adding binary review and
+synchronization burden. Production artifacts should use R020's `parquet`
+profile unless a human-reviewable CSV deliverable is specifically required.
+
 Execution behavior is defined by the schema's adjacent operation descriptions
 and the shared normative rules in [`../rules/README.md`](../rules/README.md);
 dataset declarations, variable references, and ODM contextual lookups by
@@ -62,6 +68,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adlb-bds`](adam-adlb-bds/) | build a BDS dataset with baseline and change |
 | [`adam-adlb-closest-visit`](adam-adlb-closest-visit/) | select the record closest to a window's target day |
 | [`adam-adlb-mean`](adam-adlb-mean/) | calculate each subject's mean result |
+| [`adam-adlb-order-sensitive-sum`](adam-adlb-order-sensitive-sum/) | sum floating-point values in source record order |
 | [`adam-adlb-reported-precision`](adam-adlb-reported-precision/) | report a result against the lower limit of normal |
 | [`adam-adlb-shift-and-criteria`](adam-adlb-shift-and-criteria/) | classify a result, its shift from baseline, and one criterion |
 | [`adam-adlb-standardized-result`](adam-adlb-standardized-result/) | carry standardized results into analysis |
