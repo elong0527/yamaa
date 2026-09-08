@@ -2342,6 +2342,35 @@ class TestSpecNames(unittest.TestCase):
 
         self.assertIn("at least one key column", "\n".join(errors))
 
+    def test_rejects_non_scalar_output_columns_without_crashing(self):
+        for value, expected_type in (({}, 'dict'), ([], 'list')):
+            with self.subTest(value=expected_type):
+                spec = {
+                    'domain': 'ADSL',
+                    'datasets': {'DM': 'dm.csv'},
+                    'keys': ['USUBJID'],
+                    'output': {'columns': [value]},
+                    'columns': [{'name': 'USUBJID'}],
+                }
+
+                root = TOOL_PATH.parents[3]
+                env, env_errors = VALIDATOR.build_schema_env(root)
+                self.assertEqual(env_errors, [])
+                errors = VALIDATOR.validate_spec_document(
+                    spec, 'example/spec.yaml', root / 'example' / 'spec.yaml', env
+                )
+
+                diagnostics = [
+                    error for error in errors
+                    if isinstance(error, VALIDATOR.ValidationDiagnostic)
+                    and error.path == 'example/spec.yaml.output.columns[0]'
+                ]
+                self.assertEqual(len(diagnostics), 1)
+                self.assertEqual(
+                    diagnostics[0].path, 'example/spec.yaml.output.columns[0]'
+                )
+                self.assertEqual(diagnostics[0].condition, 'invalid_field_type')
+
     def test_accepts_output_order_by_over_declared_columns(self):
         spec = {
             "domain": "ADSL",

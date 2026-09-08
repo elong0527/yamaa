@@ -4280,8 +4280,11 @@ def validate_spec_names(spec, spec_label):
                     f"ERROR: {spec_label}.output.columns[{index}]: "
                     f"undeclared column {name!r}"
                 )
-        output_names = set(output_columns)
-        if isinstance(keys, list):
+        if (
+            all(isinstance(name, str) for name in output_columns)
+            and isinstance(keys, list)
+        ):
+            output_names = set(output_columns)
             for index, key in enumerate(keys):
                 if isinstance(key, str) and key not in output_names:
                     for path in (f"keys[{index}]", 'output.columns'):
