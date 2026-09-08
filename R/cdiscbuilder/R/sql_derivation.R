@@ -46,7 +46,11 @@ NULL
   merged <- merged_df # nolint
   # Execute using sqldf
   # We replace `DM.COLUMN` with `[DM.COLUMN]` to handle dots in SQLite
-  sql_quoted <- str_replace_all(sql, "(\\w+)\\.(\\w+)", "[\\1.\\2]")
+  sql_quoted <- str_replace_all(
+    sql,
+    "(?<!\\w)([[:alpha:]_]\\w*)\\.([[:alpha:]_]\\w*)(?!\\w)",
+    "[\\1.\\2]"
+  )
   result_df <- tryCatch(
     {
       sqldf::sqldf(sql_quoted)
@@ -115,8 +119,7 @@ NULL
         filtered_df |> filter(eval(parse_expr(f_expr)))
       },
       error = function(e) {
-        warning("Filter failed: ", conditionMessage(e))
-        merged_df
+        stop("Filter failed: ", conditionMessage(e), call. = FALSE)
       }
     )
   }
@@ -338,11 +341,8 @@ NULL
 ) {
   func <- agg_spec$function_
   if (is.null(func)) func <- "first"
-  if (func == "first") {
-    # SQLite does not have FIRST(), we can approximate with MIN
-    agg_expr <- paste("MIN(", source_col, ") as result")
-  } else if (func == "last") {
-    agg_expr <- paste("MAX(", source_col, ") as result")
+  if (func %in% c("first", "last")) {
+    stop("Unsupported aggregation function: ", func)
   } else if (func == "mean") {
     agg_expr <- paste("AVG(CAST(", source_col, "AS REAL)) as result")
   } else if (func == "sum") {
