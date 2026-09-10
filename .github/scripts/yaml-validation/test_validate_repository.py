@@ -27,6 +27,14 @@ assert BLOCKER_SPEC is not None and BLOCKER_SPEC.loader is not None
 BLOCKER_CHECK = importlib.util.module_from_spec(BLOCKER_SPEC)
 BLOCKER_SPEC.loader.exec_module(BLOCKER_CHECK)
 
+EXECUTION_PATH = Path(__file__).parent / 'check_execution_manifest.py'
+EXECUTION_SPEC = importlib.util.spec_from_file_location(
+    'check_execution_manifest', EXECUTION_PATH
+)
+assert EXECUTION_SPEC is not None and EXECUTION_SPEC.loader is not None
+EXECUTION_CHECK = importlib.util.module_from_spec(EXECUTION_SPEC)
+EXECUTION_SPEC.loader.exec_module(EXECUTION_CHECK)
+
 
 class TestYamlLoader(unittest.TestCase):
     def test_yaml_12_boolean_resolution(self):
@@ -840,6 +848,136 @@ class TestStaticSemanticContracts(unittest.TestCase):
         self.assertEqual(set(cycle[:-1]), {'A', 'B'})
 
 
+class TestExecutionManifestGate(unittest.TestCase):
+    def load_text(self, text):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / 'execution-manifest.yaml'
+            path.write_text(text, encoding='utf-8')
+            return EXECUTION_CHECK.load_manifest(path)
+
+    def blocked_entry(self):
+        return {'status': 'blocked', 'blocked_by': '#101'}
+
+    def test_duplicate_keys_are_rejected(self):
+        manifest, error = self.load_text(
+            'version: "1.0"\n'
+            'examples:\n'
+            '  duplicate:\n'
+            '    status: blocked\n'
+            '    blocked_by: "#101"\n'
+            '  duplicate:\n'
+            '    status: blocked\n'
+            '    blocked_by: "#101"\n'
+        )
+
+        self.assertIsNone(manifest)
+        self.assertIsNotNone(error)
+        self.assertTrue(error.startswith('execution-manifest.yaml: '))
+        self.assertIn("found duplicate key 'duplicate'", error)
+
+    def test_missing_mistyped_and_unsupported_versions_are_rejected(self):
+        documents = (
+            {'examples': {}},
+            {'versions': '1.0', 'examples': {}},
+            {'version': 1.0, 'examples': {}},
+            {'version': '2.0', 'examples': {}},
+        )
+
+        for document in documents:
+            with self.subTest(document=document):
+                errors = EXECUTION_CHECK.check_manifest(document)
+                self.assertIn(
+                    'execution-manifest.yaml: \'version\' must be "1.0"',
+                    errors,
+                )
+
+    def test_non_mapping_root_is_a_clean_error(self):
+        manifest, load_error = self.load_text('')
+
+        self.assertIsNone(load_error)
+        self.assertEqual(
+            EXECUTION_CHECK.check_manifest(manifest),
+            ['execution-manifest.yaml: root must be a mapping'],
+        )
+
+    def test_bad_blocked_by_shapes_are_rejected(self):
+        entries = (
+            {'status': 'blocked', 'blocked_by': 101},
+            {'status': 'blocked', 'blocked_by': 'issue-101'},
+            {'status': 'blocked'},
+        )
+
+        for entry in entries:
+            with self.subTest(entry=entry):
+                document = {'version': '1.0', 'examples': {'one': entry}}
+                errors = EXECUTION_CHECK.check_manifest(document)
+                self.assertEqual(len(errors), 1)
+                self.assertIn('blocked_by', errors[0])
+
+    def test_unknown_status_is_rejected(self):
+        document = {
+            'version': '1.0',
+            'examples': {'one': {'status': 'pending'}},
+        }
+
+        errors = EXECUTION_CHECK.check_manifest(document)
+
+        self.assertEqual(errors, ["one: unknown status 'pending'"])
+
+    def test_executable_without_runtimes_is_rejected(self):
+        document = {
+            'version': '1.0',
+            'examples': {'one': {'status': 'executable'}},
+        }
+
+        errors = EXECUTION_CHECK.check_manifest(document)
+
+        self.assertEqual(
+            errors,
+            ['one: executable entries must declare runtimes'],
+        )
+
+    def test_missing_and_stale_entries_are_rejected(self):
+        document = {
+            'version': '1.0',
+            'examples': {
+                'present': self.blocked_entry(),
+                'stale': self.blocked_entry(),
+            },
+        }
+
+        errors = EXECUTION_CHECK.check_manifest(
+            document, ['present', 'missing']
+        )
+
+        self.assertEqual(
+            errors,
+            [
+                'missing entry: missing',
+                'stale entry (no such example): stale',
+            ],
+        )
+
+    def test_valid_minimal_manifest_passes(self):
+        document = {
+            'version': '1.0',
+            'examples': {
+                'blocked': self.blocked_entry(),
+                'executable': {
+                    'status': 'executable',
+                    'runtimes': ['python'],
+                },
+            },
+        }
+
+        self.assertEqual(
+            EXECUTION_CHECK.check_manifest(
+                document, ['blocked', 'executable']
+            ),
+            [],
+        )
+
+
 class TestValidationManifest(unittest.TestCase):
     def test_repository_manifest_is_complete_and_registered(self):
         root = TOOL_PATH.parents[3]
@@ -949,6 +1087,35 @@ class TestValidationManifest(unittest.TestCase):
                 blockers, lambda _number: ('open', False)
             ),
             [],
+        )
+
+    def test_load_blockers_includes_execution_manifest(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            examples = root / 'yaml' / 'examples'
+            examples.mkdir(parents=True)
+            (examples / 'validation-manifest.yaml').write_text(
+                'fixtures:\n'
+                '  validation-one:\n'
+                '    blocked_by: "#103"\n',
+                encoding='utf-8',
+            )
+            (examples / 'execution-manifest.yaml').write_text(
+                'examples:\n'
+                '  execution-one:\n'
+                '    status: blocked\n'
+                '    blocked_by: "#101"\n'
+                '  executable:\n'
+                '    status: executable\n'
+                '    blocked_by: "#102"\n',
+                encoding='utf-8',
+            )
+
+            blockers = BLOCKER_CHECK.load_blockers(root)
+
+        self.assertEqual(
+            blockers,
+            {101: ['execution-one'], 103: ['validation-one']},
         )
 
 

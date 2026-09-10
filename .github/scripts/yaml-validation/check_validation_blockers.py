@@ -12,22 +12,29 @@ import yaml
 
 
 def load_blockers(root):
-    manifest_path = root / 'yaml' / 'examples' / 'validation-manifest.yaml'
-    with open(manifest_path, 'r', encoding='utf-8') as handle:
-        manifest = yaml.safe_load(handle)
-    fixtures = (
-        manifest.get('fixtures', {}) if isinstance(manifest, dict) else {}
-    )
     blockers = {}
-    for name, entry in fixtures.items():
-        if not isinstance(entry, dict) or 'blocked_by' not in entry:
-            continue
-        blocker = entry['blocked_by']
-        if not isinstance(blocker, str) or re.fullmatch(
-            r'#[1-9][0-9]*', blocker
-        ) is None:
-            continue
-        blockers.setdefault(int(blocker[1:]), []).append(name)
+    manifests = (
+        ('validation-manifest.yaml', 'fixtures', False),
+        ('execution-manifest.yaml', 'examples', True),
+    )
+    for filename, collection, blocked_only in manifests:
+        manifest_path = root / 'yaml' / 'examples' / filename
+        with open(manifest_path, 'r', encoding='utf-8') as handle:
+            manifest = yaml.safe_load(handle)
+        entries = (
+            manifest.get(collection, {}) if isinstance(manifest, dict) else {}
+        )
+        for name, entry in entries.items():
+            if not isinstance(entry, dict) or 'blocked_by' not in entry:
+                continue
+            if blocked_only and entry.get('status') != 'blocked':
+                continue
+            blocker = entry['blocked_by']
+            if not isinstance(blocker, str) or re.fullmatch(
+                r'#[1-9][0-9]*', blocker
+            ) is None:
+                continue
+            blockers.setdefault(int(blocker[1:]), []).append(name)
     return blockers
 
 
@@ -66,7 +73,7 @@ def validate_blocker_states(blockers, state_lookup):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Reject closed issues in the validation manifest.'
+        description='Reject closed issues in validation and execution manifests.'
     )
     parser.add_argument(
         '--root', type=Path, default=Path(__file__).resolve().parents[3]
