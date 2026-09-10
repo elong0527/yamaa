@@ -5,11 +5,11 @@ CATH,002,ALT,Alanine Aminotransferase,2025-01-01,2025-01-02,Vitamin D3,8,U/L,Y,8
 CATH,002,ALT,Alanine Aminotransferase,2025-01-08,2025-01-02,Vitamin D3,12,U/L,,8,4,50,2
 CATH,003,ALT,Alanine Aminotransferase,2025-01-01,2025-01-02,Active,0,U/L,Y,0,0,,1
 CATH,003,ALT,Alanine Aminotransferase,2025-01-08,2025-01-02,Active,5,U/L,,0,5,,2
-CATH,001,ALTSI,Alanine Aminotransferase (SI),2025-01-01,2025-01-02,Placebo,0.167,ukat/L,Y,0.167,0,0,3
-CATH,001,ALTSI,Alanine Aminotransferase (SI),2025-01-08,2025-01-02,Placebo,0.2505,ukat/L,,0.167,0.0835,50,4
+CATH,001,ALTSI,Alanine Aminotransferase (SI),2025-01-01,2025-01-02,Placebo,0.16699999999999998,ukat/L,Y,0.16699999999999998,0,0,3
+CATH,001,ALTSI,Alanine Aminotransferase (SI),2025-01-08,2025-01-02,Placebo,0.2505,ukat/L,,0.16699999999999998,0.08350000000000002,50.000000000000014,4
 CATH,002,ALTSI,Alanine Aminotransferase (SI),2025-01-01,2025-01-02,Vitamin D3,0.1336,ukat/L,Y,0.1336,0,0,3
 CATH,002,ALTSI,Alanine Aminotransferase (SI),2025-01-08,2025-01-02,Vitamin D3,0.2004,ukat/L,,0.1336,0.0668,50,4
 CATH,003,ALTSI,Alanine Aminotransferase (SI),2025-01-01,2025-01-02,Active,0,ukat/L,Y,0,0,,3
-CATH,003,ALTSI,Alanine Aminotransferase (SI),2025-01-08,2025-01-02,Active,0.0835,ukat/L,,0,0.0835,,4
+CATH,003,ALTSI,Alanine Aminotransferase (SI),2025-01-08,2025-01-02,Active,0.08349999999999999,ukat/L,,0,0.08349999999999999,,4
 CATH,001,AST,Aspartate Aminotransferase,2025-01-01,2025-01-02,Placebo,20,U/L,Y,20,0,0,5
 CATH,001,AST,Aspartate Aminotransferase,2025-01-08,2025-01-02,Placebo,18,U/L,,20,-2,-10,6
