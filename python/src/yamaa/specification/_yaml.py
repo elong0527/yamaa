@@ -66,6 +66,15 @@ class _Yaml12Loader(yaml.SafeLoader):
         mapping: dict[object, object] = {}
         for key_node, value_node in node.value:
             key = self.construct_object(key_node, deep=deep)
+            try:
+                hash(key)
+            except TypeError as error:
+                raise ConstructorError(
+                    "while constructing a mapping",
+                    node.start_mark,
+                    "found unhashable key",
+                    key_node.start_mark,
+                ) from error
             if key in mapping:
                 raise ConstructorError(
                     "while constructing a mapping",

@@ -279,6 +279,7 @@ def test_yaml_12_core_scalars_remain_distinct(tmp_path: Path) -> None:
         "value: !!str first\n",
         "source: &source {value: first}\ncopy: *source\n",
         "source: &source {value: first}\ncopy: {<<: *source}\n",
+        "? [a, b]\n: value\n",
     ],
 )
 def test_rejects_unsupported_yaml_features(tmp_path: Path, content: str) -> None:
