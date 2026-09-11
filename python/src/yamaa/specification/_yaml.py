@@ -149,6 +149,48 @@ def _yaml_error(error: yaml.YAMLError) -> SpecificationError:
     )
 
 
+def _escaped_path_member(member: object) -> str:
+    return str(member).encode("unicode_escape").decode("ascii")
+
+
+def _unicode_scalar_diagnostics(
+    value: object,
+    path: str = "$",
+) -> list[ValidationDiagnostic]:
+    if isinstance(value, str):
+        for offset, character in enumerate(value):
+            code_point = ord(character)
+            if 0xD800 <= code_point <= 0xDFFF:
+                return [
+                    ValidationDiagnostic(
+                        condition="invalid_text",
+                        spec_paths=(path,),
+                        context={
+                            "code_point": f"U+{code_point:04X}",
+                            "offset": offset,
+                        },
+                    )
+                ]
+        return []
+    if isinstance(value, list):
+        diagnostics: list[ValidationDiagnostic] = []
+        for index, item in enumerate(value):
+            diagnostics.extend(_unicode_scalar_diagnostics(item, f"{path}[{index}]"))
+        return diagnostics
+    if isinstance(value, dict):
+        diagnostics = []
+        for key, item in value.items():
+            diagnostics.extend(_unicode_scalar_diagnostics(key, f"{path}.<key>"))
+            diagnostics.extend(
+                _unicode_scalar_diagnostics(
+                    item,
+                    f"{path}.{_escaped_path_member(key)}",
+                )
+            )
+        return diagnostics
+    return []
+
+
 def read_yaml_document(path: str | Path) -> object:
     """Read one ASCII YAML document using YAML 1.2 core scalar rules."""
     source_path = Path(path)
@@ -170,6 +212,10 @@ def read_yaml_document(path: str | Path) -> object:
         ) from error
 
     try:
-        return yaml.load(text, Loader=_Yaml12Loader)
+        document = yaml.load(text, Loader=_Yaml12Loader)
     except yaml.YAMLError as error:
         raise _yaml_error(error) from error
+    diagnostics = _unicode_scalar_diagnostics(document)
+    if diagnostics:
+        raise SpecificationError(diagnostics)
+    return document

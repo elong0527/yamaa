@@ -27,6 +27,20 @@ def _copy_schema_bundle(tmp_path: Path) -> Path:
     return schema_root
 
 
+def _mutate_schema(
+    tmp_path: Path,
+    filename: str,
+    old: str,
+    new: str,
+) -> Path:
+    schema_root = _copy_schema_bundle(tmp_path)
+    schema_path = schema_root / filename
+    source = schema_path.read_text(encoding="ascii")
+    assert old in source
+    schema_path.write_text(source.replace(old, new, 1), encoding="ascii")
+    return schema_root
+
+
 def test_loads_and_normalizes_basic_specification() -> None:
     loaded = load_specification(EXAMPLES / "sdtm-dm-basic/spec.yaml", SCHEMA_ROOT)
     specification = loaded.specification
@@ -153,25 +167,65 @@ def test_accepts_integer_for_float_schema_field(tmp_path: Path) -> None:
 
 
 def test_reports_invalid_schema_patterns(tmp_path: Path) -> None:
-    schema_root = _copy_schema_bundle(tmp_path)
-    schema_path = schema_root / "schema.yaml"
-    schema = schema_path.read_text(encoding="ascii")
-    schema_path.write_text(
-        schema.replace(
-            "pattern: '^[A-Za-z_][A-Za-z0-9_]*$'",
-            "pattern: '['",
-            1,
-        ),
-        encoding="ascii",
+    schema_root = _mutate_schema(
+        tmp_path,
+        "schema.yaml",
+        "pattern: '^[A-Za-z_][A-Za-z0-9_]*$'",
+        "pattern: '['",
     )
 
     with pytest.raises(SpecificationError) as caught:
         load_specification(EXAMPLES / "sdtm-dm-basic/spec.yaml", schema_root)
 
     diagnostic = caught.value.diagnostics[0]
-    assert diagnostic.condition == "invalid_regex"
-    assert diagnostic.spec_paths == ("domain",)
-    assert diagnostic.context["pattern"] == "["
+    assert diagnostic.condition == "invalid_schema_bundle"
+    assert "invalid pattern '['" in diagnostic.context["reason"]
+
+
+@pytest.mark.parametrize(
+    ("filename", "old", "new", "reason"),
+    [
+        (
+            "schema.yaml",
+            "pattern: '^[A-Za-z_][A-Za-z0-9_]*$'",
+            "patern: '^[A-Za-z_][A-Za-z0-9_]*$'",
+            "invalid descriptor keyword 'patern'",
+        ),
+        (
+            "schema.yaml",
+            "type: domain_name",
+            'type: "list[domain_name"',
+            "invalid type expression",
+        ),
+        (
+            "schema.yaml",
+            "type: domain_name",
+            "type: missing_type",
+            "unknown schema type 'missing_type'",
+        ),
+        (
+            "schema_expression_mapping.yaml",
+            "default: true",
+            "default: invalid",
+            "invalid default",
+        ),
+    ],
+)
+def test_rejects_invalid_schema_declarations(
+    tmp_path: Path,
+    filename: str,
+    old: str,
+    new: str,
+    reason: str,
+) -> None:
+    schema_root = _mutate_schema(tmp_path, filename, old, new)
+
+    with pytest.raises(SpecificationError) as caught:
+        load_specification(EXAMPLES / "sdtm-dm-basic/spec.yaml", schema_root)
+
+    diagnostic = caught.value.diagnostics[0]
+    assert diagnostic.condition == "invalid_schema_bundle"
+    assert reason in diagnostic.context["reason"]
 
 
 def test_rejects_mismatched_included_schema_version(tmp_path: Path) -> None:
@@ -247,6 +301,21 @@ def test_rejects_non_ascii_authored_source(tmp_path: Path) -> None:
     assert caught.value.diagnostics[0].condition == "non_ascii_source"
 
 
+def test_rejects_surrogate_code_points_from_yaml_escapes(tmp_path: Path) -> None:
+    path = tmp_path / "surrogate.yaml"
+    path.write_text('label: "\\uD800"\n', encoding="ascii")
+
+    with pytest.raises(SpecificationError) as caught:
+        read_yaml_document(path)
+
+    assert caught.value.diagnostics[0].model_dump(mode="json") == {
+        "phase": "validation",
+        "condition": "invalid_text",
+        "spec_paths": ["$.label"],
+        "context": {"code_point": "U+D800", "offset": 0},
+    }
+
+
 def test_rejects_schema_version_mismatch(tmp_path: Path) -> None:
     source = (EXAMPLES / "sdtm-dm-basic/spec.yaml").read_text(encoding="ascii")
     path = tmp_path / "wrong-version.yaml"
@@ -260,4 +329,23 @@ def test_rejects_schema_version_mismatch(tmp_path: Path) -> None:
         "condition": "schema_version_mismatch",
         "spec_paths": ["schema_version"],
         "context": {"expected": "1.0", "actual": "9.9"},
+    }
+
+
+def test_malformed_schema_version_has_a_structured_diagnostic(tmp_path: Path) -> None:
+    source = (EXAMPLES / "sdtm-dm-basic/spec.yaml").read_text(encoding="ascii")
+    path = tmp_path / "malformed-version.yaml"
+    path.write_text(
+        source.replace('schema_version: "1.0"', "schema_version: {1: value}"),
+        encoding="ascii",
+    )
+
+    with pytest.raises(SpecificationError) as caught:
+        load_specification(path, SCHEMA_ROOT)
+
+    assert caught.value.diagnostics[0].model_dump(mode="json") == {
+        "phase": "validation",
+        "condition": "schema_version_mismatch",
+        "spec_paths": ["schema_version"],
+        "context": {"expected": "1.0", "actual_type": "mapping"},
     }

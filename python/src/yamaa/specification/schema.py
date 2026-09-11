@@ -71,15 +71,18 @@ def load_schema_bundle(schema_root: str | Path) -> SchemaBundle:
     registries: dict[str, dict[str, Any]] = {}
     kinds: dict[str, DefinitionKind] = {}
     version: str | None = None
-    pending = [entrypoint]
+    pending = [(entrypoint, ())]
     completed: set[Path] = set()
 
     while pending:
-        current = pending.pop()
+        current, ancestors = pending.pop()
         resolved = current.resolve()
+        if resolved in ancestors:
+            raise _schema_failure(current, f"schema include cycle at {current.name}")
         if resolved in completed:
             continue
         completed.add(resolved)
+        descendants = ancestors + (resolved,)
         document = read_yaml_document(current)
         if not isinstance(document, dict):
             raise _schema_failure(current, "schema document must be a mapping")
@@ -110,11 +113,13 @@ def load_schema_bundle(schema_root: str | Path) -> SchemaBundle:
                 candidate.resolve().relative_to(root)
             except ValueError as error:
                 raise _schema_failure(current, f"unsafe include {include!r}") from error
-            pending.append(candidate)
+            pending.append((candidate, descendants))
 
         for name, definition in document.items():
             if name in {"version", "includes"}:
                 continue
+            if not isinstance(name, str) or not name:
+                raise _schema_failure(current, "declaration names must be strings")
             if isinstance(definition, list):
                 kind: DefinitionKind = "class"
             elif isinstance(definition, dict) and (
@@ -148,13 +153,15 @@ def load_schema_bundle(schema_root: str | Path) -> SchemaBundle:
     assert version is not None
     if "root_class" not in classes:
         raise _schema_failure(entrypoint, "root_class is not declared")
-    return SchemaBundle(
+    bundle = SchemaBundle(
         version=version,
         path=entrypoint,
         classes=classes,
         aliases=aliases,
         registries=registries,
     )
+    _validate_schema_bundle(bundle)
+    return bundle
 
 
 def _members(type_value: object) -> list[str]:
@@ -164,14 +171,272 @@ def _members(type_value: object) -> list[str]:
 
 def _split_arguments(value: str) -> tuple[str, str]:
     depth = 0
+    separator: int | None = None
     for index, character in enumerate(value):
         if character == "[":
             depth += 1
         elif character == "]":
             depth -= 1
+            if depth < 0:
+                break
         elif character == "," and depth == 0:
-            return value[:index].strip(), value[index + 1 :].strip()
+            if separator is not None:
+                break
+            separator = index
+    if depth == 0 and separator is not None:
+        key_type = value[:separator].strip()
+        value_type = value[separator + 1 :].strip()
+        if key_type and value_type:
+            return key_type, value_type
     raise ValueError(f"invalid dictionary type arguments {value!r}")
+
+
+_BUILTIN_TYPES = frozenset({"str", "int", "float", "bool", "null", "list", "dict"})
+_DESCRIPTOR_KEYS = frozenset(
+    {"type", "description", "values", "pattern", "min_length", "size", "default"}
+)
+_TYPE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _parse_type_expression(expression: str) -> list[str]:
+    expression = expression.strip()
+    if _TYPE_NAME.fullmatch(expression):
+        return [expression]
+    if expression.startswith("list[") and expression.endswith("]"):
+        inner = expression[5:-1].strip()
+        if inner:
+            return _parse_type_expression(inner)
+    if expression.startswith("dict[") and expression.endswith("]"):
+        key_type, value_type = _split_arguments(expression[5:-1])
+        return _parse_type_expression(key_type) + _parse_type_expression(value_type)
+    raise ValueError(f"invalid type expression {expression!r}")
+
+
+def _descriptor_issues(
+    descriptor: object,
+    *,
+    class_field: bool,
+    path: str,
+) -> tuple[list[str], list[str]]:
+    if not isinstance(descriptor, dict):
+        return [f"{path}: descriptor must be a mapping"], []
+
+    issues: list[str] = []
+    allowed = _DESCRIPTOR_KEYS | ({"required"} if class_field else set())
+    for keyword in descriptor:
+        if keyword not in allowed:
+            issues.append(f"{path}: invalid descriptor keyword {keyword!r}")
+
+    type_value = descriptor.get("type")
+    if "type" not in descriptor:
+        issues.append(f"{path}: missing 'type'")
+        return issues, []
+    if isinstance(type_value, str):
+        type_members = [type_value.strip()]
+    elif (
+        isinstance(type_value, list)
+        and type_value
+        and all(isinstance(item, str) for item in type_value)
+    ):
+        type_members = [item.strip() for item in type_value]
+    else:
+        issues.append(f"{path}: type must be a string or non-empty list of strings")
+        type_members = []
+
+    references: list[str] = []
+    for member in type_members:
+        try:
+            references.extend(_parse_type_expression(member))
+        except ValueError as error:
+            issues.append(f"{path}.type: {error}")
+
+    required = descriptor.get("required")
+    if "required" in descriptor and type(required) is not bool:
+        issues.append(f"{path}: required must be a boolean")
+    if required is True and "default" in descriptor:
+        issues.append(f"{path}: a required field cannot declare a default")
+
+    description = descriptor.get("description")
+    if "description" in descriptor and (
+        not isinstance(description, str) or not description.strip()
+    ):
+        issues.append(f"{path}: description must be a non-empty string")
+
+    string_only = type_members == ["str"]
+    sized_only = bool(type_members) and all(
+        member in {"list", "dict"} or member.startswith(("list[", "dict["))
+        for member in type_members
+    )
+
+    pattern = descriptor.get("pattern")
+    if "pattern" in descriptor:
+        if not string_only:
+            issues.append(f"{path}: pattern is allowed only for type str")
+        if not isinstance(pattern, str):
+            issues.append(f"{path}: pattern must be a string")
+        else:
+            try:
+                regress.Regex(f"^(?:{pattern})$", "u")
+            except regress.RegressError as error:
+                issues.append(f"{path}: invalid pattern {pattern!r}: {error}")
+
+    minimum = descriptor.get("min_length")
+    if "min_length" in descriptor:
+        if not string_only:
+            issues.append(f"{path}: min_length is allowed only for type str")
+        if type(minimum) is not int or minimum < 0:
+            issues.append(f"{path}: min_length must be a non-negative integer")
+
+    size = descriptor.get("size")
+    if "size" in descriptor:
+        if not sized_only:
+            issues.append(f"{path}: size is allowed only for list or dict")
+        if type(size) is not int or size < 0:
+            issues.append(f"{path}: size must be a non-negative integer")
+
+    values = descriptor.get("values")
+    if "values" in descriptor:
+        if not string_only:
+            issues.append(f"{path}: values is allowed only for type str")
+        if not isinstance(values, list) or not all(
+            isinstance(value, str) for value in values
+        ):
+            issues.append(f"{path}: values must be a list of strings")
+
+    return issues, references
+
+
+def _field_issues(
+    fields: object,
+    *,
+    path: str,
+) -> tuple[list[str], list[str], list[tuple[object, dict[str, Any], str]]]:
+    if not isinstance(fields, list):
+        return [f"{path}: class must be a list"], [], []
+    issues: list[str] = []
+    references: list[str] = []
+    defaults: list[tuple[object, dict[str, Any], str]] = []
+    names: set[str] = set()
+    for index, entry in enumerate(fields):
+        entry_path = f"{path}[{index}]"
+        if not isinstance(entry, dict) or len(entry) != 1:
+            issues.append(f"{entry_path}: class fields must be one-entry mappings")
+            continue
+        name, descriptor = next(iter(entry.items()))
+        if not isinstance(name, str) or not name:
+            issues.append(f"{entry_path}: field name must be a non-empty string")
+            continue
+        field_path = f"{path}.{name}"
+        if name in names:
+            issues.append(f"{field_path}: duplicate class field")
+        names.add(name)
+        descriptor_errors, descriptor_references = _descriptor_issues(
+            descriptor,
+            class_field=True,
+            path=field_path,
+        )
+        issues.extend(descriptor_errors)
+        references.extend(descriptor_references)
+        if isinstance(descriptor, dict) and "default" in descriptor:
+            defaults.append(
+                (descriptor["default"], descriptor, f"{field_path}.default")
+            )
+    return issues, references, defaults
+
+
+def _validate_schema_bundle(bundle: SchemaBundle) -> None:
+    issues: list[str] = []
+    references: list[str] = []
+    defaults: list[tuple[object, dict[str, Any], str]] = []
+    known_types = _BUILTIN_TYPES | bundle.classes.keys() | bundle.aliases.keys()
+
+    for name, fields in bundle.classes.items():
+        field_errors, field_references, field_defaults = _field_issues(
+            fields,
+            path=name,
+        )
+        issues.extend(field_errors)
+        references.extend(field_references)
+        defaults.extend(field_defaults)
+
+    referenced_registries: set[str] = set()
+    for name, alias in bundle.aliases.items():
+        path = name
+        if "registry" in alias:
+            if set(alias) != {"registry"}:
+                issues.append(
+                    f"{path}: registry-backed type must contain only 'registry'"
+                )
+            registry_name = alias.get("registry")
+            if not isinstance(registry_name, str) or not registry_name:
+                issues.append(f"{path}: registry name must be a non-empty string")
+            else:
+                referenced_registries.add(registry_name)
+            continue
+        descriptor_errors, descriptor_references = _descriptor_issues(
+            alias,
+            class_field=False,
+            path=path,
+        )
+        issues.extend(descriptor_errors)
+        references.extend(descriptor_references)
+        if "default" in alias:
+            defaults.append((alias["default"], alias, f"{path}.default"))
+
+    for registry_name, entries in bundle.registries.items():
+        if not entries:
+            issues.append(f"{registry_name}: registry is empty")
+        if registry_name not in referenced_registries:
+            issues.append(f"{registry_name}: registry is unreferenced")
+        for entry_name, definition in entries.items():
+            entry_path = f"{registry_name}.{entry_name}"
+            if not isinstance(entry_name, str) or not entry_name:
+                issues.append(f"{entry_path}: entry name must be a non-empty string")
+                continue
+            if isinstance(definition, list):
+                field_errors, field_references, field_defaults = _field_issues(
+                    definition,
+                    path=entry_path,
+                )
+                issues.extend(field_errors)
+                references.extend(field_references)
+                defaults.extend(field_defaults)
+            elif isinstance(definition, dict):
+                descriptor_errors, descriptor_references = _descriptor_issues(
+                    definition,
+                    class_field=False,
+                    path=entry_path,
+                )
+                issues.extend(descriptor_errors)
+                references.extend(descriptor_references)
+                if "default" in definition:
+                    defaults.append(
+                        (
+                            definition["default"],
+                            definition,
+                            f"{entry_path}.default",
+                        )
+                    )
+            else:
+                issues.append(f"{entry_path}: entry must be a class or descriptor")
+
+    for registry_name in referenced_registries:
+        if registry_name not in bundle.registries:
+            issues.append(f"registry {registry_name!r} is not declared")
+    for reference in references:
+        if reference not in known_types:
+            issues.append(f"unknown schema type {reference!r}")
+
+    if issues:
+        raise _schema_failure(bundle.path, "; ".join(issues))
+
+    for value, descriptor, path in defaults:
+        diagnostics = _validate_descriptor(value, descriptor, bundle, path)
+        if diagnostics:
+            conditions = ", ".join(item.condition for item in diagnostics)
+            issues.append(f"{path}: invalid default ({conditions})")
+    if issues:
+        raise _schema_failure(bundle.path, "; ".join(issues))
 
 
 def _actual_type(value: object) -> str:
@@ -469,11 +734,16 @@ def validate_specification(
         return [_invalid_type("$", "root_class", document)]
     version = document.get("schema_version")
     if version != bundle.version:
+        context: dict[str, JsonValue] = {"expected": bundle.version}
+        if version is None or isinstance(version, (str, int, float, bool)):
+            context["actual"] = version
+        else:
+            context["actual_type"] = _actual_type(version)
         return [
             _diagnostic(
                 "schema_version",
                 "schema_version_mismatch",
-                {"expected": bundle.version, "actual": version},
+                context,
             )
         ]
     return _validate_single(document, "root_class", bundle, "")
