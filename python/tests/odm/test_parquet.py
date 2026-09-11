@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import io
+import tarfile
 from pathlib import Path
 
 import polars as pl
@@ -48,6 +50,41 @@ def test_writer_projects_two_groups_into_same_schema(
         "ItemGroupRepeatKey",
         "ItemName",
     ).row(0) == (None, "FO.20", "2", "IG.20", "3", "Test name")
+
+
+def test_writer_forwards_configurable_archive_member_bound(
+    odm20_path: Path,
+    tmp_path: Path,
+) -> None:
+    archive_path = tmp_path / "bounded.tar"
+    payload = odm20_path.read_bytes()
+    with tarfile.open(archive_path, "w") as archive:
+        for name, contents in (("odm.xml", payload), ("notes.txt", b"notes")):
+            info = tarfile.TarInfo(name)
+            info.size = len(contents)
+            archive.addfile(info, io.BytesIO(contents))
+
+    output = tmp_path / "bounded.parquet"
+    with pytest.raises(ODMError, match="more than 1 members"):
+        write_odm_parquet(archive_path, output, max_archive_members=1)
+    assert not output.exists()
+
+    result = write_odm_parquet(archive_path, output, max_archive_members=2)
+
+    assert result.row_count == 2
+    assert pl.read_parquet(output).height == 2
+
+
+def test_writer_rejects_invalid_archive_member_bound(
+    odm20_path: Path,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "invalid-bound.parquet"
+
+    with pytest.raises(ODMError, match="max_archive_members must be at least 1"):
+        write_odm_parquet(odm20_path, output, max_archive_members=0)
+
+    assert not output.exists()
 
 
 def test_output_must_be_parquet(odm13_path: Path, tmp_path: Path) -> None:
