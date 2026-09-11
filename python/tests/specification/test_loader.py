@@ -263,6 +263,45 @@ def test_rejects_invalid_schema_declarations(
     assert reason in diagnostic.context["reason"]
 
 
+def test_allows_registry_operations_named_type_and_registry(tmp_path: Path) -> None:
+    schema_root = _copy_schema_bundle(tmp_path)
+    schema_path = schema_root / "schema.yaml"
+    source = schema_path.read_text(encoding="ascii")
+    schema_path.write_text(
+        f"{source}\n"
+        "special_operation:\n"
+        "    registry: special_operations\n"
+        "special_operations:\n"
+        "    type: {type: str}\n"
+        "    registry: {type: str}\n",
+        encoding="ascii",
+    )
+
+    loaded = load_specification(EXAMPLES / "sdtm-dm-basic/spec.yaml", schema_root)
+
+    assert loaded.specification.domain == "DM"
+
+
+def test_heterogeneous_duplicate_registry_keys_are_structured(
+    tmp_path: Path,
+) -> None:
+    schema_root = _copy_schema_bundle(tmp_path)
+    declaration = (
+        "\nheterogeneous_registry:\n    1: {type: str}\n    repeated: {type: str}\n"
+    )
+    for filename in ("schema_derivation.yaml", "schema_verification.yaml"):
+        schema_path = schema_root / filename
+        source = schema_path.read_text(encoding="ascii")
+        schema_path.write_text(f"{source}{declaration}", encoding="ascii")
+
+    with pytest.raises(SpecificationError) as caught:
+        load_specification(EXAMPLES / "sdtm-dm-basic/spec.yaml", schema_root)
+
+    diagnostic = caught.value.diagnostics[0]
+    assert diagnostic.condition == "invalid_schema_bundle"
+    assert "duplicate registry entry" in diagnostic.context["reason"]
+
+
 def test_rejects_mismatched_included_schema_version(tmp_path: Path) -> None:
     schema_root = _copy_schema_bundle(tmp_path)
     include_path = schema_root / "schema_shared.yaml"

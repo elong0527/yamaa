@@ -60,6 +60,18 @@ def _schema_failure(path: Path, reason: str) -> SpecificationError:
     )
 
 
+def _is_alias_declaration(definition: dict[object, object]) -> bool:
+    type_value = definition.get("type")
+    return (
+        isinstance(type_value, str)
+        or (
+            isinstance(type_value, list)
+            and all(isinstance(member, str) for member in type_value)
+        )
+        or isinstance(definition.get("registry"), str)
+    )
+
+
 def load_schema_bundle(schema_root: str | Path) -> SchemaBundle:
     """Load one closed schema bundle rooted at ``schema.yaml``."""
     root = Path(schema_root).resolve()
@@ -123,9 +135,7 @@ def load_schema_bundle(schema_root: str | Path) -> SchemaBundle:
                 raise _schema_failure(current, "declaration names must be strings")
             if isinstance(definition, list):
                 kind: DefinitionKind = "class"
-            elif isinstance(definition, dict) and (
-                "type" in definition or "registry" in definition
-            ):
+            elif isinstance(definition, dict) and _is_alias_declaration(definition):
                 kind = "alias"
             elif isinstance(definition, dict):
                 kind = "registry"
@@ -144,7 +154,10 @@ def load_schema_bundle(schema_root: str | Path) -> SchemaBundle:
                 registry = registries.setdefault(name, {})
                 duplicates = registry.keys() & definition.keys()
                 if duplicates:
-                    duplicate = min(duplicates)
+                    duplicate = min(
+                        duplicates,
+                        key=lambda value: (type(value).__name__, repr(value)),
+                    )
                     raise _schema_failure(
                         current,
                         f"duplicate registry entry {name}.{duplicate}",
