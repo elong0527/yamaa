@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 import pyarrow.parquet as pq
+
 from yamaa.odm.errors import ODMError
 from yamaa.odm.readers import iter_odm_records
 from yamaa.odm.schema import (

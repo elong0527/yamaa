@@ -11,6 +11,7 @@ from typing import BinaryIO, Literal
 import polars as pl
 from lxml import etree
 from pydantic import ValidationError
+
 from yamaa.odm.errors import ODMError
 from yamaa.odm.schema import ClinicalItemRow, rows_to_frame
 
