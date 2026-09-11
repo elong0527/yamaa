@@ -936,7 +936,8 @@ def _normalize_type(
             continue
         inner = member[5:-1].strip()
         if (
-            inner in members
+            len(members) == 2
+            and inner in members
             and not isinstance(value, list)
             and _matches(value, inner, bundle, active)
         ):

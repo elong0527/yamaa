@@ -101,6 +101,21 @@ def test_normalizes_schema_defaults_with_collection_shorthand(tmp_path: Path) ->
     assert loaded.specification.parents == ["parent.yaml"]
 
 
+def test_does_not_expand_collection_shorthand_in_larger_union(
+    tmp_path: Path,
+) -> None:
+    schema_root = _mutate_schema(
+        tmp_path,
+        "schema.yaml",
+        "type: domain_name",
+        'type: [str, "list[str]", int]',
+    )
+
+    loaded = load_specification(EXAMPLES / "sdtm-dm-basic/spec.yaml", schema_root)
+
+    assert loaded.specification.domain == "DM"
+
+
 def test_negative_column_type_matches_committed_diagnostic() -> None:
     with pytest.raises(SpecificationError) as caught:
         load_specification(
