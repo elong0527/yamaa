@@ -935,12 +935,11 @@ def _normalize_type(
         if not (member.startswith("list[") and member.endswith("]")):
             continue
         inner = member[5:-1].strip()
-        if (
-            len(members) == 2
-            and inner in members
-            and not isinstance(value, list)
-            and _matches(value, inner, bundle, active)
-        ):
+        if len(members) != 2 or inner not in members:
+            continue
+        if _matches(value, member, bundle, active):
+            return _normalize_single(value, member, bundle, active)
+        if _matches(value, inner, bundle, active):
             return [_normalize_type(value, inner, bundle, active)]
 
     for class_name in members:
@@ -960,7 +959,7 @@ def _normalize_type(
             if (
                 member == class_name
                 or member in bundle.classes
-                or member not in field_types
+                or field_types != [member]
             ):
                 continue
             if _matches(value, member, bundle, active):

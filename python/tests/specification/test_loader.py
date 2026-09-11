@@ -7,6 +7,10 @@ import pytest
 
 from yamaa.specification import SpecificationError, load_specification
 from yamaa.specification._yaml import read_yaml_document
+from yamaa.specification.schema import (
+    load_schema_bundle,
+    normalize_specification,
+)
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
@@ -116,26 +120,52 @@ def test_does_not_expand_collection_shorthand_in_larger_union(
     assert loaded.specification.domain == "DM"
 
 
-def test_does_not_expand_class_shorthand_in_larger_union(tmp_path: Path) -> None:
+def test_expands_list_valued_collection_shorthand(tmp_path: Path) -> None:
     schema_root = _mutate_schema(
         tmp_path,
         "schema.yaml",
         "type: domain_name",
-        "type: [str, domain_wrapper, int]",
+        'type: [items, "list[items]"]',
+    )
+    schema_path = schema_root / "schema.yaml"
+    schema_path.write_text(
+        schema_path.read_text(encoding="ascii")
+        + "\nitems:\n    type: list[str]\n",
+        encoding="ascii",
+    )
+
+    bundle = load_schema_bundle(schema_root)
+    normalized = normalize_specification(
+        {"domain": ["DM"]},
+        bundle,
+    )
+
+    assert normalized == {"domain": [["DM"]]}
+
+
+def test_does_not_expand_class_shorthand_when_field_is_a_union(
+    tmp_path: Path,
+) -> None:
+    schema_root = _mutate_schema(
+        tmp_path,
+        "schema.yaml",
+        "type: domain_name",
+        "type: [str, domain_wrapper]",
     )
     schema_path = schema_root / "schema.yaml"
     source = schema_path.read_text(encoding="ascii")
     schema_path.write_text(
         f"{source}\n"
         "domain_wrapper:\n"
-        "    - value: {type: str, required: true}\n"
+        "    - value: {type: [str, int], required: true}\n"
         "    - label: {type: str, default: domain}\n",
         encoding="ascii",
     )
 
-    loaded = load_specification(EXAMPLES / "sdtm-dm-basic/spec.yaml", schema_root)
+    bundle = load_schema_bundle(schema_root)
+    normalized = normalize_specification({"domain": "DM"}, bundle)
 
-    assert loaded.specification.domain == "DM"
+    assert normalized == {"domain": "DM"}
 
 
 def test_negative_column_type_matches_committed_diagnostic() -> None:
