@@ -7784,6 +7784,123 @@ EXPECTED_ERROR_PHASES = {
 }
 
 
+def load_condition_registry(root: Path):
+    relative_path = Path('yaml/conditions.yaml')
+    path = root / relative_path
+    if not path.is_file():
+        examples_dir = root / 'yaml' / 'examples'
+        if not examples_dir.is_dir() or not any(
+            examples_dir.glob('negative-*/expected/error.yaml')
+        ):
+            return {'version': '1.0', 'conditions': {}}, []
+        return None, [f"ERROR: {relative_path}: condition registry is missing"]
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            registry = yaml.load(handle, Loader=UniqueKeyLoader)
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        return None, [f"ERROR: {relative_path}: {exc}"]
+    return registry, []
+
+
+def validate_condition_registry(root: Path, registry):
+    errors = []
+    label = 'yaml/conditions.yaml'
+    if not isinstance(registry, dict):
+        return [f"ERROR: {label}: expected a mapping"]
+    if registry.get('version') != '1.0':
+        errors.append(f"ERROR: {label}.version: expected '1.0'")
+    for field in sorted(set(registry) - {'version', 'conditions'}):
+        errors.append(f"ERROR: {label}.{field}: unknown field")
+    conditions = registry.get('conditions')
+    if not isinstance(conditions, dict):
+        errors.append(f"ERROR: {label}.conditions: expected a mapping")
+        return errors
+    condition_names = list(conditions)
+    if (
+        all(isinstance(condition, str) for condition in condition_names)
+        and condition_names != sorted(condition_names)
+    ):
+        errors.append(f"ERROR: {label}.conditions: expected sorted keys")
+
+    for condition, registration in conditions.items():
+        path = f"{label}.conditions.{condition}"
+        if not (
+            isinstance(condition, str)
+            and re.fullmatch(
+                r'[a-z][a-z0-9]*(?:_[a-z0-9]+)*', condition
+            )
+        ):
+            errors.append(f"ERROR: {path}: expected a snake-case name")
+        if not isinstance(registration, dict):
+            errors.append(f"ERROR: {path}: expected a mapping")
+            continue
+        for field in sorted(set(registration) - {'rules', 'phases'}):
+            errors.append(f"ERROR: {path}.{field}: unknown field")
+        rules = registration.get('rules')
+        if not (
+            isinstance(rules, list)
+            and rules
+            and all(
+                isinstance(rule, str)
+                and re.fullmatch(r'R[0-9]{3}', rule)
+                for rule in rules
+            )
+            and rules == sorted(set(rules))
+        ):
+            errors.append(
+                f"ERROR: {path}.rules: expected unique sorted rule ids"
+            )
+        phases = registration.get('phases')
+        if not (
+            isinstance(phases, list)
+            and phases
+            and all(
+                isinstance(phase, str) and phase in EXPECTED_ERROR_PHASES
+                for phase in phases
+            )
+            and phases == sorted(set(phases))
+        ):
+            errors.append(
+                f"ERROR: {path}.phases: expected unique sorted phases"
+            )
+
+    examples_dir = root / 'yaml' / 'examples'
+    if not examples_dir.is_dir():
+        return errors
+    for error_path in sorted(
+        examples_dir.glob('negative-*/expected/error.yaml')
+    ):
+        try:
+            with open(error_path, 'r', encoding='utf-8') as handle:
+                contract = yaml.load(handle, Loader=UniqueKeyLoader)
+        except (OSError, UnicodeError, yaml.YAMLError):
+            continue
+        if not isinstance(contract, dict):
+            continue
+        condition = contract.get('condition')
+        phase = contract.get('phase')
+        if not isinstance(condition, str) or not isinstance(phase, str):
+            continue
+        fixture_label = error_path.relative_to(root)
+        registration = conditions.get(condition)
+        if registration is None:
+            errors.append(
+                f"ERROR: {fixture_label}.condition: unregistered condition "
+                f"{condition!r}"
+            )
+            continue
+        if (
+            isinstance(registration, dict)
+            and isinstance(registration.get('phases'), list)
+            and phase not in registration['phases']
+        ):
+            errors.append(
+                f"ERROR: {fixture_label}.phase: condition {condition!r} is "
+                f"not registered for phase {phase!r}"
+            )
+    return errors
+
+
 def spec_path_exists(spec, path):
     node = spec
     for part in path.split('.'):
@@ -9554,6 +9671,14 @@ def check_yaml_files(root: Path):
     if validation_manifest is not None:
         errors.extend(
             validate_validation_manifest(root, validation_manifest)
+        )
+    condition_registry, condition_registry_load_errors = (
+        load_condition_registry(root)
+    )
+    errors.extend(condition_registry_load_errors)
+    if condition_registry is not None:
+        errors.extend(
+            validate_condition_registry(root, condition_registry)
         )
     errors.extend(
         validate_examples_structure(
