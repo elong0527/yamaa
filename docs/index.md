@@ -34,6 +34,13 @@ How the 149 example directories are put together, which example answers which
 question, and how the negative examples encode failure behavior. Start here if
 you are implementing YAMAA, or looking for a worked precedent.
 
+**[Dataset coverage review](dataset-coverage-review.md)**
+The examples read one dataset at a time, against four fixed criteria: which
+situations they cover and which are missing, whether each README agrees with
+its output and is guaranteed by its specification, how the specification is
+built from the schema beside its Excel form, and how every expected value
+traces back to the input. Start here if you are reviewing the suite.
+
 ## Teaching from these pages
 
 With one hour, and an audience of statistical programmers:

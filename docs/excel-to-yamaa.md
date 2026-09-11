@@ -4,7 +4,7 @@ title: Excel to YAMAA
 
 # Translating an Excel specification
 
-> **YAMAA docs:** [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Examples walkthrough](yaml-examples-walkthrough.md)
+> **YAMAA docs:** [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Examples walkthrough](yaml-examples-walkthrough.md) | [Dataset coverage review](dataset-coverage-review.md)
 
 > **Read this if** you have SDTM or ADaM specifications in Excel and want to
 > know what each cell becomes. It maps every column of a Variable sheet, then
