@@ -51,4 +51,6 @@ jobs:
         run: >-
           ${{ github.workspace }}/python/.venv/bin/python -c
           "import yamaa; from yamaa.odm import write_odm_parquet;
-          print(yamaa.__version__, write_odm_parquet.__name__)"
+          from yamaa.specification import load_specification;
+          print(yamaa.__version__, write_odm_parquet.__name__,
+          load_specification.__name__)"

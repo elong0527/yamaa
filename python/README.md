@@ -37,3 +37,19 @@ result = write_odm_parquet("input.xml", "clinical-items.parquet")
 
 See the [ODM helper documentation](src/yamaa/odm/README.md) for the fixed schema
 and supported XML layouts.
+
+## Specification loader
+
+Load one specification against the repository schema bundle:
+
+```python
+from yamaa.specification import load_specification
+
+loaded = load_specification("study/spec.yaml", "yaml")
+print(loaded.specification.domain)
+```
+
+The loader applies YAML 1.2 core scalar rules, rejects YAML features outside
+the authored-source contract, reads safe schema includes, validates the document
+against the bundle, materializes R006 shorthands and defaults, and returns strict
+Pydantic models. It does not execute the specification or resolve inheritance.
