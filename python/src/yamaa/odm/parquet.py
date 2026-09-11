@@ -35,6 +35,7 @@ def write_odm_parquet(
     batch_size: int = 10_000,
     compression: str = "zstd",
     overwrite: bool = False,
+    max_archive_members: int = 10_000,
     max_expanded_bytes: int = 256 * 1024 * 1024,
     max_xml_depth: int = 64,
 ) -> ParquetWriteResult:
@@ -86,6 +87,7 @@ def write_odm_parquet(
             for record in iter_odm_records(
                 source_path,
                 archive_member=archive_member,
+                max_archive_members=max_archive_members,
                 max_expanded_bytes=max_expanded_bytes,
                 max_xml_depth=max_xml_depth,
             ):

@@ -142,6 +142,55 @@ def test_archive_member_selects_one_of_multiple_xml_files(tmp_path: Path) -> Non
     assert len(rows) == 2
 
 
+def test_archive_member_count_at_bound_does_not_require_full_member_list(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    archive_path = tmp_path / "bounded.tar.gz"
+    payload = ODM_20.encode()
+    with tarfile.open(archive_path, "w:gz") as archive:
+        for name, contents in (
+            ("study/odm.xml", payload),
+            ("study/index.html", b"<html/>"),
+            ("study/notes.txt", b"notes"),
+        ):
+            info = tarfile.TarInfo(name)
+            info.size = len(contents)
+            archive.addfile(info, io.BytesIO(contents))
+
+    def fail_getmembers(archive: tarfile.TarFile) -> list[tarfile.TarInfo]:
+        raise AssertionError("getmembers must not be called")
+
+    monkeypatch.setattr(tarfile.TarFile, "getmembers", fail_getmembers)
+
+    rows = list(iter_odm_records(archive_path, max_archive_members=3))
+
+    assert len(rows) == 2
+
+
+def test_archive_member_count_above_bound_is_rejected(tmp_path: Path) -> None:
+    archive_path = tmp_path / "too-many-members.tar"
+    with tarfile.open(archive_path, "w") as archive:
+        for index in range(20):
+            contents = str(index).encode()
+            info = tarfile.TarInfo(f"member-{index}.txt")
+            info.size = len(contents)
+            archive.addfile(info, io.BytesIO(contents))
+
+    with pytest.raises(ODMError, match="more than 3 members"):
+        read_odm(archive_path, max_archive_members=3)
+
+
+def test_public_readers_reject_invalid_archive_member_bound(
+    odm20_path: Path,
+) -> None:
+    with pytest.raises(ODMError, match="max_archive_members must be at least 1"):
+        list(iter_odm_records(odm20_path, max_archive_members=0))
+
+    with pytest.raises(ODMError, match="max_archive_members must be at least 1"):
+        read_odm(odm20_path, max_archive_members=0)
+
+
 def test_archive_rejects_non_regular_xml_member(tmp_path: Path) -> None:
     archive_path = tmp_path / "unsafe.tar.gz"
     with tarfile.open(archive_path, "w:gz") as archive:

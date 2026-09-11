@@ -70,10 +70,23 @@ def _is_os_metadata(name: str) -> bool:
     return path.name.startswith("._") or "__MACOSX__" in path.parts
 
 
+def _bounded_archive_members(
+    archive: tarfile.TarFile,
+    max_archive_members: int,
+) -> Iterator[tarfile.TarInfo]:
+    for member_count, member in enumerate(archive, start=1):
+        if member_count > max_archive_members:
+            raise ODMError(
+                f"TAR input contains more than {max_archive_members} members"
+            )
+        yield member
+
+
 def resolve_archive_member(
     path: Path,
     archive_member: str | None,
     max_expanded_bytes: int,
+    max_archive_members: int = 10_000,
 ) -> str | None:
     """Select one safe XML archive member, or return None for plain XML."""
     is_archive = tarfile.is_tarfile(path)
@@ -89,30 +102,35 @@ def resolve_archive_member(
 
     try:
         with tarfile.open(path, "r:*") as archive:
-            members = archive.getmembers()
+            selected_member: tarfile.TarInfo | None = None
+            candidate_count = 0
+            for member in _bounded_archive_members(archive, max_archive_members):
+                if archive_member is None:
+                    is_candidate = member.name.casefold().endswith(
+                        ".xml"
+                    ) and not _is_os_metadata(member.name)
+                else:
+                    is_candidate = member.name == archive_member
+                if is_candidate:
+                    candidate_count += 1
+                    if selected_member is None:
+                        selected_member = member
+
             if archive_member is None:
-                candidates = [
-                    member
-                    for member in members
-                    if member.name.casefold().endswith(".xml")
-                    and not _is_os_metadata(member.name)
-                ]
-                if len(candidates) != 1:
+                if candidate_count != 1:
                     raise ODMError(
                         "TAR input must contain exactly one XML member or receive "
                         "archive_member"
                     )
             else:
-                candidates = [
-                    member for member in members if member.name == archive_member
-                ]
-                if len(candidates) != 1:
+                if candidate_count != 1:
                     raise ODMError(
-                        f"TAR input contains {len(candidates)} entries named "
+                        f"TAR input contains {candidate_count} entries named "
                         f"{archive_member!r}"
                     )
 
-            member = candidates[0]
+            assert selected_member is not None
+            member = selected_member
             if not _safe_member_name(member.name):
                 raise ODMError(f"unsafe TAR member path {member.name!r}")
             if not member.isfile():
@@ -125,7 +143,11 @@ def resolve_archive_member(
 
 
 @contextmanager
-def _open_xml_stream(path: Path, member_name: str | None) -> Iterator[BinaryIO]:
+def _open_xml_stream(
+    path: Path,
+    member_name: str | None,
+    max_archive_members: int,
+) -> Iterator[BinaryIO]:
     if member_name is None:
         with path.open("rb") as stream:
             yield stream
@@ -133,7 +155,14 @@ def _open_xml_stream(path: Path, member_name: str | None) -> Iterator[BinaryIO]:
 
     try:
         with tarfile.open(path, "r:*") as archive:
-            stream = archive.extractfile(archive.getmember(member_name))
+            member = None
+            for candidate in _bounded_archive_members(archive, max_archive_members):
+                if candidate.name == member_name:
+                    member = candidate
+                    break
+            if member is None:
+                raise ODMError(f"cannot open TAR member {member_name!r}")
+            stream = archive.extractfile(member)
             if stream is None:
                 raise ODMError(f"cannot open TAR member {member_name!r}")
             with stream:
@@ -179,11 +208,13 @@ def iter_odm_records(
     source: str | Path,
     *,
     archive_member: str | None = None,
+    max_archive_members: int = 10_000,
     max_expanded_bytes: int = 256 * 1024 * 1024,
     max_xml_depth: int = 64,
 ) -> Iterator[ClinicalItemRow]:
     """Yield one validated row per clinical item in source order.
 
+    TAR inputs may contain at most max_archive_members entries.
     A direct FormData ancestor supplies form context. When FormData is absent,
     exactly two nested ItemGroupData ancestors are supported: the outer group
     supplies form context and the inner group supplies item-group context.
@@ -193,6 +224,8 @@ def iter_odm_records(
         raise FileNotFoundError(source_path)
     if max_expanded_bytes < 1:
         raise ODMError("max_expanded_bytes must be at least 1")
+    if max_archive_members < 1:
+        raise ODMError("max_archive_members must be at least 1")
     if max_xml_depth < 8:
         raise ODMError("max_xml_depth must be at least 8")
 
@@ -200,6 +233,7 @@ def iter_odm_records(
         source_path,
         archive_member,
         max_expanded_bytes,
+        max_archive_members,
     )
     names: dict[DefinitionKind, dict[MetadataKey, str | None]] = {
         "event": {},
@@ -222,7 +256,11 @@ def iter_odm_records(
     depth = 0
 
     try:
-        with _open_xml_stream(source_path, member_name) as stream:
+        with _open_xml_stream(
+            source_path,
+            member_name,
+            max_archive_members,
+        ) as stream:
             context = etree.iterparse(
                 stream,
                 events=("start", "end"),
@@ -548,6 +586,7 @@ def read_odm(
     source: str | Path,
     *,
     archive_member: str | None = None,
+    max_archive_members: int = 10_000,
     max_expanded_bytes: int = 256 * 1024 * 1024,
     max_xml_depth: int = 64,
 ) -> pl.DataFrame:
@@ -556,6 +595,7 @@ def read_odm(
         iter_odm_records(
             source,
             archive_member=archive_member,
+            max_archive_members=max_archive_members,
             max_expanded_bytes=max_expanded_bytes,
             max_xml_depth=max_xml_depth,
         )
