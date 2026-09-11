@@ -35,10 +35,9 @@ result = write_odm_parquet("input.xml", "clinical-items.parquet")
 print(result.row_count)
 ```
 
-Run the focused tests with the pinned temporary environment:
+Run the focused tests from the installed, locked package environment:
 
 ```bash
-PYTHONPATH=python/src uv run \
-  --with-requirements python/requirements-odm-test.txt \
-  python -m pytest python/tests/odm
+uv sync --project python --extra test --locked --no-editable
+uv run --project python --no-sync pytest python/tests/odm
 ```
