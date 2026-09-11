@@ -33,6 +33,18 @@ semantics, error behavior, and representative examples are complete.
 | R022 | [Regular expressions](R022-regular-expressions.md) | normative | The pinned engine and flag set, full-match and search behavior per consumer, capture-group numbering | R006, R007, R008, R009, R019 |
 | R023 | [Delimited source profile](R023-delimited-source.md) | normative | The `csv` source syntax: encoding, records and fields, header shape, and delivered quoting | R014, R019, R021 |
 
+## Reserved rule IDs
+
+A rule ID is reserved here on `main` before the branch that writes its file,
+so two branches cannot allocate one ID. The branch that lands the rule
+deletes its reservation row and adds its index row above; the repository
+validation rejects a tree where one ID is both reserved and indexed, where
+two files claim one ID, or where an indexed ID has no file.
+[CONTRIBUTING.md](../../CONTRIBUTING.md) states the procedure.
+
+| ID | Intended rule | Reserved by |
+|---|---|---|
+
 ## Rule admission
 
 The maintained rule set has one status: normative. Design proposals may be

@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 import yaml
@@ -34,6 +35,16 @@ EXECUTION_SPEC = importlib.util.spec_from_file_location(
 assert EXECUTION_SPEC is not None and EXECUTION_SPEC.loader is not None
 EXECUTION_CHECK = importlib.util.module_from_spec(EXECUTION_SPEC)
 EXECUTION_SPEC.loader.exec_module(EXECUTION_CHECK)
+
+NORMATIVE_PATH = Path(__file__).parent / 'check_normative_change.py'
+NORMATIVE_SPEC = importlib.util.spec_from_file_location(
+    'check_normative_change', NORMATIVE_PATH
+)
+assert NORMATIVE_SPEC is not None and NORMATIVE_SPEC.loader is not None
+NORMATIVE_CHECK = importlib.util.module_from_spec(NORMATIVE_SPEC)
+NORMATIVE_SPEC.loader.exec_module(NORMATIVE_CHECK)
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class TestYamlLoader(unittest.TestCase):
@@ -1620,6 +1631,9 @@ class TestRuleMetadata(unittest.TestCase):
                 '| ID | Rule | Status | Owns | Depends on |\n'
                 '|---|---|---|---|---|\n'
                 '| R001 | Rule | proposed | Topic | -- |\n'
+                '\n## Reserved rule IDs\n\n'
+                '| ID | Intended rule | Reserved by |\n'
+                '|---|---|---|\n'
             )
             (rules / 'R001-rule.md').write_text(
                 '---\nid: R001\ntitle: Rule\nstatus: proposed\n---\n'
@@ -4918,6 +4932,366 @@ class TestSourceProfileDiagnostics(unittest.TestCase):
                 'phase: validation\ncondition: source_profile_unknown\n'
             )
             self.assertEqual(VALIDATOR.validate_csv_shapes(root), [])
+
+
+RULE_INDEX_HEADER = (
+    '# Derivation rules\n\n'
+    '| ID | Rule | Status | Owns | Depends on |\n'
+    '|---|---|---|---|---|\n'
+)
+RESERVED_TABLE_HEADER = (
+    '## Reserved rule IDs\n\n'
+    '| ID | Intended rule | Reserved by |\n'
+    '|---|---|---|\n'
+)
+RULE_FRONT_MATTER = (
+    '---\n'
+    'id: {rule_id}\n'
+    'title: {title}\n'
+    'status: normative\n'
+    'applies_to: [dataset]\n'
+    'depends_on: []\n'
+    '---\n\n'
+    '# {title}\n'
+)
+
+
+def rules_index(indexed=(), reserved=()):
+    """Spell a rules/README.md carrying the given index and reservations."""
+    text = RULE_INDEX_HEADER
+    for rule_id, slug in indexed:
+        text += (
+            f'| {rule_id} | [{rule_id}]({rule_id}-{slug}.md) | normative '
+            f'| Something | -- |\n'
+        )
+    text += '\n' + RESERVED_TABLE_HEADER
+    for row in reserved:
+        text += '| ' + ' | '.join(row) + ' |\n'
+    text += '\n## Rule admission\n\nProse that mentions R999 in passing.\n'
+    return text
+
+
+def write_rules(root, indexed=(), reserved=(), extra_files=()):
+    """Write a yaml/rules tree and return its repository root."""
+    rules = root / 'yaml' / 'rules'
+    rules.mkdir(parents=True, exist_ok=True)
+    (rules / 'README.md').write_text(
+        rules_index(indexed, reserved), encoding='utf-8'
+    )
+    for rule_id, slug in tuple(indexed) + tuple(extra_files):
+        (rules / f'{rule_id}-{slug}.md').write_text(
+            RULE_FRONT_MATTER.format(rule_id=rule_id, title=slug),
+            encoding='utf-8',
+        )
+    return root
+
+
+class TestRuleIdIntegrity(unittest.TestCase):
+    """#174: nothing may allocate one rule ID twice."""
+
+    def errors_for(self, **kwargs):
+        with tempfile.TemporaryDirectory() as raw:
+            root = write_rules(Path(raw), **kwargs)
+            return VALIDATOR.validate_rule_metadata(root)
+
+    def test_indexed_rules_with_their_files_pass(self):
+        self.assertEqual(
+            self.errors_for(indexed=[('R001', 'first'), ('R002', 'second')]),
+            [],
+        )
+
+    def test_two_files_claiming_one_id_are_rejected(self):
+        errors = self.errors_for(
+            indexed=[('R020', 'artifact-serialization')],
+            extra_files=[('R020', 'project-resource-resolution')],
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn('R020 is claimed by more than one file', errors[0])
+        self.assertIn('R020-artifact-serialization.md', errors[0])
+        self.assertIn('R020-project-resource-resolution.md', errors[0])
+
+    def test_indexed_id_without_a_file_is_rejected(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = write_rules(Path(raw), indexed=[('R001', 'first')])
+            (root / 'yaml' / 'rules' / 'R001-first.md').unlink()
+            errors = VALIDATOR.validate_rule_metadata(root)
+
+        self.assertEqual(
+            errors,
+            ['ERROR: yaml/rules/README.md: R001 is indexed but no rule file '
+             'defines it'],
+        )
+
+    def test_duplicate_index_rows_are_rejected(self):
+        errors = self.errors_for(
+            indexed=[('R001', 'first'), ('R001', 'first')]
+        )
+
+        self.assertIn(
+            'ERROR: yaml/rules/README.md: R001 is indexed more than once',
+            errors,
+        )
+
+    def test_a_reserved_id_that_is_defined_is_rejected(self):
+        errors = self.errors_for(
+            indexed=[('R001', 'first')],
+            reserved=[('R001', 'First', '#174')],
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn('R001 is reserved and already defined', errors[0])
+
+    def test_an_open_reservation_passes(self):
+        self.assertEqual(
+            self.errors_for(
+                indexed=[('R001', 'first')],
+                reserved=[('R002', 'Second rule', '#174')],
+            ),
+            [],
+        )
+
+    def test_malformed_reservation_rows_are_rejected(self):
+        errors = self.errors_for(
+            indexed=[('R001', 'first')],
+            reserved=[
+                ('R2', 'Short id', '#174'),
+                ('R003', '', '#174'),
+                ('R004', 'No issue', '174'),
+                ('R005', 'Missing a cell'),
+            ],
+        )
+
+        self.assertIn(
+            "ERROR: yaml/rules/README.md: reserved ID 'R2' must be spelled "
+            'Rnnn',
+            errors,
+        )
+        self.assertIn(
+            'ERROR: yaml/rules/README.md: reserved R003 must name its '
+            'intended rule',
+            errors,
+        )
+        self.assertIn(
+            'ERROR: yaml/rules/README.md: reserved R004 must name its '
+            "reserving issue as #<number>, got '174'",
+            errors,
+        )
+        self.assertTrue(
+            any('must carry an ID, an intended rule, and a reserving issue'
+                in error for error in errors),
+            errors,
+        )
+
+    def test_one_id_reserved_twice_is_rejected(self):
+        errors = self.errors_for(
+            indexed=[('R001', 'first')],
+            reserved=[('R002', 'Second', '#174'), ('R002', 'Other', '#175')],
+        )
+
+        self.assertEqual(
+            errors,
+            ['ERROR: yaml/rules/README.md: R002 is reserved more than once'],
+        )
+
+    def test_a_missing_reservation_section_is_rejected(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = write_rules(Path(raw), indexed=[('R001', 'first')])
+            index = root / 'yaml' / 'rules' / 'README.md'
+            index.write_text(
+                index.read_text(encoding='utf-8').replace(
+                    '## Reserved rule IDs', '## Something else'
+                ),
+                encoding='utf-8',
+            )
+            errors = VALIDATOR.validate_rule_metadata(root)
+
+        self.assertEqual(
+            errors,
+            ["ERROR: yaml/rules/README.md: missing the '## Reserved rule "
+             "IDs' section"],
+        )
+
+    def test_a_renamed_reservation_column_is_rejected(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = write_rules(Path(raw), indexed=[('R001', 'first')])
+            index = root / 'yaml' / 'rules' / 'README.md'
+            index.write_text(
+                index.read_text(encoding='utf-8').replace(
+                    '| ID | Intended rule | Reserved by |',
+                    '| ID | Intended rule | Issue |',
+                ),
+                encoding='utf-8',
+            )
+            errors = VALIDATOR.validate_rule_metadata(root)
+
+        self.assertEqual(
+            errors,
+            ['ERROR: yaml/rules/README.md: the reservation table header must '
+             'be ID | Intended rule | Reserved by'],
+        )
+
+    def test_prose_below_the_index_is_not_an_index_row(self):
+        entries, duplicates = VALIDATOR.rule_index_entries(
+            rules_index(indexed=[('R001', 'first')])
+        )
+
+        self.assertEqual(entries, {'R001': 'normative'})
+        self.assertEqual(duplicates, [])
+
+    def test_the_repository_index_and_reservations_parse(self):
+        index = (REPO_ROOT / 'yaml' / 'rules' / 'README.md').read_text(
+            encoding='utf-8'
+        )
+        entries, duplicates = VALIDATOR.rule_index_entries(index)
+        reserved, errors = VALIDATOR.reserved_rule_entries(index)
+
+        self.assertEqual(duplicates, [])
+        self.assertEqual(errors, [])
+        self.assertEqual(set(entries.values()), {'normative'})
+        self.assertEqual(reserved.keys() & entries.keys(), set())
+
+
+class TestNormativeChangeGate(unittest.TestCase):
+    """#174: reservation and changelog gates measured against a base."""
+
+    def git(self, root, *arguments):
+        subprocess.run(
+            ('git', *arguments),
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    def repository(self, raw, indexed=(), reserved=()):
+        """Return a root whose `main` carries the given rule index."""
+        root = write_rules(Path(raw), indexed=indexed, reserved=reserved)
+        self.git(root, 'init', '--quiet')
+        self.git(root, 'symbolic-ref', 'HEAD', 'refs/heads/main')
+        self.git(root, 'config', 'user.email', 'test@example.com')
+        self.git(root, 'config', 'user.name', 'Test')
+        self.git(root, 'add', '--all')
+        self.git(root, 'commit', '--quiet', '-m', 'base')
+        return root
+
+    def test_normative_paths_are_recognized(self):
+        for path in (
+            'yaml/rules/R001-execution-model.md',
+            'yaml/schema.yaml',
+            'yaml/schema_derivation.yaml',
+        ):
+            self.assertTrue(NORMATIVE_CHECK.is_normative(path), path)
+
+        for path in (
+            'yaml/rules/README.md',
+            'yaml/examples/adam-adsl-bmi-compute/spec.yaml',
+            'yaml/conformance/notes.md',
+            'docs/index.md',
+            '.github/scripts/yaml-validation/validate_repository.py',
+        ):
+            self.assertFalse(NORMATIVE_CHECK.is_normative(path), path)
+
+    def test_a_normative_change_without_a_fragment_is_rejected(self):
+        errors = NORMATIVE_CHECK.check_changelog_fragment(
+            ['yaml/rules/R001-execution-model.md'], ['docs/index.md']
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn('adds no changelog.d/ fragment', errors[0])
+        self.assertIn('yaml/rules/R001-execution-model.md', errors[0])
+
+    def test_a_fragment_clears_a_normative_change(self):
+        self.assertEqual(
+            NORMATIVE_CHECK.check_changelog_fragment(
+                ['yaml/schema.yaml'], ['changelog.d/174-governance.md']
+            ),
+            [],
+        )
+
+    def test_a_change_that_is_not_normative_needs_no_fragment(self):
+        self.assertEqual(
+            NORMATIVE_CHECK.check_changelog_fragment([], []), []
+        )
+
+    def test_a_misnamed_fragment_is_rejected(self):
+        for name in ('governance.md', '174-Governance.md', '174.md',
+                     '0-governance.md', '174-governance.txt'):
+            errors = NORMATIVE_CHECK.check_changelog_fragment(
+                ['yaml/schema.yaml'], [f'changelog.d/{name}']
+            )
+
+            self.assertTrue(
+                any('must be named' in error for error in errors), name
+            )
+
+    def test_the_fragment_directory_readme_is_not_a_fragment(self):
+        errors = NORMATIVE_CHECK.check_changelog_fragment(
+            ['yaml/schema.yaml'], ['changelog.d/README.md']
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn('adds no changelog.d/ fragment', errors[0])
+
+    def test_an_unreserved_new_rule_id_is_rejected(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = self.repository(raw, indexed=[('R001', 'first')])
+            (root / 'yaml' / 'rules' / 'R002-second.md').write_text(
+                RULE_FRONT_MATTER.format(rule_id='R002', title='second'),
+                encoding='utf-8',
+            )
+            errors = NORMATIVE_CHECK.check_reserved_ids('main', root=root)
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn(
+            'R002 is defined here but was neither indexed nor reserved on '
+            'main',
+            errors[0],
+        )
+
+    def test_a_reserved_new_rule_id_passes(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = self.repository(
+                raw,
+                indexed=[('R001', 'first')],
+                reserved=[('R002', 'Second rule', '#174')],
+            )
+            (root / 'yaml' / 'rules' / 'R002-second.md').write_text(
+                RULE_FRONT_MATTER.format(rule_id='R002', title='second'),
+                encoding='utf-8',
+            )
+            self.assertEqual(
+                NORMATIVE_CHECK.check_reserved_ids('main', root=root), []
+            )
+
+    def test_renaming_a_rule_file_keeps_its_id_and_needs_no_reservation(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = self.repository(raw, indexed=[('R001', 'first')])
+            rules = root / 'yaml' / 'rules'
+            (rules / 'R001-first.md').rename(rules / 'R001-renamed.md')
+            self.assertEqual(
+                NORMATIVE_CHECK.check_reserved_ids('main', root=root), []
+            )
+
+    def test_an_unreadable_base_is_reported(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = self.repository(raw, indexed=[('R001', 'first')])
+            errors = NORMATIVE_CHECK.check_reserved_ids('nonexistent',
+                                                        root=root)
+
+        self.assertEqual(len(errors), 1)
+        self.assertIn('cannot read yaml/rules/README.md at nonexistent',
+                      errors[0])
+
+    def test_the_base_comes_from_the_argument_or_the_environment(self):
+        self.assertEqual(NORMATIVE_CHECK.resolve_base('origin/main'),
+                         'origin/main')
+        with unittest.mock.patch.dict(
+            os.environ, {'GITHUB_BASE_REF': 'release'}
+        ):
+            self.assertEqual(NORMATIVE_CHECK.resolve_base(''), 'origin/release')
+        with unittest.mock.patch.dict(os.environ, {'GITHUB_BASE_REF': ''}):
+            self.assertIsNone(NORMATIVE_CHECK.resolve_base(''))
 
 
 if __name__ == '__main__':

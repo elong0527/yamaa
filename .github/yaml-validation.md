@@ -16,7 +16,9 @@ The validation ensures:
    `dict[K,V]`, unions, classes, aliases, and registries) must resolve. The
    validator also enforces `values`, `pattern`, `min_length`, and `size`
    constraints. Every maintained rule must declare `status: normative`, match
-   its stable file ID, and carry the same status in the rule index.
+   its stable file ID, and carry the same status in the rule index. One rule
+   ID is claimed by at most one file, every indexed ID has a file, and an ID
+   held in the `Reserved rule IDs` table is not also defined.
 4. **Example specs**: Every `spec.yaml` or `spec_<variant>.yaml` validates
    against the schemas, checking required fields, unknown fields, and registry
    payload shapes. An entry with `parents` first resolves its ordered local
@@ -171,6 +173,23 @@ To treat warnings as errors, run with the `--warnings-as-errors` flag:
 ```bash
 python3 .github/scripts/yaml-validation/validate_repository.py --warnings-as-errors
 ```
+
+## Normative Change Gates
+A pull request that changes a rule file or a schema module clears two further
+gates, both measured against the base branch and run by the `normative-change`
+job. A rule ID the branch defines must already be indexed or reserved on the
+base, and the change must add a `changelog.d/` entry.
+[CONTRIBUTING.md](../CONTRIBUTING.md) states both procedures. Run them locally
+against the branch the pull request targets:
+
+```bash
+git fetch origin main
+python3 .github/scripts/yaml-validation/check_normative_change.py \
+    --base origin/main
+```
+
+Without `--base` and without `GITHUB_BASE_REF` the check reports that it has
+no base to compare against and passes, so a push build stays green.
 
 CI additionally checks that every `blocked_by` issue in the validation manifest
 remains open. With GitHub credentials available, run the same check locally:

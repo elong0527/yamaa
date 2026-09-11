@@ -21,6 +21,9 @@ and minimal resolved form are defined by
 - [`python/`](python/) - Python implementation
 - [`docs/`](docs/) - diagrams and assets
 
+[CONTRIBUTING.md](CONTRIBUTING.md) states how a change to the rules or
+the schema bundle is governed.
+
 ## Example
 
 The specification is deterministic by design and supports SQL expressions. More realistic examples are available in the [`yaml/examples/`](yaml/examples/) directory.

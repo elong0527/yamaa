@@ -8427,6 +8427,122 @@ def validate_example_readmes(root: Path):
     return errors
 
 
+RULE_ID_PATTERN = re.compile(r'\AR[0-9]{3}\Z')
+RESERVED_HEADING = 'Reserved rule IDs'
+RESERVED_BY_PATTERN = re.compile(r'\A#[1-9][0-9]*\Z')
+RESERVED_COLUMNS = ['ID', 'Intended rule', 'Reserved by']
+
+
+def markdown_table_rows(text):
+    """Return the trimmed cells of every pipe-table row in `text`.
+
+    The alignment row under a header carries no content and is skipped.
+    """
+    rows = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith('|') or not stripped.endswith('|'):
+            continue
+        cells = [cell.strip() for cell in stripped.strip('|').split('|')]
+        if all(cell and set(cell) <= {'-', ':'} for cell in cells):
+            continue
+        rows.append(cells)
+    return rows
+
+
+def markdown_section(text, heading):
+    """Return the body under one `## <heading>`, or None when absent."""
+    match = re.search(
+        rf'^##\s+{re.escape(heading)}\s*$(.*?)(?=^##\s|\Z)',
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    return None if match is None else match.group(1)
+
+
+def rule_index_entries(index_text):
+    """Return ({id: status}, duplicate ids) for the rule index table.
+
+    The index is the table above the first `##` heading, so a rule ID
+    quoted anywhere in the prose below it is not an index entry.
+    """
+    heading = re.search(r'^##\s', index_text, re.MULTILINE)
+    region = index_text if heading is None else index_text[:heading.start()]
+    entries = {}
+    duplicates = []
+    for cells in markdown_table_rows(region):
+        if len(cells) < 3 or not RULE_ID_PATTERN.match(cells[0]):
+            continue
+        if cells[0] in entries:
+            duplicates.append(cells[0])
+            continue
+        entries[cells[0]] = cells[2]
+    return entries, duplicates
+
+
+def reserved_rule_entries(index_text):
+    """Return ({id: reserving issue}, errors) for the reservation table.
+
+    A reservation holds an ID on `main` before the branch that writes its
+    rule file, so two branches cannot allocate one ID.
+    """
+    errors = []
+    section = markdown_section(index_text, RESERVED_HEADING)
+    if section is None:
+        return {}, [
+            "ERROR: yaml/rules/README.md: missing the "
+            f"'## {RESERVED_HEADING}' section"
+        ]
+
+    rows = markdown_table_rows(section)
+    if not rows:
+        return {}, [
+            f"ERROR: yaml/rules/README.md: the '{RESERVED_HEADING}' section "
+            "must carry the reservation table"
+        ]
+    header, reservations = rows[0], rows[1:]
+    if header != RESERVED_COLUMNS:
+        errors.append(
+            "ERROR: yaml/rules/README.md: the reservation table header must "
+            f"be {' | '.join(RESERVED_COLUMNS)}"
+        )
+
+    entries = {}
+    for cells in reservations:
+        if len(cells) != 3:
+            errors.append(
+                "ERROR: yaml/rules/README.md: reserved row "
+                f"{' | '.join(cells)!r} must carry an ID, an intended rule, "
+                "and a reserving issue"
+            )
+            continue
+        rule_id, title, issue = cells
+        if not RULE_ID_PATTERN.match(rule_id):
+            errors.append(
+                f"ERROR: yaml/rules/README.md: reserved ID {rule_id!r} must "
+                "be spelled Rnnn"
+            )
+            continue
+        if rule_id in entries:
+            errors.append(
+                f"ERROR: yaml/rules/README.md: {rule_id} is reserved more "
+                "than once"
+            )
+            continue
+        if not title:
+            errors.append(
+                f"ERROR: yaml/rules/README.md: reserved {rule_id} must name "
+                "its intended rule"
+            )
+        if not RESERVED_BY_PATTERN.match(issue):
+            errors.append(
+                f"ERROR: yaml/rules/README.md: reserved {rule_id} must name "
+                f"its reserving issue as #<number>, got {issue!r}"
+            )
+        entries[rule_id] = issue
+    return entries, errors
+
+
 def validate_rule_metadata(root: Path):
     errors = []
     rules_dir = root / 'yaml' / 'rules'
@@ -8434,6 +8550,26 @@ def validate_rule_metadata(root: Path):
     if not rules_dir.is_dir() or not index_path.is_file():
         return errors
     index = index_path.read_text(encoding='utf-8')
+
+    index_entries, index_duplicates = rule_index_entries(index)
+    for rule_id in index_duplicates:
+        errors.append(
+            f"ERROR: yaml/rules/README.md: {rule_id} is indexed more than once"
+        )
+    reserved_entries, reserved_errors = reserved_rule_entries(index)
+    errors.extend(reserved_errors)
+
+    files_by_id = {}
+    for rule_path in sorted(rules_dir.glob('R[0-9][0-9][0-9]-*.md')):
+        files_by_id.setdefault(rule_path.name[:4], []).append(rule_path)
+
+    for rule_id, paths in sorted(files_by_id.items()):
+        if len(paths) > 1:
+            claimants = ', '.join(path.name for path in paths)
+            errors.append(
+                f"ERROR: yaml/rules: {rule_id} is claimed by more than one "
+                f"file: {claimants}"
+            )
 
     for rule_path in sorted(rules_dir.glob('R[0-9][0-9][0-9]-*.md')):
         label = rule_path.relative_to(root)
@@ -8463,17 +8599,28 @@ def validate_rule_metadata(root: Path):
                 "'normative'"
             )
 
-        index_row = re.search(
-            rf'^\| {re.escape(expected_id)} \|.*?\| ([^|]+) \|',
-            index,
-            re.MULTILINE,
-        )
-        if index_row is None:
+        status = index_entries.get(expected_id)
+        if status is None:
             errors.append(f"ERROR: {label}: rule is absent from rules/README.md")
-        elif index_row.group(1).strip() != 'normative':
+        elif status != 'normative':
             errors.append(
                 f"ERROR: yaml/rules/README.md: {expected_id} status must be "
                 "'normative'"
+            )
+
+    for rule_id in sorted(index_entries):
+        if rule_id not in files_by_id:
+            errors.append(
+                f"ERROR: yaml/rules/README.md: {rule_id} is indexed but no "
+                "rule file defines it"
+            )
+
+    for rule_id in sorted(reserved_entries):
+        if rule_id in files_by_id or rule_id in index_entries:
+            errors.append(
+                f"ERROR: yaml/rules/README.md: {rule_id} is reserved and "
+                "already defined; a rule that landed releases its "
+                "reservation"
             )
 
     return errors

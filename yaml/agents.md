@@ -30,6 +30,9 @@ outside the rule index until their contracts and example coverage are complete.
   do not recreate a generic exception list.
 - Store each cohesive semantic area in one rule file under `rules/`.
 - Give every rule a stable ID and list it in `rules/README.md`.
+  Reserve the ID on `main` before the branch that writes the rule;
+  `CONTRIBUTING.md` states how, and repository validation rejects a
+  tree where two files claim one ID.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.

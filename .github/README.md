@@ -5,8 +5,8 @@ Keep workflow definitions in `workflows/` and their supporting code in
 
 - `scripts/examples/`: Ruby checks for example column labels and dependency
   order, their shared specification discovery helper, and unit tests.
-- `scripts/yaml-validation/`: Python repository and validation blocker checks,
-  their unit tests, and `requirements.txt`.
+- `scripts/yaml-validation/`: Python repository, validation blocker, and
+  normative change checks, their unit tests, and `requirements.txt`.
 
 Scripts locate repository data relative to their own files, so they can also
 run locally from any working directory. Keep tests and shared helpers beside
@@ -17,4 +17,5 @@ Pin external actions to full commit hashes with exact release comments
 updating a pin.
 
 See [Repository Validation](yaml-validation.md) for validation scope and local
-commands.
+commands, and [CONTRIBUTING.md](../CONTRIBUTING.md) for the governance the
+`normative-change` job enforces.

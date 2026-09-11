@@ -1,0 +1,19 @@
+# Owners of the normative surface: the rule set and the schema bundle.
+# GitHub requests a review from the owner on every pull request that
+# touches these paths.
+#
+# This file records ownership. It does not by itself require an approval:
+# that needs a branch protection rule on `main` with "Require review from
+# Code Owners" enabled. While the repository has one maintainer, who also
+# opens the automation-authored pull requests, GitHub would leave such a
+# rule unsatisfiable, so it stays off. CONTRIBUTING.md, "Review", states
+# what to enable once a second reviewer can approve.
+
+/yaml/rules/        @elong0527
+/yaml/schema*.yaml  @elong0527
+
+# The governance machinery itself.
+/.github/CODEOWNERS @elong0527
+/CONTRIBUTING.md    @elong0527
+/CHANGELOG.md       @elong0527
+/changelog.d/       @elong0527
