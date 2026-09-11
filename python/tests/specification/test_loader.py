@@ -129,8 +129,7 @@ def test_expands_list_valued_collection_shorthand(tmp_path: Path) -> None:
     )
     schema_path = schema_root / "schema.yaml"
     schema_path.write_text(
-        schema_path.read_text(encoding="ascii")
-        + "\nitems:\n    type: list[str]\n",
+        schema_path.read_text(encoding="ascii") + "\nitems:\n    type: list[str]\n",
         encoding="ascii",
     )
 
