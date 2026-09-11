@@ -1,4 +1,4 @@
-"""Namespace-aware, bounded-memory readers for ODM 1.3 and ODM 2.0."""
+"""General namespace-aware readers for ODM clinical-item data."""
 
 from __future__ import annotations
 
@@ -6,19 +6,20 @@ import tarfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
-from typing import BinaryIO
+from typing import BinaryIO, Literal
 
+import polars as pl
 from lxml import etree
 from pydantic import ValidationError
-from yamaa.odm.catalog import DefinitionKind, MetadataCatalog
-from yamaa.odm.errors import ODMArchiveError, ODMMetadataError, ODMParseError
-from yamaa.odm.profiles import (
-    ODM_13_NAMESPACE,
-    ODM_20_NAMESPACE,
-    ImportProfile,
-    get_profile,
-)
-from yamaa.odm.schema import ClinicalItemRow
+from yamaa.odm.errors import ODMError
+from yamaa.odm.schema import ClinicalItemRow, rows_to_frame
+
+ODM_13_NAMESPACE = "http://www.cdisc.org/ns/odm/v1.3"
+ODM_20_NAMESPACE = "http://www.cdisc.org/ns/odm/v2.0"
+SUPPORTED_NAMESPACES = frozenset({ODM_13_NAMESPACE, ODM_20_NAMESPACE})
+
+DefinitionKind = Literal["event", "form", "group", "item"]
+MetadataKey = tuple[str, str, str]
 
 
 def _local_name(tag: str) -> str:
@@ -32,16 +33,14 @@ def _extension_attribute(element: etree._Element, name: str) -> str | None:
         if qualified.namespace and qualified.localname == name:
             matches.append(value)
     if len(matches) > 1:
-        raise ODMParseError(
-            f"multiple namespaced attributes have the local name {name!r}"
-        )
+        raise ODMError(f"multiple namespaced attributes have local name {name!r}")
     return matches[0] if matches else None
 
 
 def _required_attribute(element: etree._Element, name: str) -> str:
     value = element.get(name)
     if value is None or value == "":
-        raise ODMParseError(f"{_local_name(element.tag)} requires non-empty @{name}")
+        raise ODMError(f"{_local_name(element.tag)} requires non-empty @{name}")
     return value
 
 
@@ -53,7 +52,11 @@ def _parse_is_null(value: str | None) -> bool:
         return True
     if normalized in {"no", "false", "0"}:
         return False
-    raise ODMParseError(f"unsupported IsNull value {value!r}")
+    raise ODMError(f"unsupported IsNull value {value!r}")
+
+
+def _source_or_metadata(source: str | None, metadata: str | None) -> str | None:
+    return metadata if source is None else source
 
 
 def _safe_member_name(name: str) -> bool:
@@ -61,69 +64,67 @@ def _safe_member_name(name: str) -> bool:
     return not path.is_absolute() and ".." not in path.parts
 
 
-def resolve_archive_member(path: Path, profile: ImportProfile) -> str | None:
-    """Select one safe XML archive member, or return None for a plain XML file."""
+def _is_os_metadata(name: str) -> bool:
+    path = PurePosixPath(name)
+    return path.name.startswith("._") or "__MACOSX__" in path.parts
+
+
+def resolve_archive_member(
+    path: Path,
+    archive_member: str | None,
+    max_expanded_bytes: int,
+) -> str | None:
+    """Select one safe XML archive member, or return None for plain XML."""
     is_archive = tarfile.is_tarfile(path)
     archive_suffix = path.name.casefold().endswith((".tar", ".tar.gz", ".tgz"))
     if archive_suffix and not is_archive:
-        raise ODMArchiveError(f"cannot read ODM archive {path}")
+        raise ODMError(f"cannot read ODM archive {path}")
     if not is_archive:
-        if path.stat().st_size > profile.max_expanded_bytes:
-            raise ODMArchiveError(
-                f"ODM XML is larger than {profile.max_expanded_bytes} bytes"
-            )
+        if archive_member is not None:
+            raise ODMError("archive_member requires a TAR input")
+        if path.stat().st_size > max_expanded_bytes:
+            raise ODMError(f"ODM XML exceeds {max_expanded_bytes} bytes")
         return None
 
     try:
         with tarfile.open(path, "r:*") as archive:
-            if profile.archive_member is not None:
+            members = archive.getmembers()
+            if archive_member is None:
                 candidates = [
                     member
-                    for member in archive.getmembers()
-                    if member.name == profile.archive_member
+                    for member in members
+                    if member.name.casefold().endswith(".xml")
+                    and not _is_os_metadata(member.name)
                 ]
-                if not candidates:
-                    raise ODMArchiveError(
-                        f"archive does not contain {profile.archive_member!r}"
-                    )
                 if len(candidates) != 1:
-                    raise ODMArchiveError(
-                        f"archive contains {len(candidates)} entries named "
-                        f"{profile.archive_member!r}"
+                    raise ODMError(
+                        "TAR input must contain exactly one XML member or receive "
+                        "archive_member"
                     )
             else:
                 candidates = [
-                    member
-                    for member in archive.getmembers()
-                    if member.name.casefold().endswith(".xml")
+                    member for member in members if member.name == archive_member
                 ]
                 if len(candidates) != 1:
-                    raise ODMArchiveError(
-                        "archive must contain exactly one XML member when the profile "
-                        "does not name one"
+                    raise ODMError(
+                        f"TAR input contains {len(candidates)} entries named "
+                        f"{archive_member!r}"
                     )
 
             member = candidates[0]
             if not _safe_member_name(member.name):
-                raise ODMArchiveError(f"unsafe archive member path {member.name!r}")
+                raise ODMError(f"unsafe TAR member path {member.name!r}")
             if not member.isfile():
-                raise ODMArchiveError(
-                    f"archive member {member.name!r} is not a regular file"
-                )
-            if member.size > profile.max_expanded_bytes:
-                raise ODMArchiveError(
-                    f"archive member is larger than {profile.max_expanded_bytes} bytes"
-                )
+                raise ODMError(f"TAR member {member.name!r} is not a regular file")
+            if member.size > max_expanded_bytes:
+                raise ODMError(f"TAR member exceeds {max_expanded_bytes} bytes")
             return member.name
     except tarfile.TarError as error:
-        raise ODMArchiveError(f"cannot read ODM archive {path}") from error
+        raise ODMError(f"cannot read ODM archive {path}") from error
 
 
 @contextmanager
-def _open_xml_stream(
-    path: Path,
-    member_name: str | None,
-) -> Iterator[BinaryIO]:
+def _open_xml_stream(path: Path, member_name: str | None) -> Iterator[BinaryIO]:
     if member_name is None:
         with path.open("rb") as stream:
             yield stream
@@ -131,18 +132,16 @@ def _open_xml_stream(
 
     try:
         with tarfile.open(path, "r:*") as archive:
-            member = archive.getmember(member_name)
-            stream = archive.extractfile(member)
+            stream = archive.extractfile(archive.getmember(member_name))
             if stream is None:
-                raise ODMArchiveError(f"cannot open archive member {member_name!r}")
+                raise ODMError(f"cannot open TAR member {member_name!r}")
             with stream:
                 yield stream
     except tarfile.TarError as error:
-        raise ODMArchiveError(f"cannot read ODM archive {path}") from error
+        raise ODMError(f"cannot read ODM archive {path}") from error
 
 
 def _release(element: etree._Element) -> None:
-    """Release a completed element and already-consumed siblings."""
     element.clear()
     parent = element.getparent()
     if parent is not None:
@@ -150,43 +149,63 @@ def _release(element: etree._Element) -> None:
             del parent[0]
 
 
-def _metadata_name(
-    catalog: MetadataCatalog,
+def _add_metadata_name(
+    names: dict[DefinitionKind, dict[MetadataKey, str | None]],
     kind: DefinitionKind,
     study_oid: str,
-    metadata_version_oid: str,
+    version_oid: str,
     oid: str,
-    profile: ImportProfile,
-) -> tuple[bool, str | None]:
-    return catalog.resolve(
-        kind,
-        study_oid,
-        metadata_version_oid,
-        oid,
-        profile.metadata_aliases,
-    )
+    name: str | None,
+) -> None:
+    key = (study_oid, version_oid, oid)
+    existing = names[kind].get(key)
+    if key in names[kind] and existing != name:
+        raise ODMError(f"conflicting {kind} definition for {'/'.join(key)}")
+    names[kind][key] = name
 
 
-def _source_or_metadata(source: str | None, metadata: str | None) -> str | None:
-    return metadata if source is None else source
+def _metadata_name(
+    names: dict[DefinitionKind, dict[MetadataKey, str | None]],
+    kind: DefinitionKind,
+    study_oid: str,
+    version_oid: str,
+    oid: str,
+) -> str | None:
+    return names[kind].get((study_oid, version_oid, oid))
 
 
 def iter_odm_records(
     source: str | Path,
-    profile: str | ImportProfile = "strict",
+    *,
+    archive_member: str | None = None,
+    max_expanded_bytes: int = 256 * 1024 * 1024,
+    max_xml_depth: int = 64,
 ) -> Iterator[ClinicalItemRow]:
-    """Yield validated clinical-item rows in XML source order.
+    """Yield one validated row per clinical item in source order.
 
-    XML parsing is event based and namespace aware. The function never creates a
-    CSV representation or retains the complete clinical section in memory.
+    A direct FormData ancestor supplies form context. When FormData is absent,
+    exactly two nested ItemGroupData ancestors are supported: the outer group
+    supplies form context and the inner group supplies item-group context.
     """
     source_path = Path(source)
     if not source_path.is_file():
         raise FileNotFoundError(source_path)
+    if max_expanded_bytes < 1:
+        raise ODMError("max_expanded_bytes must be at least 1")
+    if max_xml_depth < 8:
+        raise ODMError("max_xml_depth must be at least 8")
 
-    selected_profile = get_profile(profile)
-    member_name = resolve_archive_member(source_path, selected_profile)
-    catalog = MetadataCatalog()
+    member_name = resolve_archive_member(
+        source_path,
+        archive_member,
+        max_expanded_bytes,
+    )
+    names: dict[DefinitionKind, dict[MetadataKey, str | None]] = {
+        "event": {},
+        "form": {},
+        "group": {},
+        "item": {},
+    }
 
     metadata_study: str | None = None
     metadata_version: str | None = None
@@ -215,32 +234,26 @@ def iter_odm_records(
                 name = qualified_name.localname
                 if phase == "start":
                     depth += 1
-                    if depth > selected_profile.max_xml_depth:
-                        raise ODMParseError(
-                            f"XML depth exceeds {selected_profile.max_xml_depth}"
-                        )
+                    if depth > max_xml_depth:
+                        raise ODMError(f"XML depth exceeds {max_xml_depth}")
 
                     if depth == 1:
                         if name != "ODM":
-                            raise ODMParseError("document root must be ODM")
+                            raise ODMError("document root must be ODM")
                         odm_namespace = qualified_name.namespace
-                        if odm_namespace not in selected_profile.allowed_namespaces:
-                            raise ODMParseError(
-                                f"ODM namespace {odm_namespace!r} is not allowed by "
-                                f"profile {selected_profile.name!r}"
+                        if odm_namespace not in SUPPORTED_NAMESPACES:
+                            raise ODMError(
+                                f"unsupported ODM namespace {odm_namespace!r}"
                             )
                         if element.getroottree().docinfo.doctype:
-                            raise ODMParseError(
-                                "DOCTYPE declarations are not supported"
-                            )
+                            raise ODMError("DOCTYPE declarations are not supported")
                         expected_version = (
                             "1.3" if odm_namespace == ODM_13_NAMESPACE else "2.0"
                         )
                         odm_version = element.get("ODMVersion") or expected_version
                         if not odm_version.startswith(expected_version):
-                            raise ODMParseError(
-                                f"ODMVersion {odm_version!r} conflicts with namespace "
-                                f"{odm_namespace!r}"
+                            raise ODMError(
+                                f"ODMVersion {odm_version!r} conflicts with namespace"
                             )
                         file_oid = element.get("FileOID")
                         continue
@@ -248,12 +261,12 @@ def iter_odm_records(
                     if qualified_name.namespace != odm_namespace:
                         continue
                     if name == "ODM":
-                        raise ODMParseError("document contains a nested ODM element")
+                        raise ODMError("document contains a nested ODM element")
                     if clinical is None and name == "Study":
                         metadata_study = _required_attribute(element, "OID")
                     elif clinical is None and name == "MetaDataVersion":
                         if metadata_study is None:
-                            raise ODMParseError("MetaDataVersion appears outside Study")
+                            raise ODMError("MetaDataVersion appears outside Study")
                         metadata_version = _required_attribute(element, "OID")
                     elif clinical is None and name in {
                         "StudyEventDef",
@@ -262,16 +275,15 @@ def iter_odm_records(
                         "ItemDef",
                     }:
                         if metadata_study is None or metadata_version is None:
-                            raise ODMParseError(
-                                f"{name} appears outside MetaDataVersion"
-                            )
+                            raise ODMError(f"{name} appears outside MetaDataVersion")
                         kind: DefinitionKind = {
                             "StudyEventDef": "event",
                             "FormDef": "form",
                             "ItemGroupDef": "group",
                             "ItemDef": "item",
                         }[name]
-                        catalog.add(
+                        _add_metadata_name(
+                            names,
                             kind,
                             metadata_study,
                             metadata_version,
@@ -279,10 +291,6 @@ def iter_odm_records(
                             element.get("Name"),
                         )
                     elif name == "ClinicalData":
-                        if odm_namespace is None:
-                            raise ODMParseError(
-                                "ClinicalData appears before an ODM root"
-                            )
                         clinical = {
                             "StudyOID": _required_attribute(element, "StudyOID"),
                             "MetaDataVersionOID": _required_attribute(
@@ -291,7 +299,7 @@ def iter_odm_records(
                         }
                     elif clinical is not None and name == "SubjectData":
                         if subject is not None:
-                            raise ODMParseError("nested SubjectData is not supported")
+                            raise ODMError("nested SubjectData is not supported")
                         subject = {
                             "SubjectKey": _required_attribute(element, "SubjectKey"),
                             "StudySubjectID": _extension_attribute(
@@ -301,9 +309,7 @@ def iter_odm_records(
                         }
                     elif clinical is not None and name == "StudyEventData":
                         if event is not None:
-                            raise ODMParseError(
-                                "nested StudyEventData is not supported"
-                            )
+                            raise ODMError("nested StudyEventData is not supported")
                         event = {
                             "StudyEventOID": _required_attribute(
                                 element, "StudyEventOID"
@@ -318,7 +324,7 @@ def iter_odm_records(
                         }
                     elif clinical is not None and name == "FormData":
                         if form is not None:
-                            raise ODMParseError("nested FormData is not supported")
+                            raise ODMError("nested FormData is not supported")
                         form = {
                             "FormOID": _required_attribute(element, "FormOID"),
                             "FormRepeatKey": element.get("FormRepeatKey"),
@@ -366,9 +372,7 @@ def iter_odm_records(
 
                 if name == "ItemData":
                     if subject is None or event is None:
-                        raise ODMParseError(
-                            "ItemData requires subject and event context"
-                        )
+                        raise ODMError("ItemData requires subject and event context")
                     item_oid = _required_attribute(element, "ItemOID")
                     value_children = [
                         child
@@ -377,11 +381,11 @@ def iter_odm_records(
                         and _local_name(child.tag) == "Value"
                     ]
                     if "Value" in element.attrib and value_children:
-                        raise ODMParseError(
+                        raise ODMError(
                             f"ItemData {item_oid!r} has attribute and child values"
                         )
                     if len(value_children) > 1:
-                        raise ODMParseError(
+                        raise ODMError(
                             f"ItemData {item_oid!r} has multiple Value children"
                         )
                     if "Value" in element.attrib:
@@ -396,27 +400,17 @@ def iter_odm_records(
 
                     is_null = _parse_is_null(element.get("IsNull"))
                     if is_null and value_present:
-                        raise ODMParseError(
-                            f"ItemData {item_oid!r} is null and also contains a value"
+                        raise ODMError(
+                            f"ItemData {item_oid!r} is null and contains a value"
                         )
 
                     study_oid = clinical["StudyOID"]
                     version_oid = clinical["MetaDataVersionOID"]
-                    if odm_namespace == ODM_13_NAMESPACE:
-                        if form is None or len(groups) != 1:
-                            raise ODMParseError(
-                                "ODM 1.3 ItemData requires one FormData and one "
-                                "ItemGroupData ancestor"
-                            )
+                    if form is not None and len(groups) == 1:
                         projected_form = form
                         item_group = groups[0]
-                        form_kind = "form"
-                    elif odm_namespace == ODM_20_NAMESPACE:
-                        if form is not None or len(groups) != 2:
-                            raise ODMParseError(
-                                "ODM 2.0 profile requires exactly two nested "
-                                "ItemGroupData ancestors and no FormData"
-                            )
+                        form_kind: DefinitionKind = "form"
+                    elif form is None and len(groups) == 2:
                         projected_form = {
                             "FormOID": groups[0]["ItemGroupOID"],
                             "FormRepeatKey": groups[0]["ItemGroupRepeatKey"],
@@ -429,50 +423,14 @@ def iter_odm_records(
                         item_group = groups[1]
                         form_kind = "group"
                     else:
-                        raise ODMParseError("ODM root was not initialized")
+                        raise ODMError(
+                            "ItemData requires FormData plus one ItemGroupData, or "
+                            "two ItemGroupData ancestors without FormData"
+                        )
 
                     event_oid = str(event["StudyEventOID"])
                     form_oid = str(projected_form["FormOID"])
                     group_oid = str(item_group["ItemGroupOID"])
-                    _, event_metadata_name = _metadata_name(
-                        catalog,
-                        "event",
-                        study_oid,
-                        version_oid,
-                        event_oid,
-                        selected_profile,
-                    )
-                    _, form_metadata_name = _metadata_name(
-                        catalog,
-                        form_kind,
-                        study_oid,
-                        version_oid,
-                        form_oid,
-                        selected_profile,
-                    )
-                    _, group_metadata_name = _metadata_name(
-                        catalog,
-                        "group",
-                        study_oid,
-                        version_oid,
-                        group_oid,
-                        selected_profile,
-                    )
-                    item_exists, item_metadata_name = _metadata_name(
-                        catalog,
-                        "item",
-                        study_oid,
-                        version_oid,
-                        item_oid,
-                        selected_profile,
-                    )
-                    if selected_profile.require_item_metadata and not item_exists:
-                        raise ODMMetadataError(
-                            "unresolved ItemDef for "
-                            f"{study_oid}/{version_oid}/{item_oid} under profile "
-                            f"{selected_profile.name!r}"
-                        )
-
                     source_ordinal += 1
                     try:
                         row = ClinicalItemRow.model_validate(
@@ -487,7 +445,14 @@ def iter_odm_records(
                                 "StudyEventOID": event_oid,
                                 "StudyEventRepeatKey": event["StudyEventRepeatKey"],
                                 "EventName": _source_or_metadata(
-                                    event["EventName"], event_metadata_name
+                                    event["EventName"],
+                                    _metadata_name(
+                                        names,
+                                        "event",
+                                        study_oid,
+                                        version_oid,
+                                        event_oid,
+                                    ),
                                 ),
                                 "StartDate": event["StartDate"],
                                 "EventStatus": event["EventStatus"],
@@ -495,7 +460,14 @@ def iter_odm_records(
                                 "FormOID": form_oid,
                                 "FormRepeatKey": projected_form["FormRepeatKey"],
                                 "FormName": _source_or_metadata(
-                                    projected_form["FormName"], form_metadata_name
+                                    projected_form["FormName"],
+                                    _metadata_name(
+                                        names,
+                                        form_kind,
+                                        study_oid,
+                                        version_oid,
+                                        form_oid,
+                                    ),
                                 ),
                                 "FormLayoutOID": projected_form["FormLayoutOID"],
                                 "FormStatus": projected_form["FormStatus"],
@@ -506,13 +478,26 @@ def iter_odm_records(
                                 "ItemGroupOID": group_oid,
                                 "ItemGroupRepeatKey": item_group["ItemGroupRepeatKey"],
                                 "ItemGroupName": _source_or_metadata(
-                                    item_group["ItemGroupName"], group_metadata_name
+                                    item_group["ItemGroupName"],
+                                    _metadata_name(
+                                        names,
+                                        "group",
+                                        study_oid,
+                                        version_oid,
+                                        group_oid,
+                                    ),
                                 ),
                                 "TransactionType": item_group["TransactionType"],
                                 "ItemOID": item_oid,
                                 "ItemName": _source_or_metadata(
                                     _extension_attribute(element, "ItemName"),
-                                    item_metadata_name,
+                                    _metadata_name(
+                                        names,
+                                        "item",
+                                        study_oid,
+                                        version_oid,
+                                        item_oid,
+                                    ),
                                 ),
                                 "Value": value,
                                 "ValuePresent": value_present,
@@ -521,9 +506,8 @@ def iter_odm_records(
                             }
                         )
                     except ValidationError as error:
-                        raise ODMParseError(
-                            f"invalid clinical item at source ordinal {source_ordinal}: "
-                            f"{error}"
+                        raise ODMError(
+                            f"invalid item at source ordinal {source_ordinal}: {error}"
                         ) from error
                     yield row
                     _release(element)
@@ -531,11 +515,10 @@ def iter_odm_records(
                     element.getparent() is not None
                     and _local_name(element.getparent().tag) == "ItemData"
                 ):
-                    # ItemData consumes and releases all of its direct children.
                     pass
                 elif name == "ItemGroupData":
                     if not groups:
-                        raise ODMParseError("unbalanced ItemGroupData")
+                        raise ODMError("unbalanced ItemGroupData")
                     groups.pop()
                     _release(element)
                 elif name == "FormData":
@@ -554,7 +537,25 @@ def iter_odm_records(
                     _release(element)
                 depth -= 1
     except etree.XMLSyntaxError as error:
-        raise ODMParseError(f"malformed ODM XML: {error}") from error
+        raise ODMError(f"malformed ODM XML: {error}") from error
 
     if odm_namespace is None:
-        raise ODMParseError("document has no ODM root")
+        raise ODMError("document has no ODM root")
+
+
+def read_odm(
+    source: str | Path,
+    *,
+    archive_member: str | None = None,
+    max_expanded_bytes: int = 256 * 1024 * 1024,
+    max_xml_depth: int = 64,
+) -> pl.DataFrame:
+    """Read all clinical items into one fixed-schema Polars DataFrame."""
+    return rows_to_frame(
+        iter_odm_records(
+            source,
+            archive_member=archive_member,
+            max_expanded_bytes=max_expanded_bytes,
+            max_xml_depth=max_xml_depth,
+        )
+    )

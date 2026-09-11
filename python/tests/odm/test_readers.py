@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 from conftest import ODM_13, ODM_20
-from yamaa.odm.errors import ODMArchiveError, ODMMetadataError, ODMParseError
-from yamaa.odm.profiles import KN189_ARCHIVE_MEMBER
-from yamaa.odm.readers import iter_odm_records
+from yamaa.odm.errors import ODMError
+from yamaa.odm.readers import iter_odm_records, read_odm
+from yamaa.odm.schema import ODM_ITEM_SCHEMA
 
 
-def test_odm13_preserves_value_states_and_enriches_names(odm13_path: Path) -> None:
+def test_odm13_preserves_values_and_enriches_exact_metadata(odm13_path: Path) -> None:
     rows = list(iter_odm_records(odm13_path))
 
     assert [row.source_ordinal for row in rows] == [1, 2, 3]
@@ -26,7 +26,7 @@ def test_odm13_preserves_value_states_and_enriches_names(odm13_path: Path) -> No
     assert rows[0].item_group_repeat_key == "7"
 
 
-def test_odm20_projects_outer_and_inner_groups(odm20_path: Path) -> None:
+def test_two_groups_supply_form_and_item_group_context(odm20_path: Path) -> None:
     rows = list(iter_odm_records(odm20_path))
 
     assert len(rows) == 2
@@ -43,7 +43,15 @@ def test_odm20_projects_outer_and_inner_groups(odm20_path: Path) -> None:
     assert rows[1].value_present is True
 
 
-def test_strict_metadata_scope_rejects_unresolved_item(tmp_path: Path) -> None:
+def test_read_odm_returns_fixed_schema_polars_frame(odm20_path: Path) -> None:
+    frame = read_odm(odm20_path)
+
+    assert frame.schema == ODM_ITEM_SCHEMA
+    assert frame.height == 2
+    assert frame["SourceOrdinal"].to_list() == [1, 2]
+
+
+def test_missing_exact_metadata_leaves_names_null(tmp_path: Path) -> None:
     source = tmp_path / "unresolved.xml"
     source.write_text(
         ODM_20.replace(
@@ -53,30 +61,14 @@ def test_strict_metadata_scope_rejects_unresolved_item(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(ODMMetadataError, match="unresolved ItemDef"):
-        list(iter_odm_records(source))
+    rows = list(iter_odm_records(source))
 
-
-def test_cart_profile_resolves_only_its_explicit_metadata_alias(tmp_path: Path) -> None:
-    source = tmp_path / "cart-alias.xml"
-    source.write_text(
-        ODM_13.replace('Study OID="S.13"', 'Study OID="S_20204824(TEST)"')
-        .replace('MetaDataVersion OID="M.13"', 'MetaDataVersion OID="v1.0.0"')
-        .replace(
-            'ClinicalData StudyOID="S.13" MetaDataVersionOID="M.13"',
-            'ClinicalData StudyOID="S_DF(TEST)" MetaDataVersionOID="v1.0.0-S_DF(TEST)"',
-        ),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ODMMetadataError, match="unresolved ItemDef"):
-        list(iter_odm_records(source, "strict"))
-
-    rows = list(iter_odm_records(source, "cart-t-openclinica"))
-    assert len(rows) == 3
-    assert rows[0].study_oid == "S_DF(TEST)"
-    assert rows[0].metadata_version_oid == "v1.0.0-S_DF(TEST)"
-    assert rows[0].item_name == "Collection date"
+    assert rows[0].study_oid == "OTHER"
+    assert rows[0].metadata_version_oid == "OTHER.M"
+    assert rows[0].event_name is None
+    assert rows[0].form_name is None
+    assert rows[0].item_group_name is None
+    assert rows[0].item_name is None
 
 
 def test_item_cannot_be_null_and_contain_a_value(tmp_path: Path) -> None:
@@ -89,11 +81,11 @@ def test_item_cannot_be_null_and_contain_a_value(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(ODMParseError, match="null and also contains a value"):
+    with pytest.raises(ODMError, match="null and contains a value"):
         list(iter_odm_records(source))
 
 
-def test_odm20_rejects_unsupported_group_depth(tmp_path: Path) -> None:
+def test_unsupported_group_depth_is_rejected(tmp_path: Path) -> None:
     source = tmp_path / "three-groups.xml"
     source.write_text(
         ODM_20.replace(
@@ -107,43 +99,65 @@ def test_odm20_rejects_unsupported_group_depth(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(ODMParseError, match="exactly two nested"):
+    with pytest.raises(ODMError, match="requires FormData plus one"):
         list(iter_odm_records(source))
 
 
-def test_archive_profile_reads_only_named_regular_member(tmp_path: Path) -> None:
+def test_archive_with_one_xml_member_is_selected_automatically(
+    tmp_path: Path,
+) -> None:
     archive_path = tmp_path / "odm.tar.gz"
     payload = ODM_20.encode()
     with tarfile.open(archive_path, "w:gz") as archive:
-        info = tarfile.TarInfo(KN189_ARCHIVE_MEMBER)
+        info = tarfile.TarInfo("study/odm.xml")
         info.size = len(payload)
         archive.addfile(info, io.BytesIO(payload))
         html = b"<html/>"
-        html_info = tarfile.TarInfo("KN189_odm_dag/index.html")
+        html_info = tarfile.TarInfo("study/index.html")
         html_info.size = len(html)
         archive.addfile(html_info, io.BytesIO(html))
+        sidecar = b"apple-double"
+        sidecar_info = tarfile.TarInfo("study/._odm.xml")
+        sidecar_info.size = len(sidecar)
+        archive.addfile(sidecar_info, io.BytesIO(sidecar))
 
-    rows = list(iter_odm_records(archive_path, "kn189"))
+    rows = list(iter_odm_records(archive_path))
     assert [row.item_oid for row in rows] == ["I.TEST", "I.RESULT"]
 
 
-def test_archive_profile_rejects_symlink_member(tmp_path: Path) -> None:
+def test_archive_member_selects_one_of_multiple_xml_files(tmp_path: Path) -> None:
+    archive_path = tmp_path / "multiple.tar.gz"
+    payload = ODM_20.encode()
+    with tarfile.open(archive_path, "w:gz") as archive:
+        for name in ("first.xml", "nested/second.xml"):
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
+
+    with pytest.raises(ODMError, match="exactly one XML member"):
+        list(iter_odm_records(archive_path))
+
+    rows = list(iter_odm_records(archive_path, archive_member="nested/second.xml"))
+    assert len(rows) == 2
+
+
+def test_archive_rejects_non_regular_xml_member(tmp_path: Path) -> None:
     archive_path = tmp_path / "unsafe.tar.gz"
     with tarfile.open(archive_path, "w:gz") as archive:
-        info = tarfile.TarInfo(KN189_ARCHIVE_MEMBER)
+        info = tarfile.TarInfo("study/odm.xml")
         info.type = tarfile.SYMTYPE
         info.linkname = "elsewhere.xml"
         archive.addfile(info)
 
-    with pytest.raises(ODMArchiveError, match="not a regular file"):
-        list(iter_odm_records(archive_path, "kn189"))
+    with pytest.raises(ODMError, match="not a regular file"):
+        list(iter_odm_records(archive_path))
 
 
-def test_malformed_xml_has_import_error(tmp_path: Path) -> None:
+def test_malformed_xml_has_helper_error(tmp_path: Path) -> None:
     source = tmp_path / "malformed.xml"
     source.write_text(
         '<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3">', encoding="utf-8"
     )
 
-    with pytest.raises(ODMParseError, match="malformed ODM XML"):
+    with pytest.raises(ODMError, match="malformed ODM XML"):
         list(iter_odm_records(source))

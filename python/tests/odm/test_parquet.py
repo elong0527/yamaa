@@ -5,17 +5,15 @@ from pathlib import Path
 import polars as pl
 import pytest
 from yamaa.odm.errors import ODMError
-from yamaa.odm.normalize import normalize_odm
+from yamaa.odm.parquet import write_odm_parquet
 from yamaa.odm.schema import ODM_ITEM_SCHEMA
 
 
-def test_normalizer_publishes_one_parquet_file(
-    odm13_path: Path, tmp_path: Path
-) -> None:
+def test_writer_publishes_one_parquet_file(odm13_path: Path, tmp_path: Path) -> None:
     output_directory = tmp_path / "output"
     output = output_directory / "clinical-items.parquet"
 
-    result = normalize_odm(odm13_path, output, batch_size=1)
+    result = write_odm_parquet(odm13_path, output, batch_size=1)
 
     assert result.row_count == 3
     assert result.output_path == output
@@ -31,14 +29,13 @@ def test_normalizer_publishes_one_parquet_file(
     metadata = pl.read_parquet_metadata(output)
     assert metadata["yamaa.schema"] == "odm-clinical-item/1"
     assert metadata["yamaa.row_count"] == "3"
-    assert metadata["yamaa.source_name"] == odm13_path.name
 
 
-def test_normalizer_projects_odm20_into_same_schema(
+def test_writer_projects_two_groups_into_same_schema(
     odm20_path: Path, tmp_path: Path
 ) -> None:
     output = tmp_path / "odm20.parquet"
-    normalize_odm(odm20_path, output, batch_size=1)
+    write_odm_parquet(odm20_path, output, batch_size=1)
 
     frame = pl.read_parquet(output)
     assert frame.schema == ODM_ITEM_SCHEMA
@@ -54,7 +51,7 @@ def test_normalizer_projects_odm20_into_same_schema(
 
 def test_output_must_be_parquet(odm13_path: Path, tmp_path: Path) -> None:
     with pytest.raises(ODMError, match="must end in .parquet"):
-        normalize_odm(odm13_path, tmp_path / "clinical-items.csv")
+        write_odm_parquet(odm13_path, tmp_path / "clinical-items.csv")
 
 
 def test_existing_output_requires_explicit_overwrite(
@@ -64,10 +61,10 @@ def test_existing_output_requires_explicit_overwrite(
     output.write_bytes(b"existing")
 
     with pytest.raises(FileExistsError):
-        normalize_odm(odm13_path, output)
+        write_odm_parquet(odm13_path, output)
     assert output.read_bytes() == b"existing"
 
-    result = normalize_odm(odm13_path, output, overwrite=True)
+    result = write_odm_parquet(odm13_path, output, overwrite=True)
     assert result.row_count == 3
     assert pl.read_parquet(output).height == 3
 
@@ -80,7 +77,7 @@ def test_empty_odm_still_publishes_fixed_schema(tmp_path: Path) -> None:
     )
     output = tmp_path / "empty.parquet"
 
-    result = normalize_odm(source, output)
+    result = write_odm_parquet(source, output)
 
     assert result.row_count == 0
     assert pl.read_parquet(output).is_empty()

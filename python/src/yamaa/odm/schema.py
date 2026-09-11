@@ -1,5 +1,6 @@
 """Pydantic and Polars contracts for the canonical clinical-item dataset."""
 
+from collections.abc import Iterable
 from pathlib import Path
 
 import polars as pl
@@ -100,14 +101,20 @@ class ClinicalItemRow(BaseModel):
         return self.model_dump(by_alias=True, mode="python")
 
 
-class NormalizationResult(BaseModel):
-    """In-memory result returned after publishing the single Parquet file."""
+def rows_to_frame(records: Iterable[ClinicalItemRow]) -> pl.DataFrame:
+    """Create a fixed-schema Polars frame from validated clinical-item rows."""
+    return pl.DataFrame(
+        [record.polars_row() for record in records],
+        schema=ODM_ITEM_SCHEMA,
+        orient="row",
+        strict=True,
+    ).select(ODM_ITEM_SCHEMA.names())
+
+
+class ParquetWriteResult(BaseModel):
+    """Result returned after atomically publishing one Parquet file."""
 
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
 
     output_path: Path
     row_count: int = Field(ge=0)
-    source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    output_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    profile: str
-    archive_member: str | None = None
