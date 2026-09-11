@@ -1,0 +1,8 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.DTHDY.derivation.study_day.date
+context:
+  source: DTHDTM
+  expected: date
+  actual: datetime

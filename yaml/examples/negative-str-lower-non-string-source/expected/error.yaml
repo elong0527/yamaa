@@ -1,0 +1,8 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.SITEFOLD.derivation.str_lower.source
+context:
+  source: SITEID
+  expected: str
+  actual: int
