@@ -116,6 +116,28 @@ def test_does_not_expand_collection_shorthand_in_larger_union(
     assert loaded.specification.domain == "DM"
 
 
+def test_does_not_expand_class_shorthand_in_larger_union(tmp_path: Path) -> None:
+    schema_root = _mutate_schema(
+        tmp_path,
+        "schema.yaml",
+        "type: domain_name",
+        "type: [str, domain_wrapper, int]",
+    )
+    schema_path = schema_root / "schema.yaml"
+    source = schema_path.read_text(encoding="ascii")
+    schema_path.write_text(
+        f"{source}\n"
+        "domain_wrapper:\n"
+        "    - value: {type: str, required: true}\n"
+        "    - label: {type: str, default: domain}\n",
+        encoding="ascii",
+    )
+
+    loaded = load_specification(EXAMPLES / "sdtm-dm-basic/spec.yaml", schema_root)
+
+    assert loaded.specification.domain == "DM"
+
+
 def test_negative_column_type_matches_committed_diagnostic() -> None:
     with pytest.raises(SpecificationError) as caught:
         load_specification(

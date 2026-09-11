@@ -944,6 +944,8 @@ def _normalize_type(
             return [_normalize_type(value, inner, bundle, active)]
 
     for class_name in members:
+        if len(members) != 2:
+            continue
         fields = _class_fields(bundle, class_name)
         required = [
             (name, descriptor)
@@ -955,7 +957,11 @@ def _normalize_type(
         field_name, descriptor = required[0]
         field_types = _members(descriptor["type"])
         for member in members:
-            if member == class_name or member not in field_types:
+            if (
+                member == class_name
+                or member in bundle.classes
+                or member not in field_types
+            ):
                 continue
             if _matches(value, member, bundle, active):
                 expanded = {
