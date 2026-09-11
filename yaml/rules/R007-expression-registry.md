@@ -3,7 +3,7 @@ id: R007
 title: Expression Registry
 status: normative
 applies_to: [expression, expressions, schema_expression]
-depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014, R015, R016, R018, R019]
+depends_on: [R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014, R015, R016, R018, R019, R024]
 ---
 
 # Expression registry
@@ -138,7 +138,7 @@ runtime types:
 - `mapping` requires a string source because dictionary keys are strings;
 - `mapping_from` requires each source and its positionally corresponding
   dictionary key column to have the same comparable type;
-- `cut` requires a numeric source;
+- `cut` and `format_number` require a numeric source;
 - `compute` requires every identifier in its expression to be numeric;
 - `str_extract`, `str_concat`, `str_template`, `str_upper`, and `str_lower`
   require string sources;
@@ -170,11 +170,12 @@ a coerced operand. Each owning rule defines the order its type takes.
 
 `source` retains its source type, which R014 defines, and `literal` retains
 its YAML scalar type after R011's non-finite normalization.
-`cut`, `str_extract`, `str_concat`, `str_template`, `str_upper`, and
-`str_lower` return strings. R019 owns the casing and text-preservation behavior
-of those string operations, and R022 owns `str_extract`'s pattern and the
-match it keeps. `compute` returns the numeric type its expression
-promotes to under R010.
+`cut`, `format_number`, `str_extract`, `str_concat`, `str_template`,
+`str_upper`, and `str_lower` return strings. R019 owns the casing and
+text-preservation behavior of those string operations, R022 owns
+`str_extract`'s pattern and the match it keeps, and R024 owns the text
+`format_number` renders and the precision it is rendered at. `compute`
+returns the numeric type its expression promotes to under R010.
 `row_number` and `rank` return integers. The temporal operations return the
 types R016 gives them. `baseline_flag` returns a string. Mapping, conditional,
 coalescing, extreme, baseline value, offset row, and previous-non-missing

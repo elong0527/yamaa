@@ -350,6 +350,7 @@ Two more registries work the same way: `column_verifications` and
 | `str_concat` | Concatenate in order -- **the only string operation that may hold literals inline** |
 | `str_template` | Interpolate, as in `"{SITEID}:{SUBJID}"` |
 | `str_upper` / `str_lower` | ASCII case conversion; other scalars are unchanged |
+| `format_number` | Write a number as text at a stated precision, as in `12.50` |
 
 R019 keeps language source ASCII while allowing Unicode scalar values in data.
 It applies no implicit normalization, compares strings by their exact scalar

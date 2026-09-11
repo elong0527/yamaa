@@ -104,6 +104,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  adam-adlb-character-results:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   adam-adlb-closest-visit:
     status: blocked
     blocked_by: "#101"
@@ -469,6 +473,10 @@ examples:
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
   negative-datetime-zone-offset:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-format-number-text-source:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet

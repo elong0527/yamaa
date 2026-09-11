@@ -15,7 +15,7 @@ semantics, error behavior, and representative examples are complete.
 | R004 | [Predicate language](R004-expression-language.md) | normative | The Boolean `sql` primitive | R001, R002, R006, R007, R010, R011, R016, R019 |
 | R005 | [Output contract](R005-output-contract.md) | normative | Column coverage, output membership, the value lifecycle, output identity, artifact row order | R001, R002, R003, R007, R008, R009, R011, R019, R020 |
 | R006 | [Compact schema language](R006-schema-language.md) | normative | Schema notation and structural validation | R019, R022 |
-| R007 | [Expression registry](R007-expression-registry.md) | normative | Registration, nesting, evaluation kinds, ordering, input types | R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014, R015, R016, R018, R019 |
+| R007 | [Expression registry](R007-expression-registry.md) | normative | Registration, nesting, evaluation kinds, ordering, input types | R001, R002, R003, R004, R005, R006, R008, R010, R011, R012, R013, R014, R015, R016, R018, R019, R024 |
 | R008 | [Local error handlers](R008-local-handlers.md) | normative | The handler lifecycle | R001, R002, R003, R005, R006, R007, R011, R012, R016 |
 | R009 | [Verifications](R009-verifications.md) | normative | What each assertion means, including group cardinality, and when it runs | R004, R005, R006, R011, R019, R022 |
 | R010 | [Scalar numeric computation](R010-scalar-computation.md) | normative | The `numeric_expression` primitive | R001, R004, R005, R006, R007, R011, R014, R015 |
@@ -28,10 +28,11 @@ semantics, error behavior, and representative examples are complete.
 | R017 | [Specification inheritance](R017-specification-inheritance.md) | normative | Parent resolution, shallow composition, pruning, and resolved order | R001, R002, R005, R006, R009, R015 |
 | R018 | [Project function environment](R018-project-function-environment.md) | normative | Project resolution, logical function contracts, singular runtime binding, activation conformance | R001, R005, R006, R011, R016, R019, R020 |
 | R019 | [Text values](R019-text-values.md) | normative | ASCII source, Unicode data, casing, equality, normalization, total order | -- |
-| R020 | [Artifact serialization](R020-artifact-serialization.md) | normative | The `parquet` and `csv` profiles, display precision, and publication | R005, R011, R014, R016, R019 |
+| R020 | [Artifact serialization](R020-artifact-serialization.md) | normative | The `parquet` and `csv` profiles, display precision, and publication | R005, R011, R014, R016, R019, R024 |
 | R021 | [Project resource resolution](R021-project-resource-resolution.md) | normative | The approved project root, written path form, readable file kinds, content identity | R006, R017, R019 |
 | R022 | [Regular expressions](R022-regular-expressions.md) | normative | The pinned engine and flag set, full-match and search behavior per consumer, capture-group numbering | R006, R007, R008, R009, R019 |
 | R023 | [Delimited source profile](R023-delimited-source.md) | normative | The `csv` source syntax: encoding, records and fields, header shape, and delivered quoting | R014, R019, R021 |
+| R024 | [Numeric text rendering](R024-numeric-text-rendering.md) | normative | The text a number takes at a stated precision, its exact rounding, and `format_number` | R007, R011, R019 |
 
 ## Rule admission
 

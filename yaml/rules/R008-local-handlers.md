@@ -34,6 +34,7 @@ Handlers occur in this fixed lifecycle:
 | mapping | `unmapped` | Use a literal for a non-missing value with no mapping |
 | cut | `missing` | Use a literal for a missing numeric input |
 | extract | `missing` | Use a literal for a missing string input |
+| render | `missing` | Use a literal for a missing numeric input, as R024 defines |
 | extract | `no_match` | Use a literal when a non-missing string does not match |
 | template | `missing` | Use a literal when any placeholder value is missing |
 | impute | `date_impute.missing`, `date_precision.missing` | Use a literal for a missing source, as R016 defines |

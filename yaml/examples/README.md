@@ -66,6 +66,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adex-uncollected-exposure`](adam-adex-uncollected-exposure/) | tell an uncollected dose from an absent administration |
 | [`adam-adlb-absolute-wbc-differential`](adam-adlb-absolute-wbc-differential/) | derive absolute WBC differentials |
 | [`adam-adlb-bds`](adam-adlb-bds/) | build a BDS dataset with baseline and change |
+| [`adam-adlb-character-results`](adam-adlb-character-results/) | report each result as text at its own precision |
 | [`adam-adlb-closest-visit`](adam-adlb-closest-visit/) | select the record closest to a window's target day |
 | [`adam-adlb-mean`](adam-adlb-mean/) | calculate each subject's mean result |
 | [`adam-adlb-order-sensitive-sum`](adam-adlb-order-sensitive-sum/) | sum floating-point values in source record order |
@@ -158,6 +159,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-date-impute-unknown-day-rule`](negative-date-impute-unknown-day-rule/) | reject a start date completed with an unrecognised day |
 | [`negative-date-precision-invalid-source`](negative-date-precision-invalid-source/) | reject a completeness flag read from text that is not a date |
 | [`negative-datetime-zone-offset`](negative-datetime-zone-offset/) | reject an event start recorded against another clock |
+| [`negative-format-number-text-source`](negative-format-number-text-source/) | reject writing collected text to a fixed number of places |
 | [`negative-function-contract-mismatch`](negative-function-contract-mismatch/) | reject an unavailable project-routine contract |
 | [`negative-greatest-incomparable-sources`](negative-greatest-incomparable-sources/) | reject a last-known-alive date taken from a day number |
 | [`negative-group-count-without-id`](negative-group-count-without-id/) | reject an unnamed baseline-count rule |

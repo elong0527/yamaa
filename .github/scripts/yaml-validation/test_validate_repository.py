@@ -783,6 +783,29 @@ class TestStaticSemanticContracts(unittest.TestCase):
             invalid_to_date[0].condition, 'incompatible_input_type'
         )
 
+    def test_format_number_source_types_and_precision(self):
+        integer_source = self.validate({
+            'format_number': {'source': 'B', 'decimals': 2}
+        })
+        text_source = self.validate({
+            'format_number': {'source': 'TEXT', 'decimals': 2}
+        })
+        negative_decimals = self.validate({
+            'format_number': {'source': 'B', 'decimals': -1}
+        })
+
+        self.assertEqual(integer_source, [])
+        self.assertEqual(
+            text_source[0].condition, 'incompatible_input_type'
+        )
+        self.assertEqual(
+            text_source[0].context,
+            {'source': 'TEXT', 'expected': 'int or float', 'actual': 'str'},
+        )
+        self.assertEqual(
+            negative_decimals[0].condition, 'invalid_decimals'
+        )
+
     def test_record_lookup_range_types(self):
         spec = {
             'record_lookups': [{

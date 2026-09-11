@@ -133,6 +133,11 @@ fixtures:
     spec_paths:
       - columns.RESULT.derivation.function.contract_version
     validator: project_function
+  negative-format-number-text-source:
+    rule: R024
+    condition: incompatible_input_type
+    spec_paths: [columns.AVALC.derivation.format_number.source]
+    validator: expression_contract
   negative-greatest-incomparable-sources:
     rule: R007
     condition: incomparable_sources

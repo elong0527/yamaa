@@ -1,0 +1,8 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.AVALC.derivation.format_number.source
+context:
+  source: LBORRES
+  expected: int or float
+  actual: str

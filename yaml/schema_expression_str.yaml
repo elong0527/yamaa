@@ -31,6 +31,18 @@ expressions:
     str_template: # Interpolates string variables under R012.
         type: [string_template, str_template_class]
         description: Portable string template, concise or with missing handling.
+    format_number: # Renders a numeric source as text at a stated precision under R024.
+        - source:
+            type: variable
+            required: true
+            description: Numeric variable rendered as text; an int or a float.
+        - decimals:
+            type: int
+            required: true
+            description: Non-negative digits written after the decimal point; R024 fixes the form and the rounding.
+        - missing:
+            type: literal_value
+            description: Value returned when source is missing.
     str_upper: # Converts ASCII a-z to A-Z and preserves every other scalar.
         - source:
             type: variable

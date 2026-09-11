@@ -334,6 +334,8 @@ VALIDATION_CONTEXT_FIELDS = {
         'group', 'group_count', 'pattern',
     },
     ('R023', 'source_profile_unknown'): {'path'},
+    ('R024', 'incompatible_input_type'): {'actual', 'expected', 'source'},
+    ('R024', 'invalid_decimals'): {'decimals'},
 }
 VALIDATION_CONDITION_REGISTRY = {
     key: {
@@ -6657,6 +6659,30 @@ def validate_expression_static_semantics(expression, path, context):
         )
         return errors
 
+    if keyword == 'format_number' and isinstance(payload, dict):
+        operation_path = f"{path}.format_number"
+        decimals = payload.get('decimals')
+        if type(decimals) is int and decimals < 0:
+            errors.append(
+                validation_diagnostic(
+                    f"{operation_path}.decimals",
+                    'invalid_decimals',
+                    f"decimals {decimals} is negative",
+                    context={'decimals': decimals},
+                )
+            )
+        errors.extend(
+            validate_named_input_type(
+                payload,
+                'source',
+                {'int', 'float'},
+                'int or float',
+                operation_path,
+                resolver,
+            )
+        )
+        return errors
+
     if keyword == 'case' and isinstance(payload, dict):
         branches = payload.get('branches')
         if isinstance(branches, list):
@@ -7724,6 +7750,7 @@ EXPECTED_ERROR_PHASES = {
     'mapping',
     'cut',
     'extract',
+    'render',
     'template',
     'impute',
     'convert',

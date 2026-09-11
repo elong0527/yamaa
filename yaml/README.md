@@ -133,6 +133,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `mapping`, `cut`, `str_extract`, `str_upper`, `str_lower` | One named source; exceptional results are literals |
 | `str_concat` | An ordered list of expressions, because concatenating requires literals beside sources |
 | `str_template` | One closed string template over named variables (R012) |
+| `format_number` | One named numeric source and a required precision; an exceptional result is a literal |
 | `mapping_from` | One or more named sources paired by position with declared right-side key columns; exceptional results are literals |
 | `compute` | One closed numeric expression over named output columns and declared record-lookup fields (R010) |
 | `date_diff`, `study_day` | Named variable operands; `date_diff` declares which endpoints it counts |

@@ -119,7 +119,7 @@ def expression_dependencies(expression, declared, lookup_sources)
       expression_dependencies(payload["otherwise"], declared, lookup_sources)
     )
   when "mapping", "mapping_from", "cut", "date_precision", "to_date",
-       "str_extract", "str_upper", "str_lower"
+       "format_number", "str_extract", "str_upper", "str_lower"
     dependencies.merge(
       variable_dependencies(payload["source"], declared, lookup_sources)
     )

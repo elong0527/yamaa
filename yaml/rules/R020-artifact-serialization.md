@@ -3,7 +3,7 @@ id: R020
 title: Artifact Serialization
 status: normative
 applies_to: [root.output, output.path, output.decimals]
-depends_on: [R005, R011, R014, R016, R019]
+depends_on: [R005, R011, R014, R016, R019, R024]
 ---
 
 # Artifact serialization
@@ -20,10 +20,11 @@ display precision, and how a written artifact replaces its target.
 This rule begins where R005 ends. R005 owns which columns the artifact has,
 their order, which rows it holds, and the order those rows leave in; nothing
 here can change any of them. R011 owns what value a column holds and the text a
-value carries when it is converted to `str`, and defers to this rule the one
-display rounding that happens after every calculation. R016 owns the canonical
-text of a `date` and a `datetime`. R019 owns the contents of a string, the
-failure of ill-formed encoded text, and the order of two strings.
+value carries when it is converted to `str`. R024 owns the text a number takes
+at a stated precision and the rounding that selects it; this rule owns only
+where that text is applied as a display. R016 owns the canonical text of a
+`date` and a `datetime`. R019 owns the contents of a string, the failure of
+ill-formed encoded text, and the order of two strings.
 
 R014 owns the other direction. It states what a stored field means when a
 specification reads it, and `csv` below is the writing counterpart of the
@@ -142,7 +143,7 @@ collected empty string, and the first row's is missing.
 |---|---|
 | `str` | its scalar values, under R019 |
 | `int` | its decimal digits, with a leading `U+002D` when negative |
-| `float` | R011's float text, or the fixed-point form below |
+| `float` | R011's float text, or R024's form at the declared precision |
 | `date` | R016's canonical `date` text |
 | `datetime` | R016's canonical `datetime` text |
 
@@ -202,24 +203,37 @@ that read back identically: the same field names in the same order, the same
 logical types, the same rows in the same order, the same nulls, and the same
 values, with every `DOUBLE` bit-identical.
 
-An implementation writes uncompressed pages and adds no key-value metadata of
-its own beyond what the format requires.
+Compression is the writer's choice. Nothing here compares Parquet bytes, so a
+restriction on the pages buys no determinism, and forbidding compression would
+cost the production container the size advantage it is chosen for. A page
+codec changes how bytes are stored and not what reads back, which is the only
+thing this profile fixes.
+
+An implementation adds no key-value metadata of its own beyond what the format
+requires. That restriction is not about bytes. Metadata an implementation
+invents is a second channel beside the schema, and a consumer that began to
+read meaning from it would depend on a producer this design never described:
+an artifact states what it holds through its columns and through the producing
+specification R014 links. Such annotations also tend to vary between two runs
+that agree on every value, which makes an artifact harder to compare for no
+gain in what it says.
 
 The bytes themselves are not fixed. A Parquet writer stamps its own identity
-and version into the file, and the row-group and page sizing, the encodings it
-selects, and the statistics it records are properties of the library rather
-than of this design. Requiring identical bytes would require every conforming
-implementation to abandon its ecosystem's writer, which buys less than it
-costs. An artifact whose bytes must be compared directly is written under
-`csv`, whose byte guarantee is exactly that.
+and version into the file, and the row-group and page sizing, the encodings
+and compression it selects, and the statistics it records are properties of
+the library rather than of this design. Requiring identical bytes would
+require every conforming implementation to abandon its ecosystem's writer,
+which buys less than it costs. An artifact whose bytes must be compared
+directly is written under `csv`, whose byte guarantee is exactly that.
 
 ### Floats are stored, not rendered
 
 A `float` reaches this profile as the binary64 value the derivation produced.
 `output.decimals` does not apply, and no rounding happens on the way out: a
 consumer that reads the artifact back receives the value the calculation used.
-Storing a container's native double is not a display, and this design rounds
-once, at a display.
+Storing a container's native double is not a display. A number that must reach
+this profile already rendered is a `str` column R024's `format_number`
+produced, and it arrives here as the text it has been since it was derived.
 
 ## Display precision
 
@@ -227,44 +241,21 @@ once, at a display.
 alone, and to every `float` column of the artifact.
 
 When it is absent, a `float` is written as R011's float text. When it is
-present with the value `n`, a `float` is written in fixed-point form with
-exactly `n` digits after the decimal point, and with a decimal point only when
-`n` is greater than zero. A value therefore keeps its declared width whether or
-not its digits require it: at `n` of 4, an integral 25 is written `25.0000`.
+present with the value `n`, a `float` is written as R024 renders it at `n`
+digits.
 
-**This is the only place a value is rounded for presentation.** It happens
-once, when the field is written, and after everything R005 sequences: every
-derivation, every conversion, every override, every verification, key
-validation, and row ordering. No dependent column, predicate, aggregate,
-verification, key, or order term ever sees a rounded value, and changing
-`output.decimals` cannot change whether a run passes or which rows it produces.
+**This is the only place the writer rounds.** It happens once, when the field
+is written, and after everything R005 sequences: every derivation, every
+conversion, every override, every verification, key validation, and row
+ordering. No dependent column, predicate, aggregate, verification, key, or
+order term ever sees a rounded value, and changing `output.decimals` cannot
+change whether a run passes or which rows it produces.
 
-### The rounding is exact and host-independent
-
-Every binary64 value is exactly some decimal fraction. Round that exact value:
-multiply it by ten raised to `n`, round the product to an integer with a tie
-going away from zero, and divide by ten raised to `n` again. A value that
-rounds to zero is written without a sign.
-
-The tie is decided on the exact value, never on a shortened representation of
-it, and the difference is observable:
-
-| Value as written in source | Its exact binary64 value | `decimals: 2` |
-|---|---|---|
-| `0.125` | 0.125 | `0.13` |
-| `-0.125` | -0.125 | `-0.13` |
-| `2.675` | 2.674999999999999822364316059974953532218933105468750 | `2.67` |
-
-`0.125` is representable, so it is a genuine tie and rounds away from zero.
-`2.675` is not representable and the nearest binary64 is below it, so there is
-no tie to break and it rounds down. An implementation that first shortens the
-value to `2.675` and then rounds reports `2.68` and does not conform.
-
-No host rounding or formatting routine may be assumed to do this. R's `round`
-and Python's `round` both send an exact tie to the even digit rather than away
-from zero, and the C formatting both ecosystems build on does the same. Each of
-the three disagrees with this rule on `0.125`, so an implementation performs
-the exact scaling above rather than delegating.
+A specification that needs a rounded number to survive into the data, rather
+than to appear in one container's text, renders it with R024's
+`format_number` and declares the `str` column that holds it. That column is a
+value: it reaches `parquet` as it reaches `csv`, and this setting never
+touches it.
 
 ## A stored artifact carries its profile
 
@@ -319,6 +310,7 @@ midway would already have published part of it.
   artifact, and the previous one is unchanged.
 - Writing a byte-order mark, a `U+000D` record terminator, or a quoting that
   differs from the `csv` condition: none is an implementation option.
-- Rounding with a host routine whose ties do not go away from zero, or
-  rounding a value any other stage can observe: neither is an implementation
-  option.
+- Rounding a `float` any stage other than this one can observe, rather than
+  the text of the field being written: not an implementation option. R024
+  owns the rounding itself and the host routines that may not be assumed to
+  perform it.

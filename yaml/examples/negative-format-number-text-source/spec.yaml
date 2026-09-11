@@ -1,0 +1,41 @@
+schema_version: "1.0"
+domain: ADLB
+datasets:
+  LB: {path: input/lb.csv}
+base: LB
+keys: [STUDYID, USUBJID, PARAMCD]
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, LBORRES, AVALC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation:
+      source: LB.PARAMCD
+
+  - name: LBORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation:
+      source: LB.LBORRES
+
+  - name: AVALC
+    type: str
+    label: Analysis Value (C)
+    derivation:
+      format_number: {source: LBORRES, decimals: 2}

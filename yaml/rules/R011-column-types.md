@@ -191,10 +191,11 @@ reaches for. R020 writes this same text into an artifact and states the bytes
 two runtimes must agree on, which they can only do if one value has one text.
 
 Calculations, comparisons, verifications, and dependent derivations always use
-the unrounded value. Final artifact display precision and its half-away-from-
-zero rounding belong to R020's `output.decimals` and occur once, when a field
-is written. R018's conformance comparison similarly operates on a temporary
-copy and never changes a value used by the specification.
+the unrounded value. R024 owns the text a number takes at a stated precision
+and the half-away-from-zero rounding that selects it, and R020's
+`output.decimals` applies that text once, when a field is written. R018's
+conformance comparison similarly operates on a temporary copy and never
+changes a value used by the specification.
 
 ## Errors
 
