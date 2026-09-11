@@ -991,6 +991,56 @@ class TestExecutionManifestGate(unittest.TestCase):
         )
 
 
+class TestConditionRegistry(unittest.TestCase):
+    def setUp(self):
+        self.root = TOOL_PATH.parents[3]
+        self.registry, load_errors = VALIDATOR.load_condition_registry(
+            self.root
+        )
+        self.assertEqual(load_errors, [])
+
+    def test_repository_registry_passes(self):
+        self.assertEqual(
+            VALIDATOR.validate_condition_registry(
+                self.root, self.registry
+            ),
+            [],
+        )
+
+    def test_unregistered_condition_is_rejected(self):
+        changed = copy.deepcopy(self.registry)
+        del changed['conditions']['aggregate_multiple_records']
+
+        errors = VALIDATOR.validate_condition_registry(self.root, changed)
+
+        self.assertEqual(
+            errors,
+            [
+                'ERROR: yaml/examples/negative-adlb-absolute-wbc-duplicate/'
+                'expected/error.yaml.condition: unregistered condition '
+                "'aggregate_multiple_records'"
+            ],
+        )
+
+    def test_wrong_phase_condition_is_rejected(self):
+        changed = copy.deepcopy(self.registry)
+        changed['conditions']['aggregate_multiple_records']['phases'] = [
+            'derivation'
+        ]
+
+        errors = VALIDATOR.validate_condition_registry(self.root, changed)
+
+        self.assertEqual(
+            errors,
+            [
+                'ERROR: yaml/examples/negative-adlb-absolute-wbc-duplicate/'
+                'expected/error.yaml.phase: condition '
+                "'aggregate_multiple_records' is not registered for phase "
+                "'row_construction'"
+            ],
+        )
+
+
 class TestValidationManifest(unittest.TestCase):
     def test_repository_manifest_is_complete_and_registered(self):
         root = TOOL_PATH.parents[3]
