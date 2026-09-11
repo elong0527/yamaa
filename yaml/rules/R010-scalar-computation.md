@@ -74,14 +74,21 @@ predicate does.
 ## Grammar
 
 ```text
-expr    := term (("+" | "-") term)*
-term    := factor (("*" | "/") factor)*
-factor  := ("-" | "+")? primary
-primary := number | "NULL" | identifier | call | "(" expr ")"
+expr       := term (("+" | "-") term)*
+term       := factor (("*" | "/") factor)*
+factor     := ("-" | "+")? primary
+primary    := number | "NULL" | identifier | call | "(" expr ")"
 identifier := name ["." name]
-call    := function "(" [expr ("," expr)*] ")"
-number  := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
+call       := function "(" [expr ("," expr)*] ")"
+number     := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
 ```
+
+`grammar/numeric.yaml` is this grammar's single source. The block above is its
+rendering, its vocabulary closes the function table below, and its cases record
+the text every implementation must accept or reject, the identifiers an
+accepted text binds, and the parse it produces. Repository validation and the R
+implementation both read that file, so no transcription of this grammar can
+drift from it without failing.
 
 Precedence is unary sign, then `*` and `/`, then binary `+` and `-`, all
 left-associative. Parentheses override precedence. Function names and `NULL`

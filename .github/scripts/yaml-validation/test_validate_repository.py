@@ -635,7 +635,7 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
 class TestStringTemplateLanguage(unittest.TestCase):
     def test_parses_placeholders_and_escaped_braces(self):
         template = '{{{SITEID}}}:{SUBJID}:{ODM.IT.DM.SEX}'
-        placeholders = VALIDATOR.parse_string_template(template)
+        placeholders = VALIDATOR.string_template_placeholders(template)
 
         self.assertEqual(
             [placeholder['name'] for placeholder in placeholders],
@@ -645,6 +645,19 @@ class TestStringTemplateLanguage(unittest.TestCase):
             VALIDATOR.string_template_identifier_names(template),
             {'SITEID', 'SUBJID', 'ODM.IT.DM.SEX'},
         )
+
+    def test_a_scan_unescapes_brace_pairs_into_literal_text(self):
+        # R012 makes the pairs take precedence while scanning, so a template
+        # carries the literal text they produce as well as its placeholders.
+        self.assertEqual(
+            VALIDATOR.parse_string_template('{{{SITEID}}}'),
+            [
+                {'kind': 'text', 'value': '{', 'span': (0, 2)},
+                {'kind': 'placeholder', 'name': 'SITEID', 'span': (3, 9)},
+                {'kind': 'text', 'value': '}', 'span': (10, 12)},
+            ],
+        )
+        self.assertEqual(VALIDATOR.parse_string_template(''), [])
 
     def test_rejects_operators_empty_and_unmatched_braces(self):
         for template in ('{A + B}', '{}', '{A', 'A}'):
@@ -3693,6 +3706,267 @@ class TestRegularExpressionContract(unittest.TestCase):
         self.assertIn('missing R022', errors[0])
 
 
+class TestClosedGrammarContracts(unittest.TestCase):
+    """One machine-readable grammar per closed language, read by everyone."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.root = TOOL_PATH.parents[3]
+
+    def contract_root(self, temp_dir, **replacements):
+        """Copy the grammars and rules into a root, applying replacements."""
+        root = Path(temp_dir)
+        shutil.copytree(
+            self.root / 'yaml' / 'grammar', root / 'yaml' / 'grammar'
+        )
+        shutil.copytree(self.root / 'yaml' / 'rules', root / 'yaml' / 'rules')
+        for relative, (old, new) in replacements.items():
+            path = root / relative
+            text = path.read_text()
+            self.assertIn(old, text)
+            path.write_text(text.replace(old, new, 1))
+        return root
+
+    # -- the grammar is one source -----------------------------------------
+
+    def test_every_contract_replays_against_this_validator(self):
+        self.assertEqual(VALIDATOR.validate_grammar_contracts(self.root), [])
+
+    def test_every_rule_that_owns_a_grammar_has_a_contract(self):
+        for contract, rule_id in VALIDATOR.GRAMMAR_CONTRACTS.items():
+            with self.subTest(contract=contract):
+                path = self.root / 'yaml' / 'grammar' / f'{contract}.yaml'
+                self.assertTrue(path.is_file())
+                document = yaml.safe_load(path.read_text())
+                self.assertEqual(document['rule'], rule_id)
+
+    def test_a_continuation_aligns_under_its_definition_or_its_bar(self):
+        rendered = VALIDATOR.render_grammar_block([
+            {'name': 'comparison', 'definition': 'a b\n| c d'},
+            {'name': 'null_test', 'definition': 'e\nf'},
+        ])
+        self.assertEqual(
+            rendered,
+            'comparison := a b\n'
+            '            | c d\n'
+            'null_test  := e\n'
+            '              f',
+        )
+
+    def test_a_rule_block_that_drifts_from_its_grammar_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/rules/R012-string-templates.md': (
+                        'placeholder := "{" variable "}"',
+                        'placeholder := "{" variable "}" | variable',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(
+                root, 'string-template'
+            )
+        self.assertEqual(len(errors), 1)
+        self.assertIn('R012-string-templates.md', errors[0])
+        self.assertIn('the grammar block is not the one', errors[0])
+
+    def test_a_shape_that_drifts_from_this_parser_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/numeric.yaml': (
+                        'shape: (+ (id A) (* (id B) (id C)))',
+                        'shape: (* (+ (id A) (id B)) (id C))',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'numeric')
+        self.assertEqual(len(errors), 1)
+        self.assertIn('multiplication-binds-tighter-than-addition', errors[0])
+        self.assertIn('this validator parses', errors[0])
+
+    def test_an_identifier_set_that_drifts_from_this_parser_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/predicate.yaml': (
+                        'identifiers: [EX.EXDOSE]',
+                        'identifiers: [EXDOSE]',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'predicate')
+        self.assertEqual(len(errors), 1)
+        self.assertIn('this validator collects', errors[0])
+
+    def test_a_text_this_parser_accepts_cannot_be_recorded_as_rejected(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/aggregate.yaml': (
+                        '  - id: a-reduction-reads-one-relation-field\n'
+                        '    covers: [reduction]\n'
+                        '    text: "SUM(EX.EXDOSE)"\n'
+                        '    parse: accept\n'
+                        '    identifiers: [EX.EXDOSE]\n'
+                        '    shape: (reduce SUM (id EX.EXDOSE))\n',
+                        '  - id: a-reduction-reads-one-relation-field\n'
+                        '    covers: [reduction]\n'
+                        '    text: "SUM(EX.EXDOSE)"\n'
+                        '    parse: reject\n'
+                        '    condition: invalid_aggregate_expression\n',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'aggregate')
+        self.assertEqual(len(errors), 1)
+        self.assertIn('records as rejected', errors[0])
+
+    def test_a_condition_that_drifts_from_this_parser_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/numeric.yaml': (
+                        '    text: "ROUND(A, 2)"\n'
+                        '    parse: reject\n'
+                        '    condition: prohibited_function\n',
+                        '    text: "ROUND(A, 2)"\n'
+                        '    parse: reject\n'
+                        '    condition: prohibited_construct\n',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'numeric')
+        self.assertEqual(len(errors), 1)
+        self.assertIn("fails with 'prohibited_function'", errors[0])
+
+    # -- the vocabulary is one source --------------------------------------
+
+    def test_a_vocabulary_that_drifts_from_this_parser_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/numeric.yaml': (
+                        'SQRT: {min_arguments: 1, max_arguments: 1}',
+                        'SQRT: {min_arguments: 1, max_arguments: 2}',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'numeric')
+        self.assertEqual(len(errors), 1)
+        self.assertIn('vocabulary.function does not name', errors[0])
+
+    def test_a_reserved_list_that_drifts_from_this_parser_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{'yaml/grammar/predicate.yaml': ('  - "ESCAPE"\n', '')},
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'predicate')
+        self.assertEqual(len(errors), 1)
+        self.assertIn('does not name the names this validator', errors[0])
+
+    def test_a_reducer_list_that_drifts_from_this_parser_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/aggregate.yaml': (
+                        '    ONLY: {argument: [expr]}',
+                        '    AVG: {argument: [expr]}',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'aggregate')
+        self.assertTrue(
+            any('does not name the reducers' in error for error in errors),
+            errors,
+        )
+
+    # -- the file is machine-checkable -------------------------------------
+
+    def test_a_production_may_not_name_an_undefined_symbol(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/string-template.yaml': (
+                        'imports:\n  variable: schema\n',
+                        'imports: {}\n',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(
+                root, 'string-template'
+            )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("placeholder: undefined symbols ['variable']", errors[0])
+
+    def test_an_import_must_name_a_contract_that_defines_it(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/numeric.yaml': (
+                        'imports:\n  name: predicate\n',
+                        'imports:\n  name: string-template\n',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'numeric')
+        self.assertEqual(len(errors), 1)
+        self.assertIn("defines no 'name' to import", errors[0])
+
+    def test_replay_requires_a_case_for_every_named_category(self):
+        self.assertIn('rejection', VALIDATOR.GRAMMAR_COVERS['string-template'])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(temp_dir)
+            source = root / 'yaml' / 'grammar' / 'string-template.yaml'
+            head, separator, cases = source.read_text().partition('cases:\n')
+            self.assertTrue(separator)
+            kept = [
+                block
+                for block in cases.split('  - id: ')[1:]
+                if 'parse: reject' not in block
+            ]
+            source.write_text(
+                head + separator
+                + ''.join(f'  - id: {block}' for block in kept)
+            )
+            errors = VALIDATOR.validate_grammar_contract(
+                root, 'string-template'
+            )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("no case covers ['rejection']", errors[0])
+
+    def test_a_missing_grammar_fails_validation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            errors = VALIDATOR.validate_grammar_contracts(Path(temp_dir))
+        self.assertEqual(len(errors), len(VALIDATOR.GRAMMAR_CONTRACTS))
+        for error in errors:
+            self.assertIn('missing machine-readable grammar', error)
+
+    # -- the R parser reads the same files ----------------------------------
+
+    def test_the_r_runner_reads_the_same_contracts(self):
+        runner = (
+            self.root / 'R' / 'cdiscbuilder' / 'inst' / 'conformance' /
+            'grammar_conformance.R'
+        )
+        text = runner.read_text()
+        for contract, rule_id in VALIDATOR.GRAMMAR_CONTRACTS.items():
+            with self.subTest(contract=contract):
+                self.assertIn(contract, text)
+                self.assertIn(rule_id, text)
+        self.assertIn('"grammar"', text)
+
+
 class TestDeclaredValidationErrors(unittest.TestCase):
     """A fixture must fail for the condition it declares."""
 
@@ -3778,13 +4052,21 @@ class TestValidatorCLI(unittest.TestCase):
         self.tool_path = Path(__file__).parent / 'validate_repository.py'
         self.test_dir = tempfile.TemporaryDirectory()
         self.root_dir = Path(self.test_dir.name)
-        # Every repository carries R022's shared fixtures, so a synthetic root
-        # that expects a clean run needs them too.
+        # Every repository carries R022's shared fixtures and the closed
+        # grammars, which are read against their rules, so a synthetic root
+        # that expects a clean run needs all of them too.
+        repository = TOOL_PATH.parents[3]
         conformance = self.root_dir / 'yaml' / 'conformance'
         conformance.mkdir(parents=True)
         shutil.copy(
-            TOOL_PATH.parents[3] / 'yaml' / 'conformance' / 'regex.yaml',
+            repository / 'yaml' / 'conformance' / 'regex.yaml',
             conformance / 'regex.yaml',
+        )
+        shutil.copytree(
+            repository / 'yaml' / 'grammar', self.root_dir / 'yaml' / 'grammar'
+        )
+        shutil.copytree(
+            repository / 'yaml' / 'rules', self.root_dir / 'yaml' / 'rules'
         )
 
     def tearDown(self):

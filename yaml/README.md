@@ -20,6 +20,8 @@ and SDTM-to-ADaM derivations. The design is under active development.
   issue.
 - `conformance/` contains language-wide fixtures that every implementation
   must reproduce, one file per contract.
+- `grammar/` contains one machine-readable grammar per closed language, with
+  the vectors every implementation must reproduce.
 - `agents.md` tells AI coding agents how to discover and maintain the design.
 
 The schema defines shape and operation-local behavior through adjacent comments
@@ -38,6 +40,14 @@ must match the whole value, capture groups are numbered by opening
 parenthesis, and a pattern that engine rejects fails validation rather than
 falling back to a host dialect. `conformance/regex.yaml` holds the fixtures
 R and Python must both reproduce.
+
+The four closed grammars are defined once, in `grammar/`. A grammar written
+in prose, in an R parser, and in a Python parser is three copies that can
+disagree, so each rule's grammar block is rendered from its grammar file,
+each closed vocabulary is compared with the constants its parser uses, and
+both implementations replay the same vectors. Changing a grammar therefore
+starts in `grammar/`, and a change that is not carried into every consumer
+fails validation.
 
 R021 gives every declared source one resource contract: a run receives one
 approved project root, a declared path is a relative file inside it with no

@@ -122,6 +122,18 @@ The validation ensures:
    engine is a required dependency: without it the validator refuses to run
    rather than falling back to Python `re`.
 
+10. **Closed grammars**: `yaml/grammar/` defines the predicate (R004),
+    numeric (R010), string template (R012), and aggregate (R013) grammars
+    once. The validator renders each rule's grammar block from its grammar
+    file and fails when the rule carries a different block, compares each
+    closed vocabulary with the constants the parsers use, checks that every
+    non-terminal a production names is defined or imported, and replays every
+    vector: an accepted text must parse into the recorded shape and bind the
+    recorded identifiers, and a rejected text must fail with the recorded
+    condition. A vector set that stops covering one of a contract's named
+    categories fails the same way. The R parser replays the same files in the
+    `grammar-conformance` workflow.
+
 ## Explicit Non-Goals
 The validator ensures structural correctness and the static cross-field checks
 listed above. At this time, it **does not**:
@@ -133,7 +145,8 @@ listed above. At this time, it **does not**:
 - Prove that a regular expression behaves identically in R and Python. R022
   pins the engine both runtimes must bind and this validator replays the
   shared fixtures on the Python side, but executable R parity waits on the
-  dual-runtime conformance workflow in issue #101.
+  dual-runtime conformance workflow in issue #101. The four closed grammars
+  are the exception: both runtimes already replay `yaml/grammar/`.
 
 ## Local Commands
 From the repository root, use a Python 3.14 environment to match CI. Install
@@ -146,6 +159,12 @@ python3 .github/scripts/yaml-validation/validate_repository.py --root .
 ```
 
 By default, the script infers the repository root relative to its own path.
+
+The R side of the shared grammar vectors needs only R and the `yaml` package:
+
+```bash
+Rscript R/cdiscbuilder/inst/conformance/grammar_conformance.R
+```
 
 The Ruby example checks and their tests can also run locally:
 
