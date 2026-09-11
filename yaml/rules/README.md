@@ -57,3 +57,8 @@ A rule owns its topic completely. A cross-reference names the owning rule and
 stops; it does not restate or re-argue that rule's content, because a
 restatement is a second place to keep correct. A rule must not silently
 override another rule; replacements declare `supersedes`.
+
+A rule that owns a closed grammar keeps it in `../grammar/`, one file per
+language. Its `## Grammar` block is rendered from that file and its closed
+vocabulary is compared with the constants each parser uses, so the block is
+a view of the grammar rather than a second copy of it.

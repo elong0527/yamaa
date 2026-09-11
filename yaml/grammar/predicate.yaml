@@ -1,0 +1,396 @@
+# Machine-readable grammar for R004's Boolean predicate language.
+#
+# This file is the single source for the closed grammar written in a field
+# typed `sql`. R004's `## Grammar` block is rendered from `productions`, and
+# every implementation's parser is checked against `reserved` and `cases`, so
+# the rule, the R parser, and the Python parser cannot drift apart without
+# failing validation.
+#
+# This contract defines the `name` and `digits` non-terminals the numeric and
+# aggregate grammars import, because a predicate and a formula must never
+# disagree about what an identifier is. Their `number` differs from this one:
+# a leading sign is part of a predicate literal and a unary operator in the
+# other two, so each contract keeps its own `number`.
+#
+# `grammar/README.md` states the file format and the shape notation.
+schema_version: "1.0"
+contract: predicate
+contract_version: "1.0.0"
+rule: R004
+start: predicate
+productions:
+  - name: predicate
+    definition: |-
+      disjunction
+  - name: disjunction
+    definition: |-
+      conjunction ("OR" conjunction)*
+  - name: conjunction
+    definition: |-
+      negation ("AND" negation)*
+  - name: negation
+    definition: |-
+      "NOT"* boolean
+  - name: boolean
+    definition: |-
+      comparison | null_test | "(" predicate ")" | "TRUE" | "FALSE"
+  - name: comparison
+    definition: |-
+      operand compare operand
+      | operand ["NOT"] "IN" "(" operand ("," operand)* ")"
+      | operand ["NOT"] "BETWEEN" operand "AND" operand
+      | operand ["NOT"] "LIKE" operand ["ESCAPE" string]
+  - name: null_test
+    definition: |-
+      operand "IS" ["NOT"] "NULL"
+  - name: compare
+    definition: |-
+      "=" | "<>" | "<" | "<=" | ">" | ">="
+  - name: operand
+    definition: |-
+      identifier | literal
+  - name: identifier
+    definition: |-
+      name ["." name]
+  - name: name
+    definition: |-
+      (letter | "_") { letter | digit | "_" }
+  - name: literal
+    definition: |-
+      number | string | temporal | "NULL"
+  - name: number
+    definition: |-
+      ["+" | "-"] digits ["." digits]
+      [("e" | "E") ["+" | "-"] digits]
+  - name: digits
+    definition: |-
+      digit { digit }
+  - name: letter
+    definition: |-
+      "A" ... "Z" | "a" ... "z"
+  - name: digit
+    definition: |-
+      "0" ... "9"
+  - name: string
+    definition: |-
+      "'" { non_quote | "''" } "'"
+  - name: non_quote
+    prose: true
+    definition: |-
+      any R019 string scalar other than "'"
+  - name: temporal
+    definition: |-
+      "DATE" string | "DATETIME" string
+imports: {}
+vocabulary: {}
+# A keyword is case-insensitive and cannot be a bare identifier. A qualified
+# field may still use one of these spellings after its qualifier.
+reserved:
+  - "AND"
+  - "BETWEEN"
+  - "DATE"
+  - "DATETIME"
+  - "ESCAPE"
+  - "FALSE"
+  - "IN"
+  - "IS"
+  - "LIKE"
+  - "NOT"
+  - "NULL"
+  - "OR"
+  - "TRUE"
+cases:
+  - id: equality-over-an-unqualified-identifier
+    covers: [comparison, identifier]
+    text: "SAFFL = 'Y'"
+    parse: accept
+    identifiers: [SAFFL]
+    shape: (= (id SAFFL) (str 'Y'))
+  - id: every-comparison-operator-parses
+    covers: [comparison]
+    text: "A = 1 AND B <> 2 AND C < 3 AND D <= 4 AND E > 5 AND F >= 6"
+    parse: accept
+    identifiers: [A, B, C, D, E, F]
+    shape: (and (and (and (and (and (= (id A) (int 1)) (<> (id B) (int
+      2))) (< (id C) (int 3))) (<= (id D) (int 4))) (> (id E) (int 5)))
+      (>= (id F) (int 6)))
+  - id: not-equal-bang-is-outside-the-grammar
+    covers: [comparison, rejection]
+    text: "AGE != 18"
+    parse: reject
+    condition: invalid_predicate
+  - id: and-binds-tighter-than-or
+    covers: [logic, precedence]
+    text: "A = 1 OR B = 2 AND C = 3"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (or (= (id A) (int 1)) (and (= (id B) (int 2)) (= (id C)
+      (int 3))))
+  - id: parentheses-override-precedence
+    covers: [logic, precedence, grouping]
+    text: "(A = 1 OR B = 2) AND C = 3"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (and (or (= (id A) (int 1)) (= (id B) (int 2))) (= (id C)
+      (int 3)))
+  - id: repeated-or-associates-from-the-left
+    covers: [logic, precedence]
+    text: "A = 1 OR B = 2 OR C = 3"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (or (or (= (id A) (int 1)) (= (id B) (int 2))) (= (id C)
+      (int 3)))
+  - id: not-binds-tighter-than-and
+    covers: [logic, precedence]
+    text: "NOT A = 1 AND B = 2"
+    parse: accept
+    identifiers: [A, B]
+    shape: (and (not (= (id A) (int 1))) (= (id B) (int 2)))
+  - id: repeated-not-nests
+    covers: [logic]
+    text: "NOT NOT TRUE"
+    parse: accept
+    identifiers: []
+    shape: (not (not true))
+  - id: boolean-literals-are-case-insensitive
+    covers: [logic, keyword-case]
+    text: "true OR False"
+    parse: accept
+    identifiers: []
+    shape: (or true false)
+  - id: keywords-are-case-insensitive
+    covers: [logic, keyword-case]
+    text: "A = 1 and B = 2 or C = 3"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (or (and (= (id A) (int 1)) (= (id B) (int 2))) (= (id C)
+      (int 3)))
+  - id: identifiers-are-case-sensitive
+    covers: [identifier, keyword-case]
+    text: "aval = AVAL"
+    parse: accept
+    identifiers: [AVAL, aval]
+    shape: (= (id aval) (id AVAL))
+  - id: a-qualified-identifier-names-its-relation
+    covers: [identifier]
+    text: "EX.EXDOSE > 0"
+    parse: accept
+    identifiers: [EX.EXDOSE]
+    shape: (> (id EX.EXDOSE) (int 0))
+  - id: a-qualified-field-may-spell-a-keyword
+    covers: [identifier, reserved]
+    text: "DM.NOT = 1"
+    parse: accept
+    identifiers: [DM.NOT]
+    shape: (= (id DM.NOT) (int 1))
+  - id: a-bare-keyword-is-not-an-identifier
+    covers: [reserved, rejection]
+    text: "LIKE = 1"
+    parse: reject
+    condition: invalid_predicate
+  - id: an-underscore-may-open-a-name
+    covers: [identifier]
+    text: "_FLAG = 'Y'"
+    parse: accept
+    identifiers: [_FLAG]
+    shape: (= (id _FLAG) (str 'Y'))
+  - id: a-digit-may-not-open-a-name
+    covers: [identifier, rejection]
+    text: "2FLAG = 'Y'"
+    parse: reject
+    condition: invalid_predicate
+  - id: a-three-part-identifier-is-outside-the-grammar
+    covers: [identifier, rejection]
+    text: "A.B.C = 1"
+    parse: reject
+    condition: invalid_predicate
+  - id: in-list-keeps-its-operands-in-order
+    covers: [in]
+    text: "AEACN IN ('DRUG WITHDRAWN', 'DOSE REDUCED')"
+    parse: accept
+    identifiers: [AEACN]
+    shape: (in (id AEACN) (str 'DRUG WITHDRAWN') (str 'DOSE REDUCED'))
+  - id: not-in-negates-the-list-membership
+    covers: [in]
+    text: "AVISITN NOT IN (1, 2)"
+    parse: accept
+    identifiers: [AVISITN]
+    shape: (not-in (id AVISITN) (int 1) (int 2))
+  - id: an-empty-in-list-is-outside-the-grammar
+    covers: [in, rejection]
+    text: "AVISITN IN ()"
+    parse: reject
+    condition: invalid_predicate
+  - id: between-takes-two-inclusive-endpoints
+    covers: [between]
+    text: "AVAL BETWEEN 1 AND 10"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (between (id AVAL) (int 1) (int 10))
+  - id: not-between-negates-the-range
+    covers: [between]
+    text: "AVAL NOT BETWEEN 1.5 AND 10"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (not-between (id AVAL) (float 1.5) (int 10))
+  - id: between-requires-its-and
+    covers: [between, rejection]
+    text: "AVAL BETWEEN 1 10"
+    parse: reject
+    condition: invalid_predicate
+  - id: like-without-escape-has-no-escape-character
+    covers: [like]
+    text: "AEDECOD LIKE 'HEAD%'"
+    parse: accept
+    identifiers: [AEDECOD]
+    shape: (like (id AEDECOD) (str 'HEAD%'))
+  - id: escape-declares-one-scalar
+    covers: [like, escape]
+    text: "AEDECOD LIKE '100!%' ESCAPE '!'"
+    parse: accept
+    identifiers: [AEDECOD]
+    shape: (like (id AEDECOD) (str '100!%') (escape '!'))
+  - id: not-like-negates-the-match
+    covers: [like]
+    text: "AEDECOD NOT LIKE 'HEAD%'"
+    parse: accept
+    identifiers: [AEDECOD]
+    shape: (not-like (id AEDECOD) (str 'HEAD%'))
+  - id: escape-rejects-a-two-scalar-literal
+    covers: [like, escape, rejection]
+    text: "AEDECOD LIKE 'a' ESCAPE '!!'"
+    parse: reject
+    condition: invalid_predicate
+  - id: a-dangling-escape-is-rejected
+    covers: [like, escape, rejection]
+    text: "AEDECOD LIKE 'HEAD!' ESCAPE '!'"
+    parse: reject
+    condition: invalid_predicate
+  - id: a-doubled-escape-character-is-not-dangling
+    covers: [like, escape]
+    text: "AEDECOD LIKE 'HEAD!!' ESCAPE '!'"
+    parse: accept
+    identifiers: [AEDECOD]
+    shape: (like (id AEDECOD) (str 'HEAD!!') (escape '!'))
+  - id: is-null-tests-missingness
+    covers: [null-test]
+    text: "AEENDTC IS NULL"
+    parse: accept
+    identifiers: [AEENDTC]
+    shape: (is-null (id AEENDTC))
+  - id: is-not-null-tests-presence
+    covers: [null-test]
+    text: "AEENDTC IS NOT NULL"
+    parse: accept
+    identifiers: [AEENDTC]
+    shape: (is-not-null (id AEENDTC))
+  - id: is-requires-null
+    covers: [null-test, rejection]
+    text: "AEENDTC IS 'Y'"
+    parse: reject
+    condition: invalid_predicate
+  - id: null-is-an-operand-of-a-comparison
+    covers: [literal, null-test]
+    text: "AVAL = NULL"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (= (id AVAL) null)
+  - id: an-integer-literal-has-no-fraction-or-exponent
+    covers: [literal]
+    text: "AVAL = 42"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (= (id AVAL) (int 42))
+  - id: a-signed-literal-keeps-its-sign
+    covers: [literal]
+    text: "AVAL = -3"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (= (id AVAL) (int -3))
+  - id: an-exponent-makes-a-literal-float
+    covers: [literal]
+    text: "AVAL = 1e3"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (= (id AVAL) (float 1e3))
+  - id: a-fraction-makes-a-literal-float
+    covers: [literal]
+    text: "AVAL = 2.50"
+    parse: accept
+    identifiers: [AVAL]
+    shape: (= (id AVAL) (float 2.50))
+  - id: a-trailing-decimal-point-is-outside-the-grammar
+    covers: [literal, rejection]
+    text: "AVAL = 2."
+    parse: reject
+    condition: invalid_predicate
+  - id: a-doubled-quote-is-one-quote
+    covers: [literal, escape]
+    text: "COMMENT = 'it''s'"
+    parse: accept
+    identifiers: [COMMENT]
+    shape: (= (id COMMENT) (str 'it''s'))
+  - id: a-backslash-is-an-ordinary-scalar
+    covers: [literal, escape]
+    text: "PATH = 'C:\\new'"
+    parse: accept
+    identifiers: [PATH]
+    shape: (= (id PATH) (str 'C:\new'))
+  - id: an-unterminated-string-is-rejected
+    covers: [literal, rejection]
+    text: "COMMENT = 'open"
+    parse: reject
+    condition: invalid_predicate
+  - id: a-date-literal-needs-its-keyword
+    covers: [literal, temporal]
+    text: "ADT >= DATE '2025-06-01'"
+    parse: accept
+    identifiers: [ADT]
+    shape: (>= (id ADT) (date '2025-06-01'))
+  - id: a-datetime-literal-carries-a-time
+    covers: [literal, temporal]
+    text: "ADTM >= DATETIME '2025-06-01T08:30'"
+    parse: accept
+    identifiers: [ADTM]
+    shape: (>= (id ADTM) (datetime '2025-06-01T08:30'))
+  - id: a-quoted-date-without-its-keyword-is-text
+    covers: [literal, temporal]
+    text: "ADT >= '2025-06-01'"
+    parse: accept
+    identifiers: [ADT]
+    shape: (>= (id ADT) (str '2025-06-01'))
+  - id: a-date-literal-that-names-no-day-is-rejected
+    covers: [literal, temporal, rejection]
+    text: "ADT >= DATE '2025-02-30'"
+    parse: reject
+    condition: invalid_predicate
+  - id: arithmetic-is-not-in-the-predicate-grammar
+    covers: [rejection]
+    text: "AVAL + 1 > 2"
+    parse: reject
+    condition: invalid_predicate
+  - id: a-function-call-is-not-in-the-predicate-grammar
+    covers: [rejection]
+    text: "ABS(AVAL) > 2"
+    parse: reject
+    condition: invalid_predicate
+  - id: a-bare-operand-is-not-a-predicate
+    covers: [rejection]
+    text: "SAFFL"
+    parse: reject
+    condition: invalid_predicate
+  - id: an-empty-predicate-is-rejected
+    covers: [rejection]
+    text: ""
+    parse: reject
+    condition: invalid_predicate
+  - id: an-unclosed-group-is-rejected
+    covers: [grouping, rejection]
+    text: "(A = 1"
+    parse: reject
+    condition: invalid_predicate
+  - id: a-trailing-token-is-rejected
+    covers: [rejection]
+    text: "A = 1 B = 2"
+    parse: reject
+    condition: invalid_predicate

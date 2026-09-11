@@ -105,16 +105,23 @@ separate right-side relation to narrow for each current row.
 ## Grammar
 
 ```text
-expr      := term (("+" | "-") term)*
-term      := factor (("*" | "/") factor)*
-factor    := ("-" | "+")? primary
-primary   := number | "NULL" | identifier | reduction | call | "(" expr ")"
-reduction := reducer "(" (expr | star) ")"
-star      := name "." "*"
-call      := function "(" [expr ("," expr)*] ")"
+expr       := term (("+" | "-") term)*
+term       := factor (("*" | "/") factor)*
+factor     := ("-" | "+")? primary
+primary    := number | "NULL" | identifier | reduction | call | "(" expr ")"
+reduction  := reducer "(" (expr | star) ")"
+star       := name "." "*"
+call       := function "(" [expr ("," expr)*] ")"
 identifier := name ["." name]
-number    := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
+number     := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
 ```
+
+`grammar/aggregate.yaml` is this grammar's single source. The block above is
+its rendering, its vocabulary closes the reducer table below, and its cases
+record the text every implementation must accept or reject, the identifiers an
+accepted text binds, and the parse it produces. Repository validation and the R
+implementation both read that file, so no transcription of this grammar can
+drift from it without failing.
 
 Precedence, associativity, and the permitted `function` names are R010's.
 Reducer and function names and `NULL` are case-insensitive; identifiers are

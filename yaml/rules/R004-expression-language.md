@@ -63,6 +63,13 @@ non_quote   := any R019 string scalar other than "'"
 temporal    := "DATE" string | "DATETIME" string
 ```
 
+`grammar/predicate.yaml` is this grammar's single source. The block above is
+its rendering, its `reserved` list closes the keywords named below, and its
+cases record the text every implementation must accept or reject, the
+identifiers an accepted text binds, and the parse it produces. Repository
+validation and the R implementation both read that file, so no transcription of
+this grammar can drift from it without failing.
+
 Whitespace may separate tokens but cannot occur inside a number, identifier,
 or keyword. Precedence is `NOT`, then `AND`, then `OR`. Repeated binary
 operators associate from the left; parentheses override precedence. Keywords,

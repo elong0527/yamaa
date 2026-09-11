@@ -29,6 +29,11 @@ outside the rule index until their contracts and example coverage are complete.
 - Keep handler fields local to the expression or result stage that can use them;
   do not recreate a generic exception list.
 - Store each cohesive semantic area in one rule file under `rules/`.
+- Change a closed grammar in its `grammar/` file first. The rule's grammar
+  block is rendered from that file, each parser's closed vocabulary is
+  compared with it, and both implementations replay its vectors, so a change
+  made anywhere else fails validation. Add a vector for every behavior the
+  change decides.
 - Give every rule a stable ID and list it in `rules/README.md`.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;

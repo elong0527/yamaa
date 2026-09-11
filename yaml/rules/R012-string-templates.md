@@ -50,6 +50,12 @@ placeholder := "{" variable "}"
 text        := one or more R019 scalar values other than "{" and "}"
 ```
 
+`grammar/string-template.yaml` is this grammar's single source. The block above
+is its rendering, and its cases record the literal text and placeholders every
+implementation must produce for a template, or the template it must reject.
+Repository validation and the R implementation both read that file, so no
+transcription of this grammar can drift from it without failing.
+
 The `variable` contents must satisfy the schema type of that name exactly.
 Whitespace is therefore not ignored inside braces. `{{` emits one literal `{`
 and `}}` emits one literal `}`. The pairs take precedence while scanning, so

@@ -1,0 +1,138 @@
+# Machine-readable grammar for R012's string template language.
+#
+# This file is the single source for the closed grammar written in
+# `str_template.template`. R012's `## Grammar` block is rendered from
+# `productions`, and every implementation's parser is checked against
+# `cases`, so the rule, the R parser, and the Python parser cannot drift
+# apart without failing validation.
+#
+# A template is scanned from left to right, and the brace pairs take
+# precedence over a single brace, so a case's shape records the literal text
+# a scan produces as well as the placeholders it binds.
+#
+# `grammar/README.md` states the file format and the shape notation.
+
+schema_version: "1.0"
+contract: string-template
+contract_version: "1.0.0"
+rule: R012
+start: template
+productions:
+  - name: template
+    definition: |-
+      part*
+  - name: part
+    definition: |-
+      text | placeholder | "{{" | "}}"
+  - name: placeholder
+    definition: |-
+      "{" variable "}"
+  - name: text
+    prose: true
+    definition: |-
+      one or more R019 scalar values other than "{" and "}"
+imports:
+  variable: schema
+vocabulary: {}
+cases:
+  - id: a-template-interleaves-text-and-placeholders
+    covers: [placeholder, text]
+    text: "{SITEID}:{SUBJID}"
+    parse: accept
+    identifiers: [SITEID, SUBJID]
+    shape: (template (placeholder SITEID) (text ':') (placeholder
+      SUBJID))
+  - id: a-repeated-placeholder-is-one-dependency
+    covers: [placeholder]
+    text: "{A}-{A}"
+    parse: accept
+    identifiers: [A]
+    shape: (template (placeholder A) (text '-') (placeholder A))
+  - id: a-template-may-be-only-text
+    covers: [text]
+    text: "no placeholder here"
+    parse: accept
+    identifiers: []
+    shape: (template (text 'no placeholder here'))
+  - id: an-empty-template-has-no-parts
+    covers: [text]
+    text: ""
+    parse: accept
+    identifiers: []
+    shape: (template)
+  - id: a-doubled-brace-emits-one-literal-brace
+    covers: [escape]
+    text: "{{literal}}"
+    parse: accept
+    identifiers: []
+    shape: (template (text '{literal}'))
+  - id: brace-pairs-take-precedence-while-scanning
+    covers: [escape, placeholder]
+    text: "{{{SITEID}}}"
+    parse: accept
+    identifiers: [SITEID]
+    shape: (template (text '{') (placeholder SITEID) (text '}'))
+  - id: a-placeholder-may-be-qualified
+    covers: [placeholder, identifier]
+    text: "{DM.SITEID}"
+    parse: accept
+    identifiers: [DM.SITEID]
+    shape: (template (placeholder DM.SITEID))
+  - id: placeholder-names-are-case-sensitive
+    covers: [placeholder, identifier]
+    text: "{aval}{AVAL}"
+    parse: accept
+    identifiers: [AVAL, aval]
+    shape: (template (placeholder aval) (placeholder AVAL))
+  - id: an-underscore-may-open-a-placeholder-name
+    covers: [placeholder, identifier]
+    text: "{_FLAG}"
+    parse: accept
+    identifiers: [_FLAG]
+    shape: (template (placeholder _FLAG))
+  - id: a-quote-in-literal-text-is-an-ordinary-scalar
+    covers: [text]
+    text: "it's {A}"
+    parse: accept
+    identifiers: [A]
+    shape: (template (text 'it''s ') (placeholder A))
+  - id: whitespace-inside-braces-is-not-ignored
+    covers: [placeholder, rejection]
+    text: "{ SITEID }"
+    parse: reject
+    condition: invalid_string_template
+  - id: an-empty-placeholder-is-rejected
+    covers: [placeholder, rejection]
+    text: "{}"
+    parse: reject
+    condition: invalid_string_template
+  - id: an-expression-inside-braces-is-rejected
+    covers: [placeholder, rejection]
+    text: "{A + B}"
+    parse: reject
+    condition: invalid_string_template
+  - id: a-format-directive-is-rejected
+    covers: [placeholder, rejection]
+    text: "{A:>10}"
+    parse: reject
+    condition: invalid_string_template
+  - id: a-nested-placeholder-is-rejected
+    covers: [placeholder, rejection]
+    text: "{A{B}}"
+    parse: reject
+    condition: invalid_string_template
+  - id: an-unmatched-opening-brace-is-rejected
+    covers: [escape, rejection]
+    text: "{A"
+    parse: reject
+    condition: invalid_string_template
+  - id: an-unmatched-closing-brace-is-rejected
+    covers: [escape, rejection]
+    text: "A}"
+    parse: reject
+    condition: invalid_string_template
+  - id: a-digit-may-not-open-a-placeholder-name
+    covers: [placeholder, rejection]
+    text: "{2FLAG}"
+    parse: reject
+    condition: invalid_string_template
