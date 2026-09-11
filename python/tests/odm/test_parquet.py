@@ -69,6 +69,27 @@ def test_existing_output_requires_explicit_overwrite(
     assert pl.read_parquet(output).height == 3
 
 
+def test_late_arriving_destination_is_preserved(
+    odm13_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "clinical-items.parquet"
+    output.write_bytes(b"racing")
+    real_exists = Path.exists
+    calls = 0
+
+    def flaky_exists(self: Path) -> bool:
+        nonlocal calls
+        if self == output and calls == 0:
+            calls += 1
+            return False
+        return real_exists(self)
+
+    monkeypatch.setattr(Path, "exists", flaky_exists)
+    with pytest.raises(FileExistsError):
+        write_odm_parquet(odm13_path, output)
+    assert output.read_bytes() == b"racing"
+
+
 def test_empty_odm_still_publishes_fixed_schema(tmp_path: Path) -> None:
     source = tmp_path / "empty.xml"
     source.write_text(

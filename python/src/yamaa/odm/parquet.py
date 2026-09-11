@@ -105,6 +105,12 @@ def write_odm_parquet(
             if writer is not None:
                 writer.close()
 
-        os.replace(staged_output, output_path)
+        if overwrite:
+            os.replace(staged_output, output_path)
+        else:
+            try:
+                os.link(staged_output, output_path)
+            except FileExistsError:
+                raise FileExistsError(output_path) from None
 
     return ParquetWriteResult(output_path=output_path, row_count=row_count)
