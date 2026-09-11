@@ -18,16 +18,16 @@ title: YAML examples walkthrough
 
 ## 1. What the suite is
 
-`yaml/examples/` holds **149 directories**. Each one is a complete, runnable
+`yaml/examples/` holds **178 directories**. Each one is a complete, runnable
 specification with its input data and the exact output an implementation must
 reproduce:
 
 | Group | Count | What it is |
 |---|---|---|
-| `adam-*` | 65 | ADaM derivations |
+| `adam-*` | 74 | ADaM derivations |
 | `sdtm-*` | 18 | SDTM derivations |
 | `odm-*` | 1 | An ODM resolution behavior |
-| `negative-*` | 65 | Specifications the design **must reject**, with the exact error |
+| `negative-*` | 85 | Specifications the design **must reject**, with the exact error |
 
 Almost half the suite is negative. That ratio is the point: a portable
 specification language is defined as much by what it refuses as by what it
@@ -147,11 +147,11 @@ complementary view -- **which example to open when you want to see a construct
 in use, and which rule governs it.** Rule IDs are the normative pages in
 [`yaml/rules/`](https://github.com/elong0527/yamaa/tree/main/yaml/rules).
 
-Rule coverage across the 51 questions below:
+Rule coverage across the 56 questions below:
 
-| R001 | R002 | R003 | R004 | R005 | R006 | R007 | R008 | R009 | R010 | R011 | R012 | R013 | R014 | R015 | R016 | R017 | R018 | R019 | R020 | R021 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 8 | 3 | 2 | 0 | 1 | 0 | 15 | 3 | 1 | 0 | 1 | 1 | 7 | 0 | 8 | 5 | 2 | 3 | 1 | 0 | 1 |
+| R001 | R002 | R003 | R004 | R005 | R006 | R007 | R008 | R009 | R010 | R011 | R012 | R013 | R014 | R015 | R016 | R017 | R018 | R019 | R020 | R021 | R022 | R023 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 9 | 3 | 2 | 0 | 2 | 0 | 15 | 3 | 1 | 0 | 1 | 1 | 8 | 0 | 8 | 5 | 2 | 3 | 1 | 3 | 1 | 0 | 1 |
 
 ### Row construction and value-level metadata
 
@@ -162,6 +162,7 @@ Rule coverage across the 51 questions below:
 | How do I consolidate several collection forms into one domain? | R001, R002 | [`sdtm-lb-multiform`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-lb-multiform) -- the same analyte on two forms is separated by specimen and location, not by test code |
 | How do I add a derived parameter alongside collected ones? | R001 | [`adam-advs-body-mass-index`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-advs-body-mass-index), [`adam-advs-body-surface-area`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-advs-body-surface-area), [`adam-advs-mean-arterial-pressure`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-advs-mean-arterial-pressure) |
 | How do I reduce a driver group into one candidate row? | R001 | [`adam-advs-body-mass-index`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-advs-body-mass-index) -- a grouped row template whose `filter` runs after the candidate is complete |
+| How do I keep only the records that meet a criterion, and still deliver a listing when none do? | R001, R020 | [`adam-adae-serious-event-listing`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adae-serious-event-listing) -- a row template's `filter` keeps the serious events; with none, the artifact is its header alone |
 | How do I score a questionnaire subscale from its item records? | R001, R013 | [`adam-adqs-subscale-score`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adqs-subscale-score) |
 | How do I reshape extra qualifiers into supplemental records? | R001 | [`sdtm-suppmh-qualifiers`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-suppmh-qualifiers), [`sdtm-suppmh-parent-linkage`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-suppmh-parent-linkage) |
 
@@ -187,6 +188,7 @@ Rule coverage across the 51 questions below:
 | How do I rank with ties? | R007 | [`adam-adae-severity-rank`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adae-severity-rank) |
 | How do I read the neighbouring row's value? | R007 | [`adam-adex-dose-reduction-flag`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adex-dose-reduction-flag) and [`adam-adrs-confirmed-response`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adrs-confirmed-response) use `row_value`; [`negative-adrs-partial-response-after-complete-response`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-adrs-partial-response-after-complete-response) shows the assertion pattern built on it |
 | How do I flag the first occurrence at several levels? | R007 | [`adam-adae-occurrence-flags`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adae-occurrence-flags) |
+| How do I deliver rows in a reviewer's order, including where missing values go? | R005 | [`adam-adae-review-order`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adae-review-order) -- `output.order_by` sorts on a descending severity ordinal the artifact does not carry, then onset date with `nulls: first`; ties stay in collection order |
 | How do I pick the record closest to a window's target day? | R007, R015 | [`adam-adlb-closest-visit`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-closest-visit), [`adam-advs-analysis-window-table`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-advs-analysis-window-table) |
 
 ### Aggregation
@@ -198,6 +200,7 @@ Rule coverage across the 51 questions below:
 | How do I take the earliest of many records as a reference date? | R013 | [`adam-adsl-dependency-order`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-dependency-order) -- `MIN(EX.EXSTDTC)` behind a `filter` |
 | How do I sum measurements per assessment? | R013 | [`adam-adtr-sum-of-target-diameters`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adtr-sum-of-target-diameters) |
 | How do I derive a nadir? | R013 | [`adam-adtr-current-nadir`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adtr-current-nadir) |
+| Does the order of a floating-point sum matter? | R013 | [`adam-adlb-order-sensitive-sum`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-order-sensitive-sum) -- values are added in stored record order, because `0.1 + 0.2 + 0.3` and its reverse give different totals |
 
 ### Dates
 
@@ -206,7 +209,7 @@ Rule coverage across the 51 questions below:
 | How do I impute a partial date and flag what was imputed? | R016, R008 | [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adae-partial-dates) -- `date_impute` beside `date_precision` reading the same source |
 | How do I compute an age in whole years? | R016 | [`adam-adsl-analysis-age`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-analysis-age) -- `date_diff` with `unit: year` and explicit `bounds` |
 | How do I compute a study day? | R016 | [`sdtm-vs-visit-study-day`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-vs-visit-study-day), [`adam-adsl-randomization-timing`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-randomization-timing) |
-| How do I derive a time-to-event endpoint? | R016 | [`adam-adtte-overall-survival`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adtte-overall-survival), [`adam-adtte-progression-free-survival`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adtte-progression-free-survival), [`adam-adtte-duration-of-response`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adtte-duration-of-response) |
+| How do I derive a time-to-event endpoint? | R016 | [`adam-adtte-overall-survival`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adtte-overall-survival), [`adam-adtte-progression-free-survival`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adtte-progression-free-survival), [`adam-adtte-duration-of-response`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adtte-duration-of-response), [`adam-adtte-first-adverse-event`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adtte-first-adverse-event) |
 | How do I scope treatments and dates to a period across a washout? | R013, R016 | [`adam-adsl-crossover-periods`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-crossover-periods) |
 
 ### Strings, codelists and classification
@@ -215,10 +218,11 @@ Rule coverage across the 51 questions below:
 |---|---|---|
 | How do I parse an identifier and fall back to a collected value? | R007, R012 | [`adam-adsl-identifier-parsing`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-identifier-parsing) -- `str_extract`, then `coalesce`, then `str_template` |
 | How do I translate one collected value into three vocabularies? | R007 | [`adam-adsl-mapping`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-mapping) -- three `mapping` expressions over the same source |
-| How do I band a numeric value? | R007 | [`adam-adsl-mapping`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-mapping) (`AGEGR1` via `cut`), [`adam-adsl-dependency-order`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-dependency-order) |
+| How do I band a numeric value? | R007 | [`adam-adsl-mapping`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-mapping) (`AGEGR1` via `cut`), [`adam-adsl-dependency-order`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-dependency-order), [`adam-adsl-age-group`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-age-group) (`AGEGR1` and its numeric `AGEGR1N` via `case`) |
 | How do I build USUBJID from parts? | R007 | [`sdtm-dm-metadata-contract`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-dm-metadata-contract) -- `str_concat` mixing sources and literals |
 | How do I clean text and reject a malformed identifier? | R007, R008 | [`adam-adae-string-handlers`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adae-string-handlers) |
 | How do I normalize a country and group it into a region? | R007 | [`adam-adsl-geography-normalization`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-geography-normalization) |
+| How do I keep free text with commas, quotes and line breaks intact? | R020, R023 | [`adam-adsl-investigator-comment`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-investigator-comment) -- a comment left blank stays distinct from one never collected |
 | How are international strings cased, compared and ordered? | R019 | [`adam-adsl-portable-text`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-portable-text) |
 | How do I classify a result, its shift, and a criterion flag? | R007 | [`adam-adlb-shift-and-criteria`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-shift-and-criteria) |
 
@@ -230,6 +234,7 @@ Rule coverage across the 51 questions below:
 | How do I chain population flags in dependency order? | R001 | [`adam-adsl-dependency-order`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-dependency-order) -- each flag reads the previous one, and `RANDFL` stays internal |
 | What happens to a non-finite number? | R011 | [`adam-adsl-non-finite-values`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-non-finite-values) -- nine derived values from YAML, source fields and a project function, all normalized to missing |
 | How do I distinguish an uncollected value from an inapplicable one? | R008 | [`adam-adex-uncollected-exposure`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adex-uncollected-exposure), [`sdtm-lb-conditional-compartments`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-lb-conditional-compartments) |
+| How do I report numbers to a fixed number of decimals? | R020 | [`adam-adlb-reported-precision`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-reported-precision) -- `output.decimals: 4` rounds once, as the value is written, half away from zero; a missing value stays absent rather than becoming zeroes |
 | Which files may a specification read? | R021 | The six `negative-dataset-path-*` examples -- a machine location, a folder above the study, a web address, a stand-in name, a folder, and a table the study does not hold, each rejected before any data is read |
 
 ### Inheritance
@@ -266,16 +271,22 @@ stated fields must match. Every negative README ends with a `## How to fix`
 section that leads with the clinical decision and then shows the smallest valid
 correction -- never a weakened check.
 
-Reading them by family is faster than reading them alphabetically:
+Reading them by family is faster than reading them alphabetically. The families
+below cover the main failure areas rather than every negative example:
 
 | Family | Examples | What they collectively pin |
 |---|---|---|
 | Closed `compute` grammar | `negative-compute-*` (7) | Aggregate functions, comparison operators, qualified identifiers, division by zero, integer overflow, `LN(0)`, `SQRT(-1)` |
 | Predicate grammar | [`negative-adae-review-condition-arithmetic`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-adae-review-condition-arithmetic), `-review-text-date`, `-review-unknown-date` | An operand is a name or a literal; types must be comparable; names must resolve |
 | Type conversion | `negative-conversion-*`, [`negative-ingest-unparseable-field`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-ingest-unparseable-field), [`negative-column-type-unknown`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-column-type-unknown) | Conversion fails loudly rather than substituting a value |
-| Partial dates | `negative-date-impute-*` (4), [`negative-date-precision-invalid-source`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-date-precision-invalid-source), [`negative-datetime-zone-offset`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-datetime-zone-offset) | Every unusable temporal input has one defined outcome |
+| Dates | `negative-date-impute-*` (4), [`negative-date-precision-invalid-source`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-date-precision-invalid-source), [`negative-datetime-zone-offset`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-datetime-zone-offset), [`negative-to-date-date-source`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-to-date-date-source) | Every unusable temporal input has one defined outcome, and a date is extracted only from a datetime |
 | Lookups and joins | `negative-record-lookup-*` (7), `negative-mapping-from-*` (4), [`negative-source-duplicate-right-key`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-source-duplicate-right-key) | Matching must be complete, paired, unique, and ordered when it chooses |
 | Output identity | `negative-keys-*`, [`negative-output-duplicate-subject`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-output-duplicate-subject), [`negative-usubjid-exceeds-length`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-usubjid-exceeds-length) | Keys are an assertion, not documentation |
+| Output order | `negative-output-order-*` (2) | An order term must name a declared column and place each value once |
+| Group counts | [`negative-group-count-without-id`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-group-count-without-id), [`negative-adlb-multiple-baseline-records`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-adlb-multiple-baseline-records) | A count within groups is a named study rule, and two baseline records for one subject and parameter fail it |
+| Resource paths | `negative-dataset-path-*` (6) | A source is a relative file inside the study: no machine location, parent escape, web address, stand-in name, folder, or missing file |
+| Delimited source files | `negative-source-unknown-profile`, `-invalid-text`, `-unterminated-quote`, `-record-width`, `-duplicate-field-name`, `-empty-field-name`, `-missing-sentinel` (7) | A file is read under one syntax and never repaired; an `NA` in a numeric field fails rather than meaning missing |
+| Regular expressions | [`negative-matches-unreadable-pattern`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-matches-unreadable-pattern), [`negative-str-extract-undeclared-group`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-str-extract-undeclared-group) | A pattern the pinned engine rejects fails validation, and an extracted group must exist in the pattern |
 | Inheritance | `negative-adsl-*parent*` (4), [`negative-adsl-inherited-output`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-adsl-inherited-output) | Cycles, version mismatches, remote paths, invalid clears, and who owns `output` |
 | Expressiveness limits | [`negative-adex-single-dose-expansion`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-adex-single-dose-expansion), [`negative-adlb-computed-parameter`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-adlb-computed-parameter), [`negative-query-slot-overflow`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-query-slot-overflow) | Where the language deliberately stops, and what to do upstream instead |
 
