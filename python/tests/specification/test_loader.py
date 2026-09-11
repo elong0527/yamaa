@@ -66,6 +66,41 @@ def test_loads_and_normalizes_basic_specification() -> None:
     }
 
 
+def test_recursive_alias_tries_a_later_union_member(tmp_path: Path) -> None:
+    schema_root = _mutate_schema(
+        tmp_path,
+        "schema.yaml",
+        "type: domain_name",
+        "type: recursive_domain",
+    )
+    schema_path = schema_root / "schema.yaml"
+    source = schema_path.read_text(encoding="ascii")
+    schema_path.write_text(
+        f"{source}\nrecursive_domain:\n    type: [recursive_domain, domain_name]\n",
+        encoding="ascii",
+    )
+
+    loaded = load_specification(EXAMPLES / "sdtm-dm-basic/spec.yaml", schema_root)
+
+    assert loaded.specification.domain == "DM"
+
+
+def test_normalizes_schema_defaults_with_collection_shorthand(tmp_path: Path) -> None:
+    schema_root = _mutate_schema(
+        tmp_path,
+        "schema.yaml",
+        '    - parents:\n        type: [path, "list[path]"]\n        required: false\n',
+        "    - parents:\n"
+        '        type: [path, "list[path]"]\n'
+        "        required: false\n"
+        "        default: parent.yaml\n",
+    )
+
+    loaded = load_specification(EXAMPLES / "sdtm-dm-basic/spec.yaml", schema_root)
+
+    assert loaded.specification.parents == ["parent.yaml"]
+
+
 def test_negative_column_type_matches_committed_diagnostic() -> None:
     with pytest.raises(SpecificationError) as caught:
         load_specification(
@@ -299,7 +334,31 @@ def test_rejects_non_ascii_authored_source(tmp_path: Path) -> None:
     with pytest.raises(SpecificationError) as caught:
         read_yaml_document(path)
 
-    assert caught.value.diagnostics[0].condition == "non_ascii_source"
+    assert caught.value.diagnostics[0].model_dump(mode="json") == {
+        "phase": "validation",
+        "condition": "non_ascii_source",
+        "spec_paths": ["$"],
+        "context": {"path": str(path), "line": 1, "column": 11},
+    }
+
+
+def test_non_ascii_in_schema_include_reports_the_include_path(tmp_path: Path) -> None:
+    schema_root = _copy_schema_bundle(tmp_path)
+    include_path = schema_root / "schema_shared.yaml"
+    source = include_path.read_text(encoding="ascii")
+    include_path.write_text(
+        source.replace(
+            "# Types shared", "# Types shar\N{LATIN SMALL LETTER E WITH ACUTE}d"
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SpecificationError) as caught:
+        load_specification(EXAMPLES / "sdtm-dm-basic/spec.yaml", schema_root)
+
+    diagnostic = caught.value.diagnostics[0]
+    assert diagnostic.condition == "non_ascii_source"
+    assert diagnostic.context["path"] == str(include_path)
 
 
 def test_rejects_surrogate_code_points_from_yaml_escapes(tmp_path: Path) -> None:

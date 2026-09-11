@@ -215,7 +215,11 @@ def read_yaml_document(path: str | Path) -> object:
                 ValidationDiagnostic(
                     condition="non_ascii_source",
                     spec_paths=("$",),
-                    context={"line": line, "column": column},
+                    context={
+                        "path": str(source_path),
+                        "line": line,
+                        "column": column,
+                    },
                 )
             ]
         ) from error

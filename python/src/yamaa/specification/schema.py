@@ -18,6 +18,7 @@ from yamaa.specification.diagnostics import (
 )
 
 DefinitionKind = Literal["class", "alias", "registry"]
+ActiveTypes = frozenset[tuple[int, str]]
 
 
 @dataclass(frozen=True)
@@ -468,7 +469,12 @@ def _class_fields(
     }
 
 
-def _outer_matches(value: object, type_name: str, bundle: SchemaBundle) -> bool:
+def _outer_matches(
+    value: object,
+    type_name: str,
+    bundle: SchemaBundle,
+    active: ActiveTypes = frozenset(),
+) -> bool:
     if type_name == "str":
         return isinstance(value, str)
     if type_name == "int":
@@ -488,10 +494,15 @@ def _outer_matches(value: object, type_name: str, bundle: SchemaBundle) -> bool:
     alias = bundle.aliases.get(type_name)
     if alias is None:
         return False
+    validation_key = (id(value), type_name)
+    if validation_key in active:
+        return False
     if "registry" in alias:
         return isinstance(value, dict)
+    nested_active = active | {validation_key}
     return any(
-        _outer_matches(value, member, bundle) for member in _members(alias.get("type"))
+        _outer_matches(value, member, bundle, nested_active)
+        for member in _members(alias.get("type"))
     )
 
 
@@ -549,8 +560,9 @@ def _validate_descriptor(
     descriptor: dict[str, Any],
     bundle: SchemaBundle,
     path: str,
+    active: ActiveTypes = frozenset(),
 ) -> list[ValidationDiagnostic]:
-    diagnostics = _validate_type(value, descriptor["type"], bundle, path)
+    diagnostics = _validate_type(value, descriptor["type"], bundle, path, active)
     if diagnostics:
         return diagnostics
     return _validate_constraints(value, descriptor, path)
@@ -562,6 +574,7 @@ def _validate_inline_class(
     bundle: SchemaBundle,
     path: str,
     class_name: str,
+    active: ActiveTypes = frozenset(),
 ) -> list[ValidationDiagnostic]:
     if not isinstance(value, dict):
         return [_invalid_type(path, class_name, value)]
@@ -583,7 +596,13 @@ def _validate_inline_class(
             )
         elif field_name in value:
             diagnostics.extend(
-                _validate_descriptor(value[field_name], descriptor, bundle, field_path)
+                _validate_descriptor(
+                    value[field_name],
+                    descriptor,
+                    bundle,
+                    field_path,
+                    active,
+                )
             )
     for field_name in value:
         if field_name not in descriptors:
@@ -602,6 +621,7 @@ def _validate_single(
     type_name: str,
     bundle: SchemaBundle,
     path: str,
+    active: ActiveTypes = frozenset(),
 ) -> list[ValidationDiagnostic]:
     if type_name == "str":
         return [] if isinstance(value, str) else [_invalid_type(path, "str", value)]
@@ -629,7 +649,9 @@ def _validate_single(
             suffix: object = index
             if isinstance(item, dict):
                 suffix = item.get("name", item.get("id", index))
-            diagnostics.extend(_validate_type(item, inner, bundle, _join(path, suffix)))
+            diagnostics.extend(
+                _validate_type(item, inner, bundle, _join(path, suffix), active)
+            )
         return diagnostics
 
     if type_name.startswith("dict[") and type_name.endswith("]"):
@@ -639,10 +661,16 @@ def _validate_single(
         diagnostics = []
         for key, item in value.items():
             diagnostics.extend(
-                _validate_type(key, key_type, bundle, _join(path, f"key({key})"))
+                _validate_type(
+                    key,
+                    key_type,
+                    bundle,
+                    _join(path, f"key({key})"),
+                    active,
+                )
             )
             diagnostics.extend(
-                _validate_type(item, value_type, bundle, _join(path, key))
+                _validate_type(item, value_type, bundle, _join(path, key), active)
             )
         return diagnostics
 
@@ -653,10 +681,15 @@ def _validate_single(
             bundle,
             path,
             type_name,
+            active,
         )
 
     alias = bundle.aliases.get(type_name)
     if alias is not None:
+        validation_key = (id(value), type_name)
+        if validation_key in active:
+            return [_invalid_type(path, type_name, value)]
+        nested_active = active | {validation_key}
         registry_name = alias.get("registry")
         if registry_name is not None:
             if not isinstance(value, dict):
@@ -687,12 +720,26 @@ def _validate_single(
                     bundle,
                     operation_path,
                     str(operation),
+                    nested_active,
                 )
-            return _validate_descriptor(payload, definition, bundle, operation_path)
+            return _validate_descriptor(
+                payload,
+                definition,
+                bundle,
+                operation_path,
+                nested_active,
+            )
 
-        diagnostics = _validate_type(value, alias["type"], bundle, path)
+        diagnostics = _validate_type(
+            value,
+            alias["type"],
+            bundle,
+            path,
+            nested_active,
+        )
         has_matching_outer_type = any(
-            _outer_matches(value, member, bundle) for member in _members(alias["type"])
+            _outer_matches(value, member, bundle, nested_active)
+            for member in _members(alias["type"])
         )
         if (
             diagnostics
@@ -712,17 +759,23 @@ def _validate_type(
     type_value: object,
     bundle: SchemaBundle,
     path: str,
+    active: ActiveTypes = frozenset(),
 ) -> list[ValidationDiagnostic]:
     attempted: list[tuple[str, list[ValidationDiagnostic]]] = []
     for type_name in _members(type_value):
-        diagnostics = _validate_single(value, type_name, bundle, path)
+        if type_name in bundle.aliases and (id(value), type_name) in active:
+            continue
+        diagnostics = _validate_single(value, type_name, bundle, path, active)
         if not diagnostics:
             return []
         attempted.append((type_name, diagnostics))
     for type_name, diagnostics in attempted:
-        if _outer_matches(value, type_name, bundle):
+        if _outer_matches(value, type_name, bundle, active):
             return diagnostics
-    return attempted[0][1] if attempted else []
+    if attempted:
+        return attempted[0][1]
+    expected = " | ".join(_members(type_value))
+    return [_invalid_type(path, expected, value)]
 
 
 def validate_specification(
@@ -749,22 +802,35 @@ def validate_specification(
     return _validate_single(document, "root_class", bundle, "")
 
 
-def _matches(value: object, type_name: str, bundle: SchemaBundle) -> bool:
-    return not _validate_single(value, type_name, bundle, "<normalization>")
+def _matches(
+    value: object,
+    type_name: str,
+    bundle: SchemaBundle,
+    active: ActiveTypes,
+) -> bool:
+    return not _validate_single(
+        value,
+        type_name,
+        bundle,
+        "<normalization>",
+        active,
+    )
 
 
 def _normalize_descriptor(
     value: object,
     descriptor: dict[str, Any],
     bundle: SchemaBundle,
+    active: ActiveTypes,
 ) -> object:
-    return _normalize_type(value, descriptor["type"], bundle)
+    return _normalize_type(value, descriptor["type"], bundle, active)
 
 
 def _normalize_inline_class(
     value: object,
     fields: list[dict[str, dict[str, Any]]],
     bundle: SchemaBundle,
+    active: ActiveTypes,
 ) -> object:
     if not isinstance(value, dict):
         return copy.deepcopy(value)
@@ -777,10 +843,15 @@ def _normalize_inline_class(
     for field_name, descriptor in descriptors.items():
         if field_name in value:
             normalized[field_name] = _normalize_descriptor(
-                value[field_name], descriptor, bundle
+                value[field_name], descriptor, bundle, active
             )
         elif "default" in descriptor:
-            normalized[field_name] = copy.deepcopy(descriptor["default"])
+            normalized[field_name] = _normalize_descriptor(
+                descriptor["default"],
+                descriptor,
+                bundle,
+                active,
+            )
     return normalized
 
 
@@ -788,32 +859,55 @@ def _normalize_single(
     value: object,
     type_name: str,
     bundle: SchemaBundle,
+    active: ActiveTypes,
 ) -> object:
     if type_name.startswith("list[") and type_name.endswith("]"):
         inner = type_name[5:-1].strip()
-        return [_normalize_type(item, inner, bundle) for item in value]  # type: ignore[union-attr]
+        return [
+            _normalize_type(item, inner, bundle, active)
+            for item in value  # type: ignore[union-attr]
+        ]
     if type_name.startswith("dict[") and type_name.endswith("]"):
         key_type, value_type = _split_arguments(type_name[5:-1])
         return {
-            _normalize_type(key, key_type, bundle): _normalize_type(
-                item, value_type, bundle
+            _normalize_type(key, key_type, bundle, active): _normalize_type(
+                item, value_type, bundle, active
             )
             for key, item in value.items()  # type: ignore[union-attr]
         }
     if type_name in bundle.classes:
-        return _normalize_inline_class(value, bundle.classes[type_name], bundle)
+        return _normalize_inline_class(
+            value,
+            bundle.classes[type_name],
+            bundle,
+            active,
+        )
     alias = bundle.aliases.get(type_name)
     if alias is not None:
+        normalization_key = (id(value), type_name)
+        if normalization_key in active:
+            return copy.deepcopy(value)
+        nested_active = active | {normalization_key}
         registry_name = alias.get("registry")
         if registry_name is not None:
             operation, payload = next(iter(value.items()))  # type: ignore[union-attr]
             definition = bundle.registries[registry_name][operation]
             if isinstance(definition, list):
-                payload = _normalize_inline_class(payload, definition, bundle)
+                payload = _normalize_inline_class(
+                    payload,
+                    definition,
+                    bundle,
+                    nested_active,
+                )
             else:
-                payload = _normalize_descriptor(payload, definition, bundle)
+                payload = _normalize_descriptor(
+                    payload,
+                    definition,
+                    bundle,
+                    nested_active,
+                )
             return {operation: payload}
-        return _normalize_type(value, alias["type"], bundle)
+        return _normalize_type(value, alias["type"], bundle, nested_active)
     return copy.deepcopy(value)
 
 
@@ -821,6 +915,7 @@ def _normalize_type(
     value: object,
     type_value: object,
     bundle: SchemaBundle,
+    active: ActiveTypes,
 ) -> object:
     members = _members(type_value)
     for member in members:
@@ -830,9 +925,9 @@ def _normalize_type(
         if (
             inner in members
             and not isinstance(value, list)
-            and _matches(value, inner, bundle)
+            and _matches(value, inner, bundle, active)
         ):
-            return [_normalize_type(value, inner, bundle)]
+            return [_normalize_type(value, inner, bundle, active)]
 
     for class_name in members:
         fields = _class_fields(bundle, class_name)
@@ -848,18 +943,28 @@ def _normalize_type(
         for member in members:
             if member == class_name or member not in field_types:
                 continue
-            if _matches(value, member, bundle):
+            if _matches(value, member, bundle, active):
                 expanded = {
-                    field_name: _normalize_descriptor(value, descriptor, bundle)
+                    field_name: _normalize_descriptor(
+                        value,
+                        descriptor,
+                        bundle,
+                        active,
+                    )
                 }
                 for name, other in fields.items():
                     if name not in expanded and "default" in other:
-                        expanded[name] = copy.deepcopy(other["default"])
+                        expanded[name] = _normalize_descriptor(
+                            other["default"],
+                            other,
+                            bundle,
+                            active,
+                        )
                 return expanded
 
     for member in members:
-        if _matches(value, member, bundle):
-            return _normalize_single(value, member, bundle)
+        if _matches(value, member, bundle, active):
+            return _normalize_single(value, member, bundle, active)
     return copy.deepcopy(value)
 
 
@@ -867,4 +972,4 @@ def normalize_specification(
     document: dict[object, object], bundle: SchemaBundle
 ) -> object:
     """Materialize defaults and R006 collection/class shorthands."""
-    return _normalize_single(document, "root_class", bundle)
+    return _normalize_single(document, "root_class", bundle, frozenset())
