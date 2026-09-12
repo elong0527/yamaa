@@ -8,6 +8,7 @@ includes:
     - schema_shared.yaml
     - schema_derivation.yaml
     - schema_verification.yaml
+    - schema_metadata.yaml
 
 root_class:
     - schema_version:
@@ -54,6 +55,10 @@ root_class:
         type: [dataset_verification, "list[dataset_verification]"]
         required: false
         description: Assertions over the completed dataset; R009 defines them.
+    - submission:
+        type: submission_dataset_class
+        required: false
+        description: Governed dataset metadata a submission document is generated from; R024 defines it.
     - metadata:
         type: "dict[str, str]"
         required: false
@@ -157,6 +162,10 @@ column_class:
         type: [column_verification, "list[column_verification]"]
         required: false
         description: Assertions over this column's completed values; R009 defines them.
+    - submission:
+        type: submission_column_class
+        required: false
+        description: Governed column metadata a submission document is generated from; R024 defines it.
     - metadata:
         type: "dict[str, str]"
         required: false

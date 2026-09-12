@@ -29,6 +29,12 @@ outside the rule index until their contracts and example coverage are complete.
 - Keep handler fields local to the expression or result stage that can use them;
   do not recreate a generic exception list.
 - Store each cohesive semantic area in one rule file under `rules/`.
+- Declare governed submission metadata in `submission`, never in the free-form
+  `metadata` map. The map stays uninterpreted and is never a fallback for a
+  field R024 closes.
+- Declare a codelist once in the study document and bind columns to its
+  identifier. Terminology restated per column is the shape R025 exists to
+  prevent.
 - Change a closed grammar in its `grammar/` file first. The rule's grammar
   block is rendered from that file, each parser's closed vocabulary is
   compared with it, and both implementations replay its vectors, so a change

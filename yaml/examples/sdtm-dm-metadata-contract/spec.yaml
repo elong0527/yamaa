@@ -4,11 +4,15 @@ datasets:
   DM_RAW: input/dm_raw.csv
 base: DM_RAW
 keys: [STUDYID, USUBJID]
-metadata:
-  dataset_label: Demographics
-  dataset_class: SPECIAL PURPOSE
-  dataset_structure: One record per subject
-  standard: SDTMIG 3.4
+submission:
+  label: Demographics
+  standard: SDTMIG
+  class: SPECIAL PURPOSE
+  structure: One record per subject
+  repeating: false
+  comment:
+    text: Demographics are described in section 2.1 of the reviewer's guide.
+    documents: [csdrg]
 
 output:
   path: dm.csv
@@ -20,9 +24,13 @@ columns:
     label: Study Identifier
     derivation:
       source: DM_RAW.STUDYID
-    metadata:
-      origin: Protocol
-      length: "20"
+    submission:
+      core: Req
+      role: Identifier
+      length: 20
+      origin:
+        type: Protocol
+        source: Sponsor
     verifications:
       not_missing: {}
 
@@ -31,10 +39,16 @@ columns:
     label: Domain Abbreviation
     derivation:
       literal: DM
-    metadata:
-      origin: Assigned
-      length: "2"
+    submission:
+      core: Req
+      role: Identifier
+      length: 2
       codelist: DOMAIN
+      origin:
+        type: Assigned
+        source: Sponsor
+    verifications:
+      not_missing: {}
 
   - name: USUBJID
     type: str
@@ -47,9 +61,15 @@ columns:
           - source: DM_RAW.SITEID
           - literal: '-'
           - source: DM_RAW.SUBJID
-    metadata:
-      origin: Derived
-      length: "30"
+    submission:
+      core: Req
+      role: Identifier
+      length: 30
+      origin:
+        type: Derived
+        source: Sponsor
+      method: Study identifier, site identifier, and subject identifier joined
+        by hyphens.
     verifications:
       - not_missing: {}
       - max_length:
@@ -60,27 +80,52 @@ columns:
     label: Subject Identifier for the Study
     derivation:
       source: DM_RAW.SUBJID
-    metadata:
-      origin: CRF
-      length: "10"
+    submission:
+      core: Req
+      role: Topic
+      length: 10
+      origin:
+        type: Collected
+        source: Investigator
+        documents:
+          - document: acrf
+            pages: {type: PhysicalRef, refs: "1"}
+    verifications:
+      not_missing: {}
 
   - name: SITEID
     type: str
     label: Study Site Identifier
     derivation:
       source: DM_RAW.SITEID
-    metadata:
-      origin: CRF
-      length: "10"
+    submission:
+      core: Req
+      role: Record Qualifier
+      length: 10
+      origin:
+        type: Collected
+        source: Investigator
+        documents:
+          - document: acrf
+            pages: {type: PhysicalRef, refs: "1"}
+    verifications:
+      not_missing: {}
 
   - name: AGE
     type: int
     label: Age
     derivation:
       source: DM_RAW.AGE
-    metadata:
-      origin: CRF
-      length: "8"
+    submission:
+      core: Exp
+      role: Record Qualifier
+      length: 3
+      origin:
+        type: Collected
+        source: Investigator
+        documents:
+          - document: acrf
+            pages: {type: PhysicalRef, refs: "1"}
     verifications:
       range:
         min: 0
@@ -91,33 +136,55 @@ columns:
     label: Age Units
     derivation:
       literal: YEARS
-    metadata:
-      origin: Assigned
-      length: "6"
+    submission:
+      core: Exp
+      role: Variable Qualifier
+      length: 5
       codelist: AGEU
+      origin:
+        type: Assigned
+        source: Sponsor
+      comment: Defaulted to YEARS because age is collected in whole years.
 
   - name: SEX
     type: str
     label: Sex
     derivation:
       source: DM_RAW.SEX
-    metadata:
-      origin: CRF
-      length: "1"
+    submission:
+      core: Req
+      role: Record Qualifier
+      length: 1
       codelist: SEX
+      origin:
+        type: Collected
+        source: Investigator
+        documents:
+          - document: acrf
+            pages: {type: PhysicalRef, refs: "1"}
     verifications:
-      allowed_values:
-        values: [F, M, U]
+      - not_missing: {}
+      - allowed_values:
+          values: [F, M, U]
 
   - name: COUNTRY
     type: str
     label: Country
     derivation:
       source: DM_RAW.COUNTRY
-    metadata:
-      origin: CRF
-      length: "3"
+    submission:
+      core: Req
+      role: Record Qualifier
+      length: 3
       codelist: COUNTRY
+      origin:
+        type: Collected
+        source: Investigator
+        documents:
+          - document: acrf
+            pages: {type: PhysicalRef, refs: "1"}
+    verifications:
+      not_missing: {}
 
 verifications:
   - unique:

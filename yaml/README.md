@@ -8,6 +8,12 @@ and SDTM-to-ADaM derivations. The design is under active development.
 - `schema.yaml` is the schema-bundle entry point and defines shared structure.
 - `schema_environment.yaml` is the separately validated project-environment
   entry point.
+- `schema_define.yaml` is the separately validated study-document entry point:
+  one document selects the specifications a Define-XML 2.1 document
+  represents and declares the standards, supporting documents, and codelists
+  they share.
+- `schema_metadata.yaml` registers the governed dataset and column submission
+  metadata that document is generated from.
 - `schema_derivation.yaml`, `schema_expression_*.yaml`, and
   `schema_verification.yaml` register and document closed derivation and
   verification types.
@@ -48,6 +54,22 @@ each closed vocabulary is compared with the constants its parser uses, and
 both implementations replay the same vectors. Changing a grammar therefore
 starts in `grammar/`, and a change that is not carried into every consumer
 fails validation.
+
+R024, R025, and R026 give a submission one generation contract. R024 closes
+the governed dataset and column metadata: a standard's family decides which
+origin pairs it admits, `core` derives `Mandatory` where the standard defines
+that mapping and never where it does not, a declared length binds to the
+`max_length` that enforces it, and a declared origin the derivation graph
+refutes is rejected rather than carried into a document. The graph never
+supplies an origin: it can prove a value was computed, but not who collected
+it. R025 makes a codelist one named, versioned object several columns share,
+enforces the values of a closed list, and requires a codelist binding and an
+`allowed_values` verification over the same column to name the same set.
+R026 composes them into one Define-XML 2.1 document whose identifiers are
+built from declared names, whose element and attribute order is fixed, and
+whose bytes two implementations must agree on exactly. Value-level metadata,
+analysis-results metadata, and split datasets are refusals with named re-entry
+triggers rather than silent omissions.
 
 R021 gives every declared source one resource contract: a run receives one
 approved project root, a declared path is a relative file inside it with no

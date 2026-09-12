@@ -70,7 +70,7 @@ If the audience will write specifications, send them through the
 ## Source
 
 - [`yaml/rules/`](https://github.com/elong0527/yamaa/tree/main/yaml/rules) --
-  the 21 normative rules, one topic each. These pages cite them as R001-R021;
+  the 26 normative rules, one topic each. These pages cite them as R001-R026;
   the index there says what each one owns.
 - [`yaml/`](https://github.com/elong0527/yamaa/tree/main/yaml) -- the schema
   bundle
