@@ -43,7 +43,11 @@ Name the directory for what it derives, not for the construct it uses:
 
 ## The README describes data, not the specification
 
-A reader of an example README wants to know what the output means. Write:
+A reader of an example README wants to know what the output means. The
+target audience is an average statistician or statistical programmer with a
+general understanding of SDTM and ADaM but limited engineering, ODM XML, or
+tooling detail: expand abbreviations on first use and state effects in
+study-data words. Write:
 
 - a short title of the form `# <what the example does>` (no
   `<STANDARD> <DOMAIN>` prefix in the title);
