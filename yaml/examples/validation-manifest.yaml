@@ -97,11 +97,6 @@ fixtures:
     condition: incompatible_input_type
     spec_paths: [columns.AGEGRP.derivation.cut.source]
     validator: expression_contract
-  negative-dataset-path-absolute:
-    rule: R021
-    condition: resource_path_not_relative
-    spec_paths: [datasets.LBREF.path]
-    validator: resource_path
   negative-dataset-path-directory:
     rule: R021
     condition: resource_path_not_regular_file

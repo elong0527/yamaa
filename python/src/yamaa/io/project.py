@@ -59,14 +59,12 @@ def classify_project_path(written_path: str) -> str | None:
     """Return the first written-form condition from R021, if any."""
     if not written_path:
         return "resource_path_not_relative"
-    if written_path.startswith("/") or "\\" in written_path:
+    if "\\" in written_path:
         return "resource_path_not_relative"
-    if _DRIVE_LETTER.match(written_path):
-        return "resource_path_not_relative"
-    if _URI_SCHEME.match(written_path):
+    if _URI_SCHEME.match(written_path) and not _DRIVE_LETTER.match(written_path):
         return "resource_path_uri_scheme"
     segments = written_path.split("/")
-    if any(segment == "" for segment in segments):
+    if any(segment == "" for segment in segments[1:]):
         return "resource_path_not_normalized"
     return None
 
@@ -169,6 +167,18 @@ class ProjectResources:
         if self._base_components is None:
             raise ResourceFailure("resource_path_outside_project", written_path)
 
+        if written_path.startswith("/") or _DRIVE_LETTER.match(written_path):
+            components: list[str] = []
+            for segment in written_path.split("/"):
+                if segment in ("", "."):
+                    continue
+                if segment == "..":
+                    if components:
+                        components.pop()
+                    continue
+                components.append(segment)
+            return ("", *components)
+
         components = list(self._base_components)
         for segment in written_path.split("/"):
             if segment == ".":
@@ -241,11 +251,21 @@ class ProjectResources:
         if self._base_components is None:  # Guarded by _path_key.
             raise AssertionError("unreachable project base")
 
-        directories = [os.dup(self._root_descriptor)]
-        components: list[str] = []
         links: list[tuple[int, str, tuple[int, int, int]]] = []
-        file_descriptor: int | None = None
-        try:
+        if key[:1] == ("",):
+            try:
+                anchor = os.open("/", self._directory_flags())
+            except OSError as error:
+                raise ResourceFailure("resource_path_missing", written_path) from error
+            directories = [anchor]
+            components = [""]
+            if written_path.startswith("/"):
+                segments = written_path.split("/")[1:]
+            else:
+                segments = written_path.split("/")
+        else:
+            directories = [os.dup(self._root_descriptor)]
+            components = []
             for component in self._base_components:
                 descriptor, status = self._open_component(
                     directories[-1], component, written_path, directory=True
@@ -255,13 +275,16 @@ class ProjectResources:
                 components.append(component)
 
             segments = written_path.split("/")
+        file_descriptor: int | None = None
+        try:
             for segment in segments[:-1]:
                 if segment == ".":
                     continue
                 if segment == "..":
-                    os.close(directories.pop())
-                    links.pop()
-                    components.pop()
+                    if len(directories) > 1:
+                        os.close(directories.pop())
+                        links.pop()
+                        components.pop()
                     continue
                 descriptor, status = self._open_component(
                     directories[-1], segment, written_path, directory=True
@@ -272,9 +295,10 @@ class ProjectResources:
 
             final = segments[-1]
             if final == "..":
-                os.close(directories.pop())
-                links.pop()
-                components.pop()
+                if len(directories) > 1:
+                    os.close(directories.pop())
+                    links.pop()
+                    components.pop()
                 final = "."
             if final == ".":
                 self._verify_links(links)

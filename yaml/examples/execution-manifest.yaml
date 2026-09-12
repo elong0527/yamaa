@@ -452,10 +452,6 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
-  negative-dataset-path-absolute:
-    status: blocked
-    blocked_by: "#101"
-    reason: no yaml executor in R or Python yet
   negative-dataset-path-directory:
     status: blocked
     blocked_by: "#101"

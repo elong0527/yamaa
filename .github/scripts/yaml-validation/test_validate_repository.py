@@ -3235,12 +3235,17 @@ class TestProjectResourceBoundary(unittest.TestCase):
         self.assertIsNone(condition)
         self.assertEqual(accepted.read_bytes(), self.source.read_bytes())
 
-    def test_rejects_rooted_written_forms(self):
-        for written in ("/etc/passwd", "C:/data/dm.csv", "input\\dm.csv"):
+    def test_rejects_non_relative_written_forms(self):
+        for written in ("input\\dm.csv",):
             with self.subTest(written=written):
                 self.assertEqual(
                     self.resolve(written)[1], "resource_path_not_relative"
                 )
+
+    def test_accepts_rooted_paths_outside_the_project(self):
+        accepted, condition = self.resolve(str(self.source))
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.read_bytes(), self.source.read_bytes())
 
     def test_rejects_uri_schemes(self):
         for written in (
@@ -3427,7 +3432,6 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
 
     def test_reports_each_rejection_at_the_declaring_field(self):
         cases = {
-            "/etc/passwd": "resource_path_not_relative",
             "../dm.csv": "resource_path_outside_project",
             "https://example.org/ref.csv": "resource_path_uri_scheme",
             "input": "resource_path_not_regular_file",
@@ -4127,7 +4131,7 @@ class TestDatasetPathExamples(unittest.TestCase):
         examples = sorted(
             (self.root / "yaml" / "examples").glob("negative-dataset-path-*")
         )
-        self.assertEqual(len(examples), 6)
+        self.assertEqual(len(examples), 5)
 
         for example in examples:
             with self.subTest(example=example.name):

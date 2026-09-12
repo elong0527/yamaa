@@ -159,12 +159,6 @@ def test_quoted_empty_is_missing_for_a_non_string_type(tmp_path: Path) -> None:
     ("example", "dataset", "path", "condition"),
     [
         (
-            "negative-dataset-path-absolute",
-            "LBREF",
-            "/shared/reference/lbref.csv",
-            "resource_path_not_relative",
-        ),
-        (
             "negative-dataset-path-directory",
             "LBREF",
             "input/lbref",

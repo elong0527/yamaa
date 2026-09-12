@@ -50,17 +50,20 @@ difference fails before code activation.
 contributes declarations that are read against that same root, so composition
 never enlarges what a run may read. A layer stored outside the root contributes
 a `project_path` that R017 rebases to the entry file, and the rebased form
-must satisfy this rule; such a layer therefore cannot contribute a readable
-source.
+must satisfy this rule; a relative path from such a layer cannot resolve to a readable source, though a rooted path it writes can.
 
 ## The written form
 
-**R021-4.** A `project_path` is one or more segments separated by `/`. It is
-checked before the filesystem is consulted, so it fails identically on every
-platform and reveals nothing about the host.
+**R021-4.** A `project_path` is one or more segments separated by `/`, with an
+optional leading separator naming a host location. It is
+checked before the filesystem is consulted; a relative path fails identically on every
+platform and reveals nothing about the host, while a rooted path names its location outright.
 
-- **R021-5.** No leading separator, drive letter, or `\\` prefix. A rooted
-  path names a location the project does not own.
+- **R021-5.** A leading separator or drive letter names a host location
+  outside the project, and is allowed. During development, code and data
+  live in different places and absolute paths are how they communicate;
+  portability is enforced when a submission package is built, not while a
+  study is developed, so a rooted path never fails the written form.
 - **R021-6.** No URI scheme. A specification declares stored project files;
   retrieval, caching, and authentication are not part of a derivation.
 - **R021-7.** No `\` anywhere. A backslash is an ordinary filename character
@@ -82,12 +85,15 @@ repository-authored value.
 
 ## Resolution and file kind
 
-**R021-11.** A `project_path` resolves relative to the directory of the layer
+**R021-11.** A relative `project_path` resolves against the directory of the layer
 that writes it, as R002 and R014 require. In a resolved specification it is
-relative to the entry file, because R017 has already rebased it.
+relative to the entry file, because R017 has already rebased it. A rooted
+`project_path` resolves against the filesystem root and is unaffected by
+rebasing.
 
-**R021-12.** Resolution walks the path one segment at a time from that
-directory. Every component except the last is a directory. The last component
+**R021-12.** Resolution walks the path one segment at a time, from the
+writing layer's directory for a relative path and from the filesystem
+root for a rooted one. Every component except the last is a directory. The last component
 is a regular file.
 
 **R021-13.** **No component is a symbolic link**, including one whose target
@@ -95,10 +101,10 @@ is inside the approved root. A link is a second name for a file, so a boundary
 that admits one must re-derive containment every time the link changes, and
 the link a validator followed is not necessarily the link a reader follows.
 
-**R021-14.** After the walk, the canonical resolved file is inside the
-canonical approved root. The written form and the symbolic-link rejection
-already imply this; the check is stated because a boundary defect must fail
-closed rather than silently.
+**R021-14.** After the walk, the canonical resolved file of a relative path
+is inside the canonical approved root. A rooted path skips this check: it
+names its location outright, and the symlink, file-kind, and snapshot
+checks below are its boundary.
 
 **R021-15.** A path that reaches no entry is missing. A path that reaches a
 directory, FIFO, socket, device, or any other non-regular file is rejected,
@@ -129,9 +135,9 @@ when content does.
 
 The written-form checks run before the filesystem is consulted so that a
 rejected path fails identically on every platform and reveals nothing about
-the host. One spelling per file keeps the single-snapshot identity
-meaningful: with two spellings for one file, two declarations could bind
-different bytes. Symbolic links are rejected because a link is a second name
+the host. Snapshot identity is over the physical file, so two spellings for
+one file -- a relative path and the rooted path naming the same bytes --
+bind the one snapshot rather than observing different bytes. Symbolic links are rejected because a link is a second name
 whose target can change between validation and ingestion, so admitting one
 would require re-deriving containment on every read. Error messages name
 only the written path for the same reason the checks run before consulting
@@ -142,12 +148,12 @@ the filesystem: a rejected specification may be probing for host layout.
 **R021-20.** A failure names the written path exactly as the specification
 wrote it, the declaring field, and one condition below. A message does not
 contain the approved root, a canonical path, a symbolic link's target, or any
-other host path, because those are the values a rejected specification is
+other host path beyond what the specification itself wrote, because those are the values a rejected specification is
 probing for.
 
 | Condition | Rejects |
 |---|---|
-| `resource_path_not_relative` | a leading separator, a drive letter, a `\\` prefix, or a backslash |
+| `resource_path_not_relative` | an empty path or a backslash |
 | `resource_path_uri_scheme` | a URI scheme, including `file:` and `https:` |
 | `resource_path_not_normalized` | an empty segment or a trailing separator |
 | `resource_path_symlink` | a symbolic link at any component |
