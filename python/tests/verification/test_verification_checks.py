@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import datetime as dt
+
 import pytest
 
 from yamaa.io.polars import frame_from_values
-from yamaa.models import TypedColumn
+from yamaa.models import DateTimeValue, DateValue, TypedColumn
 from yamaa.specification.models import Column as SpecColumn
 from yamaa.specification.models import Expression, OrderTerm, Output
 from yamaa.verification import (
@@ -14,6 +16,7 @@ from yamaa.verification import (
     verify_columns,
     verify_dataset,
 )
+from yamaa.verification import _key_tuple as key_tuple
 
 KEYS = ["STUDYID", "USUBJID"]
 
@@ -107,6 +110,25 @@ def test_allowed_values_lets_missing_pass() -> None:
     ]
 
     assert verify_columns(table, columns, KEYS).frame.height == 2
+
+
+def test_allowed_values_does_not_treat_booleans_as_numbers() -> None:
+    table = frame_from_values(
+        (TypedColumn(name="VALUE", type="int"),),
+        [[1]],
+    )
+    columns = [
+        SpecColumn(
+            name="VALUE",
+            type="int",
+            verifications=[Expression({"allowed_values": {"values": [True]}})],
+        )
+    ]
+
+    with pytest.raises(VerificationError) as raised:
+        verify_columns(table, columns, ["VALUE"])
+
+    assert _check(raised.value)["condition"] == "allowed_values_failed"
 
 
 def test_max_length_and_matches_use_search_semantics() -> None:
@@ -237,6 +259,20 @@ def test_duplicate_key_reports_each_key_once() -> None:
     }
 
 
+def test_temporal_identity_ignores_collection_precision() -> None:
+    year_precision = DateValue(
+        year=2025,
+        month=1,
+        day=2,
+        collected_precision="year",
+    )
+    day_precision = DateValue(year=2025, month=1, day=2)
+
+    assert key_tuple({"ADT": year_precision}, ["ADT"]) == key_tuple(
+        {"ADT": day_precision}, ["ADT"]
+    )
+
+
 def test_unique_counts_missing_as_a_value() -> None:
     table = frame_from_values(
         BASE_COLUMNS,
@@ -303,6 +339,88 @@ def test_implies_and_predicate_follow_three_valued_logic() -> None:
             [Expression({"predicate": {"id": "y", "assert": "AGE > 30"}})],
         )
     assert _check(raised.value)["condition"] == "predicate_failed"
+
+
+def test_predicates_normalize_native_temporal_table_values() -> None:
+    table = frame_from_values(
+        (
+            TypedColumn(name="ID", type="str"),
+            TypedColumn(name="ADT", type="date"),
+            TypedColumn(name="ADTM", type="datetime"),
+        ),
+        [
+            [
+                "01",
+                DateValue.parse("2025-01-02"),
+                DateTimeValue.parse("2025-01-02T03:04:05"),
+            ]
+        ],
+    )
+    verification = Expression(
+        {
+            "predicate": {
+                "id": "temporal-values",
+                "assert": (
+                    "ADT = DATE '2025-01-02' AND ADTM = DATETIME '2025-01-02T03:04:05'"
+                ),
+            }
+        }
+    )
+
+    assert verify_dataset(table, ["ID"], [verification]) is table
+
+
+def test_predicates_receive_resolved_record_lookup_bindings() -> None:
+    table = frame_from_values(
+        (TypedColumn(name="ID", type="str"),),
+        [["01"], ["02"]],
+    )
+    verification = Expression(
+        {
+            "predicate": {
+                "id": "lookup-date",
+                "assert": "VISIT.ADT >= DATE '2025-01-01'",
+            }
+        }
+    )
+
+    assert (
+        verify_dataset(
+            table,
+            ["ID"],
+            [verification],
+            record_lookup_fields=["VISIT.ADT"],
+            record_lookup_rows=[
+                {"VISIT.ADT": dt.date(2025, 1, 1)},
+                {"VISIT.ADT": DateValue.parse("2025-01-02")},
+            ],
+        )
+        is table
+    )
+
+
+def test_record_lookup_bindings_must_match_the_declared_row_schema() -> None:
+    table = frame_from_values(
+        (TypedColumn(name="ID", type="str"),),
+        [["01"]],
+    )
+
+    with pytest.raises(ValueError, match="align"):
+        verify_dataset(
+            table,
+            ["ID"],
+            [],
+            record_lookup_fields=["VISIT.ADT"],
+            record_lookup_rows=[],
+        )
+    with pytest.raises(ValueError, match="match their schema"):
+        verify_dataset(
+            table,
+            ["ID"],
+            [],
+            record_lookup_fields=["VISIT.ADT"],
+            record_lookup_rows=[{}],
+        )
 
 
 def test_row_count_bounds_groups_and_filters() -> None:

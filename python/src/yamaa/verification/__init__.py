@@ -29,6 +29,7 @@ from yamaa.models import (
     DateTimeValue,
     DateValue,
     TypedTable,
+    runtime_type_name,
 )
 from yamaa.specification.models import Column as SpecColumn
 from yamaa.specification.models import Expression, OrderTerm, Output
@@ -77,6 +78,52 @@ def _json(value: object) -> JsonValue:
     if isinstance(value, (str, int, float, bool)):
         return value
     return type(value).__name__
+
+
+def _identity_value(value: object) -> object:
+    """Return the language-level equality key for one table value."""
+    if isinstance(value, (DateValue, DateTimeValue)):
+        return (runtime_type_name(value), *value.ordering_key)
+    if type(value) is dt.datetime:
+        return (
+            "datetime",
+            value.year,
+            value.month,
+            value.day,
+            value.hour,
+            value.minute,
+            value.second,
+        )
+    if type(value) is dt.date:
+        return ("date", value.year, value.month, value.day)
+    if type(value) is bool:
+        return ("bool", value)
+    return value
+
+
+def _runtime_value(value: object) -> object:
+    """Restore native temporal table scalars to predicate runtime values."""
+    if type(value) is dt.datetime:
+        return DateTimeValue(
+            year=value.year,
+            month=value.month,
+            day=value.day,
+            hour=value.hour,
+            minute=value.minute,
+            second=value.second,
+        )
+    if type(value) is dt.date:
+        return DateValue(year=value.year, month=value.month, day=value.day)
+    return value
+
+
+def _values_equal(left: object, right: object) -> bool:
+    """Compare verification literals without Python's bool/int coercion."""
+    if type(left) is bool or type(right) is bool:
+        return type(left) is bool and type(right) is bool and left == right
+    if type(left) in (int, float) and type(right) in (int, float):
+        return left == right
+    return _identity_value(left) == _identity_value(right)
 
 
 def _row_keys(row: Mapping[str, object], keys: Sequence[str]) -> dict[str, JsonValue]:
@@ -154,7 +201,8 @@ def _check_column(
         offending = [
             _row_keys(row, keys)
             for row, value in zip(rows, values)
-            if not _missing(value) and value not in accepted
+            if not _missing(value)
+            and not any(_values_equal(value, item) for item in accepted)
         ]
         if offending:
             _declare(
@@ -274,7 +322,9 @@ def verify_columns(
 
 
 def _key_tuple(row: Mapping[str, object], names: Sequence[str]) -> tuple[object, ...]:
-    return tuple(None if _missing(row[name]) else row[name] for name in names)
+    return tuple(
+        None if _missing(row[name]) else _identity_value(row[name]) for name in names
+    )
 
 
 def _check_keys(
@@ -386,10 +436,13 @@ def _parsed_predicate(
 def _predicate_truth(
     ast: object,
     row: Mapping[str, object],
+    lookup_row: Mapping[str, object],
     keys: Sequence[str],
     path: str,
 ) -> TruthValue:
-    result = evaluate_predicate(ast, MappingResolver(dict(row)))
+    values = {name: _runtime_value(value) for name, value in row.items()}
+    values.update({name: _runtime_value(value) for name, value in lookup_row.items()})
+    result = evaluate_predicate(ast, MappingResolver(values))
     if isinstance(result, ConditionResult):
         requirement = {
             "unknown_field": "R004-32",
@@ -427,7 +480,9 @@ def _check_dataset(
     keyword: str,
     arguments: Mapping[str, object],
     rows: Sequence[Mapping[str, object]],
+    lookup_rows: Sequence[Mapping[str, object]],
     available: set[str],
+    predicate_available: set[str],
     keys: Sequence[str],
     index: int,
     failures: list[VerificationFailure],
@@ -493,13 +548,15 @@ def _check_dataset(
             raise ValueError("implies requires an id")
         when_path = f"{path}.when"
         then_path = f"{path}.then"
-        when = _parsed_predicate(arguments.get("when"), available, when_path)
-        then = _parsed_predicate(arguments.get("then"), available, then_path)
+        when = _parsed_predicate(arguments.get("when"), predicate_available, when_path)
+        then = _parsed_predicate(arguments.get("then"), predicate_available, then_path)
         offending = [
             _row_keys(row, keys)
-            for row in rows
-            if _predicate_truth(when, row, keys, when_path) is TruthValue.TRUE
-            and _predicate_truth(then, row, keys, then_path) is not TruthValue.TRUE
+            for row, lookup_row in zip(rows, lookup_rows, strict=True)
+            if _predicate_truth(when, row, lookup_row, keys, when_path)
+            is TruthValue.TRUE
+            and _predicate_truth(then, row, lookup_row, keys, then_path)
+            is not TruthValue.TRUE
         ]
         if offending:
             _declare(
@@ -517,12 +574,12 @@ def _check_dataset(
             raise ValueError("predicate requires an id")
         assertion_path = f"{path}.assert"
         assertion = _parsed_predicate(
-            arguments.get("assert"), available, assertion_path
+            arguments.get("assert"), predicate_available, assertion_path
         )
         offending = [
             _row_keys(row, keys)
-            for row in rows
-            if _predicate_truth(assertion, row, keys, assertion_path)
+            for row, lookup_row in zip(rows, lookup_rows, strict=True)
+            if _predicate_truth(assertion, row, lookup_row, keys, assertion_path)
             is not TruthValue.TRUE
         ]
         if offending:
@@ -560,14 +617,19 @@ def _check_dataset(
         filter_path = f"{path}.filter"
         if arguments.get("filter") is not None:
             predicate = _parsed_predicate(
-                arguments.get("filter"), available, filter_path
+                arguments.get("filter"), predicate_available, filter_path
             )
         partitions: dict[tuple[object, ...], int] = {} if groups else {(): 0}
-        for row in rows:
+        group_values: dict[tuple[object, ...], tuple[object, ...]] = (
+            {} if groups else {(): ()}
+        )
+        for row, lookup_row in zip(rows, lookup_rows, strict=True):
             combined = _key_tuple(row, groups or ())
             partitions.setdefault(combined, 0)
+            group_values.setdefault(combined, tuple(row[name] for name in groups or ()))
             if predicate is None or (
-                _predicate_truth(predicate, row, keys, filter_path) is TruthValue.TRUE
+                _predicate_truth(predicate, row, lookup_row, keys, filter_path)
+                is TruthValue.TRUE
             ):
                 partitions[combined] += 1
         offending = [
@@ -586,7 +648,9 @@ def _check_dataset(
                 context["keys"] = [
                     {
                         name: _json(value)
-                        for name, value in zip(groups, combined, strict=True)
+                        for name, value in zip(
+                            groups, group_values[combined], strict=True
+                        )
                     }
                     for combined, _ in offending[:_MAX_REPORTED_KEYS]
                 ]
@@ -613,10 +677,33 @@ def verify_dataset(
     table: TypedTable,
     keys: Sequence[str],
     verifications: Sequence[Expression],
+    *,
+    record_lookup_fields: Sequence[str] = (),
+    record_lookup_rows: Sequence[Mapping[str, object]] | None = None,
 ) -> TypedTable:
-    """Validate keys, then run dataset verifications over completed rows."""
+    """Validate keys, then verify rows with aligned resolved lookup fields."""
     rows = _rows(table)
     available = {column.name for column in table.columns}
+    lookup_fields = list(record_lookup_fields)
+    if len(lookup_fields) != len(set(lookup_fields)):
+        raise ValueError("record lookup fields must be unique")
+    if any(
+        not isinstance(name, str) or name.count(".") != 1 or not all(name.split("."))
+        for name in lookup_fields
+    ):
+        raise ValueError("record lookup fields must be qualified")
+    if available.intersection(lookup_fields):
+        raise ValueError("record lookup fields must not shadow output columns")
+    bindings = (
+        [{} for _ in rows] if record_lookup_rows is None else list(record_lookup_rows)
+    )
+    if len(bindings) != len(rows):
+        raise ValueError("record lookup rows must align with output rows")
+    expected_fields = set(lookup_fields)
+    for binding in bindings:
+        if not isinstance(binding, Mapping) or set(binding) != expected_fields:
+            raise ValueError("record lookup row fields must match their schema")
+    predicate_available = available | expected_fields
     failures: list[VerificationFailure] = []
     _check_keys(rows, list(keys), available, failures)
     if failures:
@@ -638,7 +725,9 @@ def verify_dataset(
             keyword,
             arguments,
             rows,
+            bindings,
             available,
+            predicate_available,
             list(keys),
             index,
             failures,
@@ -706,8 +795,11 @@ def finalize_output(
     output: Output,
     keys: Sequence[str],
     verifications: Sequence[Expression],
+    *,
+    record_lookup_fields: Sequence[str] = (),
+    record_lookup_rows: Sequence[Mapping[str, object]] | None = None,
 ) -> TypedTable:
-    """Validate output membership and keys, verify, then order for writing."""
+    """Validate membership and keys, verify with lookups, then order."""
     available = {column.name for column in table.columns}
     if not output.columns:
         raise ValueError("output columns must not be empty")
@@ -720,7 +812,13 @@ def finalize_output(
         if key not in output.columns:
             raise ValueError(f"key column {key!r} is not an output column")
 
-    verified = verify_dataset(table, keys, verifications)
+    verified = verify_dataset(
+        table,
+        keys,
+        verifications,
+        record_lookup_fields=record_lookup_fields,
+        record_lookup_rows=record_lookup_rows,
+    )
     return order_table(verified, output.order_by or ())
 
 

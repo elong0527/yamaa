@@ -17,6 +17,22 @@ publish_artifact(
   dataset verifications, and applies stable presentation ordering. Both
   raise `VerificationError` for data failures with stable phase, condition,
   spec path, and offending keys.
+- When a verification predicate reads a resolved R004 record lookup, pass its
+  qualified field schema and one aligned binding per completed output row:
+
+  ```python
+  ordered = finalize_output(
+      table,
+      spec.output,
+      spec.keys,
+      spec.verifications or [],
+      record_lookup_fields=["VISIT.ADT"],
+      record_lookup_rows=lookup_bindings,
+  )
+  ```
+
+  The executor owns lookup resolution; verification consumes only these
+  already-resolved row bindings.
 - `write_artifact()` selects the profile from `output.path` (`.csv` byte
   exact, `.parquet` read-back identical) and renders `output.columns` in
   order. Missing is always bare in `csv` and null in `parquet`.
