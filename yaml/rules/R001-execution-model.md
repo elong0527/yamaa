@@ -3,7 +3,7 @@ id: R001
 title: Execution Model
 status: normative
 applies_to: [root.base, root.rows, row.dataset, row.group_by, row.filter, root.columns, derivation]
-depends_on: [R002, R003, R004, R005, R007, R008, R010, R012, R013, R015, R019]
+
 ---
 
 # Execution model

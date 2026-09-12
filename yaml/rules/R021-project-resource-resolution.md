@@ -3,7 +3,7 @@ id: R021
 title: Project Resource Resolution
 status: normative
 applies_to: [project_path, dataset_source, dataset_class]
-depends_on: [R006, R017, R019]
+
 ---
 
 # Project resource resolution

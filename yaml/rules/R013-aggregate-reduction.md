@@ -4,8 +4,7 @@ title: Aggregate Reduction
 status: normative
 applies_to: [expression.aggregate, aggregate_class.between,
   aggregate_expression]
-depends_on: [R001, R002, R003, R004, R006, R007, R010, R011, R014, R015,
-  R019]
+
 ---
 
 # Aggregate reduction

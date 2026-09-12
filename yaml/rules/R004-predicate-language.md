@@ -3,7 +3,7 @@ id: R004
 title: Predicate Language
 status: normative
 applies_to: [sql]
-depends_on: [R001, R002, R006, R007, R010, R011, R016, R019]
+
 ---
 
 # Predicate language

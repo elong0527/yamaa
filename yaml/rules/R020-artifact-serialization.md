@@ -3,7 +3,7 @@ id: R020
 title: Artifact Serialization
 status: normative
 applies_to: [root.output, output.path, output.decimals]
-depends_on: [R005, R011, R014, R016, R019]
+
 ---
 
 # Artifact serialization

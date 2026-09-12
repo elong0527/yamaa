@@ -3,7 +3,7 @@ id: R017
 title: Specification Inheritance
 status: normative
 applies_to: [root.parents, root.schema_version, root]
-depends_on: [R001, R002, R005, R006, R009, R015]
+
 ---
 
 # Specification inheritance

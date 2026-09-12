@@ -3,7 +3,7 @@ id: R023
 title: Delimited Source Profile
 status: normative
 applies_to: [dataset_source, dataset_class.path]
-depends_on: [R014, R019, R021]
+
 ---
 
 # Delimited source profile

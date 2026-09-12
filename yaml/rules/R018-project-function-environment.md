@@ -3,7 +3,7 @@ id: R018
 title: Project Function Environment
 status: normative
 applies_to: [environment, function, function_contract, function_binding]
-depends_on: [R001, R005, R006, R011, R016, R019, R020]
+
 ---
 
 # Project function environment
