@@ -6,15 +6,9 @@ keys: [STUDYID, USUBJID, LBSEQ]
 
 output:
   path: lb.csv
-  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, VISIT, VISITNUM, LBTESTCD, LBTEST, LBCAT, LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESC, LBSTRESN, LBSTRESU, LBSTAT, LBDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, VISIT, VISITNUM, LBTESTCD, LBTEST, LBCAT, LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESC, LBSTRESN, LBSTRESU, LBSTAT, LBDTC]
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation:
-      source: ODM.StudyOID
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
@@ -23,6 +17,12 @@ columns:
     verifications:
       allowed_values:
         values: [LB]
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ODM.StudyOID
 
   - name: USUBJID
     type: str

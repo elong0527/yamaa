@@ -6,20 +6,20 @@ keys: [STUDYID, USUBJID, VSSEQ]
 
 output:
   path: vs.csv
-  columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU]
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VISIT, VSTESTCD, VSTEST, VSORRES, VSORRESU, VSSTRESN, VSSTRESC, VSSTRESU]
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation:
-      source: VS_RAW.STUDYID
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation:
       literal: VS
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: VS_RAW.STUDYID
 
   - name: USUBJID
     type: str

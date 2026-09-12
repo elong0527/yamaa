@@ -14,20 +14,20 @@ record_lookups:
 
 output:
   path: lb.csv
-  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTRESN, LBORRESU, LBSTNRLO, LBSTNRHI, LBNRIND]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTRESN, LBORRESU, LBSTNRLO, LBSTNRHI, LBNRIND]
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation:
-      source: LB_RAW.STUDYID
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation:
       literal: LB
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: LB_RAW.STUDYID
 
   - name: USUBJID
     type: str

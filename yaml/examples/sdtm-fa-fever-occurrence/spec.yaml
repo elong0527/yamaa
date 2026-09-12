@@ -11,8 +11,8 @@ keys: [STUDYID, USUBJID, FASEQ]
 output:
   path: fa.csv
   columns:
-    - STUDYID
     - DOMAIN
+    - STUDYID
     - USUBJID
     - FASEQ
     - FATESTCD
@@ -25,15 +25,15 @@ output:
     - VSSTRESN
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation: {source: VS.STUDYID}
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation: {literal: FA}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: VS.STUDYID}
 
   - name: USUBJID
     type: str

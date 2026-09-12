@@ -14,16 +14,16 @@ record_lookups:
 
 output:
   path: ae.csv
-  columns: [STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AESEV, TXNTYPE, AUDITDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESEV, TXNTYPE, AUDITDTC]
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
 
   - name: USUBJID
     type: str

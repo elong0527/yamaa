@@ -6,20 +6,20 @@ keys: [STUDYID, USUBJID, LBSEQ]
 
 output:
   path: lb.csv
-  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBCAT, LBORRES, LBDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBCAT, LBORRES, LBDTC]
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation:
-      source: ODM.StudyOID
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation:
       literal: LB
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ODM.StudyOID
 
   - name: USUBJID
     type: str

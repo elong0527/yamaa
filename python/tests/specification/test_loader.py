@@ -262,7 +262,10 @@ def test_accepts_integer_for_float_schema_field(tmp_path: Path) -> None:
 
     loaded = load_specification(path, SCHEMA_ROOT)
 
-    verification = loaded.specification.columns[0].verifications
+    studyid = next(
+        column for column in loaded.specification.columns if column.name == "STUDYID"
+    )
+    verification = studyid.verifications
     assert verification is not None
     assert verification[0].root == {"range": {"min": 1}}
 

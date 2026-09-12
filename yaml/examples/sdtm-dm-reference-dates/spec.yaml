@@ -17,20 +17,20 @@ record_lookups:
 
 output:
   path: dm.csv
-  columns: [STUDYID, DOMAIN, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC, RFENDTC]
+  columns: [DOMAIN, STUDYID, USUBJID, RFICDTC, RFXSTDTC, RFXENDTC, RFSTDTC, RFENDTC]
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation:
-      source: DM_RAW.STUDYID
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation:
       literal: DM
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM_RAW.STUDYID
 
   - name: USUBJID
     type: str

@@ -30,20 +30,20 @@ record_lookups:
 
 output:
   path: vs.csv
-  columns: [STUDYID, DOMAIN, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, VISIT, VISITNUM, EPOCH, VSDY]
+  columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, VISIT, VISITNUM, EPOCH, VSDY]
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation:
-      source: VS_RAW.STUDYID
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation:
       literal: VS
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: VS_RAW.STUDYID
 
   - name: USUBJID
     type: str
