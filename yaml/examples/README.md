@@ -134,6 +134,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-adsl-remote-parent`](negative-adsl-remote-parent/) | reject shared definitions from a remote location |
 | [`negative-adsl-subject-reference`](negative-adsl-subject-reference/) | reject a malformed subject reference |
 | [`negative-advs-overlapping-analysis-windows`](negative-advs-overlapping-analysis-windows/) | reject overlapping analysis windows |
+| [`negative-all-or-none-partial-row`](negative-all-or-none-partial-row/) | reject a row with only some paired dates present |
 | [`negative-baseline-flag-tied-date`](negative-baseline-flag-tied-date/) | reject a baseline chosen between two same-day results |
 | [`negative-column-type-unknown`](negative-column-type-unknown/) | reject an analysis value with an ambiguous numeric type |
 | [`negative-compute-aggregate-function`](negative-compute-aggregate-function/) | reject a total written as a formula |
@@ -152,6 +153,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-dataset-path-parent-escape`](negative-dataset-path-parent-escape/) | reject reference limits stored above the study |
 | [`negative-dataset-path-symlink`](negative-dataset-path-symlink/) | reject reference limits reached through a stand-in name |
 | [`negative-dataset-path-url`](negative-dataset-path-url/) | reject reference limits named by a web address |
+| [`negative-date-diff-datetime-endpoints`](negative-date-diff-datetime-endpoints/) | reject counting days between two moments |
 | [`negative-date-impute-invalid-source`](negative-date-impute-invalid-source/) | reject a start date completed from text that is not a date |
 | [`negative-date-impute-month-out-of-range`](negative-date-impute-month-out-of-range/) | reject a start date completed with no month of the year |
 | [`negative-date-impute-nonexistent-day`](negative-date-impute-nonexistent-day/) | reject an end date completed past the end of its month |
@@ -164,6 +166,8 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-ingest-unparseable-field`](negative-ingest-unparseable-field/) | reject a dose recorded with its unit |
 | [`negative-keys-internal-column`](negative-keys-internal-column/) | reject a site-scoped subject identity |
 | [`negative-keys-missing-value`](negative-keys-missing-value/) | reject a record that no analysis visit identifies |
+| [`negative-least-incomparable-sources`](negative-least-incomparable-sources/) | reject an earliest-alive date taken from a day number |
+| [`negative-literal-non-scalar`](negative-literal-non-scalar/) | reject a fixed value written as a structure |
 | [`negative-mapping-case-fold-collision`](negative-mapping-case-fold-collision/) | reject a smoking flag whose dictionary answers twice |
 | [`negative-mapping-from-duplicate-key`](negative-mapping-from-duplicate-key/) | reject a reference range stated twice |
 | [`negative-mapping-from-key-length-mismatch`](negative-mapping-from-key-length-mismatch/) | reject a reference range chosen by an unpaired key |
@@ -171,10 +175,13 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-mapping-from-unmapped-key`](negative-mapping-from-unmapped-key/) | reject a result with no reference range |
 | [`negative-mapping-unmapped-value`](negative-mapping-unmapped-value/) | reject an unmapped response |
 | [`negative-matches-unreadable-pattern`](negative-matches-unreadable-pattern/) | reject a sex code checked against an unreadable match rule |
+| [`negative-not-missing-absent-age`](negative-not-missing-absent-age/) | reject a missing age |
 | [`negative-output-duplicate-subject`](negative-output-duplicate-subject/) | reject a repeated demographics record |
 | [`negative-output-order-repeated-term`](negative-output-order-repeated-term/) | reject an order that places one value twice |
 | [`negative-output-order-unknown-column`](negative-output-order-unknown-column/) | reject a submission order over a value the dataset does not carry |
+| [`negative-previous-non-missing-non-variable-source`](negative-previous-non-missing-non-variable-source/) | reject carrying forward a fixed value |
 | [`negative-query-slot-overflow`](negative-query-slot-overflow/) | reject an event belonging to more queries than it has places |
+| [`negative-rank-invalid-method`](negative-rank-invalid-method/) | reject an unlisted tie-numbering method |
 | [`negative-record-lookup-id-collision`](negative-record-lookup-id-collision/) | reject a first treatment named after its own source |
 | [`negative-record-lookup-incomparable-range`](negative-record-lookup-incomparable-range/) | reject an epoch range with incomparable endpoints |
 | [`negative-record-lookup-incomplete-key`](negative-record-lookup-incomplete-key/) | reject a reference limit chosen without a sex |
@@ -182,6 +189,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-record-lookup-unordered-choice`](negative-record-lookup-unordered-choice/) | reject a treatment and dose taken from an unchosen record |
 | [`negative-record-lookup-unordered-keep`](negative-record-lookup-unordered-keep/) | reject a treatment ordered but not chosen |
 | [`negative-record-lookup-unpaired-key`](negative-record-lookup-unpaired-key/) | reject a reference limit matched against nothing |
+| [`negative-row-number-numeric-filter`](negative-row-number-numeric-filter/) | reject a sequence filtered by a number |
 | [`negative-row-value-self-reference`](negative-row-value-self-reference/) | reject a weight carried forward from a carried-forward weight |
 | [`negative-row-value-zero-offset`](negative-row-value-zero-offset/) | reject a previous weight that names no earlier visit |
 | [`negative-source-duplicate-field-name`](negative-source-duplicate-field-name/) | reject a subject listing that names one field twice |
@@ -191,9 +199,11 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-source-missing-sentinel`](negative-source-missing-sentinel/) | reject an age recorded as NA |
 | [`negative-source-output-self-reference`](negative-source-output-self-reference/) | reject a parameter that reads the dataset it is part of |
 | [`negative-source-record-width`](negative-source-record-width/) | reject a subject listing record with an extra field |
+| [`negative-source-undeclared-field`](negative-source-undeclared-field/) | reject a copy from an undeclared field |
 | [`negative-source-unknown-profile`](negative-source-unknown-profile/) | reject a subject listing stored under an unnamed format |
 | [`negative-source-unterminated-quote`](negative-source-unterminated-quote/) | reject a comment whose quoted text never closes |
 | [`negative-str-extract-undeclared-group`](negative-str-extract-undeclared-group/) | reject a site identifier taken from an uncaptured part |
+| [`negative-study-day-datetime-input`](negative-study-day-datetime-input/) | reject a study day measured from a moment |
 | [`negative-sum-non-numeric-source`](negative-sum-non-numeric-source/) | reject a severity burden totalled from severity words |
 | [`negative-to-date-date-source`](negative-to-date-date-source/) | reject extracting a date from a date |
 | [`negative-types-unknown-field`](negative-types-unknown-field/) | reject a total over a field the source does not have |

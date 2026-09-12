@@ -1,0 +1,8 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.SURVDD.derivation.date_diff.start
+context:
+  source: RFSTDTM
+  expected: date
+  actual: datetime

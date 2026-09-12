@@ -3,6 +3,7 @@ version: "1.0"
 conditions:
   aggregate_identifier_not_grouped: {rules: [R013], phases: [validation]}
   aggregate_multiple_records: {rules: [R013], phases: [row_construction]}
+  all_or_none_failed: {rules: [R009], phases: [verification]}
   ambiguous_baseline: {rules: [R007], phases: [derivation]}
   ambiguous_dictionary: {rules: [R007], phases: [validation]}
   conversion_failed: {rules: [R011], phases: [convert]}
@@ -39,6 +40,7 @@ conditions:
   missing_verification_id: {rules: [R009], phases: [validation]}
   month_out_of_range: {rules: [R016], phases: [validation]}
   multiple_matches: {rules: [R003, R008], phases: [join]}
+  not_missing_failed: {rules: [R009], phases: [verification]}
   predicate_failed: {rules: [R009], phases: [verification]}
   prohibited_construct: {rules: [R010, R013], phases: [validation]}
   prohibited_function: {rules: [R010, R013], phases: [validation]}

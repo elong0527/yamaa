@@ -1,0 +1,42 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, DTHDT, LSTVSDY, FSTALVDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM.USUBJID
+
+  - name: DTHDT
+    type: date
+    label: Date of Death
+    derivation:
+      source: DM.DTHDTC
+
+  - name: LSTVSDY
+    type: int
+    label: Last Visit Study Day
+    derivation:
+      source: DM.LSTVSDY
+
+  - name: FSTALVDT
+    type: date
+    label: First Known Alive Date
+    derivation:
+      least:
+        sources: [DTHDT, LSTVSDY]

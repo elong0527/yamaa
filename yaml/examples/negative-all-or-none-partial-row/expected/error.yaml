@@ -1,0 +1,10 @@
+phase: verification
+condition: all_or_none_failed
+spec_paths:
+  - verifications[0].all_or_none
+context:
+  verification_id: paired-death-dates
+  failure_count: 1
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-812

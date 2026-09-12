@@ -1,0 +1,7 @@
+phase: validation
+condition: invalid_field_type
+spec_paths:
+  - columns.AGEGRP.derivation.case.branches[0].then.literal
+context:
+  expected: literal_value
+  actual: mapping

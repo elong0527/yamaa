@@ -1,0 +1,7 @@
+phase: validation
+condition: invalid_field_type
+spec_paths:
+  - columns.SEVRANK.derivation.rank.method
+context:
+  expected: str
+  actual: mapping

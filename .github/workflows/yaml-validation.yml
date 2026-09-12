@@ -48,6 +48,10 @@ jobs:
         run: |
           python3 .github/scripts/yaml-validation/check_execution_manifest.py
 
+      - name: Check vocabulary coverage
+        run: |
+          python3 .github/scripts/yaml-validation/check_vocabulary_coverage.py
+
       - name: Check validation blocker issues
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

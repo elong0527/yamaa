@@ -1,0 +1,7 @@
+phase: validation
+condition: invalid_field_type
+spec_paths:
+  - columns.VISITSEQ.derivation.row_number.filter
+context:
+  expected: str
+  actual: int

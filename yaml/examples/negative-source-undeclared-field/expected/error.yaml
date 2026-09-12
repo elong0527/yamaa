@@ -1,0 +1,6 @@
+phase: validation
+condition: unknown_field
+spec_paths:
+  - columns.AGE.derivation.source
+context:
+  identifier: DM.AGEYRS
