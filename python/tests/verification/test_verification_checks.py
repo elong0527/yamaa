@@ -551,6 +551,31 @@ def test_predicate_evaluation_conditions_are_not_treated_as_unknown() -> None:
     assert failure["requirement"] == "R004-33"
 
 
+def test_implies_evaluates_then_when_when_is_false() -> None:
+    table = frame_from_values(BASE_COLUMNS, BASE_ROWS)
+
+    with pytest.raises(VerificationError) as raised:
+        verify_dataset(
+            table,
+            KEYS,
+            [
+                Expression(
+                    {
+                        "implies": {
+                            "id": "typed-consequent",
+                            "when": "AGE < 0",
+                            "then": "SEX > 1",
+                        }
+                    }
+                )
+            ],
+        )
+
+    failure = _check(raised.value)
+    assert failure["condition"] == "incompatible_input_type"
+    assert failure["spec_paths"] == ("verifications[0].implies.then",)
+
+
 def test_rejects_reversed_range_and_duplicate_verification_ids() -> None:
     table = frame_from_values(BASE_COLUMNS, [])
     columns = [

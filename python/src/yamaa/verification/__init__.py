@@ -476,6 +476,21 @@ def _row_id(arguments: Mapping[str, object], keyword: str) -> str | None:
     return identifier
 
 
+def _implication_fails(
+    when: object,
+    then: object,
+    row: Mapping[str, object],
+    lookup_row: Mapping[str, object],
+    keys: Sequence[str],
+    when_path: str,
+    then_path: str,
+) -> bool:
+    """Evaluate both predicates before applying implication truth semantics."""
+    when_truth = _predicate_truth(when, row, lookup_row, keys, when_path)
+    then_truth = _predicate_truth(then, row, lookup_row, keys, then_path)
+    return when_truth is TruthValue.TRUE and then_truth is not TruthValue.TRUE
+
+
 def _check_dataset(
     keyword: str,
     arguments: Mapping[str, object],
@@ -553,10 +568,15 @@ def _check_dataset(
         offending = [
             _row_keys(row, keys)
             for row, lookup_row in zip(rows, lookup_rows, strict=True)
-            if _predicate_truth(when, row, lookup_row, keys, when_path)
-            is TruthValue.TRUE
-            and _predicate_truth(then, row, lookup_row, keys, then_path)
-            is not TruthValue.TRUE
+            if _implication_fails(
+                when,
+                then,
+                row,
+                lookup_row,
+                keys,
+                when_path,
+                then_path,
+            )
         ]
         if offending:
             _declare(
