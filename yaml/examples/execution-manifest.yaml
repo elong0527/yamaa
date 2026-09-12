@@ -200,6 +200,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  adam-adsl-duration-weeks-months:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   adam-adsl-geography-normalization:
     status: blocked
     blocked_by: "#101"
@@ -469,6 +473,10 @@ examples:
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
   negative-dataset-path-url:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-date-diff-bounds-unit:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet

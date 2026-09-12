@@ -90,6 +90,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adsl-dependency-order`](adam-adsl-dependency-order/) | derive a chain of population flags |
 | [`adam-adsl-disposition`](adam-adsl-disposition/) | select the final subject disposition from DS |
 | [`adam-adsl-dose-adjustment-flag`](adam-adsl-dose-adjustment-flag/) | derive a dose adjustment flag from multiple sources |
+| [`adam-adsl-duration-weeks-months`](adam-adsl-duration-weeks-months/) | exposure duration in weeks and months |
 | [`adam-adsl-geography-normalization`](adam-adsl-geography-normalization/) | normalize collected country and group it into a region |
 | [`adam-adsl-identifier-parsing`](adam-adsl-identifier-parsing/) | parse the site from USUBJID with a collected fallback |
 | [`adam-adsl-investigator-comment`](adam-adsl-investigator-comment/) | keep an investigator comment exactly as collected |
@@ -158,6 +159,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-dataset-path-parent-escape`](negative-dataset-path-parent-escape/) | reject reference limits stored above the study |
 | [`negative-dataset-path-symlink`](negative-dataset-path-symlink/) | reject reference limits reached through a stand-in name |
 | [`negative-dataset-path-url`](negative-dataset-path-url/) | reject reference limits named by a web address |
+| [`negative-date-diff-bounds-unit`](negative-date-diff-bounds-unit/) | reject endpoint counting beside a month count |
 | [`negative-date-diff-datetime-endpoints`](negative-date-diff-datetime-endpoints/) | reject counting days between two moments |
 | [`negative-date-impute-invalid-source`](negative-date-impute-invalid-source/) | reject a start date completed from text that is not a date |
 | [`negative-date-impute-month-out-of-range`](negative-date-impute-month-out-of-range/) | reject a start date completed with no month of the year |

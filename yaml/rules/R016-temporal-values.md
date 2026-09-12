@@ -526,3 +526,42 @@ operand in a `compute` expression: fail under R010, which admits only numeric
 identifiers. **R016-71.** Storing a value an implementation cannot hold exactly,
 such as a fractional or leap second: never reached, because the text is rejected
 first. An implementation must not round to reach one.
+
+## Whole calendar units
+
+**R016-72.** `date_diff` with `unit: day` is the calendar-date difference
+`end` minus `start` in days. With `unit: week` it is the number of whole
+seven-day blocks that difference holds: the quotient of the day count and
+seven, with any remainder discarded.
+
+**R016-73.** With `unit: month`, `date_diff` counts how many monthly
+anniversaries of `start` fall on or before `end`. The k-th anniversary
+carries the year and month k months after `start`, with its day clamped
+to the length of that month. With `unit: year` it counts yearly
+anniversaries the same way. Three boundary cases pin the rule:
+`2025-01-31` to `2025-02-28` is one month, `2024-02-29` to `2025-02-28`
+is twelve months and one year, and `2025-01-31` to `2025-03-01` is one
+month, because the March anniversary of January 31 is March 31.
+
+**R016-74.** A February 29 anniversary in a common year falls on February
+28. This is the clamping the previous requirement already states, named
+here because it is the case an age computation meets every leap year.
+
+**R016-75.** When `end` precedes `start`, the result is the negation of
+the count with the operands exchanged. An earlier date therefore
+produces a negative result in every unit, and no unit rounds toward
+negative infinity.
+
+**R016-76.** `bounds` counts endpoints of a day range and is defined
+only with `unit: day`. `exclusive` counts from `start` to `end`
+excluding `start`; `inclusive` counts both endpoints and is one greater;
+`between` counts neither and is one smaller. With `unit: week`,
+`unit: month`, or `unit: year`, `bounds` must be absent or `exclusive`;
+any other value has no meaning -- an age of 35 does not become 36 --
+and is rejected where the specification is read, before any data is seen.
+
+**R016-77.** A `date_diff` with a non-`exclusive` `bounds` beside a
+non-`day` `unit` fails validation with condition `value_not_permitted`,
+naming the offending `bounds` value and the permitted value
+`exclusive`. Like every validation failure, no handler answers it and
+no artifact is accepted.

@@ -33,13 +33,13 @@
   <header class="page-header">
     <div class="brand">YAMAA / Example explorer</div>
     <h1>All examples</h1>
-    <p class="lede">195 example dashboards, generated from <a href="https://github.com/elong0527/yamaa/tree/main/yaml/examples">yaml/examples</a>. Each page shows the README, the source fixtures, the expected artifacts, and the YAML specification.</p>
-    <nav class="outcome-jump" aria-label="Jump to a group"><a href="#positive">Examples (94)</a><a href="#negative">Anti-pattern (101)</a></nav>
+    <p class="lede">191 example dashboards, generated from <a href="https://github.com/elong0527/yamaa/tree/main/yaml/examples">yaml/examples</a>. Each page shows the README, the source fixtures, the expected artifacts, and the YAML specification.</p>
+    <nav class="outcome-jump" aria-label="Jump to a group"><a href="#positive">Examples (95)</a><a href="#negative">Anti-pattern (96)</a></nav>
   </header>
   <main class="gallery" aria-label="Example gallery">
     <section class="outcome" id="positive" aria-labelledby="positive-heading">
       <h2 id="positive-heading">Examples</h2>
-      <p class="outcome-note">94 examples. Each runs to completion and produces the artifact in expected/.</p>
+      <p class="outcome-note">95 examples. Each runs to completion and produces the artifact in expected/.</p>
       <section aria-label="Examples: ADaM ADAE">
         <h3>ADaM ADAE</h3>
         <p class="count">16 examples</p>
@@ -136,7 +136,7 @@
       </section>
       <section aria-label="Examples: ADaM ADSL">
         <h3>ADaM ADSL</h3>
-        <p class="count">21 examples</p>
+        <p class="count">22 examples</p>
         <ul>
         <li><a href="adam-adsl-age-group.html">ADaM ADSL: derive age group</a></li>
         <li><a href="adam-adsl-analysis-age.html">ADaM ADSL: analysis age</a></li>
@@ -147,6 +147,7 @@
         <li><a href="adam-adsl-dependency-order.html">ADaM ADSL: derive a chain of population flags</a></li>
         <li><a href="adam-adsl-disposition.html">ADaM ADSL: select the final subject disposition from DS</a></li>
         <li><a href="adam-adsl-dose-adjustment-flag.html">ADaM ADSL: derive a dose adjustment flag from multiple sources</a></li>
+        <li><a href="adam-adsl-duration-weeks-months.html">ADaM ADSL: exposure duration in weeks and months</a></li>
         <li><a href="adam-adsl-geography-normalization.html">ADaM ADSL: normalize collected country and group it into a region</a></li>
         <li><a href="adam-adsl-identifier-parsing.html">ADaM ADSL: parse the site from USUBJID with a collected fallback</a></li>
         <li><a href="adam-adsl-investigator-comment.html">ADaM ADSL: keep an investigator comment exactly as collected</a></li>
@@ -269,7 +270,7 @@
     </section>
     <section class="outcome" id="negative" aria-labelledby="negative-heading">
       <h2 id="negative-heading">Anti-pattern</h2>
-      <p class="outcome-note">101 examples. Each must fail, and expected/error.yaml pins the error it raises.</p>
+      <p class="outcome-note">96 examples. Each must fail, and expected/error.yaml pins the error it raises.</p>
       <section aria-label="Anti-pattern: ADaM ADAE">
         <h3>ADaM ADAE</h3>
         <p class="count">15 examples</p>
@@ -311,13 +312,12 @@
       </section>
       <section aria-label="Anti-pattern: ADaM ADLB">
         <h3>ADaM ADLB</h3>
-        <p class="count">25 examples</p>
+        <p class="count">24 examples</p>
         <ul>
         <li><a href="negative-adlb-absolute-wbc-duplicate.html">ADaM ADLB: reject duplicate WBC inputs for an absolute differential</a></li>
         <li><a href="negative-adlb-computed-parameter.html">ADaM ADLB: reject a parameter computed from the dataset being built</a></li>
         <li><a href="negative-adlb-multiple-baseline-records.html">ADaM ADLB: reject a subject with two baseline records for one parameter</a></li>
         <li><a href="negative-baseline-flag-tied-date.html">ADaM ADLB: reject a baseline chosen between two same-day results</a></li>
-        <li><a href="negative-baseline-value-multiple-flags.html">ADaM ADLB: reject a baseline carried from two flagged visits</a></li>
         <li><a href="negative-column-type-unknown.html">ADaM ADLB: reject an analysis value with an ambiguous numeric type</a></li>
         <li><a href="negative-compute-aggregate-function.html">ADaM ADLB: reject a total written as a formula</a></li>
         <li><a href="negative-compute-comparison-operator.html">ADaM ADLB: reject an above-range flag written as a formula</a></li>
@@ -350,7 +350,7 @@
       </section>
       <section aria-label="Anti-pattern: ADaM ADSL">
         <h3>ADaM ADSL</h3>
-        <p class="count">39 examples</p>
+        <p class="count">36 examples</p>
         <ul>
         <li><a href="negative-adam-adsl-stratification-reconciliation.html">ADaM ADSL: reconcile randomization strata</a></li>
         <li><a href="negative-adsl-cyclic-parent.html">ADaM ADSL: reject a circular chain of shared definitions</a></li>
@@ -361,9 +361,8 @@
         <li><a href="negative-adsl-remote-parent.html">ADaM ADSL: reject shared definitions from a remote location</a></li>
         <li><a href="negative-adsl-subject-reference.html">ADaM ADSL: reject a malformed subject reference</a></li>
         <li><a href="negative-all-or-none-partial-row.html">ADaM ADSL: reject a row with only some paired dates present</a></li>
-        <li><a href="negative-allowed-values-mismatch.html">ADaM ADSL: reject a recorded sex the study does not recognize</a></li>
         <li><a href="negative-compute-sqrt-of-negative.html">ADaM ADSL: reject a body surface area from a negative weight</a></li>
-        <li><a href="negative-cut-non-numeric-source.html">ADaM ADSL: reject age bands grouped from a coded value</a></li>
+        <li><a href="negative-date-diff-bounds-unit.html">ADaM ADSL: reject endpoint counting beside a month count</a></li>
         <li><a href="negative-date-diff-datetime-endpoints.html">ADaM ADSL: reject counting days between two moments</a></li>
         <li><a href="negative-greatest-incomparable-sources.html">ADaM ADSL: reject a last-known-alive date taken from a day number</a></li>
         <li><a href="negative-keys-internal-column.html">ADaM ADSL: reject a site-scoped subject identity</a></li>
@@ -386,19 +385,16 @@
         <li><a href="negative-source-unknown-profile.html">ADaM ADSL: reject a subject listing stored under an unnamed format</a></li>
         <li><a href="negative-source-unterminated-quote.html">ADaM ADSL: reject a comment whose quoted text never closes</a></li>
         <li><a href="negative-str-extract-undeclared-group.html">ADaM ADSL: reject a site identifier taken from an uncaptured part</a></li>
-        <li><a href="negative-str-lower-non-string-source.html">ADaM ADSL: reject a site name folded from a number</a></li>
         <li><a href="negative-study-day-datetime-input.html">ADaM ADSL: reject a study day measured from a moment</a></li>
-        <li><a href="negative-unique-duplicate-values.html">ADaM ADSL: reject a site shared by two subjects</a></li>
         <li><a href="negative-variable-nested-expression.html">ADaM ADSL: reject an uppercased country chosen inside the same step</a></li>
         <li><a href="negative-verification-implausible-age.html">ADaM ADSL: reject an implausible age</a></li>
         </ul>
       </section>
       <section aria-label="Anti-pattern: ADaM ADVS">
         <h3>ADaM ADVS</h3>
-        <p class="count">7 examples</p>
+        <p class="count">6 examples</p>
         <ul>
         <li><a href="negative-advs-overlapping-analysis-windows.html">ADaM ADVS: reject overlapping analysis windows</a></li>
-        <li><a href="negative-coalesce-self-reference.html">ADaM ADVS: reject a severity carried from its own column</a></li>
         <li><a href="negative-conversion-non-integral.html">ADaM ADVS: reject a pulse rate recorded between whole beats</a></li>
         <li><a href="negative-keys-missing-value.html">ADaM ADVS: reject a record that no analysis visit identifies</a></li>
         <li><a href="negative-previous-non-missing-non-variable-source.html">ADaM ADVS: reject carrying forward a fixed value</a></li>

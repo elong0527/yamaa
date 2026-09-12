@@ -1,0 +1,45 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, STDT, ENDT, DURM]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM.USUBJID
+
+  - name: STDT
+    type: date
+    label: Start Date
+    derivation:
+      source: DM.STDT
+
+  - name: ENDT
+    type: date
+    label: End Date
+    derivation:
+      source: DM.ENDT
+
+  - name: DURM
+    type: int
+    label: Duration in Whole Months
+    derivation:
+      date_diff:
+        start: STDT
+        end: ENDT
+        unit: month
+        bounds: inclusive
