@@ -35,6 +35,8 @@ conditions:
   invalid_text: {rules: [R019], phases: [ingest]}
   length_failed: {rules: [R009], phases: [verification]}
   ln_of_nonpositive: {rules: [R010], phases: [derivation]}
+  matches_failed: {rules: [R009], phases: [verification]}
+  max_length_failed: {rules: [R009], phases: [verification]}
   missing_entry_output: {rules: [R017], phases: [validation]}
   missing_input: {rules: [R008], phases: [mapping]}
   missing_key: {rules: [R005], phases: [output]}
