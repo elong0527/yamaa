@@ -152,8 +152,8 @@ def test_column_enrichment_keeps_the_constructed_row_count() -> None:
 
     assert isinstance(result, ExecutionSuccess)
     assert [name for name, _ in observed] == [
-        "STUDYID",
         "DOMAIN",
+        "STUDYID",
         "USUBJID",
         "SUBJID",
         "SEX",
@@ -197,8 +197,8 @@ def test_verification_and_output_hooks_run_in_normative_order() -> None:
 
     assert isinstance(result, ExecutionSuccess)
     assert observed == [
-        "column:STUDYID",
         "column:DOMAIN",
+        "column:STUDYID",
         "column:USUBJID",
         "column:SUBJID",
         "column:SEX",

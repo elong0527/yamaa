@@ -35,8 +35,8 @@ def rendered(
 
 
 DM_COLUMNS: list[tuple[str, ColumnType]] = [
-    ("STUDYID", "str"),
     ("DOMAIN", "str"),
+    ("STUDYID", "str"),
     ("USUBJID", "str"),
     ("SUBJID", "str"),
     ("SEX", "str"),
@@ -48,10 +48,10 @@ DM_COLUMNS: list[tuple[str, ColumnType]] = [
 
 def test_a_constructed_dm_table_serializes_to_the_committed_expected_bytes() -> None:
     rows: list[list[object]] = [
-        ["STUDY01", "DM", "001", "001", "M", 34, "Placebo", "Placebo"],
-        ["STUDY01", "DM", "002", "002", "F", 28, "Vitamin D3", "Vitamin D3"],
-        ["STUDY01", "DM", "003", "003", "U", None, "Unassigned", "Unassigned"],
-        ["STUDY01", "DM", "004", "004", "U", None, "Unassigned", "Unassigned"],
+        ["DM", "STUDY01", "001", "001", "M", 34, "Placebo", "Placebo"],
+        ["DM", "STUDY01", "002", "002", "F", 28, "Vitamin D3", "Vitamin D3"],
+        ["DM", "STUDY01", "003", "003", "U", None, "Unassigned", "Unassigned"],
+        ["DM", "STUDY01", "004", "004", "U", None, "Unassigned", "Unassigned"],
     ]
 
     content = rendered(DM_COLUMNS, rows, keys=["STUDYID", "USUBJID"])
