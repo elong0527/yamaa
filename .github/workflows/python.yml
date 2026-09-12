@@ -11,12 +11,16 @@ permissions:
 
 jobs:
   test:
-    name: package-tests (${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    # R021 and R023 fix path resolution and source reading, so the same bytes
+    # must give the same records on a case-sensitive and a case-insensitive
+    # filesystem.
+    name: package-tests (${{ matrix.os }}, ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest]
         python-version: ["3.11", "3.14"]
     steps:
       - name: Checkout repository

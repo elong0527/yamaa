@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import datetime as dt
 from pathlib import Path
 
 import polars as pl
 import pytest
 
 from yamaa.io import SourceError, load_source_table, load_source_tables
+from yamaa.io.polars import frame_from_values
 from yamaa.io.project import ProjectResources
-from yamaa.models import DateTimeValue, DateValue
+from yamaa.models import DateValue, TypedColumn
 from yamaa.specification.models import DatasetSource
 
 REPOSITORY = Path(__file__).parents[3]
@@ -50,8 +52,8 @@ def test_loads_ordered_typed_polars_table_without_inference(tmp_path: Path) -> N
         "ID": pl.String,
         "AGE": pl.Int64,
         "SCORE": pl.Float64,
-        "DATE": pl.Object,
-        "MOMENT": pl.Object,
+        "DATE": pl.Date,
+        "MOMENT": pl.Datetime("us"),
         "EMPTY": pl.String,
         "TEXT": pl.String,
     }
@@ -60,8 +62,9 @@ def test_loads_ordered_typed_polars_table_without_inference(tmp_path: Path) -> N
         "ID": "007",
         "AGE": 42,
         "SCORE": 1.5,
-        "DATE": DateValue.parse("2025-01-02"),
-        "MOMENT": DateTimeValue.parse("2025-01-02T03:04"),
+        "DATE": dt.date(2025, 1, 2),
+        # R016 datetimes are zone-free local civil times.
+        "MOMENT": dt.datetime(2025, 1, 2, 3, 4),  # noqa: DTZ001
         "EMPTY": None,
         "TEXT": None,
     }
@@ -70,6 +73,20 @@ def test_loads_ordered_typed_polars_table_without_inference(tmp_path: Path) -> N
     assert rows[1]["SCORE"] is None
     assert rows[1]["EMPTY"] == "NA"
     assert rows[1]["TEXT"] == "unknown"
+    # Native temporal columns answer ordinary Polars expressions; an object
+    # column of R016 values would not.
+    assert loaded.table.frame.filter(pl.col("DATE") > dt.date(2025, 1, 15)).height == 1
+
+
+def test_a_date_below_day_precision_has_no_host_column() -> None:
+    # Ingestion never produces one, because R011 admits only the complete
+    # R016 forms. A native column cannot carry the precision, so storing one
+    # fails loudly instead of dropping it.
+    column = TypedColumn(name="DATE", type="date")
+    partial = DateValue(year=2025, month=2, day=1, collected_precision="month")
+
+    with pytest.raises(ValueError, match="day precision"):
+        frame_from_values((column,), [[partial]])
 
 
 @pytest.mark.parametrize("text", ["NA", "NULL", ".", "unknown"])

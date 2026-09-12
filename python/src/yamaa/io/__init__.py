@@ -6,6 +6,7 @@ adapter delivers plain text-or-missing values; quoting is a transport
 detail no adapter preserves.
 """
 
+from yamaa.io.project import ProjectResources, ResourceFailure
 from yamaa.io.source import (
     LoadedDataset,
     SourceDiagnostic,
@@ -16,6 +17,8 @@ from yamaa.io.source import (
 
 __all__ = [
     "LoadedDataset",
+    "ProjectResources",
+    "ResourceFailure",
     "SourceDiagnostic",
     "SourceError",
     "load_source_table",

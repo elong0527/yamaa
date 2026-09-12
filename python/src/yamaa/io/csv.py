@@ -3,18 +3,20 @@
 Quoting follows the Python csv-module default: double quotes escape,
 surrounding whitespace is preserved, and a field with no characters is
 missing whether it was bare or quoted.
+
+`scan_records` and `record_coordinates` are the one implementation of the
+profile's syntax. The repository validator loads this module by path and
+reports its own findings from those records, so the two never read one
+fixture differently. That is why this module imports the standard library
+alone: the validator installs no package to run.
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from typing import NamedTuple
 
 
-class _FrozenModel(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
-
-
-class CsvSource(_FrozenModel):
+class CsvSource(NamedTuple):
     """An ordered header and records parsed from one CSV snapshot."""
 
     names: tuple[str, ...]
@@ -31,7 +33,12 @@ class CsvProfileFailure(ValueError):
         super().__init__(f"{condition} at record {record}, field {field!r}")
 
 
-def _coordinates(prefix: str) -> tuple[int, int]:
+def record_coordinates(prefix: str) -> tuple[int, int]:
+    """The record and field a reader stands at after reading `prefix`.
+
+    Records and fields are counted from one and the header is record one,
+    so a failure names the coordinates R023 requires of every runtime.
+    """
     record = 1
     field = 1
     index = 0
@@ -57,7 +64,16 @@ def _coordinates(prefix: str) -> tuple[int, int]:
     return record, field
 
 
-def _parse_records(data: str) -> list[list[str | None]]:
+def scan_records(data: str) -> list[list[str | None]]:
+    """Scan decoded source text into records of text or missing.
+
+    A field with no characters is missing whether it was bare or quoted,
+    so quoting decides how a field is read and never what it means.
+    `U+000D U+000A` terminates a record as `U+000A` does, and the final
+    record may omit its terminator, because neither spelling changes the
+    records a file holds. Every other difference raises rather than being
+    repaired.
+    """
     if not data:
         return []
     records: list[list[str | None]] = []
@@ -132,12 +148,12 @@ def parse_csv(content: bytes) -> CsvSource:
         data = content.decode("utf-8")
     except UnicodeDecodeError as error:
         prefix = content[: error.start].decode("utf-8")
-        record, field = _coordinates(prefix)
+        record, field = record_coordinates(prefix)
         raise CsvProfileFailure("invalid_text", record, field) from error
     if data.startswith("\ufeff"):
         raise CsvProfileFailure("source_byte_order_mark", 1, 1)
 
-    records = _parse_records(data)
+    records = scan_records(data)
     if not records:
         raise CsvProfileFailure("source_header_absent", 1, 1)
 

@@ -5,6 +5,7 @@ import csv
 import datetime as dt
 import decimal
 import hashlib
+import importlib.util
 import io
 import json
 import keyword
@@ -8270,14 +8271,24 @@ def artifact_profile(output):
     return ARTIFACT_PROFILES.get(PurePosixPath(declared).suffix.lower())
 
 
-class SourceProfileError(Exception):
-    """Bytes R022's csv source profile does not admit."""
+# R023's syntax has one implementation. The package module loaded here is
+# the reader a runtime uses, and it imports the standard library alone so
+# this script can load it by path without installing anything. What a
+# repository check adds stays below: fixture wording, and reporting every
+# departure in one pass where a runtime stops at the first.
+_CSV_PROFILE_PATH = (
+    Path(__file__).resolve().parents[3]
+    / 'python' / 'src' / 'yamaa' / 'io' / 'csv.py'
+)
+_CSV_PROFILE_SPEC = importlib.util.spec_from_file_location(
+    'yamaa_io_csv', _CSV_PROFILE_PATH
+)
+CSV_PROFILE = importlib.util.module_from_spec(_CSV_PROFILE_SPEC)
+_CSV_PROFILE_SPEC.loader.exec_module(CSV_PROFILE)
 
-    def __init__(self, condition, record, field):
-        super().__init__(condition)
-        self.condition = condition
-        self.record = record
-        self.field = field
+SourceProfileError = CSV_PROFILE.CsvProfileFailure
+parse_source_profile = CSV_PROFILE.scan_records
+source_coordinates = CSV_PROFILE.record_coordinates
 
 
 SOURCE_PROFILE_CONDITIONS = {
@@ -8298,121 +8309,6 @@ SOURCE_PROFILE_CONDITIONS = {
 SOURCE_READ_CONDITIONS = (
     set(SOURCE_PROFILE_CONDITIONS) - {'source_profile_unknown'}
 ) | {'invalid_text'}
-
-
-def parse_source_profile(data: str):
-    """Parse a delimited source under R023 into records of text or missing.
-
-    A field with no characters is missing whether it was bare or quoted,
-    so quoting decides how a field is read and never what it means.
-    `U+000D U+000A` terminates a record as `U+000A` does, and the final
-    record may omit its terminator, because neither spelling changes the
-    records a file holds. Every other difference raises rather than being
-    repaired.
-    """
-    if not data:
-        return []
-    records = []
-    record = []
-    index = 0
-    size = len(data)
-    number = 1
-    field_number = 1
-    while True:
-        if data[index:index + 1] == '"':
-            index += 1
-            chunks = []
-            while True:
-                if index >= size:
-                    raise SourceProfileError(
-                        'source_quote_unterminated', number, field_number
-                    )
-                character = data[index]
-                if character == '"':
-                    if data[index + 1:index + 2] == '"':
-                        chunks.append('"')
-                        index += 2
-                        continue
-                    index += 1
-                    break
-                if character == '\r':
-                    raise SourceProfileError(
-                        'source_carriage_return', number, field_number
-                    )
-                chunks.append(character)
-                index += 1
-            field = ''.join(chunks) or None
-            if index < size and data[index] not in ',\r\n':
-                raise SourceProfileError(
-                    'source_text_after_quote', number, field_number
-                )
-        else:
-            start = index
-            while index < size and data[index] not in ',\n':
-                character = data[index]
-                if character == '"':
-                    raise SourceProfileError(
-                        'source_quote_in_bare_field', number, field_number
-                    )
-                if character == '\r':
-                    break
-                index += 1
-            field = data[start:index] or None
-        record.append(field)
-        if index >= size:
-            records.append(record)
-            break
-        if data[index] == ',':
-            index += 1
-            field_number += 1
-            continue
-        if data[index] == '\r':
-            if data[index + 1:index + 2] != '\n':
-                raise SourceProfileError(
-                    'source_carriage_return', number, field_number
-                )
-            index += 2
-        else:
-            index += 1
-        records.append(record)
-        record = []
-        number += 1
-        field_number = 1
-        if index >= size:
-            break
-    return records
-
-
-def source_coordinates(prefix: str):
-    """The record and field a reader stands at after reading `prefix`.
-
-    Records and fields are counted from one, and the header is record one,
-    so a failure names the same coordinates R023 requires of a runtime.
-    """
-    record = 1
-    field = 1
-    index = 0
-    size = len(prefix)
-    while index < size:
-        character = prefix[index]
-        if character == '"':
-            index += 1
-            while index < size:
-                if prefix[index] == '"':
-                    if prefix[index + 1:index + 2] == '"':
-                        index += 2
-                        continue
-                    index += 1
-                    break
-                index += 1
-            continue
-        if character == ',':
-            field += 1
-        elif character == '\n':
-            record += 1
-            field = 1
-        index += 1
-    return record, field
 
 
 def check_source_file(csv_path: Path):
