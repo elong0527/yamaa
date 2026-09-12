@@ -2583,7 +2583,10 @@ def predicate_identifier_names(text):
         ast = parse_predicate(text)
     except PredicateError:
         return set()
+    return ast_identifier_names(ast)
 
+
+def ast_identifier_names(ast):
     names = set()
 
     def visit(node):
@@ -2609,22 +2612,7 @@ def numeric_expression_identifier_names(text):
         ast = parse_numeric_expression(text)
     except NumericExpressionError:
         return set()
-
-    names = set()
-
-    def visit(node):
-        if node.get('kind') == 'identifier':
-            names.add(node['name'])
-        for value in node.values():
-            if isinstance(value, dict):
-                visit(value)
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, dict):
-                        visit(item)
-
-    visit(ast)
-    return names
+    return ast_identifier_names(ast)
 
 
 def aggregate_expression_identifier_names(text):
@@ -2634,22 +2622,7 @@ def aggregate_expression_identifier_names(text):
         ast = parse_aggregate_expression(text)
     except AggregateExpressionError:
         return set()
-
-    names = set()
-
-    def visit(node):
-        if node.get('kind') == 'identifier':
-            names.add(node['name'])
-        for value in node.values():
-            if isinstance(value, dict):
-                visit(value)
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, dict):
-                        visit(item)
-
-    visit(ast)
-    return names
+    return ast_identifier_names(ast)
 
 
 class StringTemplateError(ValueError):
@@ -8590,7 +8563,7 @@ def decide_predicate(text):
         ast = parse_predicate(text)
     except PredicateError:
         return 'invalid_predicate', None, set()
-    return None, predicate_shape(ast), predicate_identifier_names(text)
+    return None, predicate_shape(ast), ast_identifier_names(ast)
 
 
 def decide_numeric(text):
