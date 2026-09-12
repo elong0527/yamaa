@@ -7956,7 +7956,7 @@ def validate_expected_error_contracts(root: Path):
             errors.append(f"ERROR: {label}: expected a mapping")
             continue
         unknown = sorted(
-            set(contract) - {'phase', 'condition', 'spec_paths', 'context'}
+            set(contract) - {'phase', 'condition', 'spec_paths', 'requirement', 'context'}
         )
         for field in unknown:
             errors.append(f"ERROR: {label}.{field}: unknown field")

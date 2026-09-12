@@ -2,5 +2,6 @@ phase: validation
 condition: undeclared_column
 spec_paths:
   - output.order_by[1]
+requirement: R005-48
 context:
   column: VISITNUM

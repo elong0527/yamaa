@@ -2,6 +2,7 @@ phase: verification
 condition: row_count_failed
 spec_paths:
   - verifications[1].row_count
+requirement: R009-19
 context:
   verification_id: one-baseline-record-per-subject-and-parameter
   failure_count: 1

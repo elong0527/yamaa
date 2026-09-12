@@ -2,6 +2,7 @@ phase: verification
 condition: implication_failed
 spec_paths:
   - verifications[2].implies
+requirement: R009-17
 context:
   verification_id: reject-pre-existing-rrr
   failure_count: 1

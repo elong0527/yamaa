@@ -2,6 +2,7 @@ phase: validation
 condition: incompatible_input_type
 spec_paths:
   - columns.DTHDY.derivation.study_day.date
+requirement: R016-65
 context:
   source: DTHDTM
   expected: date

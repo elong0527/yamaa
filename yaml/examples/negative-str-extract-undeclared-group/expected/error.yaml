@@ -2,6 +2,7 @@ phase: validation
 condition: regex_group_out_of_range
 spec_paths:
   - columns.SITEID.derivation.str_extract.group
+requirement: R022-28
 context:
   group: 2
   group_count: 1

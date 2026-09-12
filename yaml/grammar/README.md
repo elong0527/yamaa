@@ -4,7 +4,7 @@ The language admits four closed grammars. Each one is defined once, here:
 
 | Contract | Rule | Written in |
 |---|---|---|
-| [`predicate.yaml`](predicate.yaml) | [R004](../rules/R004-expression-language.md) | a field typed `sql` |
+| [`predicate.yaml`](predicate.yaml) | [R004](../rules/R004-predicate-language.md) | a field typed `sql` |
 | [`numeric.yaml`](numeric.yaml) | [R010](../rules/R010-scalar-computation.md) | `compute.expr` |
 | [`string-template.yaml`](string-template.yaml) | [R012](../rules/R012-string-templates.md) | `str_template.template` |
 | [`aggregate.yaml`](aggregate.yaml) | [R013](../rules/R013-aggregate-reduction.md) | `aggregate.expr` |

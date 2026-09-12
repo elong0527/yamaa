@@ -2,6 +2,7 @@ phase: validation
 condition: function_contract_mismatch
 spec_paths:
   - columns.RESULT.derivation.function.contract_version
+requirement: R018-38
 context:
   function: project_value
   requested: "2.0.0"
