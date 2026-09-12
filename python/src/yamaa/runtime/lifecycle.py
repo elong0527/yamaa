@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,6 +27,20 @@ from yamaa.planning import ExecutionDiagnostic, PlannedDerivation, UnsupportedFe
 from yamaa.specification.models import ColumnType, Expression
 
 ResolverFactory = Callable[[Mapping[str, object]], Resolver]
+
+# Which R008 handler fields each registered operation offers. R008-22 makes a
+# handler on an operation that does not register it a schema failure, so this
+# map is the one place a new operation declares its handler paths.
+DECLARED_HANDLERS: dict[str, tuple[HandlerName, ...]] = {
+    "source": ("missing", "multiple_matches"),
+    "mapping": ("missing", "unmapped"),
+    "cut": ("missing",),
+    "str_extract": ("missing", "no_match"),
+    "str_concat": ("missing",),
+    "str_template": ("missing",),
+    "str_upper": ("missing",),
+    "str_lower": ("missing",),
+}
 
 
 class HandlerCount(BaseModel):
@@ -65,27 +79,58 @@ class HandlerCounter:
     def _register_expression(self, expression: Expression, path: str) -> None:
         operation = expression.operation
         payload = expression.root[operation]
-        operation_path = f"{path}.{operation}"
+        self._register_operation(operation, payload, f"{path}.{operation}")
+
+    def _register_operation(
+        self,
+        operation: str,
+        payload: object,
+        operation_path: str,
+    ) -> None:
         if not isinstance(payload, Mapping):
             return
-        handlers: tuple[HandlerName, ...]
-        if operation == "source":
-            handlers = ("missing", "multiple_matches")
-        elif operation == "mapping":
-            handlers = ("missing", "unmapped")
-        else:
-            handlers = ()
-        for handler in handlers:
+        for handler in DECLARED_HANDLERS.get(operation, ()):
             if handler in payload:
                 self.register(f"{operation_path}.{handler}", handler)
+        # R007-3 lets these fields nest an expression that owns handlers of
+        # its own, so their paths are registered too.
+        if operation == "str_concat":
+            self._register_nested(payload.get("sources"), operation_path, "sources")
+        elif operation == "case":
+            branches = payload.get("branches")
+            if isinstance(branches, Sequence) and not isinstance(branches, str):
+                for index, branch in enumerate(branches):
+                    if isinstance(branch, Mapping):
+                        self._register_one(
+                            branch.get("then"),
+                            f"{operation_path}.branches[{index}].then",
+                        )
+            if "otherwise" in payload:
+                self._register_one(payload["otherwise"], f"{operation_path}.otherwise")
+
+    def _register_nested(self, values: object, prefix: str, field: str) -> None:
+        if not isinstance(values, Sequence) or isinstance(values, str):
+            return
+        for index, value in enumerate(values):
+            self._register_one(value, f"{prefix}.{field}[{index}]")
+
+    def _register_one(self, expression: object, path: str) -> None:
+        if not isinstance(expression, Mapping) or len(expression) != 1:
+            return
+        operation, payload = next(iter(expression.items()))
+        self._register_operation(operation, payload, f"{path}.{operation}")
 
     def record_expression(
         self, planned_path: str, expression: Expression, result: ValueResult
     ) -> None:
-        if result.handled_by is None:
-            return
         operation_path = f"{planned_path}.{expression.operation}"
-        self.increment(f"{operation_path}.{result.handled_by}", result.handled_by)
+        if result.handled_by is not None:
+            self.increment(f"{operation_path}.{result.handled_by}", result.handled_by)
+        for observation in result.observations:
+            self.increment(
+                f"{operation_path}.{observation.path}.{observation.handler}",
+                observation.handler,
+            )
 
     def snapshot(self) -> tuple[HandlerCount, ...]:
         return tuple(
@@ -114,10 +159,13 @@ def _condition_diagnostic(
     condition: RuntimeCondition,
     path: str,
 ) -> ExecutionDiagnostic:
+    if condition.path_suffix is not None:
+        path = f"{path}.{condition.path_suffix}"
     return ExecutionDiagnostic(
         phase=condition.phase,
         condition=condition.condition,
         spec_paths=(path,),
+        requirement=condition.requirement,
         context=condition.context,
     )
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from enum import Enum
+from functools import lru_cache
 from typing import Any, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, JsonValue
@@ -364,6 +365,21 @@ def parse_predicate(text: str) -> PredicateAst:
     if not isinstance(text, str) or not text:
         raise PredicateError("predicate must be a non-empty string", 0)
     return _PredicateParser(text).parse()
+
+
+@lru_cache(maxsize=512)
+def _parse_cached(text: str) -> PredicateAst:
+    return parse_predicate(text)
+
+
+def parse_predicate_cached(text: str) -> PredicateAst:
+    """Parse one predicate, reusing the parse of a repeated text.
+
+    A `case` branch re-reads its own `when` for every row, and parsing is a
+    pure function of the text, so the parse is shared. The returned AST is
+    never mutated.
+    """
+    return _parse_cached(text)
 
 
 class TruthValue(Enum):

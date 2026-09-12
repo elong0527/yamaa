@@ -1,4 +1,4 @@
-"""Initial expression dispatch with injected source resolution."""
+"""Source resolution and the leaf expressions every dispatch starts from."""
 
 from __future__ import annotations
 
@@ -7,13 +7,15 @@ from typing import Literal, Protocol, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
+from yamaa.expressions.text import ascii_upper
 from yamaa.models.values import (
     MISSING,
+    ConditionPhase,
     ConditionResult,
     EvaluationResult,
     HandlerName,
+    HandlerObservation,
     RuntimeCondition,
-    UnsupportedResult,
     ValueResult,
     normalize_runtime_value,
     runtime_type_name,
@@ -95,26 +97,32 @@ ExpressionHandler: TypeAlias = Callable[[object, Resolver], EvaluationResult]
 ExpressionInput: TypeAlias = Expression | Mapping[str, object]
 
 
-def _condition(
-    phase: Literal["validation", "mapping"],
+def expression_condition(
+    phase: ConditionPhase,
     condition: str,
     context: dict[str, JsonValue],
-    applicable_handler: Literal["missing", "unmapped"] | None = None,
+    applicable_handler: HandlerName | None = None,
+    requirement: str | None = None,
+    field: str | None = None,
 ) -> ConditionResult:
+    """Build one structured condition an expression returns rather than raises."""
     return ConditionResult(
         condition=RuntimeCondition(
             phase=phase,
             condition=condition,
             context=context,
             applicable_handler=applicable_handler,
+            requirement=requirement,
+            path_suffix=field,
         )
     )
 
 
-def _handler_value(
+def handler_value(
     payload: Mapping[object, object],
     name: HandlerName,
 ) -> EvaluationResult:
+    """Substitute one declared R008 literal and record which handler fired."""
     normalized = normalize_runtime_value(payload[name])
     if isinstance(normalized, ValueResult):
         return ValueResult(value=normalized.value, handled_by=name)
@@ -129,13 +137,13 @@ def _source(payload: object, resolver: Resolver) -> EvaluationResult:
         variable = payload.get("variable")
         options = payload
         if not isinstance(variable, str):
-            return _condition(
+            return expression_condition(
                 "validation",
                 "invalid_field_type",
                 {"field": "variable", "expected": "str"},
             )
     else:
-        return _condition(
+        return expression_condition(
             "validation",
             "invalid_field_type",
             {"operation": "source", "expected": "str or mapping"},
@@ -143,7 +151,7 @@ def _source(payload: object, resolver: Resolver) -> EvaluationResult:
 
     multiple = options.get("multiple_matches")
     if multiple is not None and not isinstance(multiple, Mapping):
-        return _condition(
+        return expression_condition(
             "validation",
             "invalid_field_type",
             {"field": "multiple_matches", "expected": "mapping"},
@@ -153,7 +161,7 @@ def _source(payload: object, resolver: Resolver) -> EvaluationResult:
     else:
         resolve_multiple = getattr(resolver, "resolve_with_multiple_matches", None)
         if not callable(resolve_multiple):
-            return _condition(
+            return expression_condition(
                 "validation",
                 "invalid_field_type",
                 {"field": "multiple_matches", "reason": "resolver unsupported"},
@@ -170,12 +178,13 @@ def _source(payload: object, resolver: Resolver) -> EvaluationResult:
     if isinstance(resolved, FailedResolution):
         return ConditionResult(condition=resolved.condition)
     if "missing" in options:
-        return _handler_value(options, "missing")
-    return _condition(
+        return handler_value(options, "missing")
+    return expression_condition(
         "mapping",
         "missing_input",
         {"variable": variable},
         "missing",
+        requirement="R007-49",
     )
 
 
@@ -184,16 +193,9 @@ def _literal(payload: object, resolver: Resolver) -> EvaluationResult:
     return normalize_runtime_value(payload)
 
 
-def _ascii_fold(value: str) -> str:
-    return "".join(
-        chr(ord(character) - 32) if "a" <= character <= "z" else character
-        for character in value
-    )
-
-
 def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
     if not isinstance(payload, Mapping):
-        return _condition(
+        return expression_condition(
             "validation",
             "invalid_field_type",
             {"operation": "mapping", "expected": "mapping"},
@@ -206,7 +208,7 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
         or not isinstance(dictionary, Mapping)
         or type(case_sensitive) is not bool
     ):
-        return _condition(
+        return expression_condition(
             "validation",
             "invalid_field_type",
             {"operation": "mapping", "expected": "source and dict"},
@@ -215,7 +217,7 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
     keys = list(dictionary)
     if not all(isinstance(key, str) for key in keys):
         invalid_key = next(key for key in keys if not isinstance(key, str))
-        return _condition(
+        return expression_condition(
             "validation",
             "incompatible_input_type",
             {"expected": "str", "actual": type(invalid_key).__name__},
@@ -225,7 +227,7 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
     if not case_sensitive:
         originals: dict[str, list[str]] = {}
         for key in keys:
-            folded_key = _ascii_fold(key)
+            folded_key = ascii_upper(key)
             originals.setdefault(folded_key, []).append(key)
             folded[folded_key] = key
         collisions = {
@@ -233,7 +235,7 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
         }
         if collisions:
             folded_key = min(collisions)
-            return _condition(
+            return expression_condition(
                 "validation",
                 "ambiguous_dictionary",
                 {"folded_key": folded_key, "entries": collisions[folded_key]},
@@ -243,7 +245,7 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
     if isinstance(resolved, FailedResolution):
         return ConditionResult(condition=resolved.condition)
     if isinstance(resolved, AbsentValue):
-        return _condition(
+        return expression_condition(
             "validation",
             "unknown_field",
             {"identifier": variable},
@@ -254,15 +256,16 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
     value = normalized.value
     if value is MISSING:
         if "missing" in payload:
-            return _handler_value(payload, "missing")
-        return _condition(
+            return handler_value(payload, "missing")
+        return expression_condition(
             "mapping",
             "missing_input",
             {"variable": variable},
             "missing",
+            requirement="R007-49",
         )
     if not isinstance(value, str):
-        return _condition(
+        return expression_condition(
             "validation",
             "incompatible_input_type",
             {"expected": "str", "actual": runtime_type_name(value)},
@@ -271,66 +274,77 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
     if case_sensitive:
         matched = value if value in dictionary else None
     else:
-        matched = folded.get(_ascii_fold(value))
+        matched = folded.get(ascii_upper(value))
 
     if matched is not None:
         return normalize_runtime_value(dictionary[matched])
     if "unmapped" in payload:
-        return _handler_value(payload, "unmapped")
-    return _condition(
+        return handler_value(payload, "unmapped")
+    return expression_condition(
         "mapping",
         "unmapped_value",
-        {"value": value},
+        {"source": variable, "value": value},
         "unmapped",
+        requirement="R007-49",
     )
 
 
-DEFAULT_EXPRESSION_HANDLERS: dict[str, ExpressionHandler] = {
+CORE_EXPRESSION_HANDLERS: dict[str, ExpressionHandler] = {
     "source": _source,
     "literal": _literal,
     "mapping": _mapping,
 }
 
 
-class ExpressionDispatcher:
-    """Dispatch normalized one-operation expressions through a closed handler map."""
-
-    def __init__(
-        self,
-        handlers: Mapping[str, ExpressionHandler] | None = None,
-    ) -> None:
-        self._handlers = dict(
-            DEFAULT_EXPRESSION_HANDLERS if handlers is None else handlers
-        )
-
-    @property
-    def supported_operations(self) -> tuple[str, ...]:
-        return tuple(self._handlers)
+class NestedDispatcher(Protocol):
+    """The dispatch an operation needs to evaluate an expression it nests."""
 
     def evaluate(
         self,
         expression: ExpressionInput,
         resolver: Resolver,
-    ) -> EvaluationResult:
-        operations = (
-            expression.root if isinstance(expression, Expression) else expression
-        )
-        if len(operations) != 1:
-            return _condition(
+    ) -> EvaluationResult: ...
+
+
+def evaluate_nested(
+    dispatcher: NestedDispatcher,
+    expression: object,
+    resolver: Resolver,
+    prefix: str,
+) -> tuple[EvaluationResult, tuple[HandlerObservation, ...]]:
+    """Evaluate one expression R007-3 permits an operation to nest.
+
+    The handler paths a nested expression fires are rebased under `prefix`,
+    so the caller that knows the specification path can report every R008-21
+    count without the nested operation knowing where it sits.
+    """
+    if not isinstance(expression, Mapping) or len(expression) != 1:
+        return (
+            expression_condition(
                 "validation",
                 "invalid_field_type",
-                {"expected": "one expression operation", "count": len(operations)},
+                {"field": prefix, "expected": "one expression operation"},
+                requirement="R007-36",
+            ),
+            (),
+        )
+    operation = next(iter(expression))
+    result = dispatcher.evaluate(expression, resolver)
+    if not isinstance(result, ValueResult):
+        return result, ()
+    observations: list[HandlerObservation] = []
+    if result.handled_by is not None:
+        observations.append(
+            HandlerObservation(
+                path=f"{prefix}.{operation}",
+                handler=result.handled_by,
             )
-        operation, payload = next(iter(operations.items()))
-        handler = self._handlers.get(operation)
-        if handler is None:
-            return UnsupportedResult(operation=operation)
-        return handler(payload, resolver)
-
-
-def evaluate_expression(
-    expression: ExpressionInput,
-    resolver: Resolver,
-) -> EvaluationResult:
-    """Evaluate one expression in the initial supported scalar subset."""
-    return ExpressionDispatcher().evaluate(expression, resolver)
+        )
+    observations.extend(
+        HandlerObservation(
+            path=f"{prefix}.{operation}.{observation.path}",
+            handler=observation.handler,
+        )
+        for observation in result.observations
+    )
+    return result, tuple(observations)

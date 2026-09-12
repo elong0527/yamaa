@@ -58,10 +58,49 @@ Pydantic models. It does not execute the specification or resolve inheritance.
 
 The runtime value kernel exposes strict Pydantic result models, explicit
 missingness, R011 conversions, R016 date and datetime values, an ordered Polars
-table contract, and R004 predicate evaluation. Scalar dispatch currently
-supports the normalized `source`, `literal`, and inline `mapping` expressions.
-Other valid operations return an explicit `UnsupportedResult` until their
-owning runtime components are implemented.
+table contract, and R004 predicate evaluation.
+
+### Registered operations
+
+Scalar dispatch supports exactly these fourteen operations. Every other
+registered keyword returns an explicit `UnsupportedResult` until its owning
+runtime component is implemented, and an unregistered keyword fails schema
+validation before it reaches dispatch.
+
+| Operation | Rule | What it returns |
+|---|---|---|
+| `source` | R002, R008 | the named source or derived variable |
+| `literal` | R007 | the declared scalar, unchanged |
+| `mapping` | R007, R019 | an inline dictionary lookup on a string source |
+| `compute` | R010 | one scalar numeric formula in the closed grammar |
+| `coalesce` | R007 | the first non-missing source, else `default` |
+| `greatest`, `least` | R007, R019 | the row-wise extreme of comparable sources |
+| `case` | R004, R007 | the first true branch, then `otherwise`, else missing |
+| `cut` | R007 | the label of the break interval a numeric source lands in |
+| `str_extract` | R022 | one capture group of the leftmost match |
+| `str_concat` | R007 | its nested expression results, in order |
+| `str_template` | R012 | literal text with its placeholders interpolated |
+| `str_upper`, `str_lower` | R019 | the exact ASCII casing substitution |
+
+`compute` reads the closed R010 grammar: the operators `+ - * /` with unary
+sign, and exactly `ABS`, `CEIL`, `FLOOR`, `TRUNC`, `SQRT`, `POWER`, `EXP`,
+`LN`, `MOD`, `GREATEST`, `LEAST`, `NULLIF`, and `COALESCE`. There is no host
+`eval`: a formula is tokenized, parsed, and evaluated in the association it
+was written in, and a division by zero, a negative `SQRT`, a non-positive
+`LN`, an invalid `POWER`, or an integer overflow fails the run rather than
+becoming missing. The relational, temporal, window, aggregate, and project
+function families remain unsupported.
+
+Every regular expression in the package -- the R006 `pattern` descriptor, the
+R009 `matches` verification, and `str_extract` -- is read by `yamaa.regex`,
+the single binding of the `regress` distribution R022 pins. Python `re` reads
+no pattern of the language. The shared vectors in `yaml/conformance/regex.yaml`
+are replayed through all three consumers.
+
+`yamaa.expressions` also exposes the two closed parsers directly -- the R010
+`parse_numeric` and the R012 `parse_template` -- each checked against the
+vectors in `yaml/grammar/`, which is the single source those grammars are
+written in.
 
 ```python
 from yamaa.expressions import MappingResolver, evaluate_expression
@@ -81,7 +120,8 @@ Run this component's focused tests from the repository root:
 
 ```bash
 uv run --project python --isolated --extra test pytest \
-  python/tests/models python/tests/expressions
+  python/tests/models python/tests/expressions \
+  python/tests/runtime/test_expression_examples.py
 ```
 
 ## ODM source binding and contextual resolution
@@ -233,11 +273,12 @@ that fired zero times. Column, key, dataset-verification, and ordered-output
 work is delegated to the pure hooks exposed by the verification and I/O
 components.
 
-This first slice supports `source`, `literal`, inline `mapping`, ungrouped row
-filters, explicit absent-source defaults, and earlier output-column references.
-Grouped rows, record lookups, inheritance, and other expression operations
-return an explicit unsupported result rather than a fabricated output.
-Execution never reads an `expected/` artifact.
+Execution supports every operation in the registered table above, along with
+ungrouped row filters, explicit absent-source defaults, and earlier
+output-column references. Grouped rows, record lookups, inheritance, and the
+relational, temporal, window, aggregate, and project function families return
+an explicit unsupported result rather than a fabricated output. Execution
+never reads an `expected/` artifact.
 
 Run the focused tests from the repository root:
 
