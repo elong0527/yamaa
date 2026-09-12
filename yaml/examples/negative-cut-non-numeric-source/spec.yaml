@@ -22,6 +22,12 @@ columns:
     derivation:
       source: DM.USUBJID
 
+  - name: SEX
+    type: str
+    label: Sex
+    derivation:
+      source: DM.SEX
+
   - name: AGEGRP
     type: str
     label: Age Group
@@ -30,9 +36,3 @@ columns:
         source: SEX
         breaks: [65]
         labels: [younger, elderly]
-
-  - name: SEX
-    type: str
-    label: Sex
-    derivation:
-      source: DM.SEX
