@@ -708,7 +708,7 @@ names the record. Excel has no such concept, but it has the bug.
 
 ### Example 9: organization, compound and study layers
 
-*Source: [`adam-adlb-standardized-result`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-standardized-result)*
+*Source: [`spec-inheritance`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/spec-inheritance)*
 
 The Excel approach is to save a copy of the corporate spec and edit it. Once
 the parent changes, every copy that has already diverged stays diverged. R017

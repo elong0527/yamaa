@@ -50,7 +50,10 @@ dataset. Reserve this layout for examples whose point is the layering itself;
 a single specification with shared parents keeps `spec.yaml`.
 
 Name the directory for what it derives, not for the construct it uses:
-`sdtm-vs-visit-study-day`, not `sdtm-vs-mapping-from`.
+`sdtm-vs-visit-study-day`, not `sdtm-vs-mapping-from`. The exception is an
+example whose subject is the specification language itself: name it `spec-*`
+(`spec-inheritance`), and the gallery lists it under its own Specification
+category rather than a data domain.
 
 ## The README describes data, not the specification
 
@@ -73,6 +76,12 @@ study-data words. Write:
 - for every negative example, a final `## How to fix` section that recommends
   the safest correction first and uses a short YAML snippet when it clarifies
   the change.
+
+A `spec-*` example explains spec behavior rather than deriving data, so it
+carries no `Variables:` list: its `Input:` names the spec files and how they
+compose, and its `Note:` states the behavior rule. It still names every
+non-key golden column somewhere in the contract so the coverage check below
+stays silent.
 
 Keep bullets to the variables a reader must understand. Direct key copies and
 fixed values need no bullet.

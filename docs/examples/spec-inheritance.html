@@ -1,11 +1,11 @@
 <!doctype html>
-<!-- Generated from yaml/examples/adam-adlb-standardized-result. Edit the source files or generator. -->
+<!-- Generated from yaml/examples/spec-inheritance. Edit the source files or generator. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Inherit laboratory-to-analysis renaming from organization through study: README, inputs, expected output, and YAML specification.">
-  <title>Inherit laboratory-to-analysis renaming from organization through study | YAMAA examples</title>
+  <meta name="description" content="Spec Inheritance: README, inputs, expected output, and YAML specification.">
+  <title>Spec Inheritance | YAMAA examples</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230c5e4b'/%3E%3Cpath d='m8 8 8 10 8-10M16 18v7' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
   <style>:root {
   color-scheme: light;
@@ -167,33 +167,32 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
       <div class="brand"><span class="brand-mark" aria-hidden="true">Y</span> YAMAA <span class="brand-separator">/</span> <span class="brand-location">Example explorer</span></div>
       <nav class="header-links" aria-label="Example navigation">
         <a class="gallery-link" href="index.html"><span aria-hidden="true">&#8592;</span> All examples</a>
-        <a class="source-link" href="https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-standardized-result">Example source <span aria-hidden="true">&#8599;</span></a>
+        <a class="source-link" href="https://github.com/elong0527/yamaa/tree/main/yaml/examples/spec-inheritance">Example source <span aria-hidden="true">&#8599;</span></a>
       </nav>
     </div>
     <div class="title-row">
-      <div class="title-block"><p class="eyebrow">ADLB</p><h1>Inherit laboratory-to-analysis renaming from organization through study</h1></div>
+      <div class="title-block"><p class="eyebrow">Specification</p><h1>Spec Inheritance</h1></div>
       <dl class="metrics"><div><dt>input files</dt><dd>1</dd></div><div><dt>subjects</dt><dd>2</dd></div><div><dt>expected rows</dt><dd>2</dd></div></dl>
     </div>
   </header>
   <main class="dashboard" aria-label="Example dashboard">
     <section id="readme" class="panel readme-panel" aria-labelledby="readme-heading">
       <header class="panel-header"><h2 id="readme-heading">README</h2><span class="panel-caption">What this example means</span></header>
-      <div class="prose" aria-label="README content"><p><strong>Goal:</strong> teach organization-to-compound-to-study inheritance, using
-renaming of laboratory (LB) results into analysis (ADLB) results as the
-vehicle.</p>
-<p><strong>Input:</strong> one row per laboratory test result, with test code,
-standardized result, and standardized unit.</p>
-<p><strong>Variables:</strong></p>
+      <div class="prose" aria-label="README content"><p><strong>Goal:</strong> demonstrate spec inheritance from organization to compound to
+study level.</p>
+<p><strong>Input:</strong> three spec files, read root-first:</p>
 <ul>
-<li><strong>PARAMCD</strong>: the test code being analyzed; its final wording comes
-from the organization level.</li>
-<li><strong>AVAL</strong>: the standardized numeric result; its final wording comes
-from the study level after the compound level retitles it.</li>
-<li><strong>AVALU</strong>: the standardized unit for the result; its final wording
-comes from the study level.</li>
+<li><code>spec_organization.yaml</code> maps the laboratory test code, result, and
+unit into <code>PARAMCD</code>, <code>AVAL</code>, and <code>AVALU</code>;</li>
+<li><code>spec_compound.yaml</code> adds field types and retitles the AVAL result;</li>
+<li><code>spec_study.yaml</code> is the entry: it names both levels as parents,
+restates the AVALU unit wording, and declares the complete output.</li>
 </ul>
-<p><strong>Note:</strong> the shared organization and compound levels carry the common
-renaming, and the deepest study level wins on final wording.</p>
+<p>Parents resolve depth-first, left to right, with later levels winning;
+the chain resolves to <code>expected/spec_resolved.yaml</code>, the default view
+in the specification dropdown.</p>
+<p><strong>Note:</strong> shared levels carry the common renaming once, and the deepest
+study level wins on final wording.</p>
 <p><strong>Standard:</strong> ADaM | <strong>Domain:</strong> ADLB</p>
 </div>
     </section>
@@ -272,7 +271,7 @@ renaming, and the deepest study level wins on final wording.</p>
       </div>
     </div>
   </main>
-  <footer class="page-footer"><span>adam-adlb-standardized-result</span><nav class="example-nav" aria-label="More examples"><span><a href="adam-adlb-shift-and-criteria.html" rel="prev">Previous example</a></span><a href="index.html">All examples</a><span><a href="adam-adoe-study-eye.html" rel="next">Next example</a></span></nav></footer>
+  <footer class="page-footer"><span>spec-inheritance</span><nav class="example-nav" aria-label="More examples"><span><a href="sdtm-vs-visit-study-day.html" rel="prev">Previous example</a></span><a href="index.html">All examples</a><span><span class="is-disabled" aria-disabled="true">Next example</span></span></nav></footer>
   <script>"use strict";
 
 document.body.classList.add("has-js");

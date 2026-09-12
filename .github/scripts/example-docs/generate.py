@@ -244,6 +244,15 @@ def highlight_yaml(line):
     return "".join(result)
 
 
+def example_category(name, title, spec):
+    if name.startswith("spec-"):
+        return "Specification", title
+    category, separator, heading = title.partition(": ")
+    if not separator:
+        return str(spec.get("domain", "YAMAA example")), title
+    return category, heading
+
+
 def describe_example(example):
     """Return the page title and category without rendering fixtures."""
     source_url = REPOSITORY + "/blob/main/yaml/examples/" + quote(example.name)
@@ -255,9 +264,7 @@ def describe_example(example):
     title, _ = render_readme(readme_path.read_text(encoding="utf-8"), source_url)
     spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
     spec = spec if isinstance(spec, dict) else {}
-    category, separator, _ = title.partition(": ")
-    if not separator:
-        category = str(spec.get("domain", "YAMAA example"))
+    category, _ = example_category(example.name, title, spec)
     return title, category
 
 
@@ -378,9 +385,7 @@ def render_example(example, previous=None, next=None):
         study, subject = json.loads(key)
         label = f"{study} / {subject}" if subject_ids.count(subject) > 1 else subject
         subject_options.append(f'<option value="{escape(key)}">{escape(label)}</option>')
-    category, separator, heading = title.partition(": ")
-    if not separator:
-        category, heading = str(spec.get("domain", "YAMAA example")), title
+    category, heading = example_category(example.name, title, spec)
     heading = heading[:1].upper() + heading[1:]
     metrics = [(len(inputs), "input files"), (len(subjects), "subjects")]
     if any(path.suffix == ".csv" for path in outputs):

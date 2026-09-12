@@ -139,7 +139,7 @@ class DashboardTests(unittest.TestCase):
             self.assertIn(f'>{section}</option>', page)
 
     def test_multi_level_spec_renders_panes_with_resolved_default(self):
-        example = generate.EXAMPLES / "adam-adlb-standardized-result"
+        example = generate.EXAMPLES / "spec-inheritance"
         entry, chain = generate.example_entry(example)
         self.assertEqual(entry.name, "spec_study.yaml")
         self.assertEqual(
@@ -152,8 +152,14 @@ class DashboardTests(unittest.TestCase):
             ["spec_organization.yaml", "spec_compound.yaml", "spec_study.yaml", "spec_resolved.yaml"],
         )
         self.assertIn("Choose specification document", page)
-        self.assertNotIn("expected/spec_resolved", page)
+        self.assertNotIn('aria-label="expected/spec_resolved.yaml"', page)
         self.assertIn(">base</option>", page)
+
+    def test_spec_prefixed_example_gets_its_own_gallery_category(self):
+        example = generate.EXAMPLES / "spec-inheritance"
+        title, category = generate.describe_example(example)
+        self.assertEqual(title, "Spec Inheritance")
+        self.assertEqual(category, "Specification")
 
     def test_unterminated_csv_is_not_silently_repaired(self):
         page = generate.render_example(generate.EXAMPLES / "negative-source-unterminated-quote").decode("ascii")

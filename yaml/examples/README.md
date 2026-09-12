@@ -72,7 +72,6 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adlb-order-sensitive-sum`](adam-adlb-order-sensitive-sum/) | sum floating-point values in source record order |
 | [`adam-adlb-reported-precision`](adam-adlb-reported-precision/) | report a result against the lower limit of normal |
 | [`adam-adlb-shift-and-criteria`](adam-adlb-shift-and-criteria/) | classify a result, its shift from baseline, and one criterion |
-| [`adam-adlb-standardized-result`](adam-adlb-standardized-result/) | inherit laboratory-to-analysis renaming from organization through study |
 | [`adam-adoe-study-eye`](adam-adoe-study-eye/) | tell the study eye from the fellow eye |
 | [`adam-adqs-subscale-score`](adam-adqs-subscale-score/) | score a questionnaire subscale from its item records |
 | [`adam-adrs-best-overall-response`](adam-adrs-best-overall-response/) | select the best overall response |
@@ -239,3 +238,4 @@ the safest correction and shows the smallest useful YAML change.
 | [`sdtm-suppmh-qualifiers`](sdtm-suppmh-qualifiers/) | reshape extra qualifiers into supplemental records |
 | [`sdtm-vs-unit-standardization`](sdtm-vs-unit-standardization/) | standardize collected results into the study's units |
 | [`sdtm-vs-visit-study-day`](sdtm-vs-visit-study-day/) | attach visit metadata and study day to a result |
+| [`spec-inheritance`](spec-inheritance/) | spec inheritance |
