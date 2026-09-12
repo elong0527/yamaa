@@ -408,6 +408,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  negative-column-forward-reference:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   negative-compute-aggregate-function:
     status: blocked
     blocked_by: "#101"
