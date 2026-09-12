@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a circular chain of shared definitions
 
+[Back to the example index](../README.md)
+
 This example attempts to prepare subject records from a reusable file that
 eventually points back to the requested file.
 

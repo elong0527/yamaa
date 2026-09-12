@@ -1,5 +1,7 @@
 # ADaM ADLB: reject an unnamed baseline-count rule
 
+[Back to the example index](../README.md)
+
 This example uses a pre-derived analysis slice to attempt one record per
 subject, parameter, and analysis date:
 

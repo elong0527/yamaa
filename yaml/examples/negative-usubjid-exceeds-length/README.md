@@ -1,5 +1,7 @@
 # SDTM DM: reject a subject identifier longer than the study permits
 
+[Back to the example index](../README.md)
+
 This example uses collected demographics to attempt one record per subject:
 
 - `USUBJID` is the unique subject identifier, built from the study, the site,

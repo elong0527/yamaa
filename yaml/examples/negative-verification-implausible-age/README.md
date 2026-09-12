@@ -1,5 +1,7 @@
 # ADaM ADSL: reject an implausible age
 
+[Back to the example index](../README.md)
+
 This example uses collected demographics to attempt one record per subject:
 
 - `AGE` is the age collected at screening, which the study restricts to adults

@@ -1,5 +1,7 @@
 # ADaM ADAE: reject a severity burden totalled from severity words
 
+[Back to the example index](../README.md)
+
 This example uses collected adverse events to attempt one record per event:
 
 - `ASEV` is the reported severity of the event;

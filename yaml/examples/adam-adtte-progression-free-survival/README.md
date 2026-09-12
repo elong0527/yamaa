@@ -1,5 +1,7 @@
 # ADaM ADTTE: derive progression-free survival
 
+[Back to the example index](../README.md)
+
 This example uses randomization dates, tumour assessments, and deaths to derive
 one progression-free-survival record per subject:
 

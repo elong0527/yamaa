@@ -1,5 +1,7 @@
 # ADaM ADAE: reject a start date completed from text that is not a date
 
+[Back to the example index](../README.md)
+
 This example uses collected adverse events whose start dates are sometimes
 incomplete to attempt one record per event:
 

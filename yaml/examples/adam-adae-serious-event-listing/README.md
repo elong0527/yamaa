@@ -1,5 +1,7 @@
 # ADaM ADAE: list the serious adverse events
 
+[Back to the example index](../README.md)
+
 This example uses sample AE records and produces one row per serious event:
 
 - `AETERM` is the term the investigator reported for the event;

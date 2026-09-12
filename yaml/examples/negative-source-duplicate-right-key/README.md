@@ -1,5 +1,7 @@
 # ADaM ADSL: reject duplicate subject enrichment
 
+[Back to the example index](../README.md)
+
 This example uses one demographics record and two analysis-subject records for
 the same subject to attempt one output record:
 

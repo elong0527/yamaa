@@ -1,5 +1,7 @@
 # ADaM ADVS: express a measurement as a growth percentile
 
+[Back to the example index](../README.md)
+
 This example uses collected body measurements, a sex-and-age growth reference,
 and a `yamaa` specification to derive one row per collected measurement:
 

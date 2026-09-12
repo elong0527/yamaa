@@ -3577,6 +3577,49 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('not in index', result.stdout)
 
+    def _index_example(self, name, description):
+        ex_dir = self.root_dir / 'yaml' / 'examples' / name
+        ex_dir.mkdir(parents=True)
+        (ex_dir / 'README.md').write_text(f'# Example: {description}\n')
+        return f'| [`{name}`]({name}/) | {description} |'
+
+    def test_example_index_sections_restart_alphabetical_order(self):
+        rows = [
+            self._index_example('sdtm-b', 'second standard example'),
+            self._index_example('adam-a', 'first standard example'),
+            self._index_example('negative-b', 'reject the second thing'),
+            self._index_example('negative-a', 'reject the first thing'),
+        ]
+        index = (
+            '### Positive examples\n\n'
+            '| Example | Derives |\n|---|---|\n'
+            f'{rows[1]}\n{rows[0]}\n\n'
+            '### Negative examples\n\n'
+            '| Example | Rejects |\n|---|---|\n'
+            f'{rows[3]}\n{rows[2]}\n'
+        )
+        (self.root_dir / 'yaml' / 'examples' / 'README.md').write_text(index)
+
+        errors = VALIDATOR.validate_examples_index(self.root_dir)
+
+        self.assertEqual(errors, [])
+
+    def test_example_index_unordered_within_one_table(self):
+        rows = [
+            self._index_example('adam-a', 'first standard example'),
+            self._index_example('sdtm-b', 'second standard example'),
+        ]
+        index = (
+            '| Example | Derives |\n|---|---|\n'
+            f'{rows[1]}\n{rows[0]}\n'
+        )
+        (self.root_dir / 'yaml' / 'examples' / 'README.md').write_text(index)
+
+        errors = VALIDATOR.validate_examples_index(self.root_dir)
+
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn('not alphabetical', errors[0])
+
     def test_csv_header_uses_output_columns(self):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'csv-output'
         ex_dir.mkdir(parents=True, exist_ok=True)

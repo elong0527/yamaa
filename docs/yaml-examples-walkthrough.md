@@ -4,6 +4,10 @@ title: YAML examples walkthrough
 
 # A walkthrough of `yaml/examples/`
 
+<!-- BEGIN GENERATED: docs-nav -->
+> **YAMAA docs:** [Index](index.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | **Examples walkthrough** | [Example gallery](examples.md)
+<!-- END GENERATED: docs-nav -->
+
 > **Audience:** anyone about to write, review, or implement a YAMAA
 > specification.
 >
@@ -18,16 +22,21 @@ title: YAML examples walkthrough
 
 ## 1. What the suite is
 
-`yaml/examples/` holds **149 directories**. Each one is a complete, runnable
+<!-- BEGIN GENERATED: example-counts -->
+`yaml/examples/` holds **167 directories**. Each one is a complete, runnable
 specification with its input data and the exact output an implementation must
 reproduce:
 
 | Group | Count | What it is |
 |---|---|---|
-| `adam-*` | 65 | ADaM derivations |
-| `sdtm-*` | 18 | SDTM derivations |
-| `odm-*` | 1 | An ODM resolution behavior |
-| `negative-*` | 65 | Specifications the design **must reject**, with the exact error |
+| `adam-*` | 72 | analysis datasets derived from collected data |
+| `sdtm-*` | 18 | tabulation datasets built from collected data |
+| `odm-*` | 1 | how a collected item resolves to a value |
+| `negative-*` | 76 | specifications the design must reject, with the exact error |
+
+The complete list, with every example linked, is the [example
+gallery](examples.md).
+<!-- END GENERATED: example-counts -->
 
 Almost half the suite is negative. That ratio is the point: a portable
 specification language is defined as much by what it refuses as by what it

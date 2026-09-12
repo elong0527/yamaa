@@ -1,5 +1,7 @@
 # ADaM ADAE: reject a review flag that compares a date with text
 
+[Back to the example index](../README.md)
+
 The collected adverse events produce one analysis row per reported event:
 
 - `REVIEWFL` is rejected because its calendar date is compared with text,

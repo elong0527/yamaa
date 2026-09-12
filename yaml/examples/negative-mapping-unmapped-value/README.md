@@ -1,5 +1,7 @@
 # ADaM ADRS: reject an unmapped response
 
+[Back to the example index](../README.md)
+
 This example uses one overall-response assessment to attempt one analysis
 record:
 

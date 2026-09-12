@@ -1,5 +1,7 @@
 # ADaM ADCM: flag a medication during treatment
 
+[Back to the example index](../README.md)
+
 This example uses sample CM and ADSL data and a `yamaa` specification to derive
 one row per concomitant medication:
 

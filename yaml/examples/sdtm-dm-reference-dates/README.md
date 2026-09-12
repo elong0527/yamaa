@@ -1,5 +1,7 @@
 # SDTM DM: derive the reference dates from EX, DS, and AE
 
+[Back to the example index](../README.md)
+
 This example uses collected DM with the EX, DS, and AE domains and a `yamaa`
 specification to derive one row per enrolled subject:
 

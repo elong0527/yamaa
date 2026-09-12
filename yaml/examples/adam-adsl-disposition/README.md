@@ -1,5 +1,7 @@
 # ADaM ADSL: select the final subject disposition from DS
 
+[Back to the example index](../README.md)
+
 This example uses sample DM and DS data and a `yamaa` specification to derive
 one row per subject:
 

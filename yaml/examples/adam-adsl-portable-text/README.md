@@ -1,5 +1,7 @@
 # ADaM ADSL: preserve and compare international text predictably
 
+[Back to the example index](../README.md)
+
 This example uses sample DM text and produces one row per subject:
 
 - `RAWTXT` preserves the collected scalar sequence;

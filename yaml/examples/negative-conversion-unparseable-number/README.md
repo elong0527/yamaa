@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a viral load reported below the assay limit
 
+[Back to the example index](../README.md)
+
 This example uses collected viral-load results as they were reported to attempt
 one record per subject and parameter:
 

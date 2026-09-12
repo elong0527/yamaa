@@ -1,5 +1,7 @@
 # ADaM ADSL: normalize non-finite numeric values to missing
 
+[Back to the example index](../README.md)
+
 This example uses one subject record to show that every non-finite numeric
 value is stored as missing:
 

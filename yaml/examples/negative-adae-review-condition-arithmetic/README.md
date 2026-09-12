@@ -1,5 +1,7 @@
 # ADaM ADAE: reject a review flag whose condition performs arithmetic
 
+[Back to the example index](../README.md)
+
 The collected adverse events produce one analysis row per reported event:
 
 - `REVIEWFL` is rejected because its decision changes the sequence number

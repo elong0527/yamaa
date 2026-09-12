@@ -1,5 +1,7 @@
 # ADaM ADSL: derive period-scoped treatments and dates across a washout
 
+[Back to the example index](../README.md)
+
 This example uses sample DM and EX data and a `yamaa` specification to derive
 one row per subject in a two-period crossover:
 

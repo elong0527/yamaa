@@ -1,5 +1,7 @@
 # ADaM ADTTE: derive the duration of a response
 
+[Back to the example index](../README.md)
+
 This example uses the subjects who responded, their later tumour assessments,
 and their deaths to derive one duration-of-response record per responder:
 

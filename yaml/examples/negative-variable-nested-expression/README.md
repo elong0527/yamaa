@@ -1,5 +1,7 @@
 # ADaM ADSL: reject an uppercased country chosen inside the same step
 
+[Back to the example index](../README.md)
+
 This example uses collected demographics with a site-level country to attempt
 one record per subject:
 

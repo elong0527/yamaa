@@ -1,5 +1,7 @@
 # ADaM ADLB: reject reference limits the study does not hold
 
+[Back to the example index](../README.md)
+
 This example uses collected laboratory results with a table of reference
 limits by test and sex to attempt one record per subject and parameter:
 

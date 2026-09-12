@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a site-scoped subject identity
 
+[Back to the example index](../README.md)
+
 This example uses collected demographics to attempt one record per subject:
 
 - `INVID` is the investigator responsible for the subject's site.

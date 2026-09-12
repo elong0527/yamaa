@@ -1,5 +1,7 @@
 # ADaM ADSL: derive a dose adjustment flag from multiple sources
 
+[Back to the example index](../README.md)
+
 This example uses ADSL, EX, EC, and FA data to return one record per subject:
 
 - `DOSADJFL` is `Y` if the subject has a dose adjustment reported in `EX`,

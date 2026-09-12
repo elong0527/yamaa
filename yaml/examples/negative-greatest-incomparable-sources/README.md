@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a last-known-alive date taken from a day number
 
+[Back to the example index](../README.md)
+
 This example uses collected demographics to attempt one record per subject:
 
 - `DTHDT` is the collected date of death and is empty for a subject who is

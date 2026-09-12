@@ -1,5 +1,7 @@
 # SDTM LB: tell an inapplicable compartment from an uncollected sample
 
+[Back to the example index](../README.md)
+
 This example uses collected skin-biopsy data and a `yamaa` specification to
 derive one record per compartment a subject actually has:
 

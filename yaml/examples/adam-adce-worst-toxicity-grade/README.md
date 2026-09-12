@@ -1,5 +1,7 @@
 # ADaM ADCE: flag the subject's worst-grade event
 
+[Back to the example index](../README.md)
+
 This example uses collected solicited events with a `yamaa` specification to
 derive one row per event:
 

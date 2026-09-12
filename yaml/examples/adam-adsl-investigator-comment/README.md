@@ -1,5 +1,7 @@
 # ADaM ADSL: keep an investigator comment exactly as collected
 
+[Back to the example index](../README.md)
+
 This example uses sample DM text and produces one row per subject:
 
 - `CMNT` is the comment the investigator recorded, kept exactly as it was

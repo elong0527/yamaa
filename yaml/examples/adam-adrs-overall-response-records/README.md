@@ -1,5 +1,7 @@
 # ADaM ADRS: prepare the overall response records an endpoint reads
 
+[Back to the example index](../README.md)
+
 This example uses collected tumour assessments and the subject's treatment
 start to derive one record per overall response recorded by the investigator:
 

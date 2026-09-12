@@ -1,5 +1,7 @@
 # ADaM ADAE: record which queries a coded event belongs to
 
+[Back to the example index](../README.md)
+
 This example uses collected adverse events and the study's query dictionary to
 derive one row per adverse event:
 

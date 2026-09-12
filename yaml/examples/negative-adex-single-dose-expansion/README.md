@@ -1,5 +1,7 @@
 # ADaM ADEX: reject one record per administration built from an aggregate dose
 
+[Back to the example index](../README.md)
+
 This example uses collected exposure records to attempt one row per
 administration:
 

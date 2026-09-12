@@ -1,5 +1,7 @@
 # ADaM ADVS: assign records to analysis windows
 
+[Back to the example index](../README.md)
+
 This example uses a pre-derived ADVS slice and a `yamaa` specification to
 derive one row per record:
 

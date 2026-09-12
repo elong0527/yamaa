@@ -1,5 +1,7 @@
 # ADaM ADRS: select the best overall response
 
+[Back to the example index](../README.md)
+
 This example uses a subject's randomization date and their prepared,
 priority-ordered response assessments to derive one best-response record per
 subject:

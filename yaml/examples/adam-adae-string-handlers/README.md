@@ -1,5 +1,7 @@
 # ADaM ADAE: clean text and handle invalid IDs
 
+[Back to the example index](../README.md)
+
 This example uses sample AE data and a `yamaa` specification to:
 
 - convert `AETERM` to lowercase as `AETERMLO`;

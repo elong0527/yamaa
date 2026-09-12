@@ -1,5 +1,7 @@
 # ADaM ADQS: score a questionnaire subscale from its item records
 
+[Back to the example index](../README.md)
+
 This example uses collected questionnaire responses and a `yamaa`
 specification to derive one row per subject, visit, and analysis parameter:
 

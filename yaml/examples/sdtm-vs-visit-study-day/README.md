@@ -1,5 +1,7 @@
 # SDTM VS: attach visit metadata and study day to a result
 
+[Back to the example index](../README.md)
+
 This example uses collected vital signs with DM, the trial-visits table, and a
 study-defined epoch-range table to derive one record per collected result:
 

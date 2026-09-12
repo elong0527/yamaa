@@ -1,5 +1,7 @@
 # ADaM ADAE: reject extracting a date from a date
 
+[Back to the example index](../README.md)
+
 The collected adverse event attempts to produce one analysis row:
 
 - `ASTDT` is the collected calendar date;

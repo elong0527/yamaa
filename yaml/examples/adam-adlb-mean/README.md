@@ -1,5 +1,7 @@
 # ADaM ADLB: calculate each subject's mean result
 
+[Back to the example index](../README.md)
+
 This example uses collected neutrophil results with a `yamaa` specification to
 derive one row per result:
 

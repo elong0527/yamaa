@@ -21,6 +21,12 @@ New to the suite? Read [`sdtm-dm-basic`](sdtm-dm-basic/) for direct mapping,
 
 ## Index
 
+Positive examples come first, then the examples the design must reject.
+Both tables are generated from the directories themselves, so adding an
+example means running
+[`generate_example_gallery.py`](../../.github/workflows/generate_example_gallery.py)
+rather than editing this list.
+
 An example that cannot express something records a design finding. The suite
 passes when its declared error occurs. Those findings are collected in this
 repository's issue tracker, which also carries the schema work they justify.
@@ -32,6 +38,12 @@ CSV records the intended artifact once that capability exists.
 
 Every expected-failure README ends with a `How to fix` section that recommends
 the safest correction and shows the smallest useful YAML change.
+
+<!-- BEGIN GENERATED: example-index -->
+### Positive examples
+
+91 examples that must run and produce the artifact its `expected/` directory
+holds.
 
 | Example | Derives |
 |---|---|
@@ -107,6 +119,33 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-advs-mean-arterial-pressure`](adam-advs-mean-arterial-pressure/) | derive mean arterial pressure |
 | [`adam-advs-once-measured-carry-forward`](adam-advs-once-measured-carry-forward/) | carry forward a once-measured characteristic |
 | [`adam-advs-prior-character-result`](adam-advs-prior-character-result/) | retain the latest earlier character result |
+| [`odm-form-scoped-item-resolution`](odm-form-scoped-item-resolution/) | resolve items within their collection form |
+| [`sdtm-ae-dictionary-coding`](sdtm-ae-dictionary-coding/) | code reported terms against a medical dictionary |
+| [`sdtm-ae-effective-transaction`](sdtm-ae-effective-transaction/) | take the effective state of a record from a transaction log |
+| [`sdtm-dm-basic`](sdtm-dm-basic/) | build one subject record from collected data |
+| [`sdtm-dm-metadata-contract`](sdtm-dm-metadata-contract/) | declare the metadata a submission needs |
+| [`sdtm-dm-reference-dates`](sdtm-dm-reference-dates/) | derive the reference dates from EX, DS, and AE |
+| [`sdtm-ds-disposition-sequence`](sdtm-ds-disposition-sequence/) | number each subject's disposition records in date order |
+| [`sdtm-ex-combination-regimen`](sdtm-ex-combination-regimen/) | represent a combination regimen |
+| [`sdtm-fa-fever-occurrence`](sdtm-fa-fever-occurrence/) | fever occurrence |
+| [`sdtm-lb-conditional-compartments`](sdtm-lb-conditional-compartments/) | tell an inapplicable compartment from an uncollected sample |
+| [`sdtm-lb-ctcae-grading`](sdtm-lb-ctcae-grading/) | assign toxicity grades |
+| [`sdtm-lb-findings`](sdtm-lb-findings/) | build one record per collected lab result |
+| [`sdtm-lb-multiform`](sdtm-lb-multiform/) | consolidate four collection forms into one dataset |
+| [`sdtm-lb-reference-range-indicator`](sdtm-lb-reference-range-indicator/) | apply external reference ranges |
+| [`sdtm-relrec-many-to-many`](sdtm-relrec-many-to-many/) | record relationships between events and medications |
+| [`sdtm-suppmh-parent-linkage`](sdtm-suppmh-parent-linkage/) | link qualifiers collected on their own form to a parent record |
+| [`sdtm-suppmh-qualifiers`](sdtm-suppmh-qualifiers/) | reshape extra qualifiers into supplemental records |
+| [`sdtm-vs-unit-standardization`](sdtm-vs-unit-standardization/) | standardize collected results into the study's units |
+| [`sdtm-vs-visit-study-day`](sdtm-vs-visit-study-day/) | attach visit metadata and study day to a result |
+
+### Negative examples
+
+76 examples that must fail, each with the exact error in `expected/error.yaml`
+and a `How to fix` section in its README.
+
+| Example | Rejects |
+|---|---|
 | [`negative-adae-review-condition-arithmetic`](negative-adae-review-condition-arithmetic/) | reject a review flag whose condition performs arithmetic |
 | [`negative-adae-review-text-date`](negative-adae-review-text-date/) | reject a review flag that compares a date with text |
 | [`negative-adae-review-unknown-date`](negative-adae-review-unknown-date/) | reject a review flag that names an unavailable date |
@@ -183,22 +222,4 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-usubjid-exceeds-length`](negative-usubjid-exceeds-length/) | reject a subject identifier longer than the study permits |
 | [`negative-variable-nested-expression`](negative-variable-nested-expression/) | reject an uppercased country chosen inside the same step |
 | [`negative-verification-implausible-age`](negative-verification-implausible-age/) | reject an implausible age |
-| [`odm-form-scoped-item-resolution`](odm-form-scoped-item-resolution/) | resolve items within their collection form |
-| [`sdtm-ae-dictionary-coding`](sdtm-ae-dictionary-coding/) | code reported terms against a medical dictionary |
-| [`sdtm-ae-effective-transaction`](sdtm-ae-effective-transaction/) | take the effective state of a record from a transaction log |
-| [`sdtm-dm-basic`](sdtm-dm-basic/) | build one subject record from collected data |
-| [`sdtm-dm-metadata-contract`](sdtm-dm-metadata-contract/) | declare the metadata a submission needs |
-| [`sdtm-dm-reference-dates`](sdtm-dm-reference-dates/) | derive the reference dates from EX, DS, and AE |
-| [`sdtm-ds-disposition-sequence`](sdtm-ds-disposition-sequence/) | number each subject's disposition records in date order |
-| [`sdtm-ex-combination-regimen`](sdtm-ex-combination-regimen/) | represent a combination regimen |
-| [`sdtm-fa-fever-occurrence`](sdtm-fa-fever-occurrence/) | fever occurrence |
-| [`sdtm-lb-conditional-compartments`](sdtm-lb-conditional-compartments/) | tell an inapplicable compartment from an uncollected sample |
-| [`sdtm-lb-ctcae-grading`](sdtm-lb-ctcae-grading/) | assign toxicity grades |
-| [`sdtm-lb-findings`](sdtm-lb-findings/) | build one record per collected lab result |
-| [`sdtm-lb-multiform`](sdtm-lb-multiform/) | consolidate four collection forms into one dataset |
-| [`sdtm-lb-reference-range-indicator`](sdtm-lb-reference-range-indicator/) | apply external reference ranges |
-| [`sdtm-relrec-many-to-many`](sdtm-relrec-many-to-many/) | record relationships between events and medications |
-| [`sdtm-suppmh-parent-linkage`](sdtm-suppmh-parent-linkage/) | link qualifiers collected on their own form to a parent record |
-| [`sdtm-suppmh-qualifiers`](sdtm-suppmh-qualifiers/) | reshape extra qualifiers into supplemental records |
-| [`sdtm-vs-unit-standardization`](sdtm-vs-unit-standardization/) | standardize collected results into the study's units |
-| [`sdtm-vs-visit-study-day`](sdtm-vs-visit-study-day/) | attach visit metadata and study day to a result |
+<!-- END GENERATED: example-index -->

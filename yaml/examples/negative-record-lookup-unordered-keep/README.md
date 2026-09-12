@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a treatment ordered but not chosen
 
+[Back to the example index](../README.md)
+
 This example uses collected demographics with exposure records to attempt one
 record per subject:
 

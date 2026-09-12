@@ -1,5 +1,7 @@
 # SDTM LB: build one record per collected lab result
 
+[Back to the example index](../README.md)
+
 This example uses collected long-form lab data and a `yamaa` specification to
 derive one record per calcium and creatinine result:
 

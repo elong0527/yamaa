@@ -1,5 +1,7 @@
 # ADaM ADSL: analysis age
 
+[Back to the example index](../README.md)
+
 This example derives the analysis age from the demographic birth date and the
 reference randomization date:
 

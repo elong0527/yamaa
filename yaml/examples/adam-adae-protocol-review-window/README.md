@@ -1,5 +1,7 @@
 # ADaM ADAE: flag adverse events for protocol review
 
+[Back to the example index](../README.md)
+
 The collected adverse events produce one analysis row per reported event:
 
 - `ASTDT` is the separately collected calendar date. `ASTDT2` is the calendar

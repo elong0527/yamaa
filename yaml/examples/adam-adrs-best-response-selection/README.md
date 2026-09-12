@@ -1,5 +1,7 @@
 # ADaM ADRS: prepare assessments for best overall response
 
+[Back to the example index](../README.md)
+
 This example uses the overall response assessments to produce one record per
 assessment for the best-response endpoint:
 

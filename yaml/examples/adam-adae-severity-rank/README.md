@@ -1,5 +1,7 @@
 # ADaM ADAE: rank a subject's events by severity
 
+[Back to the example index](../README.md)
+
 This example uses collected adverse events to derive one record per event:
 
 - `ASEV` is the reported severity of the event, and is empty when severity was

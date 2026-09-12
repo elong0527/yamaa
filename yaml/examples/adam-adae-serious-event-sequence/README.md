@@ -1,5 +1,7 @@
 # ADaM ADAE: number a subject's serious events in onset order
 
+[Back to the example index](../README.md)
+
 This example uses collected adverse events to derive one record per event:
 
 - `AESER` marks an event the investigator reported as serious;

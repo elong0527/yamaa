@@ -1,5 +1,7 @@
 # ADaM ADSL: date the subject started new anti-cancer therapy
 
+[Back to the example index](../README.md)
+
 This example uses a subject list with the concomitant medications and
 procedures collected beside it to derive one record per subject:
 

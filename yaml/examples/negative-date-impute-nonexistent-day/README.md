@@ -1,5 +1,7 @@
 # ADaM ADAE: reject an end date completed past the end of its month
 
+[Back to the example index](../README.md)
+
 This example uses collected adverse events whose end dates are sometimes
 recorded without a day to attempt one record per event:
 

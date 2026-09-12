@@ -1,5 +1,7 @@
 # ADaM ADAE: reject an event belonging to more queries than it has places
 
+[Back to the example index](../README.md)
+
 This example uses collected adverse events and the study's query dictionary to
 attempt one row per adverse event:
 

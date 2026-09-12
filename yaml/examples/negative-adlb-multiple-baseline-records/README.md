@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a subject with two baseline records for one parameter
 
+[Back to the example index](../README.md)
+
 This example uses a pre-derived analysis slice to prepare one record per
 subject, parameter, and analysis date:
 

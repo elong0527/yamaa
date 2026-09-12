@@ -1,5 +1,7 @@
 # ADaM ADEX: reject a dose intensity measured against a per-record plan
 
+[Back to the example index](../README.md)
+
 This example uses a subject-treatment inventory with its component exposure
 records to attempt one record per subject and treatment:
 

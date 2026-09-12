@@ -1,5 +1,7 @@
 # SDTM LB: resolve items within their collection form
 
+[Back to the example index](../README.md)
+
 This example uses a long-form ODM projection with five laboratory forms and a
 `yamaa` specification to derive one record per reported result:
 

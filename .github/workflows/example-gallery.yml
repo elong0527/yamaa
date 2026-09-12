@@ -1,0 +1,25 @@
+name: Example gallery
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  example-gallery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      # The gallery is generated from yaml/examples/, so a new example that
+      # reaches main without regenerating it would leave the index, the
+      # back-links, and the published counts disagreeing with the suite.
+      - name: Check the example gallery is up to date
+        run: python3 .github/workflows/generate_example_gallery.py --check

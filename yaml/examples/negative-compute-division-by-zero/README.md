@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a percent change from a zero baseline
 
+[Back to the example index](../README.md)
+
 This example uses collected laboratory results with their baseline values to
 attempt one record per subject and parameter:
 

@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a log result from an undetectable value
 
+[Back to the example index](../README.md)
+
 This example uses collected viral-load results to attempt one record per
 subject and parameter:
 

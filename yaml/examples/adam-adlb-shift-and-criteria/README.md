@@ -1,5 +1,7 @@
 # ADaM ADLB: classify a result, its shift from baseline, and one criterion
 
+[Back to the example index](../README.md)
+
 This example uses a pre-derived ADLB slice and a `yamaa` specification to
 derive one row per subject, parameter, and record:
 

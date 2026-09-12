@@ -1,5 +1,7 @@
 # ADaM ADSL: normalize collected country and group it into a region
 
+[Back to the example index](../README.md)
+
 This example uses sample DM data and a `yamaa` specification to derive one row
 per subject:
 

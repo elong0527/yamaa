@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a cell total larger than the counter can hold
 
+[Back to the example index](../README.md)
+
 This example uses collected cell concentrations and sample volumes to attempt
 one record per subject:
 

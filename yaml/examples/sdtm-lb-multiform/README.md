@@ -1,5 +1,7 @@
 # SDTM LB: consolidate four collection forms into one dataset
 
+[Back to the example index](../README.md)
+
 This example uses collected serum, skin-biopsy, saliva, and tape-strip data and
 a `yamaa` specification to derive one record per result actually reported:
 

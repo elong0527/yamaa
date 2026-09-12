@@ -1,5 +1,7 @@
 # SDTM DM: build one subject record from collected data
 
+[Back to the example index](../README.md)
+
 This example uses collected long-form clinical data and a `yamaa` specification
 to derive one record per subject. The `rows` entry uses each subject's SEX item
 record only to establish the output grain; all values are derived with their

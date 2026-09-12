@@ -1,5 +1,7 @@
 # ADaM ADVS: reject a pulse rate recorded between whole beats
 
+[Back to the example index](../README.md)
+
 This example uses collected pulse rates to attempt one record per measurement:
 
 - `AVAL` is the pulse in beats per minute, which the analysis holds as a whole

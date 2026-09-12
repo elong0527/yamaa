@@ -1,5 +1,7 @@
 # ADaM ADRS: confirm an objective response
 
+[Back to the example index](../README.md)
+
 This example uses an ordered series of overall tumour responses to derive one
 record per assessment:
 

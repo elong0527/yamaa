@@ -1,5 +1,7 @@
 # SDTM AE: code reported terms against a medical dictionary
 
+[Back to the example index](../README.md)
+
 This example uses collected adverse events with a MedDRA extract and a `yamaa`
 specification to derive one record per event:
 

@@ -1,5 +1,7 @@
 # ADaM ADSL: select the first rescue medication
 
+[Back to the example index](../README.md)
+
 This example uses collected demographics with the medications taken alongside
 study treatment to derive one record per subject:
 

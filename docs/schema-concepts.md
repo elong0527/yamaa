@@ -4,7 +4,9 @@ title: Schema concepts
 
 # The schema: class, type, expression, registry
 
-> **YAMAA docs:** [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Examples walkthrough](yaml-examples-walkthrough.md)
+<!-- BEGIN GENERATED: docs-nav -->
+> **YAMAA docs:** [Index](index.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | **Schema concepts** | [Examples walkthrough](yaml-examples-walkthrough.md) | [Example gallery](examples.md)
+<!-- END GENERATED: docs-nav -->
 
 > **Read this if** you are writing or reviewing a specification and want the
 > language itself: what the four schema words mean, and every derivation verb

@@ -1,5 +1,7 @@
 # ADaM ADAE: flag the first occurrence at three levels
 
+[Back to the example index](../README.md)
+
 This example uses a pre-classified ADAE slice and a `yamaa` specification to
 derive one row per adverse event:
 
