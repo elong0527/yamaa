@@ -1,17 +1,13 @@
 name: Example dashboards
 
+# PR preview: proves generation is deterministic and uploads the dashboards
+# as an artifact. Nothing generated is committed; deploy-docs.yml builds
+# and publishes the site on push to main.
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'yaml/examples/**'
-      - 'docs/examples/**'
-      - '.github/scripts/example-docs/**'
-      - '.github/workflows/example-docs.yml'
   pull_request:
     paths:
       - 'yaml/examples/**'
-      - 'docs/examples/**'
       - '.github/scripts/example-docs/**'
       - '.github/workflows/example-docs.yml'
 
@@ -47,8 +43,6 @@ jobs:
         run: python .github/scripts/example-docs/generate.py --all --quiet --output-dir /tmp/yamaa-example-docs-second
       - name: Confirm byte-for-byte deterministic output
         run: diff -rq /tmp/yamaa-example-docs-first /tmp/yamaa-example-docs-second
-      - name: Check the committed example is current
-        run: python .github/scripts/example-docs/generate.py --check
       - name: Upload all generated example dashboards
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

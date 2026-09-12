@@ -1,0 +1,51 @@
+name: Deploy docs
+
+# Mirrors the pharmaverse/rtflite principle: sources live in git, HTML is
+# built in CI and deployed via deploy-pages. Nothing generated is committed.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'yaml/examples/**'
+      - 'docs/**'
+      - '.github/scripts/example-docs/**'
+      - '.github/workflows/deploy-docs.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Install pinned rendering dependencies
+        run: python -m pip install -r .github/scripts/example-docs/requirements.txt
+      - name: Generate every example dashboard
+        env:
+          LC_ALL: C.UTF-8
+          PYTHONHASHSEED: '1'
+          TZ: UTC
+        run: python .github/scripts/example-docs/generate.py --all --quiet
+      - uses: actions/configure-pages@3e0d92b6602389ad65bbc7f7b2f558f0b12b9d1f # v6.0.1
+      - uses: actions/jekyll-build-pages@3b78dc0ffce0e0e527fc8df4f50008fd0ef347d # v1.0.3
+        with:
+          source: ./docs
+          destination: ./_site
+      - uses: actions/upload-pages-artifact@7b1a5fc5d8570d382669d073d5393a92677df3429 # v4.0.0
+        with:
+          path: ./_site
+      - uses: actions/deploy-pages@592e1b4863d74d0e4d7b24b79771d462c0aaa # v5.0.0
+        id: deployment
