@@ -167,3 +167,9 @@ handled.
 **R003-37.** An aggregate `between` with neither bound, a bound outside
 the right-side relation, or operands whose types are not comparable:
 fail under R013.
+
+## Review
+
+**R003-38.** Validation reports the inferred applicable keys for every
+qualified source, so a reviewer sees which same-named columns the join
+matches on.

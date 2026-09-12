@@ -1694,6 +1694,61 @@ class TestRuleMetadata(unittest.TestCase):
         self.assertTrue(all('normative' in error for error in errors))
 
 
+class TestJoinKeyInference(unittest.TestCase):
+    def write_example(self, root, name, spec, files):
+        ex_dir = root / 'yaml' / 'examples' / name
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'spec.yaml').write_text(spec)
+        for filename, content in files.items():
+            (ex_dir / 'input' / filename).write_text(content)
+
+    def test_reports_inferred_keys_per_qualified_source(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.write_example(
+                root, 'ex',
+                'schema_version: "1.0"\n'
+                'datasets:\n'
+                '  AE: input/ae.csv\n'
+                '  SUPP: input/supp.csv\n'
+                'base: AE\n'
+                'keys: [STUDYID, USUBJID, AESEQ]\n'
+                'columns:\n'
+                '  - name: AESEV\n'
+                '    derivation:\n'
+                "      source: SUPP.AESEV\n",
+                {
+                    'ae.csv': 'STUDYID,USUBJID,AESEQ\n1,1,1\n',
+                    'supp.csv': 'STUDYID,USUBJID,AESEQ,AESEV\n1,1,1,MILD\n',
+                },
+            )
+            warnings = VALIDATOR.validate_join_key_inference(root)
+
+        self.assertEqual(len(warnings), 1)
+        self.assertIn('qualified source SUPP', warnings[0])
+        self.assertIn('[STUDYID, USUBJID, AESEQ]', warnings[0])
+
+    def test_skips_base_dataset_and_missing_right_side(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.write_example(
+                root, 'ex',
+                'schema_version: "1.0"\n'
+                'datasets:\n'
+                '  AE: input/ae.csv\n'
+                'base: AE\n'
+                'keys: [STUDYID]\n'
+                'columns:\n'
+                '  - name: X\n'
+                '    derivation:\n'
+                "      source: AE.X\n",
+                {'ae.csv': 'STUDYID,X\n1,a\n'},
+            )
+            warnings = VALIDATOR.validate_join_key_inference(root)
+
+        self.assertEqual(warnings, [])
+
+
 class TestSpecificationInheritance(unittest.TestCase):
     def setUp(self):
         self.env, schema_errors = VALIDATOR.build_schema_env(
