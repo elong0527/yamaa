@@ -124,3 +124,38 @@ Run this component's focused tests from the repository root:
 ```bash
 uv run --project python --isolated --extra test pytest python/tests/io
 ```
+
+## Verified tables and published artifacts
+
+Assert over a completed table, then write and publish what it produces:
+
+```python
+from yamaa.artifacts import ArtifactTarget, build_artifact, publish_artifact
+from yamaa.verification import verify_completed_table
+
+verify_completed_table(table, spec.columns, spec.keys, spec.verifications or [])
+artifact = build_artifact(table, spec.output, spec.keys)
+publish_artifact(ArtifactTarget(run_directory / "adsl.csv"), artifact)
+```
+
+`yamaa.verification` exposes one hook per R005 stage -- `check_column`,
+`check_keys`, and `check_dataset` -- so an executor runs each assertion when
+R005 says it runs rather than sweeping every check to the end. Each reports
+failures in the committed error shape and leaves the run's fate to its
+caller; `verify_completed_table` runs the three in order and raises.
+
+`yamaa.artifacts` selects the profile from `output.path`, applies R005's
+column selection and row order, and writes `.csv` byte for byte or
+`.parquet` under the R020 type mapping. Publication replaces one target the
+caller explicitly permits, through a temporary file beside it, so a failure
+leaves the previous artifact in place.
+
+See the [artifact and verification documentation](src/yamaa/artifacts/README.md)
+for what each step owns.
+
+Run this component's focused tests from the repository root:
+
+```bash
+uv run --project python --isolated --extra test pytest \
+  python/tests/verification python/tests/artifacts
+```
