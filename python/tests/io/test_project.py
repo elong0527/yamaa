@@ -10,8 +10,11 @@ import pytest
 from pydantic import ValidationError
 
 from yamaa.io.project import (
+    PROJECT_CONFIGURATION_NAME,
+    ProjectConfigurationError,
     ProjectResources,
     ResourceFailure,
+    approve_roots,
     classify_project_path,
 )
 
@@ -396,3 +399,188 @@ def test_failure_text_never_exposes_host_paths(tmp_path: Path) -> None:
 
     assert str(tmp_path) not in str(raised.value)
     assert str(raised.value) == "resource_path_missing: 'input/missing.csv'"
+
+
+# ---------------------------------------------------------------------------
+# Project configuration: the study says where its own data is kept (R021-1..5)
+# ---------------------------------------------------------------------------
+
+
+def write_project(root: Path, body: str) -> Path:
+    configuration = root / PROJECT_CONFIGURATION_NAME
+    configuration.write_text(body, encoding="utf-8")
+    return configuration
+
+
+def test_configuration_marks_the_project_root_from_a_nested_entry_file(
+    tmp_path: Path,
+) -> None:
+    study = tmp_path / "study"
+    nested = study / "adam" / "adsl"
+    nested.mkdir(parents=True)
+    entry = nested / "spec.yaml"
+    entry.write_text("domain: ADSL\n", encoding="utf-8")
+    write_project(study, 'version: "1.0"\n')
+
+    approved = approve_roots(entry)
+
+    assert approved.project_root == study.resolve()
+    assert approved.configuration == study / PROJECT_CONFIGURATION_NAME
+    assert approved.data_roots == ()
+
+
+def test_entry_under_no_configuration_keeps_the_earlier_behavior(
+    tmp_path: Path,
+) -> None:
+    entry = tmp_path / "spec.yaml"
+    entry.write_text("domain: ADSL\n", encoding="utf-8")
+
+    approved = approve_roots(entry)
+
+    assert approved.project_root == tmp_path.resolve()
+    assert approved.configuration is None
+    assert approved.data_roots == ()
+
+
+def test_a_study_approves_its_own_data_root(tmp_path: Path) -> None:
+    study = tmp_path / "study"
+    study.mkdir()
+    store = tmp_path / "data"
+    store.mkdir()
+    (store / "lbref.csv").write_bytes(b"LBTESTCD\nALT\n")
+    entry = study / "spec.yaml"
+    entry.write_text("domain: ADLB\n", encoding="utf-8")
+    write_project(study, f'version: "1.0"\ndata_roots:\n  - {store.as_posix()}\n')
+
+    approved = approve_roots(entry)
+    resources = ProjectResources(approved.project_root, data_roots=approved.data_roots)
+
+    assert approved.data_roots == (store,)
+    assert resources.capture(rooted(store, "lbref.csv")).content == b"LBTESTCD\nALT\n"
+
+
+def test_a_relative_data_root_is_read_from_the_project_root(tmp_path: Path) -> None:
+    study = tmp_path / "study"
+    study.mkdir()
+    store = tmp_path / "data"
+    store.mkdir()
+    entry = study / "spec.yaml"
+    entry.write_text("domain: ADLB\n", encoding="utf-8")
+    write_project(study, 'version: "1.0"\ndata_roots:\n  - ../data\n')
+
+    declared = approve_roots(entry).data_roots
+    assert tuple(root.resolve() for root in declared) == (store.resolve(),)
+
+
+def test_an_inherited_layer_cannot_contribute_a_data_root(tmp_path: Path) -> None:
+    # R021-4: only the entry project's configuration is read. A parent layer
+    # carrying its own configuration never widens the run that reaches it.
+    study = tmp_path / "study"
+    study.mkdir()
+    org = tmp_path / "org"
+    org.mkdir()
+    forbidden = tmp_path / "elsewhere"
+    forbidden.mkdir()
+    write_project(org, f'version: "1.0"\ndata_roots:\n  - {forbidden.as_posix()}\n')
+    write_project(study, 'version: "1.0"\n')
+    entry = study / "spec.yaml"
+    entry.write_text("domain: ADSL\n", encoding="utf-8")
+
+    approved = approve_roots(entry)
+
+    assert approved.data_roots == ()
+    resources = ProjectResources(approved.project_root, data_roots=approved.data_roots)
+    with pytest.raises(ResourceFailure) as raised:
+        resources.capture(rooted(forbidden, "lbref.csv"))
+    assert raised.value.condition == "resource_path_not_relative"
+
+
+def test_a_runner_caps_what_a_configuration_may_approve(tmp_path: Path) -> None:
+    study = tmp_path / "study"
+    study.mkdir()
+    permitted = tmp_path / "data" / "pilot7"
+    permitted.mkdir(parents=True)
+    entry = study / "spec.yaml"
+    entry.write_text("domain: ADLB\n", encoding="utf-8")
+    write_project(study, f'version: "1.0"\ndata_roots:\n  - {permitted.as_posix()}\n')
+
+    inside = approve_roots(entry, data_roots=[tmp_path / "data"])
+    assert tuple(root.resolve() for root in inside.data_roots) == (permitted.resolve(),)
+
+    with pytest.raises(ProjectConfigurationError):
+        approve_roots(entry, data_roots=[tmp_path / "study"])
+
+
+def test_a_packaging_run_declines_the_configuration_roots(tmp_path: Path) -> None:
+    study = tmp_path / "study"
+    study.mkdir()
+    store = tmp_path / "data"
+    store.mkdir()
+    entry = study / "spec.yaml"
+    entry.write_text("domain: ADLB\n", encoding="utf-8")
+    write_project(study, f'version: "1.0"\ndata_roots:\n  - {store.as_posix()}\n')
+
+    approved = approve_roots(entry, read_project_configuration=False)
+
+    assert approved.project_root == study.resolve()
+    assert approved.data_roots == ()
+
+
+def test_a_runner_may_name_the_project_root_outright(tmp_path: Path) -> None:
+    study = tmp_path / "study"
+    narrower = study / "adam"
+    narrower.mkdir(parents=True)
+    entry = narrower / "spec.yaml"
+    entry.write_text("domain: ADSL\n", encoding="utf-8")
+    write_project(study, 'version: "1.0"\n')
+
+    assert approve_roots(entry, project_root=narrower).project_root == (
+        narrower.resolve()
+    )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "- not a mapping\n",
+        'version: "2.0"\n',
+        'version: "1.0"\nunknown: 1\n',
+        'version: "1.0"\ndata_roots: "/data"\n',
+        'version: "1.0"\ndata_roots:\n  - ""\n',
+        'version: "1.0"\ndata_roots:\n  - /nonexistent-root-for-this-test\n',
+    ],
+)
+def test_a_malformed_configuration_fails_before_any_specification(
+    tmp_path: Path, body: str
+) -> None:
+    entry = tmp_path / "spec.yaml"
+    entry.write_text("domain: ADSL\n", encoding="utf-8")
+    write_project(tmp_path, body)
+
+    with pytest.raises(ProjectConfigurationError):
+        approve_roots(entry)
+
+
+def test_a_declared_data_root_keeps_the_spelling_the_study_wrote(
+    unresolved_directory: str,
+) -> None:
+    """The anchor's spelling rule reaches the configuration layer too.
+
+    On macOS a study writes /var/..., whose canonical form is /private/var/....
+    Canonicalizing the declared root would throw that spelling away and reject
+    the rooted path the study actually writes.
+    """
+    study = Path(unresolved_directory) / "study"
+    study.mkdir()
+    store = Path(unresolved_directory) / "data"
+    store.mkdir()
+    (store / "lbref.csv").write_bytes(b"LBTESTCD\nALT\n")
+    entry = study / "spec.yaml"
+    entry.write_text("domain: ADLB\n", encoding="utf-8")
+    written = rooted(unresolved_directory, "data")
+    write_project(study, f'version: "1.0"\ndata_roots:\n  - {written}\n')
+
+    approved = approve_roots(entry)
+    resources = ProjectResources(approved.project_root, data_roots=approved.data_roots)
+
+    assert resources.capture(f"{written}/lbref.csv").content == b"LBTESTCD\nALT\n"

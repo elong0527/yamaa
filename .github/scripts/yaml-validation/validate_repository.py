@@ -2664,8 +2664,8 @@ def _rebase_local_path(value, layer_path, entry_path):
         return value
     written = Path(value)
     if rooted_project_segments(value) is not None or written.is_absolute():
-        # R021-12: a rooted path resolves against the approved root it names,
-        # and R021-13 reads that written form, so rebasing leaves it alone.
+        # R021-14: a rooted path resolves against the approved root it names,
+        # and R021-15 reads that written form, so rebasing leaves it alone.
         return value
     target = (layer_path.parent / written).resolve()
     try:
@@ -4478,10 +4478,97 @@ URI_SCHEME_PATTERN = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]*:')
 DRIVE_ROOT_PATTERN = re.compile(r'^[A-Za-z]:/')
 
 
+PROJECT_CONFIGURATION_NAME = 'yamaa-project.yaml'
+PROJECT_CONFIGURATION_FIELDS = {'version', 'data_roots'}
+
+
+def read_project_configuration(project_root, label=None):
+    """Return (data_roots, errors) for the configuration at a named root.
+
+    R021-2 gives a runner that names the root the configuration sitting at
+    that root and no other. R021-29 fails a configuration a run cannot start
+    from; a root that holds none is a study that declared nothing.
+    """
+    directory = Path(project_root)
+    path = directory / PROJECT_CONFIGURATION_NAME
+    if not path.is_file():
+        return (), []
+    label = label or PROJECT_CONFIGURATION_NAME
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            document = yaml.load(handle, Loader=UniqueKeyLoader)
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        return (), [f"ERROR: {label}: {exc}"]
+    if not isinstance(document, dict):
+        return (), [f"ERROR: {label}: expected a mapping"]
+
+    errors = []
+    for field in sorted(set(document) - PROJECT_CONFIGURATION_FIELDS):
+        errors.append(f"ERROR: {label}.{field}: unknown field")
+    if document.get('version') != '1.0':
+        errors.append(f"ERROR: {label}.version: expected '1.0'")
+
+    declared = document.get('data_roots')
+    if declared is None:
+        declared = []
+    if not (
+        isinstance(declared, list)
+        and all(isinstance(item, str) and item for item in declared)
+    ):
+        errors.append(
+            f"ERROR: {label}.data_roots: expected a list of non-empty paths"
+        )
+        return (), errors
+
+    roots = []
+    for item in declared:
+        candidate = Path(item)
+        if not candidate.is_absolute():
+            # A relative entry names a directory beside the study, read from
+            # the project root the configuration itself marks.
+            candidate = directory / candidate
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError:
+            resolved = None
+        if resolved is None or not resolved.is_dir():
+            errors.append(
+                f"ERROR: {label}.data_roots: {item!r} is not an existing "
+                "directory"
+            )
+            continue
+        # The spelling the study wrote is kept, not its canonical form: a
+        # rooted path repeats that spelling, and R021-15 matches it there.
+        roots.append(candidate)
+    return tuple(roots), errors
+
+
+def project_data_roots(project_root):
+    """Data roots the configuration at a named project root approves."""
+    roots, _ = read_project_configuration(project_root)
+    return roots
+
+
+def validate_project_configurations(root: Path):
+    """Report every project configuration the repository cannot start from."""
+    errors = []
+    for path in sorted(root.rglob(PROJECT_CONFIGURATION_NAME)):
+        if any(
+            part in {'.git', '.claude', '.venv', 'node_modules'}
+            for part in path.parts
+        ):
+            continue
+        _, configuration_errors = read_project_configuration(
+            path.parent, label=str(path.relative_to(root))
+        )
+        errors.extend(configuration_errors)
+    return errors
+
+
 def rooted_project_segments(written):
     """Split a rooted written path into its marker and segments, or None.
 
-    R021-5 spells a rooted path with a leading separator or with one ASCII
+    R021-7 spells a rooted path with a leading separator or with one ASCII
     letter and ':/'. The marker leads the returned segments, so a path rooted
     one way never repeats a root spelled the other way.
     """
@@ -4501,9 +4588,9 @@ def rooted_project_segments(written):
 def classify_written_project_path(written):
     """Return the R021 condition a written project path violates, if any.
 
-    R021-23 fixes the order: a scheme (R021-7), then a backslash (R021-8),
-    then an empty segment (R021-9), then a dot segment in a rooted path
-    (R021-10). Nothing here consults the filesystem.
+    R021-25 fixes the order: a scheme (R021-9), then a backslash (R021-10),
+    then an empty segment (R021-11), then a dot segment in a rooted path
+    (R021-12). Nothing here consults the filesystem.
     """
     if not isinstance(written, str):
         return 'resource_path_not_normalized'
@@ -4570,7 +4657,7 @@ def resolve_project_path(written, base_dir, project_root, data_roots=()):
 
     segments = rooted_project_segments(written)
     if segments is not None:
-        # R021-13: a rooted path is anchored at the approved root whose
+        # R021-15: a rooted path is anchored at the approved root whose
         # leading segments it repeats, and the anchor is canonical, so the
         # link a platform puts in front of a system directory is resolved
         # once here rather than rejected below.
@@ -4970,7 +5057,8 @@ def validate_spec_contracts(
                 continue
             path = f"{spec_label}.datasets.{dataset_id}"
             resolved, condition = resolve_project_path(
-                source_path, spec_path.parent, project_root
+                source_path, spec_path.parent, project_root,
+                project_data_roots(project_root),
             )
             if condition is not None:
                 errors.append(
@@ -7396,7 +7484,8 @@ def validate_producing_specs(
         if not isinstance(schema_ref, str):
             continue
         producer_path, condition = resolve_project_path(
-            schema_ref, spec_path.parent, project_root
+            schema_ref, spec_path.parent, project_root,
+            project_data_roots(project_root),
         )
         if condition is not None:
             errors.append(
@@ -7448,7 +7537,8 @@ def validate_producing_specs(
         if not isinstance(source_ref, str):
             continue
         source_path, condition = resolve_project_path(
-            source_ref, spec_path.parent, project_root
+            source_ref, spec_path.parent, project_root,
+            project_data_roots(project_root),
         )
         if condition is not None:
             continue
@@ -9666,6 +9756,7 @@ def check_yaml_files(root: Path):
         errors.extend(
             validate_validation_manifest(root, validation_manifest)
         )
+    errors.extend(validate_project_configurations(root))
     condition_registry, condition_registry_load_errors = (
         load_condition_registry(root)
     )

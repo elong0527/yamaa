@@ -104,18 +104,46 @@ loaded = load_source_tables(datasets, resources)
 dm = loaded["DM"].table
 ```
 
-When a study keeps its data somewhere other than its specifications, approve
-the directory that holds it and declare the data by a rooted path:
+### Keeping code and data in different places
+
+A study that keeps its data outside its specifications says so in its own
+`yamaa-project.yaml`, at the top of the study:
+
+```yaml
+version: "1.0"
+data_roots:
+  - /data/pilot7
+```
+
+A run finds that file by walking up from the entry specification, and the
+directory holding it is the project root. Data may then be declared by a
+rooted path:
 
 ```python
-resources = ProjectResources("study", data_roots=["/data/pilot7"])
+from yamaa.io import ProjectResources, approve_roots
+
+approved = approve_roots("study/adam/adsl/spec.yaml")
+resources = ProjectResources(approved.project_root, data_roots=approved.data_roots)
 datasets = {"LBREF": DatasetSource(path="/data/pilot7/reference/lbref.csv")}
 ```
 
-`data_roots` is the runner's decision and is fixed before any specification is
-read, so a declaration selects among approved roots and can never add one. A
-rooted path naming no approved root fails as `resource_path_not_relative`, and
-the failure names the written path alone.
+A rooted path naming no approved root fails as `resource_path_not_relative`,
+and the failure names the written path alone. A study that ships no
+configuration behaves exactly as before: the entry file's directory is the
+project root and nothing outside it can be read.
+
+The roots are fixed before any specification is read, and only the entry
+study's own configuration contributes to them. A layer inherited under R017
+never widens them, so an organization template cannot redirect where a study
+reads from. A runner keeps the last word over a study it did not write:
+
+```python
+# Cap what the configuration may approve; a root outside these fails the run.
+approve_roots(entry, data_roots=["/data"])
+
+# Decline the configuration's roots entirely, as a packaging run does.
+approve_roots(entry, read_project_configuration=False)
+```
 
 The reader accepts the fixed `.csv` profile only. It parses the retained byte
 snapshot in memory, preserves source row and header order, and reads a field

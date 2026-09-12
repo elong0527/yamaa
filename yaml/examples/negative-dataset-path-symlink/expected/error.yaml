@@ -2,7 +2,7 @@ phase: validation
 condition: resource_path_symlink
 spec_paths:
   - datasets.LBREF.path
-requirement: R021-15
+requirement: R021-17
 context:
   dataset: LBREF
   path: input/lbref.csv

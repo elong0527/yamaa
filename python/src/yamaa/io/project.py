@@ -14,8 +14,13 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from yamaa.specification._yaml import read_yaml_document
+from yamaa.specification.diagnostics import SpecificationError
+
 _URI_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _DRIVE_ROOT = re.compile(r"^[A-Za-z]:/")
+
+PROJECT_CONFIGURATION_NAME = "yamaa-project.yaml"
 
 
 class _PathChanged(OSError):
@@ -77,7 +82,7 @@ class ResourceFailure(ValueError):
 def rooted_project_segments(written_path: str) -> tuple[str, ...] | None:
     """Split a rooted written path into its marker and segments, or None.
 
-    R021-5 spells a rooted path with a leading separator or with one ASCII
+    R021-7 spells a rooted path with a leading separator or with one ASCII
     letter and ``:/``. The marker leads the returned segments so that a path
     rooted one way never matches a root spelled the other way.
     """
@@ -95,9 +100,9 @@ def rooted_project_segments(written_path: str) -> tuple[str, ...] | None:
 def classify_project_path(written_path: str) -> str | None:
     """Return the first written-form condition from R021, if any.
 
-    R021-23 fixes the order: a scheme (R021-7), then a backslash (R021-8),
-    then an empty segment (R021-9), then a dot segment in a rooted path
-    (R021-10). Nothing here consults the filesystem.
+    R021-25 fixes the order: a scheme (R021-9), then a backslash (R021-10),
+    then an empty segment (R021-11), then a dot segment in a rooted path
+    (R021-12). Nothing here consults the filesystem.
     """
     segments = rooted_project_segments(written_path)
     if segments is None and _URI_SCHEME.match(written_path):
@@ -117,6 +122,152 @@ def _directory_spelling(candidate: str | Path) -> tuple[str, ...] | None:
     return rooted_project_segments(PurePath(candidate).as_posix())
 
 
+class ProjectConfigurationError(ValueError):
+    """A project configuration a run cannot be started from (R021-29)."""
+
+
+@dataclass(frozen=True)
+class ApprovedRoots:
+    """Every root one run may read from, fixed before any specification."""
+
+    project_root: Path
+    data_roots: tuple[Path, ...]
+    configuration: Path | None
+
+
+def _existing_directory(candidate: str | Path, label: str) -> Path:
+    try:
+        resolved = Path(candidate).resolve(strict=True)
+    except OSError as error:
+        raise ValueError(f"{label} must exist") from error
+    if not resolved.is_dir():
+        raise ValueError(f"{label} must be a directory")
+    return resolved
+
+
+def find_project_configuration(entry_file: str | Path) -> Path | None:
+    """Walk up from an entry file to its project configuration (R021-2).
+
+    The file marks the project root by sitting at it, so the first one found
+    on the way up names the root. A run that finds none is a run whose study
+    declared nothing, not a failure.
+    """
+    start = Path(entry_file).resolve()
+    directory = start if start.is_dir() else start.parent
+    for candidate in (directory, *directory.parents):
+        configuration = candidate / PROJECT_CONFIGURATION_NAME
+        if configuration.is_file():
+            return configuration
+    return None
+
+
+def _declared_data_roots(configuration: Path, project_root: Path) -> tuple[Path, ...]:
+    """Read the data roots one project configuration declares."""
+    try:
+        document = read_yaml_document(configuration)
+    except (SpecificationError, OSError) as error:
+        raise ProjectConfigurationError(
+            "project configuration cannot be read"
+        ) from error
+    if not isinstance(document, dict):
+        raise ProjectConfigurationError("project configuration must be a mapping")
+    unknown = sorted(set(document) - {"version", "data_roots"})
+    if unknown:
+        raise ProjectConfigurationError(
+            f"project configuration has unknown fields: {unknown}"
+        )
+    if document.get("version") != "1.0":
+        raise ProjectConfigurationError("project configuration version must be '1.0'")
+
+    declared = document.get("data_roots")
+    if declared is None:
+        return ()
+    if not isinstance(declared, list) or not all(
+        isinstance(item, str) and item for item in declared
+    ):
+        raise ProjectConfigurationError(
+            "project configuration data_roots must be non-empty paths"
+        )
+
+    roots: list[Path] = []
+    for item in declared:
+        candidate = Path(item)
+        if not candidate.is_absolute():
+            # A relative entry names a directory beside the study, so it is
+            # read from the project root the configuration itself marks.
+            candidate = project_root / candidate
+        try:
+            _existing_directory(candidate, "approved data root")
+        except ValueError as error:
+            raise ProjectConfigurationError(
+                "project configuration declares a data root that is not an "
+                "existing directory"
+            ) from error
+        # The spelling the study wrote is kept, not its canonical form: a
+        # rooted path repeats that spelling, and R021-15 matches it there.
+        roots.append(candidate)
+    return tuple(roots)
+
+
+def approve_roots(
+    entry_file: str | Path,
+    *,
+    project_root: str | Path | None = None,
+    data_roots: Iterable[str | Path] | None = None,
+    read_project_configuration: bool = True,
+) -> ApprovedRoots:
+    """Select every root one run may read from, before any specification.
+
+    The project root is where the configuration sits unless the runner names
+    one outright (R021-1). Data roots come from that configuration and from
+    the runner (R021-3). A runner that names data roots makes them the
+    ceiling every declared root must resolve inside, and a packaging run
+    declines the configuration's roots entirely (R021-5).
+    """
+    if project_root is not None:
+        # A runner that names the root takes the configuration sitting at it,
+        # never one further up that names a wider project.
+        root = _existing_directory(project_root, "approved project root")
+        named = root / PROJECT_CONFIGURATION_NAME
+        configuration = named if named.is_file() else None
+    else:
+        configuration = find_project_configuration(entry_file)
+        if configuration is not None:
+            selected: Path = configuration.parent
+        else:
+            entry = Path(entry_file).resolve()
+            selected = entry if entry.is_dir() else entry.parent
+        root = _existing_directory(selected, "approved project root")
+
+    ceiling: tuple[Path, ...] | None = None
+    if data_roots is not None:
+        ceiling = tuple(
+            _existing_directory(candidate, "approved data root")
+            for candidate in data_roots
+        )
+
+    declared: tuple[Path, ...] = ()
+    if configuration is not None and read_project_configuration:
+        declared = _declared_data_roots(configuration, root)
+
+    if declared and ceiling is not None:
+        for written in declared:
+            candidate = written.resolve()
+            if not any(
+                candidate == limit or limit in candidate.parents for limit in ceiling
+            ):
+                raise ProjectConfigurationError(
+                    "project configuration declares a data root outside the "
+                    "roots this run allows"
+                )
+
+    return ApprovedRoots(
+        project_root=root,
+        data_roots=declared if declared else (ceiling or ()),
+        configuration=configuration,
+    )
+
+
 class ProjectResources:
     """Capture and verify files under the roots one runner approved."""
 
@@ -127,7 +278,7 @@ class ProjectResources:
         base_directory: str | Path | None = None,
         data_roots: Iterable[str | Path] = (),
     ) -> None:
-        root = self._existing_directory(project_root, "approved project root")
+        root = _existing_directory(project_root, "approved project root")
 
         base = Path(base_directory) if base_directory is not None else root
         try:
@@ -157,7 +308,7 @@ class ProjectResources:
         try:
             approved.append(self._approve(project_root, root))
             for candidate in data_roots:
-                resolved = self._existing_directory(candidate, "approved data root")
+                resolved = _existing_directory(candidate, "approved data root")
                 approved.append(self._approve(candidate, resolved))
         except BaseException:
             for opened in approved:
@@ -183,21 +334,11 @@ class ProjectResources:
         for descriptor in descriptors:
             os.close(descriptor)
 
-    @staticmethod
-    def _existing_directory(candidate: str | Path, label: str) -> Path:
-        try:
-            resolved = Path(candidate).resolve(strict=True)
-        except OSError as error:
-            raise ValueError(f"{label} must exist") from error
-        if not resolved.is_dir():
-            raise ValueError(f"{label} must be a directory")
-        return resolved
-
     def _approve(self, written: str | Path, resolved: Path) -> _ApprovedRoot:
         """Open one approved root and record the spellings that name it.
 
-        R021-2 canonicalizes and opens a root when the runner selects it, so
-        R021-15 can exempt the anchor: nothing above this descriptor can be
+        R021-3 canonicalizes and opens a root when it is selected, so
+        R021-17 can exempt the anchor: nothing above this descriptor can be
         swapped between validation and ingestion.
         """
         descriptor = -1
@@ -250,7 +391,7 @@ class ProjectResources:
         return (status.st_dev, status.st_ino, stat.S_IFMT(status.st_mode))
 
     def _anchor(self, written_path: str) -> _Anchor:
-        """Choose the approved root a written path resolves from (R021-13)."""
+        """Choose the approved root a written path resolves from (R021-15)."""
         condition = classify_project_path(written_path)
         if condition is not None:
             raise ResourceFailure(condition, written_path)
