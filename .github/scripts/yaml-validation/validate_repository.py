@@ -9692,6 +9692,7 @@ def check_yaml_files(root: Path):
     )
     errors.extend(validate_examples_layout(root))
     errors.extend(validate_examples_index(root))
+    warnings.extend(validate_join_key_inference(root))
     errors.extend(validate_expected_error_contracts(root))
     errors.extend(validate_csv_shapes(root))
     errors.extend(validate_example_readmes(root))
@@ -9857,6 +9858,73 @@ def validate_examples_index(root: Path):
                     errors.append(f"ERROR: {dname} title description '{title_desc}' does not match index '{indexed_entries[dname]}'")
 
     return errors
+
+QUALIFIED_REFERENCE = re.compile(r'\b([A-Za-z][A-Za-z0-9_]*)\.([A-Za-z][A-Za-z0-9_]*)\b')
+
+
+def spec_qualified_datasets(spec):
+    """Return dataset qualifiers referenced as DATASET.COLUMN in a spec."""
+    found = set()
+
+    def visit(node):
+        if isinstance(node, str):
+            for match in QUALIFIED_REFERENCE.finditer(node):
+                found.add(match.group(1))
+        elif isinstance(node, dict):
+            for value in node.values():
+                visit(value)
+        elif isinstance(node, list):
+            for value in node:
+                visit(value)
+
+    visit(spec)
+    return found
+
+
+def validate_join_key_inference(root: Path):
+    """Surface the applicable keys R003 infers for every qualified source.
+
+    Applicable keys are output keys whose names also exist on the right
+    side, so a same-named column silently widens the join. Reporting the
+    inferred keys per dataset lets a reviewer see the join.
+    """
+    warnings = []
+    examples_dir = root / 'yaml' / 'examples'
+    if not examples_dir.exists():
+        return warnings
+    for ex_dir in sorted(examples_dir.iterdir()):
+        if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
+            continue
+        for spec_path in example_spec_paths(ex_dir):
+            try:
+                with open(spec_path, 'r', encoding='utf-8') as handle:
+                    spec = yaml.load(handle, Loader=UniqueKeyLoader)
+            except Exception:
+                continue
+            if not isinstance(spec, dict):
+                continue
+            keys = spec.get('keys') or []
+            datasets = spec.get('datasets') or {}
+            base = spec.get('base')
+            if not isinstance(keys, list) or not isinstance(datasets, dict):
+                continue
+            for qualifier in sorted(spec_qualified_datasets(spec)):
+                if qualifier == base or qualifier not in datasets:
+                    continue
+                right = ex_dir / str(datasets[qualifier])
+                try:
+                    with open(right, 'r', encoding='utf-8', newline='') as handle:
+                        header = next(csv.reader(handle))
+                except (OSError, StopIteration):
+                    continue
+                applicable = [key for key in keys if key in header]
+                label = spec_path.relative_to(root)
+                warnings.append(
+                    f"WARNING: {label}: qualified source {qualifier} "
+                    f"matches on keys [{', '.join(applicable)}]"
+                )
+    return warnings
+
 
 def validate_examples_layout(root: Path):
     errors = []

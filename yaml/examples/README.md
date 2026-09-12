@@ -42,6 +42,7 @@ the safest correction and shows the smallest useful YAML change.
 | Example | Derives |
 |---|---|
 | [`adam-adae-death-outcome`](adam-adae-death-outcome/) | carry each subject's death onto every event |
+| [`adam-adae-event-severity`](adam-adae-event-severity/) | carry each event's severity from its supplemental record |
 | [`adam-adae-occurrence-flags`](adam-adae-occurrence-flags/) | flag the first occurrence at three levels |
 | [`adam-adae-partial-dates`](adam-adae-partial-dates/) | impute partial dates |
 | [`adam-adae-post-dose-onset`](adam-adae-post-dose-onset/) | classify an event by the moment it started |
