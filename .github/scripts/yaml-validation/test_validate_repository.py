@@ -1,4 +1,5 @@
 import copy
+import importlib
 import importlib.util
 import math
 import os
@@ -13,11 +14,11 @@ from pathlib import Path
 import yaml
 
 
-TOOL_PATH = Path(__file__).parent / "validate_repository.py"
-SPEC = importlib.util.spec_from_file_location("validate_repository", TOOL_PATH)
-assert SPEC is not None and SPEC.loader is not None
-VALIDATOR = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(VALIDATOR)
+VALIDATION_SCRIPT_DIR = Path(__file__).parent
+TOOL_PATH = VALIDATION_SCRIPT_DIR / "validate_repository.py"
+if str(VALIDATION_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(VALIDATION_SCRIPT_DIR))
+VALIDATOR = importlib.import_module("yamaa_validation.repository")
 
 BLOCKER_PATH = Path(__file__).parent / 'check_validation_blockers.py'
 BLOCKER_SPEC = importlib.util.spec_from_file_location(
@@ -34,6 +35,26 @@ EXECUTION_SPEC = importlib.util.spec_from_file_location(
 assert EXECUTION_SPEC is not None and EXECUTION_SPEC.loader is not None
 EXECUTION_CHECK = importlib.util.module_from_spec(EXECUTION_SPEC)
 EXECUTION_SPEC.loader.exec_module(EXECUTION_CHECK)
+
+
+class TestValidationImports(unittest.TestCase):
+    def test_source_text_component_imports_without_repository(self):
+        code = (
+            "import sys\n"
+            f"sys.path.insert(0, {str(VALIDATION_SCRIPT_DIR)!r})\n"
+            "from yamaa_validation import validate_ascii_sources\n"
+            "assert callable(validate_ascii_sources)\n"
+            "assert 'yamaa_validation.repository' not in sys.modules\n"
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = subprocess.run(
+                [sys.executable, "-c", code],
+                cwd=temp_dir,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 class TestYamlLoader(unittest.TestCase):
