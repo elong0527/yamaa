@@ -8,7 +8,17 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
-from yamaa.expressions import PredicateAst, PredicateError, parse_predicate
+from yamaa.expressions import (
+    NumericError,
+    PredicateAst,
+    PredicateError,
+    TemplateError,
+    numeric_identifiers,
+    parse_numeric_cached,
+    parse_predicate,
+    parse_template_cached,
+    template_identifiers,
+)
 from yamaa.io.source import LoadedDataset
 from yamaa.models import ColumnType, ConditionPhase, TypedTable
 from yamaa.odm import BindingFailure, BindingPlan, BoundReference, build_binding_plan
@@ -37,6 +47,9 @@ class ExecutionDiagnostic(_FrozenModel):
     phase: ConditionPhase
     condition: str = Field(min_length=1)
     spec_paths: tuple[str, ...] = Field(min_length=1)
+    # The committed error contracts name the requirement each failure is
+    # reported against; a failure that has not been given one omits it.
+    requirement: str | None = Field(default=None, pattern=r"^R[0-9]{3}-[0-9]+$")
     context: dict[str, JsonValue]
 
 
@@ -107,12 +120,15 @@ class _Reference:
     path: str
     expected_type: ColumnType | None = None
     current_value_available: bool = False
+    # The R007 requirement the owning operation's input type is held to.
+    requirement: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class _ExpressionInfo:
     references: tuple[_Reference, ...]
     unsupported: tuple[UnsupportedFeature, ...]
+    diagnostics: tuple[ExecutionDiagnostic, ...] = ()
 
 
 def _diagnostic(
@@ -121,12 +137,14 @@ def _diagnostic(
     context: dict[str, JsonValue],
     *,
     phase: ConditionPhase = "validation",
+    requirement: str | None = None,
 ) -> ExecutionDiagnostic:
     paths = (spec_path,) if isinstance(spec_path, str) else tuple(spec_path)
     return ExecutionDiagnostic(
         phase=phase,
         condition=condition,
         spec_paths=paths,
+        requirement=requirement,
         context=context,
     )
 
@@ -138,7 +156,7 @@ def _expression_path(path: str, derivation: HandledExpression) -> str:
 
 
 def _deduplicate_references(references: Sequence[_Reference]) -> tuple[_Reference, ...]:
-    seen: set[tuple[str, str, ColumnType | None, bool]] = set()
+    seen: set[tuple[str, str, ColumnType | None, bool, str | None]] = set()
     ordered: list[_Reference] = []
     for reference in references:
         identity = (
@@ -146,6 +164,7 @@ def _deduplicate_references(references: Sequence[_Reference]) -> tuple[_Referenc
             reference.path,
             reference.expected_type,
             reference.current_value_available,
+            reference.requirement,
         )
         if identity not in seen:
             ordered.append(reference)
@@ -153,10 +172,22 @@ def _deduplicate_references(references: Sequence[_Reference]) -> tuple[_Referenc
     return tuple(ordered)
 
 
+# The operations whose `source` names one variable of a stated input type.
+_TYPED_SOURCES: dict[str, tuple[ColumnType | None, str]] = {
+    "mapping": ("str", "R007-20"),
+    "str_extract": ("str", "R007-24"),
+    "str_upper": ("str", "R007-24"),
+    "str_lower": ("str", "R007-24"),
+    "cut": (None, "R007-22"),
+}
+
+
 def _expression_info(
     expression: Expression,
     path: str,
     supported_operations: Collection[str],
+    *,
+    column_phase: bool = True,
 ) -> _ExpressionInfo:
     operation = expression.operation
     operation_path = f"{path}.{operation}"
@@ -170,18 +201,157 @@ def _expression_info(
 
     payload = expression.root[operation]
     references: list[_Reference] = []
+    unsupported: list[UnsupportedFeature] = []
+    diagnostics: list[ExecutionDiagnostic] = []
+
+    def nest(nested: object, nested_path: str) -> None:
+        """Collect one expression R007-3 permits this operation to nest."""
+        if not isinstance(nested, Mapping) or len(nested) != 1:
+            return
+        info = _expression_info(
+            Expression.model_validate(dict(nested)),
+            nested_path,
+            supported_operations,
+            column_phase=column_phase,
+        )
+        references.extend(info.references)
+        unsupported.extend(info.unsupported)
+        diagnostics.extend(info.diagnostics)
+
     if operation == "source":
         variable = payload if isinstance(payload, str) else payload.get("variable")
         if isinstance(variable, str):
             references.append(_Reference(variable, operation_path))
-    elif operation == "mapping" and isinstance(payload, Mapping):
+    elif operation in _TYPED_SOURCES and isinstance(payload, Mapping):
         variable = payload.get("source")
+        expected, requirement = _TYPED_SOURCES[operation]
         if isinstance(variable, str):
-            references.append(_Reference(variable, f"{operation_path}.source", "str"))
+            references.append(
+                _Reference(
+                    variable,
+                    f"{operation_path}.source",
+                    expected,
+                    requirement=requirement,
+                )
+            )
+    elif operation in {"coalesce", "greatest", "least"} and isinstance(
+        payload, Mapping
+    ):
+        sources = payload.get("sources")
+        if isinstance(sources, Sequence) and not isinstance(sources, str):
+            references.extend(
+                _Reference(name, f"{operation_path}.sources[{index}]")
+                for index, name in enumerate(sources)
+                if isinstance(name, str)
+            )
+    elif operation == "compute" and isinstance(payload, Mapping):
+        diagnostics.extend(
+            _compute_references(payload, operation_path, references, column_phase)
+        )
+    elif operation == "str_template":
+        template = payload if isinstance(payload, str) else None
+        if isinstance(payload, Mapping):
+            template = payload.get("template")
+        if isinstance(template, str):
+            diagnostics.extend(
+                _template_references(template, operation_path, references)
+            )
+    elif operation == "str_concat" and isinstance(payload, Mapping):
+        sources = payload.get("sources")
+        if isinstance(sources, Sequence) and not isinstance(sources, str):
+            for index, nested in enumerate(sources):
+                nest(nested, f"{operation_path}.sources[{index}]")
+    elif operation == "case" and isinstance(payload, Mapping):
+        branches = payload.get("branches")
+        if isinstance(branches, Sequence) and not isinstance(branches, str):
+            for index, branch in enumerate(branches):
+                if not isinstance(branch, Mapping):
+                    continue
+                branch_path = f"{operation_path}.branches[{index}]"
+                when = branch.get("when")
+                if isinstance(when, str):
+                    ast = _parse_predicate_at(when, f"{branch_path}.when", diagnostics)
+                    if ast is not None:
+                        references.extend(
+                            _Reference(name, f"{branch_path}.when")
+                            for name in _predicate_identifiers(ast)
+                        )
+                nest(branch.get("then"), f"{branch_path}.then")
+        if "otherwise" in payload:
+            nest(payload["otherwise"], f"{operation_path}.otherwise")
+
     return _ExpressionInfo(
         references=_deduplicate_references(references),
-        unsupported=(),
+        unsupported=tuple(unsupported),
+        diagnostics=tuple(diagnostics),
     )
+
+
+def _compute_references(
+    payload: Mapping[str, object],
+    operation_path: str,
+    references: list[_Reference],
+    column_phase: bool,
+) -> list[ExecutionDiagnostic]:
+    """Collect R010 identifiers, or report why the formula cannot be read."""
+    expr = payload.get("expr")
+    if not isinstance(expr, str):
+        return []
+    expr_path = f"{operation_path}.expr"
+    try:
+        ast = parse_numeric_cached(expr)
+    except NumericError as error:
+        return [
+            ExecutionDiagnostic(
+                phase="validation",
+                condition=error.condition,
+                spec_paths=(expr_path,),
+                requirement=error.requirement,
+                context={"expr": expr, **error.context},
+            )
+        ]
+    diagnostics: list[ExecutionDiagnostic] = []
+    for name in numeric_identifiers(ast):
+        if column_phase and "." in name:
+            # R010-3: only a declared R015 record lookup may qualify a name
+            # during column derivation, and no lookup executes yet.
+            diagnostics.append(
+                ExecutionDiagnostic(
+                    phase="validation",
+                    condition="qualified_identifier",
+                    spec_paths=(expr_path,),
+                    requirement="R010-38",
+                    context={"expr": expr, "identifier": name},
+                )
+            )
+            continue
+        references.append(_Reference(name, expr_path))
+    return diagnostics
+
+
+def _template_references(
+    template: str,
+    operation_path: str,
+    references: list[_Reference],
+) -> list[ExecutionDiagnostic]:
+    """Collect R012 placeholders, or report a template outside the grammar."""
+    try:
+        parts = parse_template_cached(template)
+    except TemplateError as error:
+        return [
+            ExecutionDiagnostic(
+                phase="validation",
+                condition=error.condition,
+                spec_paths=(operation_path,),
+                requirement=error.requirement,
+                context=error.context,
+            )
+        ]
+    references.extend(
+        _Reference(name, f"{operation_path}.template", "str", requirement="R007-24")
+        for name in template_identifiers(parts)
+    )
+    return []
 
 
 def _predicate_identifiers(ast: PredicateAst) -> tuple[str, ...]:
@@ -214,6 +384,7 @@ def _parse_predicate_at(
                 "invalid_predicate",
                 path,
                 {"predicate": text, "position": error.position},
+                requirement="R004-31",
             )
         )
         return None
@@ -226,11 +397,19 @@ def _plan_derivation(
     supported_operations: Collection[str],
     diagnostics: list[ExecutionDiagnostic],
     unsupported: list[UnsupportedFeature],
+    *,
+    column_phase: bool = True,
 ) -> tuple[PlannedDerivation, tuple[_Reference, ...]]:
     value_path = _expression_path(path, declaration)
-    info = _expression_info(declaration.value, value_path, supported_operations)
+    info = _expression_info(
+        declaration.value,
+        value_path,
+        supported_operations,
+        column_phase=column_phase,
+    )
     references = list(info.references)
     unsupported.extend(info.unsupported)
+    diagnostics.extend(info.diagnostics)
 
     override_predicates: list[PredicateAst] = []
     for index, override in enumerate(declaration.override or ()):
@@ -250,7 +429,9 @@ def _plan_derivation(
             override.value,
             f"{override_path}.value",
             supported_operations,
+            column_phase=column_phase,
         )
+        diagnostics.extend(override_info.diagnostics)
         references.extend(
             _Reference(
                 reference.name,
@@ -341,6 +522,7 @@ def _validate_qualified_reference(
                     "expected": reference.expected_type,
                     "actual": actual,
                 },
+                requirement=reference.requirement,
             )
         )
 
@@ -697,6 +879,7 @@ def plan_execution(
                     supported_operations,
                     diagnostics,
                     unsupported,
+                    column_phase=False,
                 )
                 derivations[name] = planned
                 row_references[(index, name)] = references
@@ -748,6 +931,7 @@ def plan_execution(
                                     "expected": reference.expected_type,
                                     "actual": column_types[reference.name],
                                 },
+                                requirement=reference.requirement,
                             )
                         )
 
@@ -773,6 +957,7 @@ def plan_execution(
                         "dependency_cycle",
                         paths,
                         {"cycle": list(cycle)},
+                        requirement="R001-41",
                     )
                 )
             ordered = _topological_row_order(derivations, column_order)
@@ -833,6 +1018,7 @@ def plan_execution(
                             "expected": reference.expected_type,
                             "actual": column_types[reference.name],
                         },
+                        requirement=reference.requirement,
                     )
                 )
 
@@ -854,7 +1040,12 @@ def plan_execution(
             dict.fromkeys(by_name[name].expression_path for name in cycle[:-1])
         )
         diagnostics.append(
-            _diagnostic("dependency_cycle", paths, {"cycle": list(cycle)})
+            _diagnostic(
+                "dependency_cycle",
+                paths,
+                {"cycle": list(cycle)},
+                requirement="R001-41",
+            )
         )
 
     for planned in column_plans:

@@ -11,7 +11,6 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Literal
 
-import regress
 from pydantic import JsonValue
 
 from yamaa.expressions import (
@@ -36,6 +35,7 @@ from yamaa.models import (
     normalize_runtime_value,
     runtime_type_name,
 )
+from yamaa.regex import Regex, RegexError, compile_pattern
 from yamaa.specification.models import Column, ColumnType, Expression
 from yamaa.verification.diagnostics import (
     REPORTED_KEYS,
@@ -43,10 +43,6 @@ from yamaa.verification.diagnostics import (
     VerificationError,
     VerificationFailure,
 )
-
-# R022 pins one engine for every pattern in the language; `matches` is a
-# search, so the pattern source is compiled as written and is not anchored.
-_REGEX_FLAGS = "u"
 
 _NUMERIC: frozenset[ColumnType] = frozenset({"int", "float"})
 
@@ -445,18 +441,20 @@ def _max_length(
 
 def _pattern(
     arguments: Mapping[str, JsonValue], column: Column, spec_path: str
-) -> regress.Regex:
+) -> Regex:
     _require_type(column, frozenset({"str"}), spec_path)
     pattern = arguments.get("pattern")
     if not isinstance(pattern, str):
         raise DeclarationError(spec_path, "R009-23", "matches requires a pattern")
     try:
-        return regress.Regex(pattern, _REGEX_FLAGS)
-    except regress.RegressError as error:
+        # `matches` is a search, so the pattern source is compiled as written
+        # and is not anchored.
+        return compile_pattern(pattern)
+    except RegexError as error:
         raise DeclarationError(
             f"{spec_path}.pattern",
             "R022-27",
-            str(error),
+            error.reason,
             condition="invalid_regex",
             context={"pattern": pattern},
         ) from error

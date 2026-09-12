@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from yamaa.expressions import (
     ExpressionDispatcher,
@@ -17,7 +17,14 @@ from yamaa.expressions import (
 from yamaa.io import Artifact, ArtifactDiagnostic, ArtifactError, build_artifact
 from yamaa.io.polars import frame_from_values, runtime_rows
 from yamaa.io.source import LoadedDataset, SourceError
-from yamaa.models import ConditionResult, TypedColumn, TypedTable
+from yamaa.models import (
+    MISSING,
+    ConditionResult,
+    DateTimeValue,
+    DateValue,
+    TypedColumn,
+    TypedTable,
+)
 from yamaa.odm import BindingIndex
 from yamaa.planning import (
     ExecutionDiagnostic,
@@ -135,6 +142,7 @@ def _verification_diagnostics(
             phase=failure.phase,
             condition=failure.condition,
             spec_paths=failure.spec_paths,
+            requirement=failure.requirement,
             context=failure.context,
         )
         for failure in failures
@@ -220,6 +228,51 @@ def _evaluate_row_filter(
     return result.value is TruthValue.TRUE
 
 
+# The phases whose failures name the record they happened on. A failure
+# decided before any row exists reports no key.
+_ROW_PHASES = frozenset({"derivation", "mapping", "row_construction", "convert"})
+
+
+def _offending_keys(
+    candidate: _CandidateRow,
+    keys: Sequence[str],
+) -> list[JsonValue] | None:
+    """Return the offending record's key values, when they are known.
+
+    A column is derived in R001 order, so a key column the failing derivation
+    precedes has no value; reporting a partial key would be worse than
+    reporting none.
+    """
+    if not keys or any(name not in candidate.values for name in keys):
+        return None
+    return [{name: _json_key(candidate.values[name]) for name in keys}]
+
+
+def _json_key(value: object) -> JsonValue:
+    if value is MISSING:
+        return None
+    if isinstance(value, (DateValue, DateTimeValue)):
+        return value.to_text()
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def _with_keys(
+    diagnostic: ExecutionDiagnostic,
+    candidate: _CandidateRow,
+    keys: Sequence[str],
+) -> ExecutionDiagnostic:
+    if diagnostic.phase not in _ROW_PHASES or "keys" in diagnostic.context:
+        return diagnostic
+    offending = _offending_keys(candidate, keys)
+    if offending is None:
+        return diagnostic
+    return diagnostic.model_copy(
+        update={"context": {**diagnostic.context, "keys": offending}}
+    )
+
+
 def _evaluate_one(
     planned: PlannedDerivation,
     column_types: Mapping[str, str],
@@ -227,6 +280,7 @@ def _evaluate_one(
     index: BindingIndex,
     dispatcher: ExpressionDispatcher,
     counter: HandlerCounter,
+    keys: Sequence[str] = (),
 ) -> object:
     try:
         return evaluate_derivation(
@@ -238,7 +292,9 @@ def _evaluate_one(
             counter,
         )
     except LifecycleCondition as error:
-        raise _ExecutionAbort([_diagnostic_from_condition(error)]) from error
+        raise _ExecutionAbort(
+            [_with_keys(_diagnostic_from_condition(error), candidate, keys)]
+        ) from error
 
 
 def _register_handler_paths(plan, counter: HandlerCounter) -> None:
@@ -278,6 +334,7 @@ def _construct_rows(
                     index,
                     dispatcher,
                     counter,
+                    plan.specification.keys,
                 )
             candidates.append(candidate)
     return candidates
@@ -326,6 +383,7 @@ def _derive_columns(
                 index,
                 dispatcher,
                 counter,
+                specification.keys,
             )
             for candidate in candidates
         ]

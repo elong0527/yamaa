@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-import regress
 from pydantic import JsonValue
 
+from yamaa.regex import RegexError, compile_pattern, full_match
 from yamaa.specification._yaml import read_yaml_document
 from yamaa.specification.diagnostics import (
     SpecificationError,
@@ -290,9 +290,9 @@ def _descriptor_issues(
             issues.append(f"{path}: pattern must be a string")
         else:
             try:
-                regress.Regex(f"^(?:{pattern})$", "u")
-            except regress.RegressError as error:
-                issues.append(f"{path}: invalid pattern {pattern!r}: {error}")
+                compile_pattern(f"^(?:{pattern})$")
+            except RegexError as error:
+                issues.append(f"{path}: invalid pattern {pattern!r}: {error.reason}")
 
     minimum = descriptor.get("min_length")
     if "min_length" in descriptor:
@@ -537,17 +537,17 @@ def _validate_constraints(
     pattern = descriptor.get("pattern")
     if pattern is not None and isinstance(value, str):
         try:
-            matched = regress.Regex(f"^(?:{pattern})$", "u").find(value)
-        except regress.RegressError as error:
+            matched = full_match(pattern, value)
+        except RegexError as error:
             diagnostics.append(
                 _diagnostic(
                     path,
                     "invalid_regex",
-                    {"pattern": pattern, "reason": str(error)},
+                    {"pattern": pattern, "reason": error.reason},
                 )
             )
         else:
-            if matched is None:
+            if not matched:
                 diagnostics.append(
                     _diagnostic(
                         path,

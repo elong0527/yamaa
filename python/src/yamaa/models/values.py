@@ -164,6 +164,23 @@ class RuntimeCondition(_FrozenModel):
     condition: str = Field(min_length=1)
     context: dict[str, JsonValue] = Field(default_factory=dict)
     applicable_handler: HandlerName | None = None
+    requirement: str | None = Field(default=None, pattern=r"^R[0-9]{3}-[0-9]+$")
+    # The payload field the condition is about, relative to the operation, so
+    # a reported path names `str_extract.group` rather than `str_extract`.
+    path_suffix: str | None = Field(default=None, min_length=1)
+
+
+class HandlerObservation(_FrozenModel):
+    """One handler that fired inside a nested expression.
+
+    R008-21 counts every handler path, and R007-3 lets `case` and
+    `str_concat` nest an expression that owns handlers of its own. The path
+    is relative to the payload of the operation that returned this result,
+    so the caller that knows the specification path can complete it.
+    """
+
+    path: str = Field(min_length=1)
+    handler: HandlerName
 
 
 class ValueResult(_FrozenModel):
@@ -172,6 +189,7 @@ class ValueResult(_FrozenModel):
     status: Literal["value"] = "value"
     value: RuntimeValue
     handled_by: HandlerName | None = None
+    observations: tuple[HandlerObservation, ...] = ()
 
 
 class ConditionResult(_FrozenModel):
@@ -196,6 +214,7 @@ def _condition(
     condition: str,
     context: dict[str, JsonValue],
     applicable_handler: HandlerName | None = None,
+    requirement: str | None = None,
 ) -> ConditionResult:
     return ConditionResult(
         condition=RuntimeCondition(
@@ -203,6 +222,7 @@ def _condition(
             condition=condition,
             context=context,
             applicable_handler=applicable_handler,
+            requirement=requirement,
         )
     )
 

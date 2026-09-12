@@ -1,17 +1,36 @@
 """Portable expression and predicate evaluation helpers."""
 
 from yamaa.expressions.core import (
+    CORE_EXPRESSION_HANDLERS,
     AbsentValue,
-    ExpressionDispatcher,
     ExpressionHandler,
     ExpressionInput,
     FailedResolution,
     MappingResolver,
     MultipleMatchResolver,
+    NestedDispatcher,
     Resolution,
     ResolvedValue,
     Resolver,
+    evaluate_nested,
+    expression_condition,
+    handler_value,
+)
+from yamaa.expressions.dispatch import (
+    DEFAULT_EXPRESSION_OPERATIONS,
+    ExpressionDispatcher,
+    build_expression_handlers,
     evaluate_expression,
+)
+from yamaa.expressions.numeric import (
+    FUNCTION_ARITIES,
+    PROHIBITED_KEYWORDS,
+    NumericAst,
+    NumericError,
+    evaluate_numeric,
+    numeric_identifiers,
+    parse_numeric,
+    parse_numeric_cached,
 )
 from yamaa.expressions.predicates import (
     PredicateAst,
@@ -21,9 +40,22 @@ from yamaa.expressions.predicates import (
     TruthValue,
     evaluate_predicate,
     parse_predicate,
+    parse_predicate_cached,
 )
+from yamaa.expressions.strings import (
+    TemplateError,
+    TemplatePart,
+    parse_template,
+    parse_template_cached,
+    template_identifiers,
+)
+from yamaa.expressions.text import ascii_lower, ascii_upper
 
 __all__ = [
+    "CORE_EXPRESSION_HANDLERS",
+    "DEFAULT_EXPRESSION_OPERATIONS",
+    "FUNCTION_ARITIES",
+    "PROHIBITED_KEYWORDS",
     "AbsentValue",
     "ExpressionDispatcher",
     "ExpressionHandler",
@@ -31,6 +63,9 @@ __all__ = [
     "FailedResolution",
     "MappingResolver",
     "MultipleMatchResolver",
+    "NestedDispatcher",
+    "NumericAst",
+    "NumericError",
     "PredicateAst",
     "PredicateError",
     "PredicateResult",
@@ -38,8 +73,24 @@ __all__ = [
     "Resolution",
     "ResolvedValue",
     "Resolver",
+    "TemplateError",
+    "TemplatePart",
     "TruthValue",
+    "ascii_lower",
+    "ascii_upper",
+    "build_expression_handlers",
     "evaluate_expression",
+    "evaluate_nested",
+    "evaluate_numeric",
     "evaluate_predicate",
+    "expression_condition",
+    "handler_value",
+    "numeric_identifiers",
+    "parse_numeric",
+    "parse_numeric_cached",
     "parse_predicate",
+    "parse_predicate_cached",
+    "parse_template",
+    "parse_template_cached",
+    "template_identifiers",
 ]
