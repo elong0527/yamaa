@@ -23,12 +23,12 @@ REPOSITORY = "https://github.com/elong0527/yamaa"
 OUTCOMES = (
     (
         "positive",
-        "Positive examples",
+        "Examples",
         "Each runs to completion and produces the artifact in expected/.",
     ),
     (
         "negative",
-        "Rejected examples",
+        "Anti-pattern",
         "Each must fail, and expected/error.yaml pins the error it raises.",
     ),
 )

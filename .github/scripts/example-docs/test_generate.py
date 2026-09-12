@@ -181,8 +181,8 @@ class DashboardTests(unittest.TestCase):
         self.assertLess(text.index('id="negative"'), text.index("negative-adsl-two.html"))
         # One shared domain heading per group, not one shared between them.
         self.assertEqual(text.count("<h3>ADaM ADSL</h3>"), 2)
-        self.assertIn('<a href="#positive">Positive examples (1)</a>', text)
-        self.assertIn('<a href="#negative">Rejected examples (1)</a>', text)
+        self.assertIn('<a href="#positive">Examples (1)</a>', text)
+        self.assertIn('<a href="#negative">Anti-pattern (1)</a>', text)
 
     def test_gallery_omits_a_group_with_no_examples(self):
         text = generate.render_index([("adam-adsl-one", "ADaM ADSL: derive", "ADaM ADSL")]).decode("ascii")

@@ -59,9 +59,9 @@ link, and again from its footer between the previous and next example. The
 header link is what makes the gallery reachable from a long page without
 scrolling to the end of it.
 
-The gallery lists positive examples before rejected ones, each group headed by
-its own count and subdivided by the standard and domain in the example title.
-A `negative-` directory name is what puts an example in the second group, the
+The gallery lists `Examples` before `Anti-pattern`, each group headed by its
+own count and subdivided by the standard and domain in the example title. A
+`negative-` directory name is what puts an example in the second group, the
 same test the repository validator applies. The two are separate contracts --
 one must produce an artifact, the other must refuse to -- so the gallery does
 not interleave them by domain. Links at the top of the page jump to either
