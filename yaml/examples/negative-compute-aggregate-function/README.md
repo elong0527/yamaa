@@ -1,7 +1,5 @@
 # ADaM ADLB: reject a total written as a formula
 
-[Back to the example index](../README.md)
-
 This example uses collected laboratory results to attempt one record per
 subject and parameter:
 

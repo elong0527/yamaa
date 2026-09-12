@@ -1,7 +1,5 @@
 # ADaM ADLB: reject a baseline chosen between two same-day results
 
-[Back to the example index](../README.md)
-
 This example uses collected lab data with ADSL to prepare one record per
 subject, parameter, and collected result:
 

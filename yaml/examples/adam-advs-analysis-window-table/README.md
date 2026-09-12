@@ -1,7 +1,5 @@
 # ADaM ADVS: assign analysis windows from the study's window table
 
-[Back to the example index](../README.md)
-
 This example uses a pre-derived ADVS slice and one study-wide analysis window
 table shared by all parameters to derive one row per record:
 

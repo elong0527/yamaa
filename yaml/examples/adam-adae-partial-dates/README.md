@@ -1,7 +1,5 @@
 # ADaM ADAE: impute partial dates
 
-[Back to the example index](../README.md)
-
 This example uses sample AE and ADSL data and a `yamaa` specification to derive
 one row per adverse event:
 

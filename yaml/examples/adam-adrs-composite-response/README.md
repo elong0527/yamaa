@@ -1,7 +1,5 @@
 # ADaM ADRS: combine efficacy, safety, and discontinuation into one response
 
-[Back to the example index](../README.md)
-
 This example uses a pre-derived ADRS slice with ADSL and a `yamaa`
 specification to derive one row per subject:
 

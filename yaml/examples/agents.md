@@ -44,8 +44,6 @@ Name the directory for what it derives, not for the construct it uses:
 A reader of an example README wants to know what the output means. Write:
 
 - a title of the form `# <STANDARD> <DOMAIN>: <what the example does>`;
-- the back-link `[Back to the example index](../README.md)` directly under
-  the title, written there by the gallery generator rather than by hand;
 - one sentence naming the input sources and the output grain, ending in a
   colon;
 - one bullet per output variable, in output order, saying what its value means
@@ -212,9 +210,6 @@ check merely to make the sample pass.
 
 ## Checks to run before finishing
 
-    # every listing of the examples matches the directories themselves
-    python3 ../../.github/workflows/generate_example_gallery.py --check
-
     # every declared example column has a non-empty, human-readable label
     ruby ../../.github/scripts/examples/check_labels.rb
 
@@ -262,13 +257,9 @@ check reports is a variable the README does not explain.
    For a positive inherited example, also write its expected resolved YAML.
 2. Write the README to the contract above. A negative example must include its
    `## How to fix` section.
-3. Run `python3 ../../.github/workflows/generate_example_gallery.py`. It reads
-   the directories and rewrites every listing of them: the index tables in
-   `README.md`, the back-link under each example title, and the published
-   gallery and counts under `docs/`. The description it publishes is the README
-   title with the standard and domain prefix removed, so the two cannot drift
-   apart. Do not edit a generated region by hand; CI runs the same command
-   with `--check`.
+3. Add a row to the index table in `README.md`. Its `Derives` column is the
+   README title with the standard and domain prefix removed, so the two cannot
+   drift apart.
 4. Record any finding it exposes as a gap on the matching work item in the
    issue tracker, or add the example's name to the gap that already states it.
 

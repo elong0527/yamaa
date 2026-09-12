@@ -1,7 +1,5 @@
 # ADaM ADSL: reject a first treatment named after its own source
 
-[Back to the example index](../README.md)
-
 This example uses collected demographics with exposure records to attempt one
 record per subject:
 

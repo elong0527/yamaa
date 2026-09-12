@@ -1,7 +1,5 @@
 # ADaM ADRS: derive measurable disease at baseline
 
-[Back to the example index](../README.md)
-
 Derives one measurable-disease existence flag parameter per ADSL subject from
 TU tumor identification records:
 

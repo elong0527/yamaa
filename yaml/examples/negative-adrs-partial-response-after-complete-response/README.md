@@ -1,7 +1,5 @@
 # ADaM ADRS: reject a partial response recorded after a complete response
 
-[Back to the example index](../README.md)
-
 This example uses a series of collected tumour assessments to prepare one
 record per assessment:
 

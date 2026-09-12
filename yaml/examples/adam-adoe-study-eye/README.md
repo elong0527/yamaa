@@ -1,7 +1,5 @@
 # ADaM ADOE: tell the study eye from the fellow eye
 
-[Back to the example index](../README.md)
-
 This example uses collected ophthalmic measurements and subject-level eye
 assignments with a `yamaa` specification to derive one row per collected
 measurement:

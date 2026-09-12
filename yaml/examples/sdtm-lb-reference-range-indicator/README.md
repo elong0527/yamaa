@@ -1,7 +1,5 @@
 # SDTM LB: apply external reference ranges
 
-[Back to the example index](../README.md)
-
 This example uses collected laboratory results and a test-by-sex reference
 dictionary to derive one record per result:
 

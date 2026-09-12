@@ -35,14 +35,9 @@ derivation verbs with what each one is for. Start here if you are writing or
 reviewing a specification and need the language itself.
 
 **[A walkthrough of the examples](yaml-examples-walkthrough.md)**
-How an example directory is put together, which example answers which
+How the 149 example directories are put together, which example answers which
 question, and how the negative examples encode failure behavior. Start here if
 you are implementing YAMAA, or looking for a worked precedent.
-
-**[The example gallery](examples.md)**
-Every example, listed and linked: the positive ones by standard, and the
-rejected ones by the phase that stops the run. Start here if you know what you
-are looking for and want the example that already does it.
 
 ## Teaching from these pages
 
@@ -80,5 +75,4 @@ If the audience will write specifications, send them through the
 - [`yaml/`](https://github.com/elong0527/yamaa/tree/main/yaml) -- the schema
   bundle
 - [`yaml/examples/`](https://github.com/elong0527/yamaa/tree/main/yaml/examples)
-  -- the runnable examples with their exact expected output; the
-  [gallery](examples.md) lists and links every one
+  -- 167 runnable examples with exact expected output

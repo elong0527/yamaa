@@ -1,7 +1,5 @@
 # ADaM ADLB: derive absolute WBC differentials
 
-[Back to the example index](../README.md)
-
 Collected analysis records produce absolute lymphocyte results at the subject
 and visit grain:
 

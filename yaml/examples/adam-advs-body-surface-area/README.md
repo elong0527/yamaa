@@ -1,7 +1,5 @@
 # ADaM ADVS: derive a body surface area parameter
 
-[Back to the example index](../README.md)
-
 Collected ADVS vital signs records produce one output row per collected record
 plus one BSA row per complete subject and visit:
 

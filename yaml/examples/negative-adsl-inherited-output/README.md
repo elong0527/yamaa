@@ -1,7 +1,5 @@
 # ADaM ADSL: reject an inherited artifact layout
 
-[Back to the example index](../README.md)
-
 This example attempts to prepare subject records while allowing a reusable
 parent to choose which variables appear in the final dataset.
 

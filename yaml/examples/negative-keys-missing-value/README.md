@@ -1,7 +1,5 @@
 # ADaM ADVS: reject a record that no analysis visit identifies
 
-[Back to the example index](../README.md)
-
 This example uses a pre-derived ADVS slice to attempt one record per subject,
 parameter, and analysis visit:
 

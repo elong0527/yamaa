@@ -1,7 +1,5 @@
 # SDTM AE: take the effective state of a record from a transaction log
 
-[Back to the example index](../README.md)
-
 This example uses an inventory of adverse-event records with the transaction
 log that amends them to derive one record per effective adverse event:
 

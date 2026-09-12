@@ -1,7 +1,5 @@
 # ADaM ADLB: select the record closest to a window's target day
 
-[Back to the example index](../README.md)
-
 This example uses a pre-derived ADLB slice and a `yamaa` specification to
 derive one row per record:
 

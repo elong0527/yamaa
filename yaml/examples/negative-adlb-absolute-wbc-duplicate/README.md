@@ -1,7 +1,5 @@
 # ADaM ADLB: reject duplicate WBC inputs for an absolute differential
 
-[Back to the example index](../README.md)
-
 Collected analysis records attempt to produce one absolute lymphocyte result
 per subject and visit:
 

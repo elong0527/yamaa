@@ -1,7 +1,5 @@
 # ADaM ADSL: reject shared definitions from a remote location
 
-[Back to the example index](../README.md)
-
 This example attempts to prepare subject records from definitions named by a
 web address.
 

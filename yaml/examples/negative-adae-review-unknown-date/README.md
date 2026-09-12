@@ -1,7 +1,5 @@
 # ADaM ADAE: reject a review flag that names an unavailable date
 
-[Back to the example index](../README.md)
-
 The collected adverse events produce one analysis row per reported event:
 
 - `REVIEWFL` is rejected because its decision names a date that the output

@@ -1,7 +1,5 @@
 # SDTM VS: standardize collected results into the study's units
 
-[Back to the example index](../README.md)
-
 This example uses collected vital signs and a `yamaa` specification to derive
 one row per collected record, describing each vital sign on its own:
 

@@ -1,7 +1,5 @@
 # SDTM DS: number each subject's disposition records in date order
 
-[Back to the example index](../README.md)
-
 This example uses raw disposition records and a `yamaa` specification to
 derive one record per collected disposition:
 

@@ -1,7 +1,5 @@
 # SDTM VS: reject an epoch range with incomparable endpoints
 
-[Back to the example index](../README.md)
-
 This example uses one vital-sign date and an epoch table expressed in integer
 study days to attempt one output record:
 

@@ -1,7 +1,5 @@
 # ADaM ADLB: carry standardized results into analysis
 
-[Back to the example index](../README.md)
-
 This example uses one laboratory record to produce one analysis record:
 
 - `PARAMCD` identifies the laboratory test being analyzed.

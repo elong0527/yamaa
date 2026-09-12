@@ -1,7 +1,5 @@
 # ADaM ADAE: reject an event start recorded against another clock
 
-[Back to the example index](../README.md)
-
 This example uses collected adverse events to attempt one record per event:
 
 - `ASTDTM` is meant to be the moment each event started.

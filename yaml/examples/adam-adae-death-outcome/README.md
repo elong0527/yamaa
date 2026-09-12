@@ -1,7 +1,5 @@
 # ADaM ADAE: carry each subject's death onto every event
 
-[Back to the example index](../README.md)
-
 This example uses collected adverse events and demographics with a `yamaa`
 specification to derive one row per adverse event:
 

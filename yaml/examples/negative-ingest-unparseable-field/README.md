@@ -1,7 +1,5 @@
 # ADaM ADEX: reject a dose recorded with its unit
 
-[Back to the example index](../README.md)
-
 This example uses a subject-treatment inventory with its component exposure
 records to attempt one record per subject and treatment:
 

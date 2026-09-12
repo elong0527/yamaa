@@ -1,7 +1,5 @@
 # Project function: reject an unavailable project-routine contract
 
-[Back to the example index](../README.md)
-
 The source contains one numeric value, but the requested project routine
 version is not the version the selected project provides. Execution stops
 before the value is processed.

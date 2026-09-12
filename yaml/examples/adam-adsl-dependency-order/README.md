@@ -1,7 +1,5 @@
 # ADaM ADSL: derive a chain of population flags
 
-[Back to the example index](../README.md)
-
 This example uses sample DM and EX data and a `yamaa` specification to derive
 one row per subject:
 

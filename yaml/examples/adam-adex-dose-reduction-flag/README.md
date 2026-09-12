@@ -1,7 +1,5 @@
 # ADaM ADEX: derive a dose reduction flag
 
-[Back to the example index](../README.md)
-
 This example reads exposure records and returns one row per exposure record:
 
 - `EXSEQ` identifies the collected exposure record;

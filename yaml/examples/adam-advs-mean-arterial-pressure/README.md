@@ -1,7 +1,5 @@
 # ADaM ADVS: derive mean arterial pressure
 
-[Back to the example index](../README.md)
-
 Collected ADVS blood-pressure records produce one output row per collected
 record plus one MAP row per complete subject and visit:
 

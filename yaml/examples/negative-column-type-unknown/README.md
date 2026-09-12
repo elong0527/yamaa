@@ -1,7 +1,5 @@
 # ADaM ADLB: reject an analysis value with an ambiguous numeric type
 
-[Back to the example index](../README.md)
-
 This example uses collected laboratory results to attempt one record per
 result:
 

@@ -1,7 +1,5 @@
 # ADaM ADSL: reject a randomization date described twice
 
-[Back to the example index](../README.md)
-
 This example uses an ODM demographics projection to produce one record per
 subject:
 

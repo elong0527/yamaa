@@ -1,7 +1,5 @@
 # ADaM ADAE: reject an order that places one value twice
 
-[Back to the example index](../README.md)
-
 This example uses collected adverse events to attempt one record per event:
 
 - `AETERM` is the reported term for the event, and `ASTDT` the date it began.

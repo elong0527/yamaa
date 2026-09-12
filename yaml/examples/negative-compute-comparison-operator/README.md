@@ -1,7 +1,5 @@
 # ADaM ADLB: reject an above-range flag written as a formula
 
-[Back to the example index](../README.md)
-
 This example uses collected laboratory results with their reference limits to
 attempt one record per subject and parameter:
 

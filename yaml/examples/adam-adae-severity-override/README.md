@@ -1,7 +1,5 @@
 # ADaM ADAE: apply an approved severity correction
 
-[Back to the example index](../README.md)
-
 This example uses sample AE data and a `yamaa` specification to derive one row
 per adverse event:
 

@@ -1,7 +1,5 @@
 # SDTM LB: reject a result with no reference range
 
-[Back to the example index](../README.md)
-
 This example uses collected laboratory results with a table of reference limits
 by test and sex to attempt one record per result:
 

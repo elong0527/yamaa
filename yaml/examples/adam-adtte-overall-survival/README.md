@@ -1,7 +1,5 @@
 # ADaM ADTTE: derive overall survival
 
-[Back to the example index](../README.md)
-
 This example uses randomization dates, last known alive dates, and deaths to
 derive one overall-survival record per subject:
 

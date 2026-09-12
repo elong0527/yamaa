@@ -1,7 +1,5 @@
 # SDTM DM: declare the metadata a submission needs
 
-[Back to the example index](../README.md)
-
 This example uses collected DM data to produce one record per subject. `SITEID`
 is the collected site identifier:
 

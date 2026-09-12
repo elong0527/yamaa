@@ -1,7 +1,5 @@
 # ADaM ADSL: derive the safety and intent-to-treat flags
 
-[Back to the example index](../README.md)
-
 This example uses a pre-derived ADSL slice and a `yamaa` specification to
 derive one row per subject:
 

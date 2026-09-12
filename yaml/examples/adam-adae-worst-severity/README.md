@@ -1,7 +1,5 @@
 # ADaM ADAE: flag the worst-severity event per preferred term
 
-[Back to the example index](../README.md)
-
 This example uses a pre-classified ADAE slice and a `yamaa` specification to
 derive one row per adverse event:
 

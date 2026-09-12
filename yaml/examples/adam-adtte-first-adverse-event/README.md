@@ -1,7 +1,5 @@
 # ADaM ADTTE: derive the time to first adverse event
 
-[Back to the example index](../README.md)
-
 This example uses treatment start dates, end of study dates, and adverse
 events to derive one time-to-first-adverse-event record per subject:
 

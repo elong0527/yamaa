@@ -1,7 +1,5 @@
 # SDTM VS: reject a submission order over a value the dataset does not carry
 
-[Back to the example index](../README.md)
-
 This example uses collected vital signs to attempt one record per measurement:
 
 - `VSTESTCD` names the measurement, and `VSSTRESN` is its result in standard

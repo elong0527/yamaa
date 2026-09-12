@@ -1,7 +1,5 @@
 # ADaM ADSL: compute BMI from height and weight
 
-[Back to the example index](../README.md)
-
 This example uses sample DM data and a `yamaa` specification to derive one row
 per subject:
 

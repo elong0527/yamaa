@@ -1,7 +1,5 @@
 # SDTM RELREC: record relationships between events and medications
 
-[Back to the example index](../README.md)
-
 This example uses collected adverse-event and concomitant-medication data and a
 `yamaa` specification to derive one record per participation in a relationship:
 

@@ -1,7 +1,5 @@
 # ADaM ADTR: derive the current nadir
 
-[Back to the example index](../README.md)
-
 This example uses prepared target-lesion assessments to derive one row per
 subject and assessment:
 

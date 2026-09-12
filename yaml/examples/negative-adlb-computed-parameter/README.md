@@ -1,7 +1,5 @@
 # ADaM ADLB: reject a parameter computed from the dataset being built
 
-[Back to the example index](../README.md)
-
 This example uses collected liver-function results to attempt one row per
 subject, collection date, and analysis parameter:
 

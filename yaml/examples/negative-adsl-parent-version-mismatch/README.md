@@ -1,7 +1,5 @@
 # ADaM ADSL: reject shared definitions from another language version
 
-[Back to the example index](../README.md)
-
 This example attempts to prepare subject records from definitions written for
 a different version of the language.
 

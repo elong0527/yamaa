@@ -1,7 +1,5 @@
 # SDTM EX: represent a combination regimen
 
-[Back to the example index](../README.md)
-
 This example uses collected exposure records from a combination oncology
 regimen and a `yamaa` specification to derive one record per administered
 component:

@@ -1,7 +1,5 @@
 # ADaM ADAE: reject a start date completed with an unrecognised day
 
-[Back to the example index](../README.md)
-
 This example uses collected adverse events whose start dates are sometimes
 recorded without a day to attempt one record per event:
 

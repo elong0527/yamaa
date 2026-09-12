@@ -1,7 +1,5 @@
 # SDTM FA: fever occurrence
 
-[Back to the example index](../README.md)
-
 Reactogenicity temperature records from VS produce one FA fever-occurrence
 record at the source-record grain:
 

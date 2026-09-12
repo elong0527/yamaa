@@ -1,7 +1,5 @@
 # ADaM ADSL: reconcile randomization strata
 
-[Back to the example index](../README.md)
-
 This example uses demographics, disease history, and the strata recorded at
 randomization to prepare one record per subject:
 

@@ -1,7 +1,5 @@
 # ADaM ADVS: retain the latest earlier character result
 
-[Back to the example index](../README.md)
-
 This example uses character results with incomplete series and visit values to
 derive one analysis record per collected row:
 

@@ -1,7 +1,5 @@
 # ADaM ADSL: reject a smoking flag whose dictionary answers twice
 
-[Back to the example index](../README.md)
-
 This example uses collected smoking status to attempt one record per subject:
 
 - `SMOKEFL` marks a subject who reported smoking.

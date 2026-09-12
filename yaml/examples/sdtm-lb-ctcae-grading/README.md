@@ -1,7 +1,5 @@
 # SDTM LB: assign toxicity grades
 
-[Back to the example index](../README.md)
-
 This example uses haematology results with sex and a reproduced toxicity grade
 to derive one record per result:
 

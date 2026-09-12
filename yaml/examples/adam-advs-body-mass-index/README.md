@@ -1,7 +1,5 @@
 # ADaM ADVS: derive body mass index
 
-[Back to the example index](../README.md)
-
 The artifact contains collected ADVS records and one derived body mass index
 parameter per eligible subject and visit:
 

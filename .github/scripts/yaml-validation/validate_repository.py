@@ -9811,14 +9811,12 @@ def validate_examples_index(root: Path):
 
     indexed_entries = {}
     last_dir = None
-    last_line = None
     not_alphabetical = False
 
     for match in pattern.finditer(index_content):
         dname = match.group(1)
         link_target = match.group(2)
         desc = match.group(3).strip()
-        line_number = index_content.count('\n', 0, match.start()) + 1
 
         if link_target != f"{dname}/":
             errors.append(
@@ -9829,17 +9827,10 @@ def validate_examples_index(root: Path):
         if dname in indexed_entries:
             errors.append(f"ERROR: duplicate index entry for {dname}")
 
-        # The index publishes one table per section, so ordering is checked
-        # within a table: a row that does not follow another row starts a new
-        # one. Sections themselves are ordered by the gallery generator.
-        if last_line is not None and line_number != last_line + 1:
-            last_dir = None
-
         if last_dir and dname < last_dir and not not_alphabetical:
             errors.append(f"ERROR: index entries not alphabetical ({last_dir} before {dname})")
             not_alphabetical = True
         last_dir = dname
-        last_line = line_number
 
         indexed_entries[dname] = desc
 

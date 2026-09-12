@@ -1,7 +1,5 @@
 # ADaM ADSL: reject removal of a required variable property
 
-[Back to the example index](../README.md)
-
 This example attempts to prepare subject records while removing information
 needed to interpret a subject identifier.
 

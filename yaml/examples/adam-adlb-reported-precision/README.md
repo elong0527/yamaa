@@ -1,7 +1,5 @@
 # ADaM ADLB: report a result against the lower limit of normal
 
-[Back to the example index](../README.md)
-
 This example uses sample LB results and produces one row per subject and test:
 
 - `AVAL` is the collected result;

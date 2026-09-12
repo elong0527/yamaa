@@ -1,7 +1,5 @@
 # ADaM ADEX: reject a total over a field the source does not have
 
-[Back to the example index](../README.md)
-
 This example uses a subject-treatment inventory with its component exposure
 records to attempt one record per subject and treatment:
 

@@ -1,7 +1,5 @@
 # ADaM ADLB: build a BDS dataset with baseline and change
 
-[Back to the example index](../README.md)
-
 This example uses collected lab data with ADSL and a `yamaa` specification to
 derive one row per subject, parameter, and visit:
 
