@@ -2,5 +2,6 @@ phase: validation
 condition: invalid_clear
 spec_paths:
   - columns.USUBJID.type
+requirement: R017-47
 context:
   field: type

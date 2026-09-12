@@ -2,6 +2,7 @@ phase: mapping
 condition: unmapped_value
 spec_paths:
   - columns.AVALC.derivation.mapping
+requirement: R007-49
 context:
   source: RS.OVRLRESP
   value: NE

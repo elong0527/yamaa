@@ -2,6 +2,7 @@ phase: join
 condition: multiple_matches
 spec_paths:
   - record_lookups[0]
+requirement: R015-28
 context:
   record_lookup: SMQ1
   dataset: QUERY

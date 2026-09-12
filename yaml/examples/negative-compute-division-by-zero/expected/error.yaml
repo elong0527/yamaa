@@ -2,6 +2,7 @@ phase: derivation
 condition: division_by_zero
 spec_paths:
   - columns.PCHG.derivation.compute
+requirement: R010-26
 context:
   expr: "100 * (AVAL - BASE) / BASE"
   keys:
