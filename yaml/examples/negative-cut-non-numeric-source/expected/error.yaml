@@ -1,0 +1,9 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.AGEGRP.derivation.cut.source
+requirement: R007-22
+context:
+  source: SEX
+  expected: numeric
+  actual: str

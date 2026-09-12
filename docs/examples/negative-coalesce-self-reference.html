@@ -1,11 +1,11 @@
 <!doctype html>
-<!-- Generated from yaml/examples/negative-all-or-none-partial-row. Edit the source files or generator. -->
+<!-- Generated from yaml/examples/negative-coalesce-self-reference. Edit the source files or generator. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="ADaM ADSL: reject a row with only some paired dates present: README, inputs, expected output, and YAML specification.">
-  <title>ADaM ADSL: reject a row with only some paired dates present | YAMAA examples</title>
+  <meta name="description" content="ADaM ADVS: reject a severity carried from its own column: README, inputs, expected output, and YAML specification.">
+  <title>ADaM ADVS: reject a severity carried from its own column | YAMAA examples</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230c5e4b'/%3E%3Cpath d='m8 8 8 10 8-10M16 18v7' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
   <style>:root {
   color-scheme: light;
@@ -33,10 +33,8 @@ button:focus-visible, a:focus-visible, select:focus-visible, [tabindex]:focus-vi
 .brand-mark { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; background: var(--green); color: white; font-size: 18px; }
 .brand-separator { color: #9aaba4; font-weight: 400; margin: 0 5px; }
 .brand-location { font-size: 14px; font-weight: 450; letter-spacing: 0; color: var(--muted); }
-.header-links { display: flex; align-items: center; gap: 20px; }
-.source-link, .gallery-link { font-size: 14px; text-decoration: none; white-space: nowrap; }
-.source-link:hover, .gallery-link:hover { text-decoration: underline; }
-.gallery-link { font-weight: 600; }
+.source-link { font-size: 14px; text-decoration: none; white-space: nowrap; }
+.source-link:hover { text-decoration: underline; }
 .title-row { margin-top: 18px; align-items: flex-end; }
 .title-block { max-width: 900px; min-width: 0; }
 .eyebrow { margin: 0 0 6px; color: var(--green); font-size: 12px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
@@ -137,7 +135,6 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
 @media (max-width: 599px) {
   .page-header { padding: 14px 16px 18px; }
   .brand-location, .brand-separator { display: none; }
-  .header-links { gap: 12px; }
   h1 { font-size: 25px; }
   .dashboard { padding: 12px 12px 0; }
   .prose { padding: 14px 18px; }
@@ -165,81 +162,69 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
   <header class="page-header">
     <div class="brand-row">
       <div class="brand"><span class="brand-mark" aria-hidden="true">Y</span> YAMAA <span class="brand-separator">/</span> <span class="brand-location">Example explorer</span></div>
-      <nav class="header-links" aria-label="Example navigation">
-        <a class="gallery-link" href="index.html"><span aria-hidden="true">&#8592;</span> All examples</a>
-        <a class="source-link" href="https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-all-or-none-partial-row">Example source <span aria-hidden="true">&#8599;</span></a>
-      </nav>
+      <a class="source-link" href="https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-coalesce-self-reference">Example source <span aria-hidden="true">&#8599;</span></a>
     </div>
     <div class="title-row">
-      <div class="title-block"><p class="eyebrow">ADaM ADSL</p><h1>Reject a row with only some paired dates present</h1></div>
-      <dl class="metrics"><div><dt>input files</dt><dd>1</dd></div><div><dt>subjects</dt><dd>2</dd></div><div><dt>expected files</dt><dd>1</dd></div></dl>
+      <div class="title-block"><p class="eyebrow">ADaM ADVS</p><h1>Reject a severity carried from its own column</h1></div>
+      <dl class="metrics"><div><dt>input files</dt><dd>1</dd></div><div><dt>subjects</dt><dd>1</dd></div><div><dt>expected files</dt><dd>1</dd></div></dl>
     </div>
   </header>
   <main class="dashboard" aria-label="Example dashboard">
     <section id="readme" class="panel readme-panel" aria-labelledby="readme-heading">
       <header class="panel-header"><h2 id="readme-heading">README</h2><span class="panel-caption">What this example means</span></header>
-      <div class="prose" aria-label="README content"><p>This example uses collected demographics to record one row per subject:</p>
+      <div class="prose" aria-label="README content"><p>This example uses vital-sign records with a <code>yamaa</code> specification to derive
+one row per measurement:</p>
 <ul>
-<li><code>RFSTD</code> is the calendar date treatment started.</li>
-<li><code>DTHDT</code> is the date of death, missing for subjects still followed.</li>
+<li><code>SEVAL</code> is the severity recorded at the visit, or the severity carried
+forward from the earlier rows when the visit has none. A severity that
+falls back to its own column has no earlier value to carry.</li>
 </ul>
-<p>The paired-dates rule requires both dates present together or both
-absent. A subject still followed breaks the pairing, so the run is
-rejected after the dataset completes and no artifact is accepted.</p>
 <h2>How to fix</h2>
-<p>Decide which absences the study allows, then assert each side on its
-own. When every subject must have a start date but only some have died,
-require the start and leave death optional:</p>
-<pre><code class="language-yaml">columns:
-  - name: RFSTD
-    type: date
-    verifications:
-      - not_missing
+<p>Carry forward from the collected source instead of the column being
+derived. Search the collected values on the earlier rows:</p>
+<pre><code class="language-yaml">previous_non_missing:
+  source: VS.SEVAL
 </code></pre>
-<p>When two dates truly travel together, keep the pairing and correct the
-offending row instead of loosening the rule.</p>
+<p>and, when the first row may itself be missing, keep the default for that
+row only.</p>
 </div>
     </section>
     <div class="comparison-bar">
       <button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-controls="specification" aria-expanded="true" hidden><svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1.5" y="2.5" width="15" height="13" rx="2" stroke="currentColor"/><path d="M6.5 3v12" stroke="currentColor"/></svg><span>Hide Spec</span></button>
       <div class="subject-control" hidden>
         <label for="subject-select">Highlight subject</label>
-        <select id="subject-select"><option value="">All subjects</option><option value="[&quot;PILOT7&quot;,&quot;P7-811&quot;]">P7-811</option><option value="[&quot;PILOT7&quot;,&quot;P7-812&quot;]">P7-812</option></select>
+        <select id="subject-select"><option value="">All subjects</option><option value="[&quot;PILOT7&quot;,&quot;P7-921&quot;]">P7-921</option></select>
       </div>
       <span id="selection-status" class="visually-hidden" role="status" aria-live="polite"></span>
     </div>
     <div class="workbench">
       <aside id="specification" class="panel schema-panel" aria-labelledby="schema-heading">
-        <header class="panel-header"><h2 id="schema-heading">YAML specification</h2><span class="panel-caption">40 lines</span></header>
-        <div class="code-toolbar"><label class="visually-hidden" for="section-select">Jump to YAML section</label><select id="section-select" hidden><option value="">Jump to section</option><option value="yaml-line-1">schema_version</option><option value="yaml-line-2">domain</option><option value="yaml-line-3">datasets</option><option value="yaml-line-5">base</option><option value="yaml-line-6">keys</option><option value="yaml-line-8">output</option><option value="yaml-line-12">columns</option><option value="yaml-line-37">verifications</option></select></div>
-        <div class="code-scroll" tabindex="0" aria-label="Complete YAML specification"><pre><code><span class="code-line" id="yaml-line-1"><span class="line-number" aria-hidden="true">1</span><span class="code-source"><span class="yaml-key">schema_version</span>: <span class="yaml-string">&quot;1.0&quot;</span></span></span><span class="code-line" id="yaml-line-2"><span class="line-number" aria-hidden="true">2</span><span class="code-source"><span class="yaml-key">domain</span>: ADSL</span></span><span class="code-line" id="yaml-line-3"><span class="line-number" aria-hidden="true">3</span><span class="code-source"><span class="yaml-key">datasets</span>:</span></span><span class="code-line" id="yaml-line-4"><span class="line-number" aria-hidden="true">4</span><span class="code-source">  <span class="yaml-key">DM</span>: input/dm.csv</span></span><span class="code-line" id="yaml-line-5"><span class="line-number" aria-hidden="true">5</span><span class="code-source"><span class="yaml-key">base</span>: DM</span></span><span class="code-line" id="yaml-line-6"><span class="line-number" aria-hidden="true">6</span><span class="code-source"><span class="yaml-key">keys</span>: [STUDYID, USUBJID]</span></span><span class="code-line" id="yaml-line-7"><span class="line-number" aria-hidden="true">7</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-8"><span class="line-number" aria-hidden="true">8</span><span class="code-source"><span class="yaml-key">output</span>:</span></span><span class="code-line" id="yaml-line-9"><span class="line-number" aria-hidden="true">9</span><span class="code-source">  <span class="yaml-key">path</span>: adsl.csv</span></span><span class="code-line" id="yaml-line-10"><span class="line-number" aria-hidden="true">10</span><span class="code-source">  <span class="yaml-key">columns</span>: [STUDYID, USUBJID, RFSTD, DTHDT]</span></span><span class="code-line" id="yaml-line-11"><span class="line-number" aria-hidden="true">11</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-12"><span class="line-number" aria-hidden="true">12</span><span class="code-source"><span class="yaml-key">columns</span>:</span></span><span class="code-line" id="yaml-line-13"><span class="line-number" aria-hidden="true">13</span><span class="code-source">  - <span class="yaml-key">name</span>: STUDYID</span></span><span class="code-line" id="yaml-line-14"><span class="line-number" aria-hidden="true">14</span><span class="code-source">    <span class="yaml-key">type</span>: str</span></span><span class="code-line" id="yaml-line-15"><span class="line-number" aria-hidden="true">15</span><span class="code-source">    <span class="yaml-key">label</span>: Study Identifier</span></span><span class="code-line" id="yaml-line-16"><span class="line-number" aria-hidden="true">16</span><span class="code-source">    <span class="yaml-key">derivation</span>:</span></span><span class="code-line" id="yaml-line-17"><span class="line-number" aria-hidden="true">17</span><span class="code-source">      <span class="yaml-key">source</span>: DM.STUDYID</span></span><span class="code-line" id="yaml-line-18"><span class="line-number" aria-hidden="true">18</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-19"><span class="line-number" aria-hidden="true">19</span><span class="code-source">  - <span class="yaml-key">name</span>: USUBJID</span></span><span class="code-line" id="yaml-line-20"><span class="line-number" aria-hidden="true">20</span><span class="code-source">    <span class="yaml-key">type</span>: str</span></span><span class="code-line" id="yaml-line-21"><span class="line-number" aria-hidden="true">21</span><span class="code-source">    <span class="yaml-key">label</span>: Unique Subject Identifier</span></span><span class="code-line" id="yaml-line-22"><span class="line-number" aria-hidden="true">22</span><span class="code-source">    <span class="yaml-key">derivation</span>:</span></span><span class="code-line" id="yaml-line-23"><span class="line-number" aria-hidden="true">23</span><span class="code-source">      <span class="yaml-key">source</span>: DM.USUBJID</span></span><span class="code-line" id="yaml-line-24"><span class="line-number" aria-hidden="true">24</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-25"><span class="line-number" aria-hidden="true">25</span><span class="code-source">  - <span class="yaml-key">name</span>: RFSTD</span></span><span class="code-line" id="yaml-line-26"><span class="line-number" aria-hidden="true">26</span><span class="code-source">    <span class="yaml-key">type</span>: date</span></span><span class="code-line" id="yaml-line-27"><span class="line-number" aria-hidden="true">27</span><span class="code-source">    <span class="yaml-key">label</span>: Reference Start Date</span></span><span class="code-line" id="yaml-line-28"><span class="line-number" aria-hidden="true">28</span><span class="code-source">    <span class="yaml-key">derivation</span>:</span></span><span class="code-line" id="yaml-line-29"><span class="line-number" aria-hidden="true">29</span><span class="code-source">      <span class="yaml-key">source</span>: DM.RFSTDT</span></span><span class="code-line" id="yaml-line-30"><span class="line-number" aria-hidden="true">30</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-31"><span class="line-number" aria-hidden="true">31</span><span class="code-source">  - <span class="yaml-key">name</span>: DTHDT</span></span><span class="code-line" id="yaml-line-32"><span class="line-number" aria-hidden="true">32</span><span class="code-source">    <span class="yaml-key">type</span>: date</span></span><span class="code-line" id="yaml-line-33"><span class="line-number" aria-hidden="true">33</span><span class="code-source">    <span class="yaml-key">label</span>: Date of Death</span></span><span class="code-line" id="yaml-line-34"><span class="line-number" aria-hidden="true">34</span><span class="code-source">    <span class="yaml-key">derivation</span>:</span></span><span class="code-line" id="yaml-line-35"><span class="line-number" aria-hidden="true">35</span><span class="code-source">      <span class="yaml-key">source</span>: DM.DTHDTC</span></span><span class="code-line" id="yaml-line-36"><span class="line-number" aria-hidden="true">36</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-37"><span class="line-number" aria-hidden="true">37</span><span class="code-source"><span class="yaml-key">verifications</span>:</span></span><span class="code-line" id="yaml-line-38"><span class="line-number" aria-hidden="true">38</span><span class="code-source">  - <span class="yaml-key">all_or_none</span>:</span></span><span class="code-line" id="yaml-line-39"><span class="line-number" aria-hidden="true">39</span><span class="code-source">      <span class="yaml-key">id</span>: paired-death-dates</span></span><span class="code-line" id="yaml-line-40"><span class="line-number" aria-hidden="true">40</span><span class="code-source">      <span class="yaml-key">columns</span>: [RFSTD, DTHDT]</span></span></code></pre></div>
+        <header class="panel-header"><h2 id="schema-heading">YAML specification</h2><span class="panel-caption">37 lines</span></header>
+        <div class="code-toolbar"><label class="visually-hidden" for="section-select">Jump to YAML section</label><select id="section-select" hidden><option value="">Jump to section</option><option value="yaml-line-1">schema_version</option><option value="yaml-line-2">domain</option><option value="yaml-line-3">datasets</option><option value="yaml-line-5">base</option><option value="yaml-line-6">keys</option><option value="yaml-line-8">output</option><option value="yaml-line-12">columns</option></select></div>
+        <div class="code-scroll" tabindex="0" aria-label="Complete YAML specification"><pre><code><span class="code-line" id="yaml-line-1"><span class="line-number" aria-hidden="true">1</span><span class="code-source"><span class="yaml-key">schema_version</span>: <span class="yaml-string">&quot;1.0&quot;</span></span></span><span class="code-line" id="yaml-line-2"><span class="line-number" aria-hidden="true">2</span><span class="code-source"><span class="yaml-key">domain</span>: ADVS</span></span><span class="code-line" id="yaml-line-3"><span class="line-number" aria-hidden="true">3</span><span class="code-source"><span class="yaml-key">datasets</span>:</span></span><span class="code-line" id="yaml-line-4"><span class="line-number" aria-hidden="true">4</span><span class="code-source">  <span class="yaml-key">VS</span>: input/vs.csv</span></span><span class="code-line" id="yaml-line-5"><span class="line-number" aria-hidden="true">5</span><span class="code-source"><span class="yaml-key">base</span>: VS</span></span><span class="code-line" id="yaml-line-6"><span class="line-number" aria-hidden="true">6</span><span class="code-source"><span class="yaml-key">keys</span>: [STUDYID, USUBJID, VSSEQ]</span></span><span class="code-line" id="yaml-line-7"><span class="line-number" aria-hidden="true">7</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-8"><span class="line-number" aria-hidden="true">8</span><span class="code-source"><span class="yaml-key">output</span>:</span></span><span class="code-line" id="yaml-line-9"><span class="line-number" aria-hidden="true">9</span><span class="code-source">  <span class="yaml-key">path</span>: advs.csv</span></span><span class="code-line" id="yaml-line-10"><span class="line-number" aria-hidden="true">10</span><span class="code-source">  <span class="yaml-key">columns</span>: [STUDYID, USUBJID, VSSEQ, SEVAL]</span></span><span class="code-line" id="yaml-line-11"><span class="line-number" aria-hidden="true">11</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-12"><span class="line-number" aria-hidden="true">12</span><span class="code-source"><span class="yaml-key">columns</span>:</span></span><span class="code-line" id="yaml-line-13"><span class="line-number" aria-hidden="true">13</span><span class="code-source">  - <span class="yaml-key">name</span>: STUDYID</span></span><span class="code-line" id="yaml-line-14"><span class="line-number" aria-hidden="true">14</span><span class="code-source">    <span class="yaml-key">type</span>: str</span></span><span class="code-line" id="yaml-line-15"><span class="line-number" aria-hidden="true">15</span><span class="code-source">    <span class="yaml-key">label</span>: Study Identifier</span></span><span class="code-line" id="yaml-line-16"><span class="line-number" aria-hidden="true">16</span><span class="code-source">    <span class="yaml-key">derivation</span>:</span></span><span class="code-line" id="yaml-line-17"><span class="line-number" aria-hidden="true">17</span><span class="code-source">      <span class="yaml-key">source</span>: VS.STUDYID</span></span><span class="code-line" id="yaml-line-18"><span class="line-number" aria-hidden="true">18</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-19"><span class="line-number" aria-hidden="true">19</span><span class="code-source">  - <span class="yaml-key">name</span>: USUBJID</span></span><span class="code-line" id="yaml-line-20"><span class="line-number" aria-hidden="true">20</span><span class="code-source">    <span class="yaml-key">type</span>: str</span></span><span class="code-line" id="yaml-line-21"><span class="line-number" aria-hidden="true">21</span><span class="code-source">    <span class="yaml-key">label</span>: Unique Subject Identifier</span></span><span class="code-line" id="yaml-line-22"><span class="line-number" aria-hidden="true">22</span><span class="code-source">    <span class="yaml-key">derivation</span>:</span></span><span class="code-line" id="yaml-line-23"><span class="line-number" aria-hidden="true">23</span><span class="code-source">      <span class="yaml-key">source</span>: VS.USUBJID</span></span><span class="code-line" id="yaml-line-24"><span class="line-number" aria-hidden="true">24</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-25"><span class="line-number" aria-hidden="true">25</span><span class="code-source">  - <span class="yaml-key">name</span>: VSSEQ</span></span><span class="code-line" id="yaml-line-26"><span class="line-number" aria-hidden="true">26</span><span class="code-source">    <span class="yaml-key">type</span>: int</span></span><span class="code-line" id="yaml-line-27"><span class="line-number" aria-hidden="true">27</span><span class="code-source">    <span class="yaml-key">label</span>: Sequence Number</span></span><span class="code-line" id="yaml-line-28"><span class="line-number" aria-hidden="true">28</span><span class="code-source">    <span class="yaml-key">derivation</span>:</span></span><span class="code-line" id="yaml-line-29"><span class="line-number" aria-hidden="true">29</span><span class="code-source">      <span class="yaml-key">source</span>: VS.VSSEQ</span></span><span class="code-line" id="yaml-line-30"><span class="line-number" aria-hidden="true">30</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-31"><span class="line-number" aria-hidden="true">31</span><span class="code-source">  - <span class="yaml-key">name</span>: SEVAL</span></span><span class="code-line" id="yaml-line-32"><span class="line-number" aria-hidden="true">32</span><span class="code-source">    <span class="yaml-key">type</span>: int</span></span><span class="code-line" id="yaml-line-33"><span class="line-number" aria-hidden="true">33</span><span class="code-source">    <span class="yaml-key">label</span>: Severity Value</span></span><span class="code-line" id="yaml-line-34"><span class="line-number" aria-hidden="true">34</span><span class="code-source">    <span class="yaml-key">derivation</span>:</span></span><span class="code-line" id="yaml-line-35"><span class="line-number" aria-hidden="true">35</span><span class="code-source">      <span class="yaml-key">coalesce</span>:</span></span><span class="code-line" id="yaml-line-36"><span class="line-number" aria-hidden="true">36</span><span class="code-source">        <span class="yaml-key">sources</span>: [VS.SEVAL, SEVAL]</span></span><span class="code-line" id="yaml-line-37"><span class="line-number" aria-hidden="true">37</span><span class="code-source">        <span class="yaml-key">default</span>: <span class="yaml-literal">0</span></span></span></code></pre></div>
       </aside>
       <div id="spec-resizer" class="panel-resizer" role="separator" aria-label="Resize specification panel" aria-controls="specification" aria-orientation="vertical" aria-valuemin="240" aria-valuemax="720" aria-valuenow="350" tabindex="0" title="Drag to resize the specification panel"><span aria-hidden="true"></span></div>
       <div class="datasets">
         <section id="inputs" aria-labelledby="inputs-heading">
           <header class="section-header"><h2 id="inputs-heading">Inputs</h2><span class="panel-caption">1 source file</span></header>
-          <div class="files-grid" style="--dataset-columns: minmax(0, 4fr)"><div id="input-file-0" class="panel file-pane" role="region" aria-label="input/dm.csv"><div class="file-heading"><h3 class="filename">input/dm.csv</h3><span class="file-count">2 rows</span></div><div class="table-scroll" tabindex="0" role="region" aria-label="input/dm.csv table"><table class="data-table"><caption class="visually-hidden">input/dm.csv</caption><thead><tr><th scope="col">STUDYID</th><th scope="col">USUBJID</th><th scope="col">RFSTDT</th><th scope="col">DTHDTC</th></tr></thead><tbody><tr data-subject="[&quot;PILOT7&quot;,&quot;P7-811&quot;]"><td data-value="PILOT7">PILOT7</td><td data-value="P7-811"><button type="button" class="subject-button" data-subject="[&quot;PILOT7&quot;,&quot;P7-811&quot;]" aria-pressed="false" aria-label="Highlight subject P7-811">P7-811</button></td><td data-value="2023-01-02">2023-01-02</td><td data-value="2023-05-14">2023-05-14</td></tr><tr data-subject="[&quot;PILOT7&quot;,&quot;P7-812&quot;]"><td data-value="PILOT7">PILOT7</td><td data-value="P7-812"><button type="button" class="subject-button" data-subject="[&quot;PILOT7&quot;,&quot;P7-812&quot;]" aria-pressed="false" aria-label="Highlight subject P7-812">P7-812</button></td><td data-value="2023-02-10">2023-02-10</td><td data-value=""><span class="missing" aria-label="Missing value">&mdash;</span></td></tr></tbody></table></div></div></div>
+          <div class="files-grid" style="--dataset-columns: minmax(0, 4fr)"><div id="input-file-0" class="panel file-pane" role="region" aria-label="input/vs.csv"><div class="file-heading"><h3 class="filename">input/vs.csv</h3><span class="file-count">2 rows</span></div><div class="table-scroll" tabindex="0" role="region" aria-label="input/vs.csv table"><table class="data-table"><caption class="visually-hidden">input/vs.csv</caption><thead><tr><th scope="col">STUDYID</th><th scope="col">USUBJID</th><th scope="col">VSSEQ</th><th scope="col">SEVAL</th></tr></thead><tbody><tr data-subject="[&quot;PILOT7&quot;,&quot;P7-921&quot;]"><td data-value="PILOT7">PILOT7</td><td data-value="P7-921"><button type="button" class="subject-button" data-subject="[&quot;PILOT7&quot;,&quot;P7-921&quot;]" aria-pressed="false" aria-label="Highlight subject P7-921">P7-921</button></td><td data-value="1">1</td><td data-value=""><span class="missing" aria-label="Missing value">&mdash;</span></td></tr><tr data-subject="[&quot;PILOT7&quot;,&quot;P7-921&quot;]"><td data-value="PILOT7">PILOT7</td><td data-value="P7-921"><button type="button" class="subject-button" data-subject="[&quot;PILOT7&quot;,&quot;P7-921&quot;]" aria-pressed="false" aria-label="Highlight subject P7-921">P7-921</button></td><td data-value="2">2</td><td data-value="2">2</td></tr></tbody></table></div></div></div>
         </section>
         <section id="outputs" aria-labelledby="outputs-heading">
           <header class="section-header"><h2 id="outputs-heading">Expected output</h2><span class="panel-caption">Expected artifacts</span></header>
-          <div class="files-grid" style="--dataset-columns: minmax(0, 1fr)"><div id="output-file-0" class="panel file-pane" role="region" aria-label="expected/error.yaml"><div class="file-heading"><h3 class="filename">expected/error.yaml</h3></div><pre class="plain-file"><code>phase: verification
-condition: all_or_none_failed
+          <div class="files-grid" style="--dataset-columns: minmax(0, 1fr)"><div id="output-file-0" class="panel file-pane" role="region" aria-label="expected/error.yaml"><div class="file-heading"><h3 class="filename">expected/error.yaml</h3></div><pre class="plain-file"><code>phase: validation
+condition: dependency_cycle
 spec_paths:
-  - verifications[0].all_or_none
-requirement: R009-16
+  - columns.SEVAL.derivation.coalesce
+requirement: R001-41
 context:
-  verification_id: paired-death-dates
-  failure_count: 1
-  keys:
-    - STUDYID: PILOT7
-      USUBJID: P7-812
+  cycle: [SEVAL, SEVAL]
 </code></pre></div></div>
           <div class="data-legend"><span><i class="derived-swatch" aria-hidden="true"></i> Shaded columns are derived</span><span>&mdash; = missing value</span></div>
         </section>
       </div>
     </div>
   </main>
-  <footer class="page-footer"><span>negative-all-or-none-partial-row</span><nav class="example-nav" aria-label="More examples"><span><a href="negative-advs-overlapping-analysis-windows.html" rel="prev">Previous example</a></span><a href="index.html">All examples</a><span><a href="negative-allowed-values-mismatch.html" rel="next">Next example</a></span></nav></footer>
+  <footer class="page-footer"><span>negative-coalesce-self-reference</span><nav class="example-nav" aria-label="More examples"><span><a href="negative-baseline-value-multiple-flags.html" rel="prev">Previous example</a></span><a href="index.html">All examples</a><span><a href="negative-column-type-unknown.html" rel="next">Next example</a></span></nav></footer>
   <script>"use strict";
 
 document.body.classList.add("has-js");

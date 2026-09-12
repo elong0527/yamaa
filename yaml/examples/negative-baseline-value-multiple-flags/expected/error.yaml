@@ -1,0 +1,11 @@
+phase: derivation
+condition: ambiguous_baseline
+spec_paths:
+  - columns.BAVL.derivation.baseline_value
+requirement: R007-37
+context:
+  column: BAVL
+  flag_count: 2
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-901

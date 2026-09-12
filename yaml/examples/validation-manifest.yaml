@@ -72,6 +72,11 @@ fixtures:
     condition: value_not_permitted
     spec_paths: [columns.AVAL.type]
     validator: schema
+  negative-coalesce-self-reference:
+    rule: R001
+    condition: dependency_cycle
+    spec_paths: [columns.SEVAL.derivation.coalesce]
+    validator: dependency_graph
   negative-compute-aggregate-function:
     rule: R010
     condition: prohibited_function
@@ -87,6 +92,11 @@ fixtures:
     condition: qualified_identifier
     spec_paths: [columns.DOSEDBL.derivation.compute.expr]
     validator: numeric_expression
+  negative-cut-non-numeric-source:
+    rule: R007
+    condition: incompatible_input_type
+    spec_paths: [columns.AGEGRP.derivation.cut.source]
+    validator: expression_contract
   negative-dataset-path-absolute:
     rule: R021
     condition: resource_path_not_relative
@@ -255,6 +265,11 @@ fixtures:
     condition: regex_group_out_of_range
     spec_paths: ["columns.SITEID.derivation.str_extract.group"]
     validator: regex
+  negative-str-lower-non-string-source:
+    rule: R007
+    condition: incompatible_input_type
+    spec_paths: [columns.SITE.derivation.str_lower.source]
+    validator: expression_contract
   negative-study-day-datetime-input:
     rule: R016
     condition: incompatible_input_type

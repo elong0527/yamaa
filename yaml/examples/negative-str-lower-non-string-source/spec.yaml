@@ -1,0 +1,36 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, SITE]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM.USUBJID
+
+  - name: SITE
+    type: str
+    label: Site Name
+    derivation:
+      str_lower:
+        source: SITENUM
+
+  - name: SITENUM
+    type: int
+    label: Site Number
+    derivation:
+      source: DM.SITENUM
