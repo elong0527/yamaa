@@ -4,8 +4,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="SDTM DM: build one subject record from collected data: README, inputs, expected output, and YAML specification.">
-  <title>SDTM DM: build one subject record from collected data | YAMAA examples</title>
+  <meta name="description" content="Create DM from EDC extract: README, inputs, expected output, and YAML specification.">
+  <title>Create DM from EDC extract | YAMAA examples</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230c5e4b'/%3E%3Cpath d='m8 8 8 10 8-10M16 18v7' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
   <style>:root {
   color-scheme: light;
@@ -171,33 +171,27 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
       </nav>
     </div>
     <div class="title-row">
-      <div class="title-block"><p class="eyebrow">SDTM DM</p><h1>Build one subject record from collected data</h1></div>
+      <div class="title-block"><p class="eyebrow">DM</p><h1>Create DM from EDC extract</h1></div>
       <dl class="metrics"><div><dt>input files</dt><dd>1</dd></div><div><dt>subjects</dt><dd>4</dd></div><div><dt>expected rows</dt><dd>4</dd></div></dl>
     </div>
   </header>
   <main class="dashboard" aria-label="Example dashboard">
     <section id="readme" class="panel readme-panel" aria-labelledby="readme-heading">
       <header class="panel-header"><h2 id="readme-heading">README</h2><span class="panel-caption">What this example means</span></header>
-      <div class="prose" aria-label="README content"><p>This example uses collected long-form clinical data and a <code>yamaa</code> specification
-to derive one record per subject. The <code>rows</code> entry uses each subject's SEX item
-record only to establish the output grain; all values are derived with their
-column declarations:</p>
+      <div class="prose" aria-label="README content"><p><strong>Goal:</strong> derive DM common variables <strong>SEX</strong>, <strong>AGE</strong>, <strong>ARM</strong> and <strong>ACTARM</strong>.</p>
+<p><strong>Input:</strong> one row per collected item from EDC (ODM XML); e.g. subject
+001 has <strong>SEX</strong>, <strong>AGE</strong> and <strong>ARM</strong> rows.</p>
+<p><strong>Variables:</strong></p>
 <ul>
-<li><code>USUBJID</code> and <code>SUBJID</code> identify the subject;</li>
-<li><code>SEX</code> is the collected sex translated into the standard <code>M</code>, <code>F</code>, and <code>U</code>.
-A sex that was not collected, and one reported as something the study does
-not recognise, both become <code>U</code>;</li>
-<li><code>AGE</code> is the collected age as a whole number, and is empty for a subject
-whose age was never collected;</li>
-<li><code>ARM</code> is the planned treatment arm, and a subject with no arm collected is
-<code>Unassigned</code>;</li>
-<li><code>ACTARM</code> is the arm the subject actually received, which this study takes to
-be the planned one, so it repeats the resolved <code>ARM</code> including its
-<code>Unassigned</code> fallback.</li>
+<li><strong>SEX</strong>: Male to <code>M</code>, Female to <code>F</code>; missing, blank, or other value
+becomes <code>U</code>.</li>
+<li><strong>AGE</strong>: integer years as collected; blank when missing.</li>
+<li><strong>ARM</strong>: planned arm text; <code>Unassigned</code> when none collected.</li>
+<li><strong>ACTARM</strong>: actual arm; here always equals <strong>ARM</strong>.</li>
 </ul>
-<p>Every subject represented by a SEX item record yields a record even when its
-value or other items were not collected, so a sparsely collected subject
-appears with the substituted values rather than being dropped.</p>
+<p><strong>Note:</strong> one row per subject with a <strong>SEX</strong> record, even if blank;
+fallbacks fill the rest.</p>
+<p><strong>Standard:</strong> SDTM | <strong>Domain:</strong> DM</p>
 </div>
     </section>
     <div class="comparison-bar">
