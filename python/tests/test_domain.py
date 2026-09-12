@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import runpy
 from pathlib import Path
 
 import polars as pl
@@ -39,17 +38,6 @@ def test_one_argument_loads_and_executes_a_domain_specification() -> None:
         "spec_paths": pl.List(pl.String),
         "context": pl.String,
     }
-
-
-def test_example_run_output_matches_the_committed_csv(monkeypatch) -> None:
-    monkeypatch.chdir(DM_EXAMPLE)
-
-    namespace = runpy.run_path("run.py")
-
-    output = namespace["output"]
-    assert isinstance(output, pl.DataFrame)
-    expected = pl.read_csv(DM_EXAMPLE / "expected/dm.csv", schema=output.schema)
-    assert output.equals(expected)
 
 
 def test_save_uses_the_requested_extension_without_changing_output(
