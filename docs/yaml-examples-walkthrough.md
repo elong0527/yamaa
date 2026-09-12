@@ -240,7 +240,7 @@ Rule coverage across the 51 questions below:
 
 | Question | Rule | Example |
 |---|---|---|
-| How do corporate, compound and study layers compose? | R017 | [`adam-adlb-standardized-result`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-standardized-result) -- four layers resolve `organization -> compound -> study -> spec`, and `expected/resolved.yaml` records the outcome: shorthand expanded to canonical form, member fields merged while root fields are replaced whole, unreachable declarations pruned, and layer-relative paths rebased to the entry file |
+| How do corporate, compound and study layers compose? | R017 | [`spec-inheritance`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/spec-inheritance) -- three levels resolve `spec_organization -> spec_compound -> spec_study`, and `expected/spec_resolved.yaml` records the outcome: shorthand expanded to canonical form, member fields merged while root fields are replaced whole, unreachable declarations pruned, and layer-relative paths rebased to the entry file |
 | How does inheritance fail? | R017 | The four `negative-adsl-*parent*` examples plus [`negative-adsl-inherited-output`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-adsl-inherited-output) -- a cycle, a version mismatch, a remote path, an invalid clear, and an `output` an entry file may not inherit |
 
 ### Project functions

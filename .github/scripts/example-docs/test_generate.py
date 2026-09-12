@@ -1,5 +1,6 @@
 import csv
 import importlib.util
+import re
 import shutil
 import subprocess
 import sys
@@ -97,7 +98,7 @@ class DashboardTests(unittest.TestCase):
             command = [sys.executable, str(HERE / "generate.py"), EXAMPLE.name, "--check", "--output-dir", str(output)]
             self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
             self.assertFalse(page.exists())
-            complete = sorted(path.name for path in generate.EXAMPLES.iterdir() if (path / "spec.yaml").is_file() and (path / "README.md").is_file())
+            complete = sorted(path.name for path in generate.EXAMPLES.iterdir() if generate.example_has_spec(path) and (path / "README.md").is_file())
             index = complete.index(EXAMPLE.name)
             previous = complete[index - 1] if index else None
             following = complete[index + 1] if index + 1 < len(complete) else None
@@ -136,6 +137,29 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('id="section-select"', page)
         for section in ["datasets", "record_lookups", "output", "columns", "verifications"]:
             self.assertIn(f'>{section}</option>', page)
+
+    def test_multi_level_spec_renders_panes_with_resolved_default(self):
+        example = generate.EXAMPLES / "spec-inheritance"
+        entry, chain = generate.example_entry(example)
+        self.assertEqual(entry.name, "spec_study.yaml")
+        self.assertEqual(
+            [path.name for path in chain],
+            ["spec_organization.yaml", "spec_compound.yaml"],
+        )
+        page = generate.render_example(example).decode("ascii")
+        self.assertEqual(
+            re.findall(r'data-filename="([^"]+)"', page),
+            ["spec_organization.yaml", "spec_compound.yaml", "spec_study.yaml", "spec_resolved.yaml"],
+        )
+        self.assertIn("Choose specification document", page)
+        self.assertNotIn('aria-label="expected/spec_resolved.yaml"', page)
+        self.assertIn(">base</option>", page)
+
+    def test_spec_prefixed_example_gets_its_own_gallery_category(self):
+        example = generate.EXAMPLES / "spec-inheritance"
+        title, category = generate.describe_example(example)
+        self.assertEqual(title, "Spec Inheritance")
+        self.assertEqual(category, "Specification")
 
     def test_unterminated_csv_is_not_silently_repaired(self):
         page = generate.render_example(generate.EXAMPLES / "negative-source-unterminated-quote").decode("ascii")

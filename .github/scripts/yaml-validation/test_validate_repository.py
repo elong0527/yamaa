@@ -4881,6 +4881,27 @@ bad_field: "what"
         self.assertTrue(errors)
         self.assertIn('cannot mix', '\n'.join(errors))
 
+    def test_parented_spec_files_are_levels_not_entries(self):
+        ex_dir = self.root_dir / 'yaml' / 'examples' / 'leveled-specs'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'README.md').write_text('# Leveled specs\n')
+        (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
+        (ex_dir / 'spec_organization.yaml').write_text('value: valid\n')
+        (ex_dir / 'spec_study.yaml').write_text(
+            'value: valid\nparents: spec_organization.yaml\n'
+        )
+
+        entries = VALIDATOR.example_entry_specs(ex_dir)
+        self.assertEqual([path.name for path in entries], ['spec_study.yaml'])
+        self.assertEqual(
+            VALIDATOR.expected_resolved_path(ex_dir, entries[0]).name,
+            'spec_resolved.yaml',
+        )
+        self.assertEqual(
+            VALIDATOR.validate_examples_layout(self.root_dir), []
+        )
+
     def test_empty_spec_is_rejected(self):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'empty-spec'
         ex_dir.mkdir(parents=True)

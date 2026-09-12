@@ -166,12 +166,14 @@ def test_mapping_validates_dictionary_before_resolving_its_source() -> None:
 
 
 def test_unsupported_operation_is_not_a_failure_condition() -> None:
+    # `row_number` is a registered R007 window expression this component does
+    # not implement, so it reports its status rather than a failure.
     result = evaluate_expression(
-        {"compute": "VALUE + 1"},
+        {"row_number": {"order_by": ["VALUE"]}},
         MappingResolver({"VALUE": 1}),
     )
 
-    assert result == UnsupportedResult(operation="compute")
+    assert result == UnsupportedResult(operation="row_number")
 
 
 def test_dispatch_protocol_accepts_a_bounded_custom_handler() -> None:

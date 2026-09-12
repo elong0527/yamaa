@@ -275,7 +275,7 @@ def test_valid_but_unimplemented_operations_have_unsupported_status() -> None:
             "derivation": age.derivation.model_copy(
                 update={
                     "value": age.derivation.value.model_copy(
-                        update={"root": {"str_upper": {"source": "ODM.Value"}}}
+                        update={"root": {"row_number": {"order_by": ["SUBJID"]}}}
                     )
                 }
             )
@@ -294,7 +294,7 @@ def test_valid_but_unimplemented_operations_have_unsupported_status() -> None:
     result = execute_specification(changed, sources)
 
     assert isinstance(result, ExecutionUnsupported)
-    assert result.features[0].operation == "str_upper"
+    assert result.features[0].operation == "row_number"
 
 
 def test_invalid_column_type_fails_before_any_source_is_ingested() -> None:
@@ -361,6 +361,7 @@ def test_source_provider_diagnostics_enter_the_execution_result() -> None:
         "phase": "ingest",
         "condition": "resource_changed",
         "spec_paths": ["datasets.ODM.path"],
+        "requirement": None,
         "context": {"dataset": "ODM"},
     }
     assert result.handler_counts == ()
