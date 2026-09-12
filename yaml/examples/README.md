@@ -141,6 +141,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-baseline-flag-tied-date`](negative-baseline-flag-tied-date/) | reject a baseline chosen between two same-day results |
 | [`negative-baseline-value-multiple-flags`](negative-baseline-value-multiple-flags/) | reject a baseline carried from two flagged visits |
 | [`negative-coalesce-self-reference`](negative-coalesce-self-reference/) | reject a severity carried from its own column |
+| [`negative-column-forward-reference`](negative-column-forward-reference/) | reject a doubled value built from a later column |
 | [`negative-column-type-unknown`](negative-column-type-unknown/) | reject an analysis value with an ambiguous numeric type |
 | [`negative-compute-aggregate-function`](negative-compute-aggregate-function/) | reject a total written as a formula |
 | [`negative-compute-comparison-operator`](negative-compute-comparison-operator/) | reject an above-range flag written as a formula |

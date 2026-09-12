@@ -16,6 +16,7 @@ conditions:
   duplicate_lookup_key: {rules: [R007], phases: [mapping]}
   duplicate_order_term: {rules: [R005], phases: [validation]}
   field_parse_failed: {rules: [R014], phases: [ingest]}
+  forward_reference: {rules: [R001], phases: [validation]}
   function_contract_mismatch: {rules: [R018], phases: [validation]}
   implication_failed: {rules: [R009], phases: [verification]}
   incomparable_range_types: {rules: [R015], phases: [validation]}

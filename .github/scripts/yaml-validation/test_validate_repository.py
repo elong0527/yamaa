@@ -860,6 +860,51 @@ class TestStaticSemanticContracts(unittest.TestCase):
         self.assertIsNotNone(cycle)
         self.assertEqual(set(cycle[:-1]), {'A', 'B'})
 
+    def test_forward_reference_reports_the_later_column(self):
+        root = TOOL_PATH.parents[3]
+        env, env_errors = VALIDATOR.build_schema_env(root)
+        self.assertEqual(env_errors, [])
+        spec = {
+            'columns': [
+                {
+                    'name': 'A', 'type': 'float',
+                    'derivation': {'coalesce': {'sources': ['B']}},
+                },
+                {
+                    'name': 'B', 'type': 'float',
+                    'derivation': {'literal': 1.5},
+                },
+            ]
+        }
+
+        self.assertEqual(
+            VALIDATOR.find_forward_reference(spec, env), ('A', 'B')
+        )
+
+    def test_forward_reference_skips_edges_inside_a_cycle(self):
+        root = TOOL_PATH.parents[3]
+        env, env_errors = VALIDATOR.build_schema_env(root)
+        self.assertEqual(env_errors, [])
+        spec = {
+            'columns': [
+                {
+                    'name': 'A', 'type': 'float',
+                    'derivation': {'coalesce': {'sources': ['B']}},
+                },
+                {
+                    'name': 'B', 'type': 'float',
+                    'derivation': {
+                        'row_value': {
+                            'source': 'A', 'offset': -1,
+                            'order_by': ['A'],
+                        }
+                    },
+                },
+            ]
+        }
+
+        self.assertIsNone(VALIDATOR.find_forward_reference(spec, env))
+
 
 class TestExecutionManifestGate(unittest.TestCase):
     def load_text(self, text):

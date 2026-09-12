@@ -306,6 +306,23 @@ def expected_cycle(spec)
   error.dig("context", "cycle")
 end
 
+def expected_forward_reference(spec)
+  error_path = File.join(File.dirname(spec), "expected", "error.yaml")
+  return nil unless File.exist?(error_path)
+
+  error = YAML.safe_load(File.read(error_path))
+  return nil unless error["condition"] == "forward_reference"
+
+  context = error["context"]
+  return nil unless context.is_a?(Hash)
+
+  column = context["column"]
+  dependency = context["dependency"]
+  return nil unless column.is_a?(String) && dependency.is_a?(String)
+
+  [column, dependency]
+end
+
 def check(spec)
   document = YAML.safe_load(File.read(spec))
   # R017 resolves and topologically orders inherited entries in the Python
@@ -406,6 +423,15 @@ def check(spec)
                                                 component.include?(dependency)
       end
     end
+  end
+
+  expected_forward = expected_forward_reference(spec)
+  if !expected_forward.nil?
+    name, dependency = expected_forward
+    unless graph.fetch(name, Set.new).include?(dependency)
+      problems << "expected forward reference is not present"
+    end
+    allowed_edges << [name, dependency]
   end
 
   graph.each do |name, dependencies|

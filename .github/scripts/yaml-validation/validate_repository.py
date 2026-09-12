@@ -256,6 +256,7 @@ def validation_diagnostic(
 # when its required context differs by operation family.
 VALIDATION_CONTEXT_FIELDS = {
     ('R001', 'dependency_cycle'): {'cycle'},
+    ('R001', 'forward_reference'): {'column', 'dependency'},
     ('R002', 'duplicate_identifier'): {'identifier'},
     ('R002', 'unknown_field'): {'identifier'},
     ('R004', 'invalid_predicate'): {'predicate'},
@@ -6710,10 +6711,10 @@ def validate_record_lookup_static_semantics(
     return errors
 
 
-def find_column_dependency_cycle(spec, env):
+def column_dependency_graph(spec, env):
     columns = spec.get('columns')
     if not isinstance(columns, list):
-        return None
+        return [], {}
     names = [
         column.get('name')
         for column in columns
@@ -6745,6 +6746,57 @@ def find_column_dependency_cycle(spec, env):
         }
         for name in names
     }
+    return names, dependencies
+
+
+def dependency_components(names, dependencies):
+    index_of = {}
+    lowlink = {}
+    stack = []
+    on_stack = set()
+    counter = [0]
+    component_of = {}
+
+    def connect(name):
+        index_of[name] = lowlink[name] = counter[0]
+        counter[0] += 1
+        stack.append(name)
+        on_stack.add(name)
+        for dependency in sorted(dependencies[name]):
+            if dependency not in index_of:
+                connect(dependency)
+                lowlink[name] = min(lowlink[name], lowlink[dependency])
+            elif dependency in on_stack:
+                lowlink[name] = min(lowlink[name], index_of[dependency])
+        if lowlink[name] == index_of[name]:
+            while True:
+                member = stack.pop()
+                on_stack.discard(member)
+                component_of[member] = name
+                if member == name:
+                    break
+
+    for name in names:
+        if name not in index_of:
+            connect(name)
+    return component_of
+
+
+def find_forward_reference(spec, env):
+    names, dependencies = column_dependency_graph(spec, env)
+    positions = {name: index for index, name in enumerate(names)}
+    component_of = dependency_components(names, dependencies)
+    for name in names:
+        for dependency in sorted(dependencies[name]):
+            if positions[dependency] > positions[name]:
+                if component_of.get(name) == component_of.get(dependency):
+                    continue
+                return name, dependency
+    return None
+
+
+def find_column_dependency_cycle(spec, env):
+    names, dependencies = column_dependency_graph(spec, env)
     state = {}
     stack = []
 
@@ -6921,6 +6973,18 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
                     context={'cycle': cycle},
                 )
             )
+    forward = find_forward_reference(spec, env)
+    if forward is not None:
+        name, dependency = forward
+        errors.append(
+            validation_diagnostic(
+                derivation_primary_path(spec, spec_label, name),
+                'forward_reference',
+                f'column {name!r} references later declared column '
+                f'{dependency!r}',
+                context={'column': name, 'dependency': dependency},
+            )
+        )
     return list(dict.fromkeys(errors))
 
 

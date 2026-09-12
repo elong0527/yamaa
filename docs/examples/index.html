@@ -33,8 +33,8 @@
   <header class="page-header">
     <div class="brand">YAMAA / Example explorer</div>
     <h1>All examples</h1>
-    <p class="lede">197 example dashboards, generated from <a href="https://github.com/elong0527/yamaa/tree/main/yaml/examples">yaml/examples</a>. Each page shows the README, the source fixtures, the expected artifacts, and the YAML specification.</p>
-    <nav class="outcome-jump" aria-label="Jump to a group"><a href="#positive">Examples (95)</a><a href="#negative">Anti-pattern (102)</a></nav>
+    <p class="lede">198 example dashboards, generated from <a href="https://github.com/elong0527/yamaa/tree/main/yaml/examples">yaml/examples</a>. Each page shows the README, the source fixtures, the expected artifacts, and the YAML specification.</p>
+    <nav class="outcome-jump" aria-label="Jump to a group"><a href="#positive">Examples (95)</a><a href="#negative">Anti-pattern (103)</a></nav>
   </header>
   <main class="gallery" aria-label="Example gallery">
     <section class="outcome" id="positive" aria-labelledby="positive-heading">
@@ -270,7 +270,7 @@
     </section>
     <section class="outcome" id="negative" aria-labelledby="negative-heading">
       <h2 id="negative-heading">Anti-pattern</h2>
-      <p class="outcome-note">102 examples. Each must fail, and expected/error.yaml pins the error it raises.</p>
+      <p class="outcome-note">103 examples. Each must fail, and expected/error.yaml pins the error it raises.</p>
       <section aria-label="Anti-pattern: ADaM ADAE">
         <h3>ADaM ADAE</h3>
         <p class="count">15 examples</p>
@@ -312,13 +312,14 @@
       </section>
       <section aria-label="Anti-pattern: ADaM ADLB">
         <h3>ADaM ADLB</h3>
-        <p class="count">25 examples</p>
+        <p class="count">26 examples</p>
         <ul>
         <li><a href="negative-adlb-absolute-wbc-duplicate.html">ADaM ADLB: reject duplicate WBC inputs for an absolute differential</a></li>
         <li><a href="negative-adlb-computed-parameter.html">ADaM ADLB: reject a parameter computed from the dataset being built</a></li>
         <li><a href="negative-adlb-multiple-baseline-records.html">ADaM ADLB: reject a subject with two baseline records for one parameter</a></li>
         <li><a href="negative-baseline-flag-tied-date.html">ADaM ADLB: reject a baseline chosen between two same-day results</a></li>
         <li><a href="negative-baseline-value-multiple-flags.html">ADaM ADLB: reject a baseline carried from two flagged visits</a></li>
+        <li><a href="negative-column-forward-reference.html">ADaM ADLB: reject a doubled value built from a later column</a></li>
         <li><a href="negative-column-type-unknown.html">ADaM ADLB: reject an analysis value with an ambiguous numeric type</a></li>
         <li><a href="negative-compute-aggregate-function.html">ADaM ADLB: reject a total written as a formula</a></li>
         <li><a href="negative-compute-comparison-operator.html">ADaM ADLB: reject an above-range flag written as a formula</a></li>
