@@ -69,9 +69,7 @@
           <TranslatedText xml:lang="en">Study Site Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Collected" Source="Investigator">
-          <def:DocumentRef leafID="LF.acrf">
-            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
-          </def:DocumentRef>
+          <def:DocumentRef leafID="LF.acrf"/>
         </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.DM.AGE" Name="AGE" DataType="integer" Length="3" SASFieldName="AGE">

@@ -55,12 +55,6 @@ function_value:
         - function_date_literal_class
         - function_datetime_literal_class
 
-standard_id:
-    type: str
-    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Identifier of a standard declared by the study document R026
-        defines.
-
 codelist_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'

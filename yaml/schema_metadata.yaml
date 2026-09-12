@@ -15,10 +15,6 @@ submission_dataset_class:
         required: true
         min_length: 1
         description: Description of the dataset as a whole, distinct from the domain it derives.
-    - standard:
-        type: standard_id
-        required: true
-        description: Foundational standard this dataset follows; R024 derives its family.
     - class:
         type: dataset_class_name
         required: true
@@ -70,7 +66,7 @@ submission_column_class:
     - length:
         type: int
         required: false
-        description: Maximum expected value length; R024 binds it to the constraint that enforces it.
+        description: Maximum expected value length; R024 derives it from a max_length verification and binds it to the constraint that enforces it.
     - significant_digits:
         type: int
         required: false
@@ -105,7 +101,7 @@ submission_origin_class:
     - source:
         type: origin_source
         required: false
-        description: Party responsible for the value; R024 closes the pairs each family admits.
+        description: Party responsible for the value; R024 closes the pairs each family admits and derives it where one fixes it.
     - description:
         type: str
         required: false
@@ -114,7 +110,7 @@ submission_origin_class:
     - documents:
         type: "list[document_reference]"
         required: false
-        description: Supporting documents evidencing the origin.
+        description: Supporting documents evidencing the origin; R024 derives the annotated case report form reference when a collected origin omits them.
 
 submission_method_class:
     - name:

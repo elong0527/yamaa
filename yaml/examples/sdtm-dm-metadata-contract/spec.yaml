@@ -6,7 +6,6 @@ base: DM_RAW
 keys: [STUDYID, USUBJID]
 submission:
   label: Demographics
-  standard: SDTMIG
   class: SPECIAL PURPOSE
   structure: One record per subject
   repeating: false
@@ -64,7 +63,6 @@ columns:
     submission:
       core: Req
       role: Identifier
-      length: 30
       origin:
         type: Derived
         source: Sponsor
@@ -105,9 +103,6 @@ columns:
       origin:
         type: Collected
         source: Investigator
-        documents:
-          - document: acrf
-            pages: {type: PhysicalRef, refs: "1"}
     verifications:
       not_missing: {}
 

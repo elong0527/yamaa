@@ -62,7 +62,7 @@ root_class:
     - metadata:
         type: "dict[str, str]"
         required: false
-        description: Free-form annotations carried with the specification; nothing validates their content.
+        description: Free-form annotations carried with the specification; R024 reserves the key names it governs.
 
 output_class:
     - path:
@@ -169,7 +169,7 @@ column_class:
     - metadata:
         type: "dict[str, str]"
         required: false
-        description: Free-form annotations carried with the column; nothing validates their content.
+        description: Free-form annotations carried with the column; R024 reserves the key names it governs.
 
 row_class:
     - id:

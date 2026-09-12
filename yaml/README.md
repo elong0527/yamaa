@@ -56,11 +56,15 @@ starts in `grammar/`, and a change that is not carried into every consumer
 fails validation.
 
 R024, R025, and R026 give a submission one generation contract. R024 closes
-the governed dataset and column metadata: a standard's family decides which
-origin pairs it admits, `core` derives `Mandatory` where the standard defines
-that mapping and never where it does not, a declared length binds to the
-`max_length` that enforces it, and a declared origin the derivation graph
-refutes is rejected rather than carried into a document. The graph never
+the governed dataset and column metadata and derives everything a
+specification already states: `Mandatory` from `core` where the standard
+defines that mapping and never where it does not, a declared length from the
+`max_length` that enforces it, an origin source where a family fixes it, and a
+collected value's annotated-CRF reference. A standard's family decides which
+origin pairs it admits, and a declared origin the derivation graph refutes is
+rejected rather than carried into a document. What a governed field owns
+cannot also be written into the free-form `metadata` map, so the map is
+annotation rather than a second place provenance can hide. The graph never
 supplies an origin: it can prove a value was computed, but not who collected
 it. R025 makes a codelist one named, versioned object several columns share,
 enforces the values of a closed list, and requires a codelist binding and an

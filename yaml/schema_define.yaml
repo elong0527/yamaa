@@ -70,6 +70,10 @@ define_class:
         type: "list[standard_class]"
         required: true
         description: Standards the represented datasets and codelists conform to.
+    - default_standard:
+        type: standard_id
+        required: false
+        description: Foundational standard every dataset follows unless its entry names another.
     - documents:
         type: "list[document_class]"
         required: false
@@ -266,6 +270,10 @@ define_dataset_class:
         type: project_path
         required: true
         description: Resolved specification whose output this dataset is.
+    - standard:
+        type: standard_id
+        required: false
+        description: Foundational standard this dataset follows; defaults to default_standard.
     - has_no_data:
         type: bool
         default: false
@@ -276,6 +284,11 @@ define_output_class:
         type: define_path
         required: true
         description: File this document produces; its extension must be .xml.
+
+standard_id:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: Identifier of a standard this document declares.
 
 define_id:
     type: str
