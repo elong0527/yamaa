@@ -4,8 +4,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="ADaM ADLB: reject reference limits named by a machine location: README, inputs, expected output, and YAML specification.">
-  <title>ADaM ADLB: reject reference limits named by a machine location | YAMAA examples</title>
+  <meta name="description" content="ADaM ADLB: reject reference limits named by an unapproved location: README, inputs, expected output, and YAML specification.">
+  <title>ADaM ADLB: reject reference limits named by an unapproved location | YAMAA examples</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230c5e4b'/%3E%3Cpath d='m8 8 8 10 8-10M16 18v7' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
   <style>:root {
   color-scheme: light;
@@ -171,7 +171,7 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
       </nav>
     </div>
     <div class="title-row">
-      <div class="title-block"><p class="eyebrow">ADaM ADLB</p><h1>Reject reference limits named by a machine location</h1></div>
+      <div class="title-block"><p class="eyebrow">ADaM ADLB</p><h1>Reject reference limits named by an unapproved location</h1></div>
       <dl class="metrics"><div><dt>input files</dt><dd>1</dd></div><div><dt>subjects</dt><dd>2</dd></div><div><dt>expected files</dt><dd>1</dd></div></dl>
     </div>
   </header>
@@ -185,10 +185,13 @@ limits by test and sex to attempt one record per subject and parameter:</p>
 <li><code>AVAL</code> is the collected result;</li>
 <li><code>ANRHI</code> is the upper limit of normal for that test and sex.</li>
 </ul>
-<p>The limits are named by a location on the machine that runs the study rather
-than by a file the study carries. What that location holds depends on the
-machine, so the study cannot be rebuilt anywhere else and cannot be reviewed
-from what it contains. The run must fail and no artifact is accepted.</p>
+<p>The limits are named by a location on the machine that runs the study. A run
+may read such a location, because code and data are commonly kept apart, but
+only one that whoever starts the run approved in advance. This study was
+started with its own directory as the only approved place to read from, so
+these limits name nothing the run may open. Naming a location cannot approve
+it: if it could, the file under review would decide what the run reads. The
+run must fail and no artifact is accepted.</p>
 <h2>How to fix</h2>
 <p>Copy the governed reference limits into the study and name them where the
 study keeps its data:</p>
@@ -196,10 +199,10 @@ study keeps its data:</p>
   LBREF:
     path: input/lbref.csv
 </code></pre>
-<p>If several studies share one limit table, give each study the version it was
-run against instead of pointing every study at one machine location. A shared
-location that is edited between runs changes results that were already
-reported.</p>
+<p>Keep a shared limit table outside the study only when the runner approves the
+directory that holds it as a data root, and then name it by its rooted path.
+Give each study the version it was run against either way: a shared location
+that is edited between runs changes results that were already reported.</p>
 </div>
     </section>
     <div class="comparison-bar">
@@ -228,7 +231,7 @@ reported.</p>
 condition: resource_path_not_relative
 spec_paths:
   - datasets.LBREF.path
-requirement: R021-5
+requirement: R021-13
 context:
   dataset: LBREF
   path: /shared/reference/lbref.csv

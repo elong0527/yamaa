@@ -104,6 +104,19 @@ loaded = load_source_tables(datasets, resources)
 dm = loaded["DM"].table
 ```
 
+When a study keeps its data somewhere other than its specifications, approve
+the directory that holds it and declare the data by a rooted path:
+
+```python
+resources = ProjectResources("study", data_roots=["/data/pilot7"])
+datasets = {"LBREF": DatasetSource(path="/data/pilot7/reference/lbref.csv")}
+```
+
+`data_roots` is the runner's decision and is fixed before any specification is
+read, so a declaration selects among approved roots and can never add one. A
+rooted path naming no approved root fails as `resource_path_not_relative`, and
+the failure names the written path alone.
+
 The reader accepts the fixed `.csv` profile only. It parses the retained byte
 snapshot in memory, preserves source row and header order, and reads a field
 with no characters as missing whether it was written bare or quoted, before

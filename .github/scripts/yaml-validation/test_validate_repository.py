@@ -3235,18 +3235,82 @@ class TestProjectResourceBoundary(unittest.TestCase):
         self.assertIsNone(condition)
         self.assertEqual(accepted.read_bytes(), self.source.read_bytes())
 
-    def test_rejects_rooted_written_forms(self):
-        for written in ("/etc/passwd", "C:/data/dm.csv", "input\\dm.csv"):
+    def test_rejects_rooted_paths_naming_no_approved_root(self):
+        for written in ("/etc/passwd", "C:/data/dm.csv"):
             with self.subTest(written=written):
                 self.assertEqual(
                     self.resolve(written)[1], "resource_path_not_relative"
                 )
+
+    def test_accepts_a_rooted_path_under_an_approved_data_root(self):
+        store = self.root / "store"
+        store.mkdir()
+        held = store / "lbref.csv"
+        held.write_text("LBTESTCD\nALT\n", encoding="utf-8")
+        confined = self.root / "project"
+        confined.mkdir()
+
+        accepted, condition = VALIDATOR.resolve_project_path(
+            f"{store.as_posix()}/lbref.csv",
+            confined,
+            confined,
+            data_roots=[store],
+        )
+
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.read_bytes(), held.read_bytes())
+
+    def test_accepts_a_rooted_path_whose_anchor_is_a_symbolic_link(self):
+        # macOS spells a temporary directory through /var, a link into
+        # /private. R021-15 exempts the anchor, so the spelling a user writes
+        # is accepted without resolving the written path first.
+        store = self.root / "store"
+        store.mkdir()
+        (store / "lbref.csv").write_text("LBTESTCD\nALT\n", encoding="utf-8")
+        linked = self.root / "data"
+        linked.symlink_to(store, target_is_directory=True)
+
+        accepted, condition = VALIDATOR.resolve_project_path(
+            f"{linked.as_posix()}/lbref.csv",
+            self.root,
+            self.root,
+            data_roots=[linked],
+        )
+
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.name, "lbref.csv")
+
+    def test_rejects_a_symbolic_link_below_a_rooted_anchor(self):
+        store = self.root / "store"
+        store.mkdir()
+        (store / "lbref.csv").write_text("LBTESTCD\nALT\n", encoding="utf-8")
+        (store / "alias.csv").symlink_to("lbref.csv")
+
+        _, condition = VALIDATOR.resolve_project_path(
+            f"{store.as_posix()}/alias.csv",
+            self.root,
+            self.root,
+            data_roots=[store],
+        )
+
+        self.assertEqual(condition, "resource_path_symlink")
+
+    def test_rooted_and_relative_spellings_reach_one_file(self):
+        rooted, rooted_condition = self.resolve(
+            f"{self.root.as_posix()}/input/dm.csv"
+        )
+        relative, relative_condition = self.resolve("input/dm.csv")
+
+        self.assertIsNone(rooted_condition)
+        self.assertIsNone(relative_condition)
+        self.assertEqual(rooted.resolve(), relative.resolve())
 
     def test_rejects_uri_schemes(self):
         for written in (
             "https://example.org/dm.csv",
             "file:///etc/passwd",
             "s3://bucket/dm.csv",
+            "C:data/dm.csv",
         ):
             with self.subTest(written=written):
                 self.assertEqual(
@@ -3269,6 +3333,10 @@ class TestProjectResourceBoundary(unittest.TestCase):
         for written in (
             "input//dm.csv",
             "input/dm.csv/",
+            "input\\dm.csv",
+            "",
+            "/",
+            "/data/../lbref.csv",
         ):
             with self.subTest(written=written):
                 self.assertEqual(
