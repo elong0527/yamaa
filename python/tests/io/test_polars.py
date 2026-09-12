@@ -42,6 +42,15 @@ def test_stored_values_read_back_as_the_values_that_were_stored() -> None:
     ]
 
 
+def test_the_runtime_missing_token_is_stored_as_a_host_null() -> None:
+    columns = (TypedColumn(name="COUNT", type="int"),)
+
+    table = frame_from_values(columns, [[MISSING]])
+
+    assert table.frame.get_column("COUNT").to_list() == [None]
+    assert runtime_rows(table) == [{"COUNT": MISSING}]
+
+
 @pytest.mark.parametrize(
     ("value", "message"),
     [

@@ -196,6 +196,56 @@ Run this component's focused tests from the repository root:
 uv run --project python --isolated --extra test pytest python/tests/io
 ```
 
+## Minimal YAML execution
+
+Load and execute one domain specification with the user-facing facade:
+
+```python
+from yamaa import yamaa_domain
+
+pilot = yamaa_domain("spec.yaml")
+
+print(pilot.spec)  # normalized specification
+print(pilot.inputs)  # dataset name -> Polars DataFrame
+print(pilot.output)  # ordered output Polars DataFrame, or None
+print(pilot.issues)  # stable Polars issue table
+
+pilot.save("expected.parquet")
+```
+
+`yamaa_domain` searches upward from the specification for `schema.yaml`; a
+specification kept elsewhere supplies `schema_root=`. Project and data roots
+follow the same R021 configuration rules as the lower-level resource API.
+Loading, source capture, and execution happen once. The facade writes nothing
+until `save` is called: without an argument it uses the specification's
+`output.path`, while an explicit `.csv` or `.parquet` path selects that output
+profile. An unsuccessful run exposes no output and `save` raises
+`DomainRunError` with the same issue table available from `pilot.issues`.
+
+The lower-level executor remains available for adapters and injected test
+hooks. It plans dependencies before evaluation, constructs record-driven rows
+in specification and source order, then enriches those rows without changing
+their count. The provider entry point completes all source-independent
+validation before it asks for source bytes. Each scalar completes expression
+evaluation, declared type conversion, conversion handling, and first-match
+override before a dependent reads it. Handler counts include declared paths
+that fired zero times. Column, key, dataset-verification, and ordered-output
+work is delegated to the pure hooks exposed by the verification and I/O
+components.
+
+This first slice supports `source`, `literal`, inline `mapping`, ungrouped row
+filters, explicit absent-source defaults, and earlier output-column references.
+Grouped rows, record lookups, inheritance, and other expression operations
+return an explicit unsupported result rather than a fabricated output.
+Execution never reads an `expected/` artifact.
+
+Run the focused tests from the repository root:
+
+```bash
+uv run --project python --isolated --extra test pytest \
+  python/tests/test_domain.py python/tests/planning python/tests/runtime
+```
+
 ## Verified tables and published artifacts
 
 Assert over a completed table, then write and publish what it produces:

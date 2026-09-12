@@ -36,6 +36,8 @@ _DTYPES: dict[ColumnType, pl.DataType] = {
 
 def _host_value(value: object) -> object:
     """Return the host scalar one converted value is stored as."""
+    if value is MISSING:
+        return None
     if isinstance(value, DateValue):
         if value.collected_precision != "day":
             raise ValueError("a date below day precision has no host column")
