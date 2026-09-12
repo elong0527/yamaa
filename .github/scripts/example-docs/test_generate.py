@@ -97,7 +97,11 @@ class DashboardTests(unittest.TestCase):
             command = [sys.executable, str(HERE / "generate.py"), EXAMPLE.name, "--check", "--output-dir", str(output)]
             self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
             self.assertFalse(page.exists())
-            page.write_bytes(generate.render_example(EXAMPLE))
+            complete = sorted(path.name for path in generate.EXAMPLES.iterdir() if (path / "spec.yaml").is_file() and (path / "README.md").is_file())
+            index = complete.index(EXAMPLE.name)
+            previous = complete[index - 1] if index else None
+            following = complete[index + 1] if index + 1 < len(complete) else None
+            page.write_bytes(generate.render_example(EXAMPLE, previous, following))
             self.assertEqual(subprocess.run(command, capture_output=True).returncode, 0)
             page.write_bytes(b"outdated page")
             self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
@@ -136,6 +140,29 @@ class DashboardTests(unittest.TestCase):
     def test_unterminated_csv_is_not_silently_repaired(self):
         page = generate.render_example(generate.EXAMPLES / "negative-source-unterminated-quote").decode("ascii")
         self.assertIn("raw CSV", page)
+
+    def test_neighbor_navigation_links_examples(self):
+        page = generate.render_example(EXAMPLE, "aaa-first", "zzz-last").decode("ascii")
+        self.assertIn('<a href="aaa-first.html" rel="prev">Previous example</a>', page)
+        self.assertIn('<a href="zzz-last.html" rel="next">Next example</a>', page)
+        self.assertIn('<a href="index.html">All examples</a>', page)
+        edges = generate.render_example(EXAMPLE, None, None).decode("ascii")
+        self.assertIn('<span class="is-disabled" aria-disabled="true">Previous example</span>', edges)
+        self.assertIn('<span class="is-disabled" aria-disabled="true">Next example</span>', edges)
+
+    def test_gallery_index_is_sorted_and_deterministic(self):
+        entries = [
+            ("zzz-one", "Zulu title", "Zulu"),
+            ("aaa-two", "Alpha title", "Alpha"),
+            ("mmm-three", "Mike title", "Alpha"),
+        ]
+        first = generate.render_index(entries)
+        self.assertEqual(first, generate.render_index(list(reversed(entries))))
+        text = first.decode("ascii")
+        self.assertLess(text.index("Alpha"), text.index("Zulu"))
+        self.assertLess(text.index("aaa-two.html"), text.index("mmm-three.html"))
+        for name in ("zzz-one", "aaa-two", "mmm-three"):
+            self.assertIn(f'href="{name}.html"', text)
 
 
 if __name__ == "__main__":

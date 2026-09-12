@@ -170,7 +170,54 @@ def highlight_yaml(line):
     return "".join(result)
 
 
-def render_example(example):
+def describe_example(example):
+    """Return the page title and category without rendering fixtures."""
+    source_url = REPOSITORY + "/blob/main/yaml/examples/" + quote(example.name)
+    readme_path = example / "README.md"
+    spec_path = example / "spec.yaml"
+    title, _ = render_readme(readme_path.read_text(encoding="utf-8"), source_url)
+    spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+    spec = spec if isinstance(spec, dict) else {}
+    category, separator, _ = title.partition(": ")
+    if not separator:
+        category = str(spec.get("domain", "YAMAA example"))
+    return title, category
+
+
+def page_link(name, label, relation):
+    if name is None:
+        return f'<span class="is-disabled" aria-disabled="true">{label}</span>'
+    return f'<a href="{escape(name)}.html" rel="{relation}">{label}</a>'
+
+
+def render_index(entries):
+    """Render the gallery page linking every generated dashboard."""
+    groups = {}
+    for name, title, category in entries:
+        groups.setdefault(category, []).append((name, title))
+    sections = []
+    for category in sorted(groups):
+        items = "".join(
+            f'      <li><a href="{escape(name)}.html">{escape(title)}</a></li>\n'
+            for name, title in sorted(groups[category])
+        )
+        sections.append(
+            f'    <section aria-label="{escape(category)}">\n'
+            f'      <h2>{escape(category)}</h2>\n'
+            f'      <p class="count">{len(groups[category])} example'
+            + ("" if len(groups[category]) == 1 else "s") + "</p>\n"
+            f"      <ul>\n{items}      </ul>\n    </section>"
+        )
+    template = Template((HERE / "gallery.html").read_text(encoding="utf-8"))
+    result = template.substitute(
+        total=len(entries),
+        source_url=REPOSITORY + "/tree/main/yaml/examples",
+        sections="\n".join(sections) + "\n",
+    )
+    return result.encode("ascii", "xmlcharrefreplace")
+
+
+def render_example(example, previous=None, next=None):
     source_url = REPOSITORY + "/blob/main/yaml/examples/" + quote(example.name)
     readme_path = example / "README.md"
     spec_path = example / "spec.yaml"
@@ -226,6 +273,8 @@ def render_example(example):
         example_name=escape(example.name), page_title=escape(title), heading=escape(heading),
         category=escape(category), description=escape(title + ": README, inputs, expected output, and YAML specification."),
         source_url=REPOSITORY + "/tree/main/yaml/examples/" + quote(example.name),
+        prev_link=page_link(previous, "Previous example", "prev"),
+        next_link=page_link(next, "Next example", "next"),
         metrics="".join(f"<div><dt>{label}</dt><dd>{count}</dd></div>" for count, label in metrics),
         subject_options="".join(subject_options), readme=readme,
         input_files=input_files,
@@ -256,22 +305,29 @@ def main():
     if args.all:
         names = [path.name for path in sorted(EXAMPLES.iterdir()) if (path / "spec.yaml").is_file() and (path / "README.md").is_file()]
     elif not names:
-        names = [path.stem for path in sorted(args.output_dir.glob("*.html"))]
+        names = [path.stem for path in sorted(args.output_dir.glob("*.html")) if path.stem != "index"]
     if not names:
         parser.error("specify an example name or --all")
+    ordered = sorted(set(names))
+    complete = sorted(path.name for path in EXAMPLES.iterdir() if (path / "spec.yaml").is_file() and (path / "README.md").is_file())
+    neighbors = {name: (complete[index - 1] if index else None, complete[index + 1] if index + 1 < len(complete) else None) for index, name in enumerate(complete) if name in set(ordered)}
+    write_index = args.all or (not args.examples and (args.output_dir / "index.html").is_file())
     failures = []
-    for name in sorted(set(names)):
+    entries = []
+    for name in ordered:
         if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
             parser.error(f"invalid example name: {name}")
         example = EXAMPLES / name
         if not (example / "README.md").is_file() or not (example / "spec.yaml").is_file():
             parser.error(f"example must contain README.md and spec.yaml: {name}")
         try:
-            rendered = render_example(example)
+            previous, following = neighbors.get(name, (None, None))
+            rendered = render_example(example, previous, following)
         except (OSError, ValueError, yaml.YAMLError) as error:
             print(f"Cannot generate {name}: {error}", file=sys.stderr)
             failures.append(name)
             continue
+        entries.append((name,) + describe_example(example))
         destination = args.output_dir / f"{name}.html"
         if args.check:
             if not destination.is_file() or destination.read_bytes() != rendered:
@@ -282,6 +338,19 @@ def main():
         else:
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(rendered)
+            if not args.quiet:
+                print(f"Generated: {destination}")
+    if write_index:
+        index = render_index(entries)
+        destination = args.output_dir / "index.html"
+        if args.check:
+            if not destination.is_file() or destination.read_bytes() != index:
+                failures.append("index")
+                print(f"Stale or missing: {destination}", file=sys.stderr)
+            elif not args.quiet:
+                print("Current: index")
+        else:
+            destination.write_bytes(index)
             if not args.quiet:
                 print(f"Generated: {destination}")
     return 1 if failures else 0

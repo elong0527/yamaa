@@ -11,7 +11,7 @@ ADaM specifications in Excel. Each one has a different job.
 
 ## Start here
 
-**[Example dashboard: ADaM ADAE death outcome](examples/adam-adae-death-outcome.html)**
+**[Example gallery: every YAMAA example](examples/index.html)**
 Read the README, compare the input tables side by side with expected output
 below, and inspect the YAML in a collapsible sidebar. Highlight a subject to
 compare its records.

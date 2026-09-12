@@ -115,6 +115,9 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
 .code-line.is-target { background: #deeddf; }
 .plain-file { margin: 0; padding: 10px 18px 18px; overflow: auto; font-size: 14px; line-height: 1.6; }
 .page-footer { padding: 16px 28px; color: #64766b; font-size: 12px; gap: 10px; }
+.example-nav { display: flex; align-items: center; gap: 12px; }
+.example-nav a { color: #0c5e4b; }
+.example-nav .is-disabled { color: #a5b3ab; }
 @media (max-width: 1000px) {
   .metrics { gap: 16px; padding-left: 8px; }
   .workbench { --spec-width: 260px; }
@@ -214,7 +217,7 @@ death never collected as an event has no event to name.</p>
       </div>
     </div>
   </main>
-  <footer class="page-footer"><span>adam-adae-death-outcome</span><span>Source data and expected results, shown together.</span></footer>
+  <footer class="page-footer"><span>adam-adae-death-outcome</span><nav class="example-nav" aria-label="More examples"><span><span class="is-disabled" aria-disabled="true">Previous example</span></span><a href="index.html">All examples</a><span><a href="adam-adae-occurrence-flags.html" rel="next">Next example</a></span></nav></footer>
   <script>"use strict";
 
 document.body.classList.add("has-js");
