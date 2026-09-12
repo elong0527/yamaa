@@ -652,10 +652,6 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
-  negative-str-lower-non-string-source:
-    status: blocked
-    blocked_by: "#101"
-    reason: no yaml executor in R or Python yet
   negative-study-day-datetime-input:
     status: blocked
     blocked_by: "#101"

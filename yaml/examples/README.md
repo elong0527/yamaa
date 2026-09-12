@@ -203,7 +203,6 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-source-unknown-profile`](negative-source-unknown-profile/) | reject a subject listing stored under an unnamed format |
 | [`negative-source-unterminated-quote`](negative-source-unterminated-quote/) | reject a comment whose quoted text never closes |
 | [`negative-str-extract-undeclared-group`](negative-str-extract-undeclared-group/) | reject a site identifier taken from an uncaptured part |
-| [`negative-str-lower-non-string-source`](negative-str-lower-non-string-source/) | reject lowercasing a numeric site code |
 | [`negative-study-day-datetime-input`](negative-study-day-datetime-input/) | reject a study day measured from a moment |
 | [`negative-sum-non-numeric-source`](negative-sum-non-numeric-source/) | reject a severity burden totalled from severity words |
 | [`negative-to-date-date-source`](negative-to-date-date-source/) | reject extracting a date from a date |

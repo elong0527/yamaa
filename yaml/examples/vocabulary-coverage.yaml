@@ -32,7 +32,7 @@ coverage:
   source: [negative-source-undeclared-field]
   str_concat: [negative-usubjid-exceeds-length]
   str_extract: [negative-str-extract-undeclared-group]
-  str_lower: [negative-str-lower-non-string-source]
+  str_lower: {gap: "#229"}
   str_template: [negative-adsl-subject-reference]
   str_upper: [negative-variable-nested-expression]
   study_day: [negative-study-day-datetime-input]
