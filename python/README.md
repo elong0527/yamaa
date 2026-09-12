@@ -53,3 +53,33 @@ The loader applies YAML 1.2 core scalar rules, rejects YAML features outside
 the authored-source contract, reads safe schema includes, validates the document
 against the bundle, materializes R006 shorthands and defaults, and returns strict
 Pydantic models. It does not execute the specification or resolve inheritance.
+
+## Typed values and scalar expressions
+
+The runtime value kernel exposes strict Pydantic result models, explicit
+missingness, R011 conversions, R016 date and datetime values, an ordered Polars
+table contract, and R004 predicate evaluation. Scalar dispatch currently
+supports the normalized `source`, `literal`, and inline `mapping` expressions.
+Other valid operations return an explicit `UnsupportedResult` until their
+owning runtime components are implemented.
+
+```python
+from yamaa.expressions import MappingResolver, evaluate_expression
+from yamaa.models import ValueResult, convert_value
+from yamaa.specification.models import Expression
+
+resolver = MappingResolver({"RAW.AGE": "42"})
+expression = Expression(root={"source": {"variable": "RAW.AGE"}})
+source = evaluate_expression(expression, resolver)
+
+assert isinstance(source, ValueResult)
+age = convert_value(source.value, "int")
+assert age == ValueResult(value=42)
+```
+
+Run this component's focused tests from the repository root:
+
+```bash
+uv run --project python --isolated --extra test pytest \
+  python/tests/models python/tests/expressions
+```
