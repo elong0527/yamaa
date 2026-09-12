@@ -1,5 +1,5 @@
 schema_version: "1.0"
-parents: organization.yaml
+parents: spec_organization.yaml
 datasets:
   LB:
     types:

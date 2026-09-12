@@ -3224,6 +3224,26 @@ def example_spec_paths(example_dir: Path):
     )
 
 
+def example_entry_specs(example_dir: Path):
+    paths = example_spec_paths(example_dir)
+    parented = set()
+    for path in paths:
+        try:
+            with open(path, 'r', encoding='utf-8') as handle:
+                spec = yaml.load(handle, Loader=UniqueKeyLoader)
+        except (OSError, UnicodeError, yaml.YAMLError):
+            continue
+        if not isinstance(spec, dict):
+            continue
+        parents = spec.get('parents', [])
+        if isinstance(parents, str):
+            parents = [parents]
+        for parent in parents:
+            if isinstance(parent, str) and parent:
+                parented.add(Path(parent).name)
+    return [path for path in paths if path.name not in parented]
+
+
 def function_value_type(value):
     """Return the exact R018 scalar type, or a sentinel for invalid values."""
     value = normalize_non_finite_float(value)
@@ -7284,6 +7304,8 @@ def validate_producing_specs(
 
 
 def expected_resolved_path(example_dir, spec_path):
+    if not (example_dir / 'spec.yaml').is_file():
+        return example_dir / 'expected' / 'spec_resolved.yaml'
     suffix = spec_path.stem.removeprefix('spec')
     return example_dir / 'expected' / f"resolved{suffix}.yaml"
 
@@ -7556,7 +7578,7 @@ def validate_examples_structure(root: Path, env, warnings=None, manifest=None):
 
         example_errors = []
         spec_labels = []
-        for spec_path in example_spec_paths(ex_dir):
+        for spec_path in example_entry_specs(ex_dir):
             try:
                 with open(spec_path, 'r', encoding='utf-8') as f:
                     spec = yaml.load(f, Loader=UniqueKeyLoader)
@@ -9440,7 +9462,7 @@ def validate_examples_csv(root: Path, env=None):
         if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
             continue
 
-        for spec_path in example_spec_paths(ex_dir):
+        for spec_path in example_entry_specs(ex_dir):
             try:
                 with open(spec_path, 'r', encoding='utf-8') as f:
                     spec = yaml.load(f, Loader=UniqueKeyLoader)
@@ -9614,7 +9636,7 @@ def validate_join_key_inference(root: Path):
     for ex_dir in sorted(examples_dir.iterdir()):
         if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
             continue
-        for spec_path in example_spec_paths(ex_dir):
+        for spec_path in example_entry_specs(ex_dir):
             try:
                 with open(spec_path, 'r', encoding='utf-8') as handle:
                     spec = yaml.load(handle, Loader=UniqueKeyLoader)

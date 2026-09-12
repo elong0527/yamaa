@@ -35,10 +35,72 @@ OUTCOMES = (
 YAML_TOKEN = re.compile(
     r'''"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|\b(?:null|true|false)\b|\b\d+(?:\.\d+)?\b|[A-Za-z_][\w-]*(?=:)'''
 )
+SPEC_FILE_PATTERN = re.compile(r'^spec(?:_[a-z][a-z0-9_]*)?\.yaml$')
+SPEC_RESOLVED_NAME = 'spec_resolved.yaml'
 
 
 def escape(value):
     return html.escape(str(value), quote=True)
+
+
+def example_spec_files(example):
+    if not example.is_dir():
+        return []
+    return sorted(
+        path
+        for path in example.iterdir()
+        if path.is_file() and SPEC_FILE_PATTERN.fullmatch(path.name)
+    )
+
+
+def example_has_spec(example):
+    return bool(example_spec_files(example))
+
+
+def example_entry(example):
+    files = example_spec_files(example)
+    if (example / 'spec.yaml').is_file():
+        return example / 'spec.yaml', []
+    specs = {}
+    for path in files:
+        try:
+            specs[path.resolve()] = yaml.safe_load(path.read_text(encoding='utf-8'))
+        except (OSError, UnicodeError, yaml.YAMLError):
+            continue
+    parented = set()
+    for spec in specs.values():
+        if not isinstance(spec, dict):
+            continue
+        parents = spec.get('parents', [])
+        if isinstance(parents, str):
+            parents = [parents]
+        for parent in parents:
+            if isinstance(parent, str) and parent:
+                parented.add(Path(parent).name)
+    entries = [path for path in files if path.name not in parented]
+    entry = entries[0] if entries else (files[0] if files else None)
+    chain = []
+    if entry is not None:
+        seen = set()
+
+        def visit(path):
+            if path in seen:
+                return
+            seen.add(path)
+            spec = specs.get(path)
+            parents = spec.get('parents', []) if isinstance(spec, dict) else []
+            if isinstance(parents, str):
+                parents = [parents]
+            for parent in parents:
+                if not isinstance(parent, str) or not parent:
+                    continue
+                candidate = path.parent / parent
+                if candidate.is_file():
+                    visit(candidate.resolve())
+            if path != (entry.resolve() if entry else None):
+                chain.append(path)
+        visit(entry.resolve())
+    return entry, chain
 
 
 def render_readme(text, source_url):
@@ -186,7 +248,10 @@ def describe_example(example):
     """Return the page title and category without rendering fixtures."""
     source_url = REPOSITORY + "/blob/main/yaml/examples/" + quote(example.name)
     readme_path = example / "README.md"
-    spec_path = example / "spec.yaml"
+    entry_path, _ = example_entry(example)
+    if entry_path is None:
+        raise ValueError(f"example has no spec file: {example.name}")
+    spec_path = entry_path
     title, _ = render_readme(readme_path.read_text(encoding="utf-8"), source_url)
     spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
     spec = spec if isinstance(spec, dict) else {}
@@ -256,10 +321,35 @@ def render_index(entries):
     return result.encode("ascii", "xmlcharrefreplace")
 
 
+def render_spec_pane(filename, text, slug, single):
+    lines = text.splitlines()
+    code_lines, section_options = [], []
+    for number, line in enumerate(lines, 1):
+        line_id = f"yaml-line-{number}" if single else f"{slug}-line-{number}"
+        code_lines.append(
+            f'<span class="code-line" id="{line_id}"><span class="line-number" aria-hidden="true">{number}</span>'
+            f'<span class="code-source">{highlight_yaml(line)}</span></span>'
+        )
+        match = re.match(r"^([A-Za-z_][\w-]*):", line)
+        if match:
+            section_options.append(f'<option value="{line_id}">{escape(match.group(1))}</option>')
+    if single:
+        return "".join(code_lines), "".join(section_options), len(lines)
+    pane = (
+        f'<div class="spec-pane" id="pane-{slug}" data-filename="{escape(filename)}" data-lines="{len(lines)}">'
+        f'<div class="file-heading"><h3 class="filename">{escape(filename)}</h3>'
+        f'<span class="file-count">{len(lines)} lines</span></div>'
+        f'<pre><code>{"".join(code_lines)}</code></pre></div>'
+    )
+    return pane, "".join(section_options), len(lines)
+
+
 def render_example(example, previous=None, next=None):
     source_url = REPOSITORY + "/blob/main/yaml/examples/" + quote(example.name)
     readme_path = example / "README.md"
-    spec_path = example / "spec.yaml"
+    spec_path, chain = example_entry(example)
+    if spec_path is None:
+        raise ValueError(f"example has no spec file: {example.name}")
     title, readme = render_readme(readme_path.read_text(encoding="utf-8"), source_url)
     spec_text = spec_path.read_text(encoding="utf-8")
     # Parse metadata for labels and visual emphasis only; this does not execute the spec.
@@ -278,7 +368,7 @@ def render_example(example, previous=None, next=None):
         if name and source != f'{spec.get("base")}.{name}':
             derived.add(name)
     inputs = fixture_files(example / "input")
-    outputs = fixture_files(example / "expected")
+    outputs = [path for path in fixture_files(example / "expected") if path.name != SPEC_RESOLVED_NAME]
     input_files, _, input_subjects = render_files(inputs, "input", example, set(), {})
     output_files, output_rows, output_subjects = render_files(outputs, "output", example, derived, labels)
     subjects = sorted(input_subjects | output_subjects)
@@ -297,16 +387,26 @@ def render_example(example, previous=None, next=None):
         metrics.append((output_rows, "expected rows"))
     else:
         metrics.append((len(outputs), "expected files"))
-    lines = spec_text.splitlines()
-    code_lines, section_options = [], []
-    for number, line in enumerate(lines, 1):
-        code_lines.append(
-            f'<span class="code-line" id="yaml-line-{number}"><span class="line-number" aria-hidden="true">{number}</span>'
-            f'<span class="code-source">{highlight_yaml(line)}</span></span>'
+    resolved_path = example / "expected" / SPEC_RESOLVED_NAME
+    if not chain and not resolved_path.is_file():
+        spec_code, section_options, spec_line_count = render_spec_pane(
+            spec_path.name, spec_text, "yaml", True
         )
-        match = re.match(r"^([A-Za-z_][\w-]*):", line)
-        if match:
-            section_options.append(f'<option value="yaml-line-{number}">{escape(match.group(1))}</option>')
+    else:
+        panes = []
+        documents = [(path.name, path.read_text(encoding="utf-8")) for path in chain]
+        documents.append((spec_path.name, spec_text))
+        if resolved_path.is_file():
+            documents.append((SPEC_RESOLVED_NAME, resolved_path.read_text(encoding="utf-8")))
+        for index, (filename, text) in enumerate(documents):
+            pane, options, count = render_spec_pane(
+                filename, text, Path(filename).stem, False
+            )
+            panes.append(pane)
+            if index == len(documents) - 1:
+                section_options, spec_line_count = options, count
+        panes.append(f"<script>{(HERE / 'spec-panes.js').read_text(encoding='utf-8')}</script>")
+        spec_code = "".join(panes)
     template = Template((HERE / "dashboard.html").read_text(encoding="utf-8"))
     result = template.substitute(
         example_name=escape(example.name), page_title=escape(title), heading=escape(heading),
@@ -320,7 +420,7 @@ def render_example(example, previous=None, next=None):
         input_caption=f"{len(inputs)} source file" + ("" if len(inputs) == 1 else "s"),
         output_files=output_files,
         output_caption=f"{output_rows} expected row" + ("" if output_rows == 1 else "s") if any(path.suffix == ".csv" for path in outputs) else "Expected artifacts",
-        spec_lines=len(lines), spec_code="".join(code_lines),
+        spec_lines=spec_line_count, spec_code=spec_code,
         section_options="".join(section_options),
         styles=(HERE / "dashboard.css").read_text(encoding="utf-8"),
         script=(HERE / "dashboard.js").read_text(encoding="utf-8"),
@@ -333,7 +433,7 @@ def render_example(example, previous=None, next=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("examples", nargs="*", help="Example directory names; defaults to existing generated dashboards")
-    parser.add_argument("--all", action="store_true", help="Generate every example containing README.md and spec.yaml")
+    parser.add_argument("--all", action="store_true", help="Generate every example containing README.md and a spec file")
     parser.add_argument("--check", action="store_true", help="Fail if a selected dashboard is missing or differs; write nothing")
     parser.add_argument("--quiet", action="store_true", help="Suppress successful generation messages")
     parser.add_argument("--output-dir", type=Path, default=DESTINATION, help="Destination directory (default: docs/examples)")
@@ -342,13 +442,13 @@ def main():
         parser.error("choose --all or explicit example names")
     names = args.examples
     if args.all:
-        names = [path.name for path in sorted(EXAMPLES.iterdir()) if (path / "spec.yaml").is_file() and (path / "README.md").is_file()]
+        names = [path.name for path in sorted(EXAMPLES.iterdir()) if example_has_spec(path) and (path / "README.md").is_file()]
     elif not names:
         names = [path.stem for path in sorted(args.output_dir.glob("*.html")) if path.stem != "index"]
     if not names:
         parser.error("specify an example name or --all")
     ordered = sorted(set(names))
-    complete = sorted(path.name for path in EXAMPLES.iterdir() if (path / "spec.yaml").is_file() and (path / "README.md").is_file())
+    complete = sorted(path.name for path in EXAMPLES.iterdir() if example_has_spec(path) and (path / "README.md").is_file())
     neighbors = {name: (complete[index - 1] if index else None, complete[index + 1] if index + 1 < len(complete) else None) for index, name in enumerate(complete) if name in set(ordered)}
     write_index = args.all or (not args.examples and (args.output_dir / "index.html").is_file())
     failures = []
@@ -357,8 +457,8 @@ def main():
         if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
             parser.error(f"invalid example name: {name}")
         example = EXAMPLES / name
-        if not (example / "README.md").is_file() or not (example / "spec.yaml").is_file():
-            parser.error(f"example must contain README.md and spec.yaml: {name}")
+        if not (example / "README.md").is_file() or not example_has_spec(example):
+            parser.error(f"example must contain README.md and a spec file: {name}")
         try:
             previous, following = neighbors.get(name, (None, None))
             rendered = render_example(example, previous, following)

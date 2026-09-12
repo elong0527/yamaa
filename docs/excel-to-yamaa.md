@@ -715,11 +715,11 @@ the parent changes, every copy that has already diverged stays diverged. R017
 turns this into real layers.
 
 ```yaml
-# layers/organization.yaml -- corporate layer: data contract and common columns
+# spec_organization.yaml -- corporate layer: data contract and common columns
 schema_version: "1.0"
 datasets:
-  LB: ../input/lb.csv
-  UNUSED: ../input/not-used.csv
+  LB: input/lb.csv
+  UNUSED: input/not-used.csv
 base: LB
 record_lookups:
   - id: unused_reference
@@ -748,9 +748,9 @@ metadata: {scope: organization}
 ```
 
 ```yaml
-# layers/compound.yaml -- compound layer: add types, retitle one column
+# spec_compound.yaml -- compound layer: add types, retitle one column
 schema_version: "1.0"
-parents: organization.yaml
+parents: spec_organization.yaml
 datasets:
   LB:
     types: {USUBJID: str, LBTESTCD: str, LBSTRESN: float, LBSTRESU: str}
@@ -761,19 +761,9 @@ metadata: {scope: compound}
 ```
 
 ```yaml
-# layers/study.yaml -- study layer
+# spec_study.yaml -- study layer, and the entry file
 schema_version: "1.0"
-parents: [organization.yaml, compound.yaml]
-columns:
-  - name: AVALU
-    label: Standardized Analysis Unit
-metadata: {scope: study}
-```
-
-```yaml
-# spec.yaml -- the deliverable, and the entry file
-schema_version: "1.0"
-parents: layers/study.yaml
+parents: [spec_organization.yaml, spec_compound.yaml]
 domain: ADLB
 keys: [USUBJID, PARAMCD]
 output:
@@ -781,12 +771,15 @@ output:
 columns:
   - name: AVAL
     label: Analysis Value
-```
+  - name: AVALU
+    label: Standardized Analysis Unit
+metadata: {scope: study}
 
 What to point out:
 
 - **Resolution is depth-first, left to right, and later wins**:
-  `organization -> compound -> study -> spec`. So `AVAL.label` ends as
+  `spec_organization -> spec_compound -> spec_study`, recorded as
+  `expected/spec_resolved.yaml`. So `AVAL.label` ends as
   `Analysis Value`. A difference between two parents is settled by their order;
   it is **not** a conflict error.
 - **Composition is shallow -- the most commonly misread rule.** Only the four
@@ -799,8 +792,9 @@ What to point out:
 - **A YAML null at a composition boundary clears** an inherited optional field.
   It is not "set to a missing value" -- `derivation: {literal: null}` is a null
   *inside* a field value and still means "derive a missing value".
-- **The entry file must declare a complete `output`.** An inherited layer
-  cannot decide the final artifact's membership or order.
+- **The entry file must declare a complete `output`.** Here that is
+  `spec_study.yaml`: an inherited layer cannot decide the final artifact's
+  membership or order.
 - **Pruning.** This example deliberately leaves an `UNUSED` dataset, an
   `unused_reference` lookup and a `TEMP` column in the corporate layer. Nothing
   reachable references them, so they are removed during resolution. **A
@@ -824,7 +818,7 @@ through project functions.**
 
 ```yaml
 schema_version: "1.0"
-parents: layers/study.yaml                         # optional: inherit shared layers
+parents: spec_study.yaml                           # optional: inherit shared levels
 domain: ADXX
 datasets:
   SRC:  input/src.csv                              # typeless container: fields default to str
