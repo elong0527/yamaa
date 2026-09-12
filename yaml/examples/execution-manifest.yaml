@@ -128,10 +128,6 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
-  adam-adlb-standardized-result:
-    status: blocked
-    blocked_by: "#101"
-    reason: no yaml executor in R or Python yet
   adam-adoe-study-eye:
     status: blocked
     blocked_by: "#101"
@@ -793,6 +789,10 @@ examples:
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
   sdtm-vs-visit-study-day:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  spec-inheritance:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet

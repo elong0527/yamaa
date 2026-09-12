@@ -15,13 +15,16 @@ tracker, one work item per root cause.
 
     <standard>-<domain>-<subject>/
         README.md
-        spec.yaml | spec_<variant>.yaml ...
-        layers/*.yaml                       # when the entry inherits
-        define.yaml                         # when the entry generates a document
+        spec.yaml                                   # one specification
+        spec_<variant>.yaml ...                     # alternative specifications, never mixed with spec.yaml
+        spec_<level>.yaml ...                       # multi-level specifications only: no spec.yaml;
+                                                    # the file no other file parents is the entry
+        define.yaml                                 # when the entry generates a document
         input/*.csv
         expected/<domain>.csv
-        expected/define.xml                 # when the entry generates a document
-        expected/resolved[_<variant>].yaml  # when the entry inherits
+        expected/define.xml                         # when the entry generates a document
+        expected/resolved[_<variant>].yaml          # single-entry inheritance
+        expected/spec_resolved.yaml                 # multi-level inheritance: resolution of the entry chain
 
 Use `spec.yaml` for one specification. Use one or more `spec_<variant>.yaml`
 files when the example intentionally demonstrates a runtime or design variant
@@ -38,8 +41,19 @@ Use `expected/resolved.yaml` with `spec.yaml`, or
 `expected/resolved_<variant>.yaml` with `spec_<variant>.yaml`. This fixture
 must be complete, canonical, minimal, and free of `parents`.
 
+A multi-level example keeps each inheritance level beside the entry as
+`spec_<level>.yaml` and carries no top-level `spec.yaml`. The level no other
+file names in `parents` is the entry: it declares the complete `output`, and
+the chain resolves to `expected/spec_resolved.yaml`, which the dashboard shows
+in its specification dropdown (the default view) rather than as an expected
+dataset. Reserve this layout for examples whose point is the layering itself;
+a single specification with shared parents keeps `spec.yaml`.
+
 Name the directory for what it derives, not for the construct it uses:
-`sdtm-vs-visit-study-day`, not `sdtm-vs-mapping-from`.
+`sdtm-vs-visit-study-day`, not `sdtm-vs-mapping-from`. The exception is an
+example whose subject is the specification language itself: name it `spec-*`
+(`spec-inheritance`), and the gallery lists it under its own Specification
+category rather than a data domain.
 
 ## The README describes data, not the specification
 
@@ -62,6 +76,12 @@ study-data words. Write:
 - for every negative example, a final `## How to fix` section that recommends
   the safest correction first and uses a short YAML snippet when it clarifies
   the change.
+
+A `spec-*` example explains spec behavior rather than deriving data, so it
+carries no `Variables:` list: its `Input:` names the spec files and how they
+compose, and its `Note:` states the behavior rule. It still names every
+non-key golden column somewhere in the contract so the coverage check below
+stays silent.
 
 Keep bullets to the variables a reader must understand. Direct key copies and
 fixed values need no bullet.
