@@ -6,7 +6,6 @@ datasets:
     types:
       VSSEQ: int
       VSSTRESN: float
-base: VS
 keys: [STUDYID, USUBJID, FASEQ]
 
 output:

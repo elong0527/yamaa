@@ -3854,7 +3854,7 @@ def validate_grouped_rows(spec, spec_label):
                 f"{', '.join(duplicates)}"
             )
 
-        driver = row.get('dataset', spec.get('base'))
+        driver = row.get('dataset', default_driver_dataset(spec))
         if not isinstance(driver, str):
             continue
         for variable_index, variable in enumerate(group_by):
@@ -4406,22 +4406,22 @@ def validate_spec_contracts(
 
     rows = spec.get('rows')
     row_entries = rows if isinstance(rows, list) else []
-    base = spec.get('base')
+    default_driver = default_driver_dataset(spec)
     full_spec = all(
         field in spec
         for field in ('domain', 'datasets', 'keys', 'output', 'columns')
     )
-    if full_spec and not row_entries and not isinstance(base, str):
+    if full_spec and not row_entries and not isinstance(default_driver, str):
         errors.append(
             f"ERROR: {spec_label}.base: base is required when rows is absent "
-            "or empty"
+            "or empty and more than one dataset is declared"
         )
     for index, row in enumerate(row_entries):
         if (
             full_spec
             and isinstance(row, dict)
             and 'dataset' not in row
-            and not isinstance(base, str)
+            and not isinstance(default_driver, str)
         ):
             errors.append(
                 f"ERROR: {spec_label}.rows[{index}].dataset: row requires a "
@@ -5227,7 +5227,7 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
         for index, row in enumerate(rows):
             if not isinstance(row, dict):
                 continue
-            driver = row.get('dataset', spec.get('base'))
+            driver = row.get('dataset', default_driver_dataset(spec))
             driver_fields = (
                 datasets.get(driver, {}) if isinstance(driver, str) else {}
             )
@@ -5470,7 +5470,7 @@ def validate_spec_numeric_expressions(
         for index, row in enumerate(rows):
             if not isinstance(row, dict):
                 continue
-            driver = row.get('dataset', spec.get('base'))
+            driver = row.get('dataset', default_driver_dataset(spec))
             driver_fields = (
                 datasets.get(driver, {}) if isinstance(driver, str) else {}
             )
@@ -6711,6 +6711,18 @@ def validate_record_lookup_static_semantics(
     return errors
 
 
+def default_driver_dataset(spec):
+    base = spec.get('base')
+    if isinstance(base, str):
+        return base
+    datasets = spec.get('datasets')
+    if isinstance(datasets, dict):
+        names = [name for name in datasets if isinstance(name, str)]
+        if len(names) == 1:
+            return names[0]
+    return None
+
+
 def column_dependency_graph(spec, env):
     columns = spec.get('columns')
     if not isinstance(columns, list):
@@ -6903,7 +6915,7 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
         for index, row in enumerate(rows):
             if not isinstance(row, dict):
                 continue
-            driver = row.get('dataset', spec.get('base'))
+            driver = row.get('dataset', default_driver_dataset(spec))
             derivations = row.get('derivations')
             if not isinstance(derivations, dict):
                 continue
@@ -9612,7 +9624,7 @@ def validate_join_key_inference(root: Path):
                 continue
             keys = spec.get('keys') or []
             datasets = spec.get('datasets') or {}
-            base = spec.get('base')
+            base = default_driver_dataset(spec)
             if not isinstance(keys, list) or not isinstance(datasets, dict):
                 continue
             for qualifier in sorted(spec_qualified_datasets(spec)):

@@ -110,6 +110,14 @@ class Specification(_StrictModel):
     verifications: list[Expression] | None = None
     metadata: dict[str, str] | None = None
 
+    @property
+    def default_driver(self):
+        if self.base is not None:
+            return self.base
+        if len(self.datasets) == 1:
+            return next(iter(self.datasets))
+        return None
+
 
 class LoadedSpecification(_StrictModel):
     """A normalized specification and its file origins."""

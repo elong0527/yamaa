@@ -72,7 +72,6 @@ schema_version: "1.0"
 domain: DM
 datasets:
   ODM: input/odm.csv
-base: ODM
 keys: [STUDYID, USUBJID]
 
 output:

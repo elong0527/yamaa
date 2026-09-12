@@ -2,7 +2,6 @@ schema_version: "1.0"
 domain: ADSL
 datasets:
   DM: {path: input/dm.csv, types: {AGE: int}}
-base: DM
 keys: [STUDYID, USUBJID]
 
 output:

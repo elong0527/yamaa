@@ -2,7 +2,6 @@ schema_version: "1.0"
 domain: ADEX
 datasets:
   EX: input/ex.csv
-base: EX
 keys: [STUDYID, USUBJID, EXSEQ]
 
 output:

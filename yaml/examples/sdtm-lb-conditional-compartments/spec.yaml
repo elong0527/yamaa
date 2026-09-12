@@ -2,7 +2,6 @@ schema_version: "1.0"
 domain: LB
 datasets:
   BX_RAW: input/bx_raw.csv
-base: BX_RAW
 keys: [STUDYID, USUBJID, LBSEQ]
 
 output:

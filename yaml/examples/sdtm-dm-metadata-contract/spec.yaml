@@ -2,7 +2,6 @@ schema_version: "1.0"
 domain: DM
 datasets:
   DM_RAW: input/dm_raw.csv
-base: DM_RAW
 keys: [STUDYID, USUBJID]
 submission:
   label: Demographics

@@ -2,7 +2,6 @@ schema_version: "1.0"
 domain: ADEG
 datasets:
   ADEG_IN: {path: input/adeg.csv, types: {AVAL: float}}
-base: ADEG_IN
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 
 output:

@@ -31,7 +31,8 @@ does not define what an expression means (R007), how a name binds to a source
 
 **R001-4.** Each `rows` entry uses its explicit `dataset` as the row driver.
 If `dataset` is omitted, it uses root `base`. `base` is optional when every
-row declares a dataset.
+row declares a dataset, and when `datasets` declares exactly one dataset:
+that dataset is the default driver.
 
 **R001-5.** A row template has one of two modes:
 
@@ -73,7 +74,7 @@ upstream and its expanded records enter the specification as ordinary input.
 
 **R001-12.** When `rows` is absent or empty, row construction produces exactly
 one output row per `base` record, in base-record order. `base` is required in
-that case.
+that case, unless `datasets` declares exactly one dataset, which drives.
 
 ## Expression evaluation
 
@@ -163,8 +164,10 @@ evaluation order to mapping order or to repeated reads of one partition.
 
 ## Errors
 
-- **R001-32.** A row without an explicit `dataset` or default `base`: fail.
-- **R001-33.** A specification with no `rows` entry and no `base`: fail.
+- **R001-32.** A row without an explicit `dataset` or default driver: fail.
+- **R001-33.** A specification with no `rows` entry and no default driver:
+  fail. The default driver is root `base`, or the single declared dataset
+  when `base` is omitted.
 - **R001-34.** An empty or duplicate `row.group_by`: fail.
 - **R001-35.** A `row.group_by` variable not qualified to that row's driver:
   fail.

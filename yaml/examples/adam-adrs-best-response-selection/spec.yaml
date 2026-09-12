@@ -2,7 +2,6 @@ schema_version: "1.0"
 domain: ADRS
 datasets:
   ADRSPRE: input/adrs_pre.csv
-base: ADRSPRE
 keys: [STUDYID, USUBJID, ASEQ]
 
 output:

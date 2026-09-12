@@ -2779,7 +2779,7 @@ class TestSpecContracts(unittest.TestCase):
     def test_rejects_missing_base_and_incomplete_column_coverage(self):
         spec = {
             "domain": "ADSL",
-            "datasets": {"DM": "dm.csv"},
+            "datasets": {"DM": "dm.csv", "VS": "vs.csv"},
             "keys": ["USUBJID"],
             "output": {"columns": ["USUBJID", "AGE"]},
             "columns": [
@@ -2794,6 +2794,38 @@ class TestSpecContracts(unittest.TestCase):
         self.assertIn("base is required", message)
         self.assertIn("AGE", message)
         self.assertIn("no derivation", message)
+
+    def test_accepts_missing_base_with_one_dataset(self):
+        spec = {
+            "domain": "ADSL",
+            "datasets": {"DM": "dm.csv"},
+            "keys": ["USUBJID"],
+            "output": {"columns": ["USUBJID"]},
+            "columns": [
+                {"name": "USUBJID", "derivation": {"source": "DM.USUBJID"}},
+            ],
+        }
+
+        self.assertEqual(
+            VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml"), []
+        )
+
+    def test_default_driver_dataset_prefers_base(self):
+        self.assertEqual(
+            VALIDATOR.default_driver_dataset(
+                {"base": "DM", "datasets": {"DM": "dm.csv", "VS": "vs.csv"}}
+            ),
+            "DM",
+        )
+        self.assertEqual(
+            VALIDATOR.default_driver_dataset({"datasets": {"DM": "dm.csv"}}),
+            "DM",
+        )
+        self.assertIsNone(
+            VALIDATOR.default_driver_dataset(
+                {"datasets": {"DM": "dm.csv", "VS": "vs.csv"}}
+            )
+        )
 
     def test_rejects_lookup_pairing_and_verification_constraints(self):
         spec = {

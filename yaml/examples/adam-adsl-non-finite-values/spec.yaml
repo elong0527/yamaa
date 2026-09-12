@@ -7,7 +7,6 @@ datasets:
       POSITIVE_INFINITY: float
       NEGATIVE_INFINITY: float
       NOT_A_NUMBER: float
-base: DM
 keys: [USUBJID]
 
 output:
