@@ -31,10 +31,10 @@ source variables, and `mapping_from`.
 **R002-2.** A declaration is a path, or a path with the types its fields
 carry; R014 owns that reading and the shorthand between the two forms.
 
-**R002-3.** A declared path is a `project_path`, resolved relative to the
-specification file and confined by R021. R017 preserves that origin when
-a declaration is inherited and rebases the path in a materialized
-resolved specification.
+**R002-3.** A declared path is a `project_path`. R021 fixes its written form,
+the approved root it resolves against, and what a run may read from it. R017
+preserves that origin when a declaration is inherited and rebases a relative
+path in a materialized resolved specification.
 
 **R002-4.** Every referenced dataset identifier must exist in `datasets`.
 

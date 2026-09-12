@@ -3235,18 +3235,82 @@ class TestProjectResourceBoundary(unittest.TestCase):
         self.assertIsNone(condition)
         self.assertEqual(accepted.read_bytes(), self.source.read_bytes())
 
-    def test_rejects_rooted_written_forms(self):
-        for written in ("/etc/passwd", "C:/data/dm.csv", "input\\dm.csv"):
+    def test_rejects_rooted_paths_naming_no_approved_root(self):
+        for written in ("/etc/passwd", "C:/data/dm.csv"):
             with self.subTest(written=written):
                 self.assertEqual(
                     self.resolve(written)[1], "resource_path_not_relative"
                 )
+
+    def test_accepts_a_rooted_path_under_an_approved_data_root(self):
+        store = self.root / "store"
+        store.mkdir()
+        held = store / "lbref.csv"
+        held.write_text("LBTESTCD\nALT\n", encoding="utf-8")
+        confined = self.root / "project"
+        confined.mkdir()
+
+        accepted, condition = VALIDATOR.resolve_project_path(
+            f"{store.as_posix()}/lbref.csv",
+            confined,
+            confined,
+            data_roots=[store],
+        )
+
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.read_bytes(), held.read_bytes())
+
+    def test_accepts_a_rooted_path_whose_anchor_is_a_symbolic_link(self):
+        # macOS spells a temporary directory through /var, a link into
+        # /private. R021-15 exempts the anchor, so the spelling a user writes
+        # is accepted without resolving the written path first.
+        store = self.root / "store"
+        store.mkdir()
+        (store / "lbref.csv").write_text("LBTESTCD\nALT\n", encoding="utf-8")
+        linked = self.root / "data"
+        linked.symlink_to(store, target_is_directory=True)
+
+        accepted, condition = VALIDATOR.resolve_project_path(
+            f"{linked.as_posix()}/lbref.csv",
+            self.root,
+            self.root,
+            data_roots=[linked],
+        )
+
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.name, "lbref.csv")
+
+    def test_rejects_a_symbolic_link_below_a_rooted_anchor(self):
+        store = self.root / "store"
+        store.mkdir()
+        (store / "lbref.csv").write_text("LBTESTCD\nALT\n", encoding="utf-8")
+        (store / "alias.csv").symlink_to("lbref.csv")
+
+        _, condition = VALIDATOR.resolve_project_path(
+            f"{store.as_posix()}/alias.csv",
+            self.root,
+            self.root,
+            data_roots=[store],
+        )
+
+        self.assertEqual(condition, "resource_path_symlink")
+
+    def test_rooted_and_relative_spellings_reach_one_file(self):
+        rooted, rooted_condition = self.resolve(
+            f"{self.root.as_posix()}/input/dm.csv"
+        )
+        relative, relative_condition = self.resolve("input/dm.csv")
+
+        self.assertIsNone(rooted_condition)
+        self.assertIsNone(relative_condition)
+        self.assertEqual(rooted.resolve(), relative.resolve())
 
     def test_rejects_uri_schemes(self):
         for written in (
             "https://example.org/dm.csv",
             "file:///etc/passwd",
             "s3://bucket/dm.csv",
+            "C:data/dm.csv",
         ):
             with self.subTest(written=written):
                 self.assertEqual(
@@ -3269,6 +3333,10 @@ class TestProjectResourceBoundary(unittest.TestCase):
         for written in (
             "input//dm.csv",
             "input/dm.csv/",
+            "input\\dm.csv",
+            "",
+            "/",
+            "/data/../lbref.csv",
         ):
             with self.subTest(written=written):
                 self.assertEqual(
@@ -3383,6 +3451,94 @@ class TestProjectResourceBoundary(unittest.TestCase):
         self.assertIsNone(replaced)
         self.assertEqual(condition, "resource_path_content_changed")
         self.assertEqual(accepted.csv_header(), ["STUDYID", "AGE"])
+
+
+class TestProjectConfiguration(unittest.TestCase):
+    """R021-1 to R021-5: the study says where its own data is kept."""
+
+    def setUp(self):
+        self.test_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.test_dir.name)
+        self.study = self.root / "study"
+        self.study.mkdir()
+        self.store = self.root / "data"
+        self.store.mkdir()
+        (self.store / "lbref.csv").write_text("LBTESTCD\nALT\n", encoding="utf-8")
+
+    def tearDown(self):
+        self.test_dir.cleanup()
+
+    def configure(self, body):
+        path = self.study / VALIDATOR.PROJECT_CONFIGURATION_NAME
+        path.write_text(body, encoding="utf-8")
+        return path
+
+    def test_a_root_with_no_configuration_declares_nothing(self):
+        roots, errors = VALIDATOR.read_project_configuration(self.study)
+
+        self.assertEqual(roots, ())
+        self.assertEqual(errors, [])
+
+    def test_a_declared_data_root_admits_a_rooted_path(self):
+        # self.root is a temporary directory nobody resolved, so on macOS the
+        # declared root is spelled through /var. Canonicalizing it here would
+        # reject the rooted path the study writes.
+        self.configure(f'version: "1.0"\ndata_roots:\n  - {self.store.as_posix()}\n')
+
+        accepted, condition = VALIDATOR.resolve_project_path(
+            f"{self.store.as_posix()}/lbref.csv",
+            self.study,
+            self.study,
+            VALIDATOR.project_data_roots(self.study),
+        )
+
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.name, "lbref.csv")
+
+    def test_the_same_path_is_rejected_without_a_configuration(self):
+        _, condition = VALIDATOR.resolve_project_path(
+            f"{self.store.as_posix()}/lbref.csv",
+            self.study,
+            self.study,
+            VALIDATOR.project_data_roots(self.study),
+        )
+
+        self.assertEqual(condition, "resource_path_not_relative")
+
+    def test_a_relative_data_root_is_read_from_the_project_root(self):
+        self.configure('version: "1.0"\ndata_roots:\n  - ../data\n')
+
+        declared = VALIDATOR.project_data_roots(self.study)
+
+        self.assertEqual(
+            tuple(root.resolve() for root in declared), (self.store.resolve(),)
+        )
+
+    def test_reports_a_configuration_a_run_cannot_start_from(self):
+        cases = {
+            "- not a mapping\n": "expected a mapping",
+            'version: "2.0"\n': "version: expected '1.0'",
+            'version: "1.0"\nunknown: 1\n': "unknown: unknown field",
+            'version: "1.0"\ndata_roots: "/data"\n': "expected a list",
+            'version: "1.0"\ndata_roots:\n  - ./absent\n': "not an existing directory",
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                self.configure(body)
+                _, errors = VALIDATOR.read_project_configuration(self.study)
+                self.assertTrue(
+                    any(expected in error for error in errors),
+                    f"{expected!r} not in {errors!r}",
+                )
+
+    def test_the_repository_sweep_finds_a_broken_configuration(self):
+        self.configure('version: "1.0"\ndata_roots: 7\n')
+
+        errors = VALIDATOR.validate_project_configurations(self.root)
+
+        self.assertTrue(
+            any("data_roots" in error for error in errors), errors
+        )
 
 
 class TestProjectResourceBoundaryInSpecs(unittest.TestCase):

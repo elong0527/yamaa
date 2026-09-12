@@ -168,7 +168,9 @@ from the entry file's directory.
 relative path is rebased relative to the entry file without changing the local
 file it denotes. If the local platform cannot express that file relative to the
 entry file, the canonical absolute local path is used. An absolute contributed
-path remains an absolute path. `parents` paths are not materialized.
+path is materialized exactly as it was written, because R021 resolves it
+against the approved root it names and reads that written form.
+`parents` paths are not materialized.
 
 **R017-24.** Rebasing states where a file is, not whether a run may read it. A
 rebased `project_path` is accepted or rejected by R021 in its rebased form.

@@ -78,8 +78,8 @@ shorthand for a `dataset_class` with no `types`.
 
 **R014-7.** `dataset_class.schema` makes a stored artifact carry the output
 contract and workflow provenance of the Yamaa specification that produces it.
-It is a `project_path` resolved relative to the consuming specification like
-`dataset_class.path`, so R021 confines both. The referenced document is a
+It is a `project_path` resolved like `dataset_class.path`, so R021 confines
+both. The referenced document is a
 complete specification validated against the same `root_class` in
 `schema.yaml`; there is no second source-schema class or field-description
 language.

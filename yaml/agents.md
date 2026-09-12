@@ -49,8 +49,11 @@ outside the rule index until their contracts and example coverage are complete.
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.
 - Declare every source path as a relative file inside the example directory.
-  R021 confines what a run may read, so a rooted path, a URL, a parent
-  traversal, or a symbolic link belongs only in a negative example.
+  An example is validated with its own directory as the only approved root
+  and carries no `yamaa-project.yaml`, so a rooted path names no approved
+  location here, and it belongs with a URL, a parent traversal, and a symbolic
+  link in a negative example. A rooted path is for a study that declares a
+  data root, not for a fixture this repository carries.
 - Write every fixture under R023's source profile: UTF-8 without a byte-order
   mark, comma-separated fields, a named non-empty field per column, and the
   same field count in every record. A file that departs from it belongs only

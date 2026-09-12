@@ -23,7 +23,15 @@ from yamaa.io.artifact import (
     render_csv,
 )
 from yamaa.io.parquet import parquet_schema, read_parquet, render_parquet
-from yamaa.io.project import ProjectResources, ResourceFailure
+from yamaa.io.project import (
+    PROJECT_CONFIGURATION_NAME,
+    ApprovedRoots,
+    ProjectConfigurationError,
+    ProjectResources,
+    ResourceFailure,
+    approve_roots,
+    find_project_configuration,
+)
 from yamaa.io.publish import ArtifactTarget, publish_artifact
 from yamaa.io.source import (
     LoadedDataset,
@@ -34,18 +42,23 @@ from yamaa.io.source import (
 )
 
 __all__ = [
+    "PROJECT_CONFIGURATION_NAME",
+    "ApprovedRoots",
     "Artifact",
     "ArtifactDiagnostic",
     "ArtifactError",
     "ArtifactProfile",
     "ArtifactTarget",
     "LoadedDataset",
+    "ProjectConfigurationError",
     "ProjectResources",
     "ResourceFailure",
     "SourceDiagnostic",
     "SourceError",
+    "approve_roots",
     "artifact_profile",
     "build_artifact",
+    "find_project_configuration",
     "load_source_table",
     "load_source_tables",
     "parquet_schema",

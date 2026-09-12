@@ -76,10 +76,16 @@ analysis-results metadata, and split datasets are refusals with named re-entry
 triggers rather than silent omissions.
 
 R021 gives every declared source one resource contract: a run receives one
-approved project root, a declared path is a relative file inside it with no
-rooted form, URI scheme, parent traversal, or symbolic link, and each accepted
+approved project root and the data roots the study's own `yamaa-project.yaml`
+declares or its runner approved, a declared path is a relative file inside the
+project root or a rooted file inside an approved data root, with no URI scheme,
+no escape above its root, and no symbolic link below it, and each accepted
 physical file is read once as one immutable byte snapshot that cannot be
-substituted between validation and ingestion.
+substituted between validation and ingestion. A rooted path is how a study
+keeps code and data in different places. The roots are fixed before any
+specification is read and come from the entry study alone, so composition never
+widens them, and a runner can cap or decline what a study declares -- which is
+where a packaging run enforces the portability a submission needs.
 
 R023 gives every delimited source one syntax: UTF-8 without a byte-order mark,
 a comma between fields, `U+000A` or `U+000D U+000A` between records, and
