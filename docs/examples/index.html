@@ -14,12 +14,19 @@
     h1 { font-size: 30px; margin: 8px 0 4px; }
     .lede { color: #4c5b54; max-width: 70ch; }
     .gallery { padding: 8px 36px 40px; }
-    .gallery h2 { font-size: 17px; margin: 28px 0 8px; color: #0c5e4b; }
+    .gallery .outcome { border-top: 1px solid #d9e3dd; margin-top: 30px; padding-top: 18px; }
+    .gallery .outcome:first-child { border-top: 0; margin-top: 12px; padding-top: 0; }
+    .gallery h2 { font-size: 22px; margin: 0 0 4px; color: #1d2b25; }
+    .gallery h3 { font-size: 16px; margin: 24px 0 6px; color: #0c5e4b; }
+    .gallery .outcome-note { color: #4c5b54; max-width: 70ch; margin: 0; }
     .gallery ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px 20px; }
     .gallery li a { color: #125cad; text-decoration: none; }
     .gallery li a:hover { text-decoration: underline; }
     .gallery .count { color: #64766b; font-size: 12px; margin: 4px 0 0; }
     .page-footer { padding: 16px 36px; color: #64766b; font-size: 12px; }
+    .outcome-jump { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 12px; }
+    .outcome-jump a { color: #125cad; text-decoration: none; font-weight: 600; }
+    .outcome-jump a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -27,334 +34,403 @@
     <div class="brand">YAMAA / Example explorer</div>
     <h1>All examples</h1>
     <p class="lede">189 example dashboards, generated from <a href="https://github.com/elong0527/yamaa/tree/main/yaml/examples">yaml/examples</a>. Each page shows the README, the source fixtures, the expected artifacts, and the YAML specification.</p>
+    <nav class="outcome-jump" aria-label="Jump to a group"><a href="#positive">Examples (94)</a><a href="#negative">Anti-pattern (95)</a></nav>
   </header>
   <main class="gallery" aria-label="Example gallery">
-    <section aria-label="ADaM ADAE">
-      <h2>ADaM ADAE</h2>
-      <p class="count">31 examples</p>
-      <ul>
-      <li><a href="adam-adae-death-outcome.html">ADaM ADAE: carry each subject&#x27;s death onto every event</a></li>
-      <li><a href="adam-adae-event-severity.html">ADaM ADAE: carry each event&#x27;s severity from its supplemental record</a></li>
-      <li><a href="adam-adae-occurrence-flags.html">ADaM ADAE: flag the first occurrence at three levels</a></li>
-      <li><a href="adam-adae-partial-dates.html">ADaM ADAE: impute partial dates</a></li>
-      <li><a href="adam-adae-post-dose-onset.html">ADaM ADAE: classify an event by the moment it started</a></li>
-      <li><a href="adam-adae-post-reference-event.html">ADaM ADAE: flag an event after a specific reference event</a></li>
-      <li><a href="adam-adae-protocol-review-window.html">ADaM ADAE: flag adverse events for protocol review</a></li>
-      <li><a href="adam-adae-query-flags.html">ADaM ADAE: record which queries a coded event belongs to</a></li>
-      <li><a href="adam-adae-review-order.html">ADaM ADAE: present a subject&#x27;s events in medical-review order</a></li>
-      <li><a href="adam-adae-serious-event-listing.html">ADaM ADAE: list the serious adverse events</a></li>
-      <li><a href="adam-adae-serious-event-sequence.html">ADaM ADAE: number a subject&#x27;s serious events in onset order</a></li>
-      <li><a href="adam-adae-severity-override.html">ADaM ADAE: apply an approved severity correction</a></li>
-      <li><a href="adam-adae-severity-rank.html">ADaM ADAE: rank a subject&#x27;s events by severity</a></li>
-      <li><a href="adam-adae-string-handlers.html">ADaM ADAE: clean text and handle invalid IDs</a></li>
-      <li><a href="adam-adae-treatment-emergent.html">ADaM ADAE: classify an event as treatment-emergent</a></li>
-      <li><a href="adam-adae-worst-severity.html">ADaM ADAE: flag the worst-severity event per preferred term</a></li>
-      <li><a href="negative-adae-review-condition-arithmetic.html">ADaM ADAE: reject a review flag whose condition performs arithmetic</a></li>
-      <li><a href="negative-adae-review-text-date.html">ADaM ADAE: reject a review flag that compares a date with text</a></li>
-      <li><a href="negative-adae-review-unknown-date.html">ADaM ADAE: reject a review flag that names an unavailable date</a></li>
-      <li><a href="negative-conversion-incomplete-date.html">ADaM ADAE: reject an event start date that names no day</a></li>
-      <li><a href="negative-date-impute-invalid-source.html">ADaM ADAE: reject a start date completed from text that is not a date</a></li>
-      <li><a href="negative-date-impute-month-out-of-range.html">ADaM ADAE: reject a start date completed with no month of the year</a></li>
-      <li><a href="negative-date-impute-nonexistent-day.html">ADaM ADAE: reject an end date completed past the end of its month</a></li>
-      <li><a href="negative-date-impute-unknown-day-rule.html">ADaM ADAE: reject a start date completed with an unrecognised day</a></li>
-      <li><a href="negative-date-precision-invalid-source.html">ADaM ADAE: reject a completeness flag read from text that is not a date</a></li>
-      <li><a href="negative-datetime-zone-offset.html">ADaM ADAE: reject an event start recorded against another clock</a></li>
-      <li><a href="negative-output-order-repeated-term.html">ADaM ADAE: reject an order that places one value twice</a></li>
-      <li><a href="negative-query-slot-overflow.html">ADaM ADAE: reject an event belonging to more queries than it has places</a></li>
-      <li><a href="negative-rank-invalid-method.html">ADaM ADAE: reject an unlisted tie-numbering method</a></li>
-      <li><a href="negative-sum-non-numeric-source.html">ADaM ADAE: reject a severity burden totalled from severity words</a></li>
-      <li><a href="negative-to-date-date-source.html">ADaM ADAE: reject extracting a date from a date</a></li>
-      </ul>
+    <section class="outcome" id="positive" aria-labelledby="positive-heading">
+      <h2 id="positive-heading">Examples</h2>
+      <p class="outcome-note">94 examples. Each runs to completion and produces the artifact in expected/.</p>
+      <section aria-label="Examples: ADaM ADAE">
+        <h3>ADaM ADAE</h3>
+        <p class="count">16 examples</p>
+        <ul>
+        <li><a href="adam-adae-death-outcome.html">ADaM ADAE: carry each subject&#x27;s death onto every event</a></li>
+        <li><a href="adam-adae-event-severity.html">ADaM ADAE: carry each event&#x27;s severity from its supplemental record</a></li>
+        <li><a href="adam-adae-occurrence-flags.html">ADaM ADAE: flag the first occurrence at three levels</a></li>
+        <li><a href="adam-adae-partial-dates.html">ADaM ADAE: impute partial dates</a></li>
+        <li><a href="adam-adae-post-dose-onset.html">ADaM ADAE: classify an event by the moment it started</a></li>
+        <li><a href="adam-adae-post-reference-event.html">ADaM ADAE: flag an event after a specific reference event</a></li>
+        <li><a href="adam-adae-protocol-review-window.html">ADaM ADAE: flag adverse events for protocol review</a></li>
+        <li><a href="adam-adae-query-flags.html">ADaM ADAE: record which queries a coded event belongs to</a></li>
+        <li><a href="adam-adae-review-order.html">ADaM ADAE: present a subject&#x27;s events in medical-review order</a></li>
+        <li><a href="adam-adae-serious-event-listing.html">ADaM ADAE: list the serious adverse events</a></li>
+        <li><a href="adam-adae-serious-event-sequence.html">ADaM ADAE: number a subject&#x27;s serious events in onset order</a></li>
+        <li><a href="adam-adae-severity-override.html">ADaM ADAE: apply an approved severity correction</a></li>
+        <li><a href="adam-adae-severity-rank.html">ADaM ADAE: rank a subject&#x27;s events by severity</a></li>
+        <li><a href="adam-adae-string-handlers.html">ADaM ADAE: clean text and handle invalid IDs</a></li>
+        <li><a href="adam-adae-treatment-emergent.html">ADaM ADAE: classify an event as treatment-emergent</a></li>
+        <li><a href="adam-adae-worst-severity.html">ADaM ADAE: flag the worst-severity event per preferred term</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: ADaM ADCE">
+        <h3>ADaM ADCE</h3>
+        <p class="count">1 example</p>
+        <ul>
+        <li><a href="adam-adce-worst-toxicity-grade.html">ADaM ADCE: flag the subject&#x27;s worst-grade event</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: ADaM ADCM">
+        <h3>ADaM ADCM</h3>
+        <p class="count">1 example</p>
+        <ul>
+        <li><a href="adam-adcm-on-treatment-flag.html">ADaM ADCM: flag a medication during treatment</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: ADaM ADEG">
+        <h3>ADaM ADEG</h3>
+        <p class="count">3 examples</p>
+        <ul>
+        <li><a href="adam-adeg-bazett-qtc.html">ADaM ADEG: derive a Bazett-corrected QT parameter</a></li>
+        <li><a href="adam-adeg-fridericia-qtc.html">ADaM ADEG: derive a Fridericia-corrected QT parameter</a></li>
+        <li><a href="adam-adeg-rr-interval.html">ADaM ADEG: derive an RR interval</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: ADaM ADEX">
+        <h3>ADaM ADEX</h3>
+        <p class="count">3 examples</p>
+        <ul>
+        <li><a href="adam-adex-cumulative-dose.html">ADaM ADEX: summarize cumulative exposure</a></li>
+        <li><a href="adam-adex-dose-reduction-flag.html">ADaM ADEX: derive a dose reduction flag</a></li>
+        <li><a href="adam-adex-uncollected-exposure.html">ADaM ADEX: tell an uncollected dose from an absent administration</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: ADaM ADLB">
+        <h3>ADaM ADLB</h3>
+        <p class="count">8 examples</p>
+        <ul>
+        <li><a href="adam-adlb-absolute-wbc-differential.html">ADaM ADLB: derive absolute WBC differentials</a></li>
+        <li><a href="adam-adlb-bds.html">ADaM ADLB: build a BDS dataset with baseline and change</a></li>
+        <li><a href="adam-adlb-closest-visit.html">ADaM ADLB: select the record closest to a window&#x27;s target day</a></li>
+        <li><a href="adam-adlb-mean.html">ADaM ADLB: calculate each subject&#x27;s mean result</a></li>
+        <li><a href="adam-adlb-order-sensitive-sum.html">ADaM ADLB: sum floating-point values in source record order</a></li>
+        <li><a href="adam-adlb-reported-precision.html">ADaM ADLB: report a result against the lower limit of normal</a></li>
+        <li><a href="adam-adlb-shift-and-criteria.html">ADaM ADLB: classify a result, its shift from baseline, and one criterion</a></li>
+        <li><a href="adam-adlb-standardized-result.html">ADaM ADLB: carry standardized results into analysis</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: ADaM ADOE">
+        <h3>ADaM ADOE</h3>
+        <p class="count">1 example</p>
+        <ul>
+        <li><a href="adam-adoe-study-eye.html">ADaM ADOE: tell the study eye from the fellow eye</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: ADaM ADQS">
+        <h3>ADaM ADQS</h3>
+        <p class="count">1 example</p>
+        <ul>
+        <li><a href="adam-adqs-subscale-score.html">ADaM ADQS: score a questionnaire subscale from its item records</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: ADaM ADRS">
+        <h3>ADaM ADRS</h3>
+        <p class="count">6 examples</p>
+        <ul>
+        <li><a href="adam-adrs-best-overall-response.html">ADaM ADRS: select the best overall response</a></li>
+        <li><a href="adam-adrs-best-response-selection.html">ADaM ADRS: prepare assessments for best overall response</a></li>
+        <li><a href="adam-adrs-composite-response.html">ADaM ADRS: combine efficacy, safety, and discontinuation into one response</a></li>
+        <li><a href="adam-adrs-confirmed-response.html">ADaM ADRS: confirm an objective response</a></li>
+        <li><a href="adam-adrs-measurable-disease.html">ADaM ADRS: derive measurable disease at baseline</a></li>
+        <li><a href="adam-adrs-overall-response-records.html">ADaM ADRS: prepare the overall response records an endpoint reads</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: ADaM ADSL">
+        <h3>ADaM ADSL</h3>
+        <p class="count">21 examples</p>
+        <ul>
+        <li><a href="adam-adsl-age-group.html">ADaM ADSL: derive age group</a></li>
+        <li><a href="adam-adsl-analysis-age.html">ADaM ADSL: analysis age</a></li>
+        <li><a href="adam-adsl-bmi-compute.html">ADaM ADSL: compute BMI from height and weight</a></li>
+        <li><a href="adam-adsl-bmi-function.html">ADaM ADSL: compute BMI by calling a routine the project supplies</a></li>
+        <li><a href="adam-adsl-completion-flag.html">ADaM ADSL: flag the subjects who completed the study</a></li>
+        <li><a href="adam-adsl-crossover-periods.html">ADaM ADSL: derive period-scoped treatments and dates across a washout</a></li>
+        <li><a href="adam-adsl-dependency-order.html">ADaM ADSL: derive a chain of population flags</a></li>
+        <li><a href="adam-adsl-disposition.html">ADaM ADSL: select the final subject disposition from DS</a></li>
+        <li><a href="adam-adsl-dose-adjustment-flag.html">ADaM ADSL: derive a dose adjustment flag from multiple sources</a></li>
+        <li><a href="adam-adsl-geography-normalization.html">ADaM ADSL: normalize collected country and group it into a region</a></li>
+        <li><a href="adam-adsl-identifier-parsing.html">ADaM ADSL: parse the site from USUBJID with a collected fallback</a></li>
+        <li><a href="adam-adsl-investigator-comment.html">ADaM ADSL: keep an investigator comment exactly as collected</a></li>
+        <li><a href="adam-adsl-last-alive-date.html">ADaM ADSL: derive the last known alive date from multiple sources</a></li>
+        <li><a href="adam-adsl-mapping.html">ADaM ADSL: translate collected values into a standard vocabulary</a></li>
+        <li><a href="adam-adsl-new-anticancer-therapy-date.html">ADaM ADSL: date the subject started new anti-cancer therapy</a></li>
+        <li><a href="adam-adsl-non-finite-values.html">ADaM ADSL: normalize non-finite numeric values to missing</a></li>
+        <li><a href="adam-adsl-population-flags.html">ADaM ADSL: derive the safety and intent-to-treat flags</a></li>
+        <li><a href="adam-adsl-portable-text.html">ADaM ADSL: preserve and compare international text predictably</a></li>
+        <li><a href="adam-adsl-randomization-timing.html">ADaM ADSL: record randomization timing</a></li>
+        <li><a href="adam-adsl-rescue-medication.html">ADaM ADSL: select the first rescue medication</a></li>
+        <li><a href="adam-adsl-treatment-selection.html">ADaM ADSL: select actual treatment and its duration from EX</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: ADaM ADTR">
+        <h3>ADaM ADTR</h3>
+        <p class="count">2 examples</p>
+        <ul>
+        <li><a href="adam-adtr-current-nadir.html">ADaM ADTR: derive the current nadir</a></li>
+        <li><a href="adam-adtr-sum-of-target-diameters.html">ADaM ADTR: sum the target lesion diameters at each assessment</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: ADaM ADTTE">
+        <h3>ADaM ADTTE</h3>
+        <p class="count">4 examples</p>
+        <ul>
+        <li><a href="adam-adtte-duration-of-response.html">ADaM ADTTE: derive the duration of a response</a></li>
+        <li><a href="adam-adtte-first-adverse-event.html">ADaM ADTTE: derive the time to first adverse event</a></li>
+        <li><a href="adam-adtte-overall-survival.html">ADaM ADTTE: derive overall survival</a></li>
+        <li><a href="adam-adtte-progression-free-survival.html">ADaM ADTTE: derive progression-free survival</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: ADaM ADVS">
+        <h3>ADaM ADVS</h3>
+        <p class="count">8 examples</p>
+        <ul>
+        <li><a href="adam-advs-analysis-visit.html">ADaM ADVS: assign records to analysis windows</a></li>
+        <li><a href="adam-advs-analysis-window-table.html">ADaM ADVS: assign analysis windows from the study&#x27;s window table</a></li>
+        <li><a href="adam-advs-body-mass-index.html">ADaM ADVS: derive body mass index</a></li>
+        <li><a href="adam-advs-body-surface-area.html">ADaM ADVS: derive a body surface area parameter</a></li>
+        <li><a href="adam-advs-growth-percentile.html">ADaM ADVS: express a measurement as a growth percentile</a></li>
+        <li><a href="adam-advs-mean-arterial-pressure.html">ADaM ADVS: derive mean arterial pressure</a></li>
+        <li><a href="adam-advs-once-measured-carry-forward.html">ADaM ADVS: carry forward a once-measured characteristic</a></li>
+        <li><a href="adam-advs-prior-character-result.html">ADaM ADVS: retain the latest earlier character result</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: SDTM AE">
+        <h3>SDTM AE</h3>
+        <p class="count">2 examples</p>
+        <ul>
+        <li><a href="sdtm-ae-dictionary-coding.html">SDTM AE: code reported terms against a medical dictionary</a></li>
+        <li><a href="sdtm-ae-effective-transaction.html">SDTM AE: take the effective state of a record from a transaction log</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: SDTM DM">
+        <h3>SDTM DM</h3>
+        <p class="count">3 examples</p>
+        <ul>
+        <li><a href="sdtm-dm-basic.html">SDTM DM: build one subject record from collected data</a></li>
+        <li><a href="sdtm-dm-metadata-contract.html">SDTM DM: declare the metadata a submission needs</a></li>
+        <li><a href="sdtm-dm-reference-dates.html">SDTM DM: derive the reference dates from EX, DS, and AE</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: SDTM DS">
+        <h3>SDTM DS</h3>
+        <p class="count">1 example</p>
+        <ul>
+        <li><a href="sdtm-ds-disposition-sequence.html">SDTM DS: number each subject&#x27;s disposition records in date order</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: SDTM EX">
+        <h3>SDTM EX</h3>
+        <p class="count">1 example</p>
+        <ul>
+        <li><a href="sdtm-ex-combination-regimen.html">SDTM EX: represent a combination regimen</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: SDTM FA">
+        <h3>SDTM FA</h3>
+        <p class="count">1 example</p>
+        <ul>
+        <li><a href="sdtm-fa-fever-occurrence.html">SDTM FA: fever occurrence</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: SDTM LB">
+        <h3>SDTM LB</h3>
+        <p class="count">6 examples</p>
+        <ul>
+        <li><a href="odm-form-scoped-item-resolution.html">SDTM LB: resolve items within their collection form</a></li>
+        <li><a href="sdtm-lb-conditional-compartments.html">SDTM LB: tell an inapplicable compartment from an uncollected sample</a></li>
+        <li><a href="sdtm-lb-ctcae-grading.html">SDTM LB: assign toxicity grades</a></li>
+        <li><a href="sdtm-lb-findings.html">SDTM LB: build one record per collected lab result</a></li>
+        <li><a href="sdtm-lb-multiform.html">SDTM LB: consolidate four collection forms into one dataset</a></li>
+        <li><a href="sdtm-lb-reference-range-indicator.html">SDTM LB: apply external reference ranges</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: SDTM RELREC">
+        <h3>SDTM RELREC</h3>
+        <p class="count">1 example</p>
+        <ul>
+        <li><a href="sdtm-relrec-many-to-many.html">SDTM RELREC: record relationships between events and medications</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: SDTM SUPPMH">
+        <h3>SDTM SUPPMH</h3>
+        <p class="count">2 examples</p>
+        <ul>
+        <li><a href="sdtm-suppmh-parent-linkage.html">SDTM SUPPMH: link qualifiers collected on their own form to a parent record</a></li>
+        <li><a href="sdtm-suppmh-qualifiers.html">SDTM SUPPMH: reshape extra qualifiers into supplemental records</a></li>
+        </ul>
+      </section>
+      <section aria-label="Examples: SDTM VS">
+        <h3>SDTM VS</h3>
+        <p class="count">2 examples</p>
+        <ul>
+        <li><a href="sdtm-vs-unit-standardization.html">SDTM VS: standardize collected results into the study&#x27;s units</a></li>
+        <li><a href="sdtm-vs-visit-study-day.html">SDTM VS: attach visit metadata and study day to a result</a></li>
+        </ul>
+      </section>
     </section>
-    <section aria-label="ADaM ADCE">
-      <h2>ADaM ADCE</h2>
-      <p class="count">1 example</p>
-      <ul>
-      <li><a href="adam-adce-worst-toxicity-grade.html">ADaM ADCE: flag the subject&#x27;s worst-grade event</a></li>
-      </ul>
-    </section>
-    <section aria-label="ADaM ADCM">
-      <h2>ADaM ADCM</h2>
-      <p class="count">1 example</p>
-      <ul>
-      <li><a href="adam-adcm-on-treatment-flag.html">ADaM ADCM: flag a medication during treatment</a></li>
-      </ul>
-    </section>
-    <section aria-label="ADaM ADEG">
-      <h2>ADaM ADEG</h2>
-      <p class="count">4 examples</p>
-      <ul>
-      <li><a href="adam-adeg-bazett-qtc.html">ADaM ADEG: derive a Bazett-corrected QT parameter</a></li>
-      <li><a href="adam-adeg-fridericia-qtc.html">ADaM ADEG: derive a Fridericia-corrected QT parameter</a></li>
-      <li><a href="adam-adeg-rr-interval.html">ADaM ADEG: derive an RR interval</a></li>
-      <li><a href="negative-adam-adeg-pre-existing-rrr.html">ADaM ADEG: reject a collected RR interval</a></li>
-      </ul>
-    </section>
-    <section aria-label="ADaM ADEX">
-      <h2>ADaM ADEX</h2>
-      <p class="count">8 examples</p>
-      <ul>
-      <li><a href="adam-adex-cumulative-dose.html">ADaM ADEX: summarize cumulative exposure</a></li>
-      <li><a href="adam-adex-dose-reduction-flag.html">ADaM ADEX: derive a dose reduction flag</a></li>
-      <li><a href="adam-adex-uncollected-exposure.html">ADaM ADEX: tell an uncollected dose from an absent administration</a></li>
-      <li><a href="negative-adex-relative-dose-intensity.html">ADaM ADEX: reject a dose intensity measured against a per-record plan</a></li>
-      <li><a href="negative-adex-single-dose-expansion.html">ADaM ADEX: reject one record per administration built from an aggregate dose</a></li>
-      <li><a href="negative-compute-qualified-identifier.html">ADaM ADEX: reject a doubled dose read straight from exposure</a></li>
-      <li><a href="negative-ingest-unparseable-field.html">ADaM ADEX: reject a dose recorded with its unit</a></li>
-      <li><a href="negative-types-unknown-field.html">ADaM ADEX: reject a total over a field the source does not have</a></li>
-      </ul>
-    </section>
-    <section aria-label="ADaM ADLB">
-      <h2>ADaM ADLB</h2>
-      <p class="count">32 examples</p>
-      <ul>
-      <li><a href="adam-adlb-absolute-wbc-differential.html">ADaM ADLB: derive absolute WBC differentials</a></li>
-      <li><a href="adam-adlb-bds.html">ADaM ADLB: build a BDS dataset with baseline and change</a></li>
-      <li><a href="adam-adlb-closest-visit.html">ADaM ADLB: select the record closest to a window&#x27;s target day</a></li>
-      <li><a href="adam-adlb-mean.html">ADaM ADLB: calculate each subject&#x27;s mean result</a></li>
-      <li><a href="adam-adlb-order-sensitive-sum.html">ADaM ADLB: sum floating-point values in source record order</a></li>
-      <li><a href="adam-adlb-reported-precision.html">ADaM ADLB: report a result against the lower limit of normal</a></li>
-      <li><a href="adam-adlb-shift-and-criteria.html">ADaM ADLB: classify a result, its shift from baseline, and one criterion</a></li>
-      <li><a href="adam-adlb-standardized-result.html">ADaM ADLB: carry standardized results into analysis</a></li>
-      <li><a href="negative-adlb-absolute-wbc-duplicate.html">ADaM ADLB: reject duplicate WBC inputs for an absolute differential</a></li>
-      <li><a href="negative-adlb-computed-parameter.html">ADaM ADLB: reject a parameter computed from the dataset being built</a></li>
-      <li><a href="negative-adlb-multiple-baseline-records.html">ADaM ADLB: reject a subject with two baseline records for one parameter</a></li>
-      <li><a href="negative-baseline-flag-tied-date.html">ADaM ADLB: reject a baseline chosen between two same-day results</a></li>
-      <li><a href="negative-column-type-unknown.html">ADaM ADLB: reject an analysis value with an ambiguous numeric type</a></li>
-      <li><a href="negative-compute-aggregate-function.html">ADaM ADLB: reject a total written as a formula</a></li>
-      <li><a href="negative-compute-comparison-operator.html">ADaM ADLB: reject an above-range flag written as a formula</a></li>
-      <li><a href="negative-compute-division-by-zero.html">ADaM ADLB: reject a percent change from a zero baseline</a></li>
-      <li><a href="negative-compute-integer-overflow.html">ADaM ADLB: reject a cell total larger than the counter can hold</a></li>
-      <li><a href="negative-compute-ln-of-zero.html">ADaM ADLB: reject a log result from an undetectable value</a></li>
-      <li><a href="negative-conversion-unparseable-number.html">ADaM ADLB: reject a viral load reported below the assay limit</a></li>
-      <li><a href="negative-dataset-path-absolute.html">ADaM ADLB: reject reference limits named by a machine location</a></li>
-      <li><a href="negative-dataset-path-directory.html">ADaM ADLB: reject reference limits that name a folder</a></li>
-      <li><a href="negative-dataset-path-missing.html">ADaM ADLB: reject reference limits the study does not hold</a></li>
-      <li><a href="negative-dataset-path-parent-escape.html">ADaM ADLB: reject reference limits stored above the study</a></li>
-      <li><a href="negative-dataset-path-symlink.html">ADaM ADLB: reject reference limits reached through a stand-in name</a></li>
-      <li><a href="negative-dataset-path-url.html">ADaM ADLB: reject reference limits named by a web address</a></li>
-      <li><a href="negative-group-count-without-id.html">ADaM ADLB: reject an unnamed baseline-count rule</a></li>
-      <li><a href="negative-mapping-from-duplicate-key.html">ADaM ADLB: reject a reference range stated twice</a></li>
-      <li><a href="negative-mapping-from-key-length-mismatch.html">ADaM ADLB: reject a reference range chosen by an unpaired key</a></li>
-      <li><a href="negative-mapping-from-partial-key.html">ADaM ADLB: reject a reference range chosen without a sex</a></li>
-      <li><a href="negative-mapping-from-unmapped-key.html">ADaM ADLB: reject a result with no reference range</a></li>
-      <li><a href="negative-row-number-numeric-filter.html">ADaM ADLB: reject a sequence filtered by a number</a></li>
-      <li><a href="negative-source-output-self-reference.html">ADaM ADLB: reject a parameter that reads the dataset it is part of</a></li>
-      </ul>
-    </section>
-    <section aria-label="ADaM ADOE">
-      <h2>ADaM ADOE</h2>
-      <p class="count">1 example</p>
-      <ul>
-      <li><a href="adam-adoe-study-eye.html">ADaM ADOE: tell the study eye from the fellow eye</a></li>
-      </ul>
-    </section>
-    <section aria-label="ADaM ADQS">
-      <h2>ADaM ADQS</h2>
-      <p class="count">1 example</p>
-      <ul>
-      <li><a href="adam-adqs-subscale-score.html">ADaM ADQS: score a questionnaire subscale from its item records</a></li>
-      </ul>
-    </section>
-    <section aria-label="ADaM ADRS">
-      <h2>ADaM ADRS</h2>
-      <p class="count">8 examples</p>
-      <ul>
-      <li><a href="adam-adrs-best-overall-response.html">ADaM ADRS: select the best overall response</a></li>
-      <li><a href="adam-adrs-best-response-selection.html">ADaM ADRS: prepare assessments for best overall response</a></li>
-      <li><a href="adam-adrs-composite-response.html">ADaM ADRS: combine efficacy, safety, and discontinuation into one response</a></li>
-      <li><a href="adam-adrs-confirmed-response.html">ADaM ADRS: confirm an objective response</a></li>
-      <li><a href="adam-adrs-measurable-disease.html">ADaM ADRS: derive measurable disease at baseline</a></li>
-      <li><a href="adam-adrs-overall-response-records.html">ADaM ADRS: prepare the overall response records an endpoint reads</a></li>
-      <li><a href="negative-adrs-partial-response-after-complete-response.html">ADaM ADRS: reject a partial response recorded after a complete response</a></li>
-      <li><a href="negative-mapping-unmapped-value.html">ADaM ADRS: reject an unmapped response</a></li>
-      </ul>
-    </section>
-    <section aria-label="ADaM ADSL">
-      <h2>ADaM ADSL</h2>
-      <p class="count">56 examples</p>
-      <ul>
-      <li><a href="adam-adsl-age-group.html">ADaM ADSL: derive age group</a></li>
-      <li><a href="adam-adsl-analysis-age.html">ADaM ADSL: analysis age</a></li>
-      <li><a href="adam-adsl-bmi-compute.html">ADaM ADSL: compute BMI from height and weight</a></li>
-      <li><a href="adam-adsl-bmi-function.html">ADaM ADSL: compute BMI by calling a routine the project supplies</a></li>
-      <li><a href="adam-adsl-completion-flag.html">ADaM ADSL: flag the subjects who completed the study</a></li>
-      <li><a href="adam-adsl-crossover-periods.html">ADaM ADSL: derive period-scoped treatments and dates across a washout</a></li>
-      <li><a href="adam-adsl-dependency-order.html">ADaM ADSL: derive a chain of population flags</a></li>
-      <li><a href="adam-adsl-disposition.html">ADaM ADSL: select the final subject disposition from DS</a></li>
-      <li><a href="adam-adsl-dose-adjustment-flag.html">ADaM ADSL: derive a dose adjustment flag from multiple sources</a></li>
-      <li><a href="adam-adsl-geography-normalization.html">ADaM ADSL: normalize collected country and group it into a region</a></li>
-      <li><a href="adam-adsl-identifier-parsing.html">ADaM ADSL: parse the site from USUBJID with a collected fallback</a></li>
-      <li><a href="adam-adsl-investigator-comment.html">ADaM ADSL: keep an investigator comment exactly as collected</a></li>
-      <li><a href="adam-adsl-last-alive-date.html">ADaM ADSL: derive the last known alive date from multiple sources</a></li>
-      <li><a href="adam-adsl-mapping.html">ADaM ADSL: translate collected values into a standard vocabulary</a></li>
-      <li><a href="adam-adsl-new-anticancer-therapy-date.html">ADaM ADSL: date the subject started new anti-cancer therapy</a></li>
-      <li><a href="adam-adsl-non-finite-values.html">ADaM ADSL: normalize non-finite numeric values to missing</a></li>
-      <li><a href="adam-adsl-population-flags.html">ADaM ADSL: derive the safety and intent-to-treat flags</a></li>
-      <li><a href="adam-adsl-portable-text.html">ADaM ADSL: preserve and compare international text predictably</a></li>
-      <li><a href="adam-adsl-randomization-timing.html">ADaM ADSL: record randomization timing</a></li>
-      <li><a href="adam-adsl-rescue-medication.html">ADaM ADSL: select the first rescue medication</a></li>
-      <li><a href="adam-adsl-treatment-selection.html">ADaM ADSL: select actual treatment and its duration from EX</a></li>
-      <li><a href="negative-adam-adsl-stratification-reconciliation.html">ADaM ADSL: reconcile randomization strata</a></li>
-      <li><a href="negative-adsl-cyclic-parent.html">ADaM ADSL: reject a circular chain of shared definitions</a></li>
-      <li><a href="negative-adsl-inherited-output.html">ADaM ADSL: reject an inherited artifact layout</a></li>
-      <li><a href="negative-adsl-invalid-parent-clear.html">ADaM ADSL: reject removal of a required variable property</a></li>
-      <li><a href="negative-adsl-parent-version-mismatch.html">ADaM ADSL: reject shared definitions from another language version</a></li>
-      <li><a href="negative-adsl-randomization-date-retyped.html">ADaM ADSL: reject a randomization date described twice</a></li>
-      <li><a href="negative-adsl-remote-parent.html">ADaM ADSL: reject shared definitions from a remote location</a></li>
-      <li><a href="negative-adsl-subject-reference.html">ADaM ADSL: reject a malformed subject reference</a></li>
-      <li><a href="negative-all-or-none-partial-row.html">ADaM ADSL: reject a row with only some paired dates present</a></li>
-      <li><a href="negative-compute-sqrt-of-negative.html">ADaM ADSL: reject a body surface area from a negative weight</a></li>
-      <li><a href="negative-date-diff-datetime-endpoints.html">ADaM ADSL: reject counting days between two moments</a></li>
-      <li><a href="negative-greatest-incomparable-sources.html">ADaM ADSL: reject a last-known-alive date taken from a day number</a></li>
-      <li><a href="negative-keys-internal-column.html">ADaM ADSL: reject a site-scoped subject identity</a></li>
-      <li><a href="negative-least-incomparable-sources.html">ADaM ADSL: reject an earliest-alive date taken from a day number</a></li>
-      <li><a href="negative-literal-non-scalar.html">ADaM ADSL: reject a fixed value written as a structure</a></li>
-      <li><a href="negative-mapping-case-fold-collision.html">ADaM ADSL: reject a smoking flag whose dictionary answers twice</a></li>
-      <li><a href="negative-matches-unreadable-pattern.html">ADaM ADSL: reject a sex code checked against an unreadable match rule</a></li>
-      <li><a href="negative-not-missing-absent-age.html">ADaM ADSL: reject a missing age</a></li>
-      <li><a href="negative-output-duplicate-subject.html">ADaM ADSL: reject a repeated demographics record</a></li>
-      <li><a href="negative-record-lookup-id-collision.html">ADaM ADSL: reject a first treatment named after its own source</a></li>
-      <li><a href="negative-record-lookup-unordered-choice.html">ADaM ADSL: reject a treatment and dose taken from an unchosen record</a></li>
-      <li><a href="negative-record-lookup-unordered-keep.html">ADaM ADSL: reject a treatment ordered but not chosen</a></li>
-      <li><a href="negative-source-duplicate-field-name.html">ADaM ADSL: reject a subject listing that names one field twice</a></li>
-      <li><a href="negative-source-duplicate-right-key.html">ADaM ADSL: reject duplicate subject enrichment</a></li>
-      <li><a href="negative-source-empty-field-name.html">ADaM ADSL: reject a subject listing with an unnamed field</a></li>
-      <li><a href="negative-source-invalid-text.html">ADaM ADSL: reject a site name stored in another encoding</a></li>
-      <li><a href="negative-source-missing-sentinel.html">ADaM ADSL: reject an age recorded as NA</a></li>
-      <li><a href="negative-source-record-width.html">ADaM ADSL: reject a subject listing record with an extra field</a></li>
-      <li><a href="negative-source-undeclared-field.html">ADaM ADSL: reject a copy from an undeclared field</a></li>
-      <li><a href="negative-source-unknown-profile.html">ADaM ADSL: reject a subject listing stored under an unnamed format</a></li>
-      <li><a href="negative-source-unterminated-quote.html">ADaM ADSL: reject a comment whose quoted text never closes</a></li>
-      <li><a href="negative-str-extract-undeclared-group.html">ADaM ADSL: reject a site identifier taken from an uncaptured part</a></li>
-      <li><a href="negative-study-day-datetime-input.html">ADaM ADSL: reject a study day measured from a moment</a></li>
-      <li><a href="negative-variable-nested-expression.html">ADaM ADSL: reject an uppercased country chosen inside the same step</a></li>
-      <li><a href="negative-verification-implausible-age.html">ADaM ADSL: reject an implausible age</a></li>
-      </ul>
-    </section>
-    <section aria-label="ADaM ADTR">
-      <h2>ADaM ADTR</h2>
-      <p class="count">2 examples</p>
-      <ul>
-      <li><a href="adam-adtr-current-nadir.html">ADaM ADTR: derive the current nadir</a></li>
-      <li><a href="adam-adtr-sum-of-target-diameters.html">ADaM ADTR: sum the target lesion diameters at each assessment</a></li>
-      </ul>
-    </section>
-    <section aria-label="ADaM ADTTE">
-      <h2>ADaM ADTTE</h2>
-      <p class="count">4 examples</p>
-      <ul>
-      <li><a href="adam-adtte-duration-of-response.html">ADaM ADTTE: derive the duration of a response</a></li>
-      <li><a href="adam-adtte-first-adverse-event.html">ADaM ADTTE: derive the time to first adverse event</a></li>
-      <li><a href="adam-adtte-overall-survival.html">ADaM ADTTE: derive overall survival</a></li>
-      <li><a href="adam-adtte-progression-free-survival.html">ADaM ADTTE: derive progression-free survival</a></li>
-      </ul>
-    </section>
-    <section aria-label="ADaM ADVS">
-      <h2>ADaM ADVS</h2>
-      <p class="count">14 examples</p>
-      <ul>
-      <li><a href="adam-advs-analysis-visit.html">ADaM ADVS: assign records to analysis windows</a></li>
-      <li><a href="adam-advs-analysis-window-table.html">ADaM ADVS: assign analysis windows from the study&#x27;s window table</a></li>
-      <li><a href="adam-advs-body-mass-index.html">ADaM ADVS: derive body mass index</a></li>
-      <li><a href="adam-advs-body-surface-area.html">ADaM ADVS: derive a body surface area parameter</a></li>
-      <li><a href="adam-advs-growth-percentile.html">ADaM ADVS: express a measurement as a growth percentile</a></li>
-      <li><a href="adam-advs-mean-arterial-pressure.html">ADaM ADVS: derive mean arterial pressure</a></li>
-      <li><a href="adam-advs-once-measured-carry-forward.html">ADaM ADVS: carry forward a once-measured characteristic</a></li>
-      <li><a href="adam-advs-prior-character-result.html">ADaM ADVS: retain the latest earlier character result</a></li>
-      <li><a href="negative-advs-overlapping-analysis-windows.html">ADaM ADVS: reject overlapping analysis windows</a></li>
-      <li><a href="negative-conversion-non-integral.html">ADaM ADVS: reject a pulse rate recorded between whole beats</a></li>
-      <li><a href="negative-keys-missing-value.html">ADaM ADVS: reject a record that no analysis visit identifies</a></li>
-      <li><a href="negative-previous-non-missing-non-variable-source.html">ADaM ADVS: reject carrying forward a fixed value</a></li>
-      <li><a href="negative-row-value-self-reference.html">ADaM ADVS: reject a weight carried forward from a carried-forward weight</a></li>
-      <li><a href="negative-row-value-zero-offset.html">ADaM ADVS: reject a previous weight that names no earlier visit</a></li>
-      </ul>
-    </section>
-    <section aria-label="Project function">
-      <h2>Project function</h2>
-      <p class="count">1 example</p>
-      <ul>
-      <li><a href="negative-function-contract-mismatch.html">Project function: reject an unavailable project-routine contract</a></li>
-      </ul>
-    </section>
-    <section aria-label="SDTM AE">
-      <h2>SDTM AE</h2>
-      <p class="count">2 examples</p>
-      <ul>
-      <li><a href="sdtm-ae-dictionary-coding.html">SDTM AE: code reported terms against a medical dictionary</a></li>
-      <li><a href="sdtm-ae-effective-transaction.html">SDTM AE: take the effective state of a record from a transaction log</a></li>
-      </ul>
-    </section>
-    <section aria-label="SDTM DM">
-      <h2>SDTM DM</h2>
-      <p class="count">4 examples</p>
-      <ul>
-      <li><a href="negative-usubjid-exceeds-length.html">SDTM DM: reject a subject identifier longer than the study permits</a></li>
-      <li><a href="sdtm-dm-basic.html">SDTM DM: build one subject record from collected data</a></li>
-      <li><a href="sdtm-dm-metadata-contract.html">SDTM DM: declare the metadata a submission needs</a></li>
-      <li><a href="sdtm-dm-reference-dates.html">SDTM DM: derive the reference dates from EX, DS, and AE</a></li>
-      </ul>
-    </section>
-    <section aria-label="SDTM DS">
-      <h2>SDTM DS</h2>
-      <p class="count">1 example</p>
-      <ul>
-      <li><a href="sdtm-ds-disposition-sequence.html">SDTM DS: number each subject&#x27;s disposition records in date order</a></li>
-      </ul>
-    </section>
-    <section aria-label="SDTM EX">
-      <h2>SDTM EX</h2>
-      <p class="count">1 example</p>
-      <ul>
-      <li><a href="sdtm-ex-combination-regimen.html">SDTM EX: represent a combination regimen</a></li>
-      </ul>
-    </section>
-    <section aria-label="SDTM FA">
-      <h2>SDTM FA</h2>
-      <p class="count">1 example</p>
-      <ul>
-      <li><a href="sdtm-fa-fever-occurrence.html">SDTM FA: fever occurrence</a></li>
-      </ul>
-    </section>
-    <section aria-label="SDTM LB">
-      <h2>SDTM LB</h2>
-      <p class="count">9 examples</p>
-      <ul>
-      <li><a href="negative-record-lookup-incomplete-key.html">SDTM LB: reject a reference limit chosen without a sex</a></li>
-      <li><a href="negative-record-lookup-unmatched-key.html">SDTM LB: reject a result with no reference range</a></li>
-      <li><a href="negative-record-lookup-unpaired-key.html">SDTM LB: reject a reference limit matched against nothing</a></li>
-      <li><a href="odm-form-scoped-item-resolution.html">SDTM LB: resolve items within their collection form</a></li>
-      <li><a href="sdtm-lb-conditional-compartments.html">SDTM LB: tell an inapplicable compartment from an uncollected sample</a></li>
-      <li><a href="sdtm-lb-ctcae-grading.html">SDTM LB: assign toxicity grades</a></li>
-      <li><a href="sdtm-lb-findings.html">SDTM LB: build one record per collected lab result</a></li>
-      <li><a href="sdtm-lb-multiform.html">SDTM LB: consolidate four collection forms into one dataset</a></li>
-      <li><a href="sdtm-lb-reference-range-indicator.html">SDTM LB: apply external reference ranges</a></li>
-      </ul>
-    </section>
-    <section aria-label="SDTM RELREC">
-      <h2>SDTM RELREC</h2>
-      <p class="count">1 example</p>
-      <ul>
-      <li><a href="sdtm-relrec-many-to-many.html">SDTM RELREC: record relationships between events and medications</a></li>
-      </ul>
-    </section>
-    <section aria-label="SDTM SUPPMH">
-      <h2>SDTM SUPPMH</h2>
-      <p class="count">2 examples</p>
-      <ul>
-      <li><a href="sdtm-suppmh-parent-linkage.html">SDTM SUPPMH: link qualifiers collected on their own form to a parent record</a></li>
-      <li><a href="sdtm-suppmh-qualifiers.html">SDTM SUPPMH: reshape extra qualifiers into supplemental records</a></li>
-      </ul>
-    </section>
-    <section aria-label="SDTM VS">
-      <h2>SDTM VS</h2>
-      <p class="count">4 examples</p>
-      <ul>
-      <li><a href="negative-output-order-unknown-column.html">SDTM VS: reject a submission order over a value the dataset does not carry</a></li>
-      <li><a href="negative-record-lookup-incomparable-range.html">SDTM VS: reject an epoch range with incomparable endpoints</a></li>
-      <li><a href="sdtm-vs-unit-standardization.html">SDTM VS: standardize collected results into the study&#x27;s units</a></li>
-      <li><a href="sdtm-vs-visit-study-day.html">SDTM VS: attach visit metadata and study day to a result</a></li>
-      </ul>
+    <section class="outcome" id="negative" aria-labelledby="negative-heading">
+      <h2 id="negative-heading">Anti-pattern</h2>
+      <p class="outcome-note">95 examples. Each must fail, and expected/error.yaml pins the error it raises.</p>
+      <section aria-label="Anti-pattern: ADaM ADAE">
+        <h3>ADaM ADAE</h3>
+        <p class="count">15 examples</p>
+        <ul>
+        <li><a href="negative-adae-review-condition-arithmetic.html">ADaM ADAE: reject a review flag whose condition performs arithmetic</a></li>
+        <li><a href="negative-adae-review-text-date.html">ADaM ADAE: reject a review flag that compares a date with text</a></li>
+        <li><a href="negative-adae-review-unknown-date.html">ADaM ADAE: reject a review flag that names an unavailable date</a></li>
+        <li><a href="negative-conversion-incomplete-date.html">ADaM ADAE: reject an event start date that names no day</a></li>
+        <li><a href="negative-date-impute-invalid-source.html">ADaM ADAE: reject a start date completed from text that is not a date</a></li>
+        <li><a href="negative-date-impute-month-out-of-range.html">ADaM ADAE: reject a start date completed with no month of the year</a></li>
+        <li><a href="negative-date-impute-nonexistent-day.html">ADaM ADAE: reject an end date completed past the end of its month</a></li>
+        <li><a href="negative-date-impute-unknown-day-rule.html">ADaM ADAE: reject a start date completed with an unrecognised day</a></li>
+        <li><a href="negative-date-precision-invalid-source.html">ADaM ADAE: reject a completeness flag read from text that is not a date</a></li>
+        <li><a href="negative-datetime-zone-offset.html">ADaM ADAE: reject an event start recorded against another clock</a></li>
+        <li><a href="negative-output-order-repeated-term.html">ADaM ADAE: reject an order that places one value twice</a></li>
+        <li><a href="negative-query-slot-overflow.html">ADaM ADAE: reject an event belonging to more queries than it has places</a></li>
+        <li><a href="negative-rank-invalid-method.html">ADaM ADAE: reject an unlisted tie-numbering method</a></li>
+        <li><a href="negative-sum-non-numeric-source.html">ADaM ADAE: reject a severity burden totalled from severity words</a></li>
+        <li><a href="negative-to-date-date-source.html">ADaM ADAE: reject extracting a date from a date</a></li>
+        </ul>
+      </section>
+      <section aria-label="Anti-pattern: ADaM ADEG">
+        <h3>ADaM ADEG</h3>
+        <p class="count">1 example</p>
+        <ul>
+        <li><a href="negative-adam-adeg-pre-existing-rrr.html">ADaM ADEG: reject a collected RR interval</a></li>
+        </ul>
+      </section>
+      <section aria-label="Anti-pattern: ADaM ADEX">
+        <h3>ADaM ADEX</h3>
+        <p class="count">5 examples</p>
+        <ul>
+        <li><a href="negative-adex-relative-dose-intensity.html">ADaM ADEX: reject a dose intensity measured against a per-record plan</a></li>
+        <li><a href="negative-adex-single-dose-expansion.html">ADaM ADEX: reject one record per administration built from an aggregate dose</a></li>
+        <li><a href="negative-compute-qualified-identifier.html">ADaM ADEX: reject a doubled dose read straight from exposure</a></li>
+        <li><a href="negative-ingest-unparseable-field.html">ADaM ADEX: reject a dose recorded with its unit</a></li>
+        <li><a href="negative-types-unknown-field.html">ADaM ADEX: reject a total over a field the source does not have</a></li>
+        </ul>
+      </section>
+      <section aria-label="Anti-pattern: ADaM ADLB">
+        <h3>ADaM ADLB</h3>
+        <p class="count">24 examples</p>
+        <ul>
+        <li><a href="negative-adlb-absolute-wbc-duplicate.html">ADaM ADLB: reject duplicate WBC inputs for an absolute differential</a></li>
+        <li><a href="negative-adlb-computed-parameter.html">ADaM ADLB: reject a parameter computed from the dataset being built</a></li>
+        <li><a href="negative-adlb-multiple-baseline-records.html">ADaM ADLB: reject a subject with two baseline records for one parameter</a></li>
+        <li><a href="negative-baseline-flag-tied-date.html">ADaM ADLB: reject a baseline chosen between two same-day results</a></li>
+        <li><a href="negative-column-type-unknown.html">ADaM ADLB: reject an analysis value with an ambiguous numeric type</a></li>
+        <li><a href="negative-compute-aggregate-function.html">ADaM ADLB: reject a total written as a formula</a></li>
+        <li><a href="negative-compute-comparison-operator.html">ADaM ADLB: reject an above-range flag written as a formula</a></li>
+        <li><a href="negative-compute-division-by-zero.html">ADaM ADLB: reject a percent change from a zero baseline</a></li>
+        <li><a href="negative-compute-integer-overflow.html">ADaM ADLB: reject a cell total larger than the counter can hold</a></li>
+        <li><a href="negative-compute-ln-of-zero.html">ADaM ADLB: reject a log result from an undetectable value</a></li>
+        <li><a href="negative-conversion-unparseable-number.html">ADaM ADLB: reject a viral load reported below the assay limit</a></li>
+        <li><a href="negative-dataset-path-absolute.html">ADaM ADLB: reject reference limits named by a machine location</a></li>
+        <li><a href="negative-dataset-path-directory.html">ADaM ADLB: reject reference limits that name a folder</a></li>
+        <li><a href="negative-dataset-path-missing.html">ADaM ADLB: reject reference limits the study does not hold</a></li>
+        <li><a href="negative-dataset-path-parent-escape.html">ADaM ADLB: reject reference limits stored above the study</a></li>
+        <li><a href="negative-dataset-path-symlink.html">ADaM ADLB: reject reference limits reached through a stand-in name</a></li>
+        <li><a href="negative-dataset-path-url.html">ADaM ADLB: reject reference limits named by a web address</a></li>
+        <li><a href="negative-group-count-without-id.html">ADaM ADLB: reject an unnamed baseline-count rule</a></li>
+        <li><a href="negative-mapping-from-duplicate-key.html">ADaM ADLB: reject a reference range stated twice</a></li>
+        <li><a href="negative-mapping-from-key-length-mismatch.html">ADaM ADLB: reject a reference range chosen by an unpaired key</a></li>
+        <li><a href="negative-mapping-from-partial-key.html">ADaM ADLB: reject a reference range chosen without a sex</a></li>
+        <li><a href="negative-mapping-from-unmapped-key.html">ADaM ADLB: reject a result with no reference range</a></li>
+        <li><a href="negative-row-number-numeric-filter.html">ADaM ADLB: reject a sequence filtered by a number</a></li>
+        <li><a href="negative-source-output-self-reference.html">ADaM ADLB: reject a parameter that reads the dataset it is part of</a></li>
+        </ul>
+      </section>
+      <section aria-label="Anti-pattern: ADaM ADRS">
+        <h3>ADaM ADRS</h3>
+        <p class="count">2 examples</p>
+        <ul>
+        <li><a href="negative-adrs-partial-response-after-complete-response.html">ADaM ADRS: reject a partial response recorded after a complete response</a></li>
+        <li><a href="negative-mapping-unmapped-value.html">ADaM ADRS: reject an unmapped response</a></li>
+        </ul>
+      </section>
+      <section aria-label="Anti-pattern: ADaM ADSL">
+        <h3>ADaM ADSL</h3>
+        <p class="count">35 examples</p>
+        <ul>
+        <li><a href="negative-adam-adsl-stratification-reconciliation.html">ADaM ADSL: reconcile randomization strata</a></li>
+        <li><a href="negative-adsl-cyclic-parent.html">ADaM ADSL: reject a circular chain of shared definitions</a></li>
+        <li><a href="negative-adsl-inherited-output.html">ADaM ADSL: reject an inherited artifact layout</a></li>
+        <li><a href="negative-adsl-invalid-parent-clear.html">ADaM ADSL: reject removal of a required variable property</a></li>
+        <li><a href="negative-adsl-parent-version-mismatch.html">ADaM ADSL: reject shared definitions from another language version</a></li>
+        <li><a href="negative-adsl-randomization-date-retyped.html">ADaM ADSL: reject a randomization date described twice</a></li>
+        <li><a href="negative-adsl-remote-parent.html">ADaM ADSL: reject shared definitions from a remote location</a></li>
+        <li><a href="negative-adsl-subject-reference.html">ADaM ADSL: reject a malformed subject reference</a></li>
+        <li><a href="negative-all-or-none-partial-row.html">ADaM ADSL: reject a row with only some paired dates present</a></li>
+        <li><a href="negative-compute-sqrt-of-negative.html">ADaM ADSL: reject a body surface area from a negative weight</a></li>
+        <li><a href="negative-date-diff-datetime-endpoints.html">ADaM ADSL: reject counting days between two moments</a></li>
+        <li><a href="negative-greatest-incomparable-sources.html">ADaM ADSL: reject a last-known-alive date taken from a day number</a></li>
+        <li><a href="negative-keys-internal-column.html">ADaM ADSL: reject a site-scoped subject identity</a></li>
+        <li><a href="negative-least-incomparable-sources.html">ADaM ADSL: reject an earliest-alive date taken from a day number</a></li>
+        <li><a href="negative-literal-non-scalar.html">ADaM ADSL: reject a fixed value written as a structure</a></li>
+        <li><a href="negative-mapping-case-fold-collision.html">ADaM ADSL: reject a smoking flag whose dictionary answers twice</a></li>
+        <li><a href="negative-matches-unreadable-pattern.html">ADaM ADSL: reject a sex code checked against an unreadable match rule</a></li>
+        <li><a href="negative-not-missing-absent-age.html">ADaM ADSL: reject a missing age</a></li>
+        <li><a href="negative-output-duplicate-subject.html">ADaM ADSL: reject a repeated demographics record</a></li>
+        <li><a href="negative-record-lookup-id-collision.html">ADaM ADSL: reject a first treatment named after its own source</a></li>
+        <li><a href="negative-record-lookup-unordered-choice.html">ADaM ADSL: reject a treatment and dose taken from an unchosen record</a></li>
+        <li><a href="negative-record-lookup-unordered-keep.html">ADaM ADSL: reject a treatment ordered but not chosen</a></li>
+        <li><a href="negative-source-duplicate-field-name.html">ADaM ADSL: reject a subject listing that names one field twice</a></li>
+        <li><a href="negative-source-duplicate-right-key.html">ADaM ADSL: reject duplicate subject enrichment</a></li>
+        <li><a href="negative-source-empty-field-name.html">ADaM ADSL: reject a subject listing with an unnamed field</a></li>
+        <li><a href="negative-source-invalid-text.html">ADaM ADSL: reject a site name stored in another encoding</a></li>
+        <li><a href="negative-source-missing-sentinel.html">ADaM ADSL: reject an age recorded as NA</a></li>
+        <li><a href="negative-source-record-width.html">ADaM ADSL: reject a subject listing record with an extra field</a></li>
+        <li><a href="negative-source-undeclared-field.html">ADaM ADSL: reject a copy from an undeclared field</a></li>
+        <li><a href="negative-source-unknown-profile.html">ADaM ADSL: reject a subject listing stored under an unnamed format</a></li>
+        <li><a href="negative-source-unterminated-quote.html">ADaM ADSL: reject a comment whose quoted text never closes</a></li>
+        <li><a href="negative-str-extract-undeclared-group.html">ADaM ADSL: reject a site identifier taken from an uncaptured part</a></li>
+        <li><a href="negative-study-day-datetime-input.html">ADaM ADSL: reject a study day measured from a moment</a></li>
+        <li><a href="negative-variable-nested-expression.html">ADaM ADSL: reject an uppercased country chosen inside the same step</a></li>
+        <li><a href="negative-verification-implausible-age.html">ADaM ADSL: reject an implausible age</a></li>
+        </ul>
+      </section>
+      <section aria-label="Anti-pattern: ADaM ADVS">
+        <h3>ADaM ADVS</h3>
+        <p class="count">6 examples</p>
+        <ul>
+        <li><a href="negative-advs-overlapping-analysis-windows.html">ADaM ADVS: reject overlapping analysis windows</a></li>
+        <li><a href="negative-conversion-non-integral.html">ADaM ADVS: reject a pulse rate recorded between whole beats</a></li>
+        <li><a href="negative-keys-missing-value.html">ADaM ADVS: reject a record that no analysis visit identifies</a></li>
+        <li><a href="negative-previous-non-missing-non-variable-source.html">ADaM ADVS: reject carrying forward a fixed value</a></li>
+        <li><a href="negative-row-value-self-reference.html">ADaM ADVS: reject a weight carried forward from a carried-forward weight</a></li>
+        <li><a href="negative-row-value-zero-offset.html">ADaM ADVS: reject a previous weight that names no earlier visit</a></li>
+        </ul>
+      </section>
+      <section aria-label="Anti-pattern: Project function">
+        <h3>Project function</h3>
+        <p class="count">1 example</p>
+        <ul>
+        <li><a href="negative-function-contract-mismatch.html">Project function: reject an unavailable project-routine contract</a></li>
+        </ul>
+      </section>
+      <section aria-label="Anti-pattern: SDTM DM">
+        <h3>SDTM DM</h3>
+        <p class="count">1 example</p>
+        <ul>
+        <li><a href="negative-usubjid-exceeds-length.html">SDTM DM: reject a subject identifier longer than the study permits</a></li>
+        </ul>
+      </section>
+      <section aria-label="Anti-pattern: SDTM LB">
+        <h3>SDTM LB</h3>
+        <p class="count">3 examples</p>
+        <ul>
+        <li><a href="negative-record-lookup-incomplete-key.html">SDTM LB: reject a reference limit chosen without a sex</a></li>
+        <li><a href="negative-record-lookup-unmatched-key.html">SDTM LB: reject a result with no reference range</a></li>
+        <li><a href="negative-record-lookup-unpaired-key.html">SDTM LB: reject a reference limit matched against nothing</a></li>
+        </ul>
+      </section>
+      <section aria-label="Anti-pattern: SDTM VS">
+        <h3>SDTM VS</h3>
+        <p class="count">2 examples</p>
+        <ul>
+        <li><a href="negative-output-order-unknown-column.html">SDTM VS: reject a submission order over a value the dataset does not carry</a></li>
+        <li><a href="negative-record-lookup-incomparable-range.html">SDTM VS: reject an epoch range with incomparable endpoints</a></li>
+        </ul>
+      </section>
     </section>
 
   </main>

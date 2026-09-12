@@ -54,6 +54,19 @@ side, with expected output below. All datasets stay visible without tabs, and
 there are no downloads. Small screens stack the layout. Content remains
 readable with JavaScript disabled and when printing.
 
+Every dashboard links back to the gallery from its header, beside the source
+link, and again from its footer between the previous and next example. The
+header link is what makes the gallery reachable from a long page without
+scrolling to the end of it.
+
+The gallery lists `Examples` before `Anti-pattern`, each group headed by its
+own count and subdivided by the standard and domain in the example title. A
+`negative-` directory name is what puts an example in the second group, the
+same test the repository validator applies. The two are separate contracts --
+one must produce an artifact, the other must refuse to -- so the gallery does
+not interleave them by domain. Links at the top of the page jump to either
+group.
+
 The Example dashboards workflow runs on relevant pushes and pull requests. It
 generates every repository example twice under different time zones and Python
 hash seeds, compares the resulting directories byte for byte, checks that the

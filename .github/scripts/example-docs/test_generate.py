@@ -150,6 +150,12 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('<span class="is-disabled" aria-disabled="true">Previous example</span>', edges)
         self.assertIn('<span class="is-disabled" aria-disabled="true">Next example</span>', edges)
 
+    def test_gallery_link_is_reachable_without_scrolling(self):
+        page = generate.render_example(EXAMPLE).decode("ascii")
+        header, _, footer = page.partition("</header>")
+        self.assertIn('<a class="gallery-link" href="index.html">', header)
+        self.assertIn('<a href="index.html">All examples</a>', footer)
+
     def test_gallery_index_is_sorted_and_deterministic(self):
         entries = [
             ("zzz-one", "Zulu title", "Zulu"),
@@ -163,6 +169,25 @@ class DashboardTests(unittest.TestCase):
         self.assertLess(text.index("aaa-two.html"), text.index("mmm-three.html"))
         for name in ("zzz-one", "aaa-two", "mmm-three"):
             self.assertIn(f'href="{name}.html"', text)
+
+    def test_gallery_lists_rejected_examples_apart_from_positive_ones(self):
+        entries = [
+            ("adam-adsl-one", "ADaM ADSL: derive a flag", "ADaM ADSL"),
+            ("negative-adsl-two", "ADaM ADSL: reject a flag", "ADaM ADSL"),
+        ]
+        text = generate.render_index(entries).decode("ascii")
+        self.assertLess(text.index('id="positive"'), text.index('id="negative"'))
+        self.assertLess(text.index("adam-adsl-one.html"), text.index('id="negative"'))
+        self.assertLess(text.index('id="negative"'), text.index("negative-adsl-two.html"))
+        # One shared domain heading per group, not one shared between them.
+        self.assertEqual(text.count("<h3>ADaM ADSL</h3>"), 2)
+        self.assertIn('<a href="#positive">Examples (1)</a>', text)
+        self.assertIn('<a href="#negative">Anti-pattern (1)</a>', text)
+
+    def test_gallery_omits_a_group_with_no_examples(self):
+        text = generate.render_index([("adam-adsl-one", "ADaM ADSL: derive", "ADaM ADSL")]).decode("ascii")
+        self.assertIn('id="positive"', text)
+        self.assertNotIn('id="negative"', text)
 
 
 if __name__ == "__main__":

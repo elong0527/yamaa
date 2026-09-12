@@ -20,6 +20,18 @@ ROOT = HERE.parents[2]
 EXAMPLES = ROOT / "yaml/examples"
 DESTINATION = ROOT / "docs/examples"
 REPOSITORY = "https://github.com/elong0527/yamaa"
+OUTCOMES = (
+    (
+        "positive",
+        "Examples",
+        "Each runs to completion and produces the artifact in expected/.",
+    ),
+    (
+        "negative",
+        "Anti-pattern",
+        "Each must fail, and expected/error.yaml pins the error it raises.",
+    ),
+)
 YAML_TOKEN = re.compile(
     r'''"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|\b(?:null|true|false)\b|\b\d+(?:\.\d+)?\b|[A-Za-z_][\w-]*(?=:)'''
 )
@@ -190,29 +202,56 @@ def page_link(name, label, relation):
     return f'<a href="{escape(name)}.html" rel="{relation}">{label}</a>'
 
 
+def plural(count, noun):
+    return f"{count} {noun}" + ("" if count == 1 else "s")
+
+
 def render_index(entries):
-    """Render the gallery page linking every generated dashboard."""
-    groups = {}
+    """Render the gallery page linking every generated dashboard.
+
+    A specification the design must refuse is a different contract from one
+    that must produce an artifact, so the two are listed apart rather than
+    interleaved by domain. A `negative-` directory name is what marks the
+    second group, the same test the repository validator applies.
+    """
+    outcomes = {key: {} for key, _, _ in OUTCOMES}
     for name, title, category in entries:
-        groups.setdefault(category, []).append((name, title))
-    sections = []
-    for category in sorted(groups):
-        items = "".join(
-            f'      <li><a href="{escape(name)}.html">{escape(title)}</a></li>\n'
-            for name, title in sorted(groups[category])
+        outcome = "negative" if name.startswith("negative-") else "positive"
+        outcomes[outcome].setdefault(category, []).append((name, title))
+    blocks, jumps = [], []
+    for key, heading, note in OUTCOMES:
+        groups = outcomes[key]
+        if not groups:
+            continue
+        total = sum(len(items) for items in groups.values())
+        jumps.append(
+            f'<a href="#{key}">{escape(heading)} ({total})</a>'
         )
-        sections.append(
-            f'    <section aria-label="{escape(category)}">\n'
-            f'      <h2>{escape(category)}</h2>\n'
-            f'      <p class="count">{len(groups[category])} example'
-            + ("" if len(groups[category]) == 1 else "s") + "</p>\n"
-            f"      <ul>\n{items}      </ul>\n    </section>"
+        sections = []
+        for category in sorted(groups):
+            items = "".join(
+                f'        <li><a href="{escape(name)}.html">{escape(title)}</a></li>\n'
+                for name, title in sorted(groups[category])
+            )
+            sections.append(
+                f'      <section aria-label="{escape(heading)}: {escape(category)}">\n'
+                f"        <h3>{escape(category)}</h3>\n"
+                f'        <p class="count">{plural(len(groups[category]), "example")}</p>\n'
+                f"        <ul>\n{items}        </ul>\n      </section>"
+            )
+        blocks.append(
+            f'    <section class="outcome" id="{key}" aria-labelledby="{key}-heading">\n'
+            f'      <h2 id="{key}-heading">{escape(heading)}</h2>\n'
+            f'      <p class="outcome-note">{plural(total, "example")}. {escape(note)}</p>\n'
+            + "\n".join(sections)
+            + "\n    </section>"
         )
     template = Template((HERE / "gallery.html").read_text(encoding="utf-8"))
     result = template.substitute(
         total=len(entries),
         source_url=REPOSITORY + "/tree/main/yaml/examples",
-        sections="\n".join(sections) + "\n",
+        summary="".join(jumps),
+        sections="\n".join(blocks) + "\n",
     )
     return result.encode("ascii", "xmlcharrefreplace")
 
