@@ -8,6 +8,7 @@ conditions:
   ambiguous_baseline: {rules: [R007], phases: [derivation]}
   ambiguous_dictionary: {rules: [R007], phases: [validation]}
   conversion_failed: {rules: [R011], phases: [convert]}
+  decimals_not_applicable: {rules: [R020], phases: [validation]}
   dependency_cycle: {rules: [R001], phases: [validation]}
   division_by_zero: {rules: [R010], phases: [derivation]}
   duplicate_identifier: {rules: [R002, R015], phases: [validation]}
@@ -35,6 +36,7 @@ conditions:
   invalid_text: {rules: [R019], phases: [ingest]}
   length_failed: {rules: [R009], phases: [verification]}
   ln_of_nonpositive: {rules: [R010], phases: [derivation]}
+  matches_failed: {rules: [R009], phases: [verification]}
   missing_entry_output: {rules: [R017], phases: [validation]}
   missing_input: {rules: [R008], phases: [mapping]}
   missing_key: {rules: [R005], phases: [output]}
@@ -45,6 +47,7 @@ conditions:
   predicate_failed: {rules: [R009], phases: [verification]}
   prohibited_construct: {rules: [R010, R013], phases: [validation]}
   prohibited_function: {rules: [R010, R013], phases: [validation]}
+  publication_failed: {rules: [R020], phases: [output]}
   qualified_identifier: {rules: [R010], phases: [validation]}
   range_failed: {rules: [R009], phases: [verification]}
   redundant_field_type: {rules: [R017], phases: [validation]}
@@ -66,10 +69,12 @@ conditions:
   sqrt_of_negative: {rules: [R010], phases: [derivation]}
   undeclared_column: {rules: [R005], phases: [validation]}
   unique_failed: {rules: [R009], phases: [verification]}
+  unknown_artifact_profile: {rules: [R020], phases: [validation]}
   unknown_field: {rules: [R002, R004, R010, R013, R014], phases: [validation]}
   unmapped_key: {rules: [R008], phases: [mapping]}
   unmapped_value: {rules: [R008], phases: [mapping]}
   unmatched_key: {rules: [R015], phases: [join]}
   unpaired_fields: {rules: [R015], phases: [validation]}
+  unwritable_value: {rules: [R020], phases: [output]}
   value_not_permitted: {rules: [R011, R016], phases: [validation]}
   zero_offset: {rules: [R007], phases: [validation]}

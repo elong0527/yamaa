@@ -1,18 +1,28 @@
-"""The fixed CSV source profile from R023.
+"""Both directions of the delimited profile: R023 in, R020 out.
 
-Quoting follows the Python csv-module default: double quotes escape,
-surrounding whitespace is preserved, and a field with no characters is
-missing whether it was bare or quoted.
+Reading follows R023. Quoting follows the Python csv-module default:
+double quotes escape, surrounding whitespace is preserved, and a field
+with no characters is missing whether it was bare or quoted.
+
+Writing follows R020, which is not the same contract read backwards.
+R020-14 fixes the quoted set exactly rather than as a minimum, and
+R020-17 writes a collected empty string as two quote characters where the
+reader above admits no such distinction. The two live here together so
+that departure is visible in one file rather than inferred across two.
 
 `scan_records` and `record_coordinates` are the one implementation of the
 profile's syntax. The repository validator loads this module by path and
 reports its own findings from those records, so the two never read one
 fixture differently. That is why this module imports the standard library
-alone: the validator installs no package to run.
+alone: the validator installs no package to run. The writing half keeps
+to that rule, so it takes text a caller has already produced from typed
+values rather than the values themselves.
 """
 
 from __future__ import annotations
 
+import decimal
+from collections.abc import Iterable, Sequence
 from typing import NamedTuple
 
 
@@ -177,3 +187,58 @@ def parse_csv(content: bytes) -> CsvSource:
         names=tuple(names),
         records=tuple(tuple(record) for record in records[1:]),
     )
+
+
+# R020-14 states the quoting condition exactly rather than as a minimum,
+# so two runtimes quote the same fields.
+_QUOTED = ('"', ",", "\r", "\n")
+
+
+def quote_field(text: str) -> str:
+    """Quote one artifact field exactly when R020-14 says it is quoted."""
+    if text == "" or any(character in text for character in _QUOTED):
+        return '"' + text.replace('"', '""') + '"'
+    return text
+
+
+def fixed_point(value: float, decimals: int) -> str:
+    """Round one binary64 value to `decimals` places, exactly and once.
+
+    R020-33 rounds the exact decimal value every binary64 is, with a tie
+    going away from zero. `Decimal(value)` is that exact value, and
+    `ROUND_HALF_UP` is the away-from-zero tie both `round` builtins and
+    the C formatting beneath them decide the other way. The context is
+    widened to the digits this value and this precision need, so a large
+    declared precision stays exact rather than reaching a host limit.
+    """
+    exact = decimal.Decimal(value)
+    with decimal.localcontext() as context:
+        context.prec = max(exact.adjusted(), 0) + decimals + 3
+        context.Emin = decimal.MIN_EMIN
+        context.Emax = decimal.MAX_EMAX
+        quantized = exact.quantize(
+            decimal.Decimal(1).scaleb(-decimals),
+            rounding=decimal.ROUND_HALF_UP,
+        )
+    text = format(quantized, "f")
+    # R020-33: a value that rounds to zero is written without a sign.
+    return text[1:] if quantized == 0 and text.startswith("-") else text
+
+
+def render_records(
+    names: Sequence[str],
+    records: Iterable[Sequence[str | None]],
+) -> bytes:
+    """Render an artifact's header and fields to the exact R020 bytes.
+
+    A field is the text its value carries, or `None` for a missing value,
+    which R020-17 writes as no characters at all.
+    """
+    lines = [",".join(quote_field(name) for name in names)]
+    lines.extend(
+        ",".join("" if field is None else quote_field(field) for field in record)
+        for record in records
+    )
+    # R020-9: U+000A terminates every record, including the last, and
+    # R020-13 keeps the header record of an artifact that holds no row.
+    return "".join(f"{line}\n" for line in lines).encode("utf-8")
