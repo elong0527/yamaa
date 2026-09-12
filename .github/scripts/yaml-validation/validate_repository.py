@@ -4479,20 +4479,16 @@ def classify_written_project_path(written):
     """Return the R021 condition a written project path violates, if any."""
     if not isinstance(written, str) or not written:
         return 'resource_path_not_relative'
-    if '\\' in written:
+    if written.startswith('/') or '\\' in written:
         return 'resource_path_not_relative'
-    if URI_SCHEME_PATTERN.match(written) and not DRIVE_LETTER_PATTERN.match(
-        written
-    ):
+    if DRIVE_LETTER_PATTERN.match(written):
+        return 'resource_path_not_relative'
+    if URI_SCHEME_PATTERN.match(written):
         return 'resource_path_uri_scheme'
     segments = written.split('/')
-    if any(segment == '' for segment in segments[1:]):
+    if any(segment == '' for segment in segments):
         return 'resource_path_not_normalized'
     return None
-
-
-def _is_rooted_project_path(written):
-    return written.startswith('/') or DRIVE_LETTER_PATTERN.match(written)
 
 
 def resolve_project_path(written, base_dir, project_root):
@@ -4505,35 +4501,27 @@ def resolve_project_path(written, base_dir, project_root):
     if condition is not None:
         return None, condition
 
-    rooted = _is_rooted_project_path(written)
     try:
         root = Path(project_root).resolve(strict=True)
     except OSError:
         return None, 'resource_path_outside_project'
 
-    if not rooted:
-        try:
-            depth = len(Path(base_dir).resolve().relative_to(root).parts)
-        except (OSError, ValueError):
-            return None, 'resource_path_outside_project'
-        for segment in written.split('/'):
-            if segment == '.':
-                continue
-            if segment == '..':
-                depth -= 1
-                if depth < 0:
-                    return None, 'resource_path_outside_project'
-            else:
-                depth += 1
-
-        segments = written.split('/')
-        current = Path(base_dir)
-    else:
-        if written.startswith('/'):
-            segments = written.split('/')[1:]
+    try:
+        depth = len(Path(base_dir).resolve().relative_to(root).parts)
+    except (OSError, ValueError):
+        return None, 'resource_path_outside_project'
+    for segment in written.split('/'):
+        if segment == '.':
+            continue
+        if segment == '..':
+            depth -= 1
+            if depth < 0:
+                return None, 'resource_path_outside_project'
         else:
-            segments = written.split('/')
-        current = Path('/')
+            depth += 1
+
+    segments = written.split('/')
+    current = Path(base_dir)
     for index, segment in enumerate(segments):
         current = current / segment
         if current.is_symlink():
@@ -4548,14 +4536,9 @@ def resolve_project_path(written, base_dir, project_root):
             return None, 'resource_path_not_regular_file'
 
     try:
-        resolved = current.resolve(strict=True)
-    except OSError:
-        return None, 'resource_path_missing'
-    if not rooted:
-        try:
-            resolved.relative_to(root)
-        except ValueError:
-            return None, 'resource_path_outside_project'
+        current.resolve(strict=True).relative_to(root)
+    except (OSError, ValueError):
+        return None, 'resource_path_outside_project'
     return current, None
 
 

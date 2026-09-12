@@ -33,8 +33,8 @@
   <header class="page-header">
     <div class="brand">YAMAA / Example explorer</div>
     <h1>All examples</h1>
-    <p class="lede">196 example dashboards, generated from <a href="https://github.com/elong0527/yamaa/tree/main/yaml/examples">yaml/examples</a>. Each page shows the README, the source fixtures, the expected artifacts, and the YAML specification.</p>
-    <nav class="outcome-jump" aria-label="Jump to a group"><a href="#positive">Examples (95)</a><a href="#negative">Anti-pattern (101)</a></nav>
+    <p class="lede">197 example dashboards, generated from <a href="https://github.com/elong0527/yamaa/tree/main/yaml/examples">yaml/examples</a>. Each page shows the README, the source fixtures, the expected artifacts, and the YAML specification.</p>
+    <nav class="outcome-jump" aria-label="Jump to a group"><a href="#positive">Examples (95)</a><a href="#negative">Anti-pattern (102)</a></nav>
   </header>
   <main class="gallery" aria-label="Example gallery">
     <section class="outcome" id="positive" aria-labelledby="positive-heading">
@@ -270,7 +270,7 @@
     </section>
     <section class="outcome" id="negative" aria-labelledby="negative-heading">
       <h2 id="negative-heading">Anti-pattern</h2>
-      <p class="outcome-note">101 examples. Each must fail, and expected/error.yaml pins the error it raises.</p>
+      <p class="outcome-note">102 examples. Each must fail, and expected/error.yaml pins the error it raises.</p>
       <section aria-label="Anti-pattern: ADaM ADAE">
         <h3>ADaM ADAE</h3>
         <p class="count">15 examples</p>
@@ -312,7 +312,7 @@
       </section>
       <section aria-label="Anti-pattern: ADaM ADLB">
         <h3>ADaM ADLB</h3>
-        <p class="count">24 examples</p>
+        <p class="count">25 examples</p>
         <ul>
         <li><a href="negative-adlb-absolute-wbc-duplicate.html">ADaM ADLB: reject duplicate WBC inputs for an absolute differential</a></li>
         <li><a href="negative-adlb-computed-parameter.html">ADaM ADLB: reject a parameter computed from the dataset being built</a></li>
@@ -326,6 +326,7 @@
         <li><a href="negative-compute-integer-overflow.html">ADaM ADLB: reject a cell total larger than the counter can hold</a></li>
         <li><a href="negative-compute-ln-of-zero.html">ADaM ADLB: reject a log result from an undetectable value</a></li>
         <li><a href="negative-conversion-unparseable-number.html">ADaM ADLB: reject a viral load reported below the assay limit</a></li>
+        <li><a href="negative-dataset-path-absolute.html">ADaM ADLB: reject reference limits named by a machine location</a></li>
         <li><a href="negative-dataset-path-directory.html">ADaM ADLB: reject reference limits that name a folder</a></li>
         <li><a href="negative-dataset-path-missing.html">ADaM ADLB: reject reference limits the study does not hold</a></li>
         <li><a href="negative-dataset-path-parent-escape.html">ADaM ADLB: reject reference limits stored above the study</a></li>

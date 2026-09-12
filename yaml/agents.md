@@ -49,11 +49,8 @@ outside the rule index until their contracts and example coverage are complete.
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.
 - Declare every source path as a relative file inside the example directory.
-  R021 confines what a run may read, so a URL, a symbolic link, or a
-  traversal escaping the project belongs only in a negative example.
-  A rooted path is allowed for data held outside the study, but examples
-  stay relative so they run anywhere; portability is enforced when a
-  submission package is built.
+  R021 confines what a run may read, so a rooted path, a URL, a parent
+  traversal, or a symbolic link belongs only in a negative example.
 - Write every fixture under R023's source profile: UTF-8 without a byte-order
   mark, comma-separated fields, a named non-empty field per column, and the
   same field count in every record. A file that departs from it belongs only

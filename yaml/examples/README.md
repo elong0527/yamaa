@@ -153,6 +153,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-conversion-non-integral`](negative-conversion-non-integral/) | reject a pulse rate recorded between whole beats |
 | [`negative-conversion-unparseable-number`](negative-conversion-unparseable-number/) | reject a viral load reported below the assay limit |
 | [`negative-cut-non-numeric-source`](negative-cut-non-numeric-source/) | reject age bands grouped from a coded value |
+| [`negative-dataset-path-absolute`](negative-dataset-path-absolute/) | reject reference limits named by a machine location |
 | [`negative-dataset-path-directory`](negative-dataset-path-directory/) | reject reference limits that name a folder |
 | [`negative-dataset-path-missing`](negative-dataset-path-missing/) | reject reference limits the study does not hold |
 | [`negative-dataset-path-parent-escape`](negative-dataset-path-parent-escape/) | reject reference limits stored above the study |
