@@ -177,56 +177,33 @@ def load_source_tables(
     if diagnostics:
         raise SourceError(diagnostics)
 
-    captured: dict[str, ResourceSnapshot] = {}
-    for dataset, source in datasets.items():
-        try:
-            captured[dataset] = resources.capture(source.path)
-        except ResourceFailure as failure:
-            diagnostics.append(_path_diagnostic(dataset, source.path, failure))
-    if diagnostics:
-        raise SourceError(diagnostics)
-
-    verified: set[int] = set()
-    for dataset, snapshot in captured.items():
-        if id(snapshot) in verified:
-            continue
-        try:
-            resources.verify(snapshot)
-        except ResourceFailure as failure:
-            failed_dataset = next(
-                (
-                    name
-                    for name, source in datasets.items()
-                    if source.path == failure.written_path
-                ),
-                dataset,
-            )
-            raise SourceError(
-                [
-                    _path_diagnostic(
-                        failed_dataset,
-                        datasets[failed_dataset].path,
-                        failure,
-                    )
-                ]
-            ) from failure
-        verified.add(id(snapshot))
-
+    seen: set[int] = set()
     loaded: dict[str, LoadedDataset] = {}
     for dataset, source in datasets.items():
-        snapshot = captured[dataset]
         try:
+            snapshot = resources.capture(source.path)
+            if id(snapshot) not in seen:
+                resources.verify(snapshot)
+                seen.add(id(snapshot))
             parsed = parse_csv(snapshot.content)
+            table = _build_table(dataset, source, parsed)
+        except ResourceFailure as failure:
+            diagnostics.append(_path_diagnostic(dataset, source.path, failure))
+            continue
         except CsvProfileFailure as failure:
-            raise SourceError(
-                [_csv_diagnostic(dataset, source.path, failure)]
-            ) from failure
+            diagnostics.append(_csv_diagnostic(dataset, source.path, failure))
+            continue
+        except SourceError as error:
+            diagnostics.extend(error.diagnostics)
+            continue
         loaded[dataset] = LoadedDataset(
             dataset=dataset,
             written_path=source.path,
             snapshot=snapshot,
-            table=_build_table(dataset, source, parsed),
+            table=table,
         )
+    if diagnostics:
+        raise SourceError(diagnostics)
     return loaded
 
 
