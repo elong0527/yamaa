@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +77,20 @@ def test_not_missing_failure_reproduces_the_committed_error_contract() -> None:
     failures = check_column(completed, column("AGE", "int", {"not_missing": {}}), KEYS)
 
     assert reported(failures[0]) == committed("negative-not-missing-absent-age")
+
+
+def test_nonfinite_float_is_missing_before_column_verification() -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str"), ("VALUE", "float")],
+        [["S", "S-1", float("inf")]],
+    )
+
+    failures = check_column(
+        completed, column("VALUE", "float", {"not_missing": {}}), KEYS
+    )
+
+    assert failures[0].condition == "not_missing_failed"
+    assert failures[0].context["keys"] == [{"STUDYID": "S", "USUBJID": "S-1"}]
 
 
 def test_allowed_values_failure_reproduces_the_committed_error_contract() -> None:
@@ -288,7 +303,7 @@ def test_grouped_row_count_keeps_a_group_whose_filter_admits_no_row() -> None:
         {"STUDYID": "CATH", "USUBJID": "CATH-UCSD-0001"},
         {"STUDYID": "CATH", "USUBJID": "CATH-UCSD-0002"},
     ]
-    assert failures[0].context["count"] == 2
+    assert failures[0].context["counts"] == [2, 0]
 
 
 def test_grouped_row_count_failure_reproduces_the_committed_error_contract() -> None:
@@ -527,6 +542,127 @@ def test_an_unevaluable_predicate_fails_instead_of_satisfying_a_verification() -
     assert raised.value.condition == "incompatible_input_type"
 
 
+@pytest.mark.parametrize("rows", [[], [["S", "S-1", -1, "M"]]])
+def test_implication_validates_its_consequent_without_short_circuiting(
+    rows: list[list[object]],
+) -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str"), ("AGE", "int"), ("SEX", "str")],
+        rows,
+    )
+
+    with pytest.raises(DeclarationError) as raised:
+        check_dataset(
+            completed,
+            [
+                Expression(
+                    root={
+                        "implies": {
+                            "id": "both-predicates-are-valid",
+                            "when": "AGE > 0",
+                            "then": "SEX > 1",
+                        }
+                    }
+                )
+            ],
+            KEYS,
+        )
+
+    assert raised.value.condition == "incompatible_input_type"
+    assert raised.value.requirement == "R004-33"
+    assert raised.value.spec_path == "verifications[0].implies.then"
+
+
+def test_predicates_receive_typed_resolved_record_lookup_bindings() -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str")],
+        [["S", "S-1"], ["S", "S-2"]],
+    )
+    declaration = Expression(
+        root={
+            "predicate": {
+                "id": "lookup-date",
+                "assert": "VISIT.ADT >= DATE '2025-01-01'",
+            }
+        }
+    )
+
+    assert (
+        verify_completed_table(
+            completed,
+            [
+                Column(name="STUDYID", type="str"),
+                Column(name="USUBJID", type="str"),
+            ],
+            KEYS,
+            [declaration],
+            record_lookup_columns=(TypedColumn(name="VISIT.ADT", type="date"),),
+            record_lookup_rows=[
+                {"VISIT.ADT": dt.date(2025, 1, 1)},
+                {"VISIT.ADT": DateValue.parse("2025-01-02")},
+            ],
+        )
+        is completed
+    )
+
+
+def test_row_count_filters_receive_resolved_record_lookup_bindings() -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str")],
+        [["S", "S-1"], ["S", "S-2"]],
+    )
+    declaration = Expression(
+        root={
+            "row_count": {
+                "filter": "VISIT.KEEP = 'Y'",
+                "min": 1,
+                "max": 1,
+            }
+        }
+    )
+
+    assert (
+        check_dataset(
+            completed,
+            [declaration],
+            KEYS,
+            record_lookup_columns=(TypedColumn(name="VISIT.KEEP", type="str"),),
+            record_lookup_rows=[{"VISIT.KEEP": "Y"}, {"VISIT.KEEP": "N"}],
+        )
+        == ()
+    )
+
+
+def test_record_lookup_bindings_must_match_their_typed_row_schema() -> None:
+    completed = table([("STUDYID", "str"), ("USUBJID", "str")], [["S", "S-1"]])
+    lookup = (TypedColumn(name="VISIT.ADT", type="date"),)
+
+    with pytest.raises(ValueError, match="align"):
+        check_dataset(
+            completed,
+            [],
+            KEYS,
+            record_lookup_columns=lookup,
+            record_lookup_rows=[],
+        )
+    with pytest.raises(ValueError, match="match their schema"):
+        check_dataset(
+            completed,
+            [],
+            KEYS,
+            record_lookup_columns=lookup,
+            record_lookup_rows=[{}],
+        )
+    with pytest.raises(ValueError, match="must be date"):
+        check_dataset(
+            completed,
+            [],
+            KEYS,
+            record_lookup_columns=lookup,
+            record_lookup_rows=[{"VISIT.ADT": "2025-01-01"}],
+        )
+
+
 def test_verify_completed_table_stops_at_the_first_failing_stage() -> None:
     completed = table(
         [("STUDYID", "str"), ("USUBJID", "str"), ("AGE", "int")],
@@ -543,7 +679,16 @@ def test_verify_completed_table_stops_at_the_first_failing_stage() -> None:
             completed,
             columns,
             KEYS,
-            [Expression(root={"row_count": {"min": 5}})],
+            [
+                Expression(
+                    root={
+                        "predicate": {
+                            "id": "later-invalid-declaration",
+                            "assert": "ABSENT = 1",
+                        }
+                    }
+                )
+            ],
         )
 
     assert [failure.condition for failure in raised.value.failures] == ["range_failed"]

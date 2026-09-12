@@ -29,9 +29,12 @@ from yamaa.models import (
     DateTimeValue,
     DateValue,
     RuntimeValue,
+    TypedColumn,
     TypedTable,
     ValueResult,
     convert_value,
+    normalize_runtime_value,
+    runtime_type_name,
 )
 from yamaa.specification.models import Column, ColumnType, Expression
 from yamaa.verification.diagnostics import (
@@ -158,9 +161,9 @@ def _groups(
     return partitions
 
 
-def _declared(table: TypedTable) -> frozenset[str]:
-    """The names a verification predicate may read on a completed row."""
-    return frozenset(column.name for column in table.columns)
+def _declared(table: TypedTable) -> dict[str, ColumnType]:
+    """The names and types a predicate may read on a completed row."""
+    return {column.name: column.type for column in table.columns}
 
 
 def _identifiers(node: object) -> set[str]:
@@ -179,7 +182,7 @@ def _predicate(
     text: JsonValue,
     spec_path: str,
     requirement: str,
-    available: frozenset[str],
+    available: Mapping[str, ColumnType],
 ) -> PredicateAst:
     if not isinstance(text, str):
         raise DeclarationError(spec_path, requirement, "a predicate must be text")
@@ -188,14 +191,14 @@ def _predicate(
     except PredicateError as error:
         raise DeclarationError(
             spec_path,
-            "R004-30",
+            "R004-31",
             str(error),
             condition="invalid_predicate",
         ) from error
     # A name is resolved against the declared columns rather than against a
     # row, so a predicate naming a column the artifact does not have is
     # refused even when no row exists to read it on.
-    unknown = sorted(_identifiers(parsed) - available)
+    unknown = sorted(_identifiers(parsed) - available.keys())
     if unknown:
         raise DeclarationError(
             spec_path,
@@ -204,7 +207,50 @@ def _predicate(
             condition="unknown_field",
             context={"identifier": unknown[0]},
         )
+    # Operand compatibility is a property of the declaration and its field
+    # schema, not of whichever values happen to occur in a row. Evaluate the
+    # parsed predicate once with a representative non-missing value of every
+    # declared type so an empty table, or a short-circuited implication, cannot
+    # hide an invalid comparison.
+    samples: dict[str, RuntimeValue] = {
+        name: _PREDICATE_SAMPLES[column_type] for name, column_type in available.items()
+    }
+    result = evaluate_predicate(parsed, MappingResolver(samples))
+    if isinstance(result, ConditionResult):
+        _raise_predicate_condition(result, spec_path)
     return parsed
+
+
+_PREDICATE_SAMPLES: dict[ColumnType, RuntimeValue] = {
+    "str": "sample",
+    "int": 0,
+    "float": 0.0,
+    "date": DateValue(year=2000, month=1, day=1),
+    "datetime": DateTimeValue(
+        year=2000,
+        month=1,
+        day=1,
+        hour=0,
+        minute=0,
+        second=0,
+    ),
+}
+
+
+def _raise_predicate_condition(result: ConditionResult, spec_path: str) -> None:
+    condition = result.condition
+    requirement = {
+        "unknown_field": "R004-32",
+        "incompatible_input_type": "R004-33",
+        "invalid_predicate": "R004-34",
+    }.get(condition.condition, "R009-23")
+    raise DeclarationError(
+        spec_path,
+        requirement,
+        f"predicate cannot be evaluated: {condition.condition}",
+        condition=condition.condition,
+        context=dict(condition.context),
+    )
 
 
 def _truth(
@@ -218,15 +264,52 @@ def _truth(
     """
     result = evaluate_predicate(ast, MappingResolver(dict(row)))
     if isinstance(result, ConditionResult):
-        condition = result.condition
-        raise DeclarationError(
-            spec_path,
-            "R009-23",
-            f"predicate cannot be evaluated: {condition.condition}",
-            condition=condition.condition,
-            context=dict(condition.context),
-        )
+        _raise_predicate_condition(result, spec_path)
     return result.value
+
+
+def _record_lookup_bindings(
+    table: TypedTable,
+    columns: Sequence[TypedColumn],
+    rows: Sequence[Mapping[str, object]] | None,
+) -> tuple[dict[str, ColumnType], list[dict[str, RuntimeValue]]]:
+    """Validate and normalize one lookup binding aligned to every output row."""
+    lookup_types = {column.name: column.type for column in columns}
+    if len(lookup_types) != len(columns):
+        raise ValueError("record lookup column names must be unique")
+    if any(
+        name.count(".") != 1 or not all(part for part in name.split("."))
+        for name in lookup_types
+    ):
+        raise ValueError("record lookup column names must be qualified")
+    output_names = {column.name for column in table.columns}
+    if output_names.intersection(lookup_types):
+        raise ValueError("record lookup columns must not shadow output columns")
+
+    bindings = [{} for _ in range(table.frame.height)] if rows is None else list(rows)
+    if len(bindings) != table.frame.height:
+        raise ValueError("record lookup rows must align with output rows")
+    expected = set(lookup_types)
+    normalized_rows: list[dict[str, RuntimeValue]] = []
+    for index, binding in enumerate(bindings):
+        if not isinstance(binding, Mapping) or set(binding) != expected:
+            raise ValueError("record lookup row fields must match their schema")
+        normalized: dict[str, RuntimeValue] = {}
+        for name, value in binding.items():
+            result = normalize_runtime_value(runtime_value(value))
+            if not isinstance(result, ValueResult):
+                raise TypeError(
+                    f"record lookup row {index} field {name!r} is not a runtime value"
+                )
+            actual = runtime_type_name(result.value)
+            if result.value is not MISSING and actual != lookup_types[name]:
+                raise ValueError(
+                    f"record lookup row {index} field {name!r} must be "
+                    f"{lookup_types[name]}, not {actual}"
+                )
+            normalized[name] = result.value
+        normalized_rows.append(normalized)
+    return lookup_types, normalized_rows
 
 
 def check_column(
@@ -439,15 +522,27 @@ def check_dataset(
     table: TypedTable,
     verifications: Sequence[Expression],
     keys: Sequence[str],
+    *,
+    record_lookup_columns: Sequence[TypedColumn] = (),
+    record_lookup_rows: Sequence[Mapping[str, object]] | None = None,
 ) -> tuple[VerificationFailure, ...]:
-    """Run the dataset verifications over completed output rows (R009-6)."""
+    """Run dataset verifications with resolved per-row lookup bindings."""
     if not verifications:
+        if record_lookup_columns or record_lookup_rows is not None:
+            _record_lookup_bindings(table, record_lookup_columns, record_lookup_rows)
         return ()
     _require_columns(table, keys, "keys", "R005-47")
+    lookup_types, lookup_rows = _record_lookup_bindings(
+        table, record_lookup_columns, record_lookup_rows
+    )
     identifiers: dict[str, str] = {}
     failures: list[VerificationFailure] = []
     key_maps = _key_maps(table, keys)
     rows = runtime_rows(table)
+    predicate_types = {**_declared(table), **lookup_types}
+    predicate_rows = [
+        {**row, **lookup_row} for row, lookup_row in zip(rows, lookup_rows, strict=True)
+    ]
     for index, declaration in enumerate(verifications):
         path = f"verifications[{index}]"
         keyword, arguments = _operation(declaration, path)
@@ -467,7 +562,15 @@ def check_dataset(
                 )
             identifiers[identifier] = spec_path
         failure = _dataset_failure(
-            keyword, arguments, table, rows, key_maps, identifier, spec_path
+            keyword,
+            arguments,
+            table,
+            rows,
+            predicate_rows,
+            predicate_types,
+            key_maps,
+            identifier,
+            spec_path,
         )
         if failure is not None:
             failures.append(failure)
@@ -493,11 +596,26 @@ def _identifier(
     return identifier
 
 
+def _implication_fails(
+    when: PredicateAst,
+    then: PredicateAst,
+    row: Mapping[str, RuntimeValue],
+    when_path: str,
+    then_path: str,
+) -> bool:
+    """Evaluate both predicates before applying implication truth semantics."""
+    when_truth = _truth(when, row, when_path)
+    then_truth = _truth(then, row, then_path)
+    return when_truth is TruthValue.TRUE and then_truth is not TruthValue.TRUE
+
+
 def _dataset_failure(
     keyword: str,
     arguments: Mapping[str, JsonValue],
     table: TypedTable,
     rows: Sequence[Mapping[str, RuntimeValue]],
+    predicate_rows: Sequence[Mapping[str, RuntimeValue]],
+    predicate_types: Mapping[str, ColumnType],
     key_maps: Sequence[KeyMap],
     identifier: str | None,
     spec_path: str,
@@ -509,7 +627,15 @@ def _dataset_failure(
 
     if keyword == "row_count":
         return _row_count_failure(
-            arguments, table, rows, condition, requirement, context, spec_path
+            arguments,
+            table,
+            rows,
+            predicate_rows,
+            predicate_types,
+            condition,
+            requirement,
+            context,
+            spec_path,
         )
 
     if keyword == "unique":
@@ -544,23 +670,24 @@ def _dataset_failure(
             if len({row[name] is MISSING for name in names}) > 1
         ]
     elif keyword == "implies":
-        available = _declared(table)
-        when = _predicate(arguments.get("when"), spec_path, "R009-23", available)
-        then = _predicate(arguments.get("then"), spec_path, "R009-23", available)
+        when_path = f"{spec_path}.when"
+        then_path = f"{spec_path}.then"
+        when = _predicate(arguments.get("when"), when_path, "R009-23", predicate_types)
+        then = _predicate(arguments.get("then"), then_path, "R009-23", predicate_types)
         offending = [
             key_maps[index]
-            for index, row in enumerate(rows)
-            if _truth(when, row, spec_path) is TruthValue.TRUE
-            and _truth(then, row, spec_path) is not TruthValue.TRUE
+            for index, row in enumerate(predicate_rows)
+            if _implication_fails(when, then, row, when_path, then_path)
         ]
     else:
+        assertion_path = f"{spec_path}.assert"
         assertion = _predicate(
-            arguments.get("assert"), spec_path, "R009-23", _declared(table)
+            arguments.get("assert"), assertion_path, "R009-23", predicate_types
         )
         offending = [
             key_maps[index]
-            for index, row in enumerate(rows)
-            if _truth(assertion, row, spec_path) is not TruthValue.TRUE
+            for index, row in enumerate(predicate_rows)
+            if _truth(assertion, row, assertion_path) is not TruthValue.TRUE
         ]
 
     if not offending:
@@ -589,6 +716,8 @@ def _row_count_failure(
     arguments: Mapping[str, JsonValue],
     table: TypedTable,
     rows: Sequence[Mapping[str, RuntimeValue]],
+    predicate_rows: Sequence[Mapping[str, RuntimeValue]],
+    predicate_types: Mapping[str, ColumnType],
     condition: str,
     requirement: str,
     context: dict[str, JsonValue],
@@ -622,13 +751,14 @@ def _row_count_failure(
 
     admitted = set(range(len(rows)))
     if arguments.get("filter") is not None:
+        filter_path = f"{spec_path}.filter"
         predicate = _predicate(
-            arguments["filter"], spec_path, "R009-23", _declared(table)
+            arguments["filter"], filter_path, "R009-23", predicate_types
         )
         admitted = {
             index
-            for index, row in enumerate(rows)
-            if _truth(predicate, row, spec_path) is TruthValue.TRUE
+            for index, row in enumerate(predicate_rows)
+            if _truth(predicate, row, filter_path) is TruthValue.TRUE
         }
 
     # R009-20 partitions the artifact rather than the counted rows, so a
@@ -644,17 +774,21 @@ def _row_count_failure(
             )
     if not offending:
         return None
-    # The bounds are read from the specification path this failure names, so
-    # the report carries what R009-7 requires and nothing it can already see:
-    # the offending groups and, as the committed fixture does, their count.
-    # An ungrouped count is one group identified by no column at all.
+    shown = offending[:REPORTED_KEYS]
+    counts: dict[str, JsonValue]
+    if len(offending) == 1:
+        counts = {"count": offending[0][1]}
+    else:
+        # Each count is aligned to the group at the same position in `keys`.
+        # Keeping only the first count would make every later group ambiguous.
+        counts = {"counts": [count for _, count in shown]}
     return _failure(
         condition,
         spec_path,
         requirement,
         context,
         [group for group, _ in offending],
-        extra={"count": offending[0][1]},
+        extra=counts,
     )
 
 
@@ -663,6 +797,9 @@ def verify_completed_table(
     columns: Sequence[Column],
     keys: Sequence[str],
     verifications: Sequence[Expression] = (),
+    *,
+    record_lookup_columns: Sequence[TypedColumn] = (),
+    record_lookup_rows: Sequence[Mapping[str, object]] | None = None,
 ) -> TypedTable:
     """Run every stage in R005 order and raise at the first that fails.
 
@@ -671,16 +808,25 @@ def verify_completed_table(
     with every failure it found, because a later stage asserts over values
     an earlier one has already refused.
     """
-    stages = (
-        [
-            failure
-            for column in columns
-            for failure in check_column(table, column, keys)
-        ],
-        list(check_keys(table, keys)),
-        list(check_dataset(table, verifications, keys)),
+    failures = [
+        failure for column in columns for failure in check_column(table, column, keys)
+    ]
+    if failures:
+        raise VerificationError(failures)
+
+    failures = list(check_keys(table, keys))
+    if failures:
+        raise VerificationError(failures)
+
+    failures = list(
+        check_dataset(
+            table,
+            verifications,
+            keys,
+            record_lookup_columns=record_lookup_columns,
+            record_lookup_rows=record_lookup_rows,
+        )
     )
-    for failures in stages:
-        if failures:
-            raise VerificationError(failures)
+    if failures:
+        raise VerificationError(failures)
     return table

@@ -241,10 +241,11 @@ def _unwritable(
 
     A `str` column holds well-formed text and an `int` column is stored
     `Int64`, so each carries the signed 64-bit bound its host column owns.
-    The other three host columns are wider than the values R011 and R016
-    admit: a `float` column holds a non-finite value, and a temporal column
-    a date outside the calendar or a `datetime` finer than the whole second
-    R020-25 writes. Each is read here rather than repaired on the way out.
+    The typed-table boundary normalizes non-finite floats under R011. This
+    defensive check still refuses one in a table whose validation was
+    bypassed, while temporal host columns can hold a date outside the
+    calendar or a `datetime` finer than the whole second R020-25 writes.
+    Each is read here rather than repaired on the way out.
 
     A temporal column is read as the count its profile stores rather than
     as a host date, because the values under test are exactly the ones no

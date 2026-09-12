@@ -417,4 +417,28 @@ class TypedTable(BaseModel):
             raise ValueError("typed table column names must be unique")
         if self.frame.columns != declared:
             raise ValueError("Polars frame columns must match declared column order")
+        frame = self.frame
+        for column in self.columns:
+            series = frame.get_column(column.name)
+            if column.type != "float" or series.dtype != pl.Float64:
+                continue
+            values = series.to_list()
+            # R011-9 through R011-15 make this normalization precede every
+            # comparison, verification, key check, and artifact operation.
+            if any(value is not None and not math.isfinite(value) for value in values):
+                frame = frame.with_columns(
+                    pl.Series(
+                        column.name,
+                        [
+                            None
+                            if value is not None and not math.isfinite(value)
+                            else value
+                            for value in values
+                        ],
+                        dtype=pl.Float64,
+                        strict=True,
+                    )
+                )
+        if frame is not self.frame:
+            object.__setattr__(self, "frame", frame)
         return self

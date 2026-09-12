@@ -40,6 +40,11 @@ the three checks above are the same work with the failures in hand.
   last. Each returns the failures it found, in the committed error shape:
   phase, condition, stable specification path, requirement, failure count,
   and representative offending keys.
+- `check_dataset(..., record_lookup_columns=..., record_lookup_rows=...)`
+  accepts the qualified name and declared type of each resolved record-lookup
+  field, plus one aligned binding per completed row. Verification predicates
+  see those bindings under R004-26; structural checks and artifact columns do
+  not. `verify_completed_table` accepts the same keyword arguments.
 - A declaration R009 requires the validation phase to reject -- a reversed
   `range`, a repeated verification id, a grouped `row_count` with no id, a
   predicate that cannot be evaluated -- raises `DeclarationError` instead. A

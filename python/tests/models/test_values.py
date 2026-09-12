@@ -217,3 +217,14 @@ def test_typed_table_requires_declared_polars_column_order() -> None:
             ),
             frame=frame,
         )
+
+
+def test_typed_table_normalizes_nonfinite_float_cells_to_missing() -> None:
+    table = TypedTable(
+        columns=(TypedColumn(name="VALUE", type="float"),),
+        frame=pl.DataFrame(
+            [pl.Series("VALUE", [1.0, math.inf, -math.inf, math.nan], pl.Float64)]
+        ),
+    )
+
+    assert table.frame["VALUE"].to_list() == [1.0, None, None, None]

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from yamaa.io import ArtifactError, build_artifact, render_csv
+from yamaa.io import build_artifact, render_csv
 from yamaa.io.csv import fixed_point
 from yamaa.io.polars import frame_from_values
 from yamaa.models import DateTimeValue, DateValue, TypedColumn, TypedTable
@@ -248,21 +248,13 @@ def test_order_by_applies_each_term_with_its_own_direction_and_nulls() -> None:
     assert content == b"SITE,SEQ,ROW\n,2,1\na,5,3\na,5,4\na,,2\nb,1,0\n"
 
 
-def test_an_unwritable_stored_value_reports_its_column_row_key_and_value() -> None:
+def test_nonfinite_float_cells_are_missing_before_artifact_rendering() -> None:
     completed = table(
         [("USUBJID", "str"), ("VALUE", "float")],
         [["S-1", 1.0], ["S-2", float("nan")], ["S-3", float("inf")]],
     )
     output = Output(path="out.csv", columns=["USUBJID", "VALUE"])
 
-    with pytest.raises(ArtifactError) as raised:
-        build_artifact(completed, output, ["USUBJID"])
-
-    diagnostic = raised.value.diagnostics[0]
-    assert diagnostic.phase == "output"
-    assert diagnostic.condition == "unwritable_value"
-    assert diagnostic.requirement == "R020-46"
-    assert diagnostic.context["column"] == "VALUE"
-    assert diagnostic.context["failure_count"] == 2
-    assert diagnostic.context["keys"] == [{"USUBJID": "S-2"}, {"USUBJID": "S-3"}]
-    assert diagnostic.context["value"] == "nan"
+    assert render_csv(build_artifact(completed, output, ["USUBJID"])) == (
+        b"USUBJID,VALUE\nS-1,1\nS-2,\nS-3,\n"
+    )

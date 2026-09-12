@@ -142,7 +142,9 @@ publish_artifact(ArtifactTarget(run_directory / "adsl.csv"), artifact)
 `check_keys`, and `check_dataset` -- so an executor runs each assertion when
 R005 says it runs rather than sweeping every check to the end. Each reports
 failures in the committed error shape and leaves the run's fate to its
-caller; `verify_completed_table` runs the three in order and raises.
+caller; `verify_completed_table` runs the three in order and raises. Dataset
+verification accepts typed, per-row record-lookup bindings for the qualified
+fields R004-26 makes visible to predicates.
 
 `yamaa.io` writes the other way for the same reason it reads: the artifact
 selects its profile from `output.path`, takes R005's column selection and
