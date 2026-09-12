@@ -9,9 +9,13 @@ import polars as pl
 import pyarrow.parquet as pq
 import pytest
 
-from yamaa.artifacts import ArtifactError, write_parquet_bytes
-from yamaa.artifacts.parquet import parquet_frame, read_parquet_frame
-from yamaa.io.polars import frame_from_values
+from yamaa.io.polars import (
+    frame_from_values,
+    parquet_frame,
+    read_parquet_frame,
+    write_parquet_bytes,
+)
+from yamaa.io.publish import ArtifactError
 from yamaa.models import DateTimeValue, DateValue, TypedColumn
 
 COLUMNS = (

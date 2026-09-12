@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from yamaa.artifacts import ArtifactError, publish_artifact
+from yamaa.io import publish_artifact
+from yamaa.io.publish import ArtifactError
 
 
 def test_publish_writes_complete_bytes(tmp_path: Path) -> None:

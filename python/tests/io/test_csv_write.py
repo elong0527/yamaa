@@ -6,8 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from yamaa.artifacts import ArtifactError, render_csv, write_artifact
+from yamaa.io import write_artifact
+from yamaa.io.csv import render_csv
 from yamaa.io.polars import frame_from_values
+from yamaa.io.publish import ArtifactError
 from yamaa.models import DateTimeValue, DateValue, TypedColumn, TypedTable
 from yamaa.specification.models import Output
 

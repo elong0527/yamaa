@@ -1,7 +1,7 @@
 # Verify and publish a completed table
 
 ```python
-from yamaa.artifacts import publish_artifact, write_artifact
+from yamaa.io import publish_artifact, write_artifact
 from yamaa.verification import verify_columns, verify_dataset
 
 verify_columns(table, spec.columns, spec.keys)
@@ -24,5 +24,5 @@ Focused tests for this component:
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
-uv run --project python --no-sync pytest python/tests/verification python/tests/artifacts -q
+uv run --project python --no-sync pytest python/tests/verification python/tests/io/test_csv_write.py python/tests/io/test_parquet_write.py python/tests/io/test_publish.py -q
 ```

@@ -6,15 +6,24 @@ import os
 import tempfile
 from pathlib import Path
 
-from yamaa.artifacts.csv import ArtifactError
+
+class ArtifactError(ValueError):
+    """One artifact declaration or publication failure with its identity."""
+
+    def __init__(
+        self,
+        condition: str,
+        value: object = None,
+        keys: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(condition)
+        self.condition = condition
+        self.value = value
+        self.keys = keys or {}
 
 
 def publish_artifact(target: str | Path, content: bytes) -> Path:
-    """Write complete bytes to a temp file and atomically replace the target.
-
-    The caller names the target outright; there is no default to derive.
-    A failure leaves the previous artifact in place and removes the residue.
-    """
+    """Atomically replace the explicit target with complete bytes."""
     path = Path(target)
     parent = path.parent
     temporary = ""
@@ -29,9 +38,9 @@ def publish_artifact(target: str | Path, content: bytes) -> Path:
         os.replace(temporary, path)
         return path
     except OSError as error:
-        raise ArtifactError(
-            "publication_failed", str(path), {"target": str(path)}
-        ) from error
-    finally:
-        if temporary and os.path.exists(temporary):
-            os.remove(temporary)
+        if temporary:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+        raise ArtifactError("publication_failed", str(path)) from error

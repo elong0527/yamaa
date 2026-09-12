@@ -1,15 +1,20 @@
 """Polars treatment for parsed source rows.
 
 Every adapter delivers plain text-or-missing values; this module is the
-only place that decides how those values become host table storage.
+only place that decides how those values become host table storage, in
+either direction.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import io
+from collections.abc import Sequence
 
 import polars as pl
+import pyarrow.parquet as pq
 
+from yamaa.io.publish import ArtifactError
 from yamaa.models import DateTimeValue, DateValue, TypedColumn, TypedTable
 from yamaa.specification.models import ColumnType
 
@@ -60,3 +65,48 @@ def frame_from_values(
         for index, column in enumerate(columns)
     ]
     return TypedTable(columns=columns, frame=pl.DataFrame(series))
+
+
+def parquet_frame(
+    table: TypedTable,
+    columns: Sequence[str],
+    keys: Sequence[str] = (),
+) -> pl.DataFrame:
+    """Project output columns in order to a Parquet-ready native frame."""
+    by_name = {column.name: column for column in table.columns}
+    for name in columns:
+        if name not in by_name:
+            raise ArtifactError("unknown_output_column", name, column=name)
+    frames = []
+    for name in columns:
+        series = table.frame.get_column(name)
+        expected = _DTYPES[by_name[name].type]
+        if series.dtype != expected:
+            raise ArtifactError(
+                "unwritable_value",
+                str(series.dtype),
+                column=name,
+            )
+        frames.append(series)
+    return pl.DataFrame(frames)
+
+
+def write_parquet_bytes(
+    table: TypedTable,
+    columns: Sequence[str],
+    keys: Sequence[str] = (),
+) -> bytes:
+    """Write output columns in order to one uncompressed Parquet file."""
+    buffer = io.BytesIO()
+    pq.write_table(
+        parquet_frame(table, columns, keys).to_arrow(),
+        buffer,
+        compression="NONE",
+        store_schema=False,
+    )
+    return buffer.getvalue()
+
+
+def read_parquet_frame(data: bytes) -> pl.DataFrame:
+    """Read Parquet bytes back for read-back comparisons, never byte ones."""
+    return pl.read_parquet(io.BytesIO(data))
