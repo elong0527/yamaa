@@ -196,6 +196,50 @@ Run this component's focused tests from the repository root:
 uv run --project python --isolated --extra test pytest python/tests/io
 ```
 
+## Minimal YAML execution
+
+Execute the initial record-driven subset from a normalized specification and
+typed source tables:
+
+```python
+from yamaa.io import ProjectResources, load_source_tables
+from yamaa.runtime import ExecutionSuccess, execute_with_source_provider
+from yamaa.specification import load_specification
+
+loaded = load_specification("study/spec.yaml", "yaml")
+resources = ProjectResources("study")
+result = execute_with_source_provider(
+    loaded.specification,
+    lambda datasets: load_source_tables(datasets, resources),
+)
+
+if isinstance(result, ExecutionSuccess):
+    print(result.artifact.frame)
+```
+
+The executor plans dependencies before evaluation, constructs record-driven
+rows in specification and source order, then enriches those rows without
+changing their count. The provider entry point completes all source-independent
+validation before it asks for any source bytes. Each scalar completes
+expression evaluation, declared
+type conversion, conversion handling, and first-match override before a
+dependent reads it. Handler counts include declared paths that fired zero
+times. Column, key, dataset-verification, and ordered-output work is delegated
+to the pure hooks exposed by the verification and I/O components.
+
+This first slice supports `source`, `literal`, inline `mapping`, ungrouped row
+filters, explicit absent-source defaults, and earlier output-column references.
+Grouped rows, record lookups, inheritance, and other expression operations
+return an explicit unsupported result rather than a fabricated output.
+Execution never reads an `expected/` artifact.
+
+Run the focused tests from the repository root:
+
+```bash
+uv run --project python --isolated --extra test pytest \
+  python/tests/planning python/tests/runtime
+```
+
 ## Verified tables and published artifacts
 
 Assert over a completed table, then write and publish what it produces:
