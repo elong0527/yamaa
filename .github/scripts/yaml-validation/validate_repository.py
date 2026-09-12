@@ -324,7 +324,7 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R021', 'resource_path_missing'): {'path'},
     ('R021', 'resource_path_not_regular_file'): {'path'},
     ('R021', 'resource_path_not_relative'): {'path'},
-    ('R021', 'resource_path_parent_traversal'): {'path'},
+    ('R021', 'resource_path_outside_project'): {'path'},
     ('R021', 'resource_path_symlink'): {'path'},
     ('R021', 'resource_path_uri_scheme'): {'path'},
     # The engine's wording is additional context an implementation may
@@ -4463,7 +4463,6 @@ def validate_column_labels(spec, spec_label):
 RESOURCE_PATH_MESSAGES = {
     'resource_path_not_relative': 'is not a relative project path',
     'resource_path_uri_scheme': 'declares a URI scheme',
-    'resource_path_parent_traversal': 'traverses a parent segment',
     'resource_path_not_normalized': 'is not normalized',
     'resource_path_symlink': 'passes through a symbolic link',
     'resource_path_outside_project': 'resolves outside the project root',
@@ -4487,9 +4486,7 @@ def classify_written_project_path(written):
     if URI_SCHEME_PATTERN.match(written):
         return 'resource_path_uri_scheme'
     segments = written.split('/')
-    if '..' in segments:
-        return 'resource_path_parent_traversal'
-    if any(segment in ('', '.') for segment in segments):
+    if any(segment == '' for segment in segments):
         return 'resource_path_not_normalized'
     return None
 
@@ -4508,6 +4505,20 @@ def resolve_project_path(written, base_dir, project_root):
         root = Path(project_root).resolve(strict=True)
     except OSError:
         return None, 'resource_path_outside_project'
+
+    try:
+        depth = len(Path(base_dir).resolve().relative_to(root).parts)
+    except (OSError, ValueError):
+        return None, 'resource_path_outside_project'
+    for segment in written.split('/'):
+        if segment == '.':
+            continue
+        if segment == '..':
+            depth -= 1
+            if depth < 0:
+                return None, 'resource_path_outside_project'
+        else:
+            depth += 1
 
     segments = written.split('/')
     current = Path(base_dir)
@@ -8210,9 +8221,9 @@ def validate_csv_artifact(csv_path: Path, label: str, spec):
         if isinstance(column, dict) and isinstance(column.get('name'), str):
             types[column['name']] = column.get('type')
 
-    header = [text for text, _quoted in records[0]]
+    header = records[0]
     for number, record in enumerate(records[1:], 2):
-        for name, (text, _quoted) in zip(header, record):
+        for name, text in zip(header, record):
             if text is None:
                 continue
             declared = types.get(name)
@@ -8290,14 +8301,14 @@ SOURCE_READ_CONDITIONS = (
 
 
 def parse_source_profile(data: str):
-    """Parse a delimited source under R023 into records of (text, quoted).
+    """Parse a delimited source under R023 into records of text or missing.
 
-    A bare empty field parses to a text of None and a quoted empty field to
-    an empty string, so R014's distinction between an uncollected value and
-    a collected empty one survives reading. `U+000D U+000A` terminates a
-    record as `U+000A` does, and the final record may omit its terminator,
-    because neither spelling changes the records a file holds. Every other
-    difference raises rather than being repaired.
+    A field with no characters is missing whether it was bare or quoted,
+    so quoting decides how a field is read and never what it means.
+    `U+000D U+000A` terminates a record as `U+000A` does, and the final
+    record may omit its terminator, because neither spelling changes the
+    records a file holds. Every other difference raises rather than being
+    repaired.
     """
     if not data:
         return []
@@ -8330,7 +8341,7 @@ def parse_source_profile(data: str):
                     )
                 chunks.append(character)
                 index += 1
-            field = (''.join(chunks), True)
+            field = ''.join(chunks) or None
             if index < size and data[index] not in ',\r\n':
                 raise SourceProfileError(
                     'source_text_after_quote', number, field_number
@@ -8346,7 +8357,7 @@ def parse_source_profile(data: str):
                 if character == '\r':
                     break
                 index += 1
-            field = (data[start:index] or None, False)
+            field = data[start:index] or None
         record.append(field)
         if index >= size:
             records.append(record)
@@ -8437,7 +8448,7 @@ def check_source_file(csv_path: Path):
         return [('source_header_absent', 1, 'source has no header record')]
 
     findings = []
-    header = [text for text, _quoted in records[0]]
+    header = records[0]
     if any(not name for name in header):
         findings.append(
             ('source_field_name_empty', 1, 'header contains an empty name')

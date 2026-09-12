@@ -180,7 +180,7 @@ def test_quoted_empty_is_missing_for_a_non_string_type(tmp_path: Path) -> None:
             "negative-dataset-path-parent-escape",
             "LBREF",
             "../reference/lbref.csv",
-            "resource_path_parent_traversal",
+            "resource_path_outside_project",
         ),
         (
             "negative-dataset-path-symlink",

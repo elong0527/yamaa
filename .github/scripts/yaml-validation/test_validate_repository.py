@@ -3183,19 +3183,19 @@ columns:
 
         self.assertIn("producer workflow dependency cycle", message)
 
-    def test_rejects_traversing_producer_link(self):
+    def test_rejects_escaping_producer_link(self):
         self.write_producer_spec(
             self.VALID_PRODUCER_SPEC.replace(
                 "datasets:\n  RAW: raw.csv",
-                "datasets:\n  RAW: ../input/raw.csv",
+                "datasets:\n  RAW: ../../escape.csv",
             )
         )
 
         message = "\n".join(self.validate())
 
         self.assertIn(
-            "resource_path_parent_traversal: '../input/raw.csv' traverses a "
-            "parent segment",
+            "resource_path_outside_project: '../../escape.csv' resolves "
+            "outside the project root",
             message,
         )
 
@@ -3253,18 +3253,21 @@ class TestProjectResourceBoundary(unittest.TestCase):
                     self.resolve(written)[1], "resource_path_uri_scheme"
                 )
 
-    def test_rejects_parent_traversal(self):
-        for written in ("../dm.csv", "input/../../dm.csv", "..", "a/../b.csv"):
+    def test_traversal_within_root_resolves(self):
+        accepted, condition = self.resolve("input/../input/dm.csv")
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.name, "dm.csv")
+
+    def test_traversal_above_root_is_outside_project(self):
+        for written in ("../dm.csv", "input/../../dm.csv", ".."):
             with self.subTest(written=written):
                 self.assertEqual(
-                    self.resolve(written)[1], "resource_path_parent_traversal"
+                    self.resolve(written)[1], "resource_path_outside_project"
                 )
 
     def test_rejects_unnormalized_written_forms(self):
         for written in (
-            "./input/dm.csv",
             "input//dm.csv",
-            "input/./dm.csv",
             "input/dm.csv/",
         ):
             with self.subTest(written=written):
@@ -3425,7 +3428,7 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
     def test_reports_each_rejection_at_the_declaring_field(self):
         cases = {
             "/etc/passwd": "resource_path_not_relative",
-            "../dm.csv": "resource_path_parent_traversal",
+            "../dm.csv": "resource_path_outside_project",
             "https://example.org/ref.csv": "resource_path_uri_scheme",
             "input": "resource_path_not_regular_file",
             "input/absent.csv": "resource_path_missing",
@@ -5067,23 +5070,23 @@ class TestSourceProfile(unittest.TestCase):
             VALIDATOR.parse_source_profile('A,B\n1,2\n'),
         )
 
-    def test_missing_and_empty_string_reach_r014_apart(self):
+    def test_missing_and_empty_reach_r014_as_missing(self):
         records = VALIDATOR.parse_source_profile('A,B\n"",\n')
-        self.assertEqual(records[1][0], ('', True))
-        self.assertEqual(records[1][1], (None, False))
+        self.assertEqual(records[1][0], None)
+        self.assertEqual(records[1][1], None)
 
     def test_quoted_field_carries_delimiter_quote_and_newline(self):
         records = VALIDATOR.parse_source_profile(
             'A\n"x, y"\n"say ""hi"""\n"two\nlines"\n'
         )
         self.assertEqual(
-            [record[0][0] for record in records[1:]],
+            [record[0] for record in records[1:]],
             ['x, y', 'say "hi"', 'two\nlines'],
         )
 
     def test_nothing_is_trimmed(self):
         records = VALIDATOR.parse_source_profile('A,B\n x , y \n')
-        self.assertEqual(records[1], [(' x ', False), (' y ', False)])
+        self.assertEqual(records[1], [' x ', ' y '])
 
     def test_carriage_return_outside_a_terminator_is_rejected(self):
         for data in ['A\n"x\ry"\n', 'A\nx\ry\n', 'A\n1\r']:
@@ -5223,7 +5226,7 @@ class TestSuiteSourceCoverage(unittest.TestCase):
             VALIDATOR.parse_source_profile(crlf.replace('\r\n', '\n')),
         )
 
-    def test_a_suite_source_keeps_missing_apart_from_empty(self):
+    def test_a_suite_source_reads_both_blanks_as_missing(self):
         path = (
             self.root / 'yaml' / 'examples'
             / 'adam-adsl-investigator-comment' / 'input' / 'dm.csv'
@@ -5232,10 +5235,12 @@ class TestSuiteSourceCoverage(unittest.TestCase):
             path.read_text(encoding='utf-8')
         )
         comments = [record[2] for record in records[1:]]
-        self.assertIn(('', True), comments, 'a collected empty comment')
-        self.assertIn((None, False), comments, 'no comment collected')
+        self.assertNotIn('', comments, 'no collected empty comment survives')
+        self.assertEqual(
+            comments.count(None), 2, 'both blanks are missing'
+        )
         self.assertIn(
-            ('Dose reduced, per protocol', True),
+            ('Dose reduced, per protocol'),
             comments,
             'a comment carrying the delimiter',
         )

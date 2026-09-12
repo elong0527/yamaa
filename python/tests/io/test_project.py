@@ -24,14 +24,40 @@ from yamaa.io.project import (
         (r"input\dm.csv", "resource_path_not_relative"),
         ("https://example.org/dm.csv", "resource_path_uri_scheme"),
         ("file:input/dm.csv", "resource_path_uri_scheme"),
-        ("input/../dm.csv", "resource_path_parent_traversal"),
-        ("./input/dm.csv", "resource_path_not_normalized"),
         ("input//dm.csv", "resource_path_not_normalized"),
         ("input/", "resource_path_not_normalized"),
     ],
 )
 def test_classifies_written_paths_in_rule_order(written: str, condition: str) -> None:
     assert classify_project_path(written) == condition
+
+
+def test_dot_segments_resolve_within_root(tmp_path: Path) -> None:
+    (tmp_path / "dm.csv").write_text("ID\n001\n")
+    resources = ProjectResources(tmp_path)
+
+    assert resources.capture("./dm.csv").sha256 == resources.capture("dm.csv").sha256
+
+
+def test_parent_traversal_within_root_shares_snapshot(tmp_path: Path) -> None:
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "dm.csv").write_text("ID\n001\n")
+    resources = ProjectResources(tmp_path)
+
+    assert (
+        resources.capture("input/../input/dm.csv").sha256
+        == resources.capture("input/dm.csv").sha256
+    )
+    assert resources.capture_reads == 1
+
+
+def test_parent_traversal_above_root_is_outside_project(tmp_path: Path) -> None:
+    resources = ProjectResources(tmp_path)
+
+    with pytest.raises(ResourceFailure) as raised:
+        resources.capture("../dm.csv")
+
+    assert raised.value.condition == "resource_path_outside_project"
 
 
 def test_captures_one_immutable_snapshot_per_physical_file(tmp_path: Path) -> None:

@@ -51,9 +51,7 @@ def classify_project_path(written_path: str) -> str | None:
     if _URI_SCHEME.match(written_path):
         return "resource_path_uri_scheme"
     segments = written_path.split("/")
-    if ".." in segments:
-        return "resource_path_parent_traversal"
-    if any(segment in {"", "."} for segment in segments):
+    if any(segment == "" for segment in segments):
         return "resource_path_not_normalized"
     return None
 
@@ -98,6 +96,22 @@ class ProjectResources:
         condition = classify_project_path(written_path)
         if condition is not None:
             raise ResourceFailure(condition, written_path)
+
+        try:
+            depth = len(self._base.relative_to(self._root).parts)
+        except ValueError as error:
+            raise ResourceFailure(
+                "resource_path_outside_project", written_path
+            ) from error
+        for segment in written_path.split("/"):
+            if segment == ".":
+                continue
+            if segment == "..":
+                depth -= 1
+                if depth < 0:
+                    raise ResourceFailure("resource_path_outside_project", written_path)
+            else:
+                depth += 1
 
         current = self._base
         segments = written_path.split("/")

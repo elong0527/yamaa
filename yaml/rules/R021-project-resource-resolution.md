@@ -66,11 +66,16 @@ platform and reveals nothing about the host.
 - **R021-7.** No `\` anywhere. A backslash is an ordinary filename character
   on one platform and a separator on another, so a path containing one
   denotes two different files.
-- **R021-8.** No `..` segment. Traversal is the whole of the escape this rule
-  exists to reject, and a normalized path never needs one.
-- **R021-9.** No `.` segment, no empty segment, and no trailing separator.
-  Each is a second spelling of one file, and two spellings defeat the
-  single-snapshot identity below.
+- **R021-8.** A `..` segment climbs to the parent directory and a `.` segment
+  stays put. Both are allowed, and both resolve textually during the walk:
+  a traversal that stays inside the approved root names one file by one
+  spelling, because the canonical resolved path below is the snapshot
+  identity. A traversal that climbs above the entry directory's depth
+  within the root fails as `resource_path_outside_project` before the
+  filesystem is consulted, so an escape fails identically on every
+  platform whether or not anything exists where it points.
+- **R021-9.** No empty segment and no trailing separator. Each is a
+  misspelling with no legitimate layout behind it.
 
 **R021-10.** A written path is ASCII under R019, like every other
 repository-authored value.
@@ -144,8 +149,7 @@ probing for.
 |---|---|
 | `resource_path_not_relative` | a leading separator, a drive letter, a `\\` prefix, or a backslash |
 | `resource_path_uri_scheme` | a URI scheme, including `file:` and `https:` |
-| `resource_path_parent_traversal` | a `..` segment |
-| `resource_path_not_normalized` | a `.` segment, an empty segment, or a trailing separator |
+| `resource_path_not_normalized` | an empty segment or a trailing separator |
 | `resource_path_symlink` | a symbolic link at any component |
 | `resource_path_outside_project` | a resolved file outside the approved root |
 | `resource_path_missing` | a path that reaches no entry |
