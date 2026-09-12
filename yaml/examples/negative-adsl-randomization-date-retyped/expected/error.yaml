@@ -2,6 +2,7 @@ phase: validation
 condition: redundant_field_type
 spec_paths:
   - datasets.DM.types.RANDDT
+requirement: R014-10
 context:
   dataset: DM
   field: RANDDT

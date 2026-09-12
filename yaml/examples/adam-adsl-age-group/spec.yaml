@@ -1,0 +1,76 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+base: DM
+keys: [STUDYID, USUBJID]
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE, AGEU, AGEGR1, AGEGR1N]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM.USUBJID
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation:
+      source: DM.AGE
+
+  - name: AGEU
+    type: str
+    label: Age Units
+    derivation:
+      source: DM.AGEU
+
+  - name: AGEGR1
+    type: str
+    label: Pooled Age Group 1
+    derivation:
+      case:
+        branches:
+          - when: "AGE < 18"
+            then:
+              literal: "<18"
+          - when: "AGE >= 18 AND AGE <= 64"
+            then:
+              literal: "18-64"
+          - when: "AGE > 64"
+            then:
+              literal: ">64"
+        otherwise:
+          literal: "Missing"
+
+  - name: AGEGR1N
+    type: int
+    label: Pooled Age Group 1 (N)
+    derivation:
+      case:
+        branches:
+          - when: "AGEGR1 = '<18'"
+            then:
+              literal: 1
+          - when: "AGEGR1 = '18-64'"
+            then:
+              literal: 2
+          - when: "AGEGR1 = '>64'"
+            then:
+              literal: 3
+        otherwise:
+          literal: null
+
+verifications:
+  - row_count:
+      min: 6
+      max: 6

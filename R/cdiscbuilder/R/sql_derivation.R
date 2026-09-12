@@ -26,11 +26,31 @@ NULL
       }
     }
   }
+  aliased_datasets <- character()
+  for (dataset_name in names(source_data)) {
+    if (str_detect(sql, paste0("\\b", dataset_name, "\\."))) {
+      if (!(dataset_name %in% aliased_datasets)) {
+        for (k in key_vars) {
+          if (k %in% names(merged_df)) {
+            alias <- paste0(dataset_name, ".", k)
+            if (!(alias %in% names(merged_df))) {
+              merged_df[[alias]] <- merged_df[[k]]
+            }
+          }
+        }
+        aliased_datasets <- c(aliased_datasets, dataset_name)
+      }
+    }
+  }
   # Ensure dataset is named 'merged' for the SQL query
   merged <- merged_df # nolint
   # Execute using sqldf
   # We replace `DM.COLUMN` with `[DM.COLUMN]` to handle dots in SQLite
-  sql_quoted <- str_replace_all(sql, "(\\w+)\\.(\\w+)", "[\\1.\\2]")
+  sql_quoted <- str_replace_all(
+    sql,
+    "(?<!\\w)([[:alpha:]_]\\w*)\\.([[:alpha:]_]\\w*)(?!\\w)",
+    "[\\1.\\2]"
+  )
   result_df <- tryCatch(
     {
       sqldf::sqldf(sql_quoted)
@@ -78,6 +98,16 @@ NULL
       }
     }
   }
+  for (ds_name in names(source_data)) {
+    for (k in key_vars) {
+      if (k %in% names(merged_df)) {
+        alias <- paste0(ds_name, ".", k)
+        if (!(alias %in% names(merged_df))) {
+          merged_df[[alias]] <- merged_df[[k]]
+        }
+      }
+    }
+  }
   filtered_df <- merged_df
   if (!is.null(filter_expr)) {
     # Attempt basic filter conversion
@@ -89,8 +119,7 @@ NULL
         filtered_df |> filter(eval(parse_expr(f_expr)))
       },
       error = function(e) {
-        warning("Filter failed: ", conditionMessage(e))
-        merged_df
+        stop("Filter failed: ", conditionMessage(e), call. = FALSE)
       }
     )
   }
@@ -312,11 +341,8 @@ NULL
 ) {
   func <- agg_spec$function_
   if (is.null(func)) func <- "first"
-  if (func == "first") {
-    # SQLite does not have FIRST(), we can approximate with MIN
-    agg_expr <- paste("MIN(", source_col, ") as result")
-  } else if (func == "last") {
-    agg_expr <- paste("MAX(", source_col, ") as result")
+  if (func %in% c("first", "last")) {
+    stop("Unsupported aggregation function: ", func)
   } else if (func == "mean") {
     agg_expr <- paste("AVG(CAST(", source_col, "AS REAL)) as result")
   } else if (func == "sum") {
@@ -328,10 +354,10 @@ NULL
   } else if (func == "closest") {
     target <- agg_spec$target
     if (is.null(target)) stop("'closest' aggregation requires 'target' field")
-    paste0(
+    return(paste0(
       "CLOSEST:", source_col, ":", target, ":",
       if (!is.null(filter_expr)) filter_expr else ""
-    )
+    ))
   } else {
     stop("Unknown aggregation function: ", func)
   }

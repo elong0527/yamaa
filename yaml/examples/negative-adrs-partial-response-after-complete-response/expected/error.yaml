@@ -2,6 +2,7 @@ phase: verification
 condition: predicate_failed
 spec_paths:
   - verifications[2].predicate
+requirement: R009-18
 context:
   verification_id: response-does-not-fall-back-after-a-complete-response
   failure_count: 1

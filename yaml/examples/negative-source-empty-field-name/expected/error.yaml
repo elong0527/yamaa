@@ -1,0 +1,10 @@
+phase: ingest
+condition: source_field_name_empty
+spec_paths:
+  - datasets.DM.path
+requirement: R023-22
+context:
+  dataset: DM
+  path: input/dm.csv
+  record: 1
+  field: 4

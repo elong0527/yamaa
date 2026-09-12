@@ -127,6 +127,11 @@ fixtures:
     condition: value_not_permitted
     spec_paths: [columns.ASTDT.derivation.date_impute.day]
     validator: schema
+  negative-date-diff-datetime-endpoints:
+    rule: R016
+    condition: incompatible_input_type
+    spec_paths: [columns.SURVDD.derivation.date_diff.start]
+    validator: temporal_contract
   negative-function-contract-mismatch:
     rule: R018
     condition: function_contract_mismatch
@@ -143,6 +148,16 @@ fixtures:
     condition: missing_verification_id
     spec_paths: ["verifications[1].row_count"]
     validator: spec_contract
+  negative-least-incomparable-sources:
+    rule: R007
+    condition: incomparable_sources
+    spec_paths: [columns.FSTALVDT.derivation.least]
+    validator: expression_contract
+  negative-literal-non-scalar:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: ["columns.AGEGRP.derivation.case.branches[0].then.literal"]
+    validator: schema
   negative-keys-internal-column:
     rule: R005
     condition: internal_column_in_keys
@@ -158,6 +173,11 @@ fixtures:
     condition: source_key_length_mismatch
     spec_paths: [columns.ANRHI.derivation.mapping_from]
     validator: mapping_contract
+  negative-matches-unreadable-pattern:
+    rule: R022
+    condition: invalid_regex
+    spec_paths: ["columns.SEX.verifications[0].matches.pattern"]
+    validator: regex
   negative-output-order-repeated-term:
     rule: R005
     condition: duplicate_order_term
@@ -188,6 +208,21 @@ fixtures:
     condition: unpaired_fields
     spec_paths: ["record_lookups[0]"]
     validator: spec_contract
+  negative-previous-non-missing-non-variable-source:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: [columns.PRIORBP.derivation.previous_non_missing.source]
+    validator: schema
+  negative-rank-invalid-method:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: [columns.SEVRANK.derivation.rank.method]
+    validator: schema
+  negative-row-number-numeric-filter:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: [columns.VISITSEQ.derivation.row_number.filter]
+    validator: schema
   negative-row-value-self-reference:
     rule: R001
     condition: dependency_cycle
@@ -205,6 +240,26 @@ fixtures:
     condition: duplicate_identifier
     spec_paths: [datasets.ADLB, domain]
     validator: name_contract
+  negative-source-undeclared-field:
+    rule: R002
+    condition: unknown_field
+    spec_paths: [columns.AGE.derivation.source]
+    validator: name_contract
+  negative-source-unknown-profile:
+    rule: R023
+    condition: source_profile_unknown
+    spec_paths: [datasets.DM.path]
+    validator: dataset_source
+  negative-str-extract-undeclared-group:
+    rule: R022
+    condition: regex_group_out_of_range
+    spec_paths: ["columns.SITEID.derivation.str_extract.group"]
+    validator: regex
+  negative-study-day-datetime-input:
+    rule: R016
+    condition: incompatible_input_type
+    spec_paths: [columns.DTHDY.derivation.study_day.date]
+    validator: temporal_contract
   negative-sum-non-numeric-source:
     rule: R013
     condition: incompatible_input_type

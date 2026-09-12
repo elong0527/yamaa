@@ -105,3 +105,172 @@ test_that("process_domain handles FINDINGS domains", {
   expect_equal(res$VSTEST, "WEIGHT")
   expect_equal(res$VSORRES, "75")
 })
+
+test_that("create_sdtm_datasets preserves ODM record identity keys", {
+  config_dir <- tempfile("sdtm-config-")
+  output_dir <- tempfile("sdtm-output-")
+  dir.create(config_dir)
+  on.exit(unlink(c(config_dir, output_dir), recursive = TRUE), add = TRUE)
+
+  yaml::write_yaml(
+    list(VS = list(list(
+      columns = list(VSORRES = list(source = "RES"))
+    ))),
+    file.path(config_dir, "vs.yaml")
+  )
+  input_csv <- file.path(config_dir, "input.csv")
+  identity_keys <- c(
+    "MetaDataVersionOID", "StudyEventRepeatKey", "FormOID",
+    "FormRepeatKey", "ItemGroupOID"
+  )
+  for (identity_key in identity_keys) {
+    input <- data.frame(
+      StudyOID = rep("S1", 3),
+      MetaDataVersionOID = rep("MDV1", 3),
+      SubjectKey = rep("SUBJ1", 3),
+      StudyEventOID = rep("SE1", 3),
+      StudyEventRepeatKey = rep("1", 3),
+      FormOID = rep("F1", 3),
+      FormRepeatKey = rep("1", 3),
+      ItemGroupOID = rep("IG1", 3),
+      ItemGroupRepeatKey = rep("1", 3),
+      ItemOID = rep("RES", 3),
+      Value = c("100", "200", "300")
+    )
+    input[[identity_key]] <- c("1", "2", "3")
+    write.csv(input, input_csv, row.names = FALSE)
+
+    result <- create_sdtm_datasets(config_dir, input_csv, output_dir)
+
+    expect_equal(
+      sort(result$VS$VSORRES),
+      c("100", "200", "300"),
+      info = identity_key
+    )
+  }
+})
+
+test_that("process_domain rejects duplicate ItemOID values within a full key", {
+  df_long <- data.frame(
+    StudyOID = c("S1", "S1"),
+    SubjectKey = c("SUBJ1", "SUBJ1"),
+    ItemGroupRepeatKey = c("1", "1"),
+    StudyEventOID = c("SE1", "SE1"),
+    StudyEventRepeatKey = c("1", "1"),
+    FormOID = c("F1", "F1"),
+    ItemOID = c("RES", "RES"),
+    Value = c("100", "200")
+  )
+  default_keys <- c(
+    "StudyOID", "SubjectKey", "ItemGroupRepeatKey", "StudyEventOID",
+    "StudyEventRepeatKey"
+  )
+  standard <- list(list(
+    formoid = "F1",
+    columns = list(VSORRES = list(source = "RES"))
+  ))
+  findings <- list(
+    type = "FINDINGS",
+    columns = list(list(
+      formoid = "F1",
+      VSORRES = list(source = "RES")
+    ))
+  )
+
+  expect_error(
+    process_domain("VS", standard, df_long, default_keys),
+    "Duplicate ItemOID values for one complete key",
+    fixed = TRUE
+  )
+  expect_error(
+    process_domain("VS", findings, df_long, default_keys),
+    "Duplicate ItemOID values for one complete key",
+    fixed = TRUE
+  )
+})
+
+test_that("cross-domain mappings require every declared lookup key", {
+  pivoted <- data.frame(
+    USUBJID = "S1",
+    VISITNUM = 1,
+    stringsAsFactors = FALSE
+  )
+  col_cfg <- list(
+    source = "REF.VALUE",
+    merge_on = c("USUBJID", "VISITNUM")
+  )
+
+  expect_error(
+    .apply_column_mapping(
+      pivoted,
+      "RESULT",
+      col_cfg,
+      list(REF = data.frame(
+        USUBJID = "S1",
+        VALUE = "matched",
+        stringsAsFactors = FALSE
+      )),
+      pivoted
+    ),
+    "Lookup keys not found in REF: VISITNUM",
+    fixed = TRUE
+  )
+
+  target_without_visit <- pivoted["USUBJID"]
+  expect_error(
+    .apply_column_mapping(
+      target_without_visit,
+      "RESULT",
+      col_cfg,
+      list(REF = data.frame(
+        USUBJID = "S1",
+        VISITNUM = 1,
+        VALUE = "matched",
+        stringsAsFactors = FALSE
+      )),
+      target_without_visit
+    ),
+    "Lookup keys not found in target dataset: VISITNUM",
+    fixed = TRUE
+  )
+})
+
+test_that("cross-domain mappings reject ambiguous right-side matches", {
+  target <- data.frame(USUBJID = "S1", stringsAsFactors = FALSE)
+  reference <- data.frame(
+    USUBJID = c("S1", "S1"),
+    VALUE = c(20, 10),
+    stringsAsFactors = FALSE
+  )
+
+  for (row_order in list(1:2, 2:1)) {
+    expect_error(
+      .apply_column_mapping(
+        target,
+        "RESULT",
+        list(source = "REF.VALUE", merge_on = "USUBJID"),
+        list(REF = reference[row_order, ]),
+        target
+      ),
+      "Lookup source REF has multiple matches for keys: USUBJID",
+      fixed = TRUE
+    )
+  }
+
+  incomplete_target <- data.frame(USUBJID = c("S1", NA), stringsAsFactors = FALSE)
+  incomplete_reference <- data.frame(
+    USUBJID = c("S1", NA, NA),
+    VALUE = c("matched", "unused-a", "unused-b"),
+    stringsAsFactors = FALSE
+  )
+  expect_equal(
+    .apply_column_mapping(
+      incomplete_target,
+      "RESULT",
+      list(source = "REF.VALUE", merge_on = "USUBJID"),
+      list(REF = incomplete_reference),
+      incomplete_target
+    ),
+    c("matched", NA_character_)
+  )
+})

@@ -1,0 +1,296 @@
+# Machine-readable grammar for R010's scalar numeric language.
+#
+# This file is the single source for the closed grammar written in
+# `compute.expr`. R010's `## Grammar` block is rendered from `productions`,
+# and every implementation's parser is checked against `vocabulary`,
+# `prohibited`, and `cases`, so the rule, the R parser, and the Python parser
+# cannot drift apart without failing validation.
+#
+# `grammar/README.md` states the file format and the shape notation.
+
+schema_version: "1.0"
+contract: numeric
+contract_version: "1.0.0"
+rule: R010
+start: expr
+productions:
+  - name: expr
+    definition: |-
+      term (("+" | "-") term)*
+  - name: term
+    definition: |-
+      factor (("*" | "/") factor)*
+  - name: factor
+    definition: |-
+      ("-" | "+")? primary
+  - name: primary
+    definition: |-
+      number | "NULL" | identifier | call | "(" expr ")"
+  - name: identifier
+    definition: |-
+      name ["." name]
+  - name: call
+    definition: |-
+      function "(" [expr ("," expr)*] ")"
+  - name: number
+    definition: |-
+      digits ["." digits] [("e" | "E") ["+" | "-"] digits]
+imports:
+  name: predicate
+  digits: predicate
+# `function` is closed: a name outside this table is a validation error
+# whatever a host dialect provides. `max_arguments: null` is unbounded.
+vocabulary:
+  function:
+    ABS: {min_arguments: 1, max_arguments: 1}
+    CEIL: {min_arguments: 1, max_arguments: 1}
+    FLOOR: {min_arguments: 1, max_arguments: 1}
+    TRUNC: {min_arguments: 1, max_arguments: 1}
+    SQRT: {min_arguments: 1, max_arguments: 1}
+    POWER: {min_arguments: 2, max_arguments: 2}
+    EXP: {min_arguments: 1, max_arguments: 1}
+    LN: {min_arguments: 1, max_arguments: 1}
+    MOD: {min_arguments: 2, max_arguments: 2}
+    GREATEST: {min_arguments: 2, max_arguments: null}
+    LEAST: {min_arguments: 2, max_arguments: null}
+    NULLIF: {min_arguments: 2, max_arguments: 2}
+    COALESCE: {min_arguments: 1, max_arguments: null}
+# A spelling the grammar reserves for a construct it does not admit, so the
+# failure names the construct rather than a stray token.
+prohibited:
+  "AND": boolean
+  "BETWEEN": comparison
+  "CASE": conditional
+  "ELSE": conditional
+  "END": conditional
+  "FALSE": boolean
+  "IN": comparison
+  "IS": comparison
+  "LIKE": comparison
+  "NOT": boolean
+  "OR": boolean
+  "OVER": window
+  "THEN": conditional
+  "TRUE": boolean
+  "WHEN": conditional
+cases:
+  - id: multiplication-binds-tighter-than-addition
+    covers: [arithmetic, precedence]
+    text: "A + B * C"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (+ (id A) (* (id B) (id C)))
+  - id: division-binds-tighter-than-subtraction
+    covers: [arithmetic, precedence]
+    text: "A - B / C"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (- (id A) (/ (id B) (id C)))
+  - id: repeated-subtraction-associates-from-the-left
+    covers: [arithmetic, precedence]
+    text: "A - B - C"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (- (- (id A) (id B)) (id C))
+  - id: repeated-division-associates-from-the-left
+    covers: [arithmetic, precedence]
+    text: "A / B / C"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (/ (/ (id A) (id B)) (id C))
+  - id: parentheses-override-precedence
+    covers: [arithmetic, grouping]
+    text: "(A + B) * C"
+    parse: accept
+    identifiers: [A, B, C]
+    shape: (* (+ (id A) (id B)) (id C))
+  - id: a-unary-sign-binds-only-its-primary
+    covers: [unary, precedence]
+    text: "-A * B"
+    parse: accept
+    identifiers: [A, B]
+    shape: (* (neg (id A)) (id B))
+  - id: a-leading-plus-is-a-unary-sign
+    covers: [unary]
+    text: "+A + B"
+    parse: accept
+    identifiers: [A, B]
+    shape: (+ (pos (id A)) (id B))
+  - id: a-unary-sign-applies-to-a-group
+    covers: [unary, grouping]
+    text: "-(A + B)"
+    parse: accept
+    identifiers: [A, B]
+    shape: (neg (+ (id A) (id B)))
+  - id: a-doubled-sign-is-outside-the-grammar
+    covers: [unary, rejection]
+    text: "--A"
+    parse: reject
+    condition: invalid_numeric_expression
+  - id: the-bmi-formula-parses
+    covers: [call, arithmetic]
+    text: "WEIGHTKG / POWER(HEIGHTCM / 100, 2)"
+    parse: accept
+    identifiers: [HEIGHTCM, WEIGHTKG]
+    shape: (/ (id WEIGHTKG) (call POWER (/ (id HEIGHTCM) (int 100))
+      (int 2)))
+  - id: function-names-are-case-insensitive
+    covers: [call, keyword-case]
+    text: "power(2, 3)"
+    parse: accept
+    identifiers: []
+    shape: (call POWER (int 2) (int 3))
+  - id: identifiers-are-case-sensitive
+    covers: [identifier, keyword-case]
+    text: "aval + AVAL"
+    parse: accept
+    identifiers: [AVAL, aval]
+    shape: (+ (id aval) (id AVAL))
+  - id: a-qualified-identifier-reads-a-record-lookup-field
+    covers: [identifier]
+    text: "LB.LBSTRESN * 2"
+    parse: accept
+    identifiers: [LB.LBSTRESN]
+    shape: (* (id LB.LBSTRESN) (int 2))
+  - id: a-three-part-identifier-is-outside-the-grammar
+    covers: [identifier, rejection]
+    text: "A.B.C + 1"
+    parse: reject
+    condition: invalid_numeric_expression
+  - id: a-variadic-function-takes-more-than-its-minimum
+    covers: [call, vocabulary]
+    text: "COALESCE(A, B, 0)"
+    parse: accept
+    identifiers: [A, B]
+    shape: (call COALESCE (id A) (id B) (int 0))
+  - id: null-is-an-argument-rather-than-a-name
+    covers: [call, null-literal]
+    text: "NULLIF(A, NULL)"
+    parse: accept
+    identifiers: [A]
+    shape: (call NULLIF (id A) null)
+  - id: null-is-case-insensitive
+    covers: [null-literal, keyword-case]
+    text: "COALESCE(null, 0)"
+    parse: accept
+    identifiers: []
+    shape: (call COALESCE null (int 0))
+  - id: an-integer-literal-has-no-fraction-or-exponent
+    covers: [literal]
+    text: "A + 42"
+    parse: accept
+    identifiers: [A]
+    shape: (+ (id A) (int 42))
+  - id: a-fraction-makes-a-literal-float
+    covers: [literal]
+    text: "A * 0.0167"
+    parse: accept
+    identifiers: [A]
+    shape: (* (id A) (float 0.0167))
+  - id: an-exponent-makes-a-literal-float
+    covers: [literal]
+    text: "A * 1E-3"
+    parse: accept
+    identifiers: [A]
+    shape: (* (id A) (float 1E-3))
+  - id: a-literal-carries-no-sign-of-its-own
+    covers: [literal, unary]
+    text: "A + -1"
+    parse: accept
+    identifiers: [A]
+    shape: (+ (id A) (neg (int 1)))
+  - id: a-leading-decimal-point-is-outside-the-grammar
+    covers: [literal, rejection]
+    text: "A + .5"
+    parse: reject
+    condition: invalid_numeric_expression
+  - id: a-trailing-decimal-point-is-outside-the-grammar
+    covers: [literal, rejection]
+    text: "A + 5."
+    parse: reject
+    condition: invalid_numeric_expression
+  - id: every-permitted-function-parses
+    covers: [call, vocabulary]
+    text: "ABS(A) + CEIL(A) + FLOOR(A) + TRUNC(A) + SQRT(A) + EXP(A)
+      + LN(A) + MOD(A, 2) + GREATEST(A, 1) + LEAST(A, 1)"
+    parse: accept
+    identifiers: [A]
+    shape: (+ (+ (+ (+ (+ (+ (+ (+ (+ (call ABS (id A)) (call CEIL (id
+      A))) (call FLOOR (id A))) (call TRUNC (id A))) (call SQRT (id A)))
+      (call EXP (id A))) (call LN (id A))) (call MOD (id A) (int 2)))
+      (call GREATEST (id A) (int 1))) (call LEAST (id A) (int 1)))
+  - id: rounding-is-not-in-the-vocabulary
+    covers: [vocabulary, rejection]
+    text: "ROUND(A, 2)"
+    parse: reject
+    condition: prohibited_function
+  - id: log-is-not-in-the-vocabulary
+    covers: [vocabulary, rejection]
+    text: "LOG(A)"
+    parse: reject
+    condition: prohibited_function
+  - id: a-reducer-is-not-in-the-vocabulary
+    covers: [vocabulary, rejection]
+    text: "SUM(A)"
+    parse: reject
+    condition: prohibited_function
+  - id: greatest-requires-two-arguments
+    covers: [vocabulary, rejection]
+    text: "GREATEST(A)"
+    parse: reject
+    condition: prohibited_function
+  - id: abs-takes-exactly-one-argument
+    covers: [vocabulary, rejection]
+    text: "ABS(A, B)"
+    parse: reject
+    condition: prohibited_function
+  - id: coalesce-requires-an-argument
+    covers: [vocabulary, rejection]
+    text: "COALESCE()"
+    parse: reject
+    condition: prohibited_function
+  - id: a-comparison-is-not-a-numeric-expression
+    covers: [prohibited, rejection]
+    text: "A > B"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-boolean-operator-is-not-a-numeric-expression
+    covers: [prohibited, rejection]
+    text: "A AND B"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-conditional-is-not-a-numeric-expression
+    covers: [prohibited, rejection]
+    text: "CASE WHEN A THEN 1 ELSE 2 END"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-window-is-not-a-numeric-expression
+    covers: [prohibited, rejection]
+    text: "A OVER B"
+    parse: reject
+    condition: prohibited_construct
+  - id: a-string-literal-is-not-a-numeric-expression
+    covers: [prohibited, rejection]
+    text: "A + 'text'"
+    parse: reject
+    condition: prohibited_construct
+  - id: an-empty-expression-is-rejected
+    covers: [rejection]
+    text: ""
+    parse: reject
+    condition: invalid_numeric_expression
+  - id: an-unclosed-group-is-rejected
+    covers: [grouping, rejection]
+    text: "(A + B"
+    parse: reject
+    condition: invalid_numeric_expression
+  - id: a-trailing-token-is-rejected
+    covers: [rejection]
+    text: "A B"
+    parse: reject
+    condition: invalid_numeric_expression
+  - id: an-unexpected-character-is-rejected
+    covers: [rejection]
+    text: "A # B"
+    parse: reject
+    condition: invalid_numeric_expression

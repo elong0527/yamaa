@@ -1,0 +1,308 @@
+# Shared regular-expression fixtures for R022.
+#
+# Every case names one pattern and, unless the pattern is rejected, one
+# subject and the outcome each R022 consumer produces for it:
+#
+#   schema_pattern  the R006 pattern descriptor keyword, a full match
+#   matches         the R009 matches column verification, a search
+#   str_extract     the str_extract expression, a search keeping one group
+#
+# A str_extract outcome is null when the pattern matched nowhere. It is a
+# mapping of the requested group and its value when the pattern matched, and
+# that value is null when the match did not enter the group.
+#
+# A case carrying `invalid: true` records a pattern the pinned engine rejects.
+# Such a pattern is rejected identically in all three consumers, so it names no
+# subject and no outcome.
+#
+# Subjects are YAML double-quoted scalars so that a non-ASCII scalar value is
+# written as an escape and this file stays ASCII under R019. Patterns are
+# single-quoted so that a backslash is literal, and spell a non-ASCII scalar
+# with the ECMAScript \u{...} escape instead.
+#
+# The `dialect` tag marks a case where Python `re` disagrees with the pinned
+# engine. Those cases are the reason R022 pins one engine rather than reading
+# patterns with whatever the host provides.
+
+schema_version: "1.0"
+contract: regex
+contract_version: "1.0.0"
+engine:
+  crate: regress
+  crate_version: "0.10.4"
+  flags: u
+cases:
+  - id: ascii-digit-class-rejects-arabic-indic-digit
+    covers: [unicode, escaping, dialect]
+    pattern: '^\d$'
+    subject: "\u0665"
+    schema_pattern: false
+    matches: false
+    str_extract: null
+  - id: ascii-digit-class-accepts-ascii-digit
+    covers: [unicode, escaping]
+    pattern: '^\d$'
+    subject: "5"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 0, value: "5"}
+  - id: ascii-word-class-rejects-latin1-letter
+    covers: [unicode, escaping, dialect]
+    pattern: '^\w$'
+    subject: "\u00E9"
+    schema_pattern: false
+    matches: false
+    str_extract: null
+  - id: whitespace-class-accepts-zero-width-no-break-space
+    covers: [unicode, escaping, dialect]
+    pattern: '^\s$'
+    subject: "\uFEFF"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 0, value: "\uFEFF"}
+  - id: dot-rejects-line-separator
+    covers: [unicode, dialect]
+    pattern: '^.$'
+    subject: "\u2028"
+    schema_pattern: false
+    matches: false
+    str_extract: null
+  - id: dot-matches-supplementary-scalar-once
+    covers: [unicode]
+    pattern: '^.$'
+    subject: "\U0001D400"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 0, value: "\U0001D400"}
+  - id: supplementary-scalar-is-not-two-characters
+    covers: [unicode]
+    pattern: '^..$'
+    subject: "\U0001D400"
+    schema_pattern: false
+    matches: false
+    str_extract: null
+  - id: code-point-escape-matches-supplementary-scalar
+    covers: [unicode, escaping, dialect]
+    pattern: '^\u{1D400}$'
+    subject: "\U0001D400"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 0, value: "\U0001D400"}
+  - id: code-point-escape-matches-latin1-letter
+    covers: [unicode, escaping, dialect]
+    pattern: '^\u{00E9}$'
+    subject: "\u00E9"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 0, value: "\u00E9"}
+  - id: property-escape-accepts-unicode-letters
+    covers: [unicode, escaping, dialect]
+    pattern: '^\p{L}+$'
+    subject: "\u00E9\u0416"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 0, value: "\u00E9\u0416"}
+  - id: property-escape-rejects-non-latin-digit-as-letter
+    covers: [unicode, escaping, dialect]
+    pattern: '^\p{L}$'
+    subject: "\u0665"
+    schema_pattern: false
+    matches: false
+    str_extract: null
+  - id: canonically-equivalent-subject-does-not-match
+    covers: [unicode, dialect]
+    pattern: '^\u{00E9}$'
+    subject: "e\u0301"
+    schema_pattern: false
+    matches: false
+    str_extract: null
+  - id: anchored-pattern-spans-the-whole-subject
+    covers: [anchors]
+    pattern: '^AE-[0-9]{3}$'
+    subject: "AE-007"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 0, value: "AE-007"}
+  - id: dollar-rejects-trailing-line-feed
+    covers: [anchors, dialect]
+    pattern: '^a$'
+    subject: "a\n"
+    schema_pattern: false
+    matches: false
+    str_extract: null
+  - id: caret-does-not-match-after-a-line-feed
+    covers: [anchors]
+    pattern: '^b'
+    subject: "a\nb"
+    schema_pattern: false
+    matches: false
+    str_extract: null
+  - id: unanchored-pattern-searches-the-subject
+    covers: [anchors, search]
+    pattern: '[0-9]{3}'
+    subject: "AE-007-X"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: "007"}
+  - id: word-boundary-anchors-inside-the-subject
+    covers: [anchors, escaping]
+    pattern: '\bAE\b'
+    subject: "X AE Y"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: "AE"}
+  - id: variable-length-lookbehind-is-accepted
+    covers: [anchors, dialect]
+    pattern: '(?<=a+)b'
+    subject: "aaab"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: "b"}
+  - id: group-zero-is-the-whole-match
+    covers: [capture-groups]
+    pattern: '^CATH-([^-]+)-[0-9]{4}$'
+    subject: "CATH-SITE01-0042"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 0, value: "CATH-SITE01-0042"}
+  - id: group-one-is-the-first-opening-parenthesis
+    covers: [capture-groups]
+    pattern: '^CATH-([^-]+)-[0-9]{4}$'
+    subject: "CATH-SITE01-0042"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 1, value: "SITE01"}
+  - id: non-capturing-group-takes-no-number
+    covers: [capture-groups]
+    pattern: '^(?:AE)-([0-9]{3})$'
+    subject: "AE-007"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 1, value: "007"}
+  - id: named-group-is-numbered-in-source-order
+    covers: [capture-groups, dialect]
+    pattern: '^(?<prefix>[A-Z]+)-(?<serial>[0-9]+)$'
+    subject: "AE-007"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 2, value: "007"}
+  - id: nested-groups-number-by-opening-parenthesis
+    covers: [capture-groups]
+    pattern: '^((a)(b))$'
+    subject: "ab"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 2, value: "a"}
+  - id: lookahead-contributes-no-group-number
+    covers: [capture-groups]
+    pattern: '^(?=AE)([A-Z]+)$'
+    subject: "AE"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 1, value: "AE"}
+  - id: backreference-names-a-group-number
+    covers: [capture-groups, escaping]
+    pattern: '^(a)\1$'
+    subject: "aa"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 1, value: "a"}
+  - id: unentered-alternative-group-has-no-value
+    covers: [capture-groups]
+    pattern: '^(?:(a)|(b))$'
+    subject: "b"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 1, value: null}
+  - id: optional-group-that-did-not-participate
+    covers: [capture-groups]
+    pattern: '^a(b)?$'
+    subject: "a"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 1, value: null}
+  - id: escaped-dot-matches-only-a-full-stop
+    covers: [escaping]
+    pattern: '^a\.b$'
+    subject: "a.b"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 0, value: "a.b"}
+  - id: escaped-dot-rejects-another-scalar
+    covers: [escaping]
+    pattern: '^a\.b$'
+    subject: "axb"
+    schema_pattern: false
+    matches: false
+    str_extract: null
+  - id: unescaped-dot-matches-any-non-terminator
+    covers: [escaping]
+    pattern: '^a.b$'
+    subject: "axb"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 0, value: "axb"}
+  - id: escaped-solidus-is-an-ordinary-scalar
+    covers: [escaping]
+    pattern: '^/a/$'
+    subject: "/a/"
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 0, value: "/a/"}
+  - id: star-pattern-keeps-an-empty-leftmost-match
+    covers: [empty-match, search]
+    pattern: 'a*'
+    subject: "bbb"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: ""}
+  - id: empty-alternative-matches-the-empty-subject
+    covers: [empty-match]
+    pattern: '^(?:a|)$'
+    subject: ""
+    schema_pattern: true
+    matches: true
+    str_extract: {group: 0, value: ""}
+  - id: empty-match-is-the-empty-string-not-missing
+    covers: [empty-match]
+    pattern: 'x*'
+    subject: "y"
+    schema_pattern: false
+    matches: true
+    str_extract: {group: 0, value: ""}
+  - id: python-named-group-syntax-is-rejected
+    covers: [unsupported, dialect]
+    pattern: '(?P<name>a)'
+    invalid: true
+  - id: inline-flag-group-is-rejected
+    covers: [unsupported, dialect]
+    pattern: '(?i)a'
+    invalid: true
+  - id: malformed-escape-is-rejected
+    covers: [unsupported, escaping, dialect]
+    pattern: '\a'
+    invalid: true
+  - id: lone-quantifier-brace-is-rejected
+    covers: [unsupported, dialect]
+    pattern: 'a{'
+    invalid: true
+  - id: unbalanced-parenthesis-is-rejected
+    covers: [unsupported]
+    pattern: 'a('
+    invalid: true
+  - id: reversed-class-range-is-rejected
+    covers: [unsupported]
+    pattern: '[z-a]'
+    invalid: true
+  - id: reversed-quantifier-bounds-are-rejected
+    covers: [unsupported]
+    pattern: 'a{2,1}'
+    invalid: true
+  - id: duplicate-group-name-is-rejected
+    covers: [unsupported]
+    pattern: '(?<dup>a)|(?<dup>b)'
+    invalid: true
+  - id: class-set-notation-is-rejected-without-the-v-flag
+    covers: [unsupported]
+    pattern: '[\p{L}--[a]]'
+    invalid: true

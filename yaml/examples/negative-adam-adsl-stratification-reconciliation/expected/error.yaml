@@ -2,6 +2,7 @@ phase: verification
 condition: predicate_failed
 spec_paths:
   - verifications[1].predicate
+requirement: R009-18
 context:
   verification_id: randomized-strata-agree
   failure_count: 1

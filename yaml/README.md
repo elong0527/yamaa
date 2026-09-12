@@ -18,6 +18,10 @@ and SDTM-to-ADaM derivations. The design is under active development.
   outputs, and `validation-manifest.yaml`, which assigns every validation-phase
   negative fixture to its owning rule and validator family or an open blocking
   issue.
+- `conformance/` contains language-wide fixtures that every implementation
+  must reproduce, one file per contract.
+- `grammar/` contains one machine-readable grammar per closed language, with
+  the vectors every implementation must reproduce.
 - `agents.md` tells AI coding agents how to discover and maintain the design.
 
 The schema defines shape and operation-local behavior through adjacent comments
@@ -29,11 +33,35 @@ may contain Unicode scalar values, casing and case-insensitive mapping affect
 ASCII letters only, no normalization is implicit, and equality and ordering
 operate on the exact scalar sequence.
 
+R022 gives every regular expression one executable contract: schema
+`pattern`, `str_extract`, and `matches` are read by one pinned ECMA-262
+engine with the Unicode flag set, each consumer fixes whether it searches or
+must match the whole value, capture groups are numbered by opening
+parenthesis, and a pattern that engine rejects fails validation rather than
+falling back to a host dialect. `conformance/regex.yaml` holds the fixtures
+R and Python must both reproduce.
+
+The four closed grammars are defined once, in `grammar/`. A grammar written
+in prose, in an R parser, and in a Python parser is three copies that can
+disagree, so each rule's grammar block is rendered from its grammar file,
+each closed vocabulary is compared with the constants its parser uses, and
+both implementations replay the same vectors. Changing a grammar therefore
+starts in `grammar/`, and a change that is not carried into every consumer
+fails validation.
+
 R021 gives every declared source one resource contract: a run receives one
 approved project root, a declared path is a relative file inside it with no
 rooted form, URI scheme, parent traversal, or symbolic link, and each accepted
 physical file is read once as one immutable byte snapshot that cannot be
 substituted between validation and ingestion.
+
+R023 gives every delimited source one syntax: UTF-8 without a byte-order mark,
+a comma between fields, `U+000A` or `U+000D U+000A` between records, and
+double-quote quoting whose doubled quote is one literal quote. It admits the
+second spelling of a terminator and a final record without one, because
+neither changes the records a file holds, and rejects every other difference
+rather than repairing it. A field reaches R014 with its quoting intact, so an
+uncollected value stays distinct from a collected empty one.
 
 ## Version 1.0 design boundary
 

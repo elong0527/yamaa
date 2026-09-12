@@ -1,0 +1,762 @@
+version: "1.0"
+
+# Execution manifest for #101: every example exactly once.
+# status is executable or blocked. No YAML executor exists in R or Python
+# yet, so every entry is blocked_by 101 until a runtime slice lands.
+examples:
+  adam-adae-death-outcome:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-event-severity:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-occurrence-flags:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-partial-dates:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-post-dose-onset:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-post-reference-event:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-protocol-review-window:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-query-flags:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-review-order:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-serious-event-listing:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-serious-event-sequence:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-severity-override:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-severity-rank:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-string-handlers:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-treatment-emergent:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adae-worst-severity:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adce-worst-toxicity-grade:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adcm-on-treatment-flag:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adeg-bazett-qtc:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adeg-fridericia-qtc:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adeg-rr-interval:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adex-cumulative-dose:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adex-dose-reduction-flag:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adex-uncollected-exposure:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adlb-absolute-wbc-differential:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adlb-bds:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adlb-closest-visit:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adlb-mean:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adlb-order-sensitive-sum:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adlb-reported-precision:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adlb-shift-and-criteria:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adlb-standardized-result:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adoe-study-eye:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adqs-subscale-score:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adrs-best-overall-response:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adrs-best-response-selection:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adrs-composite-response:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adrs-confirmed-response:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adrs-measurable-disease:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adrs-overall-response-records:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-age-group:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-analysis-age:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-bmi-compute:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-bmi-function:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-completion-flag:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-crossover-periods:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-dependency-order:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-disposition:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-dose-adjustment-flag:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-geography-normalization:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-identifier-parsing:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-investigator-comment:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-last-alive-date:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-mapping:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-new-anticancer-therapy-date:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-non-finite-values:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-population-flags:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-portable-text:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-randomization-timing:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-rescue-medication:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-treatment-selection:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adtr-current-nadir:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adtr-sum-of-target-diameters:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adtte-duration-of-response:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adtte-first-adverse-event:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adtte-overall-survival:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adtte-progression-free-survival:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-advs-analysis-visit:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-advs-analysis-window-table:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-advs-body-mass-index:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-advs-body-surface-area:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-advs-growth-percentile:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-advs-mean-arterial-pressure:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-advs-once-measured-carry-forward:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-advs-prior-character-result:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adae-review-condition-arithmetic:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adae-review-text-date:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adae-review-unknown-date:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adam-adeg-pre-existing-rrr:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adam-adsl-stratification-reconciliation:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adex-relative-dose-intensity:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adex-single-dose-expansion:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adlb-absolute-wbc-duplicate:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adlb-computed-parameter:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adlb-multiple-baseline-records:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adrs-partial-response-after-complete-response:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adsl-cyclic-parent:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adsl-inherited-output:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adsl-invalid-parent-clear:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adsl-parent-version-mismatch:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adsl-randomization-date-retyped:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adsl-remote-parent:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-adsl-subject-reference:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-advs-overlapping-analysis-windows:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-all-or-none-partial-row:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-baseline-flag-tied-date:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-column-type-unknown:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-compute-aggregate-function:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-compute-comparison-operator:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-compute-division-by-zero:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-compute-integer-overflow:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-compute-ln-of-zero:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-compute-qualified-identifier:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-compute-sqrt-of-negative:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-conversion-incomplete-date:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-conversion-non-integral:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-conversion-unparseable-number:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-dataset-path-absolute:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-dataset-path-directory:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-dataset-path-missing:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-dataset-path-parent-escape:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-dataset-path-symlink:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-dataset-path-url:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-date-diff-datetime-endpoints:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-date-impute-invalid-source:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-date-impute-month-out-of-range:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-date-impute-nonexistent-day:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-date-impute-unknown-day-rule:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-date-precision-invalid-source:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-datetime-zone-offset:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-function-contract-mismatch:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-greatest-incomparable-sources:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-group-count-without-id:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-ingest-unparseable-field:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-keys-internal-column:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-keys-missing-value:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-least-incomparable-sources:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-literal-non-scalar:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-mapping-case-fold-collision:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-mapping-from-duplicate-key:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-mapping-from-key-length-mismatch:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-mapping-from-partial-key:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-mapping-from-unmapped-key:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-mapping-unmapped-value:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-matches-unreadable-pattern:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-not-missing-absent-age:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-output-duplicate-subject:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-output-order-repeated-term:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-output-order-unknown-column:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-previous-non-missing-non-variable-source:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-query-slot-overflow:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-rank-invalid-method:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-record-lookup-id-collision:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-record-lookup-incomparable-range:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-record-lookup-incomplete-key:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-record-lookup-unmatched-key:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-record-lookup-unordered-choice:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-record-lookup-unordered-keep:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-record-lookup-unpaired-key:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-row-number-numeric-filter:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-row-value-self-reference:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-row-value-zero-offset:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-source-duplicate-field-name:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-source-duplicate-right-key:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-source-empty-field-name:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-source-invalid-text:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-source-missing-sentinel:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-source-output-self-reference:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-source-record-width:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-source-undeclared-field:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-source-unknown-profile:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-source-unterminated-quote:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-str-extract-undeclared-group:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-study-day-datetime-input:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-sum-non-numeric-source:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-to-date-date-source:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-types-unknown-field:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-usubjid-exceeds-length:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-variable-nested-expression:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-verification-implausible-age:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  odm-form-scoped-item-resolution:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-ae-dictionary-coding:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-ae-effective-transaction:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-dm-basic:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-dm-metadata-contract:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-dm-reference-dates:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-ds-disposition-sequence:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-ex-combination-regimen:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-fa-fever-occurrence:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-lb-conditional-compartments:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-lb-ctcae-grading:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-lb-findings:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-lb-multiform:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-lb-reference-range-indicator:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-relrec-many-to-many:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-suppmh-parent-linkage:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-suppmh-qualifiers:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-vs-unit-standardization:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-vs-visit-study-day:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet

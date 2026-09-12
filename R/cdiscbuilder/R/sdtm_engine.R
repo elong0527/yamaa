@@ -3,6 +3,12 @@
 #' @import purrr
 #' @import stringr
 NULL
+.require_single_value <- function(x) {
+  if (length(x) > 1) {
+    stop("Duplicate ItemOID values for one complete key", call. = FALSE)
+  }
+  x
+}
 #' Extract dependencies from domain configuration
 #' @noRd
 .extract_dependencies <- function(domain_name, sources) {
@@ -192,17 +198,35 @@ topological_sort <- function(domains_config) {
       if (!is.null(built_domains[[ref_domain]]) && ref_col %in% names(built_domains[[ref_domain]])) { # nolint: line_length_linter
         ref_df <- built_domains[[ref_domain]]
         merge_keys <- if (!is.null(col_cfg$merge_on)) col_cfg$merge_on else "USUBJID" # nolint: line_length_linter
-        # Simple left join
-        valid_keys <- intersect(merge_keys, intersect(names(final_df), names(ref_df))) # nolint: line_length_linter
-        if (length(valid_keys) > 0) {
-          ref_subset <- ref_df |>
-            select(all_of(c(valid_keys, ref_col))) |>
-            distinct(across(all_of(valid_keys)), .keep_all = TRUE)
-          merged <- final_df |>
-            select(all_of(valid_keys)) |>
-            left_join(ref_subset, by = valid_keys)
-          series <- merged[[ref_col]]
+        missing_target_keys <- setdiff(merge_keys, names(final_df))
+        if (length(missing_target_keys) > 0) {
+          stop(
+            "Lookup keys not found in target dataset: ",
+            paste(missing_target_keys, collapse = ", ")
+          )
         }
+        missing_reference_keys <- setdiff(merge_keys, names(ref_df))
+        if (length(missing_reference_keys) > 0) {
+          stop(
+            "Lookup keys not found in ", ref_domain, ": ",
+            paste(missing_reference_keys, collapse = ", ")
+          )
+        }
+        complete_reference_keys <- complete.cases(ref_df[merge_keys])
+        complete_reference <- ref_df[complete_reference_keys, , drop = FALSE]
+        if (anyDuplicated(complete_reference[merge_keys]) > 0) {
+          stop(
+            "Lookup source ", ref_domain,
+            " has multiple matches for keys: ",
+            paste(merge_keys, collapse = ", ")
+          )
+        }
+        ref_subset <- complete_reference |>
+          select(all_of(c(merge_keys, ref_col)))
+        merged <- final_df |>
+          select(all_of(merge_keys)) |>
+          left_join(ref_subset, by = merge_keys, na_matches = "never")
+        series <- merged[[ref_col]]
       }
     } else if (src %in% names(pivoted)) {
       series <- pivoted[[src]]
@@ -265,7 +289,8 @@ process_findings_domain <- function(domain_name, config, df_long, default_keys, 
     pivoted <- source_df |>
       select(all_of(keys), "ItemOID", "Value") |>
       pivot_wider(
-        names_from = "ItemOID", values_from = "Value", values_fn = first
+        names_from = "ItemOID", values_from = "Value",
+        values_fn = .require_single_value
       )
     final_df <- tibble::tibble(.rows = nrow(pivoted))
     for (k in keys) {
@@ -374,7 +399,10 @@ process_domain <- function(
     keys <- intersect(keys, names(source_df))
     pivoted <- source_df |>
       select(all_of(keys), ItemOID, Value) |> # nolint: object_usage_linter
-      pivot_wider(names_from = ItemOID, values_from = Value, values_fn = first)
+      pivot_wider(
+        names_from = ItemOID, values_from = Value,
+        values_fn = .require_single_value
+      )
     # Map columns
     final_df <- tibble::tibble(.rows = nrow(pivoted))
     # Add keys to final_df first to allow cross-domain joins
@@ -428,6 +456,302 @@ process_domain <- function(
   combined <- bind_rows(domain_dfs)
   combined
 }
+.read_delimited_source <- function(path) {
+  connection <- file(path, "rb")
+  on.exit(close(connection))
+  size <- file.info(path)$size
+  bytes <- readBin(connection, what = "raw", n = size)
+  fail <- function(code, record = record_number, field = field_number) {
+    stop(
+      sprintf("%s: %s at record %d, field %d", code, path, record, field),
+      call. = FALSE
+    )
+  }
+  if (length(bytes) == 0) {
+    fail("source_header_absent", 1L, 1L)
+  }
+  if (
+    length(bytes) >= 3 &&
+      identical(bytes[seq_len(3)], as.raw(c(0xef, 0xbb, 0xbf)))
+  ) {
+    fail("source_byte_order_mark", 1L, 1L)
+  }
+  invalid_pos <- {
+    n <- length(bytes)
+    pos <- NA_integer_
+    i <- 1L
+    while (i <= n && is.na(pos)) {
+      b <- as.integer(bytes[i])
+      if (b <= 0x7fL) {
+        i <- i + 1L
+        next
+      }
+      expected <- if (b >= 0xc2L && b <= 0xdfL) 1L else if (b >= 0xe0L && b <= 0xefL) 2L else if (b >= 0xf0L && b <= 0xf4L) 3L else NA_integer_
+      if (is.na(expected)) {
+        pos <- i
+        break
+      }
+      if (i + expected > n) {
+        pos <- i
+        break
+      }
+      continuation_ok <- TRUE
+      for (k in seq_len(expected)) {
+        cb <- as.integer(bytes[i + k])
+        if (cb < 0x80L || cb > 0xbfL) {
+          continuation_ok <- FALSE
+          break
+        }
+      }
+      if (!continuation_ok) {
+        pos <- i
+        break
+      }
+      if (expected == 2L) {
+        b2 <- as.integer(bytes[i + 1L])
+        if (b == 0xe0L && b2 < 0xa0L) pos <- i
+        if (b == 0xedL && b2 > 0x9fL) pos <- i
+      } else if (expected == 3L) {
+        b2 <- as.integer(bytes[i + 1L])
+        if (b == 0xf0L && b2 < 0x90L) pos <- i
+        if (b == 0xf4L && b2 > 0x8fL) pos <- i
+      }
+      if (!is.na(pos)) break
+      i <- i + expected + 1L
+    }
+    pos
+  }
+  if (!is.na(invalid_pos)) {
+    scan_record <- 1L
+    scan_field <- 1L
+    scan_state <- "start"
+    scan_index <- 1L
+    while (scan_index < invalid_pos) {
+      b <- as.integer(bytes[scan_index])
+      if (scan_state == "quoted") {
+        if (b == 0x22L) {
+          if (
+            scan_index + 1L < invalid_pos &&
+              as.integer(bytes[scan_index + 1L]) == 0x22L
+          ) {
+            scan_index <- scan_index + 2L
+            next
+          }
+          scan_state <- "after_quote"
+          scan_index <- scan_index + 1L
+          next
+        }
+        scan_index <- scan_index + 1L
+        next
+      }
+      if (b == 0x0dL) {
+        if (
+          scan_index + 1L < invalid_pos &&
+            as.integer(bytes[scan_index + 1L]) == 0x0aL
+        ) {
+          scan_record <- scan_record + 1L
+          scan_field <- 1L
+          scan_state <- "start"
+          scan_index <- scan_index + 2L
+          next
+        }
+        if (scan_index + 1L == invalid_pos) {
+          scan_index <- scan_index + 1L
+          next
+        }
+        scan_index <- scan_index + 1L
+        next
+      }
+      if (b == 0x0aL) {
+        scan_record <- scan_record + 1L
+        scan_field <- 1L
+        scan_state <- "start"
+        scan_index <- scan_index + 1L
+        next
+      }
+      if (scan_state == "start") {
+        if (b == 0x22L) {
+          scan_state <- "quoted"
+        } else if (b == 0x2cL) {
+          scan_field <- scan_field + 1L
+        } else {
+          scan_state <- "bare"
+        }
+        scan_index <- scan_index + 1L
+        next
+      }
+      if (scan_state == "bare") {
+        if (b == 0x2cL) {
+          scan_field <- scan_field + 1L
+          scan_state <- "start"
+        }
+        scan_index <- scan_index + 1L
+        next
+      }
+      if (b == 0x2cL) {
+        scan_field <- scan_field + 1L
+        scan_state <- "start"
+      }
+      scan_index <- scan_index + 1L
+    }
+    fail("invalid_text", scan_record, scan_field)
+  }
+  text <- tryCatch(
+    iconv(
+      rawToChar(bytes),
+      from = "UTF-8",
+      to = "UTF-8",
+      sub = NA_character_
+    ),
+    error = function(error) NA_character_
+  )
+  if (is.na(text)) {
+    fail("invalid_text", 1L, 1L)
+  }
+  code_points <- utf8ToInt(text)
+  records <- list()
+  current_record <- list()
+  field_text <- integer()
+  field_quoted <- FALSE
+  state <- "start"
+  record_number <- 1L
+  field_number <- 1L
+  append_field <- function() {
+    current_record[[length(current_record) + 1L]] <<- list(
+      text = intToUtf8(field_text),
+      quoted = field_quoted
+    )
+    field_text <<- integer()
+    field_quoted <<- FALSE
+  }
+  append_record <- function() {
+    append_field()
+    records[[length(records) + 1L]] <<- current_record
+    current_record <<- list()
+    record_number <<- record_number + 1L
+    field_number <<- 1L
+  }
+  index <- 1L
+  while (index <= length(code_points)) {
+    code_point <- code_points[[index]]
+    if (state == "quoted") {
+      if (code_point == 13L) {
+        fail("source_carriage_return")
+      }
+      if (code_point == 34L) {
+        if (
+          index < length(code_points) &&
+            code_points[[index + 1L]] == 34L
+        ) {
+          field_text <- c(field_text, 34L)
+          index <- index + 2L
+        } else {
+          state <- "after_quote"
+          index <- index + 1L
+        }
+      } else {
+        field_text <- c(field_text, code_point)
+        index <- index + 1L
+      }
+      next
+    }
+    if (code_point == 13L) {
+      if (
+        index == length(code_points) ||
+          code_points[[index + 1L]] != 10L
+      ) {
+        fail("source_carriage_return")
+      }
+      append_record()
+      state <- "start"
+      index <- index + 2L
+      next
+    }
+    if (code_point == 10L) {
+      append_record()
+      state <- "start"
+      index <- index + 1L
+      next
+    }
+    if (state == "start") {
+      if (code_point == 34L) {
+        field_quoted <- TRUE
+        state <- "quoted"
+      } else if (code_point == 44L) {
+        append_field()
+        field_number <- field_number + 1L
+      } else {
+        field_text <- c(field_text, code_point)
+        state <- "bare"
+      }
+      index <- index + 1L
+      next
+    }
+    if (state == "bare") {
+      if (code_point == 34L) {
+        fail("source_quote_in_bare_field")
+      }
+      if (code_point == 44L) {
+        append_field()
+        field_number <- field_number + 1L
+        state <- "start"
+      } else {
+        field_text <- c(field_text, code_point)
+      }
+      index <- index + 1L
+      next
+    }
+    if (code_point != 44L) {
+      fail("source_text_after_quote")
+    }
+    append_field()
+    field_number <- field_number + 1L
+    state <- "start"
+    index <- index + 1L
+  }
+  if (state == "quoted") {
+    fail("source_quote_unterminated")
+  }
+  if (tail(code_points, 1L) != 10L) {
+    append_record()
+  }
+  header <- vapply(records[[1L]], `[[`, character(1), "text")
+  empty_name <- which(header == "")[1L]
+  if (!is.na(empty_name)) {
+    fail("source_field_name_empty", 1L, empty_name)
+  }
+  duplicate_name <- anyDuplicated(header)
+  if (duplicate_name != 0L) {
+    fail("source_field_name_duplicate", 1L, duplicate_name)
+  }
+  data_records <- records[-1L]
+  for (record_index in seq_along(data_records)) {
+    if (length(data_records[[record_index]]) != length(header)) {
+      fail(
+        "source_record_width",
+        record_index + 1L,
+        min(length(data_records[[record_index]]), length(header)) + 1L
+      )
+    }
+  }
+  columns <- lapply(seq_along(header), function(column_index) {
+    vapply(data_records, function(record) {
+      field <- record[[column_index]]
+      if (!field$quoted && identical(field$text, "")) {
+        NA_character_
+      } else {
+        field$text
+      }
+    }, character(1))
+  })
+  names(columns) <- header
+  as.data.frame(
+    columns,
+    stringsAsFactors = FALSE,
+    check.names = FALSE,
+    optional = TRUE
+  )
+}
 #' Build all SDTM datasets from specifications
 #'
 #' @description Orchestrates the entire SDTM build process
@@ -456,9 +780,11 @@ create_sdtm_datasets <- function(config_dir, input_csv, output_dir) {
       config$domains[[d]] <- parsed[[d]]
     }
   }
-  df_long <- read.csv(input_csv, stringsAsFactors = FALSE)
+  df_long <- .read_delimited_source(input_csv)
   default_keys <- c(
-    "StudyOID", "SubjectKey", "ItemGroupRepeatKey", "StudyEventOID"
+    "StudyOID", "MetaDataVersionOID", "SubjectKey", "StudyEventOID",
+    "StudyEventRepeatKey", "FormOID", "FormRepeatKey", "ItemGroupOID",
+    "ItemGroupRepeatKey"
   )
   domains_order <- topological_sort(config$domains)
   cat("Build order:", paste(domains_order, collapse = " -> "), "\n")

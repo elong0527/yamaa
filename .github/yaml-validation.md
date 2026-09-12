@@ -49,10 +49,12 @@ The validation ensures:
    rooted form, URI scheme, parent traversal, `.` or empty segment, or
    trailing separator; no component may be a symbolic link; the file must
    exist, be a regular file, and canonicalize inside the approved project
-   root, which defaults to the entry specification's directory. Each accepted
-   physical file is read once as one immutable byte snapshot, shared by every
-   declaration that reaches it, so a header is never re-read from a path that
-   may since have changed. Source-producing
+   root, which defaults to the entry specification's directory. A dataset
+   path whose extension names no R023 profile is rejected from the written
+   path, before the source is read. Each accepted physical file is read once
+   as one immutable byte snapshot, shared by every declaration that reaches
+   it, so a header is never re-read from a path that may since have
+   changed. Source-producing
    specifications linked through `schema` validate recursively
    against `root_class`; producer source paths must resolve, derivation coverage
    must be complete, workflow dependencies must be acyclic, every stored
@@ -78,9 +80,18 @@ The validation ensures:
    `expected/error.yaml`. Error contracts use the closed phase vocabulary,
    snake-case conditions, existing specification paths, and an optional
    mapping context.
-6. **CSV consistency**: Input and expected CSV files must have unique,
-   non-empty headers and a consistent field count. Expected output headers
-   must match exactly the `output.columns` sequence declared by the
+6. **CSV consistency**: Every input and expected fixture whose extension is
+   `.csv` in any case is read under R023's source profile, which preserves
+   quoting, so a bare empty field stays distinct from a quoted empty one
+   rather than being normalized to the same text. A fixture must decode as
+   UTF-8, carry no byte-order mark, terminate its records with `U+000A` or
+   `U+000D U+000A`, close every quoted field,
+   name each field of a unique, non-empty header, and carry the header's
+   field count in every record. A negative example may carry the fixture that
+   provokes the source condition its `expected/error.yaml` declares, and must
+   actually provoke it: a malformed fixture no example declares is an error,
+   and so is a declared source condition no fixture reports. Expected output
+   headers must match exactly the `output.columns` sequence declared by the
    specification. `output.path` names the file the specification produces and
    its extension must be one R020 maps; the expected artifact carries that
    name. An artifact whose path resolves to the `csv` profile must also carry
@@ -99,6 +110,29 @@ The validation ensures:
    avoid schema vocabulary, describe each non-key expected column, and use
    only the remediation or specification-variant sections allowed by
    `yaml/examples/agents.md`.
+9. **Regular expressions**: Every pattern the language admits -- a schema
+   `pattern` descriptor, `str_extract.pattern`, and a `matches` verification
+   -- is compiled by the one ECMA-262 engine R022 pins, with the Unicode flag
+   set. A pattern that engine rejects fails as `invalid_regex` at its
+   declaring path, and a `str_extract` selecting a group its pattern does not
+   declare fails as `regex_group_out_of_range`. The validator replays
+   `yaml/conformance/regex.yaml` against the same engine, so a fixture whose
+   recorded outcome drifts from the engine, or a fixture set that stops
+   covering one of R022's named categories, fails validation. The pinned
+   engine is a required dependency: without it the validator refuses to run
+   rather than falling back to Python `re`.
+
+10. **Closed grammars**: `yaml/grammar/` defines the predicate (R004),
+    numeric (R010), string template (R012), and aggregate (R013) grammars
+    once. The validator renders each rule's grammar block from its grammar
+    file and fails when the rule carries a different block, compares each
+    closed vocabulary with the constants the parsers use, checks that every
+    non-terminal a production names is defined or imported, and replays every
+    vector: an accepted text must parse into the recorded shape and bind the
+    recorded identifiers, and a rejected text must fail with the recorded
+    condition. A vector set that stops covering one of a contract's named
+    categories fails the same way. The R parser replays the same files in the
+    `grammar-conformance` workflow.
 
 ## Explicit Non-Goals
 The validator ensures structural correctness and the static cross-field checks
@@ -108,17 +142,37 @@ listed above. At this time, it **does not**:
   Inherited specifications are canonicalized as part of producing their
   resolved data tree.
 - Reproduce golden output values in the `.csv` files.
-- Prove that a regular expression behaves identically in R and Python; the
-  ECMAScript portability contract is tracked in issue #106.
+- Prove that a regular expression behaves identically in R and Python. R022
+  pins the engine both runtimes must bind and this validator replays the
+  shared fixtures on the Python side, but executable R parity waits on the
+  dual-runtime conformance workflow in issue #101. The four closed grammars
+  are the exception: both runtimes already replay `yaml/grammar/`.
 
 ## Local Commands
-To run the validator locally:
+From the repository root, use a Python 3.14 environment to match CI. Install
+the dependencies, run the tests, and validate the repository:
 
 ```bash
-python3 .github/workflows/validate_repository.py --root .
+python3 -m pip install -r .github/scripts/yaml-validation/requirements.txt
+python3 .github/scripts/yaml-validation/test_validate_repository.py
+python3 .github/scripts/yaml-validation/validate_repository.py --root .
 ```
 
 By default, the script infers the repository root relative to its own path.
+
+The R side of the shared grammar vectors needs only R and the `yaml` package:
+
+```bash
+Rscript R/cdiscbuilder/inst/conformance/grammar_conformance.R
+```
+
+The Ruby example checks and their tests can also run locally:
+
+```bash
+ruby .github/scripts/examples/test_check_example_dependencies.rb
+ruby .github/scripts/examples/check_example_dependencies.rb
+ruby .github/scripts/examples/check_labels.rb
+```
 
 ## Exit Behavior
 - Returns `0` if the repository structure is completely valid (no errors).
@@ -128,13 +182,13 @@ By default, the script infers the repository root relative to its own path.
 Warnings are printed to standard output but do not fail validation. The Python
 validator checks column labels for every resolved specification and orders
 inherited columns by dependency. The existing Ruby checks under
-`.github/workflows/` continue to enforce these policies for non-inherited
+`.github/scripts/examples/` continue to enforce these policies for non-inherited
 examples and discover linked producing specifications recursively.
 
 To treat warnings as errors, run with the `--warnings-as-errors` flag:
 
 ```bash
-python3 .github/workflows/validate_repository.py --warnings-as-errors
+python3 .github/scripts/yaml-validation/validate_repository.py --warnings-as-errors
 ```
 
 CI additionally checks that every `blocked_by` issue in the validation manifest
@@ -142,5 +196,5 @@ remains open. With GitHub credentials available, run the same check locally:
 
 ```bash
 GITHUB_REPOSITORY=elong0527/yamaa \
-  python3 .github/workflows/check_validation_blockers.py
+  python3 .github/scripts/yaml-validation/check_validation_blockers.py
 ```

@@ -1,0 +1,169 @@
+import csv
+import importlib.util
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+from html.parser import HTMLParser
+from pathlib import Path
+
+
+HERE = Path(__file__).resolve().parent
+module_spec = importlib.util.spec_from_file_location("generate", HERE / "generate.py")
+generate = importlib.util.module_from_spec(module_spec)
+module_spec.loader.exec_module(generate)
+EXAMPLE = generate.EXAMPLES / "adam-adae-death-outcome"
+
+
+class DashboardContent(HTMLParser):
+    def __init__(self, page):
+        super().__init__(convert_charrefs=True)
+        self.cells = []
+        self.downloads = []
+        self.file_panes = []
+        self.tabs = []
+        self.code = []
+        self.sections = []
+        self.code_depth = 0
+        self.feed(page)
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag in {"section", "aside"}:
+            self.sections.append(attrs.get("id"))
+        if tag == "td":
+            self.cells.append(attrs["data-value"])
+        if tag == "a" and "download" in attrs:
+            self.downloads.append(attrs)
+        if "file-pane" in attrs.get("class", "").split():
+            self.file_panes.append(attrs)
+        if attrs.get("role") == "tab":
+            self.tabs.append(attrs)
+        if tag == "span":
+            if self.code_depth:
+                self.code_depth += 1
+            elif attrs.get("class") == "code-source":
+                self.code_depth = 1
+                self.code.append("")
+
+    def handle_endtag(self, tag):
+        if tag == "span" and self.code_depth:
+            self.code_depth -= 1
+
+    def handle_data(self, data):
+        if self.code_depth:
+            self.code[-1] += data
+
+
+class DashboardTests(unittest.TestCase):
+    def test_source_values_and_yaml_are_exact(self):
+        content = DashboardContent(generate.render_example(EXAMPLE).decode("ascii"))
+        expected_cells = []
+        for relative in ["input/ae.csv", "input/dm.csv", "expected/adae.csv"]:
+            path = EXAMPLE / relative
+            with path.open(newline="") as stream:
+                rows = list(csv.reader(stream))
+            expected_cells.extend(value for row in rows[1:] for value in row)
+        self.assertEqual(content.cells, expected_cells)
+        self.assertEqual(content.code, (EXAMPLE / "spec.yaml").read_text().splitlines())
+        self.assertEqual(content.sections, ["readme", "specification", "inputs", "outputs"])
+        self.assertEqual(content.downloads, [])
+        self.assertEqual(content.tabs, [])
+        self.assertEqual([pane["aria-label"] for pane in content.file_panes], ["input/ae.csv", "input/dm.csv", "expected/adae.csv"])
+        self.assertTrue(all("hidden" not in pane for pane in content.file_panes))
+
+    def test_bytes_do_not_depend_on_checkout_location_or_mtime(self):
+        original = generate.render_example(EXAMPLE)
+        with tempfile.TemporaryDirectory() as directory:
+            copied = Path(directory) / EXAMPLE.name
+            shutil.copytree(EXAMPLE, copied)
+            for path in copied.rglob("*"):
+                if path.is_file():
+                    path.touch()
+            self.assertEqual(generate.render_example(copied), original)
+        self.assertEqual(generate.render_example(EXAMPLE), original)
+
+    def test_source_edits_change_page_and_check_does_not_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            copied = folder / EXAMPLE.name
+            shutil.copytree(EXAMPLE, copied)
+            (copied / "README.md").write_text((copied / "README.md").read_text() + "\nAdditional explanation.\n")
+            self.assertNotEqual(generate.render_example(copied), generate.render_example(EXAMPLE))
+            output = folder / "output"
+            output.mkdir()
+            page = output / (EXAMPLE.name + ".html")
+            command = [sys.executable, str(HERE / "generate.py"), EXAMPLE.name, "--check", "--output-dir", str(output)]
+            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
+            self.assertFalse(page.exists())
+            complete = sorted(path.name for path in generate.EXAMPLES.iterdir() if (path / "spec.yaml").is_file() and (path / "README.md").is_file())
+            index = complete.index(EXAMPLE.name)
+            previous = complete[index - 1] if index else None
+            following = complete[index + 1] if index + 1 < len(complete) else None
+            page.write_bytes(generate.render_example(EXAMPLE, previous, following))
+            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 0)
+            page.write_bytes(b"outdated page")
+            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
+            self.assertEqual(page.read_bytes(), b"outdated page")
+
+    def test_markup_and_multiline_csv_values_are_preserved_as_data(self):
+        value = '<script>alert("unsafe")</script>\nA & B | C'
+        rendered = generate.render_table(["TEXT"], [[value]], "quoted.csv", set(), {})
+        self.assertNotIn("<script>", rendered)
+        self.assertEqual(DashboardContent(rendered).cells, [value])
+        _, readme = generate.render_readme('# Example\n\n<script>alert("unsafe")</script>\n\n[File](input/ae.csv)', "https://example.org/fixture")
+        self.assertNotIn("<script>", readme)
+        self.assertIn('href="https://example.org/fixture/input/ae.csv"', readme)
+
+    def test_negative_fixture_is_shown_without_repair(self):
+        example = generate.EXAMPLES / "negative-source-record-width"
+        page = generate.render_example(example).decode("ascii")
+        self.assertIn("raw CSV", page)
+        self.assertIn("Expected artifacts", page)
+        self.assertIn(generate.escape((example / "expected/error.yaml").read_text()), page)
+
+    def test_subject_identity_includes_study(self):
+        first = generate.subject_key({"STUDYID": "STUDY-A", "USUBJID": "001"})
+        second = generate.subject_key({"STUDYID": "STUDY-B", "USUBJID": "001"})
+        self.assertNotEqual(first, second)
+        self.assertEqual(generate.subject_key({"STUDYID": "STUDY-A"}), "")
+
+    def test_specification_controls_are_generated(self):
+        page = generate.render_example(EXAMPLE).decode("ascii")
+        self.assertIn('<span>Hide Spec</span>', page)
+        self.assertIn('role="separator" aria-label="Resize specification panel"', page)
+        self.assertIn('id="section-select"', page)
+        for section in ["datasets", "record_lookups", "output", "columns", "verifications"]:
+            self.assertIn(f'>{section}</option>', page)
+
+    def test_unterminated_csv_is_not_silently_repaired(self):
+        page = generate.render_example(generate.EXAMPLES / "negative-source-unterminated-quote").decode("ascii")
+        self.assertIn("raw CSV", page)
+
+    def test_neighbor_navigation_links_examples(self):
+        page = generate.render_example(EXAMPLE, "aaa-first", "zzz-last").decode("ascii")
+        self.assertIn('<a href="aaa-first.html" rel="prev">Previous example</a>', page)
+        self.assertIn('<a href="zzz-last.html" rel="next">Next example</a>', page)
+        self.assertIn('<a href="index.html">All examples</a>', page)
+        edges = generate.render_example(EXAMPLE, None, None).decode("ascii")
+        self.assertIn('<span class="is-disabled" aria-disabled="true">Previous example</span>', edges)
+        self.assertIn('<span class="is-disabled" aria-disabled="true">Next example</span>', edges)
+
+    def test_gallery_index_is_sorted_and_deterministic(self):
+        entries = [
+            ("zzz-one", "Zulu title", "Zulu"),
+            ("aaa-two", "Alpha title", "Alpha"),
+            ("mmm-three", "Mike title", "Alpha"),
+        ]
+        first = generate.render_index(entries)
+        self.assertEqual(first, generate.render_index(list(reversed(entries))))
+        text = first.decode("ascii")
+        self.assertLess(text.index("Alpha"), text.index("Zulu"))
+        self.assertLess(text.index("aaa-two.html"), text.index("mmm-three.html"))
+        for name in ("zzz-one", "aaa-two", "mmm-three"):
+            self.assertIn(f'href="{name}.html"', text)
+
+
+if __name__ == "__main__":
+    unittest.main()

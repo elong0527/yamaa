@@ -1,0 +1,73 @@
+version: "1.0"
+
+conditions:
+  aggregate_identifier_not_grouped: {rules: [R013], phases: [validation]}
+  aggregate_multiple_records: {rules: [R013], phases: [row_construction]}
+  all_or_none_failed: {rules: [R009], phases: [verification]}
+  ambiguous_baseline: {rules: [R007], phases: [derivation]}
+  ambiguous_dictionary: {rules: [R007], phases: [validation]}
+  conversion_failed: {rules: [R011], phases: [convert]}
+  dependency_cycle: {rules: [R001], phases: [validation]}
+  division_by_zero: {rules: [R010], phases: [derivation]}
+  duplicate_identifier: {rules: [R002, R015], phases: [validation]}
+  duplicate_key: {rules: [R005], phases: [output]}
+  duplicate_lookup_key: {rules: [R007], phases: [mapping]}
+  duplicate_order_term: {rules: [R005], phases: [validation]}
+  field_parse_failed: {rules: [R014], phases: [ingest]}
+  function_contract_mismatch: {rules: [R018], phases: [validation]}
+  implication_failed: {rules: [R009], phases: [verification]}
+  incomparable_range_types: {rules: [R015], phases: [validation]}
+  incomparable_sources: {rules: [R007], phases: [validation]}
+  incompatible_input_type: {rules: [R004, R007, R010, R013, R016], phases: [validation]}
+  incomplete_match_value: {rules: [R015], phases: [join]}
+  inheritance_cycle: {rules: [R017], phases: [validation]}
+  integer_overflow: {rules: [R010], phases: [derivation]}
+  internal_column_in_keys: {rules: [R005], phases: [validation]}
+  invalid_calendar_date: {rules: [R016], phases: [impute]}
+  invalid_clear: {rules: [R017], phases: [validation]}
+  invalid_date_text: {rules: [R016], phases: [impute]}
+  invalid_field_type: {rules: [R006], phases: [validation]}
+  invalid_parent_path: {rules: [R017], phases: [validation]}
+  invalid_predicate: {rules: [R004], phases: [validation]}
+  invalid_regex: {rules: [R022], phases: [validation]}
+  invalid_string_template: {rules: [R012], phases: [validation]}
+  invalid_text: {rules: [R019], phases: [ingest]}
+  length_failed: {rules: [R009], phases: [verification]}
+  ln_of_nonpositive: {rules: [R010], phases: [derivation]}
+  missing_entry_output: {rules: [R017], phases: [validation]}
+  missing_input: {rules: [R008], phases: [mapping]}
+  missing_key: {rules: [R005], phases: [output]}
+  missing_verification_id: {rules: [R009], phases: [validation]}
+  month_out_of_range: {rules: [R016], phases: [validation]}
+  multiple_matches: {rules: [R003, R008], phases: [join]}
+  not_missing_failed: {rules: [R009], phases: [verification]}
+  predicate_failed: {rules: [R009], phases: [verification]}
+  prohibited_construct: {rules: [R010, R013], phases: [validation]}
+  prohibited_function: {rules: [R010, R013], phases: [validation]}
+  qualified_identifier: {rules: [R010], phases: [validation]}
+  range_failed: {rules: [R009], phases: [verification]}
+  redundant_field_type: {rules: [R017], phases: [validation]}
+  regex_group_out_of_range: {rules: [R022], phases: [validation]}
+  resource_path_missing: {rules: [R021], phases: [validation]}
+  resource_path_not_regular_file: {rules: [R021], phases: [validation]}
+  resource_path_not_relative: {rules: [R021], phases: [validation]}
+  resource_path_parent_traversal: {rules: [R021], phases: [validation]}
+  resource_path_symlink: {rules: [R021], phases: [validation]}
+  resource_path_uri_scheme: {rules: [R021], phases: [validation]}
+  row_count_failed: {rules: [R009], phases: [verification]}
+  schema_version_mismatch: {rules: [R017], phases: [validation]}
+  source_field_name_duplicate: {rules: [R023], phases: [ingest]}
+  source_field_name_empty: {rules: [R023], phases: [ingest]}
+  source_key_length_mismatch: {rules: [R007], phases: [validation]}
+  source_profile_unknown: {rules: [R023], phases: [validation]}
+  source_quote_unterminated: {rules: [R023], phases: [ingest]}
+  source_record_width: {rules: [R023], phases: [ingest]}
+  sqrt_of_negative: {rules: [R010], phases: [derivation]}
+  undeclared_column: {rules: [R005], phases: [validation]}
+  unknown_field: {rules: [R002, R004, R010, R013, R014], phases: [validation]}
+  unmapped_key: {rules: [R008], phases: [mapping]}
+  unmapped_value: {rules: [R008], phases: [mapping]}
+  unmatched_key: {rules: [R015], phases: [join]}
+  unpaired_fields: {rules: [R015], phases: [validation]}
+  value_not_permitted: {rules: [R011, R016], phases: [validation]}
+  zero_offset: {rules: [R007], phases: [validation]}

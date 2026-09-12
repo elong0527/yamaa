@@ -151,6 +151,8 @@ and has these fields:
 - `phase`: the evaluation phase that rejects the run;
 - `condition`: a stable snake-case name for the failed condition;
 - `spec_paths`: one or more specification locations implicated in the failure;
+- `requirement`: the numbered rule requirement the example pins, such as
+  `R013-7`;
 - `context`: optional structured facts such as the dataset, offending keys,
   value, match count, or verification ID.
 
@@ -214,7 +216,7 @@ check merely to make the sample pass.
     python3 ../../.github/workflows/generate_example_gallery.py --check
 
     # every declared example column has a non-empty, human-readable label
-    ruby ../../.github/workflows/check_labels.rb
+    ruby ../../.github/scripts/examples/check_labels.rb
 
     # no schema vocabulary reached the data-contract portion of a README,
     # and every negative example has exactly one remediation section

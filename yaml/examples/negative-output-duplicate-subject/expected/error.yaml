@@ -2,6 +2,7 @@ phase: output
 condition: duplicate_key
 spec_paths:
   - keys
+requirement: R005-52
 context:
   duplicate_count: 1
   keys:
