@@ -4977,35 +4977,40 @@ bad_field: "what"
 
 class TestCsvProfile(unittest.TestCase):
     def parse_render(self, data):
-        return VALIDATOR.render_csv_profile(VALIDATOR.parse_csv_profile(data))
+        records = VALIDATOR.scan_records(data)
+        return VALIDATOR.render_records(records[0], records[1:]).decode('utf-8')
 
-    def test_missing_and_empty_string_are_distinct(self):
-        records = VALIDATOR.parse_csv_profile('A,B\n1,\n2,""\n')
-        self.assertEqual(records[1][1], (None, False))
-        self.assertEqual(records[2][1], ('', True))
+    def test_bare_and_quoted_empty_are_both_missing(self):
+        records = VALIDATOR.scan_records('A,B\n1,\n2,""\n')
+        self.assertIsNone(records[1][1])
+        self.assertIsNone(records[2][1])
 
     def test_quoted_field_carries_delimiter_quote_and_newline(self):
         data = 'A\n"x, y"\n"say ""hi"""\n"two\nlines"\n'
-        records = VALIDATOR.parse_csv_profile(data)
+        records = VALIDATOR.scan_records(data)
         self.assertEqual(
-            [record[0][0] for record in records[1:]],
+            [record[0] for record in records[1:]],
             ['x, y', 'say "hi"', 'two\nlines'],
         )
         self.assertEqual(self.parse_render(data), data)
 
     def test_carriage_return_terminator_is_rejected(self):
-        with self.assertRaises(ValueError) as caught:
-            VALIDATOR.parse_csv_profile('A,B\r\n1,2\r\n')
-        self.assertIn('U+000D', str(caught.exception))
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / 'adsl.csv'
+            path.write_bytes(b'A,B\r\n1,2\r\n')
+            errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', {})
+        self.assertTrue(any('U+000A' in error for error in errors), errors)
 
     def test_unterminated_final_record_is_rejected(self):
-        with self.assertRaises(ValueError) as caught:
-            VALIDATOR.parse_csv_profile('A,B\n1,2')
-        self.assertIn('U+000A', str(caught.exception))
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / 'adsl.csv'
+            path.write_bytes(b'A,B\n1,2')
+            errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', {})
+        self.assertTrue(any('U+000A' in error for error in errors), errors)
 
     def test_unterminated_quote_is_rejected(self):
         with self.assertRaises(ValueError):
-            VALIDATOR.parse_csv_profile('A,B\n1,"open\n')
+            VALIDATOR.scan_records('A,B\n1,"open\n')
 
     def test_needless_quoting_does_not_render_back(self):
         data = 'A,B\n"1",2\n'
@@ -5013,7 +5018,7 @@ class TestCsvProfile(unittest.TestCase):
 
     def test_zero_row_artifact_is_the_header_alone(self):
         data = 'STUDYID,USUBJID\n'
-        self.assertEqual(len(VALIDATOR.parse_csv_profile(data)), 1)
+        self.assertEqual(len(VALIDATOR.scan_records(data)), 1)
         self.assertEqual(self.parse_render(data), data)
 
     def test_float_text_omits_a_trailing_zero_decimal(self):
@@ -5120,12 +5125,12 @@ class TestCsvProfile(unittest.TestCase):
                 ],
             }
             errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', spec)
-        self.assertTrue(any('U+000D' in error for error in errors), errors)
+        self.assertTrue(any('U+000A' in error for error in errors), errors)
 
     def test_artifact_check_accepts_a_conforming_artifact(self):
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / 'adsl.csv'
-            path.write_bytes(b'STUDYID,COMMENT,AVAL\nS1,"has, comma",10\nS1,"",\n')
+            path.write_bytes(b'STUDYID,COMMENT,AVAL\nS1,"has, comma",10\nS1,,\n')
             spec = {
                 'output': {'profile': 'csv',
                            'columns': ['STUDYID', 'COMMENT', 'AVAL']},

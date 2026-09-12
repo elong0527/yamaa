@@ -7853,75 +7853,21 @@ BOM_UTF8 = '\ufeff'
 CANONICAL_INT = re.compile(r'0|-?[1-9][0-9]*')
 
 
-def parse_csv_profile(data: str):
-    """Parse R020's csv profile text into records of (text, quoted) fields.
-
-    A bare empty field is missing and parses to a text of None; a quoted
-    empty field is the collected empty string. Raises ValueError for text
-    the profile does not admit.
-    """
-    records = []
-    record = []
-    index = 0
-    size = len(data)
-    while index < size:
-        if data[index] == '"':
-            index += 1
-            chunks = []
-            while True:
-                if index >= size:
-                    raise ValueError('unterminated quoted field')
-                character = data[index]
-                if character == '"':
-                    if data[index + 1:index + 2] == '"':
-                        chunks.append('"')
-                        index += 2
-                        continue
-                    index += 1
-                    break
-                chunks.append(character)
-                index += 1
-            field = (''.join(chunks), True)
-        else:
-            start = index
-            while index < size and data[index] not in ',\n':
-                index += 1
-            raw = data[start:index]
-            if '"' in raw:
-                raise ValueError('a bare field carries U+0022')
-            if '\r' in raw:
-                raise ValueError('U+000D outside a quoted field')
-            field = (raw or None, False)
-        record.append(field)
-        if index >= size:
-            raise ValueError('the final record is not terminated by U+000A')
-        if data[index] == ',':
-            index += 1
-            continue
-        if data[index] != '\n':
-            raise ValueError('a quoted field is followed by ordinary text')
-        index += 1
-        records.append(record)
-        record = []
-    if record:
-        raise ValueError('the final record is not terminated by U+000A')
-    return records
-
-
-def render_csv_profile(records):
-    """Render records back under R020's exact quoting condition."""
-    lines = []
-    for record in records:
-        fields = []
-        for text, _quoted in record:
-            if text is None:
-                fields.append('')
-            elif text == '' or any(c in text for c in '",\r\n'):
-                fields.append('"' + text.replace('"', '""') + '"')
-            else:
-                fields.append(text)
-        lines.append(','.join(fields) + '\n')
-    return ''.join(lines)
+# R020's csv profile text. The runtime's `yamaa.io.csv` owns the profile:
+# `scan_records` reads records of text-or-missing under the unified
+# missing rule, and `render_records` writes the exact quoting condition.
+# This file owns no second dialect.
+try:
+    from yamaa.io.csv import (
+        CsvProfileFailure,
+        render_records,
+        scan_records,
+    )
+except ImportError as error:
+    raise SystemExit(
+        "validate_repository.py requires the yamaa package "
+        "(run: uv sync --project python --locked)"
+    ) from error
 
 
 def canonical_float_text(value: str, decimals=None):
@@ -8020,12 +7966,12 @@ def validate_csv_artifact(csv_path: Path, label: str, spec):
     if data.startswith(BOM_UTF8):
         return [f"ERROR: {label}: csv carries a byte-order mark"]
     try:
-        records = parse_csv_profile(data)
+        records = scan_records(data)
     except ValueError as exc:
         return [f"ERROR: {label}: csv: {exc}"]
     if not records:
         return [f"ERROR: {label}: csv carries no header record"]
-    if render_csv_profile(records) != data:
+    if render_records(records[0], records[1:]).decode('utf-8') != data:
         errors.append(
             f"ERROR: {label}: csv quoting is not the exact condition R020 "
             "states, or a record is not terminated by U+000A"
