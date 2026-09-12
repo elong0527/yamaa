@@ -1,4 +1,4 @@
-test_that("CSV ingestion treats bare and quoted empty as missing", {
+test_that("CSV ingestion preserves typeless text and empty provenance", {
   working_dir <- tempfile("sdtm-csv-ingestion-")
   config_dir <- file.path(working_dir, "config")
   output_dir <- file.path(working_dir, "output")
@@ -42,5 +42,5 @@ test_that("CSV ingestion treats bare and quoted empty as missing", {
   expect_true(all(datasets$DM$SUBJECT == "001"))
   expect_true(all(datasets$DM$SITE == "007"))
   expect_true(all(is.na(datasets$DM$BARE)))
-  expect_true(all(is.na(datasets$DM$QUOTED)))
+  expect_true(all(datasets$DM$QUOTED == ""))
 })
