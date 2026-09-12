@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:def="http://www.cdisc.org/ns/def/v2.1" xmlns:xlink="http://www.w3.org/1999/xlink" ODMVersion="1.3.2" FileType="Snapshot" FileOID="www.example.org/STUDY01/1/Define-XML_2.1" CreationDateTime="2026-09-11T00:00:00" Originator="Example Sponsor" SourceSystem="yamaa" SourceSystemVersion="1.0" def:Context="Submission">
+  <Study OID="STDY.STUDY01">
+    <GlobalVariables>
+      <StudyName>STUDY01</StudyName>
+      <StudyDescription>Example study demonstrating the Define-XML metadata contract</StudyDescription>
+      <ProtocolName>STUDY-01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.STUDY01.1" Name="Study STUDY01, Data Definitions" Description="Tabulation data definitions for STUDY01" def:DefineVersion="2.1.11">
+      <def:Standards>
+        <def:Standard OID="STD.SDTMIG" Name="SDTMIG" Type="IG" Version="3.4" Status="Final"/>
+        <def:Standard OID="STD.CT_SDTM" Name="CDISC/NCI" Type="CT" PublishingSet="SDTM" Version="2023-12-15" Status="Final"/>
+      </def:Standards>
+      <def:AnnotatedCRF>
+        <def:DocumentRef leafID="LF.acrf"/>
+      </def:AnnotatedCRF>
+      <def:SupplementalDoc>
+        <def:DocumentRef leafID="LF.csdrg"/>
+      </def:SupplementalDoc>
+      <ItemGroupDef OID="IG.DM" Name="DM" Domain="DM" Purpose="Tabulation" SASDatasetName="DM" Repeating="No" IsReferenceData="No" def:Structure="One record per subject" def:ArchiveLocationID="LF.DM" def:StandardOID="STD.SDTMIG" def:CommentOID="COM.DM">
+        <Description>
+          <TranslatedText xml:lang="en">Demographics</TranslatedText>
+        </Description>
+        <ItemRef ItemOID="IT.DM.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DM.DOMAIN" OrderNumber="2" Mandatory="Yes" Role="Identifier"/>
+        <ItemRef ItemOID="IT.DM.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" Role="Identifier" MethodOID="MT.DM.USUBJID"/>
+        <ItemRef ItemOID="IT.DM.SUBJID" OrderNumber="4" Mandatory="Yes" Role="Topic"/>
+        <ItemRef ItemOID="IT.DM.SITEID" OrderNumber="5" Mandatory="Yes" Role="Record Qualifier"/>
+        <ItemRef ItemOID="IT.DM.AGE" OrderNumber="6" Mandatory="No" Role="Record Qualifier"/>
+        <ItemRef ItemOID="IT.DM.AGEU" OrderNumber="7" Mandatory="No" Role="Variable Qualifier"/>
+        <ItemRef ItemOID="IT.DM.SEX" OrderNumber="8" Mandatory="Yes" Role="Record Qualifier"/>
+        <ItemRef ItemOID="IT.DM.COUNTRY" OrderNumber="9" Mandatory="Yes" Role="Record Qualifier"/>
+        <def:Class Name="SPECIAL PURPOSE"/>
+        <def:leaf ID="LF.DM" xlink:href="dm.csv">
+          <def:title>dm.csv</def:title>
+        </def:leaf>
+      </ItemGroupDef>
+      <ItemDef OID="IT.DM.STUDYID" Name="STUDYID" DataType="text" Length="20" SASFieldName="STUDYID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.DOMAIN" Name="DOMAIN" DataType="text" Length="2" SASFieldName="DOMAIN">
+        <Description>
+          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
+        </Description>
+        <CodeListRef CodeListOID="CL.DOMAIN"/>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.USUBJID" Name="USUBJID" DataType="text" Length="30" SASFieldName="USUBJID">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.SUBJID" Name="SUBJID" DataType="text" Length="10" SASFieldName="SUBJID">
+        <Description>
+          <TranslatedText xml:lang="en">Subject Identifier for the Study</TranslatedText>
+        </Description>
+        <def:Origin Type="Collected" Source="Investigator">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.DM.SITEID" Name="SITEID" DataType="text" Length="10" SASFieldName="SITEID">
+        <Description>
+          <TranslatedText xml:lang="en">Study Site Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Collected" Source="Investigator">
+          <def:DocumentRef leafID="LF.acrf"/>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.DM.AGE" Name="AGE" DataType="integer" Length="3" SASFieldName="AGE">
+        <Description>
+          <TranslatedText xml:lang="en">Age</TranslatedText>
+        </Description>
+        <def:Origin Type="Collected" Source="Investigator">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.DM.AGEU" Name="AGEU" DataType="text" Length="5" SASFieldName="AGEU" def:CommentOID="COM.DM.AGEU">
+        <Description>
+          <TranslatedText xml:lang="en">Age Units</TranslatedText>
+        </Description>
+        <CodeListRef CodeListOID="CL.AGEU"/>
+        <def:Origin Type="Assigned" Source="Sponsor"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.SEX" Name="SEX" DataType="text" Length="1" SASFieldName="SEX">
+        <Description>
+          <TranslatedText xml:lang="en">Sex</TranslatedText>
+        </Description>
+        <CodeListRef CodeListOID="CL.SEX"/>
+        <def:Origin Type="Collected" Source="Investigator">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.DM.COUNTRY" Name="COUNTRY" DataType="text" Length="3" SASFieldName="COUNTRY">
+        <Description>
+          <TranslatedText xml:lang="en">Country</TranslatedText>
+        </Description>
+        <CodeListRef CodeListOID="CL.COUNTRY"/>
+        <def:Origin Type="Collected" Source="Investigator">
+          <def:DocumentRef leafID="LF.acrf">
+            <def:PDFPageRef PageRefs="1" Type="PhysicalRef"/>
+          </def:DocumentRef>
+        </def:Origin>
+      </ItemDef>
+      <CodeList OID="CL.DOMAIN" Name="Domain Abbreviation (DM)" DataType="text" def:StandardOID="STD.CT_SDTM" SASFormatName="$DMDOMAI">
+        <CodeListItem CodedValue="DM">
+          <Decode>
+            <TranslatedText xml:lang="en">Demographics</TranslatedText>
+          </Decode>
+          <Alias Context="nci:ExtCodeID" Name="C49572"/>
+        </CodeListItem>
+        <Alias Context="nci:ExtCodeID" Name="C66734"/>
+      </CodeList>
+      <CodeList OID="CL.AGEU" Name="Age Unit" DataType="text" def:StandardOID="STD.CT_SDTM">
+        <EnumeratedItem CodedValue="YEARS">
+          <Alias Context="nci:ExtCodeID" Name="C29848"/>
+        </EnumeratedItem>
+        <Alias Context="nci:ExtCodeID" Name="C66781"/>
+      </CodeList>
+      <CodeList OID="CL.SEX" Name="Sex" DataType="text" def:StandardOID="STD.CT_SDTM" SASFormatName="$SEX">
+        <CodeListItem CodedValue="F">
+          <Decode>
+            <TranslatedText xml:lang="en">Female</TranslatedText>
+          </Decode>
+          <Alias Context="nci:ExtCodeID" Name="C16576"/>
+        </CodeListItem>
+        <CodeListItem CodedValue="M">
+          <Decode>
+            <TranslatedText xml:lang="en">Male</TranslatedText>
+          </Decode>
+          <Alias Context="nci:ExtCodeID" Name="C20197"/>
+        </CodeListItem>
+        <CodeListItem CodedValue="U">
+          <Decode>
+            <TranslatedText xml:lang="en">Unknown</TranslatedText>
+          </Decode>
+          <Alias Context="nci:ExtCodeID" Name="C17998"/>
+        </CodeListItem>
+        <Alias Context="nci:ExtCodeID" Name="C66731"/>
+      </CodeList>
+      <CodeList OID="CL.COUNTRY" Name="Country Codes" DataType="text" def:StandardOID="STD.CT_SDTM">
+        <ExternalCodeList Dictionary="ISO 3166" Version="2020" href="https://www.iso.org/iso-3166-country-codes.html"/>
+      </CodeList>
+      <MethodDef OID="MT.DM.USUBJID" Name="DM.USUBJID" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Study identifier, site identifier, and subject identifier joined by hyphens.</TranslatedText>
+        </Description>
+      </MethodDef>
+      <def:CommentDef OID="COM.DM">
+        <Description>
+          <TranslatedText xml:lang="en">Demographics are described in section 2.1 of the reviewer's guide.</TranslatedText>
+        </Description>
+        <def:DocumentRef leafID="LF.csdrg"/>
+      </def:CommentDef>
+      <def:CommentDef OID="COM.DM.AGEU">
+        <Description>
+          <TranslatedText xml:lang="en">Defaulted to YEARS because age is collected in whole years.</TranslatedText>
+        </Description>
+      </def:CommentDef>
+      <def:leaf ID="LF.acrf" xlink:href="acrf.pdf">
+        <def:title>Annotated Case Report Form</def:title>
+      </def:leaf>
+      <def:leaf ID="LF.csdrg" xlink:href="csdrg.pdf">
+        <def:title>Study Data Reviewer's Guide</def:title>
+      </def:leaf>
+    </MetaDataVersion>
+  </Study>
+</ODM>

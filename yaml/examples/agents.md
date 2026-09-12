@@ -17,8 +17,10 @@ tracker, one work item per root cause.
         README.md
         spec.yaml | spec_<variant>.yaml ...
         layers/*.yaml                       # when the entry inherits
+        define.yaml                         # when the entry generates a document
         input/*.csv
         expected/<domain>.csv
+        expected/define.xml                 # when the entry generates a document
         expected/resolved[_<variant>].yaml  # when the entry inherits
 
 Use `spec.yaml` for one specification. Use one or more `spec_<variant>.yaml`

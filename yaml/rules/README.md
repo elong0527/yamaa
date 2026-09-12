@@ -32,6 +32,9 @@ semantics, error behavior, and representative examples are complete.
 | R021 | [Project resource resolution](R021-project-resource-resolution.md) | normative | The approved project root, written path form, readable file kinds, content identity |
 | R022 | [Regular expressions](R022-regular-expressions.md) | normative | The pinned engine and flag set, full-match and search behavior per consumer, capture-group numbering |
 | R023 | [Delimited source profile](R023-delimited-source.md) | normative | The `csv` source syntax: encoding, records and fields, header shape, and delivered quoting |
+| R024 | [Submission metadata](R024-submission-metadata.md) | normative | Governed dataset and column metadata: standard families, data type, length, core and mandatory, origin and what the graph refutes, methods, comments |
+| R025 | [Controlled terminology](R025-controlled-terminology.md) | normative | The codelist object: identity, values, extensibility, external form, what a binding enforces, and agreement with `allowed_values` |
+| R026 | [Define-XML 2.1 composition and serialization](R026-define-xml.md) | normative | The study document, composition, generated identifiers, element mapping and order, bytes, publication, and the deferred constructs |
 
 ## Rule admission
 

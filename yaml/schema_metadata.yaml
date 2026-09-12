@@ -1,0 +1,247 @@
+version: "1.0"
+
+# Governed submission metadata. R024 defines what each field means, which
+# combinations a standard admits, and what the derivation graph refutes.
+# R025 owns the codelist a binding names, and R026 composes these declarations
+# with a study document into one Define-XML 2.1 document.
+#
+# Every identifier here names an object the study document declares. A
+# specification validates on its own with the names unresolved; R026 resolves
+# them when the specification joins a document.
+
+submission_dataset_class:
+    - label:
+        type: str
+        required: true
+        min_length: 1
+        description: Description of the dataset as a whole, distinct from the domain it derives.
+    - class:
+        type: dataset_class_name
+        required: true
+        description: General observation class of the dataset.
+    - subclass:
+        type: dataset_subclass_name
+        required: false
+        description: Observation subclass, declared when the standard defines one for the dataset.
+    - structure:
+        type: str
+        required: true
+        min_length: 1
+        description: Level of detail one record represents, stated in prose.
+    - repeating:
+        type: bool
+        required: true
+        description: Whether the dataset may carry more than one record per subject or pool.
+    - reference_data:
+        type: bool
+        default: false
+        description: Whether the dataset carries reference data rather than subject data.
+    - domain:
+        type: domain_name
+        required: false
+        description: Domain the dataset belongs to; defaults to the specification's domain.
+    - comment:
+        type: submission_comment
+        required: false
+        description: Sponsor comment carried with the dataset definition.
+
+submission_column_class:
+    - core:
+        type: core_designation
+        required: false
+        description: Standard core designation; R024 states which family declares it and what it derives.
+    - mandatory:
+        type: bool
+        required: false
+        description: Whether the column must carry a value; R024 states when it is derived and when declared.
+    - role:
+        type: str
+        required: false
+        min_length: 1
+        description: Role the column plays in its dataset, in the vocabulary its standard publishes.
+    - data_type:
+        type: define_data_type
+        required: false
+        description: Submission data type; R024 defaults it from the declared column type.
+    - length:
+        type: int
+        required: false
+        description: Maximum expected value length; R024 derives it from a max_length verification and binds it to the constraint that enforces it.
+    - significant_digits:
+        type: int
+        required: false
+        description: Digits after the decimal point; required with a float submission data type.
+    - display_format:
+        type: str
+        required: false
+        min_length: 1
+        description: Presentation format carried for a reader; it never changes a computed value.
+    - codelist:
+        type: codelist_id
+        required: false
+        description: Codelist whose values this column carries; R025 defines the binding.
+    - origin:
+        type: submission_origin_class
+        required: true
+        description: Declared provenance of the value; R024 states what the graph refutes.
+    - method:
+        type: submission_method
+        required: false
+        description: Algorithm producing the value; R024 requires it for a derived origin.
+    - comment:
+        type: submission_comment
+        required: false
+        description: Sponsor comment carried with the column definition.
+
+submission_origin_class:
+    - type:
+        type: origin_type
+        required: true
+        description: How the value originated.
+    - source:
+        type: origin_source
+        required: false
+        description: Party responsible for the value; R024 closes the pairs each family admits and derives it where one fixes it.
+    - description:
+        type: str
+        required: false
+        min_length: 1
+        description: Explanatory text, required where R024 states the origin is incomplete without it.
+    - documents:
+        type: "list[document_reference]"
+        required: false
+        description: Supporting documents evidencing the origin; R024 derives the annotated case report form reference when a collected origin omits them.
+
+submission_method_class:
+    - name:
+        type: str
+        required: false
+        min_length: 1
+        description: Name of the algorithm; R026 derives one when it is omitted.
+    - type:
+        type: method_type
+        default: Computation
+        description: Kind of algorithm the method describes.
+    - description:
+        type: str
+        required: true
+        min_length: 1
+        description: Statement of the algorithm in prose.
+    - expression:
+        type: formal_expression_class
+        required: false
+        description: Machine-readable code the method is also stated in.
+    - documents:
+        type: "list[document_reference]"
+        required: false
+        description: Supporting documents carrying the full algorithm.
+
+submission_comment_class:
+    - text:
+        type: str
+        required: true
+        min_length: 1
+        description: Text of the comment.
+    - documents:
+        type: "list[document_reference]"
+        required: false
+        description: Supporting documents the comment refers to.
+
+formal_expression_class:
+    - context:
+        type: str
+        required: true
+        min_length: 1
+        description: Language the code is written in, named for a reader that evaluates it.
+    - code:
+        type: str
+        required: true
+        min_length: 1
+        description: The code itself; nothing in this language parses or executes it.
+
+document_reference_class:
+    - document:
+        type: document_id
+        required: true
+        description: Supporting document this reference names.
+    - pages:
+        type: page_reference_class
+        required: false
+        description: Place within the document the reference points at.
+
+page_reference_class:
+    - type:
+        type: str
+        required: true
+        values: [PhysicalRef, NamedDestination]
+        description: Whether refs are physical page numbers or named destinations.
+    - refs:
+        type: str
+        required: true
+        min_length: 1
+        description: Space-separated page numbers or destination names.
+    - title:
+        type: str
+        required: false
+        min_length: 1
+        description: Label a reader sees in place of the raw reference.
+
+submission_comment:
+    type: [str, submission_comment_class]
+    description: Comment text, or text with the documents it refers to.
+
+submission_method:
+    type: [str, submission_method_class]
+    description: Algorithm stated in prose, or with its name, code, and documents.
+
+document_reference:
+    type: [document_id, document_reference_class]
+    description: Document identifier, or an identifier with the place it points at.
+
+core_designation:
+    type: str
+    values: [Req, Exp, Perm]
+    description: Required, expected, or permissible in the dataset's standard.
+
+origin_type:
+    type: str
+    values: [Assigned, Collected, Derived, Not Available, Other, Predecessor,
+        Protocol]
+    description: Define-XML 2.1 origin type.
+
+origin_source:
+    type: str
+    values: [Investigator, Sponsor, Subject, Vendor]
+    description: Define-XML 2.1 origin source.
+
+method_type:
+    type: str
+    values: [Computation, Imputation]
+    description: Kind of algorithm a method describes.
+
+define_data_type:
+    type: str
+    values: [text, integer, float, date, datetime, time, partialDate,
+        partialTime, partialDatetime, incompleteDate, incompleteTime,
+        incompleteDatetime, durationDatetime, intervalDatetime, URI]
+    description: Submission data type a column is represented by; R024 closes
+        which ones each declared column type admits.
+
+dataset_class_name:
+    type: str
+    values: [ADAM OTHER, BASIC DATA STRUCTURE, DEVICE LEVEL ANALYSIS DATASET,
+        EVENTS, FINDINGS, FINDINGS ABOUT, INTERVENTIONS,
+        MEDICAL DEVICE BASIC DATA STRUCTURE,
+        MEDICAL DEVICE OCCURRENCE DATA STRUCTURE, OCCURRENCE DATA STRUCTURE,
+        REFERENCE DATA STRUCTURE, RELATIONSHIP, SPECIAL PURPOSE,
+        STUDY REFERENCE, SUBJECT LEVEL ANALYSIS DATASET, TRIAL DESIGN]
+    description: General observation class, in the exact case Define-XML 2.1
+        publishes.
+
+dataset_subclass_name:
+    type: str
+    values: [ADVERSE EVENT, MEDICAL DEVICE TIME-TO-EVENT,
+        NON-COMPARTMENTAL ANALYSIS, POPULATION PHARMACOKINETIC ANALYSIS,
+        TIME-TO-EVENT]
+    description: Observation subclass, in the exact case Define-XML 2.1
+        publishes.

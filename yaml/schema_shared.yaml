@@ -54,3 +54,15 @@ function_value:
         - literal_value
         - function_date_literal_class
         - function_datetime_literal_class
+
+codelist_id:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: Identifier of a codelist declared by the study document R026
+        defines.
+
+document_id:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: Identifier of a supporting document declared by the study
+        document R026 defines.
