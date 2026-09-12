@@ -1,18 +1,27 @@
 # Example dashboards
 
-This iteration creates one self-contained HTML example:
-`docs/examples/adam-adae-death-outcome.html`. It is generated from `README.md`,
-`spec.yaml`, and regular files under `input/` and `expected/`. Edit source fixtures or the shared
-template, stylesheet, and script here, then regenerate; do not edit generated
-HTML manually.
+This iteration generates one self-contained HTML page per example plus an
+`index.html` gallery, all under `docs/examples/`. Each page is generated from
+its `README.md`, `spec.yaml`, and regular files under `input/` and `expected/`.
+Edit source fixtures or the shared template, stylesheet, and script here, then
+regenerate; do not edit generated HTML manually.
 
-From the repository root, generate the pilot:
+From the repository root, generate every example and the gallery:
+
+```sh
+uv run --with-requirements .github/scripts/example-docs/requirements.txt python .github/scripts/example-docs/generate.py --all
+```
+
+With explicit example names, regenerate only those dashboards; each keeps the
+previous and next links of the full gallery, and the gallery itself is left
+untouched:
 
 ```sh
 uv run --with-requirements .github/scripts/example-docs/requirements.txt python .github/scripts/example-docs/generate.py adam-adae-death-outcome
 ```
 
-With no example names, regenerate the existing dashboard in `docs/examples/`.
+With no example names, regenerate the dashboards already present in
+`docs/examples/`, plus the gallery when `index.html` is among them.
 `--output-dir PATH` changes the output directory for a temporary preview.
 
 Check that existing dashboards match the current fixtures and template:
@@ -48,8 +57,10 @@ readable with JavaScript disabled and when printing.
 The Example dashboards workflow runs on relevant pushes and pull requests. It
 generates every repository example twice under different time zones and Python
 hash seeds, compares the resulting directories byte for byte, checks that the
-committed pilot is current, and uploads the complete generated set as the
-`yamaa-example-dashboards` workflow artifact.
+committed pages and gallery are current, and uploads the complete generated
+set as the `yamaa-example-dashboards` workflow artifact. The gallery
+`docs/examples/index.html` is served as the directory index by GitHub Pages,
+so every page is reachable from the site without leaving the examples.
 
 The generator displays expected artifacts; it does not execute YAMAA or claim
 that expected output was reproduced. YAML is parsed only for display metadata.

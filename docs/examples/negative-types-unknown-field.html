@@ -1,0 +1,347 @@
+<!doctype html>
+<!-- Generated from yaml/examples/negative-types-unknown-field. Edit the source files or generator. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="ADaM ADEX: reject a total over a field the source does not have: README, inputs, expected output, and YAML specification.">
+  <title>ADaM ADEX: reject a total over a field the source does not have | YAMAA examples</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230c5e4b'/%3E%3Cpath d='m8 8 8 10 8-10M16 18v7' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+  <style>:root {
+  color-scheme: light;
+  --ink: #18332e;
+  --muted: #566b65;
+  --green: #0c5e4b;
+  --line: #d5e1dc;
+  --surface: #fff;
+  --derived: #eef7f2;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 16px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--ink); background: #f0f4f2; }
+a { color: var(--green); text-underline-offset: 3px; }
+button, select { font: inherit; cursor: pointer; }
+button:focus-visible, a:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 3px solid #227bce; outline-offset: 3px; }
+[hidden] { display: none !important; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip-link { position: absolute; top: -100px; left: 20px; z-index: 10; padding: 12px; background: white; }
+.skip-link:focus { top: 10px; }
+.page-header { padding: 14px 28px 18px; border-top: 4px solid var(--green); background: var(--surface); border-bottom: 1px solid var(--line); }
+.brand-row, .title-row, .comparison-bar, .panel-header, .section-header, .file-heading, .page-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 750; font-size: 15px; letter-spacing: .03em; }
+.brand-mark { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; background: var(--green); color: white; font-size: 18px; }
+.brand-separator { color: #9aaba4; font-weight: 400; margin: 0 5px; }
+.brand-location { font-size: 14px; font-weight: 450; letter-spacing: 0; color: var(--muted); }
+.source-link { font-size: 14px; text-decoration: none; white-space: nowrap; }
+.source-link:hover { text-decoration: underline; }
+.title-row { margin-top: 18px; align-items: flex-end; }
+.title-block { max-width: 900px; min-width: 0; }
+.eyebrow { margin: 0 0 6px; color: var(--green); font-size: 12px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+h1 { margin: 0; font-size: clamp(24px, 2.1vw, 32px); line-height: 1.2; font-weight: 650; letter-spacing: -.025em; }
+.metrics { display: flex; gap: 24px; margin: 0; padding: 0 4px 1px 20px; flex-shrink: 0; }
+.metrics div { display: flex; flex-direction: column-reverse; gap: 3px; }
+.metrics dt { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.metrics dd { margin: 0; font-size: 26px; line-height: 1.1; font-weight: 650; font-variant-numeric: tabular-nums; }
+.dashboard { padding: 20px 28px 0; }
+.panel { min-width: 0; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.panel-header { min-height: 46px; padding: 11px 18px; border-bottom: 1px solid var(--line); gap: 10px; }
+h2 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -.015em; }
+.panel-caption { color: var(--muted); font-size: 13px; text-align: right; }
+.prose { padding: 16px 22px; font-size: 16px; line-height: 1.6; columns: 2; column-gap: 40px; }
+.prose p { margin: 0 0 12px; break-inside: avoid; }
+.prose p:last-child { margin-bottom: 0; }
+.prose ul, .prose ol { margin: 0 0 12px; padding-left: 22px; }
+.prose li { margin: 0 0 9px; padding-left: 3px; break-inside: avoid; }
+.prose li::marker { color: #4c8a73; }
+.prose h2, .prose h3 { margin: 18px 0 10px; line-height: 1.4; break-after: avoid; }
+.prose h1 { font-size: 20px; }
+.prose blockquote { margin: 16px 0; border-left: 3px solid #8cb6a3; padding-left: 15px; color: var(--muted); }
+code, .filename, .data-table th { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+.prose code { color: var(--green); background: var(--derived); border-radius: 3px; padding: 2px 4px; font-size: .86em; }
+.prose pre { padding: 12px; overflow: auto; background: #f5f8f6; }
+.prose pre code { padding: 0; background: none; }
+.comparison-bar { position: sticky; top: 0; z-index: 2; min-height: 60px; padding: 12px 0; background: #f0f4f2; }
+.sidebar-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; border: 1px solid #bdcec5; border-radius: 5px; padding: 6px 12px; background: white; color: var(--green); font-size: 14px; font-weight: 550; white-space: nowrap; }
+.sidebar-toggle:hover { background: var(--derived); }
+.subject-control { display: flex; align-items: center; gap: 10px; margin-left: auto; font-size: 14px; }
+.subject-control label { color: var(--muted); white-space: nowrap; }
+select { min-height: 36px; max-width: 100%; border: 1px solid #bdcec5; border-radius: 5px; padding: 4px 24px 4px 9px; color: var(--ink); background: white; font-size: 14px; }
+.workbench { --spec-width: clamp(260px, 23vw, 350px); display: grid; grid-template-columns: var(--spec-width) 20px minmax(0, 1fr); align-items: start; }
+.workbench.without-sidebar { grid-template-columns: minmax(0, 1fr); }
+.workbench.without-sidebar .panel-resizer { display: none; }
+.panel-resizer { position: sticky; top: 60px; display: grid; place-items: center; width: 20px; height: min(680px, calc(100dvh - 80px)); cursor: col-resize; touch-action: none; }
+.panel-resizer::before { content: ""; width: 2px; height: 54px; border-radius: 2px; background: #b8c9c1; transition: width .12s ease, background .12s ease; }
+.panel-resizer:hover::before, .panel-resizer:focus-visible::before, .panel-resizer.is-resizing::before { width: 4px; background: var(--green); }
+body.is-resizing { cursor: col-resize; user-select: none; }
+.datasets { min-width: 0; display: grid; gap: 22px; }
+.section-header { min-height: 36px; margin-bottom: 10px; }
+.files-grid { display: grid; grid-template-columns: var(--dataset-columns, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.file-heading { min-height: 42px; padding: 10px 14px; gap: 8px; }
+.filename { margin: 0; font-size: 13px; font-weight: 550; color: var(--muted); overflow-wrap: anywhere; }
+.file-count { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.table-scroll { overflow: auto; padding-bottom: 3px; scrollbar-width: thin; scrollbar-color: #bacbc1 transparent; }
+.data-table { border-collapse: separate; border-spacing: 0; width: 100%; color: #223d34; font-size: 14px; font-variant-numeric: tabular-nums; }
+.data-table th { text-align: left; padding: 9px 9px; border-top: 1px solid #e5ece7; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 550; background: #f6f8f7; white-space: nowrap; }
+.data-table td { border-bottom: 1px solid #e5ece7; padding: 9px 9px; white-space: nowrap; height: 36px; }
+.data-table th:first-child, .data-table td:first-child { padding-left: 14px; }
+.data-table th:last-child, .data-table td:last-child { padding-right: 14px; }
+.data-table tr:last-child td { border-bottom: 0; }
+.data-table th.derived, .data-table td.derived { background: var(--derived); }
+.data-table th.derived { color: var(--green); border-top-color: #c8dfd1; }
+.data-table tr.is-selected td { background: #d9edde; border-bottom-color: #bfd8c6; }
+.data-table tr.is-selected td:first-child { box-shadow: inset 3px 0 var(--green); }
+.subject-button { padding: 0; border: 0; background: transparent; color: inherit; font-size: inherit; text-align: left; }
+body.has-js .subject-button { color: var(--green); text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 4px; }
+.subject-button:hover { text-decoration-style: solid; }
+.subject-button[aria-pressed="true"] { font-weight: 750; }
+.missing { color: #7c8983; }
+.no-rows { margin: 18px; color: var(--muted); }
+.data-legend { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 11px 2px; font-size: 12px; color: var(--muted); }
+.data-legend > span:first-child { display: flex; align-items: center; gap: 7px; }
+.derived-swatch { display: inline-block; width: 10px; height: 10px; border: 1px solid #b5d3c1; background: var(--derived); border-radius: 2px; }
+.schema-panel { position: sticky; top: 60px; display: flex; flex-direction: column; height: min(680px, calc(100dvh - 80px)); min-height: 200px; }
+.schema-panel h2 { font-size: 16px; }
+.schema-panel .panel-header { flex-shrink: 0; padding-left: 14px; padding-right: 14px; }
+.code-toolbar { display: flex; min-height: 48px; padding: 6px 12px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.code-toolbar select { width: 100%; }
+.code-scroll { position: relative; flex: 1; min-height: 0; overflow: auto; padding: 12px 0 18px; background: #f8faf9; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #bacbc1 transparent; }
+.code-scroll pre { margin: 0; font-size: 14px; line-height: 1.65; tab-size: 2; }
+.code-line { display: block; width: max-content; min-width: 100%; padding-right: 18px; }
+.line-number { position: sticky; left: 0; display: inline-block; width: 40px; padding-right: 10px; text-align: right; color: #85948c; user-select: none; background: #f8faf9; font-size: 12px; }
+.yaml-key { color: #125cad; }
+.yaml-string { color: #35733a; }
+.yaml-literal { color: #995213; }
+.code-line.is-target { background: #deeddf; }
+.plain-file { margin: 0; padding: 10px 18px 18px; overflow: auto; font-size: 14px; line-height: 1.6; }
+.page-footer { padding: 16px 28px; color: #64766b; font-size: 12px; gap: 10px; }
+.example-nav { display: flex; align-items: center; gap: 12px; }
+.example-nav a { color: #0c5e4b; }
+.example-nav .is-disabled { color: #a5b3ab; }
+@media (max-width: 1000px) {
+  .metrics { gap: 16px; padding-left: 8px; }
+  .workbench { --spec-width: 260px; }
+  .files-grid { gap: 10px; }
+  .dashboard { padding: 16px 18px 0; }
+}
+@media (max-width: 799px) {
+  .workbench { grid-template-columns: minmax(0, 1fr); }
+  .panel-resizer { display: none; }
+  .schema-panel { position: static; height: 350px; }
+  .prose { columns: 1; }
+  .title-row { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .metrics { padding: 0; gap: 28px; }
+}
+@media (max-width: 599px) {
+  .page-header { padding: 14px 16px 18px; }
+  .brand-location, .brand-separator { display: none; }
+  h1 { font-size: 25px; }
+  .dashboard { padding: 12px 12px 0; }
+  .prose { padding: 14px 18px; }
+  .comparison-bar { gap: 8px; flex-wrap: wrap; }
+  .subject-control { gap: 6px; }
+  .subject-control label { font-size: 12px; }
+  .sidebar-toggle { padding-left: 8px; padding-right: 8px; }
+  .files-grid { grid-template-columns: minmax(0, 1fr); }
+  .page-footer { flex-direction: column; align-items: flex-start; padding: 14px 16px; overflow-wrap: anywhere; }
+}
+@media print {
+  body { background: white; }
+  .dashboard { padding: 0; }
+  .comparison-bar, .code-toolbar, .panel-resizer, .page-footer { display: none !important; }
+  .workbench { display: block; }
+  .schema-panel, .schema-panel[hidden] { position: static; display: block !important; height: auto; margin: 16px 0; }
+  .panel, .code-scroll, .table-scroll { overflow: visible; }
+  .panel { break-inside: avoid; }
+  .datasets { gap: 16px; }
+}
+</style>
+</head>
+<body>
+  <a class="skip-link" href="#readme">Skip to example</a>
+  <header class="page-header">
+    <div class="brand-row">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">Y</span> YAMAA <span class="brand-separator">/</span> <span class="brand-location">Example explorer</span></div>
+      <a class="source-link" href="https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-types-unknown-field">Example source <span aria-hidden="true">&#8599;</span></a>
+    </div>
+    <div class="title-row">
+      <div class="title-block"><p class="eyebrow">ADaM ADEX</p><h1>Reject a total over a field the source does not have</h1></div>
+      <dl class="metrics"><div><dt>input files</dt><dd>2</dd></div><div><dt>subjects</dt><dd>1</dd></div><div><dt>expected files</dt><dd>1</dd></div></dl>
+    </div>
+  </header>
+  <main class="dashboard" aria-label="Example dashboard">
+    <section id="readme" class="panel readme-panel" aria-labelledby="readme-heading">
+      <header class="panel-header"><h2 id="readme-heading">README</h2><span class="panel-caption">What this example means</span></header>
+      <div class="prose" aria-label="README content"><p>This example uses a subject-treatment inventory with its component exposure
+records to attempt one record per subject and treatment:</p>
+<ul>
+<li><code>DOSECUM</code> is the total dose administered across the exposure records.</li>
+</ul>
+<p>The exposure records are described as carrying a numeric field they do not
+have, and the field they do carry is left as text. Ignoring the description
+would total text, and applying it to the similarly named field would guess
+which one was meant, so the run must fail and no artifact is accepted.</p>
+<h2>How to fix</h2>
+<p>Correct the field name in the dataset type declaration so it names the column
+that actually exists:</p>
+<pre><code class="language-yaml">datasets:
+  TRT: input/subject_treatment.csv
+  EX:
+    path: input/ex.csv
+    types:
+      EXDOSE: float
+</code></pre>
+<p>The qualified aggregate can then resolve <code>EX.EXDOSE</code> as numeric.</p>
+</div>
+    </section>
+    <div class="comparison-bar">
+      <button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-controls="specification" aria-expanded="true" hidden><svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1.5" y="2.5" width="15" height="13" rx="2" stroke="currentColor"/><path d="M6.5 3v12" stroke="currentColor"/></svg><span>Hide Spec</span></button>
+      <div class="subject-control" hidden>
+        <label for="subject-select">Highlight subject</label>
+        <select id="subject-select"><option value="">All subjects</option><option value="[&quot;PILOT7&quot;,&quot;P7-631&quot;]">P7-631</option></select>
+      </div>
+      <span id="selection-status" class="visually-hidden" role="status" aria-live="polite"></span>
+    </div>
+    <div class="workbench">
+      <aside id="specification" class="panel schema-panel" aria-labelledby="schema-heading">
+        <header class="panel-header"><h2 id="schema-heading">YAML specification</h2><span class="panel-caption">36 lines</span></header>
+        <div class="code-toolbar"><label class="visually-hidden" for="section-select">Jump to YAML section</label><select id="section-select" hidden><option value="">Jump to section</option><option value="yaml-line-1">schema_version</option><option value="yaml-line-2">domain</option><option value="yaml-line-3">datasets</option><option value="yaml-line-6">base</option><option value="yaml-line-7">keys</option><option value="yaml-line-9">output</option><option value="yaml-line-13">columns</option></select></div>
+        <div class="code-scroll" tabindex="0" aria-label="Complete YAML specification"><pre><code><span class="code-line" id="yaml-line-1"><span class="line-number" aria-hidden="true">1</span><span class="code-source"><span class="yaml-key">schema_version</span>: <span class="yaml-string">&quot;1.0&quot;</span></span></span><span class="code-line" id="yaml-line-2"><span class="line-number" aria-hidden="true">2</span><span class="code-source"><span class="yaml-key">domain</span>: ADEX</span></span><span class="code-line" id="yaml-line-3"><span class="line-number" aria-hidden="true">3</span><span class="code-source"><span class="yaml-key">datasets</span>:</span></span><span class="code-line" id="yaml-line-4"><span class="line-number" aria-hidden="true">4</span><span class="code-source">  <span class="yaml-key">TRT</span>: input/subject_treatment.csv</span></span><span class="code-line" id="yaml-line-5"><span class="line-number" aria-hidden="true">5</span><span class="code-source">  <span class="yaml-key">EX</span>: {<span class="yaml-key">path</span>: input/ex.csv, <span class="yaml-key">types</span>: {<span class="yaml-key">EXDOSE</span>: float, <span class="yaml-key">EXDOSEN</span>: float}}</span></span><span class="code-line" id="yaml-line-6"><span class="line-number" aria-hidden="true">6</span><span class="code-source"><span class="yaml-key">base</span>: TRT</span></span><span class="code-line" id="yaml-line-7"><span class="line-number" aria-hidden="true">7</span><span class="code-source"><span class="yaml-key">keys</span>: [STUDYID, USUBJID, EXTRT]</span></span><span class="code-line" id="yaml-line-8"><span class="line-number" aria-hidden="true">8</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-9"><span class="line-number" aria-hidden="true">9</span><span class="code-source"><span class="yaml-key">output</span>:</span></span><span class="code-line" id="yaml-line-10"><span class="line-number" aria-hidden="true">10</span><span class="code-source">  <span class="yaml-key">path</span>: adex.csv</span></span><span class="code-line" id="yaml-line-11"><span class="line-number" aria-hidden="true">11</span><span class="code-source">  <span class="yaml-key">columns</span>: [STUDYID, USUBJID, EXTRT, DOSECUM]</span></span><span class="code-line" id="yaml-line-12"><span class="line-number" aria-hidden="true">12</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-13"><span class="line-number" aria-hidden="true">13</span><span class="code-source"><span class="yaml-key">columns</span>:</span></span><span class="code-line" id="yaml-line-14"><span class="line-number" aria-hidden="true">14</span><span class="code-source">  - <span class="yaml-key">name</span>: STUDYID</span></span><span class="code-line" id="yaml-line-15"><span class="line-number" aria-hidden="true">15</span><span class="code-source">    <span class="yaml-key">type</span>: str</span></span><span class="code-line" id="yaml-line-16"><span class="line-number" aria-hidden="true">16</span><span class="code-source">    <span class="yaml-key">label</span>: Study Identifier</span></span><span class="code-line" id="yaml-line-17"><span class="line-number" aria-hidden="true">17</span><span class="code-source">    <span class="yaml-key">derivation</span>:</span></span><span class="code-line" id="yaml-line-18"><span class="line-number" aria-hidden="true">18</span><span class="code-source">      <span class="yaml-key">source</span>: TRT.STUDYID</span></span><span class="code-line" id="yaml-line-19"><span class="line-number" aria-hidden="true">19</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-20"><span class="line-number" aria-hidden="true">20</span><span class="code-source">  - <span class="yaml-key">name</span>: USUBJID</span></span><span class="code-line" id="yaml-line-21"><span class="line-number" aria-hidden="true">21</span><span class="code-source">    <span class="yaml-key">type</span>: str</span></span><span class="code-line" id="yaml-line-22"><span class="line-number" aria-hidden="true">22</span><span class="code-source">    <span class="yaml-key">label</span>: Unique Subject Identifier</span></span><span class="code-line" id="yaml-line-23"><span class="line-number" aria-hidden="true">23</span><span class="code-source">    <span class="yaml-key">derivation</span>:</span></span><span class="code-line" id="yaml-line-24"><span class="line-number" aria-hidden="true">24</span><span class="code-source">      <span class="yaml-key">source</span>: TRT.USUBJID</span></span><span class="code-line" id="yaml-line-25"><span class="line-number" aria-hidden="true">25</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-26"><span class="line-number" aria-hidden="true">26</span><span class="code-source">  - <span class="yaml-key">name</span>: EXTRT</span></span><span class="code-line" id="yaml-line-27"><span class="line-number" aria-hidden="true">27</span><span class="code-source">    <span class="yaml-key">type</span>: str</span></span><span class="code-line" id="yaml-line-28"><span class="line-number" aria-hidden="true">28</span><span class="code-source">    <span class="yaml-key">label</span>: Name of Treatment</span></span><span class="code-line" id="yaml-line-29"><span class="line-number" aria-hidden="true">29</span><span class="code-source">    <span class="yaml-key">derivation</span>:</span></span><span class="code-line" id="yaml-line-30"><span class="line-number" aria-hidden="true">30</span><span class="code-source">      <span class="yaml-key">source</span>: TRT.EXTRT</span></span><span class="code-line" id="yaml-line-31"><span class="line-number" aria-hidden="true">31</span><span class="code-source"></span></span><span class="code-line" id="yaml-line-32"><span class="line-number" aria-hidden="true">32</span><span class="code-source">  - <span class="yaml-key">name</span>: DOSECUM</span></span><span class="code-line" id="yaml-line-33"><span class="line-number" aria-hidden="true">33</span><span class="code-source">    <span class="yaml-key">type</span>: float</span></span><span class="code-line" id="yaml-line-34"><span class="line-number" aria-hidden="true">34</span><span class="code-source">    <span class="yaml-key">label</span>: Cumulative Dose</span></span><span class="code-line" id="yaml-line-35"><span class="line-number" aria-hidden="true">35</span><span class="code-source">    <span class="yaml-key">derivation</span>:</span></span><span class="code-line" id="yaml-line-36"><span class="line-number" aria-hidden="true">36</span><span class="code-source">      <span class="yaml-key">aggregate</span>: <span class="yaml-string">&quot;SUM(EX.EXDOSE)&quot;</span></span></span></code></pre></div>
+      </aside>
+      <div id="spec-resizer" class="panel-resizer" role="separator" aria-label="Resize specification panel" aria-controls="specification" aria-orientation="vertical" aria-valuemin="240" aria-valuemax="720" aria-valuenow="350" tabindex="0" title="Drag to resize the specification panel"><span aria-hidden="true"></span></div>
+      <div class="datasets">
+        <section id="inputs" aria-labelledby="inputs-heading">
+          <header class="section-header"><h2 id="inputs-heading">Inputs</h2><span class="panel-caption">2 source files</span></header>
+          <div class="files-grid" style="--dataset-columns: minmax(0, 5fr) minmax(0, 3fr)"><div id="input-file-0" class="panel file-pane" role="region" aria-label="input/ex.csv"><div class="file-heading"><h3 class="filename">input/ex.csv</h3><span class="file-count">1 row</span></div><div class="table-scroll" tabindex="0" role="region" aria-label="input/ex.csv table"><table class="data-table"><caption class="visually-hidden">input/ex.csv</caption><thead><tr><th scope="col">STUDYID</th><th scope="col">USUBJID</th><th scope="col">EXTRT</th><th scope="col">EXSEQ</th><th scope="col">EXDOSE</th></tr></thead><tbody><tr data-subject="[&quot;PILOT7&quot;,&quot;P7-631&quot;]"><td data-value="PILOT7">PILOT7</td><td data-value="P7-631"><button type="button" class="subject-button" data-subject="[&quot;PILOT7&quot;,&quot;P7-631&quot;]" aria-pressed="false" aria-label="Highlight subject P7-631">P7-631</button></td><td data-value="Carboplatin">Carboplatin</td><td data-value="1">1</td><td data-value="300">300</td></tr></tbody></table></div></div><div id="input-file-1" class="panel file-pane" role="region" aria-label="input/subject_treatment.csv"><div class="file-heading"><h3 class="filename">input/subject_treatment.csv</h3><span class="file-count">1 row</span></div><div class="table-scroll" tabindex="0" role="region" aria-label="input/subject_treatment.csv table"><table class="data-table"><caption class="visually-hidden">input/subject_treatment.csv</caption><thead><tr><th scope="col">STUDYID</th><th scope="col">USUBJID</th><th scope="col">EXTRT</th></tr></thead><tbody><tr data-subject="[&quot;PILOT7&quot;,&quot;P7-631&quot;]"><td data-value="PILOT7">PILOT7</td><td data-value="P7-631"><button type="button" class="subject-button" data-subject="[&quot;PILOT7&quot;,&quot;P7-631&quot;]" aria-pressed="false" aria-label="Highlight subject P7-631">P7-631</button></td><td data-value="Carboplatin">Carboplatin</td></tr></tbody></table></div></div></div>
+        </section>
+        <section id="outputs" aria-labelledby="outputs-heading">
+          <header class="section-header"><h2 id="outputs-heading">Expected output</h2><span class="panel-caption">Expected artifacts</span></header>
+          <div class="files-grid" style="--dataset-columns: minmax(0, 1fr)"><div id="output-file-0" class="panel file-pane" role="region" aria-label="expected/error.yaml"><div class="file-heading"><h3 class="filename">expected/error.yaml</h3></div><pre class="plain-file"><code>phase: validation
+condition: unknown_field
+spec_paths:
+  - datasets.EX.types.EXDOSEN
+context:
+  dataset: EX
+  field: EXDOSEN
+</code></pre></div></div>
+          <div class="data-legend"><span><i class="derived-swatch" aria-hidden="true"></i> Shaded columns are derived</span><span>&mdash; = missing value</span></div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <footer class="page-footer"><span>negative-types-unknown-field</span><nav class="example-nav" aria-label="More examples"><span><a href="negative-to-date-date-source.html" rel="prev">Previous example</a></span><a href="index.html">All examples</a><span><a href="negative-usubjid-exceeds-length.html" rel="next">Next example</a></span></nav></footer>
+  <script>"use strict";
+
+document.body.classList.add("has-js");
+
+const sidebarToggle = document.getElementById("sidebar-toggle");
+const specification = document.getElementById("specification");
+const workbench = document.querySelector(".workbench");
+const specResizer = document.getElementById("spec-resizer");
+sidebarToggle.hidden = false;
+sidebarToggle.addEventListener("click", () => {
+  specification.hidden = !specification.hidden;
+  workbench.classList.toggle("without-sidebar", specification.hidden);
+  sidebarToggle.setAttribute("aria-expanded", String(!specification.hidden));
+  sidebarToggle.querySelector("span").textContent = specification.hidden ? "Show Spec" : "Hide Spec";
+});
+
+const MIN_SPEC_WIDTH = 240;
+const MAX_SPEC_WIDTH = 720;
+const MIN_DATA_WIDTH = 420;
+
+function specWidthBounds() {
+  return {
+    min: MIN_SPEC_WIDTH,
+    max: Math.max(MIN_SPEC_WIDTH, Math.min(MAX_SPEC_WIDTH, workbench.clientWidth - MIN_DATA_WIDTH - specResizer.offsetWidth)),
+  };
+}
+
+function setSpecWidth(width) {
+  const bounds = specWidthBounds();
+  const next = Math.round(Math.max(bounds.min, Math.min(bounds.max, width)));
+  workbench.style.setProperty("--spec-width", next + "px");
+  specResizer.setAttribute("aria-valuemin", String(bounds.min));
+  specResizer.setAttribute("aria-valuemax", String(bounds.max));
+  specResizer.setAttribute("aria-valuenow", String(next));
+  specResizer.setAttribute("aria-valuetext", next + " pixels wide");
+}
+
+setSpecWidth(specification.getBoundingClientRect().width);
+
+let resizing = false;
+specResizer.addEventListener("pointerdown", (event) => {
+  resizing = true;
+  specResizer.setPointerCapture(event.pointerId);
+  specResizer.classList.add("is-resizing");
+  document.body.classList.add("is-resizing");
+});
+specResizer.addEventListener("pointermove", (event) => {
+  if (!resizing) return;
+  setSpecWidth(event.clientX - workbench.getBoundingClientRect().left);
+});
+function stopResize(event) {
+  if (!resizing) return;
+  resizing = false;
+  if (specResizer.hasPointerCapture(event.pointerId)) specResizer.releasePointerCapture(event.pointerId);
+  specResizer.classList.remove("is-resizing");
+  document.body.classList.remove("is-resizing");
+}
+specResizer.addEventListener("pointerup", stopResize);
+specResizer.addEventListener("pointercancel", stopResize);
+specResizer.addEventListener("keydown", (event) => {
+  const current = Number(specResizer.getAttribute("aria-valuenow"));
+  const step = event.shiftKey ? 50 : 20;
+  if (event.key === "ArrowLeft") setSpecWidth(current - step);
+  else if (event.key === "ArrowRight") setSpecWidth(current + step);
+  else if (event.key === "Home") setSpecWidth(specWidthBounds().min);
+  else if (event.key === "End") setSpecWidth(specWidthBounds().max);
+  else return;
+  event.preventDefault();
+});
+window.addEventListener("resize", () => {
+  if (!specification.hidden) {
+    setSpecWidth(specification.getBoundingClientRect().width);
+  }
+});
+
+const subjectSelect = document.getElementById("subject-select");
+const subjectButtons = document.querySelectorAll(".subject-button");
+if (subjectSelect.options.length > 1) {
+  document.querySelector(".subject-control").hidden = false;
+  function selectSubject(subject) {
+    subjectSelect.value = subject;
+    let inputRows = 0;
+    let outputRows = 0;
+    document.querySelectorAll("tr[data-subject]").forEach((row) => {
+      const selected = subject !== "" && row.dataset.subject === subject;
+      row.classList.toggle("is-selected", selected);
+      if (selected && row.closest("#inputs")) inputRows += 1;
+      if (selected && row.closest("#outputs")) outputRows += 1;
+    });
+    subjectButtons.forEach((button) => {
+      button.setAttribute("aria-pressed", String(subject !== "" && button.dataset.subject === subject));
+    });
+    document.getElementById("selection-status").textContent = subject
+      ? subjectSelect.selectedOptions[0].textContent + ": " + inputRows + " input rows and " + outputRows + " expected output rows highlighted across all files."
+      : "All subjects shown. No rows highlighted.";
+  }
+  subjectSelect.addEventListener("change", () => selectSubject(subjectSelect.value));
+  subjectButtons.forEach((button) => {
+    button.addEventListener("click", () => selectSubject(button.dataset.subject === subjectSelect.value ? "" : button.dataset.subject));
+  });
+}
+
+const sectionSelect = document.getElementById("section-select");
+sectionSelect.hidden = false;
+sectionSelect.addEventListener("change", () => {
+  document.querySelectorAll(".code-line.is-target").forEach((line) => line.classList.remove("is-target"));
+  if (!sectionSelect.value) return;
+  const line = document.getElementById(sectionSelect.value);
+  const scroller = document.querySelector(".code-scroll");
+  line.classList.add("is-target");
+  scroller.scrollTop += line.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 12;
+});
+</script>
+</body>
+</html>
