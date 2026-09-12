@@ -34,30 +34,31 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python3 -m pip install -r .github/scripts/yaml-validation/requirements.txt
+          python -m pip install uv==0.11.6
+          uv sync --project python --locked
 
       - name: Run unit tests
         run: |
-          python3 .github/scripts/yaml-validation/test_validate_repository.py
+          uv run --project python --no-sync python .github/scripts/yaml-validation/test_validate_repository.py
 
       - name: Run repository validation
         run: |
-          python3 .github/scripts/yaml-validation/validate_repository.py
+          uv run --project python --no-sync python .github/scripts/yaml-validation/validate_repository.py
 
       - name: Check execution manifest
         run: |
-          python3 .github/scripts/yaml-validation/check_execution_manifest.py
+          uv run --project python --no-sync python .github/scripts/yaml-validation/check_execution_manifest.py
 
       - name: Check vocabulary coverage
         run: |
-          python3 .github/scripts/yaml-validation/check_vocabulary_coverage.py
+          uv run --project python --no-sync python .github/scripts/yaml-validation/check_vocabulary_coverage.py
 
       - name: Check rule metadata
         run: |
-          python3 .github/scripts/yaml-validation/check_rule_metadata.py
+          uv run --project python --no-sync python .github/scripts/yaml-validation/check_rule_metadata.py
 
       - name: Check validation blocker issues
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python3 .github/scripts/yaml-validation/check_validation_blockers.py
+          uv run --project python --no-sync python .github/scripts/yaml-validation/check_validation_blockers.py

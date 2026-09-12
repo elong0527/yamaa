@@ -166,9 +166,9 @@ From the repository root, use a Python 3.14 environment to match CI. Install
 the dependencies, run the tests, and validate the repository:
 
 ```bash
-python3 -m pip install -r .github/scripts/yaml-validation/requirements.txt
-python3 .github/scripts/yaml-validation/test_validate_repository.py
-python3 .github/scripts/yaml-validation/validate_repository.py --root .
+uv sync --project python --locked
+uv run --project python --no-sync python .github/scripts/yaml-validation/test_validate_repository.py
+uv run --project python --no-sync python .github/scripts/yaml-validation/validate_repository.py --root .
 ```
 
 By default, the script infers the repository root relative to its own path.
