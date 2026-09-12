@@ -85,7 +85,7 @@ def check_error(path, requirements, errors):
 def main():
     errors = []
     requirements = set()
-    for path in sorted(RULES.glob("R*.md")):
+    for path in sorted(RULES.glob("R[0-9]*.md")):
         check_rule(path, errors, requirements)
     for path in sorted(EXAMPLES.glob("negative-*/expected/error.yaml")):
         check_error(path, requirements, errors)
