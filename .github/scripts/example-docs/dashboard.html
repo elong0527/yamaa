@@ -1,0 +1,60 @@
+<!doctype html>
+<!-- Generated from yaml/examples/$example_name. Edit the source files or generator. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="$description">
+  <title>$page_title | YAMAA examples</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230c5e4b'/%3E%3Cpath d='m8 8 8 10 8-10M16 18v7' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+  <style>$styles</style>
+</head>
+<body>
+  <a class="skip-link" href="#readme">Skip to example</a>
+  <header class="page-header">
+    <div class="brand-row">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">Y</span> YAMAA <span class="brand-separator">/</span> <span class="brand-location">Example explorer</span></div>
+      <a class="source-link" href="$source_url">Example source <span aria-hidden="true">&#8599;</span></a>
+    </div>
+    <div class="title-row">
+      <div class="title-block"><p class="eyebrow">$category</p><h1>$heading</h1></div>
+      <dl class="metrics">$metrics</dl>
+    </div>
+  </header>
+  <main class="dashboard" aria-label="Example dashboard">
+    <section id="readme" class="panel readme-panel" aria-labelledby="readme-heading">
+      <header class="panel-header"><h2 id="readme-heading">README</h2><span class="panel-caption">What this example means</span></header>
+      <div class="prose" aria-label="README content">$readme</div>
+    </section>
+    <div class="comparison-bar">
+      <button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-controls="specification" aria-expanded="true" hidden><svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1.5" y="2.5" width="15" height="13" rx="2" stroke="currentColor"/><path d="M6.5 3v12" stroke="currentColor"/></svg><span>Hide Spec</span></button>
+      <div class="subject-control" hidden>
+        <label for="subject-select">Highlight subject</label>
+        <select id="subject-select"><option value="">All subjects</option>$subject_options</select>
+      </div>
+      <span id="selection-status" class="visually-hidden" role="status" aria-live="polite"></span>
+    </div>
+    <div class="workbench">
+      <aside id="specification" class="panel schema-panel" aria-labelledby="schema-heading">
+        <header class="panel-header"><h2 id="schema-heading">YAML specification</h2><span class="panel-caption">$spec_lines lines</span></header>
+        <div class="code-toolbar"><label class="visually-hidden" for="section-select">Jump to YAML section</label><select id="section-select" hidden><option value="">Jump to section</option>$section_options</select></div>
+        <div class="code-scroll" tabindex="0" aria-label="Complete YAML specification"><pre><code>$spec_code</code></pre></div>
+      </aside>
+      <div id="spec-resizer" class="panel-resizer" role="separator" aria-label="Resize specification panel" aria-controls="specification" aria-orientation="vertical" aria-valuemin="240" aria-valuemax="720" aria-valuenow="350" tabindex="0" title="Drag to resize the specification panel"><span aria-hidden="true"></span></div>
+      <div class="datasets">
+        <section id="inputs" aria-labelledby="inputs-heading">
+          <header class="section-header"><h2 id="inputs-heading">Inputs</h2><span class="panel-caption">$input_caption</span></header>
+          $input_files
+        </section>
+        <section id="outputs" aria-labelledby="outputs-heading">
+          <header class="section-header"><h2 id="outputs-heading">Expected output</h2><span class="panel-caption">$output_caption</span></header>
+          $output_files
+          <div class="data-legend"><span><i class="derived-swatch" aria-hidden="true"></i> Shaded columns are derived</span><span>&mdash; = missing value</span></div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <footer class="page-footer"><span>$example_name</span><span>Source data and expected results, shown together.</span></footer>
+  <script>$script</script>
+</body>
+</html>

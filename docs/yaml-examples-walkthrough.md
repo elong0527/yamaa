@@ -48,6 +48,11 @@ The suite serves three audiences at once:
 
 ## 2. Reading one example in five minutes
 
+For a complete example on one page, see
+**[ADaM ADAE: death outcome](examples/adam-adae-death-outcome.html)**. The README
+appears above the input tables and expected output, with a collapsible YAML
+sidebar. Everything is generated directly from the example's source files.
+
 Take [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-dm-basic), the suggested first read.
 
 **Step 1 -- the README, for intent.** One record per subject; `SEX` is the

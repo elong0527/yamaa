@@ -11,6 +11,11 @@ ADaM specifications in Excel. Each one has a different job.
 
 ## Start here
 
+**[Example dashboard: ADaM ADAE death outcome](examples/adam-adae-death-outcome.html)**
+Read the README, compare the input tables side by side with expected output
+below, and inspect the YAML in a collapsible sidebar. Highlight a subject to
+compare its records.
+
 **[Why YAMAA looks the way it does](why-yamaa.md)**
 An Excel specification has three layers and writes down only two. This page is
 about the missing one -- what "semantics" means in practice, why two programmers
