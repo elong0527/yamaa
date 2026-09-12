@@ -13,10 +13,14 @@ import os
 import tempfile
 from pathlib import Path
 
-from yamaa.artifacts.csv import render_csv
-from yamaa.artifacts.diagnostics import ArtifactDiagnostic, ArtifactError
-from yamaa.artifacts.output import Artifact, ArtifactProfile, profile_of
-from yamaa.artifacts.parquet import render_parquet
+from yamaa.io.artifact import (
+    Artifact,
+    ArtifactDiagnostic,
+    ArtifactError,
+    ArtifactProfile,
+    profile_of,
+    render_artifact,
+)
 
 
 class ArtifactTarget:
@@ -42,13 +46,6 @@ class ArtifactTarget:
 
     def __repr__(self) -> str:
         return f"ArtifactTarget({str(self.path)!r})"
-
-
-def render_artifact(artifact: Artifact) -> bytes:
-    """Render one artifact to the complete bytes its profile fixes."""
-    if artifact.profile == "csv":
-        return render_csv(artifact)
-    return render_parquet(artifact)
 
 
 def publish_artifact(target: ArtifactTarget, artifact: Artifact) -> Path:

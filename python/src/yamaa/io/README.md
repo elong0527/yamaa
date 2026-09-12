@@ -1,10 +1,14 @@
-# Verify a completed table and publish its artifact
+# Sources in, artifacts out
 
-`yamaa.verification` asserts over a completed table; `yamaa.artifacts` turns
-one into the bytes R020 fixes and replaces a permitted target with them.
+This module is the boundary between a run and the files around it. Reading
+is R023 and R014: `load_source_tables` captures a declared dataset and hands
+back an ordered, typed table. Writing is R020, below.
+
+`yamaa.verification` asserts over a completed table; this module turns one
+into the bytes R020 fixes and replaces a permitted target with them.
 
 ```python
-from yamaa.artifacts import ArtifactTarget, build_artifact, publish_artifact
+from yamaa.io import ArtifactTarget, build_artifact, publish_artifact
 from yamaa.verification import check_column, check_dataset, check_keys
 
 failures = [
@@ -58,8 +62,18 @@ R021 reaches only the files a run reads and R020 owns the artifact's bytes
 rather than where a run may put them, so no target is admitted on a
 specification's word alone.
 
+## Where the code sits
+
+`csv.py` holds both directions of the delimited profile, and imports the
+standard library alone because the repository validator loads it by path.
+Its writing half therefore takes text, not values: `artifact.py` maps each
+typed value to the text R011, R016, and R019 fix, and hands the fields over.
+`parquet.py` writes the typed container, `polars.py` decides how values are
+stored in and read back from a host table, and `project.py` and `source.py`
+read.
+
 ## Focused tests
 
 ```bash
-uv run --project python --no-sync pytest python/tests/verification python/tests/artifacts
+uv run --project python --no-sync pytest python/tests/verification python/tests/io
 ```

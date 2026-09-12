@@ -1,9 +1,11 @@
-"""Turn a completed table into the ordered artifact a profile can write.
+"""The artifact a specification produces, and what it becomes.
 
 R005 owns which columns the artifact has, which rows it holds, and the
 order they leave in; this module applies those decisions to a completed
 table and refuses a declaration or a stored value that no profile can
-carry, so a rendered artifact is writable by construction.
+carry, so a rendered artifact is writable by construction. It then maps
+each typed value to the text its rule fixes and hands that to the profile
+that writes it: `csv` for bytes, `parquet` for a typed container.
 """
 
 from __future__ import annotations
@@ -15,18 +17,28 @@ from pathlib import PurePosixPath
 from typing import Annotated, Any, Literal, TypeAlias
 
 import polars as pl
-from pydantic import BaseModel, ConfigDict, InstanceOf, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, InstanceOf, JsonValue
 
-from yamaa.artifacts.diagnostics import (
-    REPORTED_KEYS,
-    ArtifactDiagnostic,
-    ArtifactError,
+from yamaa.io.csv import fixed_point, render_records
+from yamaa.io.parquet import render_parquet
+from yamaa.io.polars import column_dtype, runtime_value
+from yamaa.models import (
+    MISSING,
+    DateTimeValue,
+    DateValue,
+    RuntimeValue,
+    TypedColumn,
+    TypedTable,
+    ValueResult,
+    convert_value,
 )
-from yamaa.io.polars import column_dtype
-from yamaa.models import TypedColumn, TypedTable
 from yamaa.specification.models import Output
 
 ArtifactProfile: TypeAlias = Literal["csv", "parquet"]
+
+# R020-46 reports the offending rows by key. The count beside them is the
+# whole count, so a bound on how many are printed never changes a failure.
+REPORTED_KEYS = 5
 
 # R020-2 fixes a closed extension mapping, matched without regard to case.
 # An extension outside it names no profile and never falls back to one.
@@ -39,6 +51,29 @@ _MIN_DAY = dt.date(dt.MINYEAR, 1, 1).toordinal() - _EPOCH
 _MAX_DAY = dt.date(dt.MAXYEAR, 12, 31).toordinal() - _EPOCH
 _MIN_MICROSECOND = _MIN_DAY * 86_400 * 1_000_000
 _MAX_MICROSECOND = (_MAX_DAY * 86_400 + 86_399) * 1_000_000
+
+
+class ArtifactDiagnostic(BaseModel):
+    """One artifact declaration or serialization failure."""
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    phase: Literal["validation", "output"]
+    condition: str = Field(min_length=1)
+    spec_paths: tuple[str, ...] = Field(min_length=1)
+    requirement: str = Field(pattern=r"^R[0-9]{3}-[0-9]+$")
+    context: dict[str, JsonValue]
+
+
+class ArtifactError(ValueError):
+    """Raised when a declaration or a completed table cannot be written."""
+
+    def __init__(self, diagnostics: list[ArtifactDiagnostic]) -> None:
+        if not diagnostics:
+            raise ValueError("ArtifactError requires at least one diagnostic")
+        self.diagnostics = tuple(diagnostics)
+        conditions = ", ".join(item.condition for item in diagnostics)
+        super().__init__(f"artifact failed: {conditions}")
 
 
 class Artifact(BaseModel):
@@ -362,3 +397,39 @@ def build_artifact(table: TypedTable, output: Output, keys: Sequence[str]) -> Ar
         columns=tuple(declared[name] for name in output.columns),
         frame=frame,
     )
+
+
+def _text(value: RuntimeValue, decimals: int | None) -> str | None:
+    """Return one field's text, or None for a missing value (R020-17, R020-18)."""
+    if value is MISSING:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (DateValue, DateTimeValue)):
+        return value.to_text()
+    if isinstance(value, float) and decimals is not None:
+        return fixed_point(value, decimals)
+    # R011 owns an `int`'s digits and a `float`'s shortest round-tripping
+    # spelling; this profile writes that text rather than a second one.
+    converted = convert_value(value, "str")
+    assert isinstance(converted, ValueResult)
+    assert isinstance(converted.value, str)
+    return converted.value
+
+
+def render_csv(artifact: Artifact) -> bytes:
+    """Render one artifact to the exact bytes R020's csv profile fixes."""
+    return render_records(
+        [column.name for column in artifact.columns],
+        (
+            [_text(runtime_value(value), artifact.decimals) for value in row]
+            for row in artifact.frame.iter_rows()
+        ),
+    )
+
+
+def render_artifact(artifact: Artifact) -> bytes:
+    """Render one artifact to the complete bytes its profile fixes."""
+    if artifact.profile == "csv":
+        return render_csv(artifact)
+    return render_parquet(artifact)

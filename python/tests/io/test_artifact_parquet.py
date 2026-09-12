@@ -7,7 +7,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from yamaa.artifacts import (
+from yamaa.io import (
     ArtifactError,
     build_artifact,
     read_parquet,

@@ -5,7 +5,7 @@ import datetime as dt
 import polars as pl
 import pytest
 
-from yamaa.artifacts import (
+from yamaa.io import (
     ArtifactError,
     artifact_profile,
     build_artifact,

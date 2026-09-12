@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from yamaa.artifacts import ArtifactError, build_artifact, fixed_point, render_csv
+from yamaa.io import ArtifactError, build_artifact, render_csv
+from yamaa.io.csv import fixed_point
 from yamaa.io.polars import frame_from_values
 from yamaa.models import DateTimeValue, DateValue, TypedColumn, TypedTable
 from yamaa.specification.models import ColumnType, Output

@@ -9,12 +9,16 @@ a writer's default.
 from __future__ import annotations
 
 import io
+from typing import TYPE_CHECKING
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from yamaa.artifacts.output import Artifact
 from yamaa.specification.models import ColumnType
+
+if TYPE_CHECKING:  # `artifact` renders through this module, so the
+    # dependency runs one way at runtime and both ways in annotations.
+    from yamaa.io.artifact import Artifact
 
 # R020-20 maps each declared type to exactly one physical and logical type.
 # A `datetime` is a reading on a wall clock, so its Timestamp carries no

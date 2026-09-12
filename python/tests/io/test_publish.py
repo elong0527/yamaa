@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from yamaa.artifacts import (
+from yamaa.io import (
     ArtifactError,
     ArtifactTarget,
     build_artifact,
