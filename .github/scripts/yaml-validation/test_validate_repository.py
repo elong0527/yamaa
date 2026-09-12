@@ -3653,11 +3653,11 @@ class TestRegularExpressionContract(unittest.TestCase):
     # -- the pinned engine -------------------------------------------------
 
     def test_requirements_install_the_engine_the_validator_pins(self):
-        text = (TOOL_PATH.parent / 'requirements.txt').read_text()
-        self.assertIn(
-            f"{VALIDATOR.REGEX_ENGINE_DISTRIBUTION}=="
-            f"{VALIDATOR.REGEX_ENGINE_DISTRIBUTION_VERSION}",
-            text,
+        from importlib.metadata import version
+
+        self.assertEqual(
+            version(VALIDATOR.REGEX_ENGINE_DISTRIBUTION),
+            VALIDATOR.REGEX_ENGINE_DISTRIBUTION_VERSION,
         )
 
     def test_missing_engine_fails_rather_than_falling_back(self):
