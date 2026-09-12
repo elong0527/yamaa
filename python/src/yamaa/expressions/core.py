@@ -35,6 +35,7 @@ class ResolvedValue(_FrozenModel):
 
     status: Literal["value"] = "value"
     value: object
+    handled_by: Literal["multiple_matches"] | None = None
 
 
 class AbsentValue(_FrozenModel):
@@ -60,6 +61,16 @@ class Resolver(Protocol):
     def resolve(self, variable: str) -> Resolution: ...
 
 
+class MultipleMatchResolver(Protocol):
+    """Optional resolver extension for structured R008 source selection."""
+
+    def resolve_with_multiple_matches(
+        self,
+        variable: str,
+        multiple_matches: Mapping[str, object],
+    ) -> Resolution: ...
+
+
 class MappingResolver:
     """Small in-memory resolver useful for scalar execution and tests."""
 
@@ -70,6 +81,14 @@ class MappingResolver:
         if variable not in self._values:
             return AbsentValue(variable=variable)
         return ResolvedValue(value=self._values[variable])
+
+    def resolve_with_multiple_matches(
+        self,
+        variable: str,
+        multiple_matches: Mapping[str, object],
+    ) -> Resolution:
+        del multiple_matches
+        return self.resolve(variable)
 
 
 ExpressionHandler: TypeAlias = Callable[[object, Resolver], EvaluationResult]
@@ -122,9 +141,32 @@ def _source(payload: object, resolver: Resolver) -> EvaluationResult:
             {"operation": "source", "expected": "str or mapping"},
         )
 
-    resolved = resolver.resolve(variable)
+    multiple = options.get("multiple_matches")
+    if multiple is not None and not isinstance(multiple, Mapping):
+        return _condition(
+            "validation",
+            "invalid_field_type",
+            {"field": "multiple_matches", "expected": "mapping"},
+        )
+    if multiple is None:
+        resolved = resolver.resolve(variable)
+    else:
+        resolve_multiple = getattr(resolver, "resolve_with_multiple_matches", None)
+        if not callable(resolve_multiple):
+            return _condition(
+                "validation",
+                "invalid_field_type",
+                {"field": "multiple_matches", "reason": "resolver unsupported"},
+            )
+        resolved = resolve_multiple(variable, multiple)
     if isinstance(resolved, ResolvedValue):
-        return normalize_runtime_value(resolved.value)
+        normalized = normalize_runtime_value(resolved.value)
+        if isinstance(normalized, ValueResult) and resolved.handled_by is not None:
+            return ValueResult(
+                value=normalized.value,
+                handled_by=resolved.handled_by,
+            )
+        return normalized
     if isinstance(resolved, FailedResolution):
         return ConditionResult(condition=resolved.condition)
     if "missing" in options:

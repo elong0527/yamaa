@@ -84,6 +84,37 @@ uv run --project python --isolated --extra test pytest \
   python/tests/models python/tests/expressions
 ```
 
+## Source binding and ODM contexts
+
+Build one binding plan from a normalized specification and its loaded source
+tables, then share one index across row-local resolvers:
+
+```python
+from yamaa.planning import build_binding_plan
+from yamaa.runtime import BindingIndex
+
+plan = build_binding_plan(loaded_spec.specification, loaded_sources)
+index = BindingIndex(plan, loaded_sources)
+resolver = index.context({"ODM": current_odm_row}, {"STUDYID": "STUDY01"})
+```
+
+The resolver implements the scalar expression protocol. Direct qualified
+fields read the supplied source record, unqualified names read completed output
+values, and a long-form ODM item uses every context column present in the ODM
+projection. Duplicate ODM items require a structured R008 `multiple_matches`
+policy; successful duplicate selection is returned with
+`handled_by="multiple_matches"` so the executor can count that path.
+Implicit cross-dataset row selection remains the keyed-join component's
+responsibility; this context resolves only source records its caller has
+explicitly bound.
+
+Run this component's focused tests from the repository root:
+
+```bash
+uv run --project python --isolated --extra test pytest \
+  python/tests/planning python/tests/runtime
+```
+
 ## CSV source ingestion
 
 Create one resource manager for the approved project and use normalized
