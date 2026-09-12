@@ -27,10 +27,10 @@ failure of ill-formed encoded text, and the order of two strings.
 
 R014 owns the other direction. It states what a stored field means when a
 specification reads it, and `csv` below is the writing counterpart of the
-delimited form it reads: the two agree on missing and on the empty string, and
-neither restates the other. R023 owns the syntax a specification reads a
-delimited *source* under, and admits the spellings a reader receives that this
-rule never writes.
+delimited form it reads: they agree on missing, they part on the empty
+string, and neither restates the other. R020-17 states where they part.
+R023 owns the syntax a specification reads a delimited *source* under, and
+admits the spellings a reader receives that this rule never writes.
 
 This rule owns which file a specification declares it produces, the bytes that
 file receives, and the replacement of it. It does not own how that path is
@@ -124,10 +124,16 @@ ordinary reader accepts its output.
 ### Missing and the empty string
 
 **R020-17.** A missing value is written as no characters at all, unquoted. A
-collected empty string is written as two quote characters. These are the two
-forms R014 reads back as absence and as the empty string, so a `str` column
-round-trips through this profile without ambiguity, and no text is ever pressed
-into service as a sentinel for absence.
+collected empty string is written as two quote characters. The two forms stay
+apart in the artifact, and no text is ever pressed into service as a sentinel
+for absence. Reading does not restore the pair: R014-16 reads an empty field as
+missing whether it was bare or quoted, so a collected empty string written here
+returns as missing if this artifact is later read as a delimited source. The
+asymmetry is deliberate. A source is authored by a producer this language does
+not control, and a distinction no such producer reliably spells is not one a
+reader may invent, while an artifact this rule writes has one writer and can
+afford the finer form. The `parquet` profile carries the pair in its container
+and keeps it in both directions.
 
     STUDYID,COMMENT,NOTE
     S1,plain text,

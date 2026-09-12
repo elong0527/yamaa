@@ -86,8 +86,9 @@ a comma between fields, `U+000A` or `U+000D U+000A` between records, and
 double-quote quoting whose doubled quote is one literal quote. It admits the
 second spelling of a terminator and a final record without one, because
 neither changes the records a file holds, and rejects every other difference
-rather than repairing it. A field reaches R014 with its quoting intact, so an
-uncollected value stays distinct from a collected empty one.
+rather than repairing it. A field reaches R014 as its text or as missing: one
+with no characters is missing whether it was bare or quoted, so quoting is
+transport and never meaning.
 
 ## Version 1.0 design boundary
 

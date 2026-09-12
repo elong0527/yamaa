@@ -145,15 +145,15 @@ for an oversight. R014 fixes what a stored field means, including that no
 text spells absence, and a reader option that spelled it here would decide
 that question before any rule in this design could see the value.
 
-## Quoting is delivered, not erased
+## Quoting is transport, not meaning
 
-**R023-21.** Every field reaches R014 as its text together with whether it was
-quoted, and an implementation must preserve both. A reader that returns text
-alone cannot tell a bare empty field from a quoted empty one, and R014 gives
-those two different meanings, so such a reader does not implement this
-profile even though it reads every other field correctly. Common dataframe
-readers discard this distinction by default; conformance is a property of
-what the reader delivers, not of which library produced it.
+**R023-21.** Every field reaches R014 as its text or as missing, and an
+implementation must preserve both. A field with no characters is missing
+whether it was bare or quoted, so quoting is a transport detail the reader
+does not report: R014 gives an empty field one meaning and never sees an
+empty string. Common dataframe readers discard text-versus-missing
+distinctions of their own by default; conformance is a property of what
+the reader delivers, not of which library produced it.
 
 ## Rationale
 

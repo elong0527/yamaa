@@ -1,8 +1,8 @@
 phase: validation
-condition: resource_path_parent_traversal
+condition: resource_path_outside_project
 spec_paths:
   - datasets.LBREF.path
-requirement: R021-8
+requirement: R021-14
 context:
   dataset: LBREF
   path: ../reference/lbref.csv

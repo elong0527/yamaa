@@ -83,3 +83,44 @@ Run this component's focused tests from the repository root:
 uv run --project python --isolated --extra test pytest \
   python/tests/models python/tests/expressions
 ```
+
+## CSV source ingestion
+
+Create one resource manager for the approved project and use normalized
+`DatasetSource` declarations to load ordered, typed Polars tables:
+
+```python
+from yamaa.io import ProjectResources, load_source_tables
+from yamaa.specification.models import DatasetSource
+
+resources = ProjectResources("study")
+datasets = {
+    "DM": DatasetSource(
+        path="input/dm.csv",
+        types={"AGE": "int", "RFSTDTC": "date"},
+    )
+}
+loaded = load_source_tables(datasets, resources)
+dm = loaded["DM"].table
+```
+
+The reader accepts the fixed `.csv` profile only. It parses the retained byte
+snapshot in memory, preserves source row and header order, and reads a field
+with no characters as missing whether it was written bare or quoted, before
+applying declared types. A `str`, `int`, or `float` column lands in the
+matching native Polars type, a `date` column in `pl.Date`, and a `datetime`
+column in `pl.Datetime("us")`, so an ingested table answers ordinary Polars
+expressions. The reader does not create CSV or other intermediate files.
+Producer-linked `schema` workflow resolution and header-contract comparison
+remain part of the workflow component; this ingestion API rejects a declaration
+carrying `schema` until that component supplies its resolved producer contract.
+
+The R023 syntax scanner in `yamaa.io.csv` imports the standard library alone.
+The repository validator loads that module by path rather than keeping a second
+reader, so one implementation decides how every fixture reads.
+
+Run this component's focused tests from the repository root:
+
+```bash
+uv run --project python --isolated --extra test pytest python/tests/io
+```

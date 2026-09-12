@@ -52,7 +52,7 @@ conditions:
   resource_path_missing: {rules: [R021], phases: [validation]}
   resource_path_not_regular_file: {rules: [R021], phases: [validation]}
   resource_path_not_relative: {rules: [R021], phases: [validation]}
-  resource_path_parent_traversal: {rules: [R021], phases: [validation]}
+  resource_path_outside_project: {rules: [R021], phases: [validation]}
   resource_path_symlink: {rules: [R021], phases: [validation]}
   resource_path_uri_scheme: {rules: [R021], phases: [validation]}
   row_count_failed: {rules: [R009], phases: [verification]}
