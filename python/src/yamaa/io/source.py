@@ -6,10 +6,15 @@ from collections.abc import Mapping
 from pathlib import PurePosixPath
 from typing import Literal
 
-import polars as pl
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
-from yamaa.ingest.csv import CsvProfileFailure, DelimitedSource, parse_csv
+from yamaa.io.csv import CsvProfileFailure, CsvSource, parse_csv
+from yamaa.io.polars import frame_from_values
+from yamaa.io.project import (
+    ProjectResources,
+    ResourceFailure,
+    ResourceSnapshot,
+)
 from yamaa.models import (
     MISSING,
     ConditionResult,
@@ -18,7 +23,6 @@ from yamaa.models import (
     ValueResult,
     convert_value,
 )
-from yamaa.resources import ProjectResources, ResourceFailure, ResourceSnapshot
 from yamaa.specification.models import ColumnType, DatasetSource
 
 
@@ -92,7 +96,7 @@ def _profile_diagnostic(dataset: str, written_path: str) -> SourceDiagnostic:
 
 
 def _field_types(
-    dataset: str, source: DatasetSource, parsed: DelimitedSource
+    dataset: str, source: DatasetSource, parsed: CsvSource
 ) -> tuple[TypedColumn, ...]:
     names = parsed.names
     declared = source.types or {}
@@ -142,34 +146,16 @@ def _parse_field(
     return None if converted.value is MISSING else converted.value
 
 
-def _series(name: str, target: ColumnType, values: list[object]) -> pl.Series:
-    dtype: pl.DataType
-    if target == "str":
-        dtype = pl.String
-    elif target == "int":
-        dtype = pl.Int64
-    elif target == "float":
-        dtype = pl.Float64
-    else:
-        # DateValue and DateTimeValue retain language-defined collected
-        # precision that native host temporal scalars cannot represent.
-        dtype = pl.Object
-    return pl.Series(name, values, dtype=dtype, strict=True)
-
-
-def _build_table(
-    dataset: str, source: DatasetSource, parsed: DelimitedSource
-) -> TypedTable:
+def _build_table(dataset: str, source: DatasetSource, parsed: CsvSource) -> TypedTable:
     columns = _field_types(dataset, source, parsed)
-    series = []
-    for index, column in enumerate(columns):
-        values = [
-            _parse_field(dataset, column.name, column.type, record[index].text)
-            for record in parsed.records
+    rows = [
+        [
+            _parse_field(dataset, column.name, column.type, record[index])
+            for index, column in enumerate(columns)
         ]
-        series.append(_series(column.name, column.type, values))
-    frame = pl.DataFrame(series)
-    return TypedTable(columns=columns, frame=frame)
+        for record in parsed.records
+    ]
+    return frame_from_values(columns, rows)
 
 
 def load_source_tables(

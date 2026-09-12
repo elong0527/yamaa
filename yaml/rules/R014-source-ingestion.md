@@ -148,16 +148,16 @@ where a handler exists.
 **R014-15.** A missing value is the absence of a value, and it is recognized
 before typing. Every type admits it, and R008's handlers answer for it.
 
-**R014-16.** In a delimited source, a bare field with no characters is
-missing. A quoted empty field is the empty string, which is a value: a `str`
-field therefore distinguishes an uncollected value from a collected empty
-one, and no other type admits an empty string at all.
+**R014-16.** In a delimited source, a field with no characters is missing,
+whether it was bare or quoted. No type admits an empty string from a
+delimited source: there is no collected-empty value distinct from a
+missing one.
 
 **R014-17.** No text is a missing-value sentinel. `NA`, `NULL`, `.`,
 `unknown`, and every other spelling are ordinary string values.
 
-**R014-18.** An empty field of any declared type other than `str` is missing
-rather than a parse failure, because it holds no text to parse.
+**R014-18.** An empty field of any declared type is missing rather than a
+parse failure, because it holds no text to parse.
 
 ## Rationale
 

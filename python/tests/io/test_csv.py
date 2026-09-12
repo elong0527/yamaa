@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from yamaa.ingest import CsvProfileFailure, parse_csv
+from yamaa.io.csv import CsvProfileFailure, parse_csv
 
 
-def test_preserves_quote_provenance_embedded_values_and_record_order() -> None:
+def test_quoted_and_bare_empty_are_missing_records_keep_order() -> None:
     source = parse_csv(
         b"ID,EMPTY,COMMENT,SPACE\r\n"
         b'007,,"line one\nline two, still one field", kept \r\n'
@@ -13,17 +13,14 @@ def test_preserves_quote_provenance_embedded_values_and_record_order() -> None:
     )
 
     assert source.names == ("ID", "EMPTY", "COMMENT", "SPACE")
-    assert [field.text for field in source.records[0]] == [
+    assert source.records[0] == (
         "007",
         None,
         "line one\nline two, still one field",
         " kept ",
-    ]
-    assert source.records[0][1].quoted is False
-    assert source.records[1][1].text == ""
-    assert source.records[1][1].quoted is True
-    assert source.records[1][2].text == 'said "hello"'
-    assert [record[0].text for record in source.records] == ["007", "008"]
+    )
+    assert source.records[1] == ("008", None, 'said "hello"', "next")
+    assert [record[0] for record in source.records] == ["007", "008"]
 
 
 @pytest.mark.parametrize(
@@ -66,9 +63,7 @@ def test_admitted_record_terminators_produce_identical_records(
     content: bytes,
 ) -> None:
     source = parse_csv(content)
-    assert [[field.text for field in record] for record in source.records] == [
-        ["1", "2"]
-    ]
+    assert [list(record) for record in source.records] == [["1", "2"]]
 
 
 def test_header_only_source_is_valid() -> None:

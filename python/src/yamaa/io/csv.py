@@ -1,4 +1,9 @@
-"""The fixed, quote-preserving CSV source profile from R023."""
+"""The fixed CSV source profile from R023.
+
+Quoting follows the Python csv-module default: double quotes escape,
+surrounding whitespace is preserved, and a field with no characters is
+missing whether it was bare or quoted.
+"""
 
 from __future__ import annotations
 
@@ -9,22 +14,11 @@ class _FrozenModel(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
 
 
-class DelimitedField(_FrozenModel):
-    """One stored field before R014 assigns its value and type."""
-
-    text: str | None
-    quoted: bool
-
-
-class DelimitedSource(_FrozenModel):
+class CsvSource(_FrozenModel):
     """An ordered header and records parsed from one CSV snapshot."""
 
-    header: tuple[DelimitedField, ...]
-    records: tuple[tuple[DelimitedField, ...], ...]
-
-    @property
-    def names(self) -> tuple[str, ...]:
-        return tuple(field.text for field in self.header if field.text is not None)
+    names: tuple[str, ...]
+    records: tuple[tuple[str | None, ...], ...]
 
 
 class CsvProfileFailure(ValueError):
@@ -63,11 +57,11 @@ def _coordinates(prefix: str) -> tuple[int, int]:
     return record, field
 
 
-def _parse_records(data: str) -> list[list[DelimitedField]]:
+def _parse_records(data: str) -> list[list[str | None]]:
     if not data:
         return []
-    records: list[list[DelimitedField]] = []
-    record: list[DelimitedField] = []
+    records: list[list[str | None]] = []
+    record: list[str | None] = []
     index = 0
     number = 1
     field_number = 1
@@ -94,7 +88,7 @@ def _parse_records(data: str) -> list[list[DelimitedField]]:
                     )
                 chunks.append(character)
                 index += 1
-            field = DelimitedField(text="".join(chunks), quoted=True)
+            field: str | None = "".join(chunks) or None
             if index < len(data) and data[index] not in ",\r\n":
                 raise CsvProfileFailure("source_text_after_quote", number, field_number)
         else:
@@ -108,7 +102,7 @@ def _parse_records(data: str) -> list[list[DelimitedField]]:
                 if character == "\r":
                     break
                 index += 1
-            field = DelimitedField(text=data[start:index] or None, quoted=False)
+            field = data[start:index] or None
         record.append(field)
         if index >= len(data):
             records.append(record)
@@ -132,7 +126,7 @@ def _parse_records(data: str) -> list[list[DelimitedField]]:
     return records
 
 
-def parse_csv(content: bytes) -> DelimitedSource:
+def parse_csv(content: bytes) -> CsvSource:
     """Parse one immutable byte snapshot under the closed CSV profile."""
     try:
         data = content.decode("utf-8")
@@ -148,23 +142,22 @@ def parse_csv(content: bytes) -> DelimitedSource:
         raise CsvProfileFailure("source_header_absent", 1, 1)
 
     header = records[0]
-    for index, field in enumerate(header, 1):
-        if not field.text:
-            raise CsvProfileFailure("source_field_name_empty", 1, index)
-    names = [field.text for field in header]
+    names: list[str] = []
     seen: set[str] = set()
-    for name in names:
-        assert name is not None
+    for index, name in enumerate(header, 1):
+        if not name:
+            raise CsvProfileFailure("source_field_name_empty", 1, index)
         if name in seen:
             raise CsvProfileFailure("source_field_name_duplicate", 1, name)
         seen.add(name)
+        names.append(name)
 
     for number, record in enumerate(records[1:], 2):
         if len(record) != len(header):
             field = min(len(record), len(header)) + 1
             raise CsvProfileFailure("source_record_width", number, field)
 
-    return DelimitedSource(
-        header=tuple(header),
+    return CsvSource(
+        names=tuple(names),
         records=tuple(tuple(record) for record in records[1:]),
     )

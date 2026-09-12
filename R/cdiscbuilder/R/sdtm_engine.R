@@ -737,7 +737,7 @@ process_domain <- function(
   columns <- lapply(seq_along(header), function(column_index) {
     vapply(data_records, function(record) {
       field <- record[[column_index]]
-      if (!field$quoted && identical(field$text, "")) {
+      if (identical(field$text, "")) {
         NA_character_
       } else {
         field$text

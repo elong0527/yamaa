@@ -5,9 +5,9 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from yamaa.ingest import SourceError, load_source_table, load_source_tables
+from yamaa.io import SourceError, load_source_table, load_source_tables
+from yamaa.io.project import ProjectResources
 from yamaa.models import DateTimeValue, DateValue
-from yamaa.resources import ProjectResources
 from yamaa.specification.models import DatasetSource
 
 REPOSITORY = Path(__file__).parents[3]
@@ -63,7 +63,7 @@ def test_loads_ordered_typed_polars_table_without_inference(tmp_path: Path) -> N
         "DATE": DateValue.parse("2025-01-02"),
         "MOMENT": DateTimeValue.parse("2025-01-02T03:04"),
         "EMPTY": None,
-        "TEXT": "",
+        "TEXT": None,
     }
     assert rows[1]["ID"] == "008"
     assert rows[1]["AGE"] is None
@@ -93,7 +93,7 @@ def test_csv_profile_extension_is_case_insensitive(tmp_path: Path) -> None:
     assert loaded.table.frame.item() == "001"
 
 
-def test_adae_fixture_keeps_uncollected_and_collected_empty_apart() -> None:
+def test_adae_fixture_treats_bare_and_quoted_empty_as_missing() -> None:
     root = REPOSITORY / "yaml/examples/adam-adae-string-handlers"
 
     loaded = load_source_table(
@@ -107,7 +107,7 @@ def test_adae_fixture_keeps_uncollected_and_collected_empty_apart() -> None:
         None,
         "BAD-ID",
         "AE-104",
-        "",
+        None,
     ]
     assert loaded.table.frame["AESEQ"].to_list() == ["1", "2", "3", "1", "2"]
 
@@ -143,22 +143,16 @@ def test_header_only_source_retains_declared_schema(tmp_path: Path) -> None:
     assert loaded.table.frame.height == 0
 
 
-def test_quoted_empty_fails_for_a_non_string_type(tmp_path: Path) -> None:
+def test_quoted_empty_is_missing_for_a_non_string_type(tmp_path: Path) -> None:
     (tmp_path / "dm.csv").write_bytes(b'AGE\n""\n')
 
-    with pytest.raises(SourceError) as raised:
-        load_source_table(
-            "DM",
-            DatasetSource(path="dm.csv", types={"AGE": "int"}),
-            ProjectResources(tmp_path),
-        )
+    loaded = load_source_table(
+        "DM",
+        DatasetSource(path="dm.csv", types={"AGE": "int"}),
+        ProjectResources(tmp_path),
+    )
 
-    assert _diagnostic(raised.value) == {
-        "phase": "ingest",
-        "condition": "field_parse_failed",
-        "spec_paths": ("datasets.DM.types.AGE",),
-        "context": {"dataset": "DM", "field": "AGE", "type": "int", "value": ""},
-    }
+    assert loaded.table.frame["AGE"].to_list() == [None]
 
 
 @pytest.mark.parametrize(

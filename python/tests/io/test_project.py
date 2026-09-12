@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from yamaa.resources import (
+from yamaa.io.project import (
     ProjectResources,
     ResourceFailure,
     classify_project_path,
