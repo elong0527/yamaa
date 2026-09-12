@@ -43,15 +43,22 @@ Name the directory for what it derives, not for the construct it uses:
 
 ## The README describes data, not the specification
 
-A reader of an example README wants to know what the output means. Write:
+A reader of an example README wants to know what the output means. The
+target audience is an average statistician or statistical programmer with a
+general understanding of SDTM and ADaM but limited engineering, ODM XML, or
+tooling detail: expand abbreviations on first use and state effects in
+study-data words. Write:
 
-- a title of the form `# <STANDARD> <DOMAIN>: <what the example does>`;
-- one sentence naming the input sources and the output grain, ending in a
-  colon;
-- one bullet per output variable, in output order, saying what its value means
-  and what it holds when the inputs do not support it;
-- at most one closing paragraph, for a rule that governs several variables at
-  once;
+- a short title of the form `# <what the example does>` (no
+  `<STANDARD> <DOMAIN>` prefix in the title);
+- a `Goal:` line naming the variables derived;
+- an `Input:` line naming the source shape in plain words;
+- a `Variables:` list with one bullet per output variable, in output order,
+  saying what its value means and what it holds when the inputs do not
+  support it;
+- at most one closing `Note:` paragraph, for a rule that governs several
+  variables at once;
+- a final tags line of the form `Standard: <STANDARD> | Domain: <DOMAIN>`;
 - for every negative example, a final `## How to fix` section that recommends
   the safest correction first and uses a short YAML snippet when it clarifies
   the change.
@@ -259,9 +266,8 @@ check reports is a variable the README does not explain.
    For a positive inherited example, also write its expected resolved YAML.
 2. Write the README to the contract above. A negative example must include its
    `## How to fix` section.
-3. Add a row to the index table in `README.md`. Its `Derives` column is the
-   README title with the standard and domain prefix removed, so the two cannot
-   drift apart.
+3. Add a row to the index table in `README.md`. Its `Derives` column copies
+   the README title, which now carries no standard/domain prefix.
 4. Record any finding it exposes as a gap on the matching work item in the
    issue tracker, or add the example's name to the gap that already states it.
 
