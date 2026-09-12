@@ -33,8 +33,10 @@ button:focus-visible, a:focus-visible, select:focus-visible, [tabindex]:focus-vi
 .brand-mark { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; background: var(--green); color: white; font-size: 18px; }
 .brand-separator { color: #9aaba4; font-weight: 400; margin: 0 5px; }
 .brand-location { font-size: 14px; font-weight: 450; letter-spacing: 0; color: var(--muted); }
-.source-link { font-size: 14px; text-decoration: none; white-space: nowrap; }
-.source-link:hover { text-decoration: underline; }
+.header-links { display: flex; align-items: center; gap: 20px; }
+.source-link, .gallery-link { font-size: 14px; text-decoration: none; white-space: nowrap; }
+.source-link:hover, .gallery-link:hover { text-decoration: underline; }
+.gallery-link { font-weight: 600; }
 .title-row { margin-top: 18px; align-items: flex-end; }
 .title-block { max-width: 900px; min-width: 0; }
 .eyebrow { margin: 0 0 6px; color: var(--green); font-size: 12px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
@@ -135,6 +137,7 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
 @media (max-width: 599px) {
   .page-header { padding: 14px 16px 18px; }
   .brand-location, .brand-separator { display: none; }
+  .header-links { gap: 12px; }
   h1 { font-size: 25px; }
   .dashboard { padding: 12px 12px 0; }
   .prose { padding: 14px 18px; }
@@ -162,7 +165,10 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
   <header class="page-header">
     <div class="brand-row">
       <div class="brand"><span class="brand-mark" aria-hidden="true">Y</span> YAMAA <span class="brand-separator">/</span> <span class="brand-location">Example explorer</span></div>
-      <a class="source-link" href="https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-ae-dictionary-coding">Example source <span aria-hidden="true">&#8599;</span></a>
+      <nav class="header-links" aria-label="Example navigation">
+        <a class="gallery-link" href="index.html"><span aria-hidden="true">&#8592;</span> All examples</a>
+        <a class="source-link" href="https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-ae-dictionary-coding">Example source <span aria-hidden="true">&#8599;</span></a>
+      </nav>
     </div>
     <div class="title-row">
       <div class="title-block"><p class="eyebrow">SDTM AE</p><h1>Code reported terms against a medical dictionary</h1></div>
