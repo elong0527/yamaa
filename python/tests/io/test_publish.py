@@ -31,11 +31,24 @@ def test_publish_replaces_atomically_and_leaves_no_residue(
 
 def test_failed_publication_preserves_the_previous_artifact(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    target = tmp_path / "missing-dir" / "dm.csv"
+    target = tmp_path / "dm.csv"
+    target.write_bytes(b"old\n")
+
+    def fail_replace(source: str, destination: Path) -> None:
+        raise OSError("simulated replacement failure")
+
+    monkeypatch.setattr("yamaa.io.publish.os.replace", fail_replace)
 
     with pytest.raises(ArtifactError) as raised:
         publish_artifact(target, b"new\n")
 
     assert raised.value.condition == "publication_failed"
-    assert [path.name for path in tmp_path.iterdir()] == []
+    assert target.read_bytes() == b"old\n"
+    assert [path.name for path in tmp_path.iterdir()] == ["dm.csv"]
+
+
+def test_publish_requires_a_caller_permitted_path(tmp_path: Path) -> None:
+    with pytest.raises(TypeError, match="caller-permitted"):
+        publish_artifact(str(tmp_path / "dm.csv"), b"new\n")  # type: ignore[arg-type]

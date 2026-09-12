@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from yamaa.io import write_artifact
-from yamaa.io.csv import render_csv
+from yamaa.io.csv_write import render_csv
 from yamaa.io.polars import frame_from_values
 from yamaa.io.publish import ArtifactError
 from yamaa.models import DateTimeValue, DateValue, TypedColumn, TypedTable
@@ -124,6 +124,15 @@ def test_display_rounding_is_exact_half_away(
     assert render_csv(table, ["DOSE"], [], decimals) == (f"DOSE\n{text}\n".encode())
 
 
+def test_display_rounding_supports_unbounded_declared_precision() -> None:
+    columns = (TypedColumn(name="DOSE", type="float"),)
+    table = frame_from_values(columns, [[25.0]])
+
+    assert render_csv(table, ["DOSE"], [], 5000) == (
+        b"DOSE\n25." + (b"0" * 5000) + b"\n"
+    )
+
+
 def test_unknown_output_column_fails() -> None:
     with pytest.raises(ArtifactError) as raised:
         render_csv(_table(), ["STUDYID", "ABSENT"], [], None)
@@ -142,3 +151,7 @@ def test_profile_dispatch_rejects_unknown_extension_and_stray_decimals() -> None
             table, Output(path="dm.parquet", columns=["STUDYID"], decimals=2), []
         )
     assert raised.value.condition == "decimals_not_applicable"
+
+    with pytest.raises(ArtifactError) as raised:
+        render_csv(table, ["STUDYID"], [], -1)
+    assert raised.value.condition == "invalid_output_decimals"

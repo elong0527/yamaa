@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import math
 
 import polars as pl
@@ -217,3 +218,37 @@ def test_typed_table_requires_declared_polars_column_order() -> None:
             ),
             frame=frame,
         )
+
+
+def test_typed_table_enforces_declared_storage_types() -> None:
+    with pytest.raises(ValidationError, match="must use Float64"):
+        TypedTable(
+            columns=(TypedColumn(name="VALUE", type="float"),),
+            frame=pl.DataFrame({"VALUE": [1]}),
+        )
+
+    with pytest.raises(ValidationError, match="must use Date"):
+        TypedTable(
+            columns=(TypedColumn(name="VALUE", type="date"),),
+            frame=pl.DataFrame([pl.Series("VALUE", ["2025-01-02"], dtype=pl.Object)]),
+        )
+
+    with pytest.raises(ValidationError, match="whole-second precision"):
+        TypedTable(
+            columns=(TypedColumn(name="VALUE", type="datetime"),),
+            frame=pl.DataFrame(
+                {"VALUE": [dt.datetime(2025, 1, 2, 3, 4, 5, 1)]},  # noqa: DTZ001
+                schema={"VALUE": pl.Datetime("us")},
+            ),
+        )
+
+
+def test_typed_table_normalizes_nonfinite_floats_to_missing() -> None:
+    table = TypedTable(
+        columns=(TypedColumn(name="VALUE", type="float"),),
+        frame=pl.DataFrame(
+            [pl.Series("VALUE", [1.0, math.inf, -math.inf, math.nan], pl.Float64)]
+        ),
+    )
+
+    assert table.frame["VALUE"].to_list() == [1.0, None, None, None]

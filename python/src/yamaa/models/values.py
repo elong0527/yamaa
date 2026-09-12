@@ -411,10 +411,52 @@ class TypedTable(BaseModel):
     frame: Annotated[pl.DataFrame, InstanceOf[pl.DataFrame]]
 
     @model_validator(mode="after")
-    def validate_column_order(self) -> TypedTable:
+    def validate_column_contract(self) -> TypedTable:
         declared = [column.name for column in self.columns]
         if len(declared) != len(set(declared)):
             raise ValueError("typed table column names must be unique")
         if self.frame.columns != declared:
             raise ValueError("Polars frame columns must match declared column order")
+
+        expected_dtypes = {
+            "str": pl.String,
+            "int": pl.Int64,
+            "float": pl.Float64,
+            "date": pl.Date,
+            "datetime": pl.Datetime("us"),
+        }
+        frame = self.frame
+        for column in self.columns:
+            series = frame.get_column(column.name)
+            expected = expected_dtypes[column.type]
+            if series.dtype != expected:
+                raise ValueError(
+                    f"typed table column {column.name!r} must use {expected}, "
+                    f"not {series.dtype}"
+                )
+
+            values = series.to_list()
+            if column.type == "float":
+                normalized = [
+                    None if value is not None and not math.isfinite(value) else value
+                    for value in values
+                ]
+                if normalized != values:
+                    frame = frame.with_columns(
+                        pl.Series(
+                            column.name,
+                            normalized,
+                            dtype=pl.Float64,
+                            strict=True,
+                        )
+                    )
+            elif column.type == "datetime" and any(
+                value is not None and value.microsecond != 0 for value in values
+            ):
+                raise ValueError(
+                    f"typed table column {column.name!r} contains a datetime "
+                    "below whole-second precision"
+                )
+        if frame is not self.frame:
+            object.__setattr__(self, "frame", frame)
         return self

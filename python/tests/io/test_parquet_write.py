@@ -100,6 +100,76 @@ def test_pages_are_uncompressed() -> None:
         metadata.row_group(0).column(index).compression
         for index in range(metadata.num_columns)
     } == {"UNCOMPRESSED"}
+    assert metadata.metadata is None
+
+
+def test_all_missing_temporal_columns_keep_their_declared_types() -> None:
+    columns = (
+        TypedColumn(name="VISIT", type="date"),
+        TypedColumn(name="DRAWN", type="datetime"),
+    )
+    frame = read_parquet_frame(
+        write_parquet_bytes(
+            frame_from_values(columns, [[None, None]]), ["VISIT", "DRAWN"]
+        )
+    )
+
+    assert frame.schema == {
+        "VISIT": pl.Date,
+        "DRAWN": pl.Datetime(time_unit="us", time_zone=None),
+    }
+
+
+def test_physical_and_logical_schema_matches_r020() -> None:
+    columns = (
+        TypedColumn(name="TEXT", type="str"),
+        TypedColumn(name="COUNT", type="int"),
+        TypedColumn(name="VALUE", type="float"),
+        TypedColumn(name="VISIT", type="date"),
+        TypedColumn(name="DRAWN", type="datetime"),
+    )
+    table = frame_from_values(
+        columns,
+        [
+            [
+                "x",
+                1,
+                1.5,
+                DateValue.parse("2025-01-02"),
+                DateTimeValue.parse("2025-01-02T03:04:05"),
+            ]
+        ],
+    )
+    metadata = pq.read_metadata(
+        io.BytesIO(write_parquet_bytes(table, [column.name for column in columns]))
+    )
+
+    assert [metadata.schema.column(index).physical_type for index in range(5)] == [
+        "BYTE_ARRAY",
+        "INT64",
+        "DOUBLE",
+        "INT32",
+        "INT64",
+    ]
+    assert [str(metadata.schema.column(index).logical_type) for index in range(5)] == [
+        "String",
+        "None",
+        "None",
+        "Date",
+        (
+            "Timestamp(isAdjustedToUTC=false, timeUnit=microseconds, "
+            "is_from_converted_type=false, force_set_converted_type=false)"
+        ),
+    ]
+    assert [
+        metadata.schema.column(index).max_definition_level for index in range(5)
+    ] == [
+        1,
+        1,
+        1,
+        1,
+        1,
+    ]
 
 
 def test_parquet_round_trip_preserves_row_order() -> None:

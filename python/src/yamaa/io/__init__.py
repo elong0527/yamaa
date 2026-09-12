@@ -5,9 +5,9 @@ Each format lives in its own module: ``csv`` today, ``xpt`` and
 adapter delivers plain text-or-missing values; quoting is a transport
 detail no adapter preserves.
 
-The same modules write back out: ``csv.render_csv`` for the exact R020
-csv bytes, ``polars.write_parquet_bytes`` for the Parquet profile, and
-``publish`` for the atomic step from complete bytes to visible artifact.
+The output modules write back out: ``csv_write.render_csv`` for the exact
+R020 csv bytes, ``polars.write_parquet_bytes`` for the Parquet profile,
+and ``publish`` for the atomic step from complete bytes to visible artifact.
 """
 
 from __future__ import annotations
@@ -51,5 +51,5 @@ def write_artifact(table: TypedTable, output: Output, keys: Sequence[str]) -> by
     if profile == ".parquet":
         if output.decimals is not None:
             raise ArtifactError("decimals_not_applicable", output.decimals)
-        return write_parquet_bytes(table, output.columns)
+        return write_parquet_bytes(table, output.columns, keys)
     raise ArtifactError("unknown_artifact_profile", output.path)

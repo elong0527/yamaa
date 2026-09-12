@@ -15,16 +15,20 @@ class ArtifactError(ValueError):
         condition: str,
         value: object = None,
         keys: dict[str, object] | None = None,
+        column: str | None = None,
     ) -> None:
         super().__init__(condition)
         self.condition = condition
         self.value = value
         self.keys = keys or {}
+        self.column = column
 
 
-def publish_artifact(target: str | Path, content: bytes) -> Path:
+def publish_artifact(target: Path, content: bytes) -> Path:
     """Atomically replace the explicit target with complete bytes."""
-    path = Path(target)
+    if not isinstance(target, Path):
+        raise TypeError("target must be a caller-permitted pathlib.Path")
+    path = target
     parent = path.parent
     temporary = ""
     try:
