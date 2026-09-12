@@ -256,6 +256,7 @@ def validation_diagnostic(
 # when its required context differs by operation family.
 VALIDATION_CONTEXT_FIELDS = {
     ('R001', 'dependency_cycle'): {'cycle'},
+    ('R001', 'forward_reference'): {'column', 'dependency'},
     ('R002', 'duplicate_identifier'): {'identifier'},
     ('R002', 'unknown_field'): {'identifier'},
     ('R004', 'invalid_predicate'): {'predicate'},
@@ -2583,7 +2584,10 @@ def predicate_identifier_names(text):
         ast = parse_predicate(text)
     except PredicateError:
         return set()
+    return ast_identifier_names(ast)
 
+
+def ast_identifier_names(ast):
     names = set()
 
     def visit(node):
@@ -2609,22 +2613,7 @@ def numeric_expression_identifier_names(text):
         ast = parse_numeric_expression(text)
     except NumericExpressionError:
         return set()
-
-    names = set()
-
-    def visit(node):
-        if node.get('kind') == 'identifier':
-            names.add(node['name'])
-        for value in node.values():
-            if isinstance(value, dict):
-                visit(value)
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, dict):
-                        visit(item)
-
-    visit(ast)
-    return names
+    return ast_identifier_names(ast)
 
 
 def aggregate_expression_identifier_names(text):
@@ -2634,22 +2623,7 @@ def aggregate_expression_identifier_names(text):
         ast = parse_aggregate_expression(text)
     except AggregateExpressionError:
         return set()
-
-    names = set()
-
-    def visit(node):
-        if node.get('kind') == 'identifier':
-            names.add(node['name'])
-        for value in node.values():
-            if isinstance(value, dict):
-                visit(value)
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, dict):
-                        visit(item)
-
-    visit(ast)
-    return names
+    return ast_identifier_names(ast)
 
 
 class StringTemplateError(ValueError):
@@ -6737,10 +6711,10 @@ def validate_record_lookup_static_semantics(
     return errors
 
 
-def find_column_dependency_cycle(spec, env):
+def column_dependency_graph(spec, env):
     columns = spec.get('columns')
     if not isinstance(columns, list):
-        return None
+        return [], {}
     names = [
         column.get('name')
         for column in columns
@@ -6772,6 +6746,57 @@ def find_column_dependency_cycle(spec, env):
         }
         for name in names
     }
+    return names, dependencies
+
+
+def dependency_components(names, dependencies):
+    index_of = {}
+    lowlink = {}
+    stack = []
+    on_stack = set()
+    counter = [0]
+    component_of = {}
+
+    def connect(name):
+        index_of[name] = lowlink[name] = counter[0]
+        counter[0] += 1
+        stack.append(name)
+        on_stack.add(name)
+        for dependency in sorted(dependencies[name]):
+            if dependency not in index_of:
+                connect(dependency)
+                lowlink[name] = min(lowlink[name], lowlink[dependency])
+            elif dependency in on_stack:
+                lowlink[name] = min(lowlink[name], index_of[dependency])
+        if lowlink[name] == index_of[name]:
+            while True:
+                member = stack.pop()
+                on_stack.discard(member)
+                component_of[member] = name
+                if member == name:
+                    break
+
+    for name in names:
+        if name not in index_of:
+            connect(name)
+    return component_of
+
+
+def find_forward_reference(spec, env):
+    names, dependencies = column_dependency_graph(spec, env)
+    positions = {name: index for index, name in enumerate(names)}
+    component_of = dependency_components(names, dependencies)
+    for name in names:
+        for dependency in sorted(dependencies[name]):
+            if positions[dependency] > positions[name]:
+                if component_of.get(name) == component_of.get(dependency):
+                    continue
+                return name, dependency
+    return None
+
+
+def find_column_dependency_cycle(spec, env):
+    names, dependencies = column_dependency_graph(spec, env)
     state = {}
     stack = []
 
@@ -6948,6 +6973,18 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
                     context={'cycle': cycle},
                 )
             )
+    forward = find_forward_reference(spec, env)
+    if forward is not None:
+        name, dependency = forward
+        errors.append(
+            validation_diagnostic(
+                derivation_primary_path(spec, spec_label, name),
+                'forward_reference',
+                f'column {name!r} references later declared column '
+                f'{dependency!r}',
+                context={'column': name, 'dependency': dependency},
+            )
+        )
     return list(dict.fromkeys(errors))
 
 
@@ -7860,9 +7897,11 @@ CANONICAL_INT = re.compile(r'0|-?[1-9][0-9]*')
 try:
     from yamaa.io.csv import (
         CsvProfileFailure,
+        fixed_point,
         render_records,
         scan_records,
     )
+    from yamaa.models import DateTimeValue, DateValue, convert_value
 except ImportError as error:
     raise SystemExit(
         "validate_repository.py requires the yamaa package "
@@ -7874,11 +7913,9 @@ def canonical_float_text(value: str, decimals=None):
     """Return why value is not R020's text for its float, or None.
 
     Static validation reads a golden file rather than running a derivation,
-    so it checks the form of the text and not the value behind it. With no
-    declared precision that is the whole contract, because R011's shortest
-    round-trip text is unique per value. With a declared precision it is the
-    written width: proving that the digits are the ones the derivation would
-    have produced needs the executable suite.
+    so it checks the form of the text and not the value behind it. The form
+    itself comes from the runtime: R011's shortest text with no declared
+    precision, R020's exact display rounding with one.
     """
     try:
         number = float(value)
@@ -7887,30 +7924,13 @@ def canonical_float_text(value: str, decimals=None):
     if math.isnan(number) or math.isinf(number):
         return 'a non-finite float is the missing value'
     if decimals is None:
-        # repr supplies the shortest round-tripping digits but places them in
-        # exponential notation past its own thresholds; R011 writes the same
-        # digits positionally, so one value keeps one spelling.
-        canonical = format(decimal.Decimal(repr(number)), 'f')
-        if canonical.endswith('.0'):
-            canonical = canonical[:-2]
+        converted = convert_value(number, 'str')
+        canonical = converted.value
         if value != canonical:
             return f'expected the shortest round-trip text {canonical}'
         return None
-    # Rounding reads the exact binary64 value, which for an extreme magnitude
-    # or a large declared precision needs more digits than the default context.
-    exact = decimal.Decimal(number)
-    try:
-        with decimal.localcontext() as context:
-            context.prec = max(28, exact.adjusted() + decimals + 3)
-            rounded = exact.quantize(
-                decimal.Decimal(1).scaleb(-decimals),
-                rounding=decimal.ROUND_HALF_UP,
-            )
-    except decimal.InvalidOperation:
-        return f'cannot be rendered at decimals {decimals}'
-    if not rounded:
-        rounded = rounded.copy_abs()
-    if value != format(rounded, 'f'):
+    canonical = fixed_point(number, decimals)
+    if value != canonical:
         return (
             f'expected exactly {decimals} digit(s) after the decimal point '
             'in positional notation'
@@ -7927,28 +7947,27 @@ CANONICAL_DATETIME = re.compile(
 def canonical_temporal_text(value: str, declared: str):
     """Return why value is not R016's canonical text for its type, or None.
 
-    R016 fixes exactly one written form per temporal type, so the check is the
-    shape and then the calendar: a zone, an offset, a fractional second, a
-    truncated form, and an unpadded field are all outside the grammar, and a
-    field combination no calendar admits fails even when the shape matches.
+    R016 fixes exactly one written form per temporal type. The verdict comes
+    from the runtime's strict parsers; the shape patterns below only route
+    the message, telling a misspelled field from a date no calendar admits.
     """
     if declared == 'date':
-        match = CANONICAL_DATE.fullmatch(value)
-        if match is None:
-            return 'expected YYYY-MM-DD'
-        try:
-            dt.date(*(int(part) for part in match.groups()))
-        except ValueError as exc:
-            return f'not a date on the calendar: {exc}'
-        return None
-
-    match = CANONICAL_DATETIME.fullmatch(value)
-    if match is None:
-        return 'expected YYYY-MM-DDThh:mm:ss'
+        parsed_type = DateValue
+        pattern = CANONICAL_DATE
+        yours = 'expected YYYY-MM-DD'
+        calendar = 'not a date on the calendar'
+    else:
+        parsed_type = DateTimeValue
+        pattern = CANONICAL_DATETIME
+        yours = 'expected YYYY-MM-DDThh:mm:ss'
+        calendar = 'not a moment on the calendar'
     try:
-        dt.datetime(*(int(part) for part in match.groups()))
+        if parsed_type.parse(value).to_text() != value:
+            return yours
     except ValueError as exc:
-        return f'not a moment on the calendar: {exc}'
+        if pattern.fullmatch(value) is None:
+            return yours
+        return f'{calendar}: {exc}'
     return None
 
 
@@ -8608,7 +8627,7 @@ def decide_predicate(text):
         ast = parse_predicate(text)
     except PredicateError:
         return 'invalid_predicate', None, set()
-    return None, predicate_shape(ast), predicate_identifier_names(text)
+    return None, predicate_shape(ast), ast_identifier_names(ast)
 
 
 def decide_numeric(text):

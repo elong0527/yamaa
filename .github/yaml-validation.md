@@ -179,11 +179,9 @@ The R side of the shared grammar vectors needs only R and the `yaml` package:
 Rscript R/cdiscbuilder/inst/conformance/grammar_conformance.R
 ```
 
-The Ruby example checks and their tests can also run locally:
+The Ruby label check can also run locally:
 
 ```bash
-ruby .github/scripts/examples/test_check_example_dependencies.rb
-ruby .github/scripts/examples/check_example_dependencies.rb
 ruby .github/scripts/examples/check_labels.rb
 ```
 
@@ -193,10 +191,11 @@ ruby .github/scripts/examples/check_labels.rb
 
 ## Warning Policy
 Warnings are printed to standard output but do not fail validation. The Python
-validator checks column labels for every resolved specification and orders
-inherited columns by dependency. The existing Ruby checks under
-`.github/scripts/examples/` continue to enforce these policies for non-inherited
-examples and discover linked producing specifications recursively.
+validator checks column labels for every resolved specification, orders
+inherited columns by dependency, and enforces declaration order, output
+contracts, and dependency cycles for every example, so no second semantic
+scan owns those policies. The remaining Ruby check under
+`.github/scripts/examples/` covers label text only.
 
 To treat warnings as errors, run with the `--warnings-as-errors` flag:
 
