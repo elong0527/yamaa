@@ -29,18 +29,20 @@ def test_positive_example_outputs_match_expected_csvs(
 ) -> None:
     example = runner.parent
     expected = {
-        path.name: path for path in sorted((example / "expected").glob("*.csv"))
+        path.stem: path for path in sorted((example / "expected").glob("*.csv"))
     }
     assert expected, f"{example.name} has run.py but no expected CSV"
 
     monkeypatch.chdir(example)
     namespace = runpy.run_path(runner.name)
-    outputs = namespace["df"]
+    outputs = {
+        name: value
+        for name, value in namespace.items()
+        if not name.startswith("_") and isinstance(value, pl.DataFrame)
+    }
 
-    assert isinstance(outputs, dict)
     assert set(outputs) == set(expected)
-    for filename, expected_path in expected.items():
-        actual = outputs[filename]
-        assert isinstance(actual, pl.DataFrame)
+    for name, expected_path in expected.items():
+        actual = outputs[name]
         committed = pl.read_csv(expected_path, schema=actual.schema)
         assert_frame_equal(actual, committed, check_exact=True)
