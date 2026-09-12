@@ -6,8 +6,7 @@ from yamaa.expressions import FailedResolution, ResolvedValue, evaluate_expressi
 from yamaa.io import ProjectResources, load_source_table, load_source_tables
 from yamaa.io.polars import frame_from_values, runtime_rows
 from yamaa.models import MISSING, ConditionResult, TypedColumn, TypedTable, ValueResult
-from yamaa.planning import ODM_CONTEXT_COLUMNS, build_binding_plan
-from yamaa.runtime import BindingIndex
+from yamaa.odm import ODM_CONTEXT_COLUMNS, BindingIndex, build_binding_plan
 from yamaa.specification import load_specification
 from yamaa.specification.models import (
     Column,
@@ -181,6 +180,19 @@ def test_direct_dataset_and_completed_output_names_resolve() -> None:
     assert context.resolve("EARLIER") == ResolvedValue(value="completed")
 
 
+def test_period_free_odm_item_oid_resolves_contextually() -> None:
+    table = _table(
+        ["StudyOID", "ItemOID", "Value"],
+        [
+            ["S1", "IT.TEST.TARGET", "target"],
+            ["S1", "AGE", "42"],
+        ],
+    )
+    context = _index(table).context({"ODM": runtime_rows(table)[0]})
+
+    assert context.resolve("ODM.AGE") == ResolvedValue(value="42")
+
+
 def test_unknown_names_and_item_references_without_context_are_failures() -> None:
     table = _table(
         ["ItemOID", "Value"],
@@ -333,6 +345,43 @@ def test_multiple_match_count_requires_more_than_one_filtered_survivor() -> None
 
     assert one == ValueResult(value="second")
     assert none == ValueResult(value=MISSING)
+
+
+def test_order_terms_are_validated_when_filter_leaves_one_survivor() -> None:
+    table = _table(
+        ["StudyOID", "ItemOID", "Value", "Include"],
+        [
+            ["S1", "IT.TEST.TARGET", "target", None],
+            ["S1", "IT.TEST.VALUE", "kept", "Y"],
+            ["S1", "IT.TEST.VALUE", "excluded", "N"],
+        ],
+    )
+    context = _index(table).context({"ODM": runtime_rows(table)[0]})
+
+    result = evaluate_expression(
+        {
+            "source": {
+                "variable": "ODM.IT.TEST.VALUE",
+                "multiple_matches": {
+                    "filter": "ODM.Include = 'Y'",
+                    "order_by": [
+                        {
+                            "variable": "ODM.Unknown",
+                            "direction": "asc",
+                            "nulls": "last",
+                        }
+                    ],
+                    "keep": "first",
+                },
+            }
+        },
+        context,
+    )
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.phase == "validation"
+    assert result.condition.condition == "unknown_field"
+    assert result.condition.context == {"identifier": "ODM.Unknown"}
 
 
 def test_multiple_match_filter_also_applies_to_one_contextual_match() -> None:

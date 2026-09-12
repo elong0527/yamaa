@@ -6,7 +6,7 @@ import pytest
 
 from yamaa.io import ProjectResources, load_source_tables
 from yamaa.models import TypedColumn
-from yamaa.planning import BindingFailure, BoundReference, build_binding_plan
+from yamaa.odm import BindingFailure, BoundReference, build_binding_plan
 from yamaa.specification import load_specification
 
 REPOSITORY = Path(__file__).parents[3]
@@ -52,10 +52,15 @@ def test_plan_resolves_output_dataset_and_complete_odm_item_names() -> None:
         "ItemGroupRepeatKey",
     )
 
+    period_free_item = plan.bind("ODM.AGE")
+    assert isinstance(period_free_item, BoundReference)
+    assert period_free_item.kind == "odm_item"
+    assert period_free_item.item_oid == "AGE"
+
 
 @pytest.mark.parametrize(
     "name",
-    ["UNKNOWN", "OTHER.Value", "ODM.NotAField"],
+    ["UNKNOWN", "OTHER.Value"],
 )
 def test_plan_rejects_unknown_names(name: str) -> None:
     plan, _ = _fixture_plan()

@@ -126,10 +126,10 @@ class BindingPlan(_FrozenModel):
                 field=field,
             )
 
-        # The second period distinguishes an ODM ItemOID reference from an
-        # ordinary unknown field. Splitting only once preserves the complete
-        # period-containing ItemOID (R002-20).
-        if "." in field and dataset.is_long_form_odm:
+        # Dataset fields take precedence above. Every other suffix on a
+        # long-form ODM relation is a complete ItemOID; R002-20 permits, but
+        # does not require, periods inside that identifier.
+        if dataset.is_long_form_odm:
             if not dataset.context_columns:
                 return _unknown(name)
             return BoundReference(

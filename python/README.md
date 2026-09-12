@@ -84,14 +84,13 @@ uv run --project python --isolated --extra test pytest \
   python/tests/models python/tests/expressions
 ```
 
-## Source binding and ODM contexts
+## ODM source binding and contextual resolution
 
 Build one binding plan from a normalized specification and its loaded source
 tables, then share one index across row-local resolvers:
 
 ```python
-from yamaa.planning import build_binding_plan
-from yamaa.runtime import BindingIndex
+from yamaa.odm import BindingIndex, build_binding_plan
 
 plan = build_binding_plan(loaded_spec.specification, loaded_sources)
 index = BindingIndex(plan, loaded_sources)
@@ -112,7 +111,7 @@ Run this component's focused tests from the repository root:
 
 ```bash
 uv run --project python --isolated --extra test pytest \
-  python/tests/planning python/tests/runtime
+  python/tests/odm
 ```
 
 ## CSV source ingestion

@@ -31,7 +31,7 @@ from yamaa.models import (
     runtime_type_name,
     values_comparable,
 )
-from yamaa.planning import ODM_CONTEXT_COLUMNS, BindingFailure, BindingPlan
+from yamaa.odm.bindings import ODM_CONTEXT_COLUMNS, BindingFailure, BindingPlan
 from yamaa.specification.models import OrderTerm
 
 
@@ -177,16 +177,6 @@ class OdmItemIndex:
         selection: MultipleMatchSelection,
         variable: str,
     ) -> Resolution:
-        eligible = self._filter(matches, selection.filter)
-        if isinstance(eligible, FailedResolution):
-            return eligible
-        if not eligible:
-            # R008-14: an empty filtered right side yields missing and does not
-            # invoke either source handler.
-            return ResolvedValue(value=MISSING)
-        if len(eligible) == 1:
-            return ResolvedValue(value=eligible[0].values["Value"])
-
         terms: list[tuple[OrderTerm, str]] = []
         for term in selection.order_by:
             if "." not in term.variable:
@@ -203,6 +193,16 @@ class OdmItemIndex:
                     {"identifier": term.variable},
                 )
             terms.append((term, field))
+
+        eligible = self._filter(matches, selection.filter)
+        if isinstance(eligible, FailedResolution):
+            return eligible
+        if not eligible:
+            # R008-14: an empty filtered right side yields missing and does not
+            # invoke either source handler.
+            return ResolvedValue(value=MISSING)
+        if len(eligible) == 1:
+            return ResolvedValue(value=eligible[0].values["Value"])
 
         def compare(left: _IndexedRow, right: _IndexedRow) -> int:
             for term, field in terms:

@@ -1,6 +1,7 @@
 # ODM helpers
 
-The ODM module provides three general-purpose functions:
+The ODM module owns ingestion and contextual resolution for CDISC ODM data.
+Its three general-purpose file APIs are:
 
 ```python
 from yamaa.odm import iter_odm_records, read_odm, write_odm_parquet
@@ -34,6 +35,21 @@ from yamaa.odm import write_odm_parquet
 result = write_odm_parquet("input.xml", "clinical-items.parquet")
 print(result.row_count)
 ```
+
+For a normalized long-form ODM projection, build one binding plan and share
+one index across row-local expression resolvers:
+
+```python
+from yamaa.odm import BindingIndex, build_binding_plan
+
+plan = build_binding_plan(loaded_spec.specification, loaded_sources)
+index = BindingIndex(plan, loaded_sources)
+resolver = index.context({"ODM": current_odm_row}, {"STUDYID": "STUDY01"})
+```
+
+The index matches every available ODM context column and the complete
+`ItemOID`. It distinguishes an absent item from a matched missing `Value` and
+applies explicit R008 multiple-match policies in deterministic source order.
 
 Run the focused tests from the installed, locked package environment:
 
