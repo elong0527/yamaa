@@ -111,6 +111,61 @@ def test_rejects_a_symlink_replacement_before_ingestion(tmp_path: Path) -> None:
     assert raised.value.written_path == "dm.csv"
 
 
+@pytest.mark.parametrize("operation", ["capture", "verify"])
+def test_intermediate_symlink_race_cannot_open_outside_project(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    project = tmp_path / "project"
+    source_directory = project / "input"
+    source_directory.mkdir(parents=True)
+    (source_directory / "dm.csv").write_bytes(b"ID\n001\n")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_source = outside / "dm.csv"
+    outside_source.write_bytes(b"ID\n001\n")
+    resources = ProjectResources(project)
+    snapshot = resources.capture("input/dm.csv") if operation == "verify" else None
+
+    original_open = os.open
+    replacement = tmp_path / "original-input"
+    outside_identity = (outside_source.stat().st_dev, outside_source.stat().st_ino)
+    replaced = False
+    opened_outside = False
+
+    def replacing_open(
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        flags: int,
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        nonlocal opened_outside, replaced
+        if not replaced and Path(path).name == "dm.csv":
+            source_directory.rename(replacement)
+            source_directory.symlink_to(outside, target_is_directory=True)
+            replaced = True
+        descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+        status = os.fstat(descriptor)
+        opened_outside |= (status.st_dev, status.st_ino) == outside_identity
+        return descriptor
+
+    monkeypatch.setattr(os, "open", replacing_open)
+
+    with pytest.raises(ResourceFailure) as raised:
+        if snapshot is None:
+            resources.capture("input/dm.csv")
+        else:
+            resources.verify(snapshot)
+
+    assert replaced
+    assert not opened_outside
+    assert raised.value.phase == "ingest"
+    assert raised.value.condition == "resource_path_content_changed"
+    assert raised.value.written_path == "input/dm.csv"
+
+
 def test_rejects_symlinks_at_final_and_intermediate_components(
     tmp_path: Path,
 ) -> None:
