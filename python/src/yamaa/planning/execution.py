@@ -641,7 +641,9 @@ def plan_execution(
             and specification.default_driver in specification.datasets
         ):
             row_plans.append(
-                PlannedRow(index=None, declaration=None, driver=specification.default_driver)
+                PlannedRow(
+                    index=None, declaration=None, driver=specification.default_driver
+                )
             )
     else:
         for index, row in enumerate(rows):
