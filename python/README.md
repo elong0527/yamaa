@@ -83,3 +83,39 @@ Run this component's focused tests from the repository root:
 uv run --project python --isolated --extra test pytest \
   python/tests/models python/tests/expressions
 ```
+
+## CSV source ingestion
+
+Create one resource manager for the approved project and use normalized
+`DatasetSource` declarations to load ordered, typed Polars tables:
+
+```python
+from yamaa.ingest import load_source_tables
+from yamaa.resources import ProjectResources
+from yamaa.specification.models import DatasetSource
+
+resources = ProjectResources("study")
+datasets = {
+    "DM": DatasetSource(
+        path="input/dm.csv",
+        types={"AGE": "int", "RFSTDTC": "date"},
+    )
+}
+loaded = load_source_tables(datasets, resources)
+dm = loaded["DM"].table
+```
+
+The reader accepts the fixed `.csv` profile only. It parses the retained byte
+snapshot in memory, preserves source row and header order, and distinguishes a
+bare empty field from quoted empty text before applying declared types. It
+does not create CSV or other intermediate files. Producer-linked `schema`
+workflow resolution and header-contract comparison remain part of the workflow
+component; this ingestion API rejects a declaration carrying `schema` until
+that component supplies its resolved producer contract.
+
+Run the focused resource and ingestion tests from the repository root:
+
+```bash
+uv run --project python --isolated --extra test pytest \
+  python/tests/resources python/tests/ingest
+```
