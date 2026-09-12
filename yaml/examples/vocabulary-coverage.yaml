@@ -9,14 +9,11 @@ version: "1.0"
 coverage:
   aggregate: [negative-sum-non-numeric-source]
   baseline_flag: [negative-baseline-flag-tied-date]
-  baseline_value:
-    gap: "#229"
+  baseline_value: [negative-baseline-value-multiple-flags]
   case: [negative-adae-review-condition-arithmetic]
-  coalesce:
-    gap: "#229"
+  coalesce: [negative-coalesce-self-reference]
   compute: [negative-compute-comparison-operator]
-  cut:
-    gap: "#229"
+  cut: [negative-cut-non-numeric-source]
   date_diff: [negative-date-diff-datetime-endpoints]
   date_impute: [negative-date-impute-month-out-of-range]
   date_precision: [negative-date-precision-invalid-source]
@@ -32,14 +29,13 @@ coverage:
   source: [negative-source-undeclared-field]
   str_concat: [negative-usubjid-exceeds-length]
   str_extract: [negative-str-extract-undeclared-group]
-  str_lower: {gap: "#229"}
+  str_lower: [negative-str-lower-non-string-source]
   str_template: [negative-adsl-subject-reference]
   str_upper: [negative-variable-nested-expression]
   study_day: [negative-study-day-datetime-input]
   to_date: [negative-to-date-date-source]
   verify:all_or_none: [negative-all-or-none-partial-row]
-  verify:allowed_values:
-    gap: "#229"
+  verify:allowed_values: [negative-allowed-values-mismatch]
   verify:implies: [negative-adam-adeg-pre-existing-rrr]
   verify:matches: [negative-matches-unreadable-pattern]
   verify:max_length: [negative-usubjid-exceeds-length]
@@ -47,5 +43,4 @@ coverage:
   verify:predicate: [negative-adam-adsl-stratification-reconciliation]
   verify:range: [negative-verification-implausible-age]
   verify:row_count: [negative-group-count-without-id]
-  verify:unique:
-    gap: "#229"
+  verify:unique: [negative-unique-duplicate-values]

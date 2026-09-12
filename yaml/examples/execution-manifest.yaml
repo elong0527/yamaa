@@ -380,6 +380,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  negative-allowed-values-mismatch:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   negative-all-or-none-partial-row:
     status: blocked
     blocked_by: "#101"
@@ -388,7 +392,15 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  negative-baseline-value-multiple-flags:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   negative-column-type-unknown:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-coalesce-self-reference:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
@@ -429,6 +441,10 @@ examples:
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
   negative-conversion-unparseable-number:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-cut-non-numeric-source:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
@@ -656,6 +672,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  negative-str-lower-non-string-source:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   negative-study-day-datetime-input:
     status: blocked
     blocked_by: "#101"
@@ -681,6 +701,10 @@ examples:
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
   negative-verification-implausible-age:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-unique-duplicate-values:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet

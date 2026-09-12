@@ -1,0 +1,7 @@
+phase: validation
+condition: dependency_cycle
+spec_paths:
+  - columns.SEVAL.derivation.coalesce
+requirement: R001-41
+context:
+  cycle: [SEVAL, SEVAL]

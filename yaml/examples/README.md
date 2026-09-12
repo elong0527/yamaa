@@ -136,7 +136,10 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-adsl-subject-reference`](negative-adsl-subject-reference/) | reject a malformed subject reference |
 | [`negative-advs-overlapping-analysis-windows`](negative-advs-overlapping-analysis-windows/) | reject overlapping analysis windows |
 | [`negative-all-or-none-partial-row`](negative-all-or-none-partial-row/) | reject a row with only some paired dates present |
+| [`negative-allowed-values-mismatch`](negative-allowed-values-mismatch/) | reject a recorded sex the study does not recognize |
 | [`negative-baseline-flag-tied-date`](negative-baseline-flag-tied-date/) | reject a baseline chosen between two same-day results |
+| [`negative-baseline-value-multiple-flags`](negative-baseline-value-multiple-flags/) | reject a baseline carried from two flagged visits |
+| [`negative-coalesce-self-reference`](negative-coalesce-self-reference/) | reject a severity carried from its own column |
 | [`negative-column-type-unknown`](negative-column-type-unknown/) | reject an analysis value with an ambiguous numeric type |
 | [`negative-compute-aggregate-function`](negative-compute-aggregate-function/) | reject a total written as a formula |
 | [`negative-compute-comparison-operator`](negative-compute-comparison-operator/) | reject an above-range flag written as a formula |
@@ -148,6 +151,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-conversion-incomplete-date`](negative-conversion-incomplete-date/) | reject an event start date that names no day |
 | [`negative-conversion-non-integral`](negative-conversion-non-integral/) | reject a pulse rate recorded between whole beats |
 | [`negative-conversion-unparseable-number`](negative-conversion-unparseable-number/) | reject a viral load reported below the assay limit |
+| [`negative-cut-non-numeric-source`](negative-cut-non-numeric-source/) | reject age bands grouped from a coded value |
 | [`negative-dataset-path-absolute`](negative-dataset-path-absolute/) | reject reference limits named by a machine location |
 | [`negative-dataset-path-directory`](negative-dataset-path-directory/) | reject reference limits that name a folder |
 | [`negative-dataset-path-missing`](negative-dataset-path-missing/) | reject reference limits the study does not hold |
@@ -204,10 +208,12 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-source-unknown-profile`](negative-source-unknown-profile/) | reject a subject listing stored under an unnamed format |
 | [`negative-source-unterminated-quote`](negative-source-unterminated-quote/) | reject a comment whose quoted text never closes |
 | [`negative-str-extract-undeclared-group`](negative-str-extract-undeclared-group/) | reject a site identifier taken from an uncaptured part |
+| [`negative-str-lower-non-string-source`](negative-str-lower-non-string-source/) | reject a site name folded from a number |
 | [`negative-study-day-datetime-input`](negative-study-day-datetime-input/) | reject a study day measured from a moment |
 | [`negative-sum-non-numeric-source`](negative-sum-non-numeric-source/) | reject a severity burden totalled from severity words |
 | [`negative-to-date-date-source`](negative-to-date-date-source/) | reject extracting a date from a date |
 | [`negative-types-unknown-field`](negative-types-unknown-field/) | reject a total over a field the source does not have |
+| [`negative-unique-duplicate-values`](negative-unique-duplicate-values/) | reject a site shared by two subjects |
 | [`negative-usubjid-exceeds-length`](negative-usubjid-exceeds-length/) | reject a subject identifier longer than the study permits |
 | [`negative-variable-nested-expression`](negative-variable-nested-expression/) | reject an uppercased country chosen inside the same step |
 | [`negative-verification-implausible-age`](negative-verification-implausible-age/) | reject an implausible age |

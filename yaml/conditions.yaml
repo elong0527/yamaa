@@ -4,6 +4,7 @@ conditions:
   aggregate_identifier_not_grouped: {rules: [R013], phases: [validation]}
   aggregate_multiple_records: {rules: [R013], phases: [row_construction]}
   all_or_none_failed: {rules: [R009], phases: [verification]}
+  allowed_values_failed: {rules: [R009], phases: [verification]}
   ambiguous_baseline: {rules: [R007], phases: [derivation]}
   ambiguous_dictionary: {rules: [R007], phases: [validation]}
   conversion_failed: {rules: [R011], phases: [convert]}
@@ -64,6 +65,7 @@ conditions:
   source_record_width: {rules: [R023], phases: [ingest]}
   sqrt_of_negative: {rules: [R010], phases: [derivation]}
   undeclared_column: {rules: [R005], phases: [validation]}
+  unique_failed: {rules: [R009], phases: [verification]}
   unknown_field: {rules: [R002, R004, R010, R013, R014], phases: [validation]}
   unmapped_key: {rules: [R008], phases: [mapping]}
   unmapped_value: {rules: [R008], phases: [mapping]}
