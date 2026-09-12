@@ -14,24 +14,9 @@ submission:
 
 output:
   path: dm.csv
-  columns: [STUDYID, DOMAIN, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, COUNTRY]
+  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, SITEID, AGE, AGEU, SEX, COUNTRY]
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation:
-      source: DM_RAW.STUDYID
-    submission:
-      core: Req
-      role: Identifier
-      length: 20
-      origin:
-        type: Protocol
-        source: Sponsor
-    verifications:
-      not_missing: {}
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
@@ -44,6 +29,21 @@ columns:
       codelist: DOMAIN
       origin:
         type: Assigned
+        source: Sponsor
+    verifications:
+      not_missing: {}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM_RAW.STUDYID
+    submission:
+      core: Req
+      role: Identifier
+      length: 20
+      origin:
+        type: Protocol
         source: Sponsor
     verifications:
       not_missing: {}
