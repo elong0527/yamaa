@@ -498,7 +498,7 @@ def _preflight_findings(
 
     rows = specification.rows or ()
     if not specification.parents:
-        if not rows and specification.base is None:
+        if not rows and specification.default_driver is None:
             diagnostics.append(_diagnostic("driver_unavailable", "base", {"row": None}))
         if (
             specification.base is not None
@@ -514,7 +514,7 @@ def _preflight_findings(
 
     for index, row in enumerate(rows):
         if not specification.parents:
-            driver = row.dataset or specification.base
+            driver = row.dataset or specification.default_driver
             if driver is None or driver not in specification.datasets:
                 diagnostics.append(
                     _diagnostic(
@@ -637,17 +637,17 @@ def plan_execution(
 
     if not rows:
         if (
-            specification.base is not None
-            and specification.base in specification.datasets
+            specification.default_driver is not None
+            and specification.default_driver in specification.datasets
         ):
             row_plans.append(
-                PlannedRow(index=None, declaration=None, driver=specification.base)
+                PlannedRow(index=None, declaration=None, driver=specification.default_driver)
             )
     else:
         for index, row in enumerate(rows):
             if row.group_by is not None:
                 continue
-            driver = row.dataset or specification.base
+            driver = row.dataset or specification.default_driver
             if driver is None or driver not in specification.datasets:
                 continue
             filter_path = f"rows[{index}].filter" if row.filter is not None else None

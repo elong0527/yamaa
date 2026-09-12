@@ -4,7 +4,6 @@ datasets:
   AE:
     path: input/ae.csv
     types: {AESEQ: int, AESTDTC: date}
-base: AE
 keys: [STUDYID, USUBJID, AESEQ]
 
 record_lookups:

@@ -6,7 +6,6 @@ datasets:
     schema: input/dm.schema.yaml
     # Intentionally invalid: the producing DM specification types RANDDT.
     types: {RANDDT: date}
-base: DM
 keys: [STUDYID, USUBJID]
 
 output:

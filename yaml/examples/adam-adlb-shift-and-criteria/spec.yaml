@@ -4,7 +4,6 @@ datasets:
   ADLBPRE:
     path: input/adlb_pre.csv
     types: {ASEQ: int, AVAL: float, ANRLO: float, ANRHI: float}
-base: ADLBPRE
 keys: [STUDYID, USUBJID, PARAMCD, ASEQ]
 
 output:

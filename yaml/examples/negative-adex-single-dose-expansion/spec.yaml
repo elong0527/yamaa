@@ -4,7 +4,6 @@ datasets:
   EX:
     path: input/ex.csv
     types: {EXSEQ: int, EXDOSE: float, EXDOSCNT: int}
-base: EX
 keys: [STUDYID, USUBJID, EXSEQ, ADOSEN]
 
 output:

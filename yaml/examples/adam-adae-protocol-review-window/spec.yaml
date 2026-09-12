@@ -8,7 +8,6 @@ datasets:
       AESTDTC: date
       AESTDTM: datetime
       SCORE: float
-base: AE
 keys: [STUDYID, USUBJID, AESEQ]
 
 output:

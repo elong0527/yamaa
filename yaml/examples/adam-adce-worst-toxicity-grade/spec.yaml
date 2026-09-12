@@ -2,7 +2,6 @@ schema_version: "1.0"
 domain: ADCE
 datasets:
   CE: input/ce.csv
-base: CE
 keys: [STUDYID, USUBJID, CESEQ]
 
 output:

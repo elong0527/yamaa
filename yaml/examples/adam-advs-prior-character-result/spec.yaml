@@ -4,7 +4,6 @@ datasets:
   VS:
     path: input/vs.csv
     types: {VSSEQ: int, AVISITN: int}
-base: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 
 output:
