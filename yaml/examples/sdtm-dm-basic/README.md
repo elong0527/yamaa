@@ -1,22 +1,19 @@
-# SDTM DM: build one subject record from collected data
+# Create DM from EDC extract
 
-This example uses collected long-form clinical data and a `yamaa` specification
-to derive one record per subject. The `rows` entry uses each subject's SEX item
-record only to establish the output grain; all values are derived with their
-column declarations:
+Goal: derive DM common variables SEX, AGE, ARM and ACTARM.
 
-- `USUBJID` and `SUBJID` identify the subject;
-- `SEX` is the collected sex translated into the standard `M`, `F`, and `U`.
-  A sex that was not collected, and one reported as something the study does
-  not recognise, both become `U`;
-- `AGE` is the collected age as a whole number, and is empty for a subject
-  whose age was never collected;
-- `ARM` is the planned treatment arm, and a subject with no arm collected is
-  `Unassigned`;
-- `ACTARM` is the arm the subject actually received, which this study takes to
-  be the planned one, so it repeats the resolved `ARM` including its
-  `Unassigned` fallback.
+Input: one row per collected item from EDC (ODM XML); e.g. subject
+001 has SEX, AGE and ARM rows.
 
-Every subject represented by a SEX item record yields a record even when its
-value or other items were not collected, so a sparsely collected subject
-appears with the substituted values rather than being dropped.
+Variables:
+
+- SEX: Male to `M`, Female to `F`; missing, blank, or other value
+  becomes `U`.
+- AGE: integer years as collected; blank when missing.
+- ARM: planned arm text; `Unassigned` when none collected.
+- ACTARM: actual arm; here always equals ARM.
+
+Note: one row per subject with a SEX record, even if blank; fallbacks
+fill the rest.
+
+Standard: SDTM | Domain: DM
