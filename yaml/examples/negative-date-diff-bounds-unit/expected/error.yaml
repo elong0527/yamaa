@@ -1,0 +1,8 @@
+phase: validation
+condition: value_not_permitted
+spec_paths:
+  - columns.DURM.derivation.date_diff.bounds
+requirement: R016-77
+context:
+  value: inclusive
+  permitted: [exclusive]

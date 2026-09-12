@@ -33,13 +33,13 @@
   <header class="page-header">
     <div class="brand">YAMAA / Example explorer</div>
     <h1>All examples</h1>
-    <p class="lede">195 example dashboards, generated from <a href="https://github.com/elong0527/yamaa/tree/main/yaml/examples">yaml/examples</a>. Each page shows the README, the source fixtures, the expected artifacts, and the YAML specification.</p>
-    <nav class="outcome-jump" aria-label="Jump to a group"><a href="#positive">Examples (94)</a><a href="#negative">Anti-pattern (101)</a></nav>
+    <p class="lede">197 example dashboards, generated from <a href="https://github.com/elong0527/yamaa/tree/main/yaml/examples">yaml/examples</a>. Each page shows the README, the source fixtures, the expected artifacts, and the YAML specification.</p>
+    <nav class="outcome-jump" aria-label="Jump to a group"><a href="#positive">Examples (95)</a><a href="#negative">Anti-pattern (102)</a></nav>
   </header>
   <main class="gallery" aria-label="Example gallery">
     <section class="outcome" id="positive" aria-labelledby="positive-heading">
       <h2 id="positive-heading">Examples</h2>
-      <p class="outcome-note">94 examples. Each runs to completion and produces the artifact in expected/.</p>
+      <p class="outcome-note">95 examples. Each runs to completion and produces the artifact in expected/.</p>
       <section aria-label="Examples: ADaM ADAE">
         <h3>ADaM ADAE</h3>
         <p class="count">16 examples</p>
@@ -136,7 +136,7 @@
       </section>
       <section aria-label="Examples: ADaM ADSL">
         <h3>ADaM ADSL</h3>
-        <p class="count">21 examples</p>
+        <p class="count">22 examples</p>
         <ul>
         <li><a href="adam-adsl-age-group.html">ADaM ADSL: derive age group</a></li>
         <li><a href="adam-adsl-analysis-age.html">ADaM ADSL: analysis age</a></li>
@@ -147,6 +147,7 @@
         <li><a href="adam-adsl-dependency-order.html">ADaM ADSL: derive a chain of population flags</a></li>
         <li><a href="adam-adsl-disposition.html">ADaM ADSL: select the final subject disposition from DS</a></li>
         <li><a href="adam-adsl-dose-adjustment-flag.html">ADaM ADSL: derive a dose adjustment flag from multiple sources</a></li>
+        <li><a href="adam-adsl-duration-weeks-months.html">ADaM ADSL: exposure duration in weeks and months</a></li>
         <li><a href="adam-adsl-geography-normalization.html">ADaM ADSL: normalize collected country and group it into a region</a></li>
         <li><a href="adam-adsl-identifier-parsing.html">ADaM ADSL: parse the site from USUBJID with a collected fallback</a></li>
         <li><a href="adam-adsl-investigator-comment.html">ADaM ADSL: keep an investigator comment exactly as collected</a></li>
@@ -269,7 +270,7 @@
     </section>
     <section class="outcome" id="negative" aria-labelledby="negative-heading">
       <h2 id="negative-heading">Anti-pattern</h2>
-      <p class="outcome-note">101 examples. Each must fail, and expected/error.yaml pins the error it raises.</p>
+      <p class="outcome-note">102 examples. Each must fail, and expected/error.yaml pins the error it raises.</p>
       <section aria-label="Anti-pattern: ADaM ADAE">
         <h3>ADaM ADAE</h3>
         <p class="count">15 examples</p>
@@ -350,7 +351,7 @@
       </section>
       <section aria-label="Anti-pattern: ADaM ADSL">
         <h3>ADaM ADSL</h3>
-        <p class="count">39 examples</p>
+        <p class="count">40 examples</p>
         <ul>
         <li><a href="negative-adam-adsl-stratification-reconciliation.html">ADaM ADSL: reconcile randomization strata</a></li>
         <li><a href="negative-adsl-cyclic-parent.html">ADaM ADSL: reject a circular chain of shared definitions</a></li>
@@ -364,6 +365,7 @@
         <li><a href="negative-allowed-values-mismatch.html">ADaM ADSL: reject a recorded sex the study does not recognize</a></li>
         <li><a href="negative-compute-sqrt-of-negative.html">ADaM ADSL: reject a body surface area from a negative weight</a></li>
         <li><a href="negative-cut-non-numeric-source.html">ADaM ADSL: reject age bands grouped from a coded value</a></li>
+        <li><a href="negative-date-diff-bounds-unit.html">ADaM ADSL: reject endpoint counting beside a month count</a></li>
         <li><a href="negative-date-diff-datetime-endpoints.html">ADaM ADSL: reject counting days between two moments</a></li>
         <li><a href="negative-greatest-incomparable-sources.html">ADaM ADSL: reject a last-known-alive date taken from a day number</a></li>
         <li><a href="negative-keys-internal-column.html">ADaM ADSL: reject a site-scoped subject identity</a></li>

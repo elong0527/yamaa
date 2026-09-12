@@ -14,7 +14,8 @@ coverage:
   coalesce: [negative-coalesce-self-reference]
   compute: [negative-compute-comparison-operator]
   cut: [negative-cut-non-numeric-source]
-  date_diff: [negative-date-diff-datetime-endpoints]
+  date_diff: [negative-date-diff-datetime-endpoints,
+    negative-date-diff-bounds-unit]
   date_impute: [negative-date-impute-month-out-of-range]
   date_precision: [negative-date-precision-invalid-source]
   greatest: [negative-greatest-incomparable-sources]

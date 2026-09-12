@@ -6635,6 +6635,21 @@ def validate_expression_static_semantics(expression, path, context):
                     resolver,
                 )
             )
+        if keyword == 'date_diff':
+            unit = payload.get('unit')
+            bounds = payload.get('bounds', 'exclusive')
+            if unit in ('week', 'month', 'year') and bounds != 'exclusive':
+                errors.append(
+                    validation_diagnostic(
+                        f"{operation_path}.bounds",
+                        'value_not_permitted',
+                        f"bounds {bounds!r} is defined only with unit 'day'",
+                        context={
+                            'value': bounds,
+                            'permitted': ['exclusive'],
+                        },
+                    )
+                )
         return errors
 
     if keyword == 'date_impute' and isinstance(payload, dict):

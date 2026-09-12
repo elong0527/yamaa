@@ -137,6 +137,11 @@ fixtures:
     condition: value_not_permitted
     spec_paths: [columns.ASTDT.derivation.date_impute.day]
     validator: schema
+  negative-date-diff-bounds-unit:
+    rule: R016
+    condition: value_not_permitted
+    spec_paths: [columns.DURM.derivation.date_diff.bounds]
+    validator: temporal_contract
   negative-date-diff-datetime-endpoints:
     rule: R016
     condition: incompatible_input_type
