@@ -4,8 +4,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="ADaM ADLB: carry standardized results into analysis: README, inputs, expected output, and YAML specification.">
-  <title>ADaM ADLB: carry standardized results into analysis | YAMAA examples</title>
+  <meta name="description" content="Carry standardized lab results into analysis: README, inputs, expected output, and YAML specification.">
+  <title>Carry standardized lab results into analysis | YAMAA examples</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230c5e4b'/%3E%3Cpath d='m8 8 8 10 8-10M16 18v7' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
   <style>:root {
   color-scheme: light;
@@ -171,21 +171,24 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
       </nav>
     </div>
     <div class="title-row">
-      <div class="title-block"><p class="eyebrow">ADaM ADLB</p><h1>Carry standardized results into analysis</h1></div>
+      <div class="title-block"><p class="eyebrow">ADLB</p><h1>Carry standardized lab results into analysis</h1></div>
       <dl class="metrics"><div><dt>input files</dt><dd>1</dd></div><div><dt>subjects</dt><dd>2</dd></div><div><dt>expected rows</dt><dd>2</dd></div></dl>
     </div>
   </header>
   <main class="dashboard" aria-label="Example dashboard">
     <section id="readme" class="panel readme-panel" aria-labelledby="readme-heading">
       <header class="panel-header"><h2 id="readme-heading">README</h2><span class="panel-caption">What this example means</span></header>
-      <div class="prose" aria-label="README content"><p>This example uses one laboratory record to produce one analysis record:</p>
+      <div class="prose" aria-label="README content"><p><strong>Goal:</strong> derive ADLB test code, result, and unit from SDTM LB.</p>
+<p><strong>Input:</strong> one row per collected laboratory result.</p>
+<p><strong>Variables:</strong></p>
 <ul>
-<li><code>PARAMCD</code> identifies the laboratory test being analyzed.</li>
-<li><code>AVAL</code> carries the standardized numeric result.</li>
-<li><code>AVALU</code> carries the standardized unit for the result.</li>
+<li><strong>PARAMCD</strong>: test code as collected.</li>
+<li><strong>AVAL</strong>: standardized numeric result.</li>
+<li><strong>AVALU</strong>: standardized unit; wording restated at the study level.</li>
 </ul>
-<p>Shared organization, compound, and study definitions supply the common data
-contract while the analysis dataset gives <code>AVAL</code> its final label.</p>
+<p><strong>Note:</strong> shared organization, compound, and study layers carry the mapping;
+only the unit wording and the result label are restated here.</p>
+<p><strong>Standard:</strong> ADaM | <strong>Domain:</strong> ADLB</p>
 </div>
     </section>
     <div class="comparison-bar">

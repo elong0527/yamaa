@@ -1,10 +1,16 @@
-# ADaM ADLB: carry standardized results into analysis
+# Carry standardized lab results into analysis
 
-This example uses one laboratory record to produce one analysis record:
+**Goal:** derive ADLB test code, result, and unit from SDTM LB.
 
-- `PARAMCD` identifies the laboratory test being analyzed.
-- `AVAL` carries the standardized numeric result.
-- `AVALU` carries the standardized unit for the result.
+**Input:** one row per collected laboratory result.
 
-Shared organization, compound, and study definitions supply the common data
-contract while the analysis dataset gives `AVAL` its final label.
+**Variables:**
+
+- **PARAMCD**: test code as collected.
+- **AVAL**: standardized numeric result.
+- **AVALU**: standardized unit; wording restated at the study level.
+
+**Note:** shared organization, compound, and study layers carry the mapping;
+only the unit wording and the result label are restated here.
+
+**Standard:** ADaM | **Domain:** ADLB
