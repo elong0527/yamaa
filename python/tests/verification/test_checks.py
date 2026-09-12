@@ -473,6 +473,19 @@ def test_declaration_defects_are_refused_rather_than_reported_as_data_failures()
     assert unreadable.value.context == {"pattern": "(?P<code>[MFU])"}
 
 
+def test_a_predicate_naming_an_absent_column_is_refused_on_an_empty_artifact() -> None:
+    empty = table([("STUDYID", "str"), ("USUBJID", "str")], [])
+    declaration = Expression(
+        root={"predicate": {"id": "names-a-ghost", "assert": "ABSENT = 1"}}
+    )
+
+    with pytest.raises(DeclarationError) as raised:
+        check_dataset(empty, [declaration], KEYS)
+
+    assert raised.value.condition == "unknown_field"
+    assert raised.value.context == {"identifier": "ABSENT"}
+
+
 def test_duplicate_verification_identifiers_are_refused() -> None:
     completed = table([("STUDYID", "str"), ("USUBJID", "str")], [["S", "S-1"]])
     declaration = {"predicate": {"id": "one-rule", "assert": "USUBJID IS NOT NULL"}}

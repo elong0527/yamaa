@@ -158,11 +158,33 @@ def _groups(
     return partitions
 
 
-def _predicate(text: JsonValue, spec_path: str, requirement: str) -> PredicateAst:
+def _declared(table: TypedTable) -> frozenset[str]:
+    """The names a verification predicate may read on a completed row."""
+    return frozenset(column.name for column in table.columns)
+
+
+def _identifiers(node: object) -> set[str]:
+    """Collect every variable one parsed predicate reads."""
+    if isinstance(node, Mapping):
+        names = {node["name"]} if node.get("kind") == "identifier" else set()
+        for value in node.values():
+            names |= _identifiers(value)
+        return names
+    if isinstance(node, list):
+        return set().union(*(_identifiers(value) for value in node)) if node else set()
+    return set()
+
+
+def _predicate(
+    text: JsonValue,
+    spec_path: str,
+    requirement: str,
+    available: frozenset[str],
+) -> PredicateAst:
     if not isinstance(text, str):
         raise DeclarationError(spec_path, requirement, "a predicate must be text")
     try:
-        return parse_predicate(text)
+        parsed = parse_predicate(text)
     except PredicateError as error:
         raise DeclarationError(
             spec_path,
@@ -170,6 +192,19 @@ def _predicate(text: JsonValue, spec_path: str, requirement: str) -> PredicateAs
             str(error),
             condition="invalid_predicate",
         ) from error
+    # A name is resolved against the declared columns rather than against a
+    # row, so a predicate naming a column the artifact does not have is
+    # refused even when no row exists to read it on.
+    unknown = sorted(_identifiers(parsed) - available)
+    if unknown:
+        raise DeclarationError(
+            spec_path,
+            "R009-31",
+            f"predicate names unknown column {unknown[0]!r}",
+            condition="unknown_field",
+            context={"identifier": unknown[0]},
+        )
+    return parsed
 
 
 def _truth(
@@ -509,8 +544,9 @@ def _dataset_failure(
             if len({row[name] is MISSING for name in names}) > 1
         ]
     elif keyword == "implies":
-        when = _predicate(arguments.get("when"), spec_path, "R009-23")
-        then = _predicate(arguments.get("then"), spec_path, "R009-23")
+        available = _declared(table)
+        when = _predicate(arguments.get("when"), spec_path, "R009-23", available)
+        then = _predicate(arguments.get("then"), spec_path, "R009-23", available)
         offending = [
             key_maps[index]
             for index, row in enumerate(rows)
@@ -518,7 +554,9 @@ def _dataset_failure(
             and _truth(then, row, spec_path) is not TruthValue.TRUE
         ]
     else:
-        assertion = _predicate(arguments.get("assert"), spec_path, "R009-23")
+        assertion = _predicate(
+            arguments.get("assert"), spec_path, "R009-23", _declared(table)
+        )
         offending = [
             key_maps[index]
             for index, row in enumerate(rows)
@@ -584,7 +622,9 @@ def _row_count_failure(
 
     admitted = set(range(len(rows)))
     if arguments.get("filter") is not None:
-        predicate = _predicate(arguments["filter"], spec_path, "R009-23")
+        predicate = _predicate(
+            arguments["filter"], spec_path, "R009-23", _declared(table)
+        )
         admitted = {
             index
             for index, row in enumerate(rows)
