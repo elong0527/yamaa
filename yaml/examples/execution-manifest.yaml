@@ -724,10 +724,6 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
-  sdtm-ae-effective-transaction:
-    status: blocked
-    blocked_by: "#101"
-    reason: no yaml executor in R or Python yet
   sdtm-dm-basic:
     status: blocked
     blocked_by: "#101"
