@@ -9,6 +9,7 @@ what the binding was actually called with, in the order it was called.
 
 from __future__ import annotations
 
+import importlib
 import sys
 
 import pytest
@@ -181,6 +182,24 @@ def test_the_language_is_settled_before_the_calls_are(project, repository) -> No
     failure = _failure(project, repository)
 
     assert failure.diagnostics[0].condition == "runner_language_mismatch"
+
+
+def test_a_binding_loads_without_an_ambient_import_machinery(
+    recording_project, repository, monkeypatch
+) -> None:
+    """Loading a binding depends on nothing another import happened to do.
+
+    `importlib.machinery` is not reachable through `importlib` unless
+    something imported it, and under pytest something always has. Removing
+    it is what tells the two apart, so an ordinary application run loads
+    project code the same way this suite does.
+    """
+    monkeypatch.delattr(importlib, "machinery", raising=False)
+    monkeypatch.delitem(sys.modules, "importlib.machinery", raising=False)
+
+    activated = _activate(recording_project, repository)
+
+    assert activated.bound("bmi") is not None
 
 
 def test_a_binding_is_resolved_inside_the_artifact_and_nowhere_else(

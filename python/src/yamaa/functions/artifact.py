@@ -16,6 +16,7 @@ import importlib.util
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from importlib.machinery import ModuleSpec
 from pathlib import Path
 from typing import Protocol
 
@@ -193,7 +194,7 @@ class LoadedArtifact:
         existing = sys.modules.get(package)
         if existing is not None:
             return package
-        specification = importlib.machinery.ModuleSpec(package, None, is_package=True)
+        specification = ModuleSpec(package, None, is_package=True)
         module = importlib.util.module_from_spec(specification)
         # The search path is exactly this artifact, so an import inside it
         # reaches the artifact's own modules and the process search path
