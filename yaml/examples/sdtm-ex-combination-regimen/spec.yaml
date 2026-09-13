@@ -27,6 +27,14 @@ columns:
     derivation:
       source: EX_RAW.USUBJID
 
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [EX_RAW.EXSTDTC, EX_RAW.EXTRT]
+
   - name: EXTRT
     type: str
     label: Name of Treatment
@@ -50,14 +58,6 @@ columns:
     label: Start Date/Time of Treatment
     derivation:
       source: EX_RAW.EXSTDTC
-
-  - name: EXSEQ
-    type: int
-    label: Sequence Number
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [EX_RAW.EXSTDTC, EX_RAW.EXTRT]
 
   - name: EXENDTC
     type: date
