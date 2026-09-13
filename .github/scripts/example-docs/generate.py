@@ -236,6 +236,42 @@ def render_files(paths, group, example, derived, labels):
     return content, row_count, subjects
 
 
+def render_failure_section(error_path):
+    """Render the expected-failure panel for an example the run must reject.
+
+    The raw assertion stays fully visible: context varies per failure, so the
+    definition list carries only the stable facts and the YAML below them.
+    """
+    raw = error_path.read_text(encoding="utf-8")
+    try:
+        failure = yaml.safe_load(raw)
+    except yaml.YAMLError:
+        failure = None
+    failure = failure if isinstance(failure, dict) else {}
+    facts = []
+    for key in ("phase", "condition", "requirement"):
+        value = failure.get(key)
+        if value:
+            facts.append((key, str(value)))
+    paths = failure.get("spec_paths")
+    if isinstance(paths, list) and paths:
+        facts.append(("spec paths", ", ".join(str(item) for item in paths)))
+    facts_html = "".join(
+        f"<div><dt>{escape(key)}</dt><dd>{escape(value)}</dd></div>"
+        for key, value in facts
+    )
+    section = (
+        '<section id="expected-failure" class="panel failure-panel" aria-labelledby="expected-failure-heading">\n'
+        '  <header class="panel-header"><h2 id="expected-failure-heading">Expected failure</h2>'
+        '<span class="panel-caption">the run is rejected; no artifact is accepted</span></header>\n'
+        f"  <dl>{facts_html}</dl>\n"
+        '  <details><summary>expected/error.yaml</summary>\n'
+        f'  <pre class="plain-file"><code>{escape(raw)}</code></pre></details>\n'
+        "</section>"
+    )
+    return failure, section
+
+
 def highlight_yaml(line):
     result, cursor = [], 0
     for token in YAML_TOKEN.finditer(line):
@@ -418,7 +454,13 @@ def render_example(example, previous=None, next=None):
         if name and source != f'{spec.get("base")}.{name}':
             derived.add(name)
     inputs = fixture_files(example / "input")
-    outputs = [path for path in fixture_files(example / "expected") if path.name != SPEC_RESOLVED_NAME]
+    error_path = example / "expected" / "error.yaml"
+    is_failure = error_path.is_file()
+    outputs = [
+        path
+        for path in fixture_files(example / "expected")
+        if path.name != SPEC_RESOLVED_NAME and (not is_failure or path.name != "error.yaml")
+    ]
     input_files, _, input_subjects = render_files(inputs, "input", example, set(), {})
     output_files, output_rows, output_subjects = render_files(outputs, "output", example, derived, labels)
     subjects = sorted(input_subjects | output_subjects)
@@ -430,11 +472,39 @@ def render_example(example, previous=None, next=None):
         subject_options.append(f'<option value="{escape(key)}">{escape(label)}</option>')
     category, heading = example_category(example.name, title, spec)
     heading = heading[:1].upper() + heading[1:]
-    metrics = [(len(inputs), "input files"), (len(subjects), "subjects")]
-    if any(path.suffix == ".csv" for path in outputs):
-        metrics.append((output_rows, "expected rows"))
+    has_csv = any(path.suffix == ".csv" for path in outputs)
+    if is_failure:
+        failure, failure_section = render_failure_section(error_path)
+        datasets_heading = "Unexpected Output"
+        description = escape(title + ": README, inputs, expected failure, and YAML specification.")
+        metrics = [("Rejected", "result", "result-rejected"), (len(inputs), "input files", ""), (len(subjects), "subjects", "")]
+        if has_csv:
+            metrics.append((output_rows, "rows presented", ""))
+            output_caption = (
+                f"{output_rows} row presented to the failing check"
+                if output_rows == 1
+                else f"{output_rows} rows presented to the failing check"
+            ) + " — not an accepted artifact"
+        else:
+            output_caption = "No artifact is produced"
     else:
-        metrics.append((len(outputs), "expected files"))
+        failure_section = ""
+        datasets_heading = "Expected output"
+        description = escape(title + ": README, inputs, expected output, and YAML specification.")
+        metrics = [(len(inputs), "input files", ""), (len(subjects), "subjects", "")]
+        if has_csv:
+            metrics.append((output_rows, "expected rows", ""))
+            output_caption = (
+                f"{output_rows} expected row" if output_rows == 1 else f"{output_rows} expected rows"
+            )
+        else:
+            metrics.append((len(outputs), "expected files", ""))
+            output_caption = "Expected artifacts"
+    def metric_cell(count, label, cls):
+        klass = f' class="{cls}"' if cls else ""
+        return f"<div{klass}><dt>{label}</dt><dd>{count}</dd></div>"
+
+    metrics_html = "".join(metric_cell(*item) for item in metrics)
     resolved_path = example / "expected" / SPEC_RESOLVED_NAME
     if not chain and not resolved_path.is_file():
         spec_code, spec_line_count = render_spec_pane(
@@ -459,16 +529,17 @@ def render_example(example, previous=None, next=None):
     template = Template((HERE / "dashboard.html").read_text(encoding="utf-8"))
     result = template.substitute(
         example_name=escape(example.name), page_title=escape(title), heading=escape(heading),
-        category=escape(category), description=escape(title + ": README, inputs, expected output, and YAML specification."),
+        category=escape(category), description=description,
+        failure_section=failure_section,
+        datasets_heading=datasets_heading,
         source_url=REPOSITORY + "/tree/main/yaml/examples/" + quote(example.name),
         prev_link=page_link(previous, "Previous example", "prev"),
         next_link=page_link(next, "Next example", "next"),
-        metrics="".join(f"<div><dt>{label}</dt><dd>{count}</dd></div>" for count, label in metrics),
+        metrics=metrics_html,
         subject_options="".join(subject_options), readme=readme,
         input_files=input_files,
         input_caption=f"{len(inputs)} source file" + ("" if len(inputs) == 1 else "s"),
-        output_files=output_files,
-        output_caption=f"{output_rows} expected row" + ("" if output_rows == 1 else "s") if any(path.suffix == ".csv" for path in outputs) else "Expected artifacts",
+        output_files=output_files, output_caption=output_caption,
         spec_lines=spec_line_count, spec_code=spec_code,
         code_panel=code_panel,
         styles=(HERE / "dashboard.css").read_text(encoding="utf-8"),

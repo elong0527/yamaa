@@ -50,7 +50,10 @@ The YAML specification occupies a left sidebar with a Hide Spec / Show Spec
 button; hiding it gives the datasets the full width. On desktop, a drag handle
 resizes the sidebar and supports the arrow, Home, and End keys. A menu inside
 the sidebar jumps to top-level YAML sections. Input datasets appear side by
-side, with expected output below. All datasets stay visible without tabs, and
+side, with expected output below. An example carrying `expected/error.yaml`
+instead renders an `Expected failure` section with the rejection facts and the
+assertion collapsed, a red `Rejected` result metric, and its datasets under an
+`Unexpected Output` heading. All datasets stay visible without tabs, and
 there are no downloads. Small screens stack the layout. Content remains
 readable with JavaScript disabled and when printing.
 
