@@ -193,7 +193,6 @@ datasets:
   LB: {path: input/lb.csv, types: {AVAL: float}}
   EX: {path: input/ex.csv, types: {EXSEQ: int, EXDOSE: float}}
   REF: {path: input/ref.csv, types: {ANRHI: float}}
-base: LB
 keys: [STUDYID, USUBJID, PARAMCD]
 
 record_lookups:
@@ -256,6 +255,7 @@ columns:
 
 rows:
   - id: collected
+    dataset: LB
     derivations:
       STUDYID: {source: LB.STUDYID}
       USUBJID: {source: LB.USUBJID}
@@ -264,6 +264,7 @@ rows:
       NPARAM: {literal: null}
       AVAL: {source: LB.AVAL}
   - id: total
+    dataset: LB
     group_by: [LB.STUDYID, LB.USUBJID, LB.SEX]
     filter: "NPARAM > 1"
     derivations:
