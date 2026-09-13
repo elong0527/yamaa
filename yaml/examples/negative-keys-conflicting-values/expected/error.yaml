@@ -1,0 +1,11 @@
+phase: derivation
+condition: multiple_values_per_key
+spec_paths:
+  - columns.AGE.derivation.source
+requirement: R001-44
+context:
+  identifier: DM.AGE
+  value_count: 2
+  keys:
+    - STUDYID: PILOT9
+      USUBJID: P9-812

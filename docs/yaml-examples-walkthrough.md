@@ -84,26 +84,33 @@ file. The `.csv` extension is what makes it the delimited text this suite
 compares byte for byte; naming `dm.parquet` instead would write the same rows
 into the other container.
 
-**Step 3 -- the bottom of the file, for row count.**
+**Step 3 -- what is not in the file, for row count.**
 
 ```yaml
-rows:
-  - id: subject
-    filter: "ODM.ItemOID = 'IT.DM.SEX'"
-    derivations: {}
+keys: [STUDYID, USUBJID]
 ```
 
-The row template derives nothing. It exists **only to establish the grain**:
-one output row per subject SEX item record. This is the cleanest illustration
-in the suite that row construction and column derivation are separate phases.
+There is no `rows:` block, and the two keys above are the whole answer. The
+distinct `STUDYID` and `USUBJID` combinations the extract carries are the
+output rows, in the order they first appear: a subject collected on three
+item records is one row, and a subject whose sex was never collected is a row
+all the same. This is the cleanest illustration in the suite that row
+construction and column derivation are separate phases -- the grain names no
+column value, and no filter decides how many records come out.
 
 **Step 4 -- the columns that carry judgement.**
 
 ```yaml
+  - name: SEXRAW
+    derivation:
+      source:
+        variable: ODM.IT.DM.SEX
+        missing: null
+
   - name: SEX
     derivation:
       mapping:
-        source: ODM.Value
+        source: SEXRAW
         dict: {Male: M, Female: F}
         missing: U
         unmapped: U
@@ -119,6 +126,9 @@ Now the README's sentences have addresses. "Not collected and not recognised
 both become U" is `missing: U` beside `unmapped: U`. "Empty when age was never
 collected" is the structured `source` form with `missing: null` -- the concise
 `source: ODM.IT.DM.AGE` form has no handler, so an absent item would be fatal.
+`SEXRAW` reads the collected item under that same structured form and is the
+one column `output.columns` does not name, so it works inside the run and
+never reaches the artifact.
 
 **Step 5 -- `expected/dm.csv`.** Confirm your reading against the artifact. Every
 sparse subject you predicted appears with the substituted value rather than
@@ -135,7 +145,7 @@ The suite's own README names three examples, in this order:
 
 | # | Example | What it establishes |
 |---|---|---|
-| 1 | [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-dm-basic) | Direct mapping, handlers, a row template used only for grain |
+| 1 | [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-dm-basic) | Direct mapping, handlers, and the declared keys as the grain |
 | 2 | [`sdtm-lb-findings`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-lb-findings) | Real row construction: one template per collected test, `row_number` for the sequence |
 | 3 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-bds) | A full Basic Data Structure build: parameters as row templates, then baseline, change and sequence as columns |
 

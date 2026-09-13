@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cmp_to_key
 from typing import Literal
@@ -93,6 +93,28 @@ class _CandidateResolver:
 def _ordered(value: RuntimeValue) -> object:
     ordering_key = getattr(value, "ordering_key", None)
     return ordering_key if ordering_key is not None else value
+
+
+def _same_value(left: RuntimeValue, right: RuntimeValue) -> bool:
+    """Return whether two readings carry the same value of the same type."""
+    if runtime_type_name(left) != runtime_type_name(right):
+        return False
+    return bool(_ordered(left) == _ordered(right))
+
+
+def _distinct_values(readings: Iterable[object]) -> list[RuntimeValue]:
+    """Collapse repeated readings of one value, in first-appearance order.
+
+    R001-12b counts the values a derivation yields for one key combination,
+    not the records carrying them, so a field constant over a subject's
+    records reads as that single value.
+    """
+    distinct: list[RuntimeValue] = []
+    for reading in readings:
+        value = runtime_value(reading)
+        if not any(_same_value(value, seen) for seen in distinct):
+            distinct.append(value)  # type: ignore[arg-type]
+    return distinct
 
 
 def _compare_runtime(left: RuntimeValue, right: RuntimeValue) -> int:
@@ -330,9 +352,10 @@ class BindingIndex:
 
         ``feeding_rows`` carries every driver record of the current key
         combination and section. A plain dataset field read collects one
-        value across them under R001-12a: no value is missing, more than
-        one value fails. Record lookups keep using the single ``source_rows``
-        record as their ODM context.
+        value across them under R001-12b: no value is missing, repeated
+        readings of one value are that value, and two values disagreeing
+        fail. Record lookups keep using the single ``source_rows`` record
+        as their ODM context.
         """
         return RuntimeContext(self, source_rows, output_values or {}, feeding_rows)
 
@@ -394,23 +417,26 @@ class RuntimeContext:
             feeding = self._feeding_rows.get(bound.dataset, [row])
             if not feeding:
                 return ResolvedValue(value=MISSING)
-            present = [
+            present = _distinct_values(
                 feeding_row[bound.field]
                 for feeding_row in feeding
                 if bound.field in feeding_row
                 and feeding_row[bound.field] is not MISSING
                 and feeding_row[bound.field] is not None
-            ]
+            )
             if not present:
                 return ResolvedValue(value=runtime_value(row[bound.field]))
             if len(present) > 1:
+                # R001-12b counts values, not the records carrying them: a
+                # field constant over a subject's records is one value, two
+                # records disagreeing are two.
                 return _failure(
                     "derivation",
                     "multiple_values_per_key",
-                    {"identifier": variable, "match_count": len(present)},
+                    {"identifier": variable, "value_count": len(present)},
                     requirement="R001-44",
                 )
-            return ResolvedValue(value=runtime_value(present[0]))
+            return ResolvedValue(value=present[0])
 
         assert bound.item_oid is not None
         return self._index._odm[bound.dataset].resolve(
