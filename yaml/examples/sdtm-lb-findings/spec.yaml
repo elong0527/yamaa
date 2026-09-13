@@ -67,6 +67,7 @@ columns:
 
 rows:
   - id: calcium
+    dataset: ODM
     filter: "ODM.ItemOID = 'IT.LB.CALCIUM' AND ODM.Value IS NOT NULL"
     derivations:
       LBTESTCD:
@@ -85,6 +86,7 @@ rows:
         literal: mg/dL
 
   - id: creatinine
+    dataset: ODM
     filter: "ODM.ItemOID = 'IT.LB.CREAT' AND ODM.Value IS NOT NULL"
     derivations:
       LBTESTCD:

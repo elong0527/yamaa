@@ -90,6 +90,7 @@ columns:
 
 rows:
   - id: height
+    dataset: VS_RAW
     filter: "VS_RAW.VSTESTCD = 'HEIGHT'"
     derivations:
       VSSTRESN:
@@ -102,6 +103,7 @@ rows:
                 literal: cm
 
   - id: weight
+    dataset: VS_RAW
     filter: "VS_RAW.VSTESTCD = 'WEIGHT'"
     derivations:
       VSSTRESN:
@@ -121,6 +123,7 @@ rows:
                 literal: kg
 
   - id: temp
+    dataset: VS_RAW
     filter: "VS_RAW.VSTESTCD = 'TEMP'"
     derivations:
       VSSTRESN:

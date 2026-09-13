@@ -59,6 +59,7 @@ columns:
 
 rows:
   - id: collected
+    dataset: ADVSIN
     derivations:
       STUDYID: {source: ADVSIN.STUDYID}
       USUBJID: {source: ADVSIN.USUBJID}
@@ -72,6 +73,7 @@ rows:
       DTYPE: {literal: null}
 
   - id: derived_bmi
+    dataset: ADVSIN
     group_by:
       - ADVSIN.STUDYID
       - ADVSIN.USUBJID

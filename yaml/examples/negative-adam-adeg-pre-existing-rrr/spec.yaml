@@ -51,6 +51,7 @@ columns:
 
 rows:
   - id: collected
+    dataset: ADEG_IN
     derivations:
       PARAMCD:
         source: ADEG_IN.PARAMCD
@@ -64,6 +65,7 @@ rows:
         literal: collected
 
   - id: derived_rrr
+    dataset: ADEG_IN
     filter: "ADEG_IN.PARAMCD = 'HR' AND ADEG_IN.AVAL IS NOT NULL AND ADEG_IN.AVAL <> 0"
     derivations:
       PARAMCD:

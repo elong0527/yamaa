@@ -2,7 +2,6 @@ schema_version: "1.0"
 domain: DM
 datasets:
   ODM: odm.csv
-base: ODM
 keys: [STUDYID, USUBJID]
 
 output:
@@ -42,5 +41,6 @@ columns:
 
 rows:
   - id: subject
+    dataset: ODM
     filter: "ODM.ItemOID = 'IT.DM.RANDDT'"
     derivations: {}

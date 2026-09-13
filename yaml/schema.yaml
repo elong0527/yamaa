@@ -26,7 +26,7 @@ root_class:
     - base:
         type: dataset_id
         required: false
-        description: Dataset whose records drive row construction; R001 states when it is required.
+        description: Dataset driving row construction when rows is absent; R001 states when it is required.
     - parents:
         type: [path, "list[path]"]
         required: false
@@ -178,8 +178,8 @@ row_class:
         description: Identifier of this row template, unique within rows.
     - dataset:
         type: dataset_id
-        required: false
-        description: Dataset driving this template's records; R001 falls back to base.
+        required: true
+        description: Dataset driving this template's records.
     - group_by:
         type: "list[variable]"
         required: false

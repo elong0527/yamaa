@@ -3,7 +3,6 @@ domain: SUPPMH
 datasets:
   MH_SUPP_RAW: input/mh_supp_raw.csv
   MH: input/mh.csv
-base: MH_SUPP_RAW
 keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 
 output:
@@ -80,6 +79,7 @@ columns:
 
 rows:
   - id: family_history
+    dataset: MH_SUPP_RAW
     filter: "MH_SUPP_RAW.MHFAMHX IS NOT NULL"
     derivations:
       QNAM:
@@ -90,6 +90,7 @@ rows:
         source: MH_SUPP_RAW.MHFAMHX
 
   - id: medical_record_confirmation
+    dataset: MH_SUPP_RAW
     filter: "MH_SUPP_RAW.MHCONF IS NOT NULL"
     derivations:
       QNAM:

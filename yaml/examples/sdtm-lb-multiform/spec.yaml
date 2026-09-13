@@ -149,6 +149,7 @@ columns:
 
 rows:
   - id: serum_vitamin_d
+    dataset: ODM
     filter: "ODM.ItemGroupOID = 'IG.NCT00789880.LB' AND ODM.ItemOID = 'IT.NCT00789880.LB.VITD' AND ODM.Value IS NOT NULL"
     derivations:
       LBTESTCD:
@@ -169,6 +170,7 @@ rows:
         source: ODM.IT.NCT00789880.LB.LBDTC
 
   - id: biopsy_il13_lesional
+    dataset: ODM
     filter: "ODM.ItemGroupOID = 'IG.NCT00789880.BX' AND ODM.ItemOID = 'IT.NCT00789880.BX.IL13_LES' AND ODM.Value IS NOT NULL"
     derivations:
       LBTESTCD:
@@ -189,6 +191,7 @@ rows:
         source: ODM.IT.NCT00789880.BX.BXDTC
 
   - id: biopsy_il13_nonlesional
+    dataset: ODM
     filter: "ODM.ItemGroupOID = 'IG.NCT00789880.BX' AND ODM.ItemOID = 'IT.NCT00789880.BX.IL13_NONLES' AND ODM.Value IS NOT NULL"
     derivations:
       LBTESTCD:
@@ -209,6 +212,7 @@ rows:
         source: ODM.IT.NCT00789880.BX.BXDTC
 
   - id: saliva_cathelicidin
+    dataset: ODM
     filter: "ODM.ItemGroupOID = 'IG.NCT00789880.SAL' AND ODM.ItemOID = 'IT.NCT00789880.SAL.SAL_CAMP' AND ODM.Value IS NOT NULL"
     derivations:
       LBTESTCD:
@@ -229,6 +233,7 @@ rows:
         source: ODM.IT.NCT00789880.SAL.SALDTC
 
   - id: tape_cathelicidin_lesional
+    dataset: ODM
     filter: "ODM.ItemGroupOID = 'IG.NCT00789880.TS' AND ODM.ItemOID = 'IT.NCT00789880.TS.TS_CAMP_LES' AND ODM.Value IS NOT NULL"
     derivations:
       LBTESTCD:
@@ -249,6 +254,7 @@ rows:
         source: ODM.IT.NCT00789880.TS.TSDTC
 
   - id: tape_cathelicidin_nonlesional
+    dataset: ODM
     filter: "ODM.ItemGroupOID = 'IG.NCT00789880.TS' AND ODM.ItemOID = 'IT.NCT00789880.TS.TS_CAMP_NONLES' AND ODM.Value IS NOT NULL"
     derivations:
       LBTESTCD:

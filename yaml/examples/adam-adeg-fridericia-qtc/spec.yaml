@@ -53,6 +53,7 @@ columns:
 
 rows:
   - id: original
+    dataset: ADEG_IN
     derivations:
       PARAMCD:
         source: ADEG_IN.PARAMCD
@@ -67,6 +68,7 @@ rows:
       AVALU:
         source: ADEG_IN.AVALU
   - id: qtcfr
+    dataset: ADEG_IN
     group_by: [ADEG_IN.STUDYID, ADEG_IN.USUBJID, ADEG_IN.AVISIT]
     filter: "QTVAL IS NOT NULL AND RRVAL IS NOT NULL"
     derivations:

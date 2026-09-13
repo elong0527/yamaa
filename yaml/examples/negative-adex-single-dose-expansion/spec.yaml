@@ -79,18 +79,21 @@ columns:
 
 rows:
   - id: dose_1
+    dataset: EX
     filter: "EX.EXDOSCNT >= 1"
     derivations:
       ADOSEN:
         literal: 1
 
   - id: dose_2
+    dataset: EX
     filter: "EX.EXDOSCNT >= 2"
     derivations:
       ADOSEN:
         literal: 2
 
   - id: dose_3
+    dataset: EX
     filter: "EX.EXDOSCNT >= 3"
     derivations:
       ADOSEN:

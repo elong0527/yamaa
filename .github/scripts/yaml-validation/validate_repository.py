@@ -2940,7 +2940,7 @@ def prune_inheritance_collections(spec, env):
     for row in row_entries:
         if not isinstance(row, dict):
             continue
-        driver = row.get('dataset', base)
+        driver = row.get('dataset')
         if isinstance(driver, str):
             live_datasets.add(driver)
         for field in ('group_by', 'filter'):
@@ -4438,15 +4438,10 @@ def validate_spec_contracts(
             "or empty and more than one dataset is declared"
         )
     for index, row in enumerate(row_entries):
-        if (
-            full_spec
-            and isinstance(row, dict)
-            and 'dataset' not in row
-            and not isinstance(default_driver, str)
-        ):
+        if full_spec and isinstance(row, dict) and 'dataset' not in row:
             errors.append(
-                f"ERROR: {spec_label}.rows[{index}].dataset: row requires a "
-                "dataset or root base"
+                f"ERROR: {spec_label}.rows[{index}].dataset: row requires an "
+                "explicit dataset"
             )
 
     columns = spec.get('columns')

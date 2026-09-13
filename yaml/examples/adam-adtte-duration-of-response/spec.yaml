@@ -4,7 +4,6 @@ datasets:
   ADSL: input/adsl.csv
   ADRSPRE: input/adrs_pre.csv
   DS: input/ds.csv
-base: ADSL
 keys: [STUDYID, USUBJID, PARAMCD]
 
 output:
@@ -243,6 +242,7 @@ columns:
 
 rows:
   - id: responder
+    dataset: ADSL
     filter: "ADSL.RESPDT IS NOT NULL"
     derivations: {}
 

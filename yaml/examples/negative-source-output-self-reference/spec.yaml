@@ -3,7 +3,6 @@ domain: ADLB
 datasets:
   LB: {path: input/lb.csv, types: {LBSTRESN: float}}
   ADLB: {path: input/adlb.csv, types: {AVAL: float, ADT: date}}
-base: LB
 keys: [STUDYID, USUBJID, ADT, PARAMCD]
 
 output:
@@ -81,6 +80,7 @@ columns:
 
 rows:
   - id: alt
+    dataset: LB
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
       PARAMCD:
@@ -93,6 +93,7 @@ rows:
         literal: null
 
   - id: ast
+    dataset: LB
     filter: "LB.LBTESTCD = 'AST'"
     derivations:
       PARAMCD:
@@ -105,6 +106,7 @@ rows:
         literal: null
 
   - id: ast_alt_ratio
+    dataset: LB
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
       PARAMCD:

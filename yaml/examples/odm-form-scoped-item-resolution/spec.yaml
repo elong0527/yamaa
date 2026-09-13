@@ -103,6 +103,7 @@ columns:
 
 rows:
   - id: reported-result
+    dataset: ODM
     filter: "ODM.ItemOID = 'IT.LB.RESULT' AND ODM.Value IS NOT NULL"
     derivations: {}
 

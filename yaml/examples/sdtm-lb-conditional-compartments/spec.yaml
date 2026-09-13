@@ -88,6 +88,7 @@ columns:
 
 rows:
   - id: lesional
+    dataset: BX_RAW
     filter: "BX_RAW.COHORT <> 'NONAD'"
     derivations:
       LBLOC:
@@ -96,6 +97,7 @@ rows:
         source: BX_RAW.LESRES
 
   - id: non_lesional
+    dataset: BX_RAW
     derivations:
       LBLOC:
         literal: NON-LESIONAL
