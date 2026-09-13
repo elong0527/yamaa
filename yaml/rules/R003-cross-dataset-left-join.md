@@ -51,6 +51,16 @@ order.
 **R003-13.** Right records with a missing applicable key cannot match.
 Key names must match exactly. String key equality is R019's.
 
+**R003-13a.** The two sides of an applicable key must also carry mutually
+comparable types under R007-31, and the match converts no operand. R014-4
+gives an undeclared field of a typeless container the type `str`, so an
+output key of another type meets such a field nowhere: every row would
+receive missing and a complete right side would be reported as an absent
+record. A key typed on one side and left to R014's default on the other is
+therefore a declaration to repair rather than a comparison to widen. This is
+what R007-19 already says between an operation's inputs and R015-11 between
+a range's operands; the join is not the one place that converts.
+
 ## Declared-key lookup
 
 **R003-14.** `mapping_from` is not this join. Both are equality left
@@ -153,11 +163,24 @@ multiple matches. A reduction `group_by` coarser than the applicable
 keys changes what the join matches on, which is why R013 requires those
 columns to be output keys.
 
+Requiring the two sides of an applicable key to be comparable answers the
+same hazard the inference itself has: a join that is well formed, holds
+uniqueness, and still matches nothing reports a complete right side as an
+absent record. Refusing the match makes the missing `types` declaration
+visible, where converting an operand would hide it and leave every runtime
+free to convert differently.
+
 ## Errors
 
 **R003-33.** No applicable keys: fail.
 
 **R003-34.** An applicable left key is unavailable: fail.
+
+**R003-34a.** An applicable key whose two sides are not mutually comparable:
+fail before any record is read, reporting the key, the dataset, and the type
+each side declares. The condition is the incompatible-input error R007-38
+owns, because the defect is a pair of operation inputs that cannot be
+compared rather than anything specific to this join.
 
 **R003-35.** Multiple matches after reduction: fail unless locally
 handled.
@@ -172,4 +195,5 @@ fail under R013.
 
 **R003-38.** Validation reports the inferred applicable keys for every
 qualified source, so a reviewer sees which same-named columns the join
-matches on.
+matches on, the type each side declares for them, and the coarser grain a
+reduction declared in their place.

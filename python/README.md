@@ -360,11 +360,11 @@ a template a driver field is a scalar only when the grain declares it; every
 other field is read through an aggregate over the group's records.
 
 An output key and the same-named right-side column must already carry one
-comparable type. R007-19 converts no operand between an operation's inputs
+comparable type. R003-13a requires it of an inferred key and R015-8a of a
+declared pair, R007-19 converts no operand between an operation's inputs,
 and R007-31 makes comparability a property of the runtime type, so a
-disagreement is reported under R007-38 rather than quietly matching nothing.
-R003 does not yet say this in its own words; #170 carries the proposed
-wording.
+disagreement is reported under R007-38 rather than quietly matching
+nothing.
 
 Because a join infers its keys, the plan states what it inferred.
 `ExecutionPlan.resolved_joins` names, for each qualified source and each
