@@ -1,23 +1,27 @@
-# ADaM ADCM: flag a medication during treatment
+# Flag medications taken during treatment
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adcm-on-treatment-flag.html)
 
-This example uses sample CM and ADSL data and a `yamaa` specification to derive
-one row per concomitant medication:
+**Goal:** flag each concomitant medication (CM) taken during the
+treatment period, adding `ONTRTFL`.
 
-- `CMSEQ` is the medication record sequence number;
-- `CMTRT` is the medication name;
-- `ASTDT` is the medication start date and is empty when none was collected;
-- `AENDT` is the medication end date and is empty for an ongoing medication;
-- `TRTSDT` is the subject's treatment start date, carried across from ADSL;
-- `TRTEDT` is the subject's treatment end date;
-- `ONTRTFL` flags a medication as occurring during the treatment phase when its
-  dates overlap the treatment period. A medication ending before treatment
-  starts, or starting after treatment ends, is left unflagged. A medication
-  with missing start or end dates is assumed to overlap if its known dates do
-  not rule overlap out. A medication belonging to a subject with no treatment
-  start date is left unflagged. When the treatment end date is missing, the
-  treatment period remains open-ended.
+**Input:** medication records carrying medication name (`CMTRT`),
+start date (`ASTDT`) and end date (`AENDT`), together with the
+subject's treatment start (`TRTSDT`) and treatment end (`TRTEDT`)
+dates from the subject-level analysis dataset (ADSL). A date that
+was never collected stays empty, and a subject without an ADSL
+record keeps their medications with both treatment dates empty.
 
-A subject with no ADSL record keeps their medications and leaves both treatment
-dates empty.
+**Variables:**
+
+- `ONTRTFL`: `Y` when the medication dates overlap the treatment
+  period; blank otherwise. A medication ending before treatment
+  starts, or starting after treatment ends, is left unflagged.
+
+**Note:** a medication with a missing start or end date is
+assumed to overlap unless its known dates rule overlap out. A
+medication for a subject with no treatment start date is left
+unflagged, while a missing treatment end date leaves the
+treatment period open-ended.
+
+**Standard:** ADaM | **Domain:** ADCM
