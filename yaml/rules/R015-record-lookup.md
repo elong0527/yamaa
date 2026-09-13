@@ -65,6 +65,11 @@ the current candidate during grouped row construction:
 **R015-8.** `source` and `key` are declared together or not at all, and so are
 `order_by` and `keep`. String matches in either form use R019 equality.
 
+**R015-8a.** A declared `source` and `key` pair must be mutually comparable
+under R007-31, as `mapping_from`'s pairs are under R007-21, as `between`'s
+operands are under R015-11, and as an inferred applicable key is under
+R003-13a. No operand is converted to make any of the four match.
+
 **R015-9.** During grouped row construction, every current-row variable used
 for matching must be derived by that row template. R001 orders those row
 derivations before the derivation that reads the lookup and rejects a

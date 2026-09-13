@@ -36,11 +36,7 @@ class SourceDiagnostic(_FrozenModel):
     phase: Literal["validation", "ingest"]
     condition: str = Field(min_length=1)
     spec_paths: tuple[str, ...] = Field(min_length=1)
-    requirement: str | None = Field(
-        default=None,
-        pattern=r"^R[0-9]{3}-[0-9]+[a-z]?$",
-        exclude_if=lambda value: value is None,
-    )
+    requirement: str | None = Field(default=None, pattern=r"^R[0-9]{3}-[0-9]+$")
     context: dict[str, JsonValue]
 
 
@@ -85,6 +81,7 @@ def _path_diagnostic(
         phase=failure.phase,
         condition=failure.condition,
         spec_paths=(f"datasets.{dataset}.path",),
+        requirement=failure.requirement,
         context={"dataset": dataset, "path": written_path},
     )
 
@@ -96,6 +93,7 @@ def _csv_diagnostic(
         phase="ingest",
         condition=failure.condition,
         spec_paths=(f"datasets.{dataset}.path",),
+        requirement=failure.requirement,
         context={
             "dataset": dataset,
             "path": written_path,
@@ -110,6 +108,7 @@ def _profile_diagnostic(dataset: str, written_path: str) -> SourceDiagnostic:
         phase="validation",
         condition="source_profile_unknown",
         spec_paths=(f"datasets.{dataset}.path",),
+        requirement="R023-23",
         context={"dataset": dataset, "path": written_path},
     )
 
@@ -159,6 +158,7 @@ def _field_types(
                         phase="validation",
                         condition="unknown_field",
                         spec_paths=(f"datasets.{dataset}.types.{field}",),
+                        requirement="R014-19",
                         context={"dataset": dataset, "field": field},
                     )
                 ]
@@ -184,6 +184,7 @@ def _parse_field(
                     phase="ingest",
                     condition="field_parse_failed",
                     spec_paths=(f"datasets.{dataset}.types.{name}",),
+                    requirement="R014-23",
                     context={
                         "dataset": dataset,
                         "field": name,

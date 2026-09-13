@@ -33,12 +33,20 @@ columns:
     derivation:
       source: ODM.SubjectKey
 
+  - name: SEXRAW
+    type: str
+    label: Sex as Collected
+    derivation:
+      source:
+        variable: ODM.IT.DM.SEX
+        missing: null
+
   - name: SEX
     type: str
     label: Sex
     derivation:
       mapping:
-        source: ODM.Value
+        source: SEXRAW
         dict:
           Male: M
           Female: F
@@ -66,8 +74,3 @@ columns:
     label: Description of Actual Arm
     derivation:
       source: ARM
-
-rows:
-  - id: subject
-    filter: "ODM.ItemOID = 'IT.DM.SEX'"
-    derivations: {}

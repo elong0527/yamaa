@@ -264,7 +264,7 @@ def _diagnostic(
     )
 
 
-def _expression_path(path: str, derivation: HandledExpression) -> str:
+def expression_path(path: str, derivation: HandledExpression) -> str:
     """Recover the authored bare-expression path where normalization permits it."""
     handled = {"conversion_failure", "override"} & derivation.model_fields_set
     return f"{path}.value" if handled else path
@@ -381,6 +381,16 @@ def _expression_info(
             for field, expected, requirement in _TEMPORAL_VARIABLES[operation]
             if isinstance(payload.get(field), str)
         )
+    elif operation == "function" and isinstance(payload, Mapping):
+        arguments = payload.get("args")
+        if isinstance(arguments, Mapping):
+            # R018-18 writes a named variable as a plain string; every other
+            # argument leaf is a literal and depends on nothing.
+            references.extend(
+                _Reference(value, f"{operation_path}.args.{name}")
+                for name, value in arguments.items()
+                if isinstance(value, str)
+            )
     elif operation in {"coalesce", "greatest", "least"} and isinstance(
         payload, Mapping
     ):
@@ -428,7 +438,11 @@ def _expression_info(
                     ast = _parse_predicate_at(when, f"{branch_path}.when", diagnostics)
                     if ast is not None:
                         references.extend(
-                            _Reference(name, f"{branch_path}.when")
+                            _Reference(
+                                name,
+                                f"{branch_path}.when",
+                                requirement="R004-32",
+                            )
                             for name in _predicate_identifiers(ast)
                         )
                 nest(branch.get("then"), f"{branch_path}.then")
@@ -927,7 +941,7 @@ def _plan_derivation(
     *,
     scope: _Scope = _COLUMN_SCOPE,
 ) -> tuple[PlannedDerivation, tuple[_Reference, ...]]:
-    value_path = _expression_path(path, declaration)
+    value_path = expression_path(path, declaration)
     info = _expression_info(
         declaration.value,
         value_path,
@@ -1033,7 +1047,12 @@ def _validate_qualified_reference(
     bound = bindings.bind(reference.name)
     if isinstance(bound, BindingFailure):
         diagnostics.append(
-            _diagnostic("unknown_field", reference.path, {"identifier": reference.name})
+            _diagnostic(
+                "unknown_field",
+                reference.path,
+                {"identifier": reference.name},
+                requirement="R002-27",
+            )
         )
         return
     if bound.kind == "output":
@@ -1775,6 +1794,7 @@ def _preflight_findings(
                 "duplicate_identifier",
                 (f"datasets.{specification.domain}", "domain"),
                 {"identifier": specification.domain},
+                requirement="R002-28",
             )
         )
     if specification.parents:
@@ -1818,7 +1838,7 @@ def _preflight_findings(
             unsupported.extend(
                 _expression_info(
                     declaration.value,
-                    _expression_path(path, declaration),
+                    expression_path(path, declaration),
                     supported_operations,
                     scope=scope,
                 ).unsupported
@@ -1842,7 +1862,7 @@ def _preflight_findings(
         unsupported.extend(
             _expression_info(
                 declaration.value,
-                _expression_path(path, declaration),
+                expression_path(path, declaration),
                 supported_operations,
                 scope=column_scope,
             ).unsupported
@@ -2071,6 +2091,7 @@ def plan_execution(
                                 "unknown_field",
                                 reference.path,
                                 {"identifier": reference.name},
+                                requirement=reference.requirement,
                             )
                         )
                     elif reference.name not in row_names:
@@ -2187,6 +2208,7 @@ def plan_execution(
                         "unknown_field",
                         reference.path,
                         {"identifier": reference.name},
+                        requirement=reference.requirement,
                     )
                 )
             elif (
@@ -2245,6 +2267,7 @@ def plan_execution(
                         "dependency_order",
                         planned.expression_path,
                         {"column": planned.column, "dependency": dependency},
+                        requirement="R001-40",
                     )
                 )
 

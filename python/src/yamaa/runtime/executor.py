@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from yamaa.expressions import (
+    WINDOW_OPERATIONS,
     ExpressionDispatcher,
     MappingResolver,
     PredicateValue,
@@ -186,6 +188,7 @@ def _declaration_diagnostic(error: DeclarationError) -> ExecutionDiagnostic:
         phase="validation",
         condition=error.condition or "invalid_declaration",
         spec_paths=(error.spec_path,),
+        requirement=error.requirement,
         context=context,
     )
 
@@ -365,6 +368,19 @@ def _grouped_filter(
     return result.value is TruthValue.TRUE
 
 
+@contextmanager
+def _partition_scope(context: RelationalContext, rows: list[CandidateRow]):
+    saved_rows = context.rows
+    saved_partitions = context._partitions
+    context.rows = list(rows)
+    context._partitions = {}
+    try:
+        yield
+    finally:
+        context.rows = saved_rows
+        context._partitions = saved_partitions
+
+
 def _key_space(
     plan,
     driver_rows: Sequence[dict[str, object]],
@@ -386,13 +402,24 @@ def _key_space(
     """
     key_names = list(plan.specification.keys)
     key_plans = [planned for planned in plan.columns if planned.column in key_names]
+    scalar_plans = [
+        planned
+        for planned in key_plans
+        if planned.declaration.value.operation not in WINDOW_OPERATIONS
+    ]
+    window_plans = [
+        planned
+        for planned in key_plans
+        if planned.declaration.value.operation in WINDOW_OPERATIONS
+    ]
     groups: dict[_KeyToken, list[dict[str, object]]] = {}
     order: list[_KeyToken] = []
     key_values: dict[_KeyToken, tuple[object, ...]] = {}
-    for position, driver_row in enumerate(driver_rows):
+    probes: list[CandidateRow] = []
+    for driver_row in driver_rows:
         probe = CandidateRow(source_rows={driver: driver_row}, values={})
-        values = tuple(
-            _evaluate_one(
+        for key_plan in scalar_plans:
+            probe.values[key_plan.column] = _evaluate_one(
                 key_plan,
                 column_types,
                 probe,
@@ -401,8 +428,24 @@ def _key_space(
                 counter,
                 plan.specification.keys,
             )
-            for key_plan in key_plans
-        )
+        probes.append(probe)
+    if window_plans:
+        for position, probe in enumerate(probes):
+            probe.output_position = position
+        with _partition_scope(context, probes):
+            for probe in probes:
+                for key_plan in window_plans:
+                    probe.values[key_plan.column] = _evaluate_one(
+                        key_plan,
+                        column_types,
+                        probe,
+                        context,
+                        dispatcher,
+                        counter,
+                        plan.specification.keys,
+                    )
+    for position, probe in enumerate(probes):
+        values = tuple(probe.values[planned.column] for planned in key_plans)
         if any(value is MISSING for value in values):
             token: _KeyToken = ("__missing_key__", position)
         else:
@@ -411,7 +454,7 @@ def _key_space(
             groups[token] = []
             order.append(token)
             key_values[token] = values
-        groups[token].append(driver_row)
+        groups[token].append(driver_rows[position])
     return key_values, groups, order
 
 

@@ -183,6 +183,11 @@ fixtures:
     condition: internal_column_in_keys
     spec_paths: ["keys[2]", output.columns]
     validator: name_contract
+  negative-keys-missing-value:
+    rule: R001
+    condition: key_dependency
+    spec_paths: ["columns.AVISIT.derivation"]
+    validator: dependency_graph
   negative-mapping-case-fold-collision:
     rule: R007
     condition: ambiguous_dictionary

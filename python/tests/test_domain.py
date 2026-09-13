@@ -90,8 +90,23 @@ def test_preflight_issues_prevent_input_loading() -> None:
     assert json.loads(issue["context"]) == {"identifier": "ADLB"}
 
 
-def test_duplicate_subject_fails_at_key_grain_derivation() -> None:
+def test_a_repeated_subject_row_fails_at_the_output_gate() -> None:
     pilot = yamaa_domain(EXAMPLES / "negative-output-duplicate-subject/spec.yaml")
+
+    assert pilot.spec is not None
+    assert pilot.output is None
+    issue = pilot.issues.row(0, named=True)
+    assert issue["severity"] == "error"
+    assert issue["phase"] == "output"
+    assert issue["condition"] == "duplicate_key"
+    assert issue["spec_paths"] == ["keys"]
+    context = json.loads(issue["context"])
+    assert context["duplicate_count"] == 1
+    assert context["keys"] == [{"STUDYID": "PILOT7", "USUBJID": "P7-722"}]
+
+
+def test_two_values_for_one_key_fail_where_the_column_is_read() -> None:
+    pilot = yamaa_domain(EXAMPLES / "negative-keys-conflicting-values/spec.yaml")
 
     assert pilot.spec is not None
     assert pilot.output is None
@@ -102,5 +117,38 @@ def test_duplicate_subject_fails_at_key_grain_derivation() -> None:
     assert issue["spec_paths"] == ["columns.AGE.derivation.source"]
     context = json.loads(issue["context"])
     assert context["identifier"] == "DM.AGE"
-    assert context["match_count"] == 2
-    assert context["keys"] == [{"STUDYID": "PILOT7", "USUBJID": "P7-722"}]
+    assert context["value_count"] == 2
+    assert context["keys"] == [{"STUDYID": "PILOT9", "USUBJID": "P9-812"}]
+
+
+def test_sequence_keys_derive_from_base_before_unique_logic() -> None:
+    expectations = {
+        "sdtm-ds-disposition-sequence": (
+            "DSSEQ",
+            [2, 1, 1, 1, 1, 1, 2],
+        ),
+        "sdtm-ex-combination-regimen": (
+            "EXSEQ",
+            [2, 3, 1, 5, 6, 4, 3, 2, 1],
+        ),
+    }
+    for example, (sequence_column, expected) in expectations.items():
+        pilot = yamaa_domain(EXAMPLES / f"{example}/spec.yaml")
+
+        assert pilot.issues.is_empty()
+        assert pilot.output is not None
+        assert pilot.output.get_column(sequence_column).to_list() == expected
+
+
+def test_key_reading_non_key_output_fails_at_validation() -> None:
+    pilot = yamaa_domain(EXAMPLES / "negative-keys-missing-value/spec.yaml")
+
+    assert pilot.spec is not None
+    assert pilot.output is None
+    issue = pilot.issues.row(0, named=True)
+    assert issue["severity"] == "error"
+    assert issue["phase"] == "validation"
+    assert issue["condition"] == "key_dependency"
+    assert issue["spec_paths"] == ["columns.AVISIT.derivation"]
+    context = json.loads(issue["context"])
+    assert context == {"column": "AVISIT", "dependency": "ADY"}

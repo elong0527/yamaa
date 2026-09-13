@@ -34,10 +34,12 @@ def _diagnostic(
     path: str,
     condition: str,
     context: dict[str, JsonValue],
+    requirement: str | None = None,
 ) -> ValidationDiagnostic:
     return ValidationDiagnostic(
         condition=condition,
         spec_paths=(path or "$",),
+        requirement=requirement,
         context=context,
     )
 
@@ -72,12 +74,23 @@ def _is_alias_declaration(definition: dict[object, object]) -> bool:
     )
 
 
-def load_schema_bundle(schema_root: str | Path) -> SchemaBundle:
-    """Load one closed schema bundle rooted at ``schema.yaml``."""
+def load_schema_bundle(
+    schema_root: str | Path,
+    *,
+    entry_name: str = "schema.yaml",
+    root_class: str = "root_class",
+) -> SchemaBundle:
+    """Load one closed schema bundle rooted at an entry document.
+
+    The repository publishes two entry points over the same shared
+    declarations: `schema.yaml` for a specification and, under R018-3,
+    `schema_environment.yaml` for a project environment validated
+    independently of any specification.
+    """
     root = Path(schema_root).resolve()
-    entrypoint = root / "schema.yaml"
+    entrypoint = root / entry_name
     if not entrypoint.is_file():
-        raise _schema_failure(entrypoint, "schema.yaml is not a regular file")
+        raise _schema_failure(entrypoint, f"{entry_name} is not a regular file")
 
     classes: dict[str, list[dict[str, dict[str, Any]]]] = {}
     aliases: dict[str, dict[str, Any]] = {}
@@ -165,8 +178,8 @@ def load_schema_bundle(schema_root: str | Path) -> SchemaBundle:
                 registry.update(definition)
 
     assert version is not None
-    if "root_class" not in classes:
-        raise _schema_failure(entrypoint, "root_class is not declared")
+    if root_class not in classes:
+        raise _schema_failure(entrypoint, f"{root_class} is not declared")
     bundle = SchemaBundle(
         version=version,
         path=entrypoint,
@@ -463,11 +476,17 @@ def _actual_type(value: object) -> str:
     return type(value).__name__
 
 
-def _invalid_type(path: str, expected: str, value: object) -> ValidationDiagnostic:
+def _invalid_type(
+    path: str,
+    expected: str,
+    value: object,
+    requirement: str | None = "R006-46",
+) -> ValidationDiagnostic:
     return _diagnostic(
         path,
         "invalid_field_type",
         {"expected": expected, "actual": _actual_type(value)},
+        requirement,
     )
 
 
@@ -523,6 +542,7 @@ def _validate_constraints(
     value: object,
     descriptor: dict[str, Any],
     path: str,
+    requirement: str = "R006-46",
 ) -> list[ValidationDiagnostic]:
     diagnostics: list[ValidationDiagnostic] = []
     permitted = descriptor.get("values")
@@ -532,6 +552,7 @@ def _validate_constraints(
                 path,
                 "value_not_permitted",
                 {"value": value, "permitted": permitted},
+                requirement,
             )
         )
     pattern = descriptor.get("pattern")
@@ -544,6 +565,7 @@ def _validate_constraints(
                     path,
                     "invalid_regex",
                     {"pattern": pattern, "reason": error.reason},
+                    "R022-27",
                 )
             )
         else:
@@ -553,18 +575,23 @@ def _validate_constraints(
                         path,
                         "pattern_mismatch",
                         {"value": value, "pattern": pattern},
+                        requirement,
                     )
                 )
     minimum = descriptor.get("min_length")
     if minimum is not None and (
         not hasattr(value, "__len__") or len(value) < minimum  # type: ignore[arg-type]
     ):
-        diagnostics.append(_diagnostic(path, "minimum_length", {"minimum": minimum}))
+        diagnostics.append(
+            _diagnostic(path, "minimum_length", {"minimum": minimum}, requirement)
+        )
     size = descriptor.get("size")
     if size is not None and (
         not hasattr(value, "__len__") or len(value) != size  # type: ignore[arg-type]
     ):
-        diagnostics.append(_diagnostic(path, "invalid_size", {"size": size}))
+        diagnostics.append(
+            _diagnostic(path, "invalid_size", {"size": size}, requirement)
+        )
     return diagnostics
 
 
@@ -759,10 +786,15 @@ def _validate_single(
             and not has_matching_outer_type
             and all(item.condition == "invalid_field_type" for item in diagnostics)
         ):
-            return [_invalid_type(path, type_name, value)]
+            requirement = "R007-37" if type_name == "variable" else "R006-46"
+            return [_invalid_type(path, type_name, value, requirement)]
         if diagnostics:
             return diagnostics
-        return _validate_constraints(value, alias, path)
+        requirement = {
+            "column_type": "R011-29",
+            "day_rule": "R016-68",
+        }.get(type_name, "R006-46")
+        return _validate_constraints(value, alias, path, requirement)
 
     return [_diagnostic(path, "unknown_schema_type", {"type": type_name})]
 
@@ -791,13 +823,14 @@ def _validate_type(
     return [_invalid_type(path, expected, value)]
 
 
-def validate_specification(
+def validate_document(
     document: object,
     bundle: SchemaBundle,
+    root_class: str,
 ) -> list[ValidationDiagnostic]:
-    """Validate a raw document against the bundle's root class."""
+    """Validate a raw document against one named class of the bundle."""
     if not isinstance(document, dict) or not document:
-        return [_invalid_type("$", "root_class", document)]
+        return [_invalid_type("$", root_class, document)]
     version = document.get("schema_version")
     if version != bundle.version:
         context: dict[str, JsonValue] = {"expected": bundle.version}
@@ -812,7 +845,15 @@ def validate_specification(
                 context,
             )
         ]
-    return _validate_single(document, "root_class", bundle, "")
+    return _validate_single(document, root_class, bundle, "")
+
+
+def validate_specification(
+    document: object,
+    bundle: SchemaBundle,
+) -> list[ValidationDiagnostic]:
+    """Validate a raw document against the bundle's root class."""
+    return validate_document(document, bundle, "root_class")
 
 
 def _matches(
@@ -987,19 +1028,26 @@ def _normalize_type(
     return copy.deepcopy(value)
 
 
+def normalize_document(
+    document: dict[object, object],
+    bundle: SchemaBundle,
+    root_class: str,
+) -> object:
+    """Materialize defaults and R006 shorthands for one named class."""
+    return _normalize_single(document, root_class, bundle, frozenset())
+
+
 def normalize_specification(
     document: dict[object, object], bundle: SchemaBundle
 ) -> object:
     """Materialize defaults and R006 collection/class shorthands."""
-    return _normalize_single(document, "root_class", bundle, frozenset())
+    return normalize_document(document, bundle, "root_class")
 
 
 # R017 validates schema-shaped fragments instead of complete root objects.  Keep
 # that component behind this deliberately small adapter rather than teaching it
 # the schema interpreter's private representation.
-def class_fields(
-    bundle: SchemaBundle, class_name: str
-) -> dict[str, dict[str, Any]]:
+def class_fields(bundle: SchemaBundle, class_name: str) -> dict[str, dict[str, Any]]:
     """Return one class's fields in schema order."""
     return _class_fields(bundle, class_name)
 

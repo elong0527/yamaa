@@ -35,6 +35,7 @@ conditions:
   invalid_regex: {rules: [R022], phases: [validation]}
   invalid_string_template: {rules: [R012], phases: [validation]}
   invalid_text: {rules: [R019], phases: [ingest]}
+  key_dependency: {rules: [R001], phases: [validation]}
   length_failed: {rules: [R009], phases: [verification]}
   ln_of_nonpositive: {rules: [R010], phases: [derivation]}
   matches_failed: {rules: [R009], phases: [verification]}
@@ -44,6 +45,7 @@ conditions:
   missing_verification_id: {rules: [R009], phases: [validation]}
   month_out_of_range: {rules: [R016], phases: [validation]}
   multiple_matches: {rules: [R003, R008], phases: [join]}
+  multiple_values_per_key: {rules: [R001], phases: [derivation]}
   not_missing_failed: {rules: [R009], phases: [verification]}
   predicate_failed: {rules: [R009], phases: [verification]}
   prohibited_construct: {rules: [R010, R013], phases: [validation]}

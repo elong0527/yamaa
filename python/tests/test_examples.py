@@ -7,7 +7,23 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
+from yamaa.io import ProjectResources, load_source_tables
+from yamaa.planning import ExecutionDiagnostic
+from yamaa.runtime import ExecutionFailure, execute_with_source_provider
+from yamaa.specification import (
+    SpecificationError,
+    ValidationDiagnostic,
+    load_specification,
+)
+from yamaa.specification._yaml import read_yaml_document
+
 EXAMPLES = Path(__file__).parents[2] / "yaml/examples"
+SCHEMA_ROOT = EXAMPLES.parent
+
+KNOWN_REQUIREMENT_GAPS = {
+    "negative-adsl-randomization-date-retyped": ("R014-10", None),
+    "negative-function-contract-mismatch": ("R018-38", None),
+}
 
 
 def positive_runners() -> tuple[Path, ...]:
@@ -16,6 +32,43 @@ def positive_runners() -> tuple[Path, ...]:
         for runner in sorted(EXAMPLES.glob("*/run.py"))
         if not (runner.parent / "expected/error.yaml").exists()
     )
+
+
+def negative_contracts() -> tuple[Path, ...]:
+    return tuple(sorted(EXAMPLES.glob("negative-*/expected/error.yaml")))
+
+
+def _negative_diagnostic(
+    example: Path,
+) -> ValidationDiagnostic | ExecutionDiagnostic | None:
+    try:
+        loaded = load_specification(example / "spec.yaml", SCHEMA_ROOT)
+    except SpecificationError as error:
+        return error.diagnostics[0]
+    resources = ProjectResources(example)
+    try:
+        result = execute_with_source_provider(
+            loaded.specification,
+            lambda datasets: load_source_tables(datasets, resources),
+        )
+    except NotImplementedError:
+        return None
+    if isinstance(result, ExecutionFailure):
+        return result.diagnostics[0]
+    return None
+
+
+def test_negative_example_requirements_match_committed_contracts() -> None:
+    mismatches = {}
+    for contract_path in negative_contracts():
+        contract = read_yaml_document(contract_path)
+        assert isinstance(contract, dict)
+        diagnostic = _negative_diagnostic(contract_path.parents[1])
+        actual = diagnostic.requirement if diagnostic is not None else None
+        expected = contract["requirement"]
+        if actual != expected:
+            mismatches[contract_path.parents[1].name] = (expected, actual)
+    assert mismatches == KNOWN_REQUIREMENT_GAPS
 
 
 @pytest.mark.parametrize(

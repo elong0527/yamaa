@@ -15,11 +15,7 @@ class ValidationDiagnostic(BaseModel):
     phase: Literal["validation"] = "validation"
     condition: str = Field(min_length=1)
     spec_paths: tuple[str, ...] = Field(min_length=1)
-    requirement: str | None = Field(
-        default=None,
-        pattern=r"^R[0-9]{3}-[0-9]+[a-z]?$",
-        exclude_if=lambda value: value is None,
-    )
+    requirement: str | None = Field(default=None, pattern=r"^R[0-9]{3}-[0-9]+$")
     context: dict[str, JsonValue]
 
 

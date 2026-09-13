@@ -10,6 +10,7 @@ from yamaa.planning.execution import (
     ResolvedJoin,
     UnsupportedFeature,
     UnsupportedPlanningError,
+    expression_path,
     plan_execution,
     preflight_execution,
 )
@@ -37,6 +38,7 @@ __all__ = [
     "WorkflowExecution",
     "WorkflowNode",
     "execute_workflow",
+    "expression_path",
     "plan_execution",
     "plan_workflow",
     "preflight_execution",
