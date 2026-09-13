@@ -93,13 +93,15 @@ so a template whose work is to leave one of the several driver records
 sharing a key combination is writing the grain `keys` already states, and
 that specification omits `rows` instead.
 
-**R001-12b.** A column derivation must yield exactly one value per row, and
-it counts values rather than the records carrying them: no value is missing,
-repeated readings of one value are that one value, and two records of one key
-combination carrying different values are two values, which fails under
-R001-44. In a specification without `rows`, a key column derivation must not
-depend on a non-key output column (R001-43); keys are derived before any row
-logic runs.
+**R001-12b.** A column derivation must resolve to exactly one source record
+per output row, and it counts records rather than the values they carry: no
+record is missing, and two records are two records even when they carry one
+value, which fails under R001-44. Deduplication happens where the grain is
+decided and nowhere else: R001-12 derives the key table as the distinct
+combination of `keys`, and a column that matches a record twice has not said
+which record it means. In a specification without `rows`, a key column
+derivation must not depend on a non-key output column (R001-43); keys are
+derived before any row logic runs.
 
 ## Expression evaluation
 
@@ -211,6 +213,9 @@ evaluation order to mapping order or to repeated reads of one partition.
 - **R001-43.** In a specification without `rows`, a key column derivation
   depending on a non-key output column: fail. Keys are derived before any row
   logic runs.
-- **R001-44.** A column derivation yielding more than one value for one key
-  combination: fail and report the column, how many values it yielded, and
-  the keys.
+- **R001-44.** A column derivation matching more than one source record for
+  one output row: fail, and report one diagnostic per offending row carrying
+  the column, that row's keys, how many records it matched, the values they
+  carried, and the columns whose values differ across them. Report every
+  offending row of the failing column before the run stops, so one run names
+  every record the specification has not chosen between.

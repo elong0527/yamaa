@@ -125,43 +125,46 @@ source:
 them and R003 defines the join uniqueness that `multiple_matches`
 relaxes.
 
-## ODM contextual references
+## Filtered reads
 
-**R002-20.** ODM item identifiers may contain periods.
-`ODM.IT.LB.LBDTC` means the `Value` whose `ItemOID` is `IT.LB.LBDTC`,
-resolved within the current ODM context.
+**R002-20.** A structured `source` may declare a `filter`. The read then
+selects records of the named dataset rather than reading the current
+row's own record, which is how a column reads one collected item out of
+a long-form relation:
 
-**R002-21.** An ODM context is the current row's values for the
-following columns, in this order, when those columns exist in the
-declared ODM projection:
+```yaml
+source:
+  variable: ODM.Value
+  filter: "ODM.ItemOID = 'IT.DM.SEX'"
+  missing: U
+```
 
-1. `StudyOID`;
-2. `MetaDataVersionOID`;
-3. `SubjectKey`;
-4. `StudyEventOID`;
-5. `StudyEventRepeatKey`;
-6. `FormOID`;
-7. `FormRepeatKey`;
-8. `ItemGroupOID`;
-9. `ItemGroupRepeatKey`.
+**R002-21.** A `filter` is an R004 predicate over one record of the read
+dataset. It names that dataset's columns and literals only: it cannot
+read the row being derived, and it cannot aggregate.
 
-**R002-22.** Resolution first matches every available context column and
-then matches the complete `ItemOID`. A projection may omit a context
-column only when its source does not carry that level.
+**R002-22.** A selected record reaches the current row only when it
+agrees with that row on every matching column. The matching columns are
+the output keys, and any column the read names in `on`.
 
-**R002-23.** A projection that carries `FormOID` must use it: identical
-item identifiers in two forms are different contextual values and must
-not be collapsed.
+**R002-23.** The row's value for a matching column is the value its
+driver record carries, and where the row has no driver record, the value
+its key column derives from the read dataset. A key column derives from
+that dataset when its derivation is a direct read of one of its columns.
 
-**R002-24.** No contextual match is an absent item. It fails unless a
-structured source declares `missing`, under R008.
+**R002-24.** `on` names columns of the read dataset. Naming the columns
+that identify a collection setting is how a read is scoped to one event,
+form, or item group; a read that names none is scoped by the keys alone.
 
-**R002-25.** More than one match after applying every available context
-column is a multiple right-side match. It fails unless a structured
-source declares `multiple_matches`, also under R008.
+**R002-25.** Exactly one matching record yields its value. No matching
+record is missing, and a declared `missing` substitutes under R008. More
+than one matching record fails under R001-44, unless the read declares
+`multiple_matches`, which R008 resolves to one record first.
 
-**R002-26.** A present matched row whose `Value` is missing returns
-missing and does not invoke the absent-item handler.
+**R002-26.** A matching record whose value is missing yields missing and
+does not invoke `missing`, which answers only for no record at all. A
+collected blank is a value the data supports; an uncollected item is
+not.
 
 ## Rationale
 
@@ -184,10 +187,12 @@ condition.
 **R002-31.** A scalar source in a grouped row naming a driver field
 absent from that row's `group_by`: fail.
 
-**R002-32.** An ODM contextual reference with no available context
-column: fail.
+**R002-32.** A `filter` naming a column outside its own dataset, reading
+the row being derived, or aggregating: fail.
 
-**R002-33.** More than one ODM contextual match: fail unless locally
-handled.
+**R002-33.** More than one record matching a filtered read for one row:
+fail under R001-44 unless the read declares `multiple_matches`.
 
-**R002-34.** No ODM contextual match: fail unless locally handled.
+**R002-34.** A filtered read whose matching columns cannot be
+determined, because a key column is not a direct read of the read
+dataset and the row has no driver record: fail.

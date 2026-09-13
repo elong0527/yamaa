@@ -28,7 +28,7 @@ fields an operation offers is declared by its registry entry under R007.
 
 | Stage | Local declaration | Behavior |
 |---|---|---|
-| bind | `source.missing` | Use a literal for an absent source variable or ODM item |
+| bind | `source.missing` | Use a literal for an absent source variable, or a filtered read no record answers |
 | join | `source.multiple_matches` | Filter, then select one duplicate right-side match |
 | mapping | `missing` | Use a literal for a missing mapping input |
 | mapping | `unmapped` | Use a literal for a non-missing value with no mapping |
@@ -51,9 +51,10 @@ fatal.
 ## What `missing` means, by stage
 
 **R008-4.** `missing` names two related conditions, distinguished by
-where it is declared. On a `source` binding, it applies when the
-variable or ODM item **does not exist in context**. It does not apply
-when the variable exists and holds a missing value.
+where it is declared. On a `source` binding, it applies when **no record
+answers the read**: the variable does not exist for this row, or its
+filter selected nothing. It does not apply when a record answers and
+holds a missing value.
 
 **R008-5.** On every other expression, `missing` applies when the named
 **input value is missing**.
