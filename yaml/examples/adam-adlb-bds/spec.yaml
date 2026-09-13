@@ -3,7 +3,6 @@ domain: ADLB
 datasets:
   LB: {path: input/lb.csv, types: {LBSTRESN: float}}
   ADSL: input/adsl.csv
-base: LB
 keys: [STUDYID, USUBJID, PARAMCD, ADT, ASEQ]
 
 output:
@@ -99,6 +98,7 @@ columns:
 
 rows:
   - id: alt
+    dataset: LB
     filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
     derivations:
       PARAMCD:
@@ -111,6 +111,7 @@ rows:
         source: LB.LBSTRESU
 
   - id: alt_si
+    dataset: LB
     filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
     derivations:
       PARAMCD:
@@ -124,6 +125,7 @@ rows:
         literal: ukat/L
 
   - id: ast
+    dataset: LB
     filter: "LB.LBTESTCD = 'AST' AND LB.LBSTRESN IS NOT NULL"
     derivations:
       PARAMCD:

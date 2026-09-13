@@ -611,6 +611,7 @@ def test_a_row_phase_lookup_cannot_match_on_a_later_phase_value() -> None:
             "rows": [
                 Row(
                     id="row",
+                    dataset="SRC",
                     derivations={
                         "X": derivation({"source": "SRC.X"}),
                         "W": derivation({"source": "LOOK.V"}),

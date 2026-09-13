@@ -1821,8 +1821,10 @@ def _preflight_findings(
 
     for index, row in enumerate(rows):
         if not specification.parents:
-            driver = row.dataset or specification.default_driver
-            if driver is None or driver not in specification.datasets:
+            driver = row.dataset
+            if driver is None and len(specification.datasets) == 1:
+                driver = next(iter(specification.datasets))
+            if driver not in specification.datasets:
                 diagnostics.append(
                     _diagnostic(
                         "driver_unavailable",
@@ -1830,7 +1832,9 @@ def _preflight_findings(
                         {"row": row.id, "dataset": driver},
                     )
                 )
-        driver = row.dataset or specification.default_driver
+        driver = row.dataset
+        if driver is None and len(specification.datasets) == 1:
+            driver = next(iter(specification.datasets))
         diagnostics.extend(_group_by_declaration(row, index, driver))
         scope = _row_scope(specification, row, driver)
         for name, declaration in row.derivations.items():
@@ -1956,7 +1960,9 @@ def plan_execution(
             )
     else:
         for index, row in enumerate(rows):
-            driver = row.dataset or specification.default_driver
+            driver = row.dataset
+            if driver is None and len(specification.datasets) == 1:
+                driver = next(iter(specification.datasets))
             if driver is None or driver not in specification.datasets:
                 continue
             row_scope = _row_scope(specification, row, driver)

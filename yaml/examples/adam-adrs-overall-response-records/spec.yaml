@@ -3,7 +3,6 @@ domain: ADRS
 datasets:
   RS: input/rs.csv
   ADSL: input/adsl.csv
-base: RS
 keys: [STUDYID, USUBJID, RSSEQ]
 
 output:
@@ -131,6 +130,7 @@ columns:
 
 rows:
   - id: overall_response
+    dataset: RS
     filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSEVAL = 'INVESTIGATOR'"
     derivations: {}
 
