@@ -10,13 +10,15 @@ the bytes on disk hash to what the environment declared.
 
 from __future__ import annotations
 
+import builtins
 import hashlib
 import importlib
 import importlib.util
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from importlib.machinery import ModuleSpec
+from importlib.abc import MetaPathFinder
+from importlib.machinery import ModuleSpec, PathFinder, SourceFileLoader
 from pathlib import Path
 from typing import Protocol
 
@@ -28,6 +30,52 @@ from yamaa.functions.models import ProjectRuntime
 # this, importing an artifact once would change its digest for the next run.
 _EXCLUDED_DIRECTORIES = frozenset({"__pycache__"})
 _EXCLUDED_SUFFIXES = frozenset({".pyc", ".pyo"})
+
+
+def _artifact_import(
+    name: str,
+    globals: Mapping[str, object] | None = None,
+    locals: Mapping[str, object] | None = None,
+    fromlist: tuple[str, ...] = (),
+    level: int = 0,
+):
+    if level == 0:
+        raise ImportError(
+            f"absolute import {name!r} cannot resolve outside the verified artifact"
+        )
+    return builtins.__import__(name, globals, locals, fromlist, level)
+
+
+class _ArtifactSourceLoader(SourceFileLoader):
+    def exec_module(self, module) -> None:
+        artifact_builtins = dict(vars(builtins))
+        artifact_builtins["__import__"] = _artifact_import
+        module.__dict__["__builtins__"] = artifact_builtins
+        super().exec_module(module)
+
+
+class _ArtifactFinder(MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if not fullname.startswith("_yamaa_artifact_"):
+            return None
+        specification = PathFinder.find_spec(fullname, path, target)
+        if specification is None or not isinstance(
+            specification.loader, SourceFileLoader
+        ):
+            return specification
+        specification.loader = _ArtifactSourceLoader(
+            specification.loader.name,
+            specification.loader.path,
+        )
+        return specification
+
+
+_ARTIFACT_FINDER = _ArtifactFinder()
+
+
+def _install_artifact_finder() -> None:
+    if _ARTIFACT_FINDER not in sys.meta_path:
+        sys.meta_path.insert(0, _ARTIFACT_FINDER)
 
 
 class ArtifactUnavailable(ValueError):
@@ -190,6 +238,7 @@ class LoadedArtifact:
         )
 
     def _package(self):
+        _install_artifact_finder()
         package = self.namespace
         existing = sys.modules.get(package)
         if existing is not None:

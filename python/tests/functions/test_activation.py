@@ -10,7 +10,9 @@ what the binding was actually called with, in the order it was called.
 from __future__ import annotations
 
 import importlib
+import inspect
 import sys
+from types import ModuleType
 
 import pytest
 from conftest import RECORDING_CODE
@@ -18,6 +20,7 @@ from conftest import RECORDING_CODE
 from yamaa.functions import (
     ACTIVATION_CACHE,
     FunctionActivationError,
+    LoadedArtifact,
     activate_project_functions,
     execute_with_project_functions,
     results_match,
@@ -216,6 +219,183 @@ def test_a_binding_is_resolved_inside_the_artifact_and_nowhere_else(
     diagnostic = failure.diagnostics[0]
     assert diagnostic.condition == "project_environment_invalid"
     assert diagnostic.context["reason"] == "the artifact contains no such module"
+
+
+@pytest.mark.parametrize(
+    ("source", "unsupported", "missing", "extra"),
+    [
+        (
+            (
+                "def bmi(weight_kg, /, height_cm, cm_per_m=100):\n"
+                "    return weight_kg / (height_cm / cm_per_m) ** 2\n"
+            ),
+            [{"name": "weight_kg", "kind": "positional_only"}],
+            ["weight_kg"],
+            [],
+        ),
+        (
+            (
+                "def bmi(weight_kg, height_cm, cm_per_m=100, *values):\n"
+                "    return weight_kg / (height_cm / cm_per_m) ** 2\n"
+            ),
+            [{"name": "values", "kind": "var_positional"}],
+            [],
+            [],
+        ),
+        (
+            (
+                "def bmi(weight_kg, height_cm, cm_per_m=100, **values):\n"
+                "    return weight_kg / (height_cm / cm_per_m) ** 2\n"
+            ),
+            [{"name": "values", "kind": "var_keyword"}],
+            [],
+            [],
+        ),
+        (
+            (
+                "def bmi(weight_kg, height_cm):\n"
+                "    return weight_kg / (height_cm / 100) ** 2\n"
+            ),
+            [],
+            ["cm_per_m"],
+            [],
+        ),
+        (
+            (
+                "def bmi(weight_kg, height_cm, cm_per_m=100, extra=0):\n"
+                "    return weight_kg / (height_cm / cm_per_m) ** 2\n"
+            ),
+            [],
+            [],
+            ["extra"],
+        ),
+    ],
+    ids=["positional-only", "varargs", "kwargs", "missing", "extra"],
+)
+def test_a_python_callable_requires_the_exact_mapped_signature(
+    project, repository, source, unsupported, missing, extra
+) -> None:
+    project.write_code(source)
+    project.write_vectors(repository.vectors)
+    project.write_environment()
+
+    failure = _failure(project, repository)
+
+    diagnostic = failure.diagnostics[0]
+    assert diagnostic.condition == "project_environment_invalid"
+    assert diagnostic.requirement == "R018-34"
+    assert diagnostic.context["unsupported"] == unsupported
+    assert diagnostic.context["missing"] == missing
+    assert diagnostic.context["extra"] == extra
+
+
+def test_signature_metadata_cannot_conceal_concrete_variadics(
+    project, repository, monkeypatch
+) -> None:
+    def advertised(weight_kg, height_cm, cm_per_m=100):
+        return weight_kg / (height_cm / cm_per_m) ** 2
+
+    def wrapper(*values, **named):
+        return advertised(*values, **named)
+
+    wrapper.__wrapped__ = advertised
+    wrapper.__signature__ = inspect.signature(advertised)
+    monkeypatch.setattr(LoadedArtifact, "load", lambda self, call: wrapper)
+    project.write_code(RECORDING_CODE)
+    project.write_vectors(repository.vectors)
+    project.write_environment()
+
+    failure = _failure(project, repository)
+
+    diagnostic = failure.diagnostics[0]
+    assert diagnostic.condition == "project_environment_invalid"
+    assert diagnostic.requirement == "R018-34"
+    assert diagnostic.context["unsupported"] == [
+        {"name": "values", "kind": "var_positional"},
+        {"name": "named", "kind": "var_keyword"},
+    ]
+    assert diagnostic.context["missing"] == [
+        "cm_per_m",
+        "height_cm",
+        "weight_kg",
+    ]
+    assert diagnostic.context["extra"] == []
+
+
+def test_signature_introspection_exceptions_are_activation_failures(
+    project, repository
+) -> None:
+    project.write_code(
+        """
+class BrokenCall:
+    def __get__(self, instance, owner):
+        raise RuntimeError("signature lookup failed")
+
+
+class BMI:
+    __call__ = BrokenCall()
+
+
+bmi = BMI()
+"""
+    )
+    project.write_vectors(repository.vectors)
+    project.write_environment()
+
+    failure = _failure(project, repository)
+
+    diagnostic = failure.diagnostics[0]
+    assert diagnostic.condition == "project_environment_invalid"
+    assert diagnostic.requirement == "R018-34"
+    assert diagnostic.context["reason"] == (
+        "the Python callable signature could not be inspected"
+    )
+    assert diagnostic.context["host_error"] == "RuntimeError"
+    assert diagnostic.context["host_message"] == "signature lookup failed"
+
+
+@pytest.mark.parametrize("ambient_source", ["sys-modules", "sys-path"])
+def test_an_absolute_transitive_import_cannot_use_ambient_code(
+    project, repository, monkeypatch, ambient_source
+) -> None:
+    dependency = "ambient_bmi_dependency"
+    if ambient_source == "sys-modules":
+        module = ModuleType(dependency)
+
+        def bmi(weight_kg, height_cm, cm_per_m=100):
+            return weight_kg / (height_cm / cm_per_m) ** 2
+
+        module.bmi = bmi
+        monkeypatch.setitem(sys.modules, dependency, module)
+    else:
+        directory = project.path.parent / "ambient"
+        directory.mkdir()
+        (directory / f"{dependency}.py").write_text(RECORDING_CODE, "utf-8")
+        monkeypatch.syspath_prepend(str(directory))
+
+    project.write_code(f"from {dependency} import bmi\n")
+    project.write_vectors(repository.vectors)
+    project.write_environment()
+
+    failure = _failure(project, repository)
+
+    diagnostic = failure.diagnostics[0]
+    assert diagnostic.condition == "function_call_failed"
+    assert diagnostic.requirement == "R018-40"
+    assert diagnostic.context["host_error"] == "ImportError"
+
+
+def test_a_relative_transitive_import_resolves_inside_the_artifact(
+    project, repository
+) -> None:
+    project.write_code(RECORDING_CODE, module="artifact_bmi_dependency")
+    project.write_code("from .artifact_bmi_dependency import bmi\n")
+    project.write_vectors(repository.vectors)
+    project.write_environment()
+
+    activated = _activate(project, repository)
+
+    assert activated.bound("bmi") is not None
 
 
 def test_an_unchanged_project_activates_once_and_a_repinned_one_again(
