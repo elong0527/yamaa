@@ -24,7 +24,7 @@ and parameter).
 - `SHIFT1` joins the baseline mark and the record's own mark, baseline
   first, so a result that stayed normal reads `NORMAL to NORMAL` and
   one that moved out of range reads `NORMAL to HIGH`; empty when
-  either mark is missing — the record's own or the baseline's.
+  either mark is missing - the record's own or the baseline's.
 - `R2BASE` divides `AVAL` by `BASE`, so the baseline record itself
   reads 1 when the ratio can be computed; empty when `AVAL` is
   missing, when there is no baseline, and when the baseline is zero
