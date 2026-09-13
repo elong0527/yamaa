@@ -105,6 +105,9 @@ def example_entry(example):
 
 def render_readme(text, source_url):
     """Render Markdown without executing raw HTML; resolve fixture-relative links."""
+    text = "\n".join(
+        line for line in text.splitlines() if "img.shields.io/badge/Dashboard" not in line
+    )
     markdown = MarkdownIt("commonmark", {"html": False}).enable("table")
     tokens = markdown.parse(text)
     title = "Example"
