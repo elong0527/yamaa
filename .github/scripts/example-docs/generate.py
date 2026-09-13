@@ -30,6 +30,7 @@ GISCUS = {
     "repo_id": "R_kgDOTXVQTg",
     "category": "Comments",
     "category_id": "DIC_kwDOTXVQTs4DFe_t",
+    "theme": "https://elong0527.github.io/yamaa/assets/giscus-yamaa.css",
 }
 COMMENT_TERM_PREFIX = "yaml/examples/"
 OUTCOMES = (
@@ -50,6 +51,9 @@ YAML_TOKEN = re.compile(
 SPEC_FILE_PATTERN = re.compile(r'^spec(?:_[a-z][a-z0-9_]*)?\.yaml$')
 SPEC_RESOLVED_NAME = 'spec_resolved.yaml'
 CODE_SUFFIXES = ('.py', '.R', '.qmd', '.Rmd')
+README_TAXONOMY = re.compile(
+    r"^\*\*Standard:\*\*\s*([^|]+?)\s*\|\s*\*\*Domain:\*\*\s*(\S+)\s*$"
+)
 
 
 def escape(value):
@@ -116,11 +120,34 @@ def example_entry(example):
     return entry, chain
 
 
+def readme_lines(text):
+    """Return dashboard prose lines without navigation or taxonomy metadata."""
+    return [
+        line
+        for line in text.splitlines()
+        if "img.shields.io/badge/Dashboard" not in line
+        and not README_TAXONOMY.fullmatch(line)
+    ]
+
+
+def readme_taxonomy(text):
+    for line in text.splitlines():
+        match = README_TAXONOMY.fullmatch(line)
+        if match:
+            return match.group(1).strip(), match.group(2).strip()
+    return None
+
+
+def readme_body_line_count(text):
+    lines = readme_lines(text)
+    if lines and lines[0].startswith("# "):
+        lines = lines[1:]
+    return sum(bool(line.strip()) for line in lines)
+
+
 def render_readme(text, source_url):
     """Render Markdown without executing raw HTML; resolve fixture-relative links."""
-    text = "\n".join(
-        line for line in text.splitlines() if "img.shields.io/badge/Dashboard" not in line
-    )
+    text = "\n".join(readme_lines(text))
     markdown = MarkdownIt("commonmark", {"html": False}).enable("table")
     tokens = markdown.parse(text)
     title = "Example"
@@ -463,7 +490,8 @@ def render_example(example, previous=None, next=None):
     if spec_path is None:
         raise ValueError(f"example has no spec file: {example.name}")
     spec_edit_url = edit_base + "/" + quote(spec_path.name)
-    title, readme = render_readme(readme_path.read_text(encoding="utf-8"), source_url)
+    readme_text = readme_path.read_text(encoding="utf-8")
+    title, readme = render_readme(readme_text, source_url)
     spec_text = spec_path.read_text(encoding="utf-8")
     # Parse metadata for labels and visual emphasis only; this does not execute the spec.
     spec = yaml.safe_load(spec_text)
@@ -498,6 +526,9 @@ def render_example(example, previous=None, next=None):
         label = f"{study} / {subject}" if subject_ids.count(subject) > 1 else subject
         subject_options.append(f'<option value="{escape(key)}">{escape(label)}</option>')
     category, heading = example_category(example.name, title, spec)
+    taxonomy = readme_taxonomy(readme_text)
+    if taxonomy and not example.name.startswith("spec-"):
+        category = ".".join(taxonomy)
     heading = heading[:1].upper() + heading[1:]
     has_csv = any(path.suffix == ".csv" for path in outputs)
     if is_failure:
@@ -587,6 +618,7 @@ def render_example(example, previous=None, next=None):
         next_link=page_link(next, "Next example", "next"),
         metrics=metrics_html,
         subject_options="".join(subject_options), readme=readme,
+        prose_class="prose prose-short" if readme_body_line_count(readme_text) <= 10 else "prose",
         input_files=input_files,
         input_caption=f"{len(inputs)} source file" + ("" if len(inputs) == 1 else "s"),
         output_files=output_files, output_caption=output_caption,
@@ -594,6 +626,7 @@ def render_example(example, previous=None, next=None):
         code_panel=code_panel,
         giscus_repo=escape(GISCUS["repo"]), giscus_repo_id=escape(GISCUS["repo_id"]),
         giscus_category=escape(GISCUS["category"]), giscus_category_id=escape(GISCUS["category_id"]),
+        giscus_theme=escape(GISCUS["theme"]),
         comment_term=escape(COMMENT_TERM_PREFIX + example.name),
         discussions_url=REPOSITORY + "/discussions",
         styles=(HERE / "dashboard.css").read_text(encoding="utf-8"),

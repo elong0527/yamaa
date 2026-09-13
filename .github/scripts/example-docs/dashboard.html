@@ -28,7 +28,7 @@
     <section id="readme" class="panel readme-panel" aria-labelledby="readme-heading">
       <header class="panel-header"><span class="panel-title"><h2 id="readme-heading">Summary</h2><a class="edit-button" href="$readme_edit_url">Edit</a></span><span class="panel-caption">What this example means</span></header>
       <div class="source-path"><code>README.md</code></div>
-      <div class="prose" aria-label="README content">$readme</div>
+      <div class="$prose_class" aria-label="README content">$readme</div>
     </section>
     $failure_section
     <div class="comparison-bar">
@@ -64,7 +64,7 @@
     <section id="comments" class="panel comments-panel" aria-labelledby="comments-heading">
       <header class="panel-header"><h2 id="comments-heading">Comments</h2><span class="panel-caption">Signed in with GitHub; saved in <a href="$discussions_url">repository Discussions</a></span></header>
       <div class="comments-body">
-        <script src="https://giscus.app/client.js" data-repo="$giscus_repo" data-repo-id="$giscus_repo_id" data-category="$giscus_category" data-category-id="$giscus_category_id" data-mapping="specific" data-term="$comment_term" data-strict="1" data-reactions-enabled="1" data-emit-metadata="0" data-input-position="bottom" data-theme="light" data-lang="en" data-loading="lazy" crossorigin="anonymous" async></script>
+        <script src="https://giscus.app/client.js" data-repo="$giscus_repo" data-repo-id="$giscus_repo_id" data-category="$giscus_category" data-category-id="$giscus_category_id" data-mapping="specific" data-term="$comment_term" data-strict="1" data-reactions-enabled="1" data-emit-metadata="0" data-input-position="bottom" data-theme="$giscus_theme" data-lang="en" data-loading="lazy" crossorigin="anonymous" async></script>
         <noscript><p>Comments need JavaScript. Read or join the discussion in <a href="$discussions_url">GitHub Discussions</a>.</p></noscript>
       </div>
     </section>
