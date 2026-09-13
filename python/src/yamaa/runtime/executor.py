@@ -158,6 +158,7 @@ def _artifact_diagnostics(
             phase=diagnostic.phase,
             condition=diagnostic.condition,
             spec_paths=diagnostic.spec_paths,
+            requirement=diagnostic.requirement,
             context=diagnostic.context,
         )
         for diagnostic in diagnostics
@@ -170,6 +171,7 @@ def _source_diagnostics(error: SourceError) -> tuple[ExecutionDiagnostic, ...]:
             phase=diagnostic.phase,
             condition=diagnostic.condition,
             spec_paths=diagnostic.spec_paths,
+            requirement=diagnostic.requirement,
             context=diagnostic.context,
         )
         for diagnostic in error.diagnostics
@@ -184,6 +186,7 @@ def _declaration_diagnostic(error: DeclarationError) -> ExecutionDiagnostic:
         phase="validation",
         condition=error.condition or "invalid_declaration",
         spec_paths=(error.spec_path,),
+        requirement=error.requirement,
         context=context,
     )
 

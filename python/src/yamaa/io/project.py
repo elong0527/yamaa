@@ -20,6 +20,15 @@ from yamaa.specification.diagnostics import SpecificationError
 _URI_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _DRIVE_ROOT = re.compile(r"^[A-Za-z]:/")
 
+_RESOURCE_REQUIREMENTS = {
+    "resource_path_uri_scheme": "R021-9",
+    "resource_path_not_relative": "R021-15",
+    "resource_path_symlink": "R021-17",
+    "resource_path_outside_project": "R021-18",
+    "resource_path_missing": "R021-19",
+    "resource_path_not_regular_file": "R021-19",
+}
+
 PROJECT_CONFIGURATION_NAME = "yamaa-project.yaml"
 
 
@@ -76,6 +85,7 @@ class ResourceFailure(ValueError):
         self.phase = phase
         self.condition = condition
         self.written_path = written_path
+        self.requirement = _RESOURCE_REQUIREMENTS.get(condition)
         super().__init__(f"{condition}: {written_path!r}")
 
 
