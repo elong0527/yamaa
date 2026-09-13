@@ -1,0 +1,7 @@
+version: "1.0"
+
+expressions:
+    date_diff:
+        - start: {type: variable, required: true}
+        - end: {type: variable, required: true}
+        - unit: {type: str, required: true, values: [day, week, month, year]}
