@@ -20,6 +20,26 @@ behavior; indexed rule files are normative for shared behavior. Example
 READMEs explain examples but do not override either. Proposed rules remain
 outside the rule index until their contracts and example coverage are complete.
 
+## Terminology
+
+One term per concept across all rules, schema comments, and messages:
+
+- **specification** - the YAML file under review. `study` and `document` stay
+  project-level (R021, R024, R026), never names for the YAML.
+- **input dataset** / **output dataset** - state the role whenever it matters.
+  Bare `dataset` appears only as a key name. `table` means a documentation
+  table, never data.
+- **row template** - one `rows` entry, building a group of output rows. Bare
+  `template` means a string template (R012).
+- **record** - input side (a file or input dataset row). **row** - output side
+  (an output record under construction or built).
+- **column** - dataset level. **field** - file and schema level (R014, R023).
+  **variable** - an expression-level name (R006).
+- **path notation** - `row.dataset`, `root.datasets`, `expression.source`
+  (R002 style). Never `row_class.` or `root_class.`.
+- **driver** - banned from normative text, schema descriptions, and
+  user-facing messages. Use input dataset or `row.dataset`.
+
 ## Maintenance rules
 
 - Keep `schema.yaml` and every `schema_*.yaml` module compact and strictly valid
