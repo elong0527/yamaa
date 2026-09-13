@@ -36,67 +36,71 @@ entry omitting `dataset` builds from the single declared dataset. When
 
 **R001-5.** A row template has one of two modes:
 
-1. **R001-6.** A template without `group_by` is record-driven. Its `filter`,
-   when present, evaluates against each driver record before any row
-   derivation. Every retained driver record produces one candidate row.
-2. **R001-7.** A template with `group_by` is group-driven. Its non-empty list
-   names only qualified variables of its row driver. The complete driver
-   relation is partitioned by the equality each value's type owns, including
+1. **R001-6.** A row template without `group_by` is record-driven. Its
+   `filter`, when present, evaluates against each input record before any
+   row derivation. Every retained input record produces one candidate row.
+2. **R001-7.** A row template with `group_by` is group-driven. Its
+   non-empty list names only qualified variables of its input dataset. The
+   complete input dataset is partitioned by the equality each value's type
+   owns, including
    R019 for strings, with missing values equal to other missing values for
    grouping. Every group produces one candidate row.
 
-**R001-8.** Groups are ordered by the position of their first driver record.
-Within a group, records retain driver order. For each group, evaluate every
+**R001-8.** Groups are ordered by the position of their first input record.
+Within a group, records retain input order. For each group, evaluate every
 row derivation once and complete stages 1 through 4 of the R005 lifecycle.
-Then evaluate the template's `filter`, when present, over the candidate's
+Then evaluate the row template's `filter`, when present, over the candidate's
 completed unqualified columns. Append the candidate only when the predicate
 is `TRUE`; `FALSE` or `UNKNOWN` suppresses it. A grouped `filter` therefore
 corresponds to filtering after a group reduction, while an ungrouped
-`filter` retains its existing driver-record meaning.
+`filter` retains its existing input-record meaning.
 
-**R001-9.** Constructed rows are appended in specification order, using driver
-order for record-driven templates and first-occurrence group order for
-group-driven templates.
+**R001-9.** Constructed rows are appended in specification order, using input
+order for record-driven row templates and first-occurrence group order for
+group-driven row templates.
 
-**R001-10.** The output row grain belongs to the input relations and the row
+**R001-10.** The output row grain belongs to the input datasets and the row
 templates written in the specification. Row construction has no operation
 that repeats a candidate a data-dependent number of times and no generated
 index for such a repetition. A source value may decide whether a written
-template retains its one candidate, but it cannot create additional
-instances of that template.
+row template retains its one candidate, but it cannot create additional
+instances of that row template.
 
 **R001-11.** When the required artifact has one row per observation,
-administration, or planned event, an input relation must therefore contain
-one driver record per required row. Expected-but-uncollected rows use an
+administration, or planned event, an input dataset must therefore contain
+one input record per required row. Expected-but-uncollected rows use an
 explicit planning relation at that grain and may be enriched from collected
 relations through record lookups. Dynamically counted expansion must happen
 upstream and its expanded records enter the specification as ordinary input.
 
 **R001-12.** The declared `keys` state the output grain, and `keys` must be
 declared. When `rows` is absent or empty, row construction derives the
-distinct combination of `keys` over the driver records, in first-appearance
+distinct combination of `keys` over the input records, in first-appearance
 order, and that key table is the output row set. The key table is standalone:
-one row per unique key combination, with no link back to the driver records,
-so the records a key combination was derived from decide its column values
+one row per unique key combination, with no link back to the input records,
+so the input records a key combination was derived from decide its
+column values
 and never how many rows the artifact carries. `base` is required in that
-case, unless `datasets` declares exactly one dataset, which drives.
+case, unless `datasets` declares exactly one dataset, which supplies the
+input records.
 
-**R001-12a.** When `rows` is present, the templates construct the rows
-instead: each template is one section over the records its `filter` keeps,
+**R001-12a.** When `rows` is present, the row templates construct the rows
+instead: each row template is one section over the records its `filter` keeps,
 every surviving record or group yields its row, and the sections concatenate
-in specification order. Templates therefore build a grain finer than the
-driver records only through the constructs R001-10 permits, and the grain
+in specification order. Row templates therefore build a grain finer than the
+input records only through the constructs R001-10 permits, and the grain
 they build must still be the one `keys` states: repeating a key combination
 fails at the output gate under R005-52. A `filter` states which rows the
 artifact carries and never which record of a key combination stands for it,
-so a template whose work is to leave one of the several driver records
+so a row template whose work is to leave one of the several input records
 sharing a key combination is writing the grain `keys` already states, and
 that specification omits `rows` instead.
 
 **R001-12b.** A column derivation must yield exactly one value per row, and
 it counts values rather than the records carrying them: repeated readings of
-one value are that one value, and two records of one key combination carrying
-different present values are two values, which fails under R001-44. A missing
+one value are that one value, and two input records of one key combination
+carrying different present values are two values, which fails under
+R001-44. A missing
 result is still the row's one value but never creates a second value for the
 R001-44 count. In a specification without `rows`, a key column derivation must not
 depend on a non-key output column (R001-43); keys are derived before any row
@@ -115,9 +119,10 @@ own `group_by`. Aggregate expressions evaluate in the contexts R007 permits.
 All other expressions return one value per current row.
 
 **R001-15.** During group-driven row construction, a source field of the row
-driver is a scalar only when that exact qualified variable occurs in the
-template's `group_by`. An aggregate expression may instead reduce the records
-of the current driver group under R007 and R013. Other row expressions
+template's input dataset is a scalar only when that exact qualified variable
+occurs in the row template's `group_by`. An aggregate expression may instead
+reduce the records of the current group under R007 and R013. Other
+row expressions
 consume group keys, literals, earlier row-derived columns, or a record lookup
 whose matching values are already complete, in the ordinary dependency order.
 
@@ -142,9 +147,10 @@ order and detect cycles. Recursively traverse each expression and collect:
 
 **R001-26.** Predicates include `case.branches[].when`, `override[].when`,
 `row.filter`, aggregate `filter`, and window `filter`. An ungrouped
-`row.filter` resolves only driver variables and runs before its derivation
-graph. A grouped `row.filter` resolves unqualified columns derived by that
-row template and runs after the whole graph completes. Identifier extraction
+`row.filter` resolves only qualified variables of its input dataset and runs
+before its derivation graph. A grouped `row.filter` resolves unqualified
+columns derived by that row template and runs after the whole graph
+completes. Identifier extraction
 requires parsing the predicate under the R004 grammar, the numeric expression
 under the R010 grammar, the string template under the R012 grammar, and the
 reducer expression under the R013 grammar; an implementation must not treat
@@ -153,7 +159,7 @@ any of them as dependency-free.
 **R001-27.** For each row definition, evaluate row derivations using a
 dependency graph. Row derivations cannot depend on values produced only
 during the column phase. Every unqualified identifier in a grouped
-`row.filter` must resolve to a column derived by that same template. The
+`row.filter` must resolve to a column derived by that same row template. The
 filter itself is not a derivation and adds no graph edge between columns
 because it runs only after all of them have completed.
 
@@ -183,7 +189,7 @@ R005 owns both.
 ## Rationale
 
 Row count changes only during row construction, so a reviewer can tell row
-grain from enrichment: the templates and their driver relations fix how many
+grain from enrichment: the row templates and their input datasets fix how many
 rows exist before any column is derived. Dependency inference keeps
 declaration order checkable and makes cycles visible instead of leaving
 evaluation order to mapping order or to repeated reads of one partition.
@@ -196,13 +202,13 @@ evaluation order to mapping order or to repeated reads of one partition.
   dataset: fail. The default is root `base`, or the single declared dataset
   when `base` is omitted.
 - **R001-34.** An empty or duplicate `row.group_by`: fail.
-- **R001-35.** A `row.group_by` variable not qualified to that row's driver:
-  fail.
-- **R001-36.** A grouped row derivation reading a non-grouped driver field
+- **R001-35.** A `row.group_by` variable not qualified to that row
+  template's input dataset: fail.
+- **R001-36.** A grouped row derivation reading a non-grouped source field
   without an aggregate: fail and report the field.
 - **R001-37.** An ungrouped `row.filter` naming an output column, or a grouped
   `row.filter` naming a qualified variable or a column not derived by that
-  template: fail.
+  row template: fail.
 - **R001-38.** A row dependency on a later-phase value: fail.
 - **R001-39.** An unresolved variable or predicate reference: fail.
 - **R001-40.** A reference to a later declared column: fail and report both
