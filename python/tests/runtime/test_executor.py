@@ -255,6 +255,77 @@ def test_row_templates_and_driver_records_keep_their_declared_order() -> None:
     ]
 
 
+def test_key_grain_without_rows_emits_one_row_per_key_combination() -> None:
+    def derive(expression):
+        return HandledExpression(value=Expression(root=expression))
+
+    specification = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        datasets={"SRC": DatasetSource(path="input/source.csv")},
+        base="SRC",
+        keys=["VALUE"],
+        output=Output(path="out.csv", columns=["VALUE", "TAG"]),
+        columns=[
+            Column(name="VALUE", type="str", derivation=derive({"source": "SRC.X"})),
+            Column(name="TAG", type="str", derivation=derive({"literal": "kept"})),
+        ],
+    )
+    sources = {
+        "SRC": TypedTable(
+            columns=(TypedColumn(name="X", type="str"),),
+            frame=pl.DataFrame({"X": ["one", "two"]}, schema={"X": pl.String}),
+        )
+    }
+
+    result = execute_specification(specification, sources)
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.artifact.frame.rows() == [("one", "kept"), ("two", "kept")]
+
+
+def test_key_grain_without_rows_rejects_multiple_values_per_key() -> None:
+    def derive(expression):
+        return HandledExpression(value=Expression(root=expression))
+
+    specification = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        datasets={"SRC": DatasetSource(path="input/source.csv")},
+        base="SRC",
+        keys=["GRP"],
+        output=Output(path="out.csv", columns=["GRP", "VALUE"]),
+        columns=[
+            Column(name="GRP", type="str", derivation=derive({"source": "SRC.G"})),
+            Column(name="VALUE", type="str", derivation=derive({"source": "SRC.X"})),
+        ],
+    )
+    sources = {
+        "SRC": TypedTable(
+            columns=(
+                TypedColumn(name="G", type="str"),
+                TypedColumn(name="X", type="str"),
+            ),
+            frame=pl.DataFrame(
+                {"G": ["one", "one"], "X": ["1", "2"]},
+                schema={"G": pl.String, "X": pl.String},
+            ),
+        )
+    }
+
+    result = execute_specification(specification, sources)
+
+    assert isinstance(result, ExecutionFailure)
+    (diagnostic,) = result.diagnostics
+    assert diagnostic.phase == "derivation"
+    assert diagnostic.condition == "multiple_values_per_key"
+    assert diagnostic.spec_paths == ("columns.VALUE.derivation.source",)
+    assert diagnostic.requirement == "R001-44"
+    assert diagnostic.context["identifier"] == "SRC.X"
+    assert diagnostic.context["match_count"] == 2
+    assert diagnostic.context["keys"] == [{"GRP": "one"}]
+
+
 def test_results_and_handler_counts_are_deterministic() -> None:
     specification, sources = dm_inputs()
 

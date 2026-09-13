@@ -1063,6 +1063,36 @@ def plan_execution(
                     )
                 )
 
+    key_set = set(specification.keys)
+    planned_by_column = {planned.column: planned for planned in column_plans}
+    has_templates = bool(specification.rows)
+    for key in specification.keys:
+        planned = planned_by_column.get(key)
+        if planned is None:
+            if has_templates:
+                continue
+            diagnostics.append(
+                _diagnostic(
+                    "key_dependency",
+                    f"columns.{key}.derivation",
+                    {"column": key},
+                    requirement="R001-43",
+                )
+            )
+            continue
+        for dependency in planned.dependencies:
+            if dependency in column_types and dependency not in key_set:
+                if has_templates:
+                    continue
+                diagnostics.append(
+                    _diagnostic(
+                        "key_dependency",
+                        planned.expression_path,
+                        {"column": key, "dependency": dependency},
+                        requirement="R001-43",
+                    )
+                )
+
     if diagnostics:
         raise ExecutionPlanningError(diagnostics)
     unique_unsupported = _unique_features(unsupported)

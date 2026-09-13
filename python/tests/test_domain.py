@@ -88,3 +88,19 @@ def test_preflight_issues_prevent_input_loading() -> None:
     assert issue["condition"] == "duplicate_identifier"
     assert issue["spec_paths"] == ["datasets.ADLB", "domain"]
     assert json.loads(issue["context"]) == {"identifier": "ADLB"}
+
+
+def test_duplicate_subject_fails_at_key_grain_derivation() -> None:
+    pilot = yamaa_domain(EXAMPLES / "negative-output-duplicate-subject/spec.yaml")
+
+    assert pilot.spec is not None
+    assert pilot.output is None
+    issue = pilot.issues.row(0, named=True)
+    assert issue["severity"] == "error"
+    assert issue["phase"] == "derivation"
+    assert issue["condition"] == "multiple_values_per_key"
+    assert issue["spec_paths"] == ["columns.AGE.derivation.source"]
+    context = json.loads(issue["context"])
+    assert context["identifier"] == "DM.AGE"
+    assert context["match_count"] == 2
+    assert context["keys"] == [{"STUDYID": "PILOT7", "USUBJID": "P7-722"}]

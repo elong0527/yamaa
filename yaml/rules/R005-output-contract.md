@@ -289,6 +289,8 @@ or row ID: fail.
 fail.
 
 **R005-52.** A missing or duplicate combined key value: fail and report the
-offending rows.
+offending rows. Under the R001 key-table grain the no-`rows` path emits at
+most one row per key combination, so a duplicate key in the final table means
+row templates emitted the same combination more than once.
 
 **R005-53.** A failed verification: fail under R009.
