@@ -38,6 +38,10 @@ EXAMPLES = SCHEMA_ROOT / "examples"
 ARTIFACT_EXAMPLES = [
     "sdtm-dm-reference-dates",
     "adam-adlb-mean",
+    # R003-9 matches on the applicable keys as the two sides declare them, so
+    # a sequence number joins once both sides say it is one.
+    "adam-adae-event-severity",
+    "sdtm-ae-effective-transaction",
 ]
 
 # Committed error contracts this component reproduces field for field.

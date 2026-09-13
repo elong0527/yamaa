@@ -1,8 +1,10 @@
 schema_version: "1.0"
 domain: AE
 datasets:
-  AE_REC: input/ae_records.csv
-  AE_TXN: {path: input/ae_txn.csv, types: {TXNSEQ: int, AUDITDTC: datetime}}
+  AE_REC: {path: input/ae_records.csv, types: {AESEQ: int}}
+  AE_TXN:
+    path: input/ae_txn.csv
+    types: {AESEQ: int, TXNSEQ: int, AUDITDTC: datetime}
 base: AE_REC
 keys: [STUDYID, USUBJID, AESEQ]
 
