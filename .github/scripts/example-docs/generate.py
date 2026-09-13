@@ -384,7 +384,7 @@ def render_index(entries):
     return result.encode("ascii", "xmlcharrefreplace")
 
 
-def render_spec_pane(filename, text, slug, single):
+def render_spec_pane(filename, text, slug, single, edit_url=None):
     lines = text.splitlines()
     code_lines = []
     for number, line in enumerate(lines, 1):
@@ -395,9 +395,10 @@ def render_spec_pane(filename, text, slug, single):
         )
     if single:
         return "".join(code_lines), len(lines)
+    edit = f'<a class="edit-button" href="{edit_url}">Edit</a>' if edit_url else ""
     pane = (
         f'<div class="spec-pane" id="pane-{slug}" data-filename="{escape(filename)}" data-lines="{len(lines)}">'
-        f'<div class="file-heading"><h3 class="filename">{escape(filename)}</h3>'
+        f'<div class="file-heading"><span class="file-title"><h3 class="filename">{escape(filename)}</h3>{edit}</span>'
         f'<span class="file-count">{len(lines)} lines</span></div>'
         f'<pre><code>{"".join(code_lines)}</code></pre></div>'
     )
@@ -411,7 +412,7 @@ def example_code_files(example):
     )
 
 
-def render_code_panel(files):
+def render_code_panel(files, edit_base=None):
     panes, options = [], []
     for path in files:
         slug = re.sub(r"[^a-z0-9]+", "-", path.name.lower()).strip("-")
@@ -422,9 +423,14 @@ def render_code_panel(files):
             for number, line in enumerate(lines, 1)
         )
         active = "" if path == files[0] else " hidden"
+        edit = (
+            f'<a class="edit-button" href="{edit_base}/{quote(path.name)}">Edit</a>'
+            if edit_base
+            else ""
+        )
         panes.append(
             f'<div class="code-pane" id="code-pane-{slug}" data-filename="{escape(path.name)}"{active}>'
-            f'<div class="file-heading"><h3 class="filename">{escape(path.name)}</h3>'
+            f'<div class="file-heading"><span class="file-title"><h3 class="filename">{escape(path.name)}</h3>{edit}</span>'
             f'<span class="file-count">{len(lines)} lines</span></div>'
             f'<div class="code-scroll" tabindex="0" aria-label="{escape(path.name)}"><pre><code>{code_lines}</code></pre></div></div>'
         )
@@ -531,22 +537,36 @@ def render_example(example, previous=None, next=None):
         spec_code, spec_line_count = render_spec_pane(
             spec_path.name, spec_text, "yaml", True
         )
+        spec_header_edit = f'<a class="edit-button" href="{spec_edit_url}">Edit</a>'
+        spec_path_row = f'<div class="source-path"><code>{escape(spec_path.name)}</code></div>'
     else:
         panes = []
-        documents = [(path.name, path.read_text(encoding="utf-8")) for path in chain]
-        documents.append((spec_path.name, spec_text))
+        sources = list(chain) + [spec_path]
         if resolved_path.is_file():
-            documents.append((SPEC_RESOLVED_NAME, resolved_path.read_text(encoding="utf-8")))
-        for filename, text in documents:
+            sources.append(resolved_path)
+        for path in sources:
+            try:
+                relpath = path.relative_to(example).as_posix()
+            except ValueError:
+                relpath = None
+            text = path.read_text(encoding="utf-8")
+            filename = path.name
+            file_edit = (
+                edit_base + "/" + "/".join(quote(part) for part in relpath.split("/"))
+                if relpath
+                else None
+            )
             pane, count = render_spec_pane(
-                filename, text, Path(filename).stem, False
+                filename, text, Path(filename).stem, False, file_edit
             )
             panes.append(pane)
             spec_line_count = count
         panes.append(f"<script>{(HERE / 'spec-panes.js').read_text(encoding='utf-8')}</script>")
         spec_code = "".join(panes)
+        spec_header_edit = ""
+        spec_path_row = ""
     code_files = example_code_files(example)
-    code_panel = render_code_panel(code_files) if code_files else ""
+    code_panel = render_code_panel(code_files, edit_base) if code_files else ""
     template = Template((HERE / "dashboard.html").read_text(encoding="utf-8"))
     result = template.substitute(
         example_name=escape(example.name), page_title=escape(title), heading=escape(heading),
@@ -554,7 +574,7 @@ def render_example(example, previous=None, next=None):
         failure_section=failure_section,
         datasets_heading=datasets_heading,
         readme_edit_url=readme_edit_url,
-        spec_file_name=escape(spec_path.name), spec_edit_url=spec_edit_url,
+        spec_header_edit=spec_header_edit, spec_path_row=spec_path_row,
         source_url=REPOSITORY + "/tree/main/yaml/examples/" + quote(example.name),
         prev_link=page_link(previous, "Previous example", "prev"),
         next_link=page_link(next, "Next example", "next"),
