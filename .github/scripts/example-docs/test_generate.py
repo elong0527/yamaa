@@ -169,6 +169,16 @@ class DashboardTests(unittest.TestCase):
         page = generate.render_example(EXAMPLE).decode("ascii")
         self.assertIn('<span>Hide Spec</span>', page)
         self.assertIn('role="separator" aria-label="Resize specification panel"', page)
+        self.assertIn('aria-valuenow="740"', page)
+        self.assertIn("const DEFAULT_SPEC_WIDTH = 740", page)
+        self.assertIn("setSpecWidth(preferredSpecWidth)", page)
+        self.assertNotIn("setSpecWidth(specification.getBoundingClientRect().width)", page)
+        self.assertIn(
+            '<div class="file-heading spec-file-heading"><span class="file-title">'
+            '<h3 class="filename">spec.yaml</h3>',
+            page,
+        )
+        self.assertIn('<span class="panel-caption">1 spec file</span>', page)
         self.assertNotIn('id="section-select"', page)
         self.assertNotIn("Jump to section", page)
 
@@ -221,6 +231,17 @@ class DashboardTests(unittest.TestCase):
             ["spec_organization.yaml", "spec_compound.yaml", "spec_study.yaml", "spec_resolved.yaml"],
         )
         self.assertIn("Choose specification document", page)
+        self.assertIn('<span class="panel-caption">4 spec files</span>', page)
+        base = "https://github.com/elong0527/yamaa/edit/main/yaml/examples/spec-inheritance"
+        for path in [
+            "spec_organization.yaml",
+            "spec_compound.yaml",
+            "spec_study.yaml",
+            "expected/spec_resolved.yaml",
+        ]:
+            self.assertIn(f'data-edit-url="{base}/{path}"', page)
+        self.assertIn('fileHeading.className = "file-heading spec-file-heading"', page)
+        self.assertIn('edit.href = active.dataset.editUrl', page)
         self.assertNotIn('aria-label="expected/spec_resolved.yaml"', page)
         self.assertNotIn('id="section-select"', page)
         base = "https://github.com/elong0527/yamaa/edit/main/yaml/examples/spec-inheritance"
@@ -229,7 +250,10 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(
             f'<a class="edit-button" href="{base}/expected/spec_resolved.yaml">Edit</a>', page
         )
-        self.assertIn('<h2 id="schema-heading">YAML specification</h2></span>', page)
+        self.assertIn(
+            '<header class="section-header"><h2 id="schema-heading">YAML specification</h2>',
+            page,
+        )
 
     def test_spec_prefixed_example_gets_its_own_gallery_category(self):
         example = generate.EXAMPLES / "spec-inheritance"

@@ -396,8 +396,10 @@ def render_spec_pane(filename, text, slug, single, edit_url=None):
     if single:
         return "".join(code_lines), len(lines)
     edit = f'<a class="edit-button" href="{edit_url}">Edit</a>' if edit_url else ""
+    edit_data = f' data-edit-url="{escape(edit_url)}"' if edit_url else ""
     pane = (
-        f'<div class="spec-pane" id="pane-{slug}" data-filename="{escape(filename)}" data-lines="{len(lines)}">'
+        f'<div class="spec-pane" id="pane-{slug}" data-filename="{escape(filename)}" '
+        f'data-lines="{len(lines)}"{edit_data}>'
         f'<div class="file-heading"><span class="file-title"><h3 class="filename">{escape(filename)}</h3>{edit}</span>'
         f'<span class="file-count">{len(lines)} lines</span></div>'
         f'<pre><code>{"".join(code_lines)}</code></pre></div>'
@@ -537,8 +539,13 @@ def render_example(example, previous=None, next=None):
         spec_code, spec_line_count = render_spec_pane(
             spec_path.name, spec_text, "yaml", True
         )
-        spec_header_edit = f'<a class="edit-button" href="{spec_edit_url}">Edit</a>'
-        spec_path_row = f'<div class="source-path"><code>{escape(spec_path.name)}</code></div>'
+        spec_caption = "1 spec file"
+        spec_file_header = (
+            '<div class="file-heading spec-file-heading"><span class="file-title">'
+            f'<h3 class="filename">{escape(spec_path.name)}</h3>'
+            f'<a class="edit-button" href="{spec_edit_url}">Edit</a></span>'
+            f'<span class="file-count">{spec_line_count} lines</span></div>'
+        )
     else:
         panes = []
         sources = list(chain) + [spec_path]
@@ -561,10 +568,10 @@ def render_example(example, previous=None, next=None):
             )
             panes.append(pane)
             spec_line_count = count
+        spec_caption = f"{len(sources)} spec files"
         panes.append(f"<script>{(HERE / 'spec-panes.js').read_text(encoding='utf-8')}</script>")
         spec_code = "".join(panes)
-        spec_header_edit = ""
-        spec_path_row = ""
+        spec_file_header = ""
     code_files = example_code_files(example)
     code_panel = render_code_panel(code_files, edit_base) if code_files else ""
     template = Template((HERE / "dashboard.html").read_text(encoding="utf-8"))
@@ -574,7 +581,7 @@ def render_example(example, previous=None, next=None):
         failure_section=failure_section,
         datasets_heading=datasets_heading,
         readme_edit_url=readme_edit_url,
-        spec_header_edit=spec_header_edit, spec_path_row=spec_path_row,
+        spec_file_header=spec_file_header,
         source_url=REPOSITORY + "/tree/main/yaml/examples/" + quote(example.name),
         prev_link=page_link(previous, "Previous example", "prev"),
         next_link=page_link(next, "Next example", "next"),
@@ -583,7 +590,7 @@ def render_example(example, previous=None, next=None):
         input_files=input_files,
         input_caption=f"{len(inputs)} source file" + ("" if len(inputs) == 1 else "s"),
         output_files=output_files, output_caption=output_caption,
-        spec_lines=spec_line_count, spec_code=spec_code,
+        spec_caption=spec_caption, spec_code=spec_code,
         code_panel=code_panel,
         giscus_repo=escape(GISCUS["repo"]), giscus_repo_id=escape(GISCUS["repo_id"]),
         giscus_category=escape(GISCUS["category"]), giscus_category_id=escape(GISCUS["category_id"]),

@@ -17,11 +17,14 @@ sidebarToggle.addEventListener("click", () => {
   workbench.classList.toggle("without-sidebar", specification.hidden);
   sidebarToggle.setAttribute("aria-expanded", String(!specification.hidden));
   sidebarToggle.querySelector("span").textContent = specification.hidden ? "Show Spec" : "Hide Spec";
+  if (!specification.hidden) setSpecWidth(preferredSpecWidth);
 });
 
 const MIN_SPEC_WIDTH = 240;
 const MAX_SPEC_WIDTH = 740;
+const DEFAULT_SPEC_WIDTH = 740;
 const MIN_DATA_WIDTH = 420;
+let preferredSpecWidth = DEFAULT_SPEC_WIDTH;
 
 function specWidthBounds() {
   return {
@@ -40,7 +43,9 @@ function setSpecWidth(width) {
   specResizer.setAttribute("aria-valuetext", next + " pixels wide");
 }
 
-setSpecWidth(specification.getBoundingClientRect().width);
+// The panel is hidden at startup, so measuring it here would yield zero and
+// replace the intended 80-character default with MIN_SPEC_WIDTH.
+setSpecWidth(preferredSpecWidth);
 
 let resizing = false;
 specResizer.addEventListener("pointerdown", (event) => {
@@ -51,7 +56,8 @@ specResizer.addEventListener("pointerdown", (event) => {
 });
 specResizer.addEventListener("pointermove", (event) => {
   if (!resizing) return;
-  setSpecWidth(event.clientX - workbench.getBoundingClientRect().left);
+  preferredSpecWidth = event.clientX - workbench.getBoundingClientRect().left;
+  setSpecWidth(preferredSpecWidth);
 });
 function stopResize(event) {
   if (!resizing) return;
@@ -65,16 +71,17 @@ specResizer.addEventListener("pointercancel", stopResize);
 specResizer.addEventListener("keydown", (event) => {
   const current = Number(specResizer.getAttribute("aria-valuenow"));
   const step = event.shiftKey ? 50 : 20;
-  if (event.key === "ArrowLeft") setSpecWidth(current - step);
-  else if (event.key === "ArrowRight") setSpecWidth(current + step);
-  else if (event.key === "Home") setSpecWidth(specWidthBounds().min);
-  else if (event.key === "End") setSpecWidth(specWidthBounds().max);
+  if (event.key === "ArrowLeft") preferredSpecWidth = current - step;
+  else if (event.key === "ArrowRight") preferredSpecWidth = current + step;
+  else if (event.key === "Home") preferredSpecWidth = specWidthBounds().min;
+  else if (event.key === "End") preferredSpecWidth = MAX_SPEC_WIDTH;
   else return;
+  setSpecWidth(preferredSpecWidth);
   event.preventDefault();
 });
 window.addEventListener("resize", () => {
   if (!specification.hidden) {
-    setSpecWidth(specification.getBoundingClientRect().width);
+    setSpecWidth(preferredSpecWidth);
   }
 });
 

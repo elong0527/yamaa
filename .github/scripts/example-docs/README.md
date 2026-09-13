@@ -49,9 +49,11 @@ unchanged by GitHub Pages because it has no Jekyll front matter. The README
 renders as the Summary panel spanning the top.
 The YAML specification occupies a left sidebar with a Hide Spec / Show Spec
 button; hiding it gives the datasets the full width. On desktop, a drag handle
-resizes the sidebar and supports the arrow, Home, and End keys. A menu inside
-the sidebar jumps to top-level YAML sections. Input datasets appear side by
-side, with expected output below. An example carrying `expected/error.yaml`
+resizes the sidebar and supports the arrow, Home, and End keys. Its default
+width fits 80-character YAML lines when the viewport has room. The active spec
+path, Edit link, and line count share the same file-heading treatment as the
+input panes; inherited examples use the path menu to switch all three. Input
+datasets appear side by side, with expected output below. An example carrying `expected/error.yaml`
 instead renders an `Expected failure` section with the rejection facts and the
 assertion collapsed, a red `Rejected` result metric, and its datasets under an
 `Unexpected Output` heading. All datasets stay visible without tabs, and
