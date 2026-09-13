@@ -29,10 +29,12 @@ does not define what an expression means (R007), how a name binds to a source
 2. **R001-3.** Column derivation enriches constructed rows and must not
    change row count.
 
-**R001-4a.** A `rows` entry's driver is its explicit `dataset`.
+**R001-4.** Every `rows` entry has exactly one driver dataset.
 
-**R001-4b.** An entry without `dataset` uses root `base`. `base` may be
-omitted when every row declares a dataset.
+**R001-4a.** The driver is the entry's explicit `dataset` when present.
+
+**R001-4b.** Otherwise the driver is root `base`. `base` may be omitted when
+every row declares a dataset.
 
 **R001-4c.** When `datasets` declares exactly one dataset, that dataset
 drives every entry without an explicit `dataset`, and `base` may be omitted.
