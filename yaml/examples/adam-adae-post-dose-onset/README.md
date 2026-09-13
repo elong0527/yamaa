@@ -1,23 +1,29 @@
-# ADaM ADAE: classify an event by the moment it started
+# Treatment emergence by onset moment
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-post-dose-onset.html)
 
-This example uses sample AE and ADSL data and a `yamaa` specification to derive
-one row per adverse event:
+**Goal:** one row per adverse event (AE), marking treatment
+emergence (`TRTEMFL`) and the subject's earliest treatment-emergent
+event (`AOCCFL`) from onset and first-exposure moments.
 
-- `AETERM` is the reported event and `ASTDTM` is the moment it started, held as
-  a date and a time of day rather than a day alone. A start collected to the
-  minute is written back to the second;
-- `TRTSDTM` is the moment the subject's first dose was given, carried across
-  from ADSL. A subject with no ADSL record leaves it empty;
-- `TRTEMFL` marks an event as treatment-emergent when it started at or after
-  that moment. An event that started earlier is not marked, and an event whose
-  own start or whose first dose was never collected is left unmarked;
-- `AOCCFL` marks the subject's earliest treatment-emergent event. Earliest
-  means by the moment of onset, and the lower sequence number settles two
-  events recorded at the same second.
+**Input:** adverse event records carrying the reported term
+(`AETERM`) and the collected onset moment (`ASTDTM`, empty when never
+collected), plus the moment of first exposure (`TRTSDTM`) from the
+subject-level analysis dataset (ADSL), empty with no subject record.
 
-Deciding emergence at the moment rather than at the day is the point of the
-example: an event that started earlier on the day of the first dose and one
-that started later the same day fall on opposite sides of the rule, and a start
-date alone cannot tell them apart.
+**Variables:**
+
+- `TRTEMFL` holds `Y` when the event started at or after first
+  exposure. It stays empty for an earlier event, and when either
+  the onset or the first exposure is missing.
+- `AOCCFL` holds `Y` on the subject's earliest treatment-emergent
+  event, ordered by onset moment with the lower sequence number
+  (`AESEQ`) settling ties at the same second. All other rows stay
+  empty.
+
+**Note:** emergence is decided at the moment, not the day: an
+event that started earlier on the day of first exposure and one
+that started later that same day fall on opposite sides, and a
+start date alone cannot tell them apart.
+
+**Standard:** ADaM | **Domain:** ADAE
