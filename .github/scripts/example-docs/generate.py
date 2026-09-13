@@ -37,6 +37,7 @@ YAML_TOKEN = re.compile(
 )
 SPEC_FILE_PATTERN = re.compile(r'^spec(?:_[a-z][a-z0-9_]*)?\.yaml$')
 SPEC_RESOLVED_NAME = 'spec_resolved.yaml'
+CODE_SUFFIXES = ('.py', '.R', '.qmd', '.Rmd')
 
 
 def escape(value):
@@ -330,25 +331,64 @@ def render_index(entries):
 
 def render_spec_pane(filename, text, slug, single):
     lines = text.splitlines()
-    code_lines, section_options = [], []
+    code_lines = []
     for number, line in enumerate(lines, 1):
         line_id = f"yaml-line-{number}" if single else f"{slug}-line-{number}"
         code_lines.append(
             f'<span class="code-line" id="{line_id}"><span class="line-number" aria-hidden="true">{number}</span>'
             f'<span class="code-source">{highlight_yaml(line)}</span></span>'
         )
-        match = re.match(r"^([A-Za-z_][\w-]*):", line)
-        if match:
-            section_options.append(f'<option value="{line_id}">{escape(match.group(1))}</option>')
     if single:
-        return "".join(code_lines), "".join(section_options), len(lines)
+        return "".join(code_lines), len(lines)
     pane = (
         f'<div class="spec-pane" id="pane-{slug}" data-filename="{escape(filename)}" data-lines="{len(lines)}">'
         f'<div class="file-heading"><h3 class="filename">{escape(filename)}</h3>'
         f'<span class="file-count">{len(lines)} lines</span></div>'
         f'<pre><code>{"".join(code_lines)}</code></pre></div>'
     )
-    return pane, "".join(section_options), len(lines)
+    return pane, len(lines)
+
+
+def example_code_files(example):
+    return sorted(
+        path for path in example.iterdir()
+        if path.is_file() and path.suffix in CODE_SUFFIXES
+    )
+
+
+def render_code_panel(files):
+    panes, options = [], []
+    for path in files:
+        slug = re.sub(r"[^a-z0-9]+", "-", path.name.lower()).strip("-")
+        lines = path.read_text(encoding="utf-8").splitlines()
+        code_lines = "".join(
+            f'<span class="code-line" id="code-{slug}-line-{number}"><span class="line-number" aria-hidden="true">{number}</span>'
+            f"<span class=\"code-source\">{escape(line)}</span></span>"
+            for number, line in enumerate(lines, 1)
+        )
+        active = "" if path == files[0] else " hidden"
+        panes.append(
+            f'<div class="code-pane" id="code-pane-{slug}" data-filename="{escape(path.name)}"{active}>'
+            f'<div class="file-heading"><h3 class="filename">{escape(path.name)}</h3>'
+            f'<span class="file-count">{len(lines)} lines</span></div>'
+            f'<div class="code-scroll" tabindex="0" aria-label="{escape(path.name)}"><pre><code>{code_lines}</code></pre></div></div>'
+        )
+        selected = " selected" if path == files[0] else ""
+        options.append(f'<option value="code-pane-{slug}"{selected}>{escape(path.name)}</option>')
+    picker = ""
+    if len(files) > 1:
+        picker = (
+            '<div class="code-picker"><label for="code-select">Choose code file</label>'
+            f'<select id="code-select">{"".join(options)}</select></div>'
+        )
+    caption = f"{len(files)} code file" + ("" if len(files) == 1 else "s")
+    return (
+        '<section id="code" class="panel code-panel" aria-labelledby="code-heading">\n'
+        f'      <header class="panel-header"><h2 id="code-heading">Code</h2><span class="panel-caption">{caption}</span></header>\n'
+        f"      {picker}\n"
+        f'      {"".join(panes)}\n'
+        "    </section>"
+    )
 
 
 def render_example(example, previous=None, next=None):
@@ -394,7 +434,7 @@ def render_example(example, previous=None, next=None):
         metrics.append((len(outputs), "expected files"))
     resolved_path = example / "expected" / SPEC_RESOLVED_NAME
     if not chain and not resolved_path.is_file():
-        spec_code, section_options, spec_line_count = render_spec_pane(
+        spec_code, spec_line_count = render_spec_pane(
             spec_path.name, spec_text, "yaml", True
         )
     else:
@@ -403,15 +443,16 @@ def render_example(example, previous=None, next=None):
         documents.append((spec_path.name, spec_text))
         if resolved_path.is_file():
             documents.append((SPEC_RESOLVED_NAME, resolved_path.read_text(encoding="utf-8")))
-        for index, (filename, text) in enumerate(documents):
-            pane, options, count = render_spec_pane(
+        for filename, text in documents:
+            pane, count = render_spec_pane(
                 filename, text, Path(filename).stem, False
             )
             panes.append(pane)
-            if index == len(documents) - 1:
-                section_options, spec_line_count = options, count
+            spec_line_count = count
         panes.append(f"<script>{(HERE / 'spec-panes.js').read_text(encoding='utf-8')}</script>")
         spec_code = "".join(panes)
+    code_files = example_code_files(example)
+    code_panel = render_code_panel(code_files) if code_files else ""
     template = Template((HERE / "dashboard.html").read_text(encoding="utf-8"))
     result = template.substitute(
         example_name=escape(example.name), page_title=escape(title), heading=escape(heading),
@@ -426,7 +467,7 @@ def render_example(example, previous=None, next=None):
         output_files=output_files,
         output_caption=f"{output_rows} expected row" + ("" if output_rows == 1 else "s") if any(path.suffix == ".csv" for path in outputs) else "Expected artifacts",
         spec_lines=spec_line_count, spec_code=spec_code,
-        section_options="".join(section_options),
+        code_panel=code_panel,
         styles=(HERE / "dashboard.css").read_text(encoding="utf-8"),
         script=(HERE / "dashboard.js").read_text(encoding="utf-8"),
     )
