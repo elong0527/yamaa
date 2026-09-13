@@ -87,9 +87,11 @@ every surviving record or group yields its row, and the sections concatenate
 in specification order. Templates therefore build a grain finer than the
 driver records only through the constructs R001-10 permits, and the grain
 they build must still be the one `keys` states: repeating a key combination
-fails at the output gate under R005-52. A template that only selects which
-records become rows states through a filter the grain `keys` already states,
-so a specification whose grain is its key combination omits `rows`.
+fails at the output gate under R005-52. A `filter` states which rows the
+artifact carries and never which record of a key combination stands for it,
+so a template whose work is to leave one of the several driver records
+sharing a key combination is writing the grain `keys` already states, and
+that specification omits `rows` instead.
 
 **R001-12b.** A column derivation must yield exactly one value per row, and
 it counts values rather than the records carrying them: no value is missing,
