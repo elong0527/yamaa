@@ -264,7 +264,7 @@ def _diagnostic(
     )
 
 
-def _expression_path(path: str, derivation: HandledExpression) -> str:
+def expression_path(path: str, derivation: HandledExpression) -> str:
     """Recover the authored bare-expression path where normalization permits it."""
     handled = {"conversion_failure", "override"} & derivation.model_fields_set
     return f"{path}.value" if handled else path
@@ -381,6 +381,16 @@ def _expression_info(
             for field, expected, requirement in _TEMPORAL_VARIABLES[operation]
             if isinstance(payload.get(field), str)
         )
+    elif operation == "function" and isinstance(payload, Mapping):
+        arguments = payload.get("args")
+        if isinstance(arguments, Mapping):
+            # R018-18 writes a named variable as a plain string; every other
+            # argument leaf is a literal and depends on nothing.
+            references.extend(
+                _Reference(value, f"{operation_path}.args.{name}")
+                for name, value in arguments.items()
+                if isinstance(value, str)
+            )
     elif operation in {"coalesce", "greatest", "least"} and isinstance(
         payload, Mapping
     ):
@@ -927,7 +937,7 @@ def _plan_derivation(
     *,
     scope: _Scope = _COLUMN_SCOPE,
 ) -> tuple[PlannedDerivation, tuple[_Reference, ...]]:
-    value_path = _expression_path(path, declaration)
+    value_path = expression_path(path, declaration)
     info = _expression_info(
         declaration.value,
         value_path,
@@ -1818,7 +1828,7 @@ def _preflight_findings(
             unsupported.extend(
                 _expression_info(
                     declaration.value,
-                    _expression_path(path, declaration),
+                    expression_path(path, declaration),
                     supported_operations,
                     scope=scope,
                 ).unsupported
@@ -1842,7 +1852,7 @@ def _preflight_findings(
         unsupported.extend(
             _expression_info(
                 declaration.value,
-                _expression_path(path, declaration),
+                expression_path(path, declaration),
                 supported_operations,
                 scope=column_scope,
             ).unsupported

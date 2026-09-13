@@ -72,12 +72,23 @@ def _is_alias_declaration(definition: dict[object, object]) -> bool:
     )
 
 
-def load_schema_bundle(schema_root: str | Path) -> SchemaBundle:
-    """Load one closed schema bundle rooted at ``schema.yaml``."""
+def load_schema_bundle(
+    schema_root: str | Path,
+    *,
+    entry_name: str = "schema.yaml",
+    root_class: str = "root_class",
+) -> SchemaBundle:
+    """Load one closed schema bundle rooted at an entry document.
+
+    The repository publishes two entry points over the same shared
+    declarations: `schema.yaml` for a specification and, under R018-3,
+    `schema_environment.yaml` for a project environment validated
+    independently of any specification.
+    """
     root = Path(schema_root).resolve()
-    entrypoint = root / "schema.yaml"
+    entrypoint = root / entry_name
     if not entrypoint.is_file():
-        raise _schema_failure(entrypoint, "schema.yaml is not a regular file")
+        raise _schema_failure(entrypoint, f"{entry_name} is not a regular file")
 
     classes: dict[str, list[dict[str, dict[str, Any]]]] = {}
     aliases: dict[str, dict[str, Any]] = {}
@@ -165,8 +176,8 @@ def load_schema_bundle(schema_root: str | Path) -> SchemaBundle:
                 registry.update(definition)
 
     assert version is not None
-    if "root_class" not in classes:
-        raise _schema_failure(entrypoint, "root_class is not declared")
+    if root_class not in classes:
+        raise _schema_failure(entrypoint, f"{root_class} is not declared")
     bundle = SchemaBundle(
         version=version,
         path=entrypoint,
@@ -791,13 +802,14 @@ def _validate_type(
     return [_invalid_type(path, expected, value)]
 
 
-def validate_specification(
+def validate_document(
     document: object,
     bundle: SchemaBundle,
+    root_class: str,
 ) -> list[ValidationDiagnostic]:
-    """Validate a raw document against the bundle's root class."""
+    """Validate a raw document against one named class of the bundle."""
     if not isinstance(document, dict) or not document:
-        return [_invalid_type("$", "root_class", document)]
+        return [_invalid_type("$", root_class, document)]
     version = document.get("schema_version")
     if version != bundle.version:
         context: dict[str, JsonValue] = {"expected": bundle.version}
@@ -812,7 +824,15 @@ def validate_specification(
                 context,
             )
         ]
-    return _validate_single(document, "root_class", bundle, "")
+    return _validate_single(document, root_class, bundle, "")
+
+
+def validate_specification(
+    document: object,
+    bundle: SchemaBundle,
+) -> list[ValidationDiagnostic]:
+    """Validate a raw document against the bundle's root class."""
+    return validate_document(document, bundle, "root_class")
 
 
 def _matches(
@@ -987,8 +1007,17 @@ def _normalize_type(
     return copy.deepcopy(value)
 
 
+def normalize_document(
+    document: dict[object, object],
+    bundle: SchemaBundle,
+    root_class: str,
+) -> object:
+    """Materialize defaults and R006 shorthands for one named class."""
+    return _normalize_single(document, root_class, bundle, frozenset())
+
+
 def normalize_specification(
     document: dict[object, object], bundle: SchemaBundle
 ) -> object:
     """Materialize defaults and R006 collection/class shorthands."""
-    return _normalize_single(document, "root_class", bundle, frozenset())
+    return normalize_document(document, bundle, "root_class")
