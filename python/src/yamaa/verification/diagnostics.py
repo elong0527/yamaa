@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
@@ -11,9 +11,17 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 # always the whole count.
 REPORTED_KEYS = 5
 
+VerificationSeverity: TypeAlias = Literal["error", "warning"]
+
 
 class VerificationFailure(BaseModel):
-    """One failed key check or verification, in the committed error shape."""
+    """One violated check, with private detail for a warning log.
+
+    ``severity``, ``offending_keys``, and ``log_context`` are execution data,
+    not additions to the portable fatal-diagnostic shape already committed by
+    negative examples. Pydantic therefore excludes them from serialized error
+    diagnostics while callers can still route and log warning violations.
+    """
 
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
 
@@ -22,6 +30,9 @@ class VerificationFailure(BaseModel):
     spec_paths: tuple[str, ...] = Field(min_length=1)
     requirement: str = Field(pattern=r"^R[0-9]{3}-[0-9]+$")
     context: dict[str, JsonValue]
+    severity: VerificationSeverity = Field(default="error", exclude=True)
+    offending_keys: tuple[dict[str, JsonValue], ...] = Field(default=(), exclude=True)
+    log_context: dict[str, JsonValue] = Field(default_factory=dict, exclude=True)
 
 
 class VerificationError(ValueError):

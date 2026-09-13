@@ -3992,6 +3992,31 @@ def validate_spec_names(spec, spec_label):
                 f"unknown_artifact_profile for {declared_path!r}; R020 maps "
                 + ', '.join(sorted(ARTIFACT_PROFILES)) + " and nothing else"
             )
+        violation_path = output.get('violation_log')
+        if (
+            isinstance(violation_path, str)
+            and artifact_profile({'path': violation_path}) is None
+        ):
+            errors.append(
+                f"ERROR: {spec_label}.output.violation_log: "
+                f"unknown_artifact_profile for {violation_path!r}; R020 maps "
+                + ', '.join(sorted(ARTIFACT_PROFILES)) + " and nothing else"
+            )
+        if (
+            isinstance(declared_path, str)
+            and isinstance(violation_path, str)
+            and declared_path == violation_path
+        ):
+            for path in ('output.path', 'output.violation_log'):
+                errors.append(
+                    validation_diagnostic(
+                        f"{spec_label}.{path}",
+                        'artifact_path_collision',
+                        'primary artifact and violation log must name different '
+                        'paths',
+                        context={'path': declared_path},
+                    )
+                )
 
     if isinstance(output, dict) and 'decimals' in output:
         decimals = output.get('decimals')
@@ -4455,6 +4480,7 @@ def validate_spec_contracts(
 ):
     """Validate static cross-field contracts from normative rules."""
     errors = []
+    output = spec.get('output')
 
     rows = spec.get('rows')
     row_entries = rows if isinstance(rows, list) else []
@@ -4592,6 +4618,7 @@ def validate_spec_contracts(
                 )
 
     verification_ids = []
+    warning_paths = []
     verifications = spec.get('verifications')
     if isinstance(verifications, dict):
         verifications = [verifications]
@@ -4603,6 +4630,8 @@ def validate_spec_contracts(
             if not isinstance(payload, dict):
                 continue
             path = f"{spec_label}.verifications[{index}].{keyword}"
+            if payload.get('severity', 'error') == 'warning':
+                warning_paths.append(f"{path}.severity")
             if keyword in {'all_or_none', 'implies', 'predicate', 'row_count'}:
                 verification_id = payload.get('id')
                 if isinstance(verification_id, str):
@@ -4702,6 +4731,8 @@ def validate_spec_contracts(
                 f"{spec_label}.columns.{column_name}.verifications[{index}]."
                 f"{keyword}"
             )
+            if payload.get('severity', 'error') == 'warning':
+                warning_paths.append(f"{path}.severity")
             if keyword == 'range':
                 if column_type not in {'int', 'float'}:
                     errors.append(
@@ -4729,6 +4760,19 @@ def validate_spec_contracts(
                 errors.append(
                     f"ERROR: {path}: {keyword} requires a str column"
                 )
+
+    if warning_paths and (
+        not isinstance(output, dict)
+        or not isinstance(output.get('violation_log'), str)
+    ):
+        errors.append(
+            validation_diagnostic(
+                f"{spec_label}.output.violation_log",
+                'missing_violation_log',
+                'warning verifications require a governed violation log',
+                context={'warnings': warning_paths},
+            )
+        )
 
     datasets = spec.get('datasets')
     if spec_path is not None and isinstance(datasets, dict):
@@ -8138,6 +8182,18 @@ def validate_csv_artifact(csv_path: Path, label: str, spec):
 
 
 ARTIFACT_PROFILES = {'.csv': 'csv', '.parquet': 'parquet'}
+VIOLATION_LOG_TYPES = {
+    'LOG_VERSION': 'str',
+    'ARTIFACT': 'str',
+    'SEVERITY': 'str',
+    'CONDITION': 'str',
+    'REQUIREMENT': 'str',
+    'SPEC_PATH': 'str',
+    'VERIFICATION_ID': 'str',
+    'FAILURE_COUNT': 'int',
+    'OFFENDING_KEYS': 'str',
+    'DETAILS': 'str',
+}
 
 
 def artifact_profile(output):
@@ -9555,35 +9611,62 @@ def validate_examples_csv(root: Path, env=None):
             )
             if not isinstance(expected_cols, list):
                 continue
+            primary_path = output.get('path')
+            primary_name = (
+                PurePosixPath(primary_path).name
+                if isinstance(primary_path, str)
+                else None
+            )
+            violation_path = output.get('violation_log')
+            violation_name = (
+                PurePosixPath(violation_path).name
+                if isinstance(violation_path, str)
+                else None
+            )
 
             expected_dir = ex_dir / 'expected'
             if not expected_dir.exists():
                 continue
             for csv_file in sorted(expected_dir.glob('*.csv')):
-                # The golden file is the artifact the specification says it
-                # produces, so its name comes from output.path rather than a
-                # convention over the domain.
-                declared_path = output.get('path')
-                if isinstance(declared_path, str):
-                    declared_name = PurePosixPath(declared_path).name
-                    if csv_file.name != declared_name:
-                        errors.append(
-                            f"ERROR: {ex_dir.name}/{csv_file.name}: expected "
-                            f"artifact name {declared_name}, which "
-                            f"output.path declares"
-                        )
+                # Each golden CSV must be one of the two artifacts the
+                # specification names. The log has its own fixed R009 schema.
+                if csv_file.name == primary_name:
+                    file_columns = expected_cols
+                    file_output = output
+                    file_spec = spec
+                elif csv_file.name == violation_name:
+                    file_columns = list(VIOLATION_LOG_TYPES)
+                    file_output = {'path': violation_path}
+                    file_spec = {
+                        'output': file_output,
+                        'columns': [
+                            {'name': name, 'type': column_type}
+                            for name, column_type in VIOLATION_LOG_TYPES.items()
+                        ],
+                    }
+                else:
+                    permitted = [
+                        name for name in (primary_name, violation_name)
+                        if name is not None
+                    ]
+                    errors.append(
+                        f"ERROR: {ex_dir.name}/{csv_file.name}: expected "
+                        f"artifact name in {permitted!r}, which output "
+                        "declares"
+                    )
+                    continue
                 try:
                     with open(csv_file, 'r', encoding='utf-8') as f:
                         reader = csv.reader(f)
                         header = next(reader)
-                        if header != expected_cols:
+                        if header != file_columns:
                             errors.append(
                                 f"ERROR: {ex_dir.name}/{csv_file.name}: "
                                 f"header mismatch for {spec_path.name}. "
-                                f"Expected {expected_cols}, got {header}"
+                                f"Expected {file_columns}, got {header}"
                             )
                 except StopIteration:
-                    if expected_cols:
+                    if file_columns:
                         errors.append(
                             f"ERROR: {ex_dir.name}/{csv_file.name} is "
                             f"empty for {spec_path.name}"
@@ -9591,14 +9674,14 @@ def validate_examples_csv(root: Path, env=None):
                 except (OSError, UnicodeError, csv.Error):
                     continue
 
-                profile = artifact_profile(output)
+                profile = artifact_profile(file_output)
                 if profile == 'csv' and csv_file not in profile_checked:
                     profile_checked.add(csv_file)
                     errors.extend(
                         validate_csv_artifact(
                             csv_file,
                             f"{ex_dir.name}/{csv_file.name}",
-                            spec,
+                            file_spec,
                         )
                     )
 

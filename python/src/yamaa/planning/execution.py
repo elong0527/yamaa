@@ -25,6 +25,7 @@ from yamaa.expressions import (
     template_identifiers,
     ungrouped_identifiers,
 )
+from yamaa.io.artifact import profile_of
 from yamaa.io.source import LoadedDataset
 from yamaa.models import ColumnType, ConditionPhase, TypedTable
 from yamaa.odm import BindingFailure, BindingPlan, BoundReference, build_binding_plan
@@ -1780,6 +1781,62 @@ def _record_lookup_declarations(
     return diagnostics
 
 
+def _warning_verification_paths(specification: Specification) -> tuple[str, ...]:
+    """Return every declaration whose normalized severity is ``warning``."""
+    paths: list[str] = []
+    for column in specification.columns:
+        for index, verification in enumerate(column.verifications or ()):
+            operation = verification.operation
+            payload = verification.root[operation]
+            if isinstance(payload, Mapping) and payload.get("severity") == "warning":
+                paths.append(
+                    f"columns.{column.name}.verifications[{index}].{operation}.severity"
+                )
+    for index, verification in enumerate(specification.verifications or ()):
+        operation = verification.operation
+        payload = verification.root[operation]
+        if isinstance(payload, Mapping) and payload.get("severity") == "warning":
+            paths.append(f"verifications[{index}].{operation}.severity")
+    return tuple(paths)
+
+
+def _violation_log_declarations(
+    specification: Specification,
+) -> list[ExecutionDiagnostic]:
+    """Validate warning/log relationships before any source is read."""
+    diagnostics: list[ExecutionDiagnostic] = []
+    warning_paths = _warning_verification_paths(specification)
+    path = specification.output.violation_log
+    if warning_paths and path is None:
+        diagnostics.append(
+            _diagnostic(
+                "missing_violation_log",
+                "output.violation_log",
+                {"warnings": list(warning_paths)},
+                requirement="R009-35",
+            )
+        )
+    if path is not None and profile_of(path) is None:
+        diagnostics.append(
+            _diagnostic(
+                "unknown_artifact_profile",
+                "output.violation_log",
+                {"path": path, "permitted": [".csv", ".parquet"]},
+                requirement="R020-43",
+            )
+        )
+    if path is not None and path == specification.output.path:
+        diagnostics.append(
+            _diagnostic(
+                "artifact_path_collision",
+                ("output.path", "output.violation_log"),
+                {"path": path},
+                requirement="R020-50",
+            )
+        )
+    return diagnostics
+
+
 def _preflight_findings(
     specification: Specification,
     supported_operations: Collection[str],
@@ -1802,6 +1859,7 @@ def _preflight_findings(
             UnsupportedFeature(operation="inheritance", spec_path="parents")
         )
     diagnostics.extend(_record_lookup_declarations(specification))
+    diagnostics.extend(_violation_log_declarations(specification))
 
     rows = specification.rows or ()
     if not specification.parents:

@@ -2745,6 +2745,40 @@ class TestSpecNames(unittest.TestCase):
             VALIDATOR.validate_spec_names(spec, "example/spec.yaml"), []
         )
 
+    def test_rejects_a_colliding_or_unknown_violation_log_path(self):
+        base = {
+            "domain": "ADSL",
+            "datasets": {"DM": "dm.csv"},
+            "base": "DM",
+            "keys": ["USUBJID"],
+            "columns": [{"name": "USUBJID"}],
+        }
+        colliding = copy.deepcopy(base)
+        colliding["output"] = {
+            "path": "adsl.csv",
+            "columns": ["USUBJID"],
+            "violation_log": "adsl.csv",
+        }
+        unknown = copy.deepcopy(base)
+        unknown["output"] = {
+            "path": "adsl.csv",
+            "columns": ["USUBJID"],
+            "violation_log": "adsl.txt",
+        }
+
+        collision_errors = VALIDATOR.validate_spec_names(
+            colliding, "example/spec.yaml"
+        )
+        unknown_errors = VALIDATOR.validate_spec_names(
+            unknown, "example/spec.yaml"
+        )
+
+        self.assertEqual(
+            sum("artifact_path_collision" in item for item in collision_errors),
+            2,
+        )
+        self.assertIn("unknown_artifact_profile", "\n".join(unknown_errors))
+
     def test_rejects_duplicate_and_unresolved_columns(self):
         spec = {
             "domain": "ADSL",
@@ -2912,6 +2946,41 @@ class TestSpecContracts(unittest.TestCase):
         self.assertEqual(
             VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml"), []
         )
+
+    def test_warning_verification_requires_a_violation_log(self):
+        spec = {
+            "domain": "ADSL",
+            "datasets": {"DM": "dm.csv"},
+            "base": "DM",
+            "keys": ["USUBJID"],
+            "output": {"path": "adsl.csv", "columns": ["USUBJID", "AGE"]},
+            "columns": [
+                {
+                    "name": "USUBJID",
+                    "type": "str",
+                    "derivation": {"source": "DM.USUBJID"},
+                },
+                {
+                    "name": "AGE",
+                    "type": "int",
+                    "derivation": {"source": "DM.AGE"},
+                    "verifications": [
+                        {"range": {"min": 18, "severity": "warning"}}
+                    ],
+                },
+            ],
+        }
+
+        missing = VALIDATOR.validate_spec_contracts(
+            spec, "example/spec.yaml"
+        )
+        spec["output"]["violation_log"] = "adsl-violations.csv"
+        governed = VALIDATOR.validate_spec_contracts(
+            spec, "example/spec.yaml"
+        )
+
+        self.assertIn("missing_violation_log", "\n".join(missing))
+        self.assertNotIn("missing_violation_log", "\n".join(governed))
 
     def test_default_driver_dataset_prefers_base(self):
         self.assertEqual(

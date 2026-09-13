@@ -4,16 +4,21 @@ column_verification:
     registry: column_verifications
 
 column_verifications:
-    not_missing: {type: empty_class}
+    not_missing:
+        - severity: {type: verification_severity, required: false, default: error}
     allowed_values:
         - values: {type: "list[literal_value]", required: true}
+        - severity: {type: verification_severity, required: false, default: error}
     range:
         - min: {type: float, required: false}
         - max: {type: float, required: false}
+        - severity: {type: verification_severity, required: false, default: error}
     max_length:
         - max: {type: int, required: true}
+        - severity: {type: verification_severity, required: false, default: error}
     matches:
         - pattern: {type: regex, required: true}
+        - severity: {type: verification_severity, required: false, default: error}
 
 dataset_verification:
     registry: dataset_verifications
@@ -21,16 +26,20 @@ dataset_verification:
 dataset_verifications:
     unique:
         - columns: {type: "list[variable]", required: true}
+        - severity: {type: verification_severity, required: false, default: error}
     all_or_none:
         - id: {type: verification_id, required: true}
         - columns: {type: "list[variable]", required: true}
+        - severity: {type: verification_severity, required: false, default: error}
     implies:
         - id: {type: verification_id, required: true}
         - when: {type: sql, required: true}
         - then: {type: sql, required: true}
+        - severity: {type: verification_severity, required: false, default: error}
     predicate:
         - id: {type: verification_id, required: true}
         - assert: {type: sql, required: true}
+        - severity: {type: verification_severity, required: false, default: error}
     row_count: # Bounds how many rows a group holds, or the whole output.
         # group_by partitions the artifact's rows and applies both bounds to
         # every group; a group's count is how many of its rows filter admits,
@@ -41,11 +50,12 @@ dataset_verifications:
         - filter: {type: sql, required: false}
         - min: {type: int, required: false}
         - max: {type: int, required: false}
-
-empty_class:
-    type: "dict[str, literal_value]"
-    size: 0
+        - severity: {type: verification_severity, required: false, default: error}
 
 verification_id:
     type: str
     min_length: 1
+
+verification_severity:
+    type: str
+    values: [error, warning]

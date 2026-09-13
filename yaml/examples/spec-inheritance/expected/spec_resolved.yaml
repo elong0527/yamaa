@@ -55,5 +55,6 @@ verifications:
       columns:
         - USUBJID
         - PARAMCD
+      severity: error
 metadata:
   scope: study

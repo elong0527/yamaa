@@ -39,6 +39,7 @@ REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
 EXAMPLES = SCHEMA_ROOT / "examples"
 DM_EXAMPLE = EXAMPLES / "sdtm-dm-basic"
+WARNING_EXAMPLE = EXAMPLES / "adam-adsl-age-quality-review"
 
 
 def dm_inputs() -> tuple[object, dict[str, object]]:
@@ -115,6 +116,86 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
         ("columns.AGE.derivation.source.missing", 2),
         ("columns.ARM.derivation.source.missing", 2),
     ]
+
+
+def test_warning_verification_keeps_the_artifact_and_builds_the_exact_log() -> None:
+    specification = load_specification(
+        WARNING_EXAMPLE / "spec.yaml", SCHEMA_ROOT
+    ).specification
+    resources = ProjectResources(WARNING_EXAMPLE)
+
+    result = execute_with_source_provider(
+        specification,
+        lambda datasets: load_source_tables(datasets, resources),
+    )
+
+    assert isinstance(result, ExecutionSuccess)
+    assert (
+        render_artifact(result.artifact)
+        == (WARNING_EXAMPLE / "expected/adsl.csv").read_bytes()
+    )
+    assert len(result.warnings) == 1
+    assert result.warnings[0].severity == "warning"
+    assert result.warnings[0].offending_keys == (
+        {"STUDYID": "PILOT7", "USUBJID": "P7-732"},
+    )
+    assert result.violation_log is not None
+    assert (
+        render_artifact(result.violation_log)
+        == (WARNING_EXAMPLE / "expected/adsl-violations.csv").read_bytes()
+    )
+
+
+def test_declared_violation_log_is_header_only_when_no_warning_fires() -> None:
+    specification = load_specification(
+        WARNING_EXAMPLE / "spec.yaml", SCHEMA_ROOT
+    ).specification
+    loaded = load_source_tables(
+        specification.datasets, ProjectResources(WARNING_EXAMPLE)
+    )["DM"]
+    sources = {
+        "DM": TypedTable(
+            columns=loaded.table.columns,
+            frame=loaded.table.frame.with_columns(pl.lit(40).alias("AGE")),
+        )
+    }
+
+    result = execute_specification(specification, sources)
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.warnings == ()
+    assert result.violation_log is not None
+    expected = (
+        (WARNING_EXAMPLE / "expected/adsl-violations.csv")
+        .read_bytes()
+        .splitlines(keepends=True)[0]
+    )
+    assert render_artifact(result.violation_log) == expected
+
+
+def test_warning_without_violation_log_fails_before_source_ingestion() -> None:
+    specification = load_specification(
+        WARNING_EXAMPLE / "spec.yaml", SCHEMA_ROOT
+    ).specification
+    changed = specification.model_copy(
+        update={
+            "output": specification.output.model_copy(update={"violation_log": None})
+        }
+    )
+    provider_called = False
+
+    def provide_sources(_datasets):
+        nonlocal provider_called
+        provider_called = True
+        return {}
+
+    result = execute_with_source_provider(changed, provide_sources)
+
+    assert isinstance(result, ExecutionFailure)
+    assert result.diagnostics[0].condition == "missing_violation_log"
+    assert result.diagnostics[0].spec_paths == ("output.violation_log",)
+    assert result.diagnostics[0].requirement == "R009-35"
+    assert not provider_called
 
 
 def test_execution_uses_source_values_and_never_needs_expected_artifacts() -> None:
