@@ -29,10 +29,11 @@ does not define what an expression means (R007), how a name binds to a source
 2. **R001-3.** Column derivation enriches constructed rows and must not
    change row count.
 
-**R001-4.** Each `rows` entry's `dataset` names the dataset driving that row.
-When root `datasets` declares exactly one dataset, that dataset drives every
-entry omitting `dataset`. When root `datasets` declares more than one, every
-entry must state `dataset`.
+**R001-4.** Each `rows` entry builds output rows from one input dataset, named
+by `row_class.dataset`. When `root_class.datasets` declares exactly one
+dataset, every entry omitting `dataset` builds from the single declared
+dataset. When `root_class.datasets` declares more than one, every entry must
+state `dataset`.
 
 **R001-5.** A row template has one of two modes:
 
@@ -190,7 +191,7 @@ evaluation order to mapping order or to repeated reads of one partition.
 
 ## Errors
 
-- **R001-32.** A `rows` entry omitting `dataset` when root `datasets`
+- **R001-32.** A `rows` entry omitting `dataset` when `root_class.datasets`
   declares more than one: fail.
 - **R001-33.** A specification with no `rows` entry and no default driver:
   fail. The default driver is root `base`, or the single declared dataset
