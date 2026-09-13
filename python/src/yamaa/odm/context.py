@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import cmp_to_key
 from typing import Literal
@@ -24,6 +24,7 @@ from yamaa.io.polars import runtime_rows, runtime_value
 from yamaa.io.source import LoadedDataset
 from yamaa.models import (
     MISSING,
+    ConditionPhase,
     ConditionResult,
     RuntimeCondition,
     RuntimeValue,
@@ -54,11 +55,12 @@ class _IndexedRow:
 
 
 def _failure(
-    phase: Literal["validation", "join"],
+    phase: ConditionPhase,
     condition: str,
     context: dict[str, JsonValue],
     *,
     applicable_handler: Literal["multiple_matches"] | None = None,
+    requirement: str | None = None,
 ) -> FailedResolution:
     return FailedResolution(
         condition=RuntimeCondition(
@@ -66,6 +68,7 @@ def _failure(
             condition=condition,
             context=context,
             applicable_handler=applicable_handler,
+            requirement=requirement,
         )
     )
 
@@ -320,9 +323,18 @@ class BindingIndex:
         self,
         source_rows: Mapping[str, Mapping[str, object]],
         output_values: Mapping[str, object] | None = None,
+        *,
+        feeding_rows: Mapping[str, Sequence[Mapping[str, object]]] | None = None,
     ) -> RuntimeContext:
-        """Create a row-local resolver over shared immutable indexes."""
-        return RuntimeContext(self, source_rows, output_values or {})
+        """Create a row-local resolver over shared immutable indexes.
+
+        ``feeding_rows`` carries every driver record of the current key
+        combination and section. A plain dataset field read collects one
+        value across them under R001-12a: no value is missing, more than
+        one value fails. Record lookups keep using the single ``source_rows``
+        record as their ODM context.
+        """
+        return RuntimeContext(self, source_rows, output_values or {}, feeding_rows)
 
 
 class RuntimeContext:
@@ -333,10 +345,15 @@ class RuntimeContext:
         index: BindingIndex,
         source_rows: Mapping[str, Mapping[str, object]],
         output_values: Mapping[str, object],
+        feeding_rows: Mapping[str, Sequence[Mapping[str, object]]] | None = None,
     ) -> None:
         self._index = index
         self._source_rows = {dataset: dict(row) for dataset, row in source_rows.items()}
         self._output_values = dict(output_values)
+        self._feeding_rows = {
+            dataset: [dict(row) for row in rows]
+            for dataset, rows in (feeding_rows or {}).items()
+        }
 
     def resolve(self, variable: str) -> Resolution:
         return self._resolve(variable, multiple_matches=None)
@@ -374,7 +391,26 @@ class RuntimeContext:
             assert bound.field is not None
             if bound.field not in row:
                 return _failure("validation", "unknown_field", {"identifier": variable})
-            return ResolvedValue(value=runtime_value(row[bound.field]))
+            feeding = self._feeding_rows.get(bound.dataset, [row])
+            if not feeding:
+                return ResolvedValue(value=MISSING)
+            present = [
+                feeding_row[bound.field]
+                for feeding_row in feeding
+                if bound.field in feeding_row
+                and feeding_row[bound.field] is not MISSING
+                and feeding_row[bound.field] is not None
+            ]
+            if not present:
+                return ResolvedValue(value=runtime_value(row[bound.field]))
+            if len(present) > 1:
+                return _failure(
+                    "derivation",
+                    "multiple_values_per_key",
+                    {"identifier": variable, "match_count": len(present)},
+                    requirement="R001-44",
+                )
+            return ResolvedValue(value=runtime_value(present[0]))
 
         assert bound.item_oid is not None
         return self._index._odm[bound.dataset].resolve(

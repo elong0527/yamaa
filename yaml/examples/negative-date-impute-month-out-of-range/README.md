@@ -1,5 +1,7 @@
 # ADaM ADAE: reject a start date completed with no month of the year
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-date-impute-month-out-of-range.html)
+
 This example uses collected adverse events whose start dates are sometimes
 recorded only as a year to attempt one record per event:
 

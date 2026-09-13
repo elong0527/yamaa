@@ -7084,7 +7084,6 @@ def validate_spec_document(
             f"ERROR: {spec_label}: spec is empty or not a mapping"
         ]
 
-    has_inheritance = 'parents' in spec
     if project_root is None:
         project_root = spec_path.parent
     if snapshots is None:
@@ -7107,8 +7106,7 @@ def validate_spec_document(
     errors.extend(validate_type(spec, ['root_class'], env, spec_label))
     errors.extend(validate_grouped_rows(spec, spec_label))
     errors.extend(validate_spec_names(spec, spec_label))
-    if has_inheritance:
-        errors.extend(validate_column_labels(spec, spec_label))
+    errors.extend(validate_column_labels(spec, spec_label))
     errors.extend(
         validate_spec_contracts(
             spec, spec_label, spec_path, project_root, snapshots
@@ -8260,6 +8258,11 @@ README_KEY_COLUMNS = {
     'RSSEQ', 'ASEQ', 'PARAMCD', 'PARAM', 'AVISIT', 'VISIT', 'RDOMAIN',
     'IDVAR', 'QNAM',
 }
+README_FOOTER_PATTERN = re.compile(
+    r'\[!\[Dashboard\]\(https://img\.shields\.io/badge/Dashboard-view-0c5e4b\)\]'
+    r'\(https://elong0527\.github\.io/yamaa/examples/'
+    r'[a-z0-9]+(?:-[a-z0-9]+)*\.html\)',
+)
 
 
 def validate_example_readmes(root: Path):
@@ -8276,7 +8279,7 @@ def validate_example_readmes(root: Path):
         label = readme_path.relative_to(root)
         text = readme_path.read_text(encoding='utf-8')
         for line_number, line in enumerate(text.splitlines(), 1):
-            if len(line) > 79:
+            if len(line) > 79 and not README_FOOTER_PATTERN.fullmatch(line.strip()):
                 errors.append(
                     f"ERROR: {label}:{line_number}: line has {len(line)} "
                     "characters; maximum is 79"
@@ -8285,6 +8288,8 @@ def validate_example_readmes(root: Path):
         marker = '\n## How to fix\n'
         contract = text.split(marker, 1)[0]
         for line_number, line in enumerate(contract.splitlines(), 1):
+            if README_FOOTER_PATTERN.fullmatch(line.strip()):
+                continue
             if README_FORBIDDEN_PATTERN.search(line):
                 errors.append(
                     f"ERROR: {label}:{line_number}: schema vocabulary is "
@@ -9432,12 +9437,9 @@ def check_yaml_files(root: Path):
         )
     )
     errors.extend(validate_examples_layout(root))
-    errors.extend(validate_examples_index(root))
     warnings.extend(validate_join_key_inference(root))
     errors.extend(validate_expected_error_contracts(root))
     errors.extend(validate_csv_shapes(root))
-    errors.extend(validate_example_readmes(root))
-    errors.extend(validate_rule_metadata(root))
     errors.extend(validate_grammar_contracts(root))
     errors.extend(validate_regex_conformance(root))
 
@@ -9678,16 +9680,24 @@ def validate_examples_layout(root: Path):
             continue
 
         rel = ex_dir.relative_to(root)
-
-        # README.md
         readme = ex_dir / 'README.md'
         if not readme.exists():
             errors.append(f"ERROR: {rel} missing README.md")
-        else:
-            if ex_dir.name.startswith('negative-'):
-                content = readme.read_text(encoding='utf-8')
-                if '## How to fix' not in content:
-                    errors.append(f"ERROR: {rel}/README.md missing '## How to fix' section")
+        elif ex_dir.name.startswith('negative-'):
+            content = readme.read_text(encoding='utf-8')
+            if '## How to fix' not in content:
+                errors.append(f"ERROR: {rel}/README.md missing '## How to fix' section")
+        if readme.exists():
+            lines = readme.read_text(encoding='utf-8').splitlines()
+            expected_badge = (
+                "[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]"
+                f"(https://elong0527.github.io/yamaa/examples/{ex_dir.name}.html)"
+            )
+            if len(lines) < 3 or lines[2].strip() != expected_badge:
+                errors.append(
+                    f"ERROR: {rel}/README.md must place '{expected_badge}' "
+                    "right after the title"
+                )
 
         # Specification files
         spec_paths = example_spec_paths(ex_dir)
@@ -9723,6 +9733,34 @@ def validate_examples_layout(root: Path):
                 errors.append(f"ERROR: {rel}/expected has no artifacts")
 
     return errors
+
+
+def validate_examples_readme_presence(root: Path):
+    """Require each example's README and each negative README's fix section.
+
+    Documentation lint: lives behind check_documentation.py, not the
+    specification-validity gate, so a prose gap cannot mask a spec verdict.
+    """
+    errors = []
+    examples_dir = root / 'yaml' / 'examples'
+    if not examples_dir.exists():
+        return errors
+
+    for ex_dir in sorted(examples_dir.iterdir()):
+        if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
+            continue
+
+        rel = ex_dir.relative_to(root)
+        readme = ex_dir / 'README.md'
+        if not readme.exists():
+            errors.append(f"ERROR: {rel} missing README.md")
+        elif ex_dir.name.startswith('negative-'):
+            content = readme.read_text(encoding='utf-8')
+            if '## How to fix' not in content:
+                errors.append(f"ERROR: {rel}/README.md missing '## How to fix' section")
+
+    return errors
+
 
 def main():
     parser = argparse.ArgumentParser(description="Validate yamaa repository structure and specs.")

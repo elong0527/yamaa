@@ -1,5 +1,7 @@
 # SDTM DS: number each subject's disposition records in date order
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-ds-disposition-sequence.html)
+
 This example uses raw disposition records and a `yamaa` specification to
 derive one record per collected disposition:
 

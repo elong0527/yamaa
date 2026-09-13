@@ -4391,6 +4391,7 @@ class TestDatasetPathExamples(unittest.TestCase):
 class TestValidatorCLI(unittest.TestCase):
     def setUp(self):
         self.tool_path = Path(__file__).parent / 'validate_repository.py'
+        self.doc_tool_path = Path(__file__).parent / 'check_documentation.py'
         self.test_dir = tempfile.TemporaryDirectory()
         self.root_dir = Path(self.test_dir.name)
         # Every repository carries R022's shared fixtures and the closed
@@ -4697,15 +4698,15 @@ class TestValidatorCLI(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_example_layout_missing_files(self):
+    def test_documentation_missing_readme(self):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'bad-example'
         ex_dir.mkdir(parents=True, exist_ok=True)
         # missing everything
-        result = subprocess.run([sys.executable, str(self.tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
+        result = subprocess.run([sys.executable, str(self.doc_tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('README.md', result.stdout)
 
-    def test_example_layout_negative_missing_how_to_fix(self):
+    def test_documentation_negative_missing_how_to_fix(self):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'negative-bad'
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'README.md').write_text('# bad')
@@ -4714,7 +4715,7 @@ class TestValidatorCLI(unittest.TestCase):
         (ex_dir / 'expected').mkdir()
         (ex_dir / 'expected' / 'error.yaml').write_text('{}')
 
-        result = subprocess.run([sys.executable, str(self.tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
+        result = subprocess.run([sys.executable, str(self.doc_tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('How to fix', result.stdout)
 
@@ -4736,7 +4737,7 @@ class TestValidatorCLI(unittest.TestCase):
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'README.md').write_text('# Index\n\n| [`stale`](stale/) | stale desc |\n')
 
-        result = subprocess.run([sys.executable, str(self.tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
+        result = subprocess.run([sys.executable, str(self.doc_tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('stale', result.stdout)
 
@@ -4750,7 +4751,7 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), '--root', str(self.root_dir)],
+            [sys.executable, str(self.doc_tool_path), '--root', str(self.root_dir)],
             capture_output=True,
             text=True,
         )
@@ -4769,7 +4770,7 @@ class TestValidatorCLI(unittest.TestCase):
         (good_ex / 'expected').mkdir()
         (good_ex / 'expected' / 'out.csv').write_text('h1')
 
-        result = subprocess.run([sys.executable, str(self.tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
+        result = subprocess.run([sys.executable, str(self.doc_tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('not in index', result.stdout)
 
@@ -4838,7 +4839,11 @@ bad_field: "what"
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'variant-example'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
-        (ex_dir / 'README.md').write_text('# Variant example\n')
+        (ex_dir / 'README.md').write_text(
+            '# Variant example\n'
+            '\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/variant-example.html)\n'
+        )
         (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
         (ex_dir / 'spec_r.yaml').write_text('value: valid\n')
         (ex_dir / 'spec_py.yaml').write_text(
@@ -4872,7 +4877,11 @@ bad_field: "what"
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'mixed-specs'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
-        (ex_dir / 'README.md').write_text('# Mixed specs\n')
+        (ex_dir / 'README.md').write_text(
+            '# Mixed specs\n'
+            '\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/mixed-specs.html)\n'
+        )
         (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
         (ex_dir / 'spec.yaml').write_text('value: base\n')
         (ex_dir / 'spec_r.yaml').write_text('value: variant\n')
@@ -4885,7 +4894,11 @@ bad_field: "what"
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'leveled-specs'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
-        (ex_dir / 'README.md').write_text('# Leveled specs\n')
+        (ex_dir / 'README.md').write_text(
+            '# Leveled specs\n'
+            '\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/leveled-specs.html)\n'
+        )
         (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
         (ex_dir / 'spec_organization.yaml').write_text('value: valid\n')
         (ex_dir / 'spec_study.yaml').write_text(
@@ -4898,6 +4911,31 @@ bad_field: "what"
             VALIDATOR.expected_resolved_path(ex_dir, entries[0]).name,
             'spec_resolved.yaml',
         )
+        self.assertEqual(
+            VALIDATOR.validate_examples_layout(self.root_dir), []
+        )
+
+    def test_readme_dashboard_badge_must_follow_the_title(self):
+        ex_dir = self.root_dir / 'yaml' / 'examples' / 'link-check'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'spec.yaml').write_text('value: valid\n')
+        (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
+        badge = (
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]'
+            '(https://elong0527.github.io/yamaa/examples/link-check.html)'
+        )
+        (ex_dir / 'README.md').write_text('# No badge\n')
+        errors = VALIDATOR.validate_examples_layout(self.root_dir)
+        self.assertIn('right after the title', '\n'.join(errors))
+        (ex_dir / 'README.md').write_text(
+            '# Wrong badge\n\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]'
+            '(https://elong0527.github.io/yamaa/examples/other-dir.html)\n'
+        )
+        errors = VALIDATOR.validate_examples_layout(self.root_dir)
+        self.assertIn('right after the title', '\n'.join(errors))
+        (ex_dir / 'README.md').write_text(f'# Right badge\n\n{badge}\n')
         self.assertEqual(
             VALIDATOR.validate_examples_layout(self.root_dir), []
         )
@@ -4975,7 +5013,7 @@ bad_field: "what"
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'negative-declared'
         (ex_dir / 'expected').mkdir(parents=True)
         (ex_dir / 'spec.yaml').write_text(
-            'columns:\n  - name: COUNTRY\n    derivation: {nested: value}\n'
+            'columns:\n  - name: COUNTRY\n    label: Country\n    derivation: {nested: value}\n'
         )
         (ex_dir / 'expected' / 'error.yaml').write_text(
             'phase: validation\ncondition: invalid_field_type\n'
@@ -4988,6 +5026,7 @@ bad_field: "what"
                 ],
                 'column_class': [
                     {'name': {'type': 'str', 'required': True}},
+                    {'label': {'type': 'str', 'required': False}},
                     {'derivation': {'type': 'str', 'required': True}},
                 ],
             },

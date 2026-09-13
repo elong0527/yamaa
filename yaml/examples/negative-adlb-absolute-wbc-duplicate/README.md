@@ -1,5 +1,7 @@
 # ADaM ADLB: reject duplicate WBC inputs for an absolute differential
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adlb-absolute-wbc-duplicate.html)
+
 Collected analysis records attempt to produce one absolute lymphocyte result
 per subject and visit:
 

@@ -1,5 +1,7 @@
 # ADaM ADAE: reject a severity burden totalled from severity words
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-sum-non-numeric-source.html)
+
 This example uses collected adverse events to attempt one record per event:
 
 - `ASEV` is the reported severity of the event;

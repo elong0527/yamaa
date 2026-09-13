@@ -6,3 +6,4 @@ __pycache__/
 docs/.jekyll-cache/
 docs/_site/
 /study/
+docs/examples/*.html

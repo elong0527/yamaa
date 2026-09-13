@@ -64,7 +64,11 @@ tooling detail: expand abbreviations on first use and state effects in
 study-data words. Write:
 
 - a short title of the form `# <what the example does>` (no
-  `<STANDARD> <DOMAIN>` prefix in the title);
+  `<STANDARD> <DOMAIN>` prefix in the title), followed by a `Dashboard` badge
+  linking to the rendered page:
+  `[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/<directory>.html)`.
+  It is navigation, not data description: the validator exempts it from the
+  prose rules below, and the dashboard hides it on the page itself;
 - a `Goal:` line naming the variables derived;
 - an `Input:` line naming the source shape in plain words;
 - a `Variables:` list with one bullet per output variable, in output order,
@@ -240,7 +244,10 @@ check merely to make the sample pass.
 ## Checks to run before finishing
 
     # every declared example column has a non-empty, human-readable label
-    ruby ../../.github/scripts/examples/check_labels.rb
+    # (validate_column_labels in validate_repository.py; the full prose gate
+    # is check_documentation.py)
+    uv run --project ../../python --no-sync \
+        python ../../.github/scripts/yaml-validation/validate_repository.py
 
     # no schema vocabulary reached the data-contract portion of a README,
     # and every negative example has exactly one remediation section

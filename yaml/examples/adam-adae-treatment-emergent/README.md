@@ -1,16 +1,23 @@
-# ADaM ADAE: classify an event as treatment-emergent
+# Flag treatment-emergent events
 
-This example uses sample AE and ADSL data and a `yamaa` specification to derive
-one row per adverse event:
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-treatment-emergent.html)
 
-- `TRTA`, `TRTSDT`, and `TRTEDT` are the subject's treatment and the dates it
-  ran between, carried across from ADSL. A subject with no ADSL record keeps
-  their events and leaves all three empty;
-- `ASTDT` is the event start date;
-- `TRTEMFL` marks an event as treatment-emergent when its start date falls
-  within the treatment period, counting both the first and the last day. An
-  event before treatment started, one after it ended, and one belonging to a
-  subject with no treatment dates are all left unflagged.
+**Goal:** flag each adverse event (AE) as treatment-emergent in
+`TRTEMFL`.
 
-Treating both boundaries as inside the period is this study's rule rather than
-a universal one.
+**Input:** AE records with analysis start date `ASTDT`, plus the
+subject-level analysis dataset (ADSL) treatment dates and actual
+treatment.
+
+**Variables:**
+
+- `TRTSDT`, `TRTEDT`, `TRTA`: carried through from ADSL; stay empty
+  when there is no ADSL record.
+- `TRTEMFL`: `Y` when `ASTDT` falls on or between `TRTSDT` and
+  `TRTEDT`; otherwise empty, including events before treatment
+  started, after it ended, or with missing treatment dates.
+
+**Note:** first and last treatment days count as inside, per this
+study's rule.
+
+**Standard:** ADaM | **Domain:** ADAE

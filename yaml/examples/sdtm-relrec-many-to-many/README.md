@@ -1,5 +1,7 @@
 # SDTM RELREC: record relationships between events and medications
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-relrec-many-to-many.html)
+
 This example uses collected adverse-event and concomitant-medication data and a
 `yamaa` specification to derive one record per participation in a relationship:
 

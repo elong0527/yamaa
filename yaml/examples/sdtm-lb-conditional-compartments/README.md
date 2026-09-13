@@ -1,5 +1,7 @@
 # SDTM LB: tell an inapplicable compartment from an uncollected sample
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-lb-conditional-compartments.html)
+
 This example uses collected skin-biopsy data and a `yamaa` specification to
 derive one record per compartment a subject actually has:
 

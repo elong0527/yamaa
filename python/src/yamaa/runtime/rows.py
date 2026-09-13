@@ -64,6 +64,9 @@ class CandidateRow:
 
     source_rows: dict[str, dict[str, object]]
     values: dict[str, object]
+    # Every driver record feeding this row under R001-12, which a direct
+    # dataset read collects one value across.
+    feeding_rows: dict[str, list[dict[str, object]]] = field(default_factory=dict)
     row_id: str | None = None
     group_driver: str | None = None
     group_records: tuple[IndexedRecord, ...] = ()
@@ -171,7 +174,11 @@ class RowResolver:
         self._candidate = candidate
         self._values: dict[str, Any] = dict(values)
         self._row_phase = row_phase
-        self._base = context.bindings.context(candidate.source_rows, self._values)
+        self._base = context.bindings.context(
+            candidate.source_rows,
+            self._values,
+            feeding_rows=candidate.feeding_rows,
+        )
 
     @property
     def _phase(self) -> ConditionPhase:
@@ -562,6 +569,10 @@ def group_candidates(
                     planned.driver: dict(zip(fields, key, strict=True)),
                 },
                 values={},
+                # R001-12a collects a direct read across the records feeding
+                # one key combination. A grouped candidate has no such read:
+                # its scalars are the grain, and everything else reduces.
+                feeding_rows={},
                 row_id=planned.declaration.id if planned.declaration else None,
                 group_driver=planned.driver,
                 group_records=records,

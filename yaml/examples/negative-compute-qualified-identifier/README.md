@@ -1,5 +1,7 @@
 # ADaM ADEX: reject a doubled dose read straight from exposure
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-compute-qualified-identifier.html)
+
 This example uses a subject-treatment inventory with its component exposure
 records to attempt one record per subject:
 

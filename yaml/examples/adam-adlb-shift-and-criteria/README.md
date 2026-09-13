@@ -1,5 +1,7 @@
 # ADaM ADLB: classify a result, its shift from baseline, and one criterion
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adlb-shift-and-criteria.html)
+
 This example uses a pre-derived ADLB slice and a `yamaa` specification to
 derive one row per subject, parameter, and record:
 

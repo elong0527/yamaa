@@ -1,5 +1,7 @@
 # ADaM ADRS: prepare assessments for best overall response
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adrs-best-response-selection.html)
+
 This example uses the overall response assessments to produce one record per
 assessment for the best-response endpoint:
 

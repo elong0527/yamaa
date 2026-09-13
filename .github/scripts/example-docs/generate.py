@@ -20,6 +20,18 @@ ROOT = HERE.parents[2]
 EXAMPLES = ROOT / "yaml/examples"
 DESTINATION = ROOT / "docs/examples"
 REPOSITORY = "https://github.com/elong0527/yamaa"
+# Comments are giscus threads in the repository's GitHub Discussions, so they
+# outlive any deployment. Each example maps to one discussion whose title is
+# COMMENT_TERM_PREFIX plus the example directory name; renaming a directory
+# starts a new thread. IDs come from https://giscus.app after the repository
+# enables Discussions and installs the giscus app.
+GISCUS = {
+    "repo": "elong0527/yamaa",
+    "repo_id": "R_kgDOTXVQTg",
+    "category": "Comments",
+    "category_id": "DIC_kwDOTXVQTs4DFe_t",
+}
+COMMENT_TERM_PREFIX = "yaml/examples/"
 OUTCOMES = (
     (
         "positive",
@@ -37,6 +49,7 @@ YAML_TOKEN = re.compile(
 )
 SPEC_FILE_PATTERN = re.compile(r'^spec(?:_[a-z][a-z0-9_]*)?\.yaml$')
 SPEC_RESOLVED_NAME = 'spec_resolved.yaml'
+CODE_SUFFIXES = ('.py', '.R', '.qmd', '.Rmd')
 
 
 def escape(value):
@@ -105,6 +118,9 @@ def example_entry(example):
 
 def render_readme(text, source_url):
     """Render Markdown without executing raw HTML; resolve fixture-relative links."""
+    text = "\n".join(
+        line for line in text.splitlines() if "img.shields.io/badge/Dashboard" not in line
+    )
     markdown = MarkdownIt("commonmark", {"html": False}).enable("table")
     tokens = markdown.parse(text)
     title = "Example"
@@ -222,14 +238,54 @@ def render_files(paths, group, example, derived, labels):
                 table = '<p class="no-rows">Showing raw CSV because the source is not a valid rectangular table.</p>' + table
         widths.append(f"minmax(0, {width}fr)")
         count_html = f'<span class="file-count">{count}</span>' if count else ""
+        edit_url = (
+            REPOSITORY + "/edit/main/yaml/examples/" + quote(example.name)
+            + "/" + "/".join(quote(part) for part in filename.split("/"))
+        )
         panes.append(
             f'<div id="{pane_id}" class="panel file-pane" role="region" aria-label="{escape(filename)}">'
-            f'<div class="file-heading"><h3 class="filename">{escape(filename)}</h3>{count_html}</div>'
+            f'<div class="file-heading"><span class="file-title"><h3 class="filename">{escape(filename)}</h3>'
+            f'<a class="edit-button" href="{edit_url}">Edit</a></span>{count_html}</div>'
             + table + "</div>"
         )
     content = "".join(panes) or '<p class="no-rows">No fixture files in this directory.</p>'
     content = f'<div class="files-grid" style="--dataset-columns: {" ".join(widths)}">{content}</div>'
     return content, row_count, subjects
+
+
+def render_failure_section(error_path, edit_url):
+    """Render the expected-failure panel for an example the run must reject.
+
+    The definition list carries only the stable facts; the full assertion,
+    including spec paths, lives in the collapsed raw YAML below it.
+    """
+    raw = error_path.read_text(encoding="utf-8")
+    try:
+        failure = yaml.safe_load(raw)
+    except yaml.YAMLError:
+        failure = None
+    failure = failure if isinstance(failure, dict) else {}
+    facts = []
+    for key in ("phase", "condition", "requirement"):
+        value = failure.get(key)
+        if value:
+            facts.append((key, str(value)))
+    facts_html = "".join(
+        f"<div><dt>{escape(key)}</dt><dd>{escape(value)}</dd></div>"
+        for key, value in facts
+    )
+    section = (
+        '<section id="expected-failure" class="panel failure-panel" aria-labelledby="expected-failure-heading">\n'
+        '  <header class="panel-header"><span class="panel-title"><h2 id="expected-failure-heading">Expected failure</h2>'
+        f'<a class="edit-button" href="{edit_url}">Edit</a></span>'
+        '<span class="panel-caption">the run is rejected; no artifact is accepted</span></header>\n'
+        '  <div class="source-path"><code>expected/error.yaml</code></div>\n'
+        f"  <dl>{facts_html}</dl>\n"
+        '  <details><summary>expected/error.yaml</summary>\n'
+        f'  <pre class="plain-file"><code>{escape(raw)}</code></pre></details>\n'
+        "</section>"
+    )
+    return failure, section
 
 
 def highlight_yaml(line):
@@ -328,35 +384,83 @@ def render_index(entries):
     return result.encode("ascii", "xmlcharrefreplace")
 
 
-def render_spec_pane(filename, text, slug, single):
+def render_spec_pane(filename, text, slug, single, edit_url=None):
     lines = text.splitlines()
-    code_lines, section_options = [], []
+    code_lines = []
     for number, line in enumerate(lines, 1):
         line_id = f"yaml-line-{number}" if single else f"{slug}-line-{number}"
         code_lines.append(
             f'<span class="code-line" id="{line_id}"><span class="line-number" aria-hidden="true">{number}</span>'
             f'<span class="code-source">{highlight_yaml(line)}</span></span>'
         )
-        match = re.match(r"^([A-Za-z_][\w-]*):", line)
-        if match:
-            section_options.append(f'<option value="{line_id}">{escape(match.group(1))}</option>')
     if single:
-        return "".join(code_lines), "".join(section_options), len(lines)
+        return "".join(code_lines), len(lines)
+    edit = f'<a class="edit-button" href="{edit_url}">Edit</a>' if edit_url else ""
     pane = (
         f'<div class="spec-pane" id="pane-{slug}" data-filename="{escape(filename)}" data-lines="{len(lines)}">'
-        f'<div class="file-heading"><h3 class="filename">{escape(filename)}</h3>'
+        f'<div class="file-heading"><span class="file-title"><h3 class="filename">{escape(filename)}</h3>{edit}</span>'
         f'<span class="file-count">{len(lines)} lines</span></div>'
         f'<pre><code>{"".join(code_lines)}</code></pre></div>'
     )
-    return pane, "".join(section_options), len(lines)
+    return pane, len(lines)
+
+
+def example_code_files(example):
+    return sorted(
+        path for path in example.iterdir()
+        if path.is_file() and path.suffix in CODE_SUFFIXES
+    )
+
+
+def render_code_panel(files, edit_base=None):
+    panes, options = [], []
+    for path in files:
+        slug = re.sub(r"[^a-z0-9]+", "-", path.name.lower()).strip("-")
+        lines = path.read_text(encoding="utf-8").splitlines()
+        code_lines = "".join(
+            f'<span class="code-line" id="code-{slug}-line-{number}"><span class="line-number" aria-hidden="true">{number}</span>'
+            f"<span class=\"code-source\">{escape(line)}</span></span>"
+            for number, line in enumerate(lines, 1)
+        )
+        active = "" if path == files[0] else " hidden"
+        edit = (
+            f'<a class="edit-button" href="{edit_base}/{quote(path.name)}">Edit</a>'
+            if edit_base
+            else ""
+        )
+        panes.append(
+            f'<div class="code-pane" id="code-pane-{slug}" data-filename="{escape(path.name)}"{active}>'
+            f'<div class="file-heading"><span class="file-title"><h3 class="filename">{escape(path.name)}</h3>{edit}</span>'
+            f'<span class="file-count">{len(lines)} lines</span></div>'
+            f'<div class="code-scroll" tabindex="0" aria-label="{escape(path.name)}"><pre><code>{code_lines}</code></pre></div></div>'
+        )
+        selected = " selected" if path == files[0] else ""
+        options.append(f'<option value="code-pane-{slug}"{selected}>{escape(path.name)}</option>')
+    picker = ""
+    if len(files) > 1:
+        picker = (
+            '<div class="code-picker"><label for="code-select">Choose code file</label>'
+            f'<select id="code-select">{"".join(options)}</select></div>'
+        )
+    caption = f"{len(files)} code file" + ("" if len(files) == 1 else "s")
+    return (
+        '<section id="code" class="panel code-panel" aria-labelledby="code-heading">\n'
+        f'      <header class="panel-header"><h2 id="code-heading">Code</h2><span class="panel-caption">{caption}</span></header>\n'
+        f"      {picker}\n"
+        f'      {"".join(panes)}\n'
+        "    </section>"
+    )
 
 
 def render_example(example, previous=None, next=None):
     source_url = REPOSITORY + "/blob/main/yaml/examples/" + quote(example.name)
+    edit_base = REPOSITORY + "/edit/main/yaml/examples/" + quote(example.name)
+    readme_edit_url = edit_base + "/README.md"
     readme_path = example / "README.md"
     spec_path, chain = example_entry(example)
     if spec_path is None:
         raise ValueError(f"example has no spec file: {example.name}")
+    spec_edit_url = edit_base + "/" + quote(spec_path.name)
     title, readme = render_readme(readme_path.read_text(encoding="utf-8"), source_url)
     spec_text = spec_path.read_text(encoding="utf-8")
     # Parse metadata for labels and visual emphasis only; this does not execute the spec.
@@ -375,7 +479,13 @@ def render_example(example, previous=None, next=None):
         if name and source != f'{spec.get("base")}.{name}':
             derived.add(name)
     inputs = fixture_files(example / "input")
-    outputs = [path for path in fixture_files(example / "expected") if path.name != SPEC_RESOLVED_NAME]
+    error_path = example / "expected" / "error.yaml"
+    is_failure = error_path.is_file()
+    outputs = [
+        path
+        for path in fixture_files(example / "expected")
+        if path.name != SPEC_RESOLVED_NAME and (not is_failure or path.name != "error.yaml")
+    ]
     input_files, _, input_subjects = render_files(inputs, "input", example, set(), {})
     output_files, output_rows, output_subjects = render_files(outputs, "output", example, derived, labels)
     subjects = sorted(input_subjects | output_subjects)
@@ -387,46 +497,98 @@ def render_example(example, previous=None, next=None):
         subject_options.append(f'<option value="{escape(key)}">{escape(label)}</option>')
     category, heading = example_category(example.name, title, spec)
     heading = heading[:1].upper() + heading[1:]
-    metrics = [(len(inputs), "input files"), (len(subjects), "subjects")]
-    if any(path.suffix == ".csv" for path in outputs):
-        metrics.append((output_rows, "expected rows"))
+    has_csv = any(path.suffix == ".csv" for path in outputs)
+    if is_failure:
+        failure, failure_section = render_failure_section(
+            error_path, edit_base + "/expected/error.yaml"
+        )
+        datasets_heading = "Unexpected Output"
+        description = escape(title + ": README, inputs, expected failure, and YAML specification.")
+        metrics = [("Rejected", "result", "result-rejected"), (len(inputs), "input files", ""), (len(subjects), "subjects", "")]
+        if has_csv:
+            metrics.append((output_rows, "rows presented", ""))
+            output_caption = (
+                f"{output_rows} row presented to the failing check"
+                if output_rows == 1
+                else f"{output_rows} rows presented to the failing check"
+            ) + " - not an accepted artifact"
+        else:
+            output_caption = "No artifact is produced"
     else:
-        metrics.append((len(outputs), "expected files"))
+        failure_section = ""
+        datasets_heading = "Expected output"
+        description = escape(title + ": README, inputs, expected output, and YAML specification.")
+        metrics = [(len(inputs), "input files", ""), (len(subjects), "subjects", "")]
+        if has_csv:
+            metrics.append((output_rows, "expected rows", ""))
+            output_caption = (
+                f"{output_rows} expected row" if output_rows == 1 else f"{output_rows} expected rows"
+            )
+        else:
+            metrics.append((len(outputs), "expected files", ""))
+            output_caption = "Expected artifacts"
+    def metric_cell(count, label, cls):
+        klass = f' class="{cls}"' if cls else ""
+        return f"<div{klass}><dt>{label}</dt><dd>{count}</dd></div>"
+
+    metrics_html = "".join(metric_cell(*item) for item in metrics)
     resolved_path = example / "expected" / SPEC_RESOLVED_NAME
     if not chain and not resolved_path.is_file():
-        spec_code, section_options, spec_line_count = render_spec_pane(
+        spec_code, spec_line_count = render_spec_pane(
             spec_path.name, spec_text, "yaml", True
         )
+        spec_header_edit = f'<a class="edit-button" href="{spec_edit_url}">Edit</a>'
+        spec_path_row = f'<div class="source-path"><code>{escape(spec_path.name)}</code></div>'
     else:
         panes = []
-        documents = [(path.name, path.read_text(encoding="utf-8")) for path in chain]
-        documents.append((spec_path.name, spec_text))
+        sources = list(chain) + [spec_path]
         if resolved_path.is_file():
-            documents.append((SPEC_RESOLVED_NAME, resolved_path.read_text(encoding="utf-8")))
-        for index, (filename, text) in enumerate(documents):
-            pane, options, count = render_spec_pane(
-                filename, text, Path(filename).stem, False
+            sources.append(resolved_path)
+        for path in sources:
+            try:
+                relpath = path.relative_to(example).as_posix()
+            except ValueError:
+                relpath = None
+            text = path.read_text(encoding="utf-8")
+            filename = path.name
+            file_edit = (
+                edit_base + "/" + "/".join(quote(part) for part in relpath.split("/"))
+                if relpath
+                else None
+            )
+            pane, count = render_spec_pane(
+                filename, text, Path(filename).stem, False, file_edit
             )
             panes.append(pane)
-            if index == len(documents) - 1:
-                section_options, spec_line_count = options, count
+            spec_line_count = count
         panes.append(f"<script>{(HERE / 'spec-panes.js').read_text(encoding='utf-8')}</script>")
         spec_code = "".join(panes)
+        spec_header_edit = ""
+        spec_path_row = ""
+    code_files = example_code_files(example)
+    code_panel = render_code_panel(code_files, edit_base) if code_files else ""
     template = Template((HERE / "dashboard.html").read_text(encoding="utf-8"))
     result = template.substitute(
         example_name=escape(example.name), page_title=escape(title), heading=escape(heading),
-        category=escape(category), description=escape(title + ": README, inputs, expected output, and YAML specification."),
+        category=escape(category), description=description,
+        failure_section=failure_section,
+        datasets_heading=datasets_heading,
+        readme_edit_url=readme_edit_url,
+        spec_header_edit=spec_header_edit, spec_path_row=spec_path_row,
         source_url=REPOSITORY + "/tree/main/yaml/examples/" + quote(example.name),
         prev_link=page_link(previous, "Previous example", "prev"),
         next_link=page_link(next, "Next example", "next"),
-        metrics="".join(f"<div><dt>{label}</dt><dd>{count}</dd></div>" for count, label in metrics),
+        metrics=metrics_html,
         subject_options="".join(subject_options), readme=readme,
         input_files=input_files,
         input_caption=f"{len(inputs)} source file" + ("" if len(inputs) == 1 else "s"),
-        output_files=output_files,
-        output_caption=f"{output_rows} expected row" + ("" if output_rows == 1 else "s") if any(path.suffix == ".csv" for path in outputs) else "Expected artifacts",
+        output_files=output_files, output_caption=output_caption,
         spec_lines=spec_line_count, spec_code=spec_code,
-        section_options="".join(section_options),
+        code_panel=code_panel,
+        giscus_repo=escape(GISCUS["repo"]), giscus_repo_id=escape(GISCUS["repo_id"]),
+        giscus_category=escape(GISCUS["category"]), giscus_category_id=escape(GISCUS["category_id"]),
+        comment_term=escape(COMMENT_TERM_PREFIX + example.name),
+        discussions_url=REPOSITORY + "/discussions",
         styles=(HERE / "dashboard.css").read_text(encoding="utf-8"),
         script=(HERE / "dashboard.js").read_text(encoding="utf-8"),
     )

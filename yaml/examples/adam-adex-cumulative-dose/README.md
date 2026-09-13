@@ -1,5 +1,7 @@
 # ADaM ADEX: summarize cumulative exposure
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adex-cumulative-dose.html)
+
 This example uses a subject-treatment inventory with its component exposure
 records to derive one record per subject and treatment:
 

@@ -1,5 +1,7 @@
 # SDTM VS: reject an epoch range with incomparable endpoints
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-record-lookup-incomparable-range.html)
+
 This example uses one vital-sign date and an epoch table expressed in integer
 study days to attempt one output record:
 

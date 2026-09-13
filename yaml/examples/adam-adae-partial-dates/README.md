@@ -1,36 +1,41 @@
-# ADaM ADAE: impute partial dates
+# Impute partial adverse event dates
 
-This example uses sample AE and ADSL data and a `yamaa` specification to derive
-one row per adverse event:
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-partial-dates.html)
 
-- `AETERM` is the reported term for the event, and `AESTDTC` its start date as
-  collected, which may carry only a year, or a year and month, or nothing
-  usable at all;
-- `TRTSDT` is the subject's treatment start date;
-- `ASTDT` is the analysis start date. A date collected in full is used as it
-  stands, and one missing only its day is placed on the 15th. A year-only
-  source remains without an analysis date rather than supplying both month and
-  day. A collected value that is not a date and an uncollected value also give
-  no analysis date;
-- a completed date is never placed before `TRTSDT`. Where the 15th would fall
-  earlier, the event is moved forward to the treatment start, which the
-  collected month still allows. Where the collected month ends before the
-  treatment start, no day it allows can satisfy that, so the event is left
-  without an analysis date rather than moved into a month nobody recorded. A
-  date collected in full is left exactly as collected even when it falls
-  earlier, because there is nothing about it to choose;
-- `ASTDTC` is the same analysis date written as text;
-- `ASTDTF` is `D` when the day was supplied. It is empty when the date was
-  collected in full and when no analysis date could be formed. It is read from
-  `ASTDT` itself rather than from the collected text, so the flag and the date
-  it describes cannot disagree;
-- `TRTEMFL` marks an event as treatment-emergent when it starts on or after
-  `TRTSDT`. A supplied day decides this exactly as a collected one would, so
-  `ASTDTF` is what tells a reader which of these events rested on one.
+**Goal:** one Analysis Data Model (ADaM) row per adverse event
+(AE) with a completed analysis start date and a treatment-emergence
+flag.
 
-The two subjects differ in what their treatment start allows. For
-`CATH-UCSD-0001` the 15th of a collected month is already on or after
-treatment start, so every completed date keeps it. For `CATH-UCSD-0002`
-treatment starts on 20 March: the March event moves from the 15th to the 20th,
-and the February event is left without an analysis date because February ends
-first.
+**Input:** collected Study Data Tabulation Model (SDTM) event
+records carrying the reported term `AETERM` and the collected start
+`AESTDTC`, plus the subject-level analysis dataset (ADSL) treatment
+start `TRTSDT`.
+
+**Variables:**
+
+- `ASTDT` is the analysis start date. A fully collected date is used
+  as it stands; a year and month without a day is completed to the
+  15th. A year-only value, a value that is not a date, and a missing
+  value give no analysis date.
+- `ASTDTC` is the same analysis date written as text, empty when
+  there is no analysis date.
+- `ASTDTF` is `D` when the day was supplied to complete the analysis
+  date. It is empty when the date was collected in full and when no
+  analysis date could be formed. The flag therefore always matches
+  the date shown.
+- `TRTEMFL` is `Y` when the analysis start falls on or after
+  `TRTSDT`, and empty when there is no analysis date or it falls
+  before `TRTSDT`. A supplied day counts exactly as a collected one
+  would, so `ASTDTF` tells a reader which flagged events rested on a
+  supplied day.
+
+**Note:** a completed date is never placed before `TRTSDT`. Where the
+15th would fall before `TRTSDT`, the event moves forward to the
+treatment start, which the collected month still allows. Where the
+collected month ends before the treatment start, no day it allows can
+satisfy that, so the event is left without an analysis date rather
+than moved into a month nobody recorded. A date collected in full is
+left exactly as collected even when it falls before `TRTSDT`,
+because there is nothing about it to choose.
+
+**Standard:** ADaM | **Domain:** ADAE

@@ -1,5 +1,7 @@
 # ADaM ADSL: reject an uppercased country chosen inside the same step
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-variable-nested-expression.html)
+
 This example uses collected demographics with a site-level country to attempt
 one record per subject:
 

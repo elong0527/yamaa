@@ -68,7 +68,7 @@ class DashboardTests(unittest.TestCase):
             expected_cells.extend(value for row in rows[1:] for value in row)
         self.assertEqual(content.cells, expected_cells)
         self.assertEqual(content.code, (EXAMPLE / "spec.yaml").read_text().splitlines())
-        self.assertEqual(content.sections, ["readme", "specification", "inputs", "outputs"])
+        self.assertEqual(content.sections, ["readme", "specification", "inputs", "outputs", "comments"])
         self.assertEqual(content.downloads, [])
         self.assertEqual(content.tabs, [])
         self.assertEqual([pane["aria-label"] for pane in content.file_panes], ["input/ae.csv", "input/dm.csv", "expected/adae.csv"])
@@ -121,8 +121,43 @@ class DashboardTests(unittest.TestCase):
         example = generate.EXAMPLES / "negative-source-record-width"
         page = generate.render_example(example).decode("ascii")
         self.assertIn("raw CSV", page)
-        self.assertIn("Expected artifacts", page)
+        self.assertIn("No artifact is produced", page)
         self.assertIn(generate.escape((example / "expected/error.yaml").read_text()), page)
+
+    def test_negative_failure_has_banner_and_own_section(self):
+        example = generate.EXAMPLES / "negative-output-duplicate-subject"
+        page = generate.render_example(example).decode("ascii")
+        self.assertIn('<div class="result-rejected"><dt>result</dt><dd>Rejected</dd></div>', page)
+        self.assertIn('id="expected-failure"', page)
+        self.assertIn('<h2 id="outputs-heading">Unexpected Output</h2>', page)
+        self.assertIn("not an accepted artifact", page)
+        self.assertIn('<div><dt>phase</dt><dd>output</dd></div>', page)
+        self.assertIn('<div><dt>requirement</dt><dd>R005-52</dd></div>', page)
+        self.assertIn("<details><summary>expected/error.yaml</summary>", page)
+        base = "https://github.com/elong0527/yamaa/edit/main/yaml/examples/negative-output-duplicate-subject"
+        self.assertIn(
+            '<h2 id="expected-failure-heading">Expected failure</h2>'
+            f'<a class="edit-button" href="{base}/expected/error.yaml">Edit</a>',
+            page,
+        )
+        self.assertNotIn("<dt>spec paths</dt>", page)
+        self.assertIn("<code>README.md</code>", page)
+        self.assertIn(f'<a class="edit-button" href="{base}/README.md">Edit</a>', page)
+        self.assertIn(f'<a class="edit-button" href="{base}/spec.yaml">Edit</a>', page)
+        self.assertIn(f'<a class="edit-button" href="{base}/input/dm.csv">Edit</a>', page)
+        self.assertIn(f'<a class="edit-button" href="{base}/expected/adsl.csv">Edit</a>', page)
+        # error.yaml leaves the datasets: one pane per CSV, none for the YAML.
+        content = DashboardContent(page)
+        self.assertIn("expected-failure", content.sections)
+        self.assertNotIn('aria-label="expected/error.yaml"', page)
+        self.assertEqual(
+            [pane["aria-label"] for pane in content.file_panes],
+            ["input/dm.csv", "expected/adsl.csv"],
+        )
+        positive = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
+        self.assertNotIn('class="result-rejected"', positive)
+        self.assertNotIn('id="expected-failure"', positive)
+        self.assertIn('<h2 id="outputs-heading">Expected output</h2>', positive)
 
     def test_subject_identity_includes_study(self):
         first = generate.subject_key({"STUDYID": "STUDY-A", "USUBJID": "001"})
@@ -134,9 +169,43 @@ class DashboardTests(unittest.TestCase):
         page = generate.render_example(EXAMPLE).decode("ascii")
         self.assertIn('<span>Hide Spec</span>', page)
         self.assertIn('role="separator" aria-label="Resize specification panel"', page)
-        self.assertIn('id="section-select"', page)
-        for section in ["datasets", "record_lookups", "output", "columns", "verifications"]:
-            self.assertIn(f'>{section}</option>', page)
+        self.assertNotIn('id="section-select"', page)
+        self.assertNotIn("Jump to section", page)
+
+    def test_comments_map_to_a_stable_discussion_per_example(self):
+        page = generate.render_example(EXAMPLE).decode("ascii")
+        self.assertEqual(page.count('src="https://giscus.app/client.js"'), 1)
+        self.assertIn('data-mapping="specific" data-term="yaml/examples/adam-adae-death-outcome" data-strict="1"', page)
+        self.assertIn('data-repo="elong0527/yamaa"', page)
+        other = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
+        self.assertIn('data-term="yaml/examples/sdtm-dm-basic"', other)
+
+    def test_code_panel_lists_example_scripts(self):
+        example = generate.EXAMPLES / "sdtm-dm-basic"
+        page = generate.render_example(example).decode("ascii")
+        self.assertIn('id="code"', page)
+        self.assertIn('data-filename="run.py"', page)
+        self.assertIn("import yamaa", page)
+        self.assertIn(
+            '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/yaml/examples/sdtm-dm-basic/run.py">Edit</a>',
+            page,
+        )
+        self.assertNotIn('id="code-select"', page)
+        plain = generate.render_example(EXAMPLE).decode("ascii")
+        self.assertNotIn('id="code"', plain)
+
+    def test_code_panel_switches_between_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            first = folder / "analysis.py"
+            first.write_text("print('one')\n", encoding="utf-8")
+            second = folder / "figure.R"
+            second.write_text("x <- 1\n", encoding="utf-8")
+            panel = generate.render_code_panel([first, second])
+        self.assertIn('id="code-select"', panel)
+        self.assertIn('<option value="code-pane-analysis-py" selected>analysis.py</option>', panel)
+        self.assertIn('<option value="code-pane-figure-r">figure.R</option>', panel)
+        self.assertIn('id="code-pane-figure-r" data-filename="figure.R" hidden>', panel)
 
     def test_multi_level_spec_renders_panes_with_resolved_default(self):
         example = generate.EXAMPLES / "spec-inheritance"
@@ -153,13 +222,25 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertIn("Choose specification document", page)
         self.assertNotIn('aria-label="expected/spec_resolved.yaml"', page)
-        self.assertIn(">base</option>", page)
+        self.assertNotIn('id="section-select"', page)
+        base = "https://github.com/elong0527/yamaa/edit/main/yaml/examples/spec-inheritance"
+        for target in ("spec_organization.yaml", "spec_compound.yaml", "spec_study.yaml"):
+            self.assertIn(f'<a class="edit-button" href="{base}/{target}">Edit</a>', page)
+        self.assertIn(
+            f'<a class="edit-button" href="{base}/expected/spec_resolved.yaml">Edit</a>', page
+        )
+        self.assertIn('<h2 id="schema-heading">YAML specification</h2></span>', page)
 
     def test_spec_prefixed_example_gets_its_own_gallery_category(self):
         example = generate.EXAMPLES / "spec-inheritance"
         title, category = generate.describe_example(example)
         self.assertEqual(title, "Spec Inheritance")
         self.assertEqual(category, "Specification")
+
+    def test_dashboard_badge_is_not_rendered_on_its_own_page(self):
+        page = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
+        self.assertNotIn("shields.io", page)
+        self.assertIn("Create DM from EDC extract", page)
 
     def test_unterminated_csv_is_not_silently_repaired(self):
         page = generate.render_example(generate.EXAMPLES / "negative-source-unterminated-quote").decode("ascii")

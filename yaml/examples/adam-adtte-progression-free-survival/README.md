@@ -1,5 +1,7 @@
 # ADaM ADTTE: derive progression-free survival
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adtte-progression-free-survival.html)
+
 This example uses randomization dates, tumour assessments, and deaths to derive
 one progression-free-survival record per subject:
 

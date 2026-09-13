@@ -42,5 +42,5 @@ test_that("CSV ingestion preserves typeless text and empty provenance", {
   expect_true(all(datasets$DM$SUBJECT == "001"))
   expect_true(all(datasets$DM$SITE == "007"))
   expect_true(all(is.na(datasets$DM$BARE)))
-  expect_true(all(datasets$DM$QUOTED == ""))
+  expect_true(all(is.na(datasets$DM$QUOTED)))
 })

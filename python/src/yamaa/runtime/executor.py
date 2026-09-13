@@ -75,6 +75,8 @@ DatasetCheck: TypeAlias = Callable[
 ]
 OutputBuilder: TypeAlias = Callable[[TypedTable, object, Sequence[str]], Artifact]
 
+_KeyToken: TypeAlias = tuple[object, ...] | tuple[str, int]
+
 
 class _FrozenModel(BaseModel):
     model_config = ConfigDict(
@@ -316,12 +318,13 @@ def _record_candidates(
     """Build one candidate per retained driver record, in driver order."""
     return [
         CandidateRow(
-            source_rows={planned.driver: dict(record.values)},
+            source_rows={planned.driver: values},
             values={},
+            feeding_rows={planned.driver: [values]},
             row_id=planned.declaration.id if planned.declaration else None,
         )
-        for record in relation.records
-        if _evaluate_row_filter(planned, index, dict(record.values))
+        for values in (dict(record.values) for record in relation.records)
+        if _evaluate_row_filter(planned, index, values)
     ]
 
 
@@ -354,6 +357,56 @@ def _grouped_filter(
     return result.value is TruthValue.TRUE
 
 
+def _key_space(
+    plan,
+    driver_rows: Sequence[dict[str, object]],
+    driver: str,
+    column_types: Mapping[str, str],
+    context: RelationalContext,
+    dispatcher: ExpressionDispatcher,
+    counter: HandlerCounter,
+) -> tuple[
+    dict[_KeyToken, tuple[object, ...]],
+    dict[_KeyToken, list[dict[str, object]]],
+    list[_KeyToken],
+]:
+    """Derive the standalone key table over one section's driver records.
+
+    Keys evaluate per driver record, then collapse to distinct combinations
+    in first-appearance order (R001-12). Records with a missing key keep one
+    entry each so the missing key still fails at the output gate.
+    """
+    key_names = list(plan.specification.keys)
+    key_plans = [planned for planned in plan.columns if planned.column in key_names]
+    groups: dict[_KeyToken, list[dict[str, object]]] = {}
+    order: list[_KeyToken] = []
+    key_values: dict[_KeyToken, tuple[object, ...]] = {}
+    for position, driver_row in enumerate(driver_rows):
+        probe = CandidateRow(source_rows={driver: driver_row}, values={})
+        values = tuple(
+            _evaluate_one(
+                key_plan,
+                column_types,
+                probe,
+                context,
+                dispatcher,
+                counter,
+                plan.specification.keys,
+            )
+            for key_plan in key_plans
+        )
+        if any(value is MISSING for value in values):
+            token: _KeyToken = ("__missing_key__", position)
+        else:
+            token = tuple(values)
+        if token not in groups:
+            groups[token] = []
+            order.append(token)
+            key_values[token] = values
+        groups[token].append(driver_row)
+    return key_values, groups, order
+
+
 def _construct_rows(
     plan,
     context: RelationalContext,
@@ -365,6 +418,14 @@ def _construct_rows(
     constructed: list[CandidateRow] = []
     for planned in plan.rows:
         relation = context.relations[planned.driver]
+        if planned.declaration is None:
+            # R001-12: with no template the key table is the output row set.
+            constructed.extend(
+                _key_grain_candidates(
+                    plan, planned, relation, column_types, context, dispatcher, counter
+                )
+            )
+            continue
         if planned.grouped:
             candidates = group_candidates(planned, relation)
         else:
@@ -388,6 +449,54 @@ def _construct_rows(
     return constructed
 
 
+def _key_grain_candidates(
+    plan,
+    planned,
+    relation: RelationIndex,
+    column_types: Mapping[str, str],
+    context: RelationalContext,
+    dispatcher: ExpressionDispatcher,
+    counter: HandlerCounter,
+) -> list[CandidateRow]:
+    """Build one candidate per key combination (R001-12).
+
+    With no `rows` template the filter cannot scope feeding records, so every
+    driver record of a key combination feeds its single row and a direct read
+    must resolve to one value (R001-44) or the row fails.
+    """
+    key_names = list(plan.specification.keys)
+    key_values, groups, order = _key_space(
+        plan,
+        [dict(record.values) for record in relation.records],
+        planned.driver,
+        column_types,
+        context,
+        dispatcher,
+        counter,
+    )
+    candidates: list[CandidateRow] = []
+    for token in order:
+        records = groups[token]
+        candidate = CandidateRow(
+            source_rows={planned.driver: records[0]},
+            values=dict(zip(key_names, key_values[token], strict=True)),
+            feeding_rows={planned.driver: records},
+        )
+        for derivation in planned.derivations:
+            candidate.values[derivation.column] = _evaluate_one(
+                derivation,
+                column_types,
+                candidate,
+                context,
+                dispatcher,
+                counter,
+                plan.specification.keys,
+                row_phase=True,
+            )
+        candidates.append(candidate)
+    return candidates
+
+
 def _run_column_checks(
     specification: Specification,
     candidates: Sequence[CandidateRow],
@@ -399,7 +508,9 @@ def _run_column_checks(
         return
     table = _table_from_candidates(specification, candidates, completed)
     for column in specification.columns:
-        if column.name not in completed or column.name in checked:
+        if column.name not in completed:
+            break
+        if column.name in checked:
             continue
         failures = hooks.column(table, column, specification.keys)
         if failures:
@@ -417,12 +528,20 @@ def _derive_columns(
 ) -> TypedTable:
     specification = plan.specification
     column_types = {column.name: column.type for column in specification.columns}
+    key_set = set(specification.keys)
+    # Key-grain mode (no `rows` template) seeds key values from the key table;
+    # template mode derives every column per surviving driver record as before.
+    key_grain = all(planned.declaration is None for planned in plan.rows)
     completed = set(plan.row_derived_columns)
+    if key_grain:
+        completed |= key_set
     checked: set[str] = set()
     constructed_count = len(candidates)
     _run_column_checks(specification, candidates, completed, checked, hooks)
 
     for derivation in plan.columns:
+        if key_grain and derivation.column in key_set:
+            continue
         values = [
             _evaluate_one(
                 derivation,

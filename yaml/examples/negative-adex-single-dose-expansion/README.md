@@ -1,5 +1,7 @@
 # ADaM ADEX: reject one record per administration built from an aggregate dose
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adex-single-dose-expansion.html)
+
 This example uses collected exposure records to attempt one row per
 administration:
 

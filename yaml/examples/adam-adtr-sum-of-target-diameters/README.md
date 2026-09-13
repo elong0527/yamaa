@@ -1,5 +1,7 @@
 # ADaM ADTR: sum the target lesion diameters at each assessment
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adtr-sum-of-target-diameters.html)
+
 This example uses a schedule of tumour assessments, the lesions measured at
 each of them, and the lesion inventory selected at study entry to derive one
 record per subject and assessment:

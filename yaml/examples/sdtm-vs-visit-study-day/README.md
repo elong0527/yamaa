@@ -1,5 +1,7 @@
 # SDTM VS: attach visit metadata and study day to a result
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-vs-visit-study-day.html)
+
 This example uses collected vital signs with DM, the trial-visits table, and a
 study-defined epoch-range table to derive one record per collected result:
 

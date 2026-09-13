@@ -1,5 +1,7 @@
 # ADaM ADSL: analysis age
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-analysis-age.html)
+
 This example derives the analysis age from the demographic birth date and the
 reference randomization date:
 

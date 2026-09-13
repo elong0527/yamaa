@@ -1,5 +1,7 @@
 # ADaM ADLB: calculate each subject's mean result
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adlb-mean.html)
+
 This example uses collected neutrophil results with a `yamaa` specification to
 derive one row per result:
 

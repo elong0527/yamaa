@@ -1,11 +1,19 @@
-# ADaM ADAE: list the serious adverse events
+# Serious event listing
 
-This example uses sample AE records and produces one row per serious event:
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-serious-event-listing.html)
 
-- `AETERM` is the term the investigator reported for the event;
-- `AESER` is `Y` on every row, because a non-serious event is not listed.
+**Goal:** list serious adverse events.
 
-A study whose events are all non-serious produces this listing with no rows in
-it. The result still carries its variable names, so a reader can tell an empty
-listing apart from a listing that was never produced, and a later step reads it
-without treating it as a special case.
+**Input:** collected adverse event (AE) records, each with a reported
+term (`AETERM`) and a serious flag (`AESER`).
+
+**Variables:**
+
+- `AESER` marks the event as serious; it holds `Y` on every listed
+  record, since a non-serious event is not listed.
+
+**Note:** when no event is serious, the listing is empty but still
+carries its variable names, so an empty listing is distinct from one
+never produced.
+
+**Standard:** ADaM | **Domain:** ADAE

@@ -1,5 +1,7 @@
 # SDTM DM: derive the reference dates from EX, DS, and AE
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-dm-reference-dates.html)
+
 This example uses collected DM with the EX, DS, and AE domains and a `yamaa`
 specification to derive one row per enrolled subject:
 

@@ -57,6 +57,10 @@ jobs:
         run: |
           uv run --project python --no-sync python .github/scripts/yaml-validation/check_rule_metadata.py
 
+      - name: Check documentation
+        run: |
+          uv run --project python --no-sync python .github/scripts/yaml-validation/check_documentation.py
+
       - name: Check validation blocker issues
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,19 +1,28 @@
-# ADaM ADAE: flag the first occurrence at three levels
+# Flag the first adverse event at three levels
 
-This example uses a pre-classified ADAE slice and a `yamaa` specification to
-derive one row per adverse event:
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-occurrence-flags.html)
 
-- `AEBODSYS` and `AEDECOD` are the body system and preferred term the event was
-  coded to, `ASTDT` is its start date, and `TRTEMFL` says whether it is
-  treatment-emergent;
-- `AOCCFL`, `AOCCSFL`, and `AOCCPFL` each mark a subject's earliest
-  treatment-emergent event: the first overall, the first within each body
-  system, and the first within each preferred term. Earliest means by start
-  date, and the lower sequence number settles two events on the same day.
+**Goal:** derive `AOCCFL`, `AOCCSFL`, and `AOCCPFL` to mark the first
+treatment-emergent adverse event (AE) for each subject overall, within
+each body system, and within each dictionary-derived term.
 
-Only treatment-emergent events are eligible, so an event that is not one is
-never marked at any level, even when it is the subject's earliest event.
+**Input:** one record per adverse event carrying `AEBODSYS` (body
+system), `AEDECOD` (dictionary-derived term), `ASTDT` (analysis start
+date), and `TRTEMFL` (`Y` when treatment-emergent).
 
-The three levels nest: an event marked as the subject's first is necessarily
-also the first in its body system and its preferred term, while a term
-occurring later carries only the preferred-term flag.
+**Variables:**
+
+- `AOCCFL` is `Y` for the subject's earliest treatment-emergent
+  event and missing otherwise.
+- `AOCCSFL` is `Y` for the subject's earliest treatment-emergent
+  event within each body system and missing otherwise.
+- `AOCCPFL` is `Y` for the subject's earliest treatment-emergent
+  event within each dictionary-derived term and missing otherwise.
+
+**Note:** earliest means by analysis start date, with the lower AE
+sequence number breaking ties on the same day. Only treatment-emergent
+events are eligible, so an event that is not treatment-emergent is
+never flagged at any level. The levels nest: the subject's first event
+is also the first in its body system and term.
+
+**Standard:** ADaM | **Domain:** ADAE

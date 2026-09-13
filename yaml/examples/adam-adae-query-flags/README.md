@@ -1,20 +1,40 @@
-# ADaM ADAE: record which queries a coded event belongs to
+# Flag adverse events by query membership
 
-This example uses collected adverse events and the study's query dictionary to
-derive one row per adverse event:
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-query-flags.html)
 
-- `AETERM` is the term the site reported and `AEDECOD` the dictionary term it
-  was coded to. An event still awaiting coding has no dictionary term;
-- `SMQ01NAM`, `SMQ01CD`, and `SMQ01SC` name the first standardized query the
-  event belongs to, its dictionary identifier, and whether the term is in that
-  query's broad or narrow reading. `SMQ02NAM`, `SMQ02CD`, and `SMQ02SC` say
-  the same for the second. A set is empty when the event's term is not in that
-  query, and an event awaiting coding is in none of them;
-- `CQ01NAM` names the customized query the sponsor defined for this study. A
-  customized query is a list of terms rather than a dictionary grouping, so it
-  carries neither an identifier nor a reading.
+**Goal:** group each adverse event by safety topic, showing which
+coded term falls under two Standardized MedDRA Query (SMQ) groupings
+and one sponsor-defined customized query (CQ) grouping.
 
-An event may belong to a standardized query and to the customized one at the
-same time, and each is reported in its own place. Which query occupies which
-place is decided by the dictionary rather than by the event, so two events
-coded to the same term always report it in the same place.
+**Input:** one row per collected adverse event with the reported term
+`AETERM` and the Medical Dictionary for Regulatory Activities
+(MedDRA) coded term `AEDECOD`. A query dictionary lists each coded
+term under its query groupings.
+
+**Variables:**
+
+The first and second groupings use parallel columns; each query
+always fills the same place.
+
+- `SMQ01NAM`: name of the first standardized query grouping the
+  coded term belongs to; empty when the term is not in it.
+- `SMQ01CD`: dictionary code of the first standardized query
+  grouping; empty when the term is not in it.
+- `SMQ01SC`: whether membership is broad or narrow scope
+  (BROAD/NARROW); empty when the term is not in it.
+- `SMQ02NAM`: name of the second standardized query grouping the
+  coded term belongs to; empty when the term is not in it.
+- `SMQ02CD`: dictionary code of the second standardized query
+  grouping; empty when the term is not in it.
+- `SMQ02SC`: whether membership is broad or narrow scope
+  (BROAD/NARROW); empty when the term is not in it.
+- `CQ01NAM`: name of the sponsor-defined grouping the term belongs
+  to; empty when not listed. No code or scope applies.
+
+**Note:** an event can sit in a standardized grouping and in the
+sponsor grouping at the same time, each shown in its own place. Two
+events with the same coded term always show the same grouping
+entries. An event still awaiting coding, with no `AEDECOD`, belongs
+to no grouping.
+
+**Standard:** ADaM | **Domain:** ADAE
