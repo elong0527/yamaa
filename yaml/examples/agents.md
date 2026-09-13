@@ -244,7 +244,10 @@ check merely to make the sample pass.
 ## Checks to run before finishing
 
     # every declared example column has a non-empty, human-readable label
-    ruby ../../.github/scripts/examples/check_labels.rb
+    # (validate_column_labels in validate_repository.py; the full prose gate
+    # is check_documentation.py)
+    uv run --project ../../python --no-sync \
+        python ../../.github/scripts/yaml-validation/validate_repository.py
 
     # no schema vocabulary reached the data-contract portion of a README,
     # and every negative example has exactly one remediation section
