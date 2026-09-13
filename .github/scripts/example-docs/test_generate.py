@@ -211,6 +211,13 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("Choose specification document", page)
         self.assertNotIn('aria-label="expected/spec_resolved.yaml"', page)
         self.assertNotIn('id="section-select"', page)
+        base = "https://github.com/elong0527/yamaa/edit/main/yaml/examples/spec-inheritance"
+        for target in ("spec_organization.yaml", "spec_compound.yaml", "spec_study.yaml"):
+            self.assertIn(f'<a class="edit-button" href="{base}/{target}">Edit</a>', page)
+        self.assertIn(
+            f'<a class="edit-button" href="{base}/expected/spec_resolved.yaml">Edit</a>', page
+        )
+        self.assertIn('<h2 id="schema-heading">YAML specification</h2></span>', page)
 
     def test_spec_prefixed_example_gets_its_own_gallery_category(self):
         example = generate.EXAMPLES / "spec-inheritance"

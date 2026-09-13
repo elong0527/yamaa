@@ -41,8 +41,8 @@
     </div>
     <div class="workbench">
       <aside id="specification" class="panel schema-panel" aria-labelledby="schema-heading">
-        <header class="panel-header"><span class="panel-title"><h2 id="schema-heading">YAML specification</h2><a class="edit-button" href="$spec_edit_url">Edit</a></span><span class="panel-caption">$spec_lines lines</span></header>
-        <div class="source-path"><code>$spec_file_name</code></div>
+        <header class="panel-header"><span class="panel-title"><h2 id="schema-heading">YAML specification</h2>$spec_header_edit</span><span class="panel-caption">$spec_lines lines</span></header>
+        $spec_path_row
         <div class="code-scroll" tabindex="0" aria-label="Complete YAML specification"><pre><code>$spec_code</code></pre></div>
       </aside>
       <div id="spec-resizer" class="panel-resizer" role="separator" aria-label="Resize specification panel" aria-controls="specification" aria-orientation="vertical" aria-valuemin="240" aria-valuemax="720" aria-valuenow="350" tabindex="0" title="Drag to resize the specification panel"><span aria-hidden="true"></span></div>
