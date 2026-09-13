@@ -74,6 +74,28 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual([pane["aria-label"] for pane in content.file_panes], ["input/ae.csv", "input/dm.csv", "expected/adae.csv"])
         self.assertTrue(all("hidden" not in pane for pane in content.file_panes))
 
+    def test_readme_taxonomy_moves_above_title_and_short_summary_is_one_column(self):
+        example = generate.EXAMPLES / "adam-adae-serious-event-listing"
+        page = generate.render_example(example).decode("ascii")
+        header, _, summary = page.partition('<section id="readme"')
+        self.assertIn('<p class="eyebrow">ADaM.ADAE</p>', header)
+        self.assertIn('<h1>Serious event listing</h1>', header)
+        self.assertNotIn("text-transform: uppercase", page)
+        self.assertIn('<div class="prose prose-short"', summary)
+        self.assertNotIn("Standard:", summary.partition("</section>")[0])
+        self.assertNotIn("Domain:", summary.partition("</section>")[0])
+        self.assertEqual(generate.readme_body_line_count(example.joinpath("README.md").read_text()), 10)
+
+    def test_long_summary_keeps_multicolumn_class(self):
+        example = generate.EXAMPLES / "adam-adae-query-flags"
+        self.assertGreater(
+            generate.readme_body_line_count(example.joinpath("README.md").read_text()),
+            10,
+        )
+        page = generate.render_example(example).decode("ascii")
+        self.assertIn('<div class="prose" aria-label="README content">', page)
+        self.assertNotIn('<div class="prose prose-short"', page)
+
     def test_bytes_do_not_depend_on_checkout_location_or_mtime(self):
         original = generate.render_example(EXAMPLE)
         with tempfile.TemporaryDirectory() as directory:
@@ -116,6 +138,13 @@ class DashboardTests(unittest.TestCase):
         _, readme = generate.render_readme('# Example\n\n<script>alert("unsafe")</script>\n\n[File](input/ae.csv)', "https://example.org/fixture")
         self.assertNotIn("<script>", readme)
         self.assertIn('href="https://example.org/fixture/input/ae.csv"', readme)
+
+    def test_readme_taxonomy_is_metadata_not_summary_content(self):
+        source = "# Example\n\nBody.\n\n**Standard:** ADaM | **Domain:** ADAE\n"
+        self.assertEqual(generate.readme_taxonomy(source), ("ADaM", "ADAE"))
+        title, readme = generate.render_readme(source, "https://example.org/fixture")
+        self.assertEqual(title, "Example")
+        self.assertEqual(readme, "<p>Body.</p>\n")
 
     def test_negative_fixture_is_shown_without_repair(self):
         example = generate.EXAMPLES / "negative-source-record-width"
@@ -187,8 +216,23 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(page.count('src="https://giscus.app/client.js"'), 1)
         self.assertIn('data-mapping="specific" data-term="yaml/examples/adam-adae-death-outcome" data-strict="1"', page)
         self.assertIn('data-repo="elong0527/yamaa"', page)
+        self.assertIn(
+            'data-theme="https://elong0527.github.io/yamaa/assets/giscus-yamaa.css"',
+            page,
+        )
         other = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
         self.assertIn('data-term="yaml/examples/sdtm-dm-basic"', other)
+
+    def test_giscus_theme_limits_reactions_to_thumbs_with_counts(self):
+        theme = (generate.ROOT / "docs/assets/giscus-yamaa.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('aria-label*="+1"', theme)
+        self.assertIn('aria-label*="-1"', theme)
+        self.assertIn('content: "0"', theme)
+        self.assertIn(".gsc-reactions-menu::details-content", theme)
+        self.assertIn("content-visibility: visible", theme)
+        self.assertIn(".gsc-social-reaction-summary-item-count", theme)
 
     def test_code_panel_lists_example_scripts(self):
         example = generate.EXAMPLES / "sdtm-dm-basic"
