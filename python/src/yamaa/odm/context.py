@@ -95,31 +95,26 @@ def _ordered(value: RuntimeValue) -> object:
     return ordering_key if ordering_key is not None else value
 
 
-def _same_value(left: RuntimeValue, right: RuntimeValue) -> bool:
-    """Return whether two readings carry one value rather than two.
-
-    Each runtime type owns that identity: R016-35 keeps collected precision
-    out of it, so two datings of one day are one value. The type name guards
-    the comparison, because a host equality that crosses runtime types would
-    read a number and a flag carrying it as one value.
-    """
-    if runtime_type_name(left) != runtime_type_name(right):
-        return False
-    return bool(left == right)
-
-
 def _distinct_values(readings: Iterable[object]) -> list[RuntimeValue]:
     """Collapse repeated readings of one value, in first-appearance order.
 
     R001-12b counts the values a derivation yields for one key combination,
     not the records carrying them, so a field constant over a subject's
-    records reads as that single value.
+    records reads as that single value. Each runtime type owns that identity
+    and hashes it -- R016-35 keeps collected precision out of a date's -- so
+    a value is held beside its type name: that separates a number from a flag
+    carrying it, and keeps a key combination covering the whole input from
+    comparing every reading against every other one.
     """
     distinct: list[RuntimeValue] = []
+    seen: set[tuple[str | None, RuntimeValue]] = set()
     for reading in readings:
-        value = runtime_value(reading)
-        if not any(_same_value(value, seen) for seen in distinct):
-            distinct.append(value)  # type: ignore[arg-type]
+        value: RuntimeValue = runtime_value(reading)  # type: ignore[assignment]
+        token = (runtime_type_name(value), value)
+        if token in seen:
+            continue
+        seen.add(token)
+        distinct.append(value)
     return distinct
 
 
