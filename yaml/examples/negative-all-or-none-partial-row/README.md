@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a row with only some paired dates present
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-all-or-none-partial-row.html)
+
 This example uses collected demographics to record one row per subject:
 
 - `RFSTD` is the calendar date treatment started.

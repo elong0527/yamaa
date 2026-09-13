@@ -1,5 +1,7 @@
 # SDTM LB: assign toxicity grades
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-lb-ctcae-grading.html)
+
 This example uses haematology results with sex and a reproduced toxicity grade
 to derive one record per result:
 

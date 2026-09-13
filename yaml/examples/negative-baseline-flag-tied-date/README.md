@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a baseline chosen between two same-day results
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-baseline-flag-tied-date.html)
+
 This example uses collected lab data with ADSL to prepare one record per
 subject, parameter, and collected result:
 

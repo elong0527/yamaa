@@ -1,5 +1,7 @@
 # ADaM ADAE: reject an unlisted tie-numbering method
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-rank-invalid-method.html)
+
 This example uses collected adverse events to record one row per event:
 
 - `AESEV` is the reported severity of the event.

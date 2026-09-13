@@ -1,5 +1,7 @@
 # ADaM ADVS: express a measurement as a growth percentile
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-growth-percentile.html)
+
 This example uses collected body measurements, a sex-and-age growth reference,
 and a `yamaa` specification to derive one row per collected measurement:
 

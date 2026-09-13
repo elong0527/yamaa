@@ -8260,6 +8260,11 @@ README_KEY_COLUMNS = {
     'RSSEQ', 'ASEQ', 'PARAMCD', 'PARAM', 'AVISIT', 'VISIT', 'RDOMAIN',
     'IDVAR', 'QNAM',
 }
+README_FOOTER_PATTERN = re.compile(
+    r'\[!\[Dashboard\]\(https://img\.shields\.io/badge/Dashboard-view-0c5e4b\)\]'
+    r'\(https://elong0527\.github\.io/yamaa/examples/'
+    r'[a-z0-9]+(?:-[a-z0-9]+)*\.html\)',
+)
 
 
 def validate_example_readmes(root: Path):
@@ -8276,7 +8281,7 @@ def validate_example_readmes(root: Path):
         label = readme_path.relative_to(root)
         text = readme_path.read_text(encoding='utf-8')
         for line_number, line in enumerate(text.splitlines(), 1):
-            if len(line) > 79:
+            if len(line) > 79 and not README_FOOTER_PATTERN.fullmatch(line.strip()):
                 errors.append(
                     f"ERROR: {label}:{line_number}: line has {len(line)} "
                     "characters; maximum is 79"
@@ -8285,6 +8290,8 @@ def validate_example_readmes(root: Path):
         marker = '\n## How to fix\n'
         contract = text.split(marker, 1)[0]
         for line_number, line in enumerate(contract.splitlines(), 1):
+            if README_FOOTER_PATTERN.fullmatch(line.strip()):
+                continue
             if README_FORBIDDEN_PATTERN.search(line):
                 errors.append(
                     f"ERROR: {label}:{line_number}: schema vocabulary is "
@@ -9688,6 +9695,16 @@ def validate_examples_layout(root: Path):
                 content = readme.read_text(encoding='utf-8')
                 if '## How to fix' not in content:
                     errors.append(f"ERROR: {rel}/README.md missing '## How to fix' section")
+            lines = readme.read_text(encoding='utf-8').splitlines()
+            expected_badge = (
+                "[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]"
+                f"(https://elong0527.github.io/yamaa/examples/{ex_dir.name}.html)"
+            )
+            if len(lines) < 3 or lines[2].strip() != expected_badge:
+                errors.append(
+                    f"ERROR: {rel}/README.md must place '{expected_badge}' "
+                    "right after the title"
+                )
 
         # Specification files
         spec_paths = example_spec_paths(ex_dir)

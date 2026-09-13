@@ -4838,7 +4838,11 @@ bad_field: "what"
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'variant-example'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
-        (ex_dir / 'README.md').write_text('# Variant example\n')
+        (ex_dir / 'README.md').write_text(
+            '# Variant example\n'
+            '\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/variant-example.html)\n'
+        )
         (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
         (ex_dir / 'spec_r.yaml').write_text('value: valid\n')
         (ex_dir / 'spec_py.yaml').write_text(
@@ -4872,7 +4876,11 @@ bad_field: "what"
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'mixed-specs'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
-        (ex_dir / 'README.md').write_text('# Mixed specs\n')
+        (ex_dir / 'README.md').write_text(
+            '# Mixed specs\n'
+            '\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/mixed-specs.html)\n'
+        )
         (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
         (ex_dir / 'spec.yaml').write_text('value: base\n')
         (ex_dir / 'spec_r.yaml').write_text('value: variant\n')
@@ -4885,7 +4893,11 @@ bad_field: "what"
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'leveled-specs'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
-        (ex_dir / 'README.md').write_text('# Leveled specs\n')
+        (ex_dir / 'README.md').write_text(
+            '# Leveled specs\n'
+            '\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/leveled-specs.html)\n'
+        )
         (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
         (ex_dir / 'spec_organization.yaml').write_text('value: valid\n')
         (ex_dir / 'spec_study.yaml').write_text(
@@ -4898,6 +4910,31 @@ bad_field: "what"
             VALIDATOR.expected_resolved_path(ex_dir, entries[0]).name,
             'spec_resolved.yaml',
         )
+        self.assertEqual(
+            VALIDATOR.validate_examples_layout(self.root_dir), []
+        )
+
+    def test_readme_dashboard_badge_must_follow_the_title(self):
+        ex_dir = self.root_dir / 'yaml' / 'examples' / 'link-check'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'spec.yaml').write_text('value: valid\n')
+        (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
+        badge = (
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]'
+            '(https://elong0527.github.io/yamaa/examples/link-check.html)'
+        )
+        (ex_dir / 'README.md').write_text('# No badge\n')
+        errors = VALIDATOR.validate_examples_layout(self.root_dir)
+        self.assertIn('right after the title', '\n'.join(errors))
+        (ex_dir / 'README.md').write_text(
+            '# Wrong badge\n\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]'
+            '(https://elong0527.github.io/yamaa/examples/other-dir.html)\n'
+        )
+        errors = VALIDATOR.validate_examples_layout(self.root_dir)
+        self.assertIn('right after the title', '\n'.join(errors))
+        (ex_dir / 'README.md').write_text(f'# Right badge\n\n{badge}\n')
         self.assertEqual(
             VALIDATOR.validate_examples_layout(self.root_dir), []
         )

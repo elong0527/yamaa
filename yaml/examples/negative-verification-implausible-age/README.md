@@ -1,5 +1,7 @@
 # ADaM ADSL: reject an implausible age
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-verification-implausible-age.html)
+
 This example uses collected demographics to attempt one record per subject:
 
 - `AGE` is the age collected at screening, which the study restricts to adults

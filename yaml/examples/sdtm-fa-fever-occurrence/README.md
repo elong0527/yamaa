@@ -1,5 +1,7 @@
 # SDTM FA: fever occurrence
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-fa-fever-occurrence.html)
+
 Reactogenicity temperature records from VS produce one FA fever-occurrence
 record at the source-record grain:
 

@@ -1,5 +1,7 @@
 # ADaM ADSL: reject endpoint counting beside a month count
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-date-diff-bounds-unit.html)
+
 This example uses collected demographics to record one row per subject:
 
 - `STDT` is the start date of the exposure.

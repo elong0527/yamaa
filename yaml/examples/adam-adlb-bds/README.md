@@ -1,5 +1,7 @@
 # ADaM ADLB: build a BDS dataset with baseline and change
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adlb-bds.html)
+
 This example uses collected lab data with ADSL and a `yamaa` specification to
 derive one row per subject, parameter, and visit:
 

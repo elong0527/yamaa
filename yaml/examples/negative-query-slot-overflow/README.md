@@ -1,5 +1,7 @@
 # ADaM ADAE: reject an event belonging to more queries than it has places
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-query-slot-overflow.html)
+
 This example uses collected adverse events and the study's query dictionary to
 attempt one row per adverse event:
 

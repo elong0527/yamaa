@@ -1,5 +1,7 @@
 # ADaM ADLB: reject an analysis value with an ambiguous numeric type
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-column-type-unknown.html)
+
 This example uses collected laboratory results to attempt one record per
 result:
 

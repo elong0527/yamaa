@@ -1,5 +1,7 @@
 # ADaM ADAE: reject extracting a date from a date
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-to-date-date-source.html)
+
 The collected adverse event attempts to produce one analysis row:
 
 - `ASTDT` is the collected calendar date;

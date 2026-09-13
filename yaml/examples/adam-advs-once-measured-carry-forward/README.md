@@ -1,5 +1,7 @@
 # ADaM ADVS: carry forward a once-measured characteristic
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-once-measured-carry-forward.html)
+
 This example uses a planned-measurement spine, long-form vital signs, and
 subject treatment dates to derive one record per planned measurement:
 

@@ -1,5 +1,7 @@
 # SDTM DM: reject a subject identifier longer than the study permits
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-usubjid-exceeds-length.html)
+
 This example uses collected demographics to attempt one record per subject:
 
 - `USUBJID` is the unique subject identifier, built from the study, the site,

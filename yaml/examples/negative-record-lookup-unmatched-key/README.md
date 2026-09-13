@@ -1,5 +1,7 @@
 # SDTM LB: reject a result with no reference range
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-record-lookup-unmatched-key.html)
+
 This example uses collected laboratory results with a table of reference limits
 by test and sex to attempt one record per result:
 

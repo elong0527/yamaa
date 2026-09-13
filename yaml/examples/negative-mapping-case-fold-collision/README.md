@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a smoking flag whose dictionary answers twice
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-mapping-case-fold-collision.html)
+
 This example uses collected smoking status to attempt one record per subject:
 
 - `SMOKEFL` marks a subject who reported smoking.

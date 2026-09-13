@@ -1,5 +1,7 @@
 # ADaM ADSL: keep an investigator comment exactly as collected
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-investigator-comment.html)
+
 This example uses sample DM text and produces one row per subject:
 
 - `CMNT` is the comment the investigator recorded, kept exactly as it was

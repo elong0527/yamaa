@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a total written as a formula
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-compute-aggregate-function.html)
+
 This example uses collected laboratory results to attempt one record per
 subject and parameter:
 

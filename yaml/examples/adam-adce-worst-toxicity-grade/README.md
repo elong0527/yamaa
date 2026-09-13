@@ -1,5 +1,7 @@
 # ADaM ADCE: flag the subject's worst-grade event
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adce-worst-toxicity-grade.html)
+
 This example uses collected solicited events with a `yamaa` specification to
 derive one row per event:
 

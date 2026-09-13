@@ -1,5 +1,7 @@
 # ADaM ADAE: carry each subject's death onto every event
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-death-outcome.html)
+
 This example uses collected adverse events and demographics with a `yamaa`
 specification to derive one row per adverse event:
 

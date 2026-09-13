@@ -1,5 +1,7 @@
 # ADaM ADAE: flag adverse events for protocol review
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-protocol-review-window.html)
+
 The collected adverse events produce one analysis row per reported event:
 
 - `ASTDT` is the separately collected calendar date. `ASTDT2` is the calendar

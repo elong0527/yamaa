@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a subject listing stored under an unnamed format
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-unknown-profile.html)
+
 This example uses a collected subject listing to attempt one record per
 subject:
 

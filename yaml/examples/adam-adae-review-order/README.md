@@ -1,5 +1,7 @@
 # ADaM ADAE: present a subject's events in medical-review order
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-review-order.html)
+
 This example uses collected adverse events and a `yamaa` specification to
 derive one record per event, in the order a medical reviewer reads them:
 

@@ -1,5 +1,7 @@
 # ADaM ADQS: score a questionnaire subscale from its item records
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adqs-subscale-score.html)
+
 This example uses collected questionnaire responses and a `yamaa`
 specification to derive one row per subject, visit, and analysis parameter:
 

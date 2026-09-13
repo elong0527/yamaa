@@ -1,5 +1,7 @@
 # SDTM DM: declare the metadata a submission needs
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-dm-metadata-contract.html)
+
 This example uses collected DM data to produce one record per subject. `SITEID`
 is the collected site identifier:
 

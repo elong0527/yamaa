@@ -1,5 +1,7 @@
 # SDTM EX: represent a combination regimen
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-ex-combination-regimen.html)
+
 This example uses collected exposure records from a combination oncology
 regimen and a `yamaa` specification to derive one record per administered
 component:

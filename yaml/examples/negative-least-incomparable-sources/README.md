@@ -1,5 +1,7 @@
 # ADaM ADSL: reject an earliest-alive date taken from a day number
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-least-incomparable-sources.html)
+
 This example uses collected demographics to record one row per subject:
 
 - `DTHDT` is the date of death, missing for subjects still followed.
