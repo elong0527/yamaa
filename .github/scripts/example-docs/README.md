@@ -45,7 +45,7 @@ those bytes and never writes files.
 
 The HTML embeds its CSS, JavaScript, and full rendered content. It opens
 directly from disk, works offline, and is copied unchanged by GitHub Pages
-because it has no Jekyll front matter. The complete README spans the top.
+because it has no Jekyll front matter. The README renders as the Summary panel spanning the top.
 The YAML specification occupies a left sidebar with a Hide Spec / Show Spec
 button; hiding it gives the datasets the full width. On desktop, a drag handle
 resizes the sidebar and supports the arrow, Home, and End keys. A menu inside

@@ -96,7 +96,7 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
 .no-rows { margin: 18px; color: var(--muted); }
 .data-legend { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 11px 2px; font-size: 12px; color: var(--muted); }
 .data-legend > span:first-child { display: flex; align-items: center; gap: 7px; }
-.failure-panel { margin-bottom: 22px; border-left: 4px solid var(--danger); }
+.failure-panel { margin: 26px 0 22px; border-left: 4px solid var(--danger); }
 .failure-panel dl { display: flex; flex-wrap: wrap; gap: 6px 32px; margin: 0; padding: 14px 18px 2px; }
 .failure-panel dl div { display: flex; gap: 8px; }
 .failure-panel dt { color: var(--muted); }
