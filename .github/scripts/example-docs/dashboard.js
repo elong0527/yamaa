@@ -20,7 +20,7 @@ sidebarToggle.addEventListener("click", () => {
 });
 
 const MIN_SPEC_WIDTH = 240;
-const MAX_SPEC_WIDTH = 720;
+const MAX_SPEC_WIDTH = 740;
 const MIN_DATA_WIDTH = 420;
 
 function specWidthBounds() {

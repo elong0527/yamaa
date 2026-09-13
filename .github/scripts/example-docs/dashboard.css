@@ -69,7 +69,7 @@ code, .filename, .data-table th { font-family: "SFMono-Regular", Consolas, "Libe
 .subject-control { display: flex; align-items: center; gap: 10px; margin-left: auto; font-size: 14px; }
 .subject-control label { color: var(--muted); white-space: nowrap; }
 select { min-height: 36px; max-width: 100%; border: 1px solid #bdcec5; border-radius: 5px; padding: 4px 24px 4px 9px; color: var(--ink); background: white; font-size: 14px; }
-.workbench { --spec-width: clamp(260px, 23vw, 350px); display: grid; grid-template-columns: var(--spec-width) 20px minmax(0, 1fr); align-items: start; }
+.workbench { --spec-width: clamp(260px, 52vw, 740px); display: grid; grid-template-columns: var(--spec-width) 20px minmax(0, 1fr); align-items: start; }
 .workbench.without-sidebar { grid-template-columns: minmax(0, 1fr); }
 .workbench.without-sidebar .panel-resizer { display: none; }
 .panel-resizer { position: sticky; top: 60px; display: grid; place-items: center; width: 20px; height: min(680px, calc(100dvh - 80px)); cursor: col-resize; touch-action: none; }
