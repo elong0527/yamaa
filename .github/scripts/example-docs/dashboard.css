@@ -98,6 +98,10 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
 .schema-panel .panel-header { flex-shrink: 0; padding-left: 14px; padding-right: 14px; }
 .code-toolbar { display: flex; min-height: 48px; padding: 6px 12px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .code-toolbar select { width: 100%; }
+.code-panel { margin-top: 22px; }
+.code-picker { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.code-picker label { color: var(--muted); white-space: nowrap; }
+.code-pane .code-scroll { max-height: 420px; }
 .code-scroll { position: relative; flex: 1; min-height: 0; overflow: auto; padding: 12px 0 18px; background: #f8faf9; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #bacbc1 transparent; }
 .code-scroll pre { margin: 0; font-size: 14px; line-height: 1.65; tab-size: 2; }
 .code-line { display: block; width: max-content; min-width: 100%; padding-right: 18px; }

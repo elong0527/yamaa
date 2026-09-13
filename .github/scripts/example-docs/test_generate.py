@@ -134,9 +134,31 @@ class DashboardTests(unittest.TestCase):
         page = generate.render_example(EXAMPLE).decode("ascii")
         self.assertIn('<span>Hide Spec</span>', page)
         self.assertIn('role="separator" aria-label="Resize specification panel"', page)
-        self.assertIn('id="section-select"', page)
-        for section in ["datasets", "record_lookups", "output", "columns", "verifications"]:
-            self.assertIn(f'>{section}</option>', page)
+        self.assertNotIn('id="section-select"', page)
+        self.assertNotIn("Jump to section", page)
+
+    def test_code_panel_lists_example_scripts(self):
+        example = generate.EXAMPLES / "sdtm-dm-basic"
+        page = generate.render_example(example).decode("ascii")
+        self.assertIn('id="code"', page)
+        self.assertIn('data-filename="run.py"', page)
+        self.assertIn("import yamaa", page)
+        self.assertNotIn('id="code-select"', page)
+        plain = generate.render_example(EXAMPLE).decode("ascii")
+        self.assertNotIn('id="code"', plain)
+
+    def test_code_panel_switches_between_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            first = folder / "analysis.py"
+            first.write_text("print('one')\n", encoding="utf-8")
+            second = folder / "figure.R"
+            second.write_text("x <- 1\n", encoding="utf-8")
+            panel = generate.render_code_panel([first, second])
+        self.assertIn('id="code-select"', panel)
+        self.assertIn('<option value="code-pane-analysis-py" selected>analysis.py</option>', panel)
+        self.assertIn('<option value="code-pane-figure-r">figure.R</option>', panel)
+        self.assertIn('id="code-pane-figure-r" data-filename="figure.R" hidden>', panel)
 
     def test_multi_level_spec_renders_panes_with_resolved_default(self):
         example = generate.EXAMPLES / "spec-inheritance"
@@ -153,7 +175,7 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertIn("Choose specification document", page)
         self.assertNotIn('aria-label="expected/spec_resolved.yaml"', page)
-        self.assertIn(">base</option>", page)
+        self.assertNotIn('id="section-select"', page)
 
     def test_spec_prefixed_example_gets_its_own_gallery_category(self):
         example = generate.EXAMPLES / "spec-inheritance"
