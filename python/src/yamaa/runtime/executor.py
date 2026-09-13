@@ -10,12 +10,13 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from yamaa.expressions import (
     ExpressionDispatcher,
+    MappingResolver,
     PredicateValue,
     TruthValue,
     evaluate_predicate,
 )
 from yamaa.io import Artifact, ArtifactDiagnostic, ArtifactError, build_artifact
-from yamaa.io.polars import frame_from_values, runtime_rows
+from yamaa.io.polars import frame_from_values
 from yamaa.io.source import LoadedDataset, SourceError
 from yamaa.models import (
     MISSING,
@@ -35,12 +36,20 @@ from yamaa.planning import (
     plan_execution,
     preflight_execution,
 )
+from yamaa.runtime.joins import RelationIndex, build_relation_indexes
 from yamaa.runtime.lifecycle import (
     HandlerCount,
     HandlerCounter,
     LifecycleCondition,
     LifecycleUnsupported,
     evaluate_derivation,
+)
+from yamaa.runtime.lookups import RecordLookupSelector
+from yamaa.runtime.rows import (
+    CandidateRow,
+    RelationalContext,
+    RowResolver,
+    group_candidates,
 )
 from yamaa.specification.models import Column, DatasetSource, Specification
 from yamaa.verification import (
@@ -116,21 +125,10 @@ class ExecutionHooks:
     output: OutputBuilder = build_artifact  # type: ignore[assignment]
 
 
-@dataclass(slots=True)
-class _CandidateRow:
-    source_rows: dict[str, dict[str, object]]
-    feeding_rows: dict[str, list[dict[str, object]]]
-    values: dict[str, object]
-
-
 class _ExecutionAbort(ValueError):
     def __init__(self, diagnostics: Sequence[ExecutionDiagnostic]) -> None:
         self.diagnostics = tuple(diagnostics)
         super().__init__(", ".join(item.condition for item in diagnostics))
-
-
-def _typed_table(value: SourceTable) -> TypedTable:
-    return value.table if isinstance(value, LoadedDataset) else value
 
 
 def _diagnostic_from_condition(error: LifecycleCondition) -> ExecutionDiagnostic:
@@ -192,7 +190,7 @@ def _declaration_diagnostic(error: DeclarationError) -> ExecutionDiagnostic:
 
 def _table_from_candidates(
     specification: Specification,
-    candidates: Sequence[_CandidateRow],
+    candidates: Sequence[CandidateRow],
     completed: set[str],
 ) -> TypedTable:
     columns = tuple(
@@ -233,11 +231,13 @@ def _evaluate_row_filter(
 
 # The phases whose failures name the record they happened on. A failure
 # decided before any row exists reports no key.
-_ROW_PHASES = frozenset({"derivation", "mapping", "row_construction", "convert"})
+_ROW_PHASES = frozenset(
+    {"derivation", "join", "mapping", "row_construction", "convert"}
+)
 
 
 def _offending_keys(
-    candidate: _CandidateRow,
+    candidate: CandidateRow,
     keys: Sequence[str],
 ) -> list[JsonValue] | None:
     """Return the offending record's key values, when they are known.
@@ -263,7 +263,7 @@ def _json_key(value: object) -> JsonValue:
 
 def _with_keys(
     diagnostic: ExecutionDiagnostic,
-    candidate: _CandidateRow,
+    candidate: CandidateRow,
     keys: Sequence[str],
 ) -> ExecutionDiagnostic:
     if diagnostic.phase not in _ROW_PHASES or "keys" in diagnostic.context:
@@ -279,20 +279,20 @@ def _with_keys(
 def _evaluate_one(
     planned: PlannedDerivation,
     column_types: Mapping[str, str],
-    candidate: _CandidateRow,
-    index: BindingIndex,
+    candidate: CandidateRow,
+    context: RelationalContext,
     dispatcher: ExpressionDispatcher,
     counter: HandlerCounter,
     keys: Sequence[str] = (),
+    *,
+    row_phase: bool = False,
 ) -> object:
     try:
         return evaluate_derivation(
             planned,
             column_types[planned.column],  # type: ignore[arg-type]
             candidate.values,
-            lambda values: index.context(
-                candidate.source_rows, values, feeding_rows=candidate.feeding_rows
-            ),
+            lambda values: RowResolver(context, candidate, values, row_phase=row_phase),
             dispatcher,
             counter,
         )
@@ -310,12 +310,59 @@ def _register_handler_paths(plan, counter: HandlerCounter) -> None:
         counter.register_derivation(derivation)
 
 
+def _record_candidates(
+    planned,
+    relation: RelationIndex,
+    index: BindingIndex,
+) -> list[CandidateRow]:
+    """Build one candidate per retained driver record, in driver order."""
+    return [
+        CandidateRow(
+            source_rows={planned.driver: values},
+            values={},
+            feeding_rows={planned.driver: [values]},
+            row_id=planned.declaration.id if planned.declaration else None,
+        )
+        for values in (dict(record.values) for record in relation.records)
+        if _evaluate_row_filter(planned, index, values)
+    ]
+
+
+def _grouped_filter(
+    planned,
+    candidate: CandidateRow,
+) -> bool:
+    """Evaluate a grouped template's filter over the completed candidate.
+
+    R001-8 runs it after every row derivation completes, so it corresponds to
+    filtering after a group reduction rather than selecting driver records.
+    """
+    if planned.filter_predicate is None:
+        return True
+    result = evaluate_predicate(
+        planned.filter_predicate, MappingResolver(candidate.values)
+    )
+    if isinstance(result, ConditionResult):
+        raise _ExecutionAbort(
+            [
+                ExecutionDiagnostic(
+                    phase=result.condition.phase,
+                    condition=result.condition.condition,
+                    spec_paths=(planned.filter_path or "rows.filter",),
+                    context=result.condition.context,
+                )
+            ]
+        )
+    assert isinstance(result, PredicateValue)
+    return result.value is TruthValue.TRUE
+
+
 def _key_space(
     plan,
     driver_rows: Sequence[dict[str, object]],
     driver: str,
     column_types: Mapping[str, str],
-    index: BindingIndex,
+    context: RelationalContext,
     dispatcher: ExpressionDispatcher,
     counter: HandlerCounter,
 ) -> tuple[
@@ -335,15 +382,13 @@ def _key_space(
     order: list[_KeyToken] = []
     key_values: dict[_KeyToken, tuple[object, ...]] = {}
     for position, driver_row in enumerate(driver_rows):
-        probe = _CandidateRow(
-            source_rows={driver: driver_row}, feeding_rows={}, values={}
-        )
+        probe = CandidateRow(source_rows={driver: driver_row}, values={})
         values = tuple(
             _evaluate_one(
                 key_plan,
                 column_types,
                 probe,
-                index,
+                context,
                 dispatcher,
                 counter,
                 plan.specification.keys,
@@ -364,56 +409,55 @@ def _key_space(
 
 def _construct_rows(
     plan,
-    sources: Mapping[str, SourceTable],
-    index: BindingIndex,
+    context: RelationalContext,
     dispatcher: ExpressionDispatcher,
     counter: HandlerCounter,
-) -> list[_CandidateRow]:
+) -> list[CandidateRow]:
+    """Run R001's row construction phase, in specification order."""
     column_types = {column.name: column.type for column in plan.specification.columns}
-    source_rows = {
-        dataset: runtime_rows(_typed_table(source))
-        for dataset, source in sources.items()
-    }
-    candidates: list[_CandidateRow] = []
+    constructed: list[CandidateRow] = []
     for planned in plan.rows:
+        relation = context.relations[planned.driver]
         if planned.declaration is None:
-            candidates.extend(
-                _construct_key_grain_rows(
-                    plan, planned, source_rows, column_types, index, dispatcher, counter
+            # R001-12: with no template the key table is the output row set.
+            constructed.extend(
+                _key_grain_candidates(
+                    plan, planned, relation, column_types, context, dispatcher, counter
                 )
             )
             continue
-        for driver_row in source_rows[planned.driver]:
-            if not _evaluate_row_filter(planned, index, driver_row):
-                continue
-            candidate = _CandidateRow(
-                source_rows={planned.driver: driver_row},
-                feeding_rows={planned.driver: [driver_row]},
-                values={},
-            )
+        if planned.grouped:
+            candidates = group_candidates(planned, relation)
+        else:
+            candidates = _record_candidates(planned, relation, context.bindings)
+        for candidate in candidates:
             for derivation in planned.derivations:
                 candidate.values[derivation.column] = _evaluate_one(
                     derivation,
                     column_types,
                     candidate,
-                    index,
+                    context,
                     dispatcher,
                     counter,
                     plan.specification.keys,
+                    row_phase=True,
                 )
-            candidates.append(candidate)
-    return candidates
+            if planned.grouped and not _grouped_filter(planned, candidate):
+                continue
+            constructed.append(candidate)
+    context.rows.extend(constructed)
+    return constructed
 
 
-def _construct_key_grain_rows(
+def _key_grain_candidates(
     plan,
     planned,
-    source_rows: Mapping[str, list[dict[str, object]]],
+    relation: RelationIndex,
     column_types: Mapping[str, str],
-    index: BindingIndex,
+    context: RelationalContext,
     dispatcher: ExpressionDispatcher,
     counter: HandlerCounter,
-) -> list[_CandidateRow]:
+) -> list[CandidateRow]:
     """Build one candidate per key combination (R001-12).
 
     With no `rows` template the filter cannot scope feeding records, so every
@@ -423,30 +467,31 @@ def _construct_key_grain_rows(
     key_names = list(plan.specification.keys)
     key_values, groups, order = _key_space(
         plan,
-        source_rows[planned.driver],
+        [dict(record.values) for record in relation.records],
         planned.driver,
         column_types,
-        index,
+        context,
         dispatcher,
         counter,
     )
-    candidates: list[_CandidateRow] = []
+    candidates: list[CandidateRow] = []
     for token in order:
         records = groups[token]
-        candidate = _CandidateRow(
+        candidate = CandidateRow(
             source_rows={planned.driver: records[0]},
-            feeding_rows={planned.driver: records},
             values=dict(zip(key_names, key_values[token], strict=True)),
+            feeding_rows={planned.driver: records},
         )
         for derivation in planned.derivations:
             candidate.values[derivation.column] = _evaluate_one(
                 derivation,
                 column_types,
                 candidate,
-                index,
+                context,
                 dispatcher,
                 counter,
                 plan.specification.keys,
+                row_phase=True,
             )
         candidates.append(candidate)
     return candidates
@@ -454,7 +499,7 @@ def _construct_key_grain_rows(
 
 def _run_column_checks(
     specification: Specification,
-    candidates: Sequence[_CandidateRow],
+    candidates: Sequence[CandidateRow],
     completed: set[str],
     checked: set[str],
     hooks: ExecutionHooks,
@@ -475,8 +520,8 @@ def _run_column_checks(
 
 def _derive_columns(
     plan,
-    candidates: list[_CandidateRow],
-    index: BindingIndex,
+    candidates: list[CandidateRow],
+    context: RelationalContext,
     dispatcher: ExpressionDispatcher,
     counter: HandlerCounter,
     hooks: ExecutionHooks,
@@ -502,7 +547,7 @@ def _derive_columns(
                 derivation,
                 column_types,
                 candidate,
-                index,
+                context,
                 dispatcher,
                 counter,
                 specification.keys,
@@ -579,18 +624,23 @@ def execute_specification(
 
     _register_handler_paths(plan, counter)
     try:
-        index = BindingIndex(plan.bindings, sources)
+        relations = build_relation_indexes(sources)
+        context = RelationalContext(
+            bindings=BindingIndex(plan.bindings, sources),
+            relations=relations,
+            lookups=RecordLookupSelector(plan.record_lookups, relations),
+            output_keys=tuple(specification.keys),
+        )
         candidates = _construct_rows(
             plan,
-            sources,
-            index,
+            context,
             selected_dispatcher,
             counter,
         )
         table = _derive_columns(
             plan,
             candidates,
-            index,
+            context,
             selected_dispatcher,
             counter,
             selected_hooks,

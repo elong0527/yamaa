@@ -62,10 +62,10 @@ table contract, and R004 predicate evaluation.
 
 ### Registered operations
 
-Scalar dispatch supports exactly these fourteen operations. Every other
-registered keyword returns an explicit `UnsupportedResult` until its owning
-runtime component is implemented, and an unregistered keyword fails schema
-validation before it reaches dispatch.
+Dispatch supports exactly these sixteen operations. Every other registered
+keyword returns an explicit `UnsupportedResult` until its owning runtime
+component is implemented, and an unregistered keyword fails schema validation
+before it reaches dispatch.
 
 | Operation | Rule | What it returns |
 |---|---|---|
@@ -81,6 +81,8 @@ validation before it reaches dispatch.
 | `str_concat` | R007 | its nested expression results, in order |
 | `str_template` | R012 | literal text with its placeholders interpolated |
 | `str_upper`, `str_lower` | R019 | the exact ASCII casing substitution |
+| `mapping_from` | R003, R007 | one right-side column reached by declared key pairs |
+| `aggregate` | R003, R007, R013 | one relation, or one partition, reduced to one value |
 
 `compute` reads the closed R010 grammar: the operators `+ - * /` with unary
 sign, and exactly `ABS`, `CEIL`, `FLOOR`, `TRUNC`, `SQRT`, `POWER`, `EXP`,
@@ -88,8 +90,16 @@ sign, and exactly `ABS`, `CEIL`, `FLOOR`, `TRUNC`, `SQRT`, `POWER`, `EXP`,
 `eval`: a formula is tokenized, parsed, and evaluated in the association it
 was written in, and a division by zero, a negative `SQRT`, a non-positive
 `LN`, an invalid `POWER`, or an integer overflow fails the run rather than
-becoming missing. The relational, temporal, window, aggregate, and project
-function families remain unsupported.
+becoming missing. The temporal, window, and project function families remain
+unsupported.
+
+`aggregate` reads the closed R013 grammar over that same arithmetic, with
+exactly the reducers `SUM`, `COUNT`, `MIN`, `MAX`, `MEAN`, and `ONLY`, plus
+`COUNT(D.*)` for records rather than values. `SUM` is a left fold in relation
+record order and `MEAN` is that fold divided by `COUNT`, so both round in
+binary64 exactly where the expression says they do. `MIN` and `MAX` read
+R019's text order and R016's chronological order; `ONLY` accepts one record
+and rejects several rather than choosing.
 
 Every regular expression in the package -- the R006 `pattern` descriptor, the
 R009 `matches` verification, and `str_extract` -- is read by `yamaa.regex`,
@@ -97,10 +107,10 @@ the single binding of the `regress` distribution R022 pins. Python `re` reads
 no pattern of the language. The shared vectors in `yaml/conformance/regex.yaml`
 are replayed through all three consumers.
 
-`yamaa.expressions` also exposes the two closed parsers directly -- the R010
-`parse_numeric` and the R012 `parse_template` -- each checked against the
-vectors in `yaml/grammar/`, which is the single source those grammars are
-written in.
+`yamaa.expressions` also exposes the closed parsers directly -- the R010
+`parse_numeric`, the R012 `parse_template`, and the R013 `parse_aggregate` --
+each checked against the vectors in `yaml/grammar/`, which is the single
+source those grammars are written in.
 
 ```python
 from yamaa.expressions import MappingResolver, evaluate_expression
@@ -274,17 +284,98 @@ work is delegated to the pure hooks exposed by the verification and I/O
 components.
 
 Execution supports every operation in the registered table above, along with
-ungrouped row filters, explicit absent-source defaults, and earlier
-output-column references. Grouped rows, record lookups, inheritance, and the
-relational, temporal, window, aggregate, and project function families return
-an explicit unsupported result rather than a fabricated output. Execution
-never reads an `expected/` artifact.
+record-driven and grouped row templates, their filters, record lookups,
+explicit absent-source defaults, and earlier output-column references.
+Inheritance and the temporal, window, and project function families return an
+explicit unsupported result rather than a fabricated output. Execution never
+reads an `expected/` artifact.
 
 Run the focused tests from the repository root:
 
 ```bash
 uv run --project python --isolated --extra test pytest \
   python/tests/test_domain.py python/tests/planning python/tests/runtime
+```
+
+## Keyed joins, record lookups, and reductions
+
+A qualified source naming another dataset joins it to the constructed row on
+the output keys both sides carry, in `keys` order:
+
+```yaml
+- name: TRT01A
+  type: str
+  derivation:
+    source:
+      variable: EX.EXTRT
+      multiple_matches: {order_by: [EX.EXSTDTC, EX.EXSEQ], keep: first}
+```
+
+`yamaa.runtime.joins` reads each declared source once into ordered typed
+records and answers every operation that reaches them from that one reading,
+so a left join, a `mapping_from` lookup, an R013 reduction, an R015 record
+lookup, and grouped row construction cannot disagree about which records a
+key reaches or which record an order puts first. Its `partition_records`,
+`order_records`, and `compare_values` are the typed partition and order
+helpers, published for the window component.
+
+The join is many-to-one: it preserves left row count and order, produces
+missing where nothing matched, and refuses to choose among several matches
+unless the specification declared how. A right-side record whose applicable
+key is missing matches nothing, so a subject id reused under a second study
+never reads the first study's records, and a right-side record with no left
+row creates none.
+
+`yamaa.runtime.lookups` performs the R015 match once and names the record, so
+the columns that read it are plainly reading one record:
+
+```yaml
+record_lookups:
+  - id: LASTEX
+    dataset: EX
+    filter: "EX.EXENDTC IS NOT NULL"
+    order_by: [EX.EXENDTC, EX.EXSEQ]
+    keep: last
+```
+
+An incomplete match value is answered before a record is looked for and an
+unmatched key after, and the two stay disjoint. Omitting `unmatched` keeps
+the behavior of the match the lookup performs: missing when it matches on
+output keys, fatal when it declares its own `source` and `key`.
+
+`yamaa.runtime.rows` owns grouped row construction. A template with
+`group_by` partitions the complete driver relation, orders the groups by the
+position of their first record, and appends one candidate per group only
+where the template's filter is `TRUE` over its completed columns. Inside such
+a template a driver field is a scalar only when the grain declares it; every
+other field is read through an aggregate over the group's records.
+
+An output key and the same-named right-side column must already carry one
+comparable type. R007-19 converts no operand between an operation's inputs
+and R007-31 makes comparability a property of the runtime type, so a
+disagreement is reported under R007-38 rather than quietly matching nothing.
+R003 does not yet say this in its own words; #170 carries the proposed
+wording.
+
+Because a join infers its keys, the plan states what it inferred.
+`ExecutionPlan.resolved_joins` names, for each qualified source and each
+reduction, the dataset it reaches and the columns it matches on -- the
+coarser grain when one is declared, the applicable keys otherwise -- and
+`ExecutionPlan.record_lookups` says the same for each named record:
+
+```python
+plan = plan_execution(specification, sources)
+for join in plan.resolved_joins:
+    print(join.spec_path, join.dataset, join.keys)
+```
+
+Run this component's focused tests from the repository root:
+
+```bash
+uv run --project python --isolated --extra test pytest \
+  python/tests/expressions/test_aggregate.py python/tests/runtime/test_joins.py \
+  python/tests/runtime/test_lookups.py \
+  python/tests/runtime/test_relational_examples.py python/tests/planning
 ```
 
 ## Verified tables and published artifacts
