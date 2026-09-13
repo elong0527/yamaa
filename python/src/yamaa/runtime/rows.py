@@ -729,7 +729,7 @@ def group_candidates(
                     planned.driver: dict(zip(fields, key, strict=True)),
                 },
                 values={},
-                # R001-12a collects a direct read across the records feeding
+                # R001-12b collects a direct read across the records feeding
                 # one key combination. A grouped candidate has no such read:
                 # its scalars are the grain, and everything else reduces.
                 feeding_rows={},

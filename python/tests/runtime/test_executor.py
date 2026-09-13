@@ -4,6 +4,7 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+import yaml
 
 from yamaa.io import (
     ProjectResources,
@@ -108,6 +109,7 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
         == (DM_EXAMPLE / "expected/dm.csv").read_bytes()
     )
     assert [(item.spec_path, item.count) for item in result.handler_counts] == [
+        ("columns.SEXRAW.derivation.source.missing", 0),
         ("columns.SEX.derivation.mapping.missing", 1),
         ("columns.SEX.derivation.mapping.unmapped", 1),
         ("columns.AGE.derivation.source.missing", 2),
@@ -156,6 +158,7 @@ def test_column_enrichment_keeps_the_constructed_row_count() -> None:
         "STUDYID",
         "USUBJID",
         "SUBJID",
+        "SEXRAW",
         "SEX",
         "AGE",
         "ARM",
@@ -201,6 +204,7 @@ def test_verification_and_output_hooks_run_in_normative_order() -> None:
         "column:STUDYID",
         "column:USUBJID",
         "column:SUBJID",
+        "column:SEXRAW",
         "column:SEX",
         "column:AGE",
         "column:ARM",
@@ -284,6 +288,42 @@ def test_key_grain_without_rows_emits_one_row_per_key_combination() -> None:
     assert result.artifact.frame.rows() == [("one", "kept"), ("two", "kept")]
 
 
+def test_key_grain_reads_a_field_constant_over_the_records_of_one_key() -> None:
+    def derive(expression):
+        return HandledExpression(value=Expression(root=expression))
+
+    specification = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        datasets={"SRC": DatasetSource(path="input/source.csv")},
+        base="SRC",
+        keys=["GRP"],
+        output=Output(path="out.csv", columns=["GRP", "LABEL"]),
+        columns=[
+            Column(name="GRP", type="str", derivation=derive({"source": "SRC.G"})),
+            Column(name="LABEL", type="str", derivation=derive({"source": "SRC.L"})),
+        ],
+    )
+    sources = {
+        "SRC": TypedTable(
+            columns=(
+                TypedColumn(name="G", type="str"),
+                TypedColumn(name="L", type="str"),
+            ),
+            frame=pl.DataFrame(
+                # Three records of one subject repeat the subject's label.
+                {"G": ["one", "one", "one"], "L": ["kept", "kept", "kept"]},
+                schema={"G": pl.String, "L": pl.String},
+            ),
+        )
+    }
+
+    result = execute_specification(specification, sources)
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.artifact.frame.rows() == [("one", "kept")]
+
+
 def test_key_grain_without_rows_rejects_multiple_values_per_key() -> None:
     def derive(expression):
         return HandledExpression(value=Expression(root=expression))
@@ -322,7 +362,7 @@ def test_key_grain_without_rows_rejects_multiple_values_per_key() -> None:
     assert diagnostic.spec_paths == ("columns.VALUE.derivation.source",)
     assert diagnostic.requirement == "R001-44"
     assert diagnostic.context["identifier"] == "SRC.X"
-    assert diagnostic.context["match_count"] == 2
+    assert diagnostic.context["value_count"] == 2
     assert diagnostic.context["keys"] == [{"GRP": "one"}]
 
 
@@ -437,6 +477,40 @@ def test_source_provider_diagnostics_enter_the_execution_result() -> None:
         "context": {"dataset": "ODM"},
     }
     assert result.handler_counts == ()
+
+
+# Committed grain contracts: how many rows a specification emits is the
+# declared keys' answer (R001-12), so the two ways a key combination can
+# still come out wrong each keep an example pinning the error it raises.
+# test_examples.py compares every negative example's `requirement`; these
+# two also pin the phase, condition, spec paths and reported keys, which is
+# what tells the output gate and the derivation failure apart.
+@pytest.mark.parametrize(
+    "name",
+    ["negative-output-duplicate-subject", "negative-keys-conflicting-values"],
+)
+def test_a_committed_grain_error_contract_is_reproduced(name: str) -> None:
+    directory = EXAMPLES / name
+    committed = yaml.safe_load(
+        (directory / "expected" / "error.yaml").read_text("utf-8")
+    )
+    specification = load_specification(
+        directory / "spec.yaml", SCHEMA_ROOT
+    ).specification
+    resources = ProjectResources(directory)
+
+    result = execute_with_source_provider(
+        specification,
+        lambda datasets: load_source_tables(datasets, resources),
+    )
+
+    assert isinstance(result, ExecutionFailure)
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.phase == committed["phase"]
+    assert diagnostic.condition == committed["condition"]
+    assert list(diagnostic.spec_paths) == committed["spec_paths"]
+    assert diagnostic.requirement == committed["requirement"]
+    assert committed["context"].items() <= diagnostic.context.items()
 
 
 def test_window_key_numbers_partitions_after_scalar_keys() -> None:

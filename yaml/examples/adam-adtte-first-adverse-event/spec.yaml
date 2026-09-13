@@ -156,8 +156,3 @@ columns:
           - when: "AEDT IS NOT NULL"
             then:
               source: AESEQ
-
-rows:
-  - id: TTE
-    dataset: ADSL
-    derivations: {}

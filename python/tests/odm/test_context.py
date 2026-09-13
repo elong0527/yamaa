@@ -5,7 +5,14 @@ from pathlib import Path
 from yamaa.expressions import FailedResolution, ResolvedValue, evaluate_expression
 from yamaa.io import ProjectResources, load_source_table, load_source_tables
 from yamaa.io.polars import frame_from_values, runtime_rows
-from yamaa.models import MISSING, ConditionResult, TypedColumn, TypedTable, ValueResult
+from yamaa.models import (
+    MISSING,
+    ConditionResult,
+    DateValue,
+    TypedColumn,
+    TypedTable,
+    ValueResult,
+)
 from yamaa.odm import ODM_CONTEXT_COLUMNS, BindingIndex, build_binding_plan
 from yamaa.specification import load_specification
 from yamaa.specification.models import (
@@ -495,3 +502,46 @@ def test_index_batching_preserves_source_order_tie_breaks() -> None:
     ]
 
     assert results == [ValueResult(value="three", handled_by="multiple_matches")] * 5
+
+
+def test_one_value_on_several_records_of_a_key_reads_as_that_value() -> None:
+    # R001-12b counts values, not records: the visit date is collected on
+    # every item record of the subject, and two datings of one day are one
+    # value under R016-35.
+    table = _table(
+        ["StudyOID", "SubjectKey", "VISITDT", "ItemOID", "Value"],
+        [
+            ["S1", "001", "2025-01-02", "IT.A", "a"],
+            ["S1", "001", "2025-01-02", "IT.B", "b"],
+        ],
+        {"VISITDT": "date"},
+    )
+    feeding = runtime_rows(table)
+    context = _index(table).context({"ODM": feeding[0]}, feeding_rows={"ODM": feeding})
+
+    result = evaluate_expression({"source": "ODM.VISITDT"}, context)
+
+    assert result == ValueResult(value=DateValue(year=2025, month=1, day=2))
+
+
+def test_two_values_on_the_records_of_a_key_fail_and_count_the_values() -> None:
+    table = _table(
+        ["StudyOID", "SubjectKey", "VISITDT", "ItemOID", "Value"],
+        [
+            ["S1", "001", "2025-01-02", "IT.A", "a"],
+            ["S1", "001", "2025-01-03", "IT.B", "b"],
+        ],
+        {"VISITDT": "date"},
+    )
+    feeding = runtime_rows(table)
+    context = _index(table).context({"ODM": feeding[0]}, feeding_rows={"ODM": feeding})
+
+    result = evaluate_expression({"source": "ODM.VISITDT"}, context)
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "multiple_values_per_key"
+    assert result.condition.requirement == "R001-44"
+    assert result.condition.context == {
+        "identifier": "ODM.VISITDT",
+        "value_count": 2,
+    }

@@ -16,12 +16,13 @@ sex (`SEX`).
 - `SEX` would be the sex collected in the demographics records,
   carried into the result unchanged.
 
-**Note:** one subject was entered twice with different ages, so the
-two records disagree on the age the result should carry. Keeping
-either record, or merging the two, would report an age the
-collected data does not support. The expected file records the
-completed rows presented to that check, but the repetition still
-rejects the run and no artifact is accepted.
+**Note:** the result is built one row per collected record, and one
+subject was entered twice with different ages, so that subject
+reaches the result twice and the two records disagree on the age it
+should carry. Keeping either record, or merging the two, would
+report an age the collected data does not support. The expected file
+records the completed rows presented to that check, but the repeated
+subject still rejects the run and no artifact is accepted.
 
 **Standard:** ADaM | **Domain:** ADSL
 

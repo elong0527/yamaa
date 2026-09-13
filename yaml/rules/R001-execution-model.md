@@ -72,21 +72,34 @@ explicit planning relation at that grain and may be enriched from collected
 relations through record lookups. Dynamically counted expansion must happen
 upstream and its expanded records enter the specification as ordinary input.
 
-**R001-12.** Row construction first derives the distinct combination of `keys`
-over the driver records, in first-appearance order. That key table is
-standalone: one row per unique key combination, with no link back to the
-driver records. When `rows` is absent or empty, the key table is the output
-row set. When `rows` is present, each row template is one section: its filter
-selects feeding records, each surviving record yields its rows for that key
-combination, and the sections concatenate. `base` is required when `rows` is
-absent or empty, unless `datasets` declares exactly one dataset, which
-drives. `keys` must be declared.
+**R001-12.** The declared `keys` state the output grain, and `keys` must be
+declared. When `rows` is absent or empty, row construction derives the
+distinct combination of `keys` over the driver records, in first-appearance
+order, and that key table is the output row set. The key table is standalone:
+one row per unique key combination, with no link back to the driver records,
+so the records a key combination was derived from decide its column values
+and never how many rows the artifact carries. `base` is required in that
+case, unless `datasets` declares exactly one dataset, which drives.
 
-**R001-12a.** A column derivation must yield exactly one value per row: zero
-values is missing, more than one value for one key combination is a failure
-under R001-44. In a specification without `rows`, a key column derivation
-must not depend on a non-key output column (R001-43); keys are derived before
-any row logic runs.
+**R001-12a.** When `rows` is present, the templates construct the rows
+instead: each template is one section over the records its `filter` keeps,
+every surviving record or group yields its row, and the sections concatenate
+in specification order. Templates therefore build a grain finer than the
+driver records only through the constructs R001-10 permits, and the grain
+they build must still be the one `keys` states: repeating a key combination
+fails at the output gate under R005-52. A `filter` states which rows the
+artifact carries and never which record of a key combination stands for it,
+so a template whose work is to leave one of the several driver records
+sharing a key combination is writing the grain `keys` already states, and
+that specification omits `rows` instead.
+
+**R001-12b.** A column derivation must yield exactly one value per row, and
+it counts values rather than the records carrying them: no value is missing,
+repeated readings of one value are that one value, and two records of one key
+combination carrying different values are two values, which fails under
+R001-44. In a specification without `rows`, a key column derivation must not
+depend on a non-key output column (R001-43); keys are derived before any row
+logic runs.
 
 ## Expression evaluation
 
@@ -199,4 +212,5 @@ evaluation order to mapping order or to repeated reads of one partition.
   depending on a non-key output column: fail. Keys are derived before any row
   logic runs.
 - **R001-44.** A column derivation yielding more than one value for one key
-  combination: fail and report the column and the keys.
+  combination: fail and report the column, how many values it yielded, and
+  the keys.

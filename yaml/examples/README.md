@@ -171,6 +171,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-greatest-incomparable-sources`](negative-greatest-incomparable-sources/) | reject a last-known-alive date taken from a day number |
 | [`negative-group-count-without-id`](negative-group-count-without-id/) | reject an unnamed baseline-count rule |
 | [`negative-ingest-unparseable-field`](negative-ingest-unparseable-field/) | reject a dose recorded with its unit |
+| [`negative-keys-conflicting-values`](negative-keys-conflicting-values/) | reject two ages collected for one subject |
 | [`negative-keys-internal-column`](negative-keys-internal-column/) | reject a site-scoped subject identity |
 | [`negative-keys-missing-value`](negative-keys-missing-value/) | reject a record that no analysis visit identifies |
 | [`negative-least-incomparable-sources`](negative-least-incomparable-sources/) | reject an earliest-alive date taken from a day number |

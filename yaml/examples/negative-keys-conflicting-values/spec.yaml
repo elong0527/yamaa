@@ -32,7 +32,3 @@ columns:
     label: Sex
     derivation:
       source: DM.SEX
-
-rows:
-  - id: record
-    derivations: {}
