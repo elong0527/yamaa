@@ -111,6 +111,9 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
 .yaml-literal { color: #995213; }
 .code-line.is-target { background: #deeddf; }
 .plain-file { margin: 0; padding: 10px 18px 18px; overflow: auto; font-size: 14px; line-height: 1.6; }
+.comments-panel { margin-top: 22px; }
+.comments-body { padding: 16px 22px 8px; }
+.comments-body noscript p { margin: 0 0 8px; }
 .page-footer { padding: 16px 28px; color: #64766b; font-size: 12px; gap: 10px; }
 .example-nav { display: flex; align-items: center; gap: 12px; }
 .example-nav a { color: #0c5e4b; }
@@ -136,6 +139,7 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
   h1 { font-size: 25px; }
   .dashboard { padding: 12px 12px 0; }
   .prose { padding: 14px 18px; }
+  .comments-body { padding: 12px 12px 4px; }
   .comparison-bar { gap: 8px; flex-wrap: wrap; }
   .subject-control { gap: 6px; }
   .subject-control label { font-size: 12px; }
@@ -146,7 +150,7 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
 @media print {
   body { background: white; }
   .dashboard { padding: 0; }
-  .comparison-bar, .code-toolbar, .panel-resizer, .page-footer { display: none !important; }
+  .comparison-bar, .code-toolbar, .panel-resizer, .page-footer, .comments-panel { display: none !important; }
   .workbench { display: block; }
   .schema-panel, .schema-panel[hidden] { position: static; display: block !important; height: auto; margin: 16px 0; }
   .panel, .code-scroll, .table-scroll { overflow: visible; }

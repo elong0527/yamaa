@@ -68,7 +68,7 @@ class DashboardTests(unittest.TestCase):
             expected_cells.extend(value for row in rows[1:] for value in row)
         self.assertEqual(content.cells, expected_cells)
         self.assertEqual(content.code, (EXAMPLE / "spec.yaml").read_text().splitlines())
-        self.assertEqual(content.sections, ["readme", "specification", "inputs", "outputs"])
+        self.assertEqual(content.sections, ["readme", "specification", "inputs", "outputs", "comments"])
         self.assertEqual(content.downloads, [])
         self.assertEqual(content.tabs, [])
         self.assertEqual([pane["aria-label"] for pane in content.file_panes], ["input/ae.csv", "input/dm.csv", "expected/adae.csv"])
@@ -136,6 +136,14 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('role="separator" aria-label="Resize specification panel"', page)
         self.assertNotIn('id="section-select"', page)
         self.assertNotIn("Jump to section", page)
+
+    def test_comments_map_to_a_stable_discussion_per_example(self):
+        page = generate.render_example(EXAMPLE).decode("ascii")
+        self.assertEqual(page.count('src="https://giscus.app/client.js"'), 1)
+        self.assertIn('data-mapping="specific" data-term="yaml/examples/adam-adae-death-outcome" data-strict="1"', page)
+        self.assertIn('data-repo="elong0527/yamaa"', page)
+        other = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
+        self.assertIn('data-term="yaml/examples/sdtm-dm-basic"', other)
 
     def test_code_panel_lists_example_scripts(self):
         example = generate.EXAMPLES / "sdtm-dm-basic"
