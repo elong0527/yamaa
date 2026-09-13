@@ -60,7 +60,7 @@ rows:
 
   - id: derived_bsa
     group_by: [ADVSIN.STUDYID, ADVSIN.USUBJID, ADVSIN.VISIT]
-    filter: "HEIGHT_VAL IS NOT NULL AND WEIGHT_VAL IS NOT NULL"
+    filter: HEIGHT_VAL IS NOT NULL AND WEIGHT_VAL IS NOT NULL
     derivations:
       STUDYID: {source: ADVSIN.STUDYID}
       USUBJID: {source: ADVSIN.USUBJID}
@@ -68,11 +68,11 @@ rows:
       PARAM: {literal: Body Surface Area (m^2)}
       HEIGHT_VAL:
         aggregate:
-          filter: "ADVSIN.PARAMCD = 'HEIGHT'"
+          filter: ADVSIN.PARAMCD = 'HEIGHT'
           expr: "ONLY(ADVSIN.AVAL)"
       WEIGHT_VAL:
         aggregate:
-          filter: "ADVSIN.PARAMCD = 'WEIGHT'"
+          filter: ADVSIN.PARAMCD = 'WEIGHT'
           expr: "ONLY(ADVSIN.AVAL)"
       AVAL:
         compute:

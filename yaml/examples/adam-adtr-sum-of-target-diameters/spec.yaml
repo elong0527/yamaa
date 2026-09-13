@@ -59,7 +59,7 @@ columns:
     label: Analysis Value
     derivation:
       aggregate:
-        filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
+        filter: TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'
         expr: "SUM(TR.TRSTRESN)"
 
   - name: NMEAS
@@ -67,7 +67,7 @@ columns:
     label: Number of Measured Target Lesions
     derivation:
       aggregate:
-        filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
+        filter: TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'
         expr: "COUNT(TR.TRSTRESN)"
 
   - name: NTARGET
@@ -75,7 +75,7 @@ columns:
     label: Number of Target Lesions
     derivation:
       aggregate:
-        filter: "TU.TUGRPID = 'TARGET'"
+        filter: TU.TUGRPID = 'TARGET'
         expr: "COUNT(TU.TULNKID)"
 
   - name: ANL01FL

@@ -79,7 +79,7 @@ columns:
           - {variable: ASEVN, direction: desc}
           - ASTDT
           - CESEQ
-        filter: "ASEVN IS NOT NULL"
+        filter: ASEVN IS NOT NULL
 
   - name: AOCCFL
     type: str

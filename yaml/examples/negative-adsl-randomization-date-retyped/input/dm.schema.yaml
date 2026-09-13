@@ -30,5 +30,5 @@ columns:
 
 rows:
   - id: subject
-    filter: "ODM.ItemOID = 'IT.DM.RANDDT'"
+    filter: ODM.ItemOID = 'IT.DM.RANDDT'
     derivations: {}

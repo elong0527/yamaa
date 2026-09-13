@@ -49,4 +49,4 @@ columns:
       row_number:
         group_by: [STUDYID, USUBJID]
         order_by: [ASTDT, AESEQ]
-        filter: "AESER = 'Y'"
+        filter: AESER = 'Y'

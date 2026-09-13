@@ -103,7 +103,7 @@ columns:
 
 rows:
   - id: reported-result
-    filter: "ODM.ItemOID = 'IT.LB.RESULT' AND ODM.Value IS NOT NULL"
+    filter: ODM.ItemOID = 'IT.LB.RESULT' AND ODM.Value IS NOT NULL
     derivations: {}
 
 verifications:

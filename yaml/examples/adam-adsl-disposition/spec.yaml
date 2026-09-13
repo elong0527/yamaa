@@ -28,7 +28,7 @@ columns:
     label: End of Study Date
     derivation:
       aggregate:
-        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
+        filter: DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL
         expr: "MAX(DS.DSSTDTC)"
 
   - name: EOSDECOD
@@ -40,7 +40,7 @@ columns:
         multiple_matches:
           order_by: [DS.DSSTDTC, DS.DSSEQ]
           keep: last
-          filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
+          filter: DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL
 
   - name: EOSREAS
     type: str
@@ -51,7 +51,7 @@ columns:
         multiple_matches:
           order_by: [DS.DSSTDTC, DS.DSSEQ]
           keep: last
-          filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
+          filter: DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL
 
   - name: EOSSTT
     type: str

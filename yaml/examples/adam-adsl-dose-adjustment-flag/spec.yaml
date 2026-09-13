@@ -30,7 +30,7 @@ columns:
     label: Dose Adjustment Count in EX
     derivation:
       aggregate:
-        filter: "EX.EXADJ IS NOT NULL"
+        filter: EX.EXADJ IS NOT NULL
         expr: "COUNT(EX.USUBJID)"
 
   - name: EX_ANY_CNT
@@ -45,7 +45,7 @@ columns:
     label: Dose Adjustment Count in EC
     derivation:
       aggregate:
-        filter: "EC.ECADJ IS NOT NULL"
+        filter: EC.ECADJ IS NOT NULL
         expr: "COUNT(EC.USUBJID)"
 
   - name: EC_ANY_CNT
@@ -60,7 +60,7 @@ columns:
     label: Dose Adjustment Count in FA
     derivation:
       aggregate:
-        filter: "FA.FATESTCD = 'OCCUR' AND FA.FAOBJ = 'DOSE ADJUSTMENT' AND FA.FASTRESC = 'Y'"
+        filter: FA.FATESTCD = 'OCCUR' AND FA.FAOBJ = 'DOSE ADJUSTMENT' AND FA.FASTRESC = 'Y'
         expr: "COUNT(FA.USUBJID)"
 
   - name: FA_ANY_CNT

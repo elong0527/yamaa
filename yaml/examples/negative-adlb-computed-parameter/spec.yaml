@@ -47,7 +47,7 @@ columns:
     label: Alanine Aminotransferase Analysis Value
     derivation:
       aggregate:
-        filter: "PARAMCD = 'ALT'"
+        filter: PARAMCD = 'ALT'
         group_by: [STUDYID, USUBJID, ADT]
         expr: "MAX(AVAL)"
 
@@ -56,7 +56,7 @@ columns:
     label: Aspartate Aminotransferase Analysis Value
     derivation:
       aggregate:
-        filter: "PARAMCD = 'AST'"
+        filter: PARAMCD = 'AST'
         group_by: [STUDYID, USUBJID, ADT]
         expr: "MAX(AVAL)"
 
@@ -75,7 +75,7 @@ columns:
 
 rows:
   - id: alt
-    filter: "LB.LBTESTCD = 'ALT'"
+    filter: LB.LBTESTCD = 'ALT'
     derivations:
       PARAMCD:
         literal: ALT
@@ -85,7 +85,7 @@ rows:
         source: LB.LBSTRESN
 
   - id: ast
-    filter: "LB.LBTESTCD = 'AST'"
+    filter: LB.LBTESTCD = 'AST'
     derivations:
       PARAMCD:
         literal: AST
@@ -95,7 +95,7 @@ rows:
         source: LB.LBSTRESN
 
   - id: ast_alt_ratio
-    filter: "LB.LBTESTCD = 'ALT'"
+    filter: LB.LBTESTCD = 'ALT'
     derivations:
       PARAMCD:
         literal: ASTALT

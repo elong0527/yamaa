@@ -11,7 +11,7 @@ keys: [STUDYID, USUBJID]
 record_lookups:
   - id: LASTEX
     dataset: EX
-    filter: "EX.EXENDTC IS NOT NULL"
+    filter: EX.EXENDTC IS NOT NULL
     order_by: [EX.EXENDTC, EX.EXSEQ]
     keep: last
 
@@ -51,7 +51,7 @@ columns:
     label: Date/Time of First Study Treatment
     derivation:
       aggregate:
-        filter: "EX.EXSTDTC IS NOT NULL"
+        filter: EX.EXSTDTC IS NOT NULL
         expr: "MIN(EX.EXSTDTC)"
 
   - name: RFXENDTC
@@ -77,7 +77,7 @@ columns:
     label: Latest Disposition Date
     derivation:
       aggregate:
-        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
+        filter: DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL
         expr: "MAX(DS.DSSTDTC)"
 
   - name: AEDT0
@@ -85,7 +85,7 @@ columns:
     label: Latest Adverse Event End Date
     derivation:
       aggregate:
-        filter: "AE.AEENDTC IS NOT NULL"
+        filter: AE.AEENDTC IS NOT NULL
         expr: "MAX(AE.AEENDTC)"
 
   - name: RFENDTC

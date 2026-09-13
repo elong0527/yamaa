@@ -54,6 +54,6 @@ verifications:
   - row_count:
       id: one-baseline-record-per-subject-and-parameter
       group_by: [STUDYID, USUBJID, PARAMCD]
-      filter: "ABLFL = 'Y'"
+      filter: ABLFL = 'Y'
       min: 1
       max: 1

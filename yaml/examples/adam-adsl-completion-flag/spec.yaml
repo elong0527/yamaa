@@ -9,7 +9,7 @@ keys: [STUDYID, USUBJID]
 record_lookups:
   - id: COMPLT
     dataset: DS
-    filter: "DS.DSDECOD = 'COMPLETED'"
+    filter: DS.DSDECOD = 'COMPLETED'
     unmatched: missing
 
 output:

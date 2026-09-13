@@ -11,7 +11,7 @@ record_lookups:
     dataset: QUERY
     source: [AEDECOD]
     key: [TERM]
-    filter: "QUERY.PREFIX = 'SMQ01'"
+    filter: QUERY.PREFIX = 'SMQ01'
     incomplete: missing
     unmatched: missing
 
@@ -19,7 +19,7 @@ record_lookups:
     dataset: QUERY
     source: [AEDECOD]
     key: [TERM]
-    filter: "QUERY.PREFIX = 'SMQ02'"
+    filter: QUERY.PREFIX = 'SMQ02'
     incomplete: missing
     unmatched: missing
 

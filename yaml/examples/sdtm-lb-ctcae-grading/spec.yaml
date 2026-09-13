@@ -63,7 +63,7 @@ columns:
 
 rows:
   - id: neutrophils
-    filter: "LB_RAW.LBTESTCD = 'ANC'"
+    filter: LB_RAW.LBTESTCD = 'ANC'
     derivations:
       ATOXGR:
         cut:
@@ -73,7 +73,7 @@ rows:
           right: false
 
   - id: haemoglobin-male
-    filter: "LB_RAW.LBTESTCD = 'HGB' AND LB_RAW.SEX = 'M'"
+    filter: LB_RAW.LBTESTCD = 'HGB' AND LB_RAW.SEX = 'M'
     derivations:
       ATOXGR:
         cut:
@@ -83,7 +83,7 @@ rows:
           right: false
 
   - id: haemoglobin-female
-    filter: "LB_RAW.LBTESTCD = 'HGB' AND LB_RAW.SEX = 'F'"
+    filter: LB_RAW.LBTESTCD = 'HGB' AND LB_RAW.SEX = 'F'
     derivations:
       ATOXGR:
         cut:

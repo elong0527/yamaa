@@ -79,19 +79,19 @@ columns:
 
 rows:
   - id: dose_1
-    filter: "EX.EXDOSCNT >= 1"
+    filter: EX.EXDOSCNT >= 1
     derivations:
       ADOSEN:
         literal: 1
 
   - id: dose_2
-    filter: "EX.EXDOSCNT >= 2"
+    filter: EX.EXDOSCNT >= 2
     derivations:
       ADOSEN:
         literal: 2
 
   - id: dose_3
-    filter: "EX.EXDOSCNT >= 3"
+    filter: EX.EXDOSCNT >= 3
     derivations:
       ADOSEN:
         literal: 3

@@ -94,7 +94,7 @@ columns:
           - ADIST
           - {variable: ADY, direction: desc}
           - LBSEQ
-        filter: "AVISIT IS NOT NULL"
+        filter: AVISIT IS NOT NULL
 
   - name: ANL01FL
     type: str

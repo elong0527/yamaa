@@ -99,7 +99,7 @@ columns:
 
 rows:
   - id: alt
-    filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
+    filter: LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL
     derivations:
       PARAMCD:
         literal: ALT
@@ -111,7 +111,7 @@ rows:
         source: LB.LBSTRESU
 
   - id: alt_si
-    filter: "LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL"
+    filter: LB.LBTESTCD = 'ALT' AND LB.LBSTRESN IS NOT NULL
     derivations:
       PARAMCD:
         literal: ALTSI
@@ -124,7 +124,7 @@ rows:
         literal: ukat/L
 
   - id: ast
-    filter: "LB.LBTESTCD = 'AST' AND LB.LBSTRESN IS NOT NULL"
+    filter: LB.LBTESTCD = 'AST' AND LB.LBSTRESN IS NOT NULL
     derivations:
       PARAMCD:
         literal: AST
@@ -144,6 +144,6 @@ verifications:
   - row_count:
       id: one-baseline-record-per-subject-and-parameter
       group_by: [STUDYID, USUBJID, PARAMCD]
-      filter: "ABLFL = 'Y'"
+      filter: ABLFL = 'Y'
       min: 1
       max: 1

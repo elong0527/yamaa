@@ -16,7 +16,7 @@ columns:
     label: Date of First Exposure to Treatment
     derivation:
       aggregate:
-        filter: "EX.EXSTDTC IS NOT NULL"
+        filter: EX.EXSTDTC IS NOT NULL
         expr: "MIN(EX.EXSTDTC)"
 
   - name: SAFFL

@@ -40,7 +40,7 @@ columns:
 
 rows:
   - id: serious
-    filter: "AE.AESER = 'Y'"
+    filter: AE.AESER = 'Y'
     derivations:
       AESER:
         literal: "Y"

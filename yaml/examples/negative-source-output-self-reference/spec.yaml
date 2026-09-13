@@ -81,7 +81,7 @@ columns:
 
 rows:
   - id: alt
-    filter: "LB.LBTESTCD = 'ALT'"
+    filter: LB.LBTESTCD = 'ALT'
     derivations:
       PARAMCD:
         literal: ALT
@@ -93,7 +93,7 @@ rows:
         literal: null
 
   - id: ast
-    filter: "LB.LBTESTCD = 'AST'"
+    filter: LB.LBTESTCD = 'AST'
     derivations:
       PARAMCD:
         literal: AST
@@ -105,7 +105,7 @@ rows:
         literal: null
 
   - id: ast_alt_ratio
-    filter: "LB.LBTESTCD = 'ALT'"
+    filter: LB.LBTESTCD = 'ALT'
     derivations:
       PARAMCD:
         literal: ASTALT

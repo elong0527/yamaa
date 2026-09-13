@@ -32,7 +32,7 @@ columns:
         multiple_matches:
           order_by: [CM.CMSTDTC, CM.CMSEQ]
           keep: first
-          filter: "CM.CMCAT = 'RESCUE MEDICATION'"
+          filter: CM.CMCAT = 'RESCUE MEDICATION'
 
 verifications:
   - row_count:

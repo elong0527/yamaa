@@ -80,7 +80,7 @@ columns:
 
 rows:
   - id: family_history
-    filter: "MH_SUPP_RAW.MHFAMHX IS NOT NULL"
+    filter: MH_SUPP_RAW.MHFAMHX IS NOT NULL
     derivations:
       QNAM:
         literal: MHFAMHX
@@ -90,7 +90,7 @@ rows:
         source: MH_SUPP_RAW.MHFAMHX
 
   - id: medical_record_confirmation
-    filter: "MH_SUPP_RAW.MHCONF IS NOT NULL"
+    filter: MH_SUPP_RAW.MHCONF IS NOT NULL
     derivations:
       QNAM:
         literal: MHCONF

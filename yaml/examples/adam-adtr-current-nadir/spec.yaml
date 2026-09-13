@@ -74,7 +74,7 @@ columns:
     label: Nadir Sum of Target Lesion Diameters
     derivation:
       aggregate:
-        filter: "ADTRPRE.ANL01FL = 'Y'"
+        filter: ADTRPRE.ANL01FL = 'Y'
         between:
           value: ADT
           lower: ADTRPRE.ADT

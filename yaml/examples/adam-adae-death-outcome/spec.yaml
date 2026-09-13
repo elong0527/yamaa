@@ -11,7 +11,7 @@ record_lookups:
     dataset: AE
     source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
-    filter: "AE.AEOUT = 'FATAL'"
+    filter: AE.AEOUT = 'FATAL'
     unmatched: missing
 
 output:

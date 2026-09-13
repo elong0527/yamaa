@@ -67,7 +67,7 @@ columns:
       row_number:
         group_by: [STUDYID, USUBJID]
         order_by: [ASTDTM, AESEQ]
-        filter: "TRTEMFL = 'Y'"
+        filter: TRTEMFL = 'Y'
 
   - name: AOCCFL
     type: str

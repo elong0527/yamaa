@@ -60,7 +60,7 @@ rows:
 
   - id: derived_map
     group_by: [ADVSIN.STUDYID, ADVSIN.USUBJID, ADVSIN.VISIT]
-    filter: "SYSBP_VAL IS NOT NULL AND DIABP_VAL IS NOT NULL"
+    filter: SYSBP_VAL IS NOT NULL AND DIABP_VAL IS NOT NULL
     derivations:
       STUDYID: {source: ADVSIN.STUDYID}
       USUBJID: {source: ADVSIN.USUBJID}
@@ -68,11 +68,11 @@ rows:
       PARAM: {literal: Mean Arterial Pressure (mmHg)}
       SYSBP_VAL:
         aggregate:
-          filter: "ADVSIN.PARAMCD = 'SYSBP'"
+          filter: ADVSIN.PARAMCD = 'SYSBP'
           expr: "ONLY(ADVSIN.AVAL)"
       DIABP_VAL:
         aggregate:
-          filter: "ADVSIN.PARAMCD = 'DIABP'"
+          filter: ADVSIN.PARAMCD = 'DIABP'
           expr: "ONLY(ADVSIN.AVAL)"
       AVAL:
         compute:

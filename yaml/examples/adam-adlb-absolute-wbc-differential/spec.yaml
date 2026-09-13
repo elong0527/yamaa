@@ -71,15 +71,15 @@ rows:
       PARAM: {literal: Lymphocytes Abs (10^9/L)}
       WBCVAL:
         aggregate:
-          filter: "ADLBIN.PARAMCD = 'WBC'"
+          filter: ADLBIN.PARAMCD = 'WBC'
           expr: "ONLY(ADLBIN.AVAL)"
       LYMLEVAL:
         aggregate:
-          filter: "ADLBIN.PARAMCD = 'LYMLE'"
+          filter: ADLBIN.PARAMCD = 'LYMLE'
           expr: "ONLY(ADLBIN.AVAL)"
       EXISTING_ABS_COUNT:
         aggregate:
-          filter: "ADLBIN.PARAMCD = 'LYMPH'"
+          filter: ADLBIN.PARAMCD = 'LYMPH'
           expr: "COUNT(ADLBIN.*)"
       AVAL:
         compute:

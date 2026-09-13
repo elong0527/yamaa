@@ -68,7 +68,7 @@ rows:
         source: ADEG_IN.AVALU
   - id: qtcfr
     group_by: [ADEG_IN.STUDYID, ADEG_IN.USUBJID, ADEG_IN.AVISIT]
-    filter: "QTVAL IS NOT NULL AND RRVAL IS NOT NULL"
+    filter: QTVAL IS NOT NULL AND RRVAL IS NOT NULL
     derivations:
       PARAMCD:
         literal: QTCFR
@@ -76,11 +76,11 @@ rows:
         literal: "QTcF - Fridericia's Correction Formula Rederived (ms)"
       QTVAL:
         aggregate:
-          filter: "ADEG_IN.PARAMCD = 'QT'"
+          filter: ADEG_IN.PARAMCD = 'QT'
           expr: "ONLY(ADEG_IN.AVAL)"
       RRVAL:
         aggregate:
-          filter: "ADEG_IN.PARAMCD = 'RR'"
+          filter: ADEG_IN.PARAMCD = 'RR'
           expr: "ONLY(ADEG_IN.AVAL)"
       AVAL:
         compute:

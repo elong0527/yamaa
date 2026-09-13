@@ -80,7 +80,7 @@ columns:
 
 rows:
   - id: item
-    filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE'"
+    filter: QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE'
     derivations:
       PARAMCD:
         source: QS.QSTESTCD
@@ -90,7 +90,7 @@ rows:
         source: QS.QSSTRESN
 
   - id: subscale
-    filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE' AND QS.QSTESTCD = 'PF01'"
+    filter: QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE' AND QS.QSTESTCD = 'PF01'
     derivations:
       PARAMCD:
         literal: PFSCORE

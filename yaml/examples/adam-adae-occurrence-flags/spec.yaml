@@ -61,7 +61,7 @@ columns:
       row_number:
         group_by: [STUDYID, USUBJID]
         order_by: [ASTDT, AESEQ]
-        filter: "TRTEMFL = 'Y'"
+        filter: TRTEMFL = 'Y'
 
   - name: AOCCSSEQ
     type: int
@@ -70,7 +70,7 @@ columns:
       row_number:
         group_by: [STUDYID, USUBJID, AEBODSYS]
         order_by: [ASTDT, AESEQ]
-        filter: "TRTEMFL = 'Y'"
+        filter: TRTEMFL = 'Y'
 
   - name: AOCCPSEQ
     type: int
@@ -79,7 +79,7 @@ columns:
       row_number:
         group_by: [STUDYID, USUBJID, AEBODSYS, AEDECOD]
         order_by: [ASTDT, AESEQ]
-        filter: "TRTEMFL = 'Y'"
+        filter: TRTEMFL = 'Y'
 
   - name: AOCCFL
     type: str

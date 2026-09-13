@@ -114,7 +114,7 @@ columns:
       row_number:
         group_by: [STUDYID, USUBJID, ADT]
         order_by: [RSSEQ]
-        filter: "AVAL = WORSTAVAL"
+        filter: AVAL = WORSTAVAL
 
   - name: ANL01FL
     type: str
@@ -131,7 +131,7 @@ columns:
 
 rows:
   - id: overall_response
-    filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSEVAL = 'INVESTIGATOR'"
+    filter: RS.RSTESTCD = 'OVRLRESP' AND RS.RSEVAL = 'INVESTIGATOR'
     derivations: {}
 
 verifications:

@@ -55,7 +55,7 @@ columns:
     label: Disease Progression Date
     derivation:
       aggregate:
-        filter: "ADRSPRE.AVALC = 'PD'"
+        filter: ADRSPRE.AVALC = 'PD'
         expr: "MIN(ADRSPRE.ADT)"
 
   - name: PDSEQ
@@ -67,14 +67,14 @@ columns:
         multiple_matches:
           order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
           keep: first
-          filter: "ADRSPRE.AVALC = 'PD'"
+          filter: ADRSPRE.AVALC = 'PD'
 
   - name: DEATHDT
     type: date
     label: Death Date
     derivation:
       aggregate:
-        filter: "DS.DSDECOD = 'DEATH'"
+        filter: DS.DSDECOD = 'DEATH'
         expr: "MIN(DS.DSSTDTC)"
 
   - name: DEATHSEQ
@@ -86,14 +86,14 @@ columns:
         multiple_matches:
           order_by: [DS.DSSTDTC, DS.DSSEQ]
           keep: first
-          filter: "DS.DSDECOD = 'DEATH'"
+          filter: DS.DSDECOD = 'DEATH'
 
   - name: LASTVLDT
     type: date
     label: Last Valid Assessment Date
     derivation:
       aggregate:
-        filter: "ADRSPRE.AVALC <> 'NE'"
+        filter: ADRSPRE.AVALC <> 'NE'
         expr: "MAX(ADRSPRE.ADT)"
 
   - name: LASTVLSEQ
@@ -105,7 +105,7 @@ columns:
         multiple_matches:
           order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
           keep: last
-          filter: "ADRSPRE.AVALC <> 'NE'"
+          filter: ADRSPRE.AVALC <> 'NE'
 
   - name: EVENTALLDT
     type: date
@@ -243,7 +243,7 @@ columns:
 
 rows:
   - id: responder
-    filter: "ADSL.RESPDT IS NOT NULL"
+    filter: ADSL.RESPDT IS NOT NULL
     derivations: {}
 
 verifications:

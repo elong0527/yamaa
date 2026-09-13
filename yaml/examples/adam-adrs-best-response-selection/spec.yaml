@@ -86,7 +86,7 @@ columns:
       row_number:
         group_by: [STUDYID, USUBJID]
         order_by: [BORPRI, ADT, ASEQ]
-        filter: "BORPRI IS NOT NULL"
+        filter: BORPRI IS NOT NULL
 
 verifications:
   - unique:

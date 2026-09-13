@@ -12,7 +12,7 @@ keys: [STUDYID, USUBJID, PARAMCD]
 record_lookups:
   - id: DEATH_REC
     dataset: ADRS
-    filter: "ADRS.PARAMCD = 'DEATH' AND ADRS.AVALC = 'Y' AND ADRS.ANL01FL = 'Y'"
+    filter: ADRS.PARAMCD = 'DEATH' AND ADRS.AVALC = 'Y' AND ADRS.ANL01FL = 'Y'
     source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
     unmatched: missing

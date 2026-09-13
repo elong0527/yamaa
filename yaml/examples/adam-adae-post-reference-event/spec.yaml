@@ -11,7 +11,7 @@ record_lookups:
     dataset: AE
     source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
-    filter: "AE.AEDECOD = 'COVID-19'"
+    filter: AE.AEDECOD = 'COVID-19'
     order_by: [AE.AESTDTC, AE.AESEQ]
     keep: first
     unmatched: missing

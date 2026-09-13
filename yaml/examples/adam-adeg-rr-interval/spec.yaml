@@ -64,7 +64,7 @@ rows:
         literal: collected
 
   - id: derived_rrr
-    filter: "ADEG_IN.PARAMCD = 'HR' AND ADEG_IN.AVAL IS NOT NULL AND ADEG_IN.AVAL <> 0"
+    filter: ADEG_IN.PARAMCD = 'HR' AND ADEG_IN.AVAL IS NOT NULL AND ADEG_IN.AVAL <> 0
     derivations:
       PARAMCD:
         literal: RRR

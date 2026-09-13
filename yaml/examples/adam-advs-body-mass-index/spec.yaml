@@ -7,7 +7,7 @@ keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
 record_lookups:
   - id: BASE_HEIGHT
     dataset: ADVSIN
-    filter: "ADVSIN.PARAMCD = 'HEIGHT'"
+    filter: ADVSIN.PARAMCD = 'HEIGHT'
     source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
     unmatched: missing
@@ -78,7 +78,7 @@ rows:
       - ADVSIN.PARAMCD
       - ADVSIN.AVISIT
       - ADVSIN.AVAL
-    filter: "SOURCE_PARAMCD = 'WEIGHT' AND AVAL IS NOT NULL"
+    filter: SOURCE_PARAMCD = 'WEIGHT' AND AVAL IS NOT NULL
     derivations:
       STUDYID: {source: ADVSIN.STUDYID}
       USUBJID: {source: ADVSIN.USUBJID}

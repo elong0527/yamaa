@@ -11,7 +11,7 @@ keys: [STUDYID, USUBJID, PARAMCD]
 record_lookups:
   - id: RESPONSE
     dataset: ADRSSEL
-    filter: "ADRSSEL.BORSEQ = 1"
+    filter: ADRSSEL.BORSEQ = 1
     unmatched: missing
 
 output:
