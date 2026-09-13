@@ -161,16 +161,17 @@ complementary view -- **which example to open when you want to see a construct
 in use, and which rule governs it.** Rule IDs are the normative pages in
 [`yaml/rules/`](https://github.com/elong0527/yamaa/tree/main/yaml/rules).
 
-Rule coverage across the 51 questions below:
+Rule coverage across the 52 questions below:
 
 | R001 | R002 | R003 | R004 | R005 | R006 | R007 | R008 | R009 | R010 | R011 | R012 | R013 | R014 | R015 | R016 | R017 | R018 | R019 | R020 | R021 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 8 | 3 | 2 | 0 | 1 | 0 | 15 | 3 | 1 | 0 | 1 | 1 | 7 | 0 | 8 | 5 | 2 | 3 | 1 | 0 | 1 |
+| 9 | 3 | 2 | 0 | 1 | 0 | 15 | 3 | 1 | 0 | 1 | 1 | 7 | 0 | 8 | 5 | 2 | 3 | 1 | 0 | 1 |
 
 ### Row construction and value-level metadata
 
 | Question | Rule | Example |
 |---|---|---|
+| How do I build one record per subject? | R001 | [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-dm-basic) -- the declared `keys` are the grain, so there is no row template to write |
 | How does one collected record become several analysis records? | R001 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-bds) -- `alt` and `alt_si` share a filter, so each ALT result produces two rows |
 | How do I build one record per collected result rather than per scheduled test? | R001 | [`sdtm-lb-findings`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-lb-findings) |
 | How do I consolidate several collection forms into one domain? | R001, R002 | [`sdtm-lb-multiform`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-lb-multiform) -- the same analyte on two forms is separated by specimen and location, not by test code |
