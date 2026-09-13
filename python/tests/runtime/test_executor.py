@@ -437,3 +437,73 @@ def test_source_provider_diagnostics_enter_the_execution_result() -> None:
         "context": {"dataset": "ODM"},
     }
     assert result.handler_counts == ()
+
+
+def test_window_key_numbers_partitions_after_scalar_keys() -> None:
+    def derive(expression):
+        return HandledExpression(value=Expression(root=expression))
+
+    specification = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        datasets={"SRC": DatasetSource(path="input/source.csv")},
+        base="SRC",
+        keys=["GRP", "SEQ"],
+        output=Output(path="out.csv", columns=["GRP", "SEQ"]),
+        columns=[
+            Column(name="GRP", type="str", derivation=derive({"source": "SRC.G"})),
+            Column(
+                name="SEQ",
+                type="int",
+                derivation=derive(
+                    {"row_number": {"group_by": ["GRP"], "order_by": ["SRC.X"]}}
+                ),
+            ),
+        ],
+    )
+    sources = {
+        "SRC": TypedTable(
+            columns=(
+                TypedColumn(name="G", type="str"),
+                TypedColumn(name="X", type="str"),
+            ),
+            frame=pl.DataFrame(
+                {"G": ["a", "a", "b"], "X": ["2", "1", "1"]},
+                schema={"G": pl.String, "X": pl.String},
+            ),
+        )
+    }
+
+    result = execute_specification(specification, sources)
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.artifact.frame.rows() == [("a", 2), ("a", 1), ("b", 1)]
+
+
+def test_key_plan_sees_earlier_key_values() -> None:
+    def derive(expression):
+        return HandledExpression(value=Expression(root=expression))
+
+    specification = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        datasets={"SRC": DatasetSource(path="input/source.csv")},
+        base="SRC",
+        keys=["GRP", "TAG"],
+        output=Output(path="out.csv", columns=["GRP", "TAG"]),
+        columns=[
+            Column(name="GRP", type="str", derivation=derive({"source": "SRC.G"})),
+            Column(name="TAG", type="str", derivation=derive({"source": "GRP"})),
+        ],
+    )
+    sources = {
+        "SRC": TypedTable(
+            columns=(TypedColumn(name="G", type="str"),),
+            frame=pl.DataFrame({"G": ["one", "two"]}, schema={"G": pl.String}),
+        )
+    }
+
+    result = execute_specification(specification, sources)
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.artifact.frame.rows() == [("one", "one"), ("two", "two")]

@@ -15,13 +15,15 @@ feed any output column.
 **Variables:**
 
 - `DSSEQ` numbers the subject's records from the earliest
-  collection date, with a record whose date is missing numbered
-  after dated records.
+  collection date text; an entry carrying only year and month
+  is completed to the 15th before numbering, and a record with
+  no date at all is numbered after dated records.
 - `DSDECOD` copies the recorded outcome: `COMPLETED`, `RANDOMIZED`,
   `ADVERSE EVENT` or `SCREEN FAILURE`.
 - `DSCAT` is `PROTOCOL MILESTONE` when the outcome is `RANDOMIZED`,
   and `DISPOSITION EVENT` for any other outcome.
 - `DSDTC` is the collection date; a partial entry such as
-  `2024-01` leaves the date missing.
+  `2024-01` is completed to the 15th of that month, and a year
+  alone is completed to June 15th.
 
 **Standard:** SDTM | **Domain:** DS

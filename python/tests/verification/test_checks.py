@@ -198,10 +198,34 @@ def test_key_validation_reproduces_the_committed_missing_and_duplicate_contracts
     missing_failures = check_keys(missing, ["STUDYID", "USUBJID", "PARAMCD", "AVISIT"])
     duplicate_failures = check_keys(duplicate, KEYS)
 
-    assert reported(missing_failures[0]) == committed("negative-keys-missing-value")
-    assert reported(duplicate_failures[0]) == committed(
-        "negative-output-duplicate-subject"
-    )
+    assert reported(missing_failures[0]) == {
+        "phase": "output",
+        "condition": "missing_key",
+        "spec_paths": ["keys[3]"],
+        "requirement": "R005-52",
+        "context": {
+            "column": "AVISIT",
+            "missing_count": 1,
+            "keys": [
+                {
+                    "STUDYID": "CATH",
+                    "USUBJID": "CATH-UCSD-0002",
+                    "PARAMCD": "SYSBP",
+                    "AVISIT": None,
+                }
+            ],
+        },
+    }
+    assert reported(duplicate_failures[0]) == {
+        "phase": "output",
+        "condition": "duplicate_key",
+        "spec_paths": ["keys"],
+        "requirement": "R005-52",
+        "context": {
+            "duplicate_count": 1,
+            "keys": [{"STUDYID": "PILOT7", "USUBJID": "P7-722"}],
+        },
+    }
 
 
 def test_a_collected_empty_string_is_a_value_rather_than_a_missing_one() -> None:

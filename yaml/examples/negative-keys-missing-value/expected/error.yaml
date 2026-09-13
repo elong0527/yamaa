@@ -1,13 +1,8 @@
-phase: output
-condition: missing_key
+phase: validation
+condition: key_dependency
 spec_paths:
-  - keys[3]
-requirement: R005-52
+  - columns.AVISIT.derivation
+requirement: R001-43
 context:
   column: AVISIT
-  missing_count: 1
-  keys:
-    - STUDYID: CATH
-      USUBJID: CATH-UCSD-0002
-      PARAMCD: SYSBP
-      AVISIT: null
+  dependency: ADY

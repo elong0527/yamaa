@@ -57,7 +57,7 @@ columns:
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]
-        order_by: [EXSTDTC, EXTRT]
+        order_by: [EX_RAW.EXSTDTC, EX_RAW.EXTRT]
 
   - name: EXENDTC
     type: date

@@ -59,9 +59,12 @@ columns:
     type: date
     label: Date/Time of Collection
     derivation:
-      value:
+      date_impute:
         source: DS_RAW.DSDTCOL
-      conversion_failure: null
+        month: 6
+        day: 15
+        missing: null
+        invalid: null
 
   - name: DSSEQ
     type: int
@@ -69,7 +72,7 @@ columns:
     derivation:
       row_number:
         group_by: [STUDYID, USUBJID]
-        order_by: [DSDTC]
+        order_by: [DS_RAW.DSDTCOL]
     verifications:
       not_missing: {}
 
