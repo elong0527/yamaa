@@ -32,6 +32,7 @@ from yamaa.expressions import (
     parse_aggregate_cached,
     parse_predicate_cached,
 )
+from yamaa.expressions.windows import WINDOW_OPERATIONS, Partition, evaluate_window
 from yamaa.models import (
     MISSING,
     ConditionPhase,
@@ -44,6 +45,7 @@ from yamaa.odm import BindingIndex
 from yamaa.planning import ExecutionDiagnostic, PlannedRow
 from yamaa.runtime.joins import (
     IndexedRecord,
+    OrderError,
     RelationIndex,
     applicable_keys,
     compare_values,
@@ -51,11 +53,13 @@ from yamaa.runtime.joins import (
     evaluate_mapping_from,
     join_scalar,
     json_value,
+    order_records,
     partition_records,
     resolution_result,
 )
 from yamaa.runtime.lifecycle import LifecycleCondition
 from yamaa.runtime.lookups import LookupOutcome, RecordLookupSelector
+from yamaa.specification.models import OrderTerm
 
 
 @dataclass(slots=True)
@@ -68,6 +72,9 @@ class CandidateRow:
     # dataset read collects one value across.
     feeding_rows: dict[str, list[dict[str, object]]] = field(default_factory=dict)
     row_id: str | None = None
+    # Where R001-9 appended this row, which is the order a window falls back
+    # to when its terms tie.
+    output_position: int = -1
     group_driver: str | None = None
     group_records: tuple[IndexedRecord, ...] = ()
     group_values: dict[str, RuntimeValue] = field(default_factory=dict)
@@ -169,11 +176,13 @@ class RowResolver:
         values: Mapping[str, object],
         *,
         row_phase: bool = False,
+        column: str | None = None,
     ) -> None:
         self._context = context
         self._candidate = candidate
         self._values: dict[str, Any] = dict(values)
         self._row_phase = row_phase
+        self._column = column
         self._base = context.bindings.context(
             candidate.source_rows,
             self._values,
@@ -299,7 +308,126 @@ class RowResolver:
         """Answer the operations that read a relation rather than one value."""
         if operation == "mapping_from":
             return self._mapping_from(payload)
+        if operation in WINDOW_OPERATIONS:
+            return self._window(operation, payload)
         return self._aggregate(payload)
+
+    def _window(
+        self,
+        operation: str,
+        payload: Mapping[str, object],
+    ) -> EvaluationResult:
+        """Locate this row in its ordered partition and ask the window.
+
+        R007-6 partitions the constructed output rows by the window's own
+        `group_by` and preserves row count, and R007-41 keeps a window out of
+        row construction, so the rows are always the completed ones.
+        """
+        if self._row_phase:
+            return _invalid(operation, "a window has no row-construction context")
+        located = self._locate(payload)
+        if isinstance(located, ConditionResult):
+            return located
+        members, current, partition_keys = located
+        eligible = self._eligible(payload, members)
+        if isinstance(eligible, ConditionResult):
+            return eligible
+        result = evaluate_window(
+            operation,
+            payload,
+            Partition(
+                rows=tuple(values for _, values in members),
+                current=current,
+                eligible=eligible,
+            ),
+        )
+        if isinstance(result, ConditionResult):
+            # A window failure is a property of the partition rather than of
+            # one row, so it names the partition it could not answer for.
+            named: dict[str, JsonValue] = {}
+            if self._column is not None:
+                named["column"] = self._column
+            named.update(result.condition.context)
+            named.setdefault("keys", [partition_keys])
+            return ConditionResult(
+                condition=result.condition.model_copy(update={"context": named})
+            )
+        return result
+
+    def _locate(
+        self,
+        payload: Mapping[str, object],
+    ) -> (
+        tuple[list[tuple[CandidateRow, dict[str, object]]], int, dict[str, JsonValue]]
+        | ConditionResult
+    ):
+        """Return this row's partition in declared order, and its place in it."""
+        fields = _names(payload.get("group_by"))
+        unavailable = [name for name in fields if name not in self._values]
+        if unavailable:
+            return ConditionResult(
+                condition=_condition("unknown_field", {"identifier": unavailable[0]})
+            )
+        key = tuple(self._values[name] for name in fields)
+        members = [
+            (row, _readable(row))
+            for row in self._context.partition(fields).get(key, ())
+        ]
+        terms = _order_terms(payload.get("order_by"))
+        if terms:
+            indexed = [
+                IndexedRecord(position=row.output_position, values=values)
+                for row, values in members
+            ]
+            try:
+                # R007-16 falls back to construction order, which is what the
+                # shared ordering helper breaks a remaining tie by.
+                ordered = order_records(indexed, terms)
+            except OrderError as error:
+                return ConditionResult(
+                    condition=_condition(
+                        "incompatible_input_type",
+                        {"source": error.variable, "types": sorted(set(error.types))},
+                        requirement="R007-39",
+                    )
+                )
+            by_position = {
+                row.output_position: entry for entry in members for row in (entry[0],)
+            }
+            members = [by_position[record.position] for record in ordered]
+        partition_keys = {
+            name: json_value(self._values[name])  # type: ignore[arg-type]
+            for name in fields
+        }
+        for index, (row, _) in enumerate(members):
+            if row is self._candidate:
+                return members, index, partition_keys
+        return ConditionResult(
+            condition=_condition(
+                "unknown_field",
+                {"identifier": "the current row is absent from its partition"},
+            )
+        )
+
+    def _eligible(
+        self,
+        payload: Mapping[str, object],
+        members: Sequence[tuple[CandidateRow, dict[str, object]]],
+    ) -> tuple[bool, ...] | ConditionResult:
+        """Say which partition rows the window's filter retained (R007-7)."""
+        predicate = self._predicate(payload.get("filter"))
+        if isinstance(predicate, ConditionResult):
+            return predicate
+        if predicate is None:
+            return tuple(True for _ in members)
+        kept: list[bool] = []
+        for _, values in members:
+            result = evaluate_predicate(predicate, MappingResolver(values))
+            if isinstance(result, ConditionResult):
+                return result
+            assert isinstance(result, PredicateValue)
+            kept.append(result.value is TruthValue.TRUE)
+        return tuple(kept)
 
     def _mapping_from(self, payload: Mapping[str, object]) -> EvaluationResult:
         dataset = payload.get("dataset")
@@ -541,6 +669,38 @@ def _record_values(
     return {
         name: record.values.get(name.split(".", 1)[-1], MISSING) for name in identifiers
     }
+
+
+def _readable(row: CandidateRow) -> dict[str, object]:
+    """Return every name one partition row answers to.
+
+    R007-12 lets a window field name a qualified source variable as well as a
+    current-output column, so a row is read through its completed columns and
+    the driver record it was constructed from together.
+    """
+    values: dict[str, object] = dict(row.values)
+    for dataset, record in row.source_rows.items():
+        for field_name, value in record.items():
+            values[f"{dataset}.{field_name}"] = value
+    return values
+
+
+def _order_terms(declared: object) -> list[tuple[OrderTerm, str]]:
+    """Bind each declared order term to the output column it reads."""
+    if not isinstance(declared, Sequence) or isinstance(declared, str):
+        return []
+    terms: list[tuple[OrderTerm, str]] = []
+    for entry in declared:
+        term = (
+            OrderTerm(variable=entry)
+            if isinstance(entry, str)
+            else OrderTerm.model_validate(dict(entry), strict=True)
+            if isinstance(entry, Mapping)
+            else None
+        )
+        if term is not None:
+            terms.append((term, term.variable))
+    return terms
 
 
 def _names(value: object) -> tuple[str, ...]:

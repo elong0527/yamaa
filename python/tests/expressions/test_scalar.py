@@ -186,11 +186,11 @@ def test_a_branch_predicate_outside_the_grammar_names_its_branch() -> None:
 
 def test_an_unsupported_nested_operation_does_not_bypass_validation() -> None:
     result = _evaluate(
-        _case([{"when": "TRUE", "then": {"row_number": {"order_by": ["A"]}}}]),
+        _case([{"when": "TRUE", "then": {"function": {"name": "f", "args": ["A"]}}}]),
         {"A": 1},
     )
 
-    assert result == UnsupportedResult(operation="row_number")
+    assert result == UnsupportedResult(operation="function")
 
 
 def _cut(**extra: object) -> dict[str, object]:

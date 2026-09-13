@@ -39,8 +39,10 @@ def _host_value(value: object) -> object:
     if value is MISSING:
         return None
     if isinstance(value, DateValue):
-        if value.collected_precision != "day":
-            raise ValueError("a date below day precision has no host column")
+        # R016-32: canonical text carries the fields alone, so an imputed
+        # date stores the day it names and its collected precision stops at
+        # the derivation. A specification carrying precision past this
+        # boundary derives a column from `date_precision`.
         return dt.date(value.year, value.month, value.day)
     if isinstance(value, DateTimeValue):
         # R016 datetimes are zone-free local civil times, so the host scalar

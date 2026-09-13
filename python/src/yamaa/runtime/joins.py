@@ -46,9 +46,9 @@ from yamaa.models import (
     RuntimeValue,
     TypedTable,
     ValueResult,
+    compare_values,
     normalize_runtime_value,
     runtime_type_name,
-    values_comparable,
 )
 from yamaa.specification.models import OrderTerm
 
@@ -71,33 +71,6 @@ class OrderError(ValueError):
         self.variable = variable
         self.types = tuple(types)
         super().__init__(f"order term {variable!r} compares {sorted(set(types))}")
-
-
-def _ordering_key(value: RuntimeValue) -> object:
-    if isinstance(value, (DateValue, DateTimeValue)):
-        return value.ordering_key
-    return value
-
-
-def compare_values(left: RuntimeValue, right: RuntimeValue) -> int:
-    """Compare two non-missing values in the order their type owns.
-
-    R007-17 gives numeric order to R010, text order to R019, and
-    chronological order to R016, so one comparison serves every ordered
-    operation rather than each reimplementing its type's order.
-    """
-    if not values_comparable(left, right):
-        raise TypeError(
-            f"incomparable values {runtime_type_name(left)!r} "
-            f"and {runtime_type_name(right)!r}"
-        )
-    ordered_left = _ordering_key(left)
-    ordered_right = _ordering_key(right)
-    if ordered_left < ordered_right:  # type: ignore[operator]
-        return -1
-    if ordered_left > ordered_right:  # type: ignore[operator]
-        return 1
-    return 0
 
 
 def partition_key(

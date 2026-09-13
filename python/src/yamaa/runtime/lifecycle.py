@@ -36,6 +36,8 @@ DECLARED_HANDLERS: dict[str, tuple[HandlerName, ...]] = {
     "mapping": ("missing", "unmapped"),
     "mapping_from": ("missing", "unmapped"),
     "cut": ("missing",),
+    "date_impute": ("missing", "invalid"),
+    "date_precision": ("missing", "invalid"),
     "str_extract": ("missing", "no_match"),
     "str_concat": ("missing",),
     "str_template": ("missing",),

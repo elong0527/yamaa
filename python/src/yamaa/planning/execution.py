@@ -9,6 +9,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from yamaa.expressions import (
+    WINDOW_OPERATIONS,
     AggregateError,
     NumericError,
     PredicateAst,
@@ -299,6 +300,19 @@ _TYPED_SOURCES: dict[str, tuple[ColumnType | None, str]] = {
     "cut": (None, "R007-22"),
 }
 
+# R016-54 types every temporal operand. `date_precision` reads either kind of
+# source, so it states no expected type and answers at evaluation.
+_TEMPORAL_VARIABLES: dict[str, tuple[tuple[str, ColumnType | None, str], ...]] = {
+    "date_diff": (("start", "date", "R016-65"), ("end", "date", "R016-65")),
+    "study_day": (("date", "date", "R016-65"), ("reference", "date", "R016-65")),
+    "date_impute": (
+        ("source", "str", "R016-54"),
+        ("not_before", "date", "R016-49"),
+    ),
+    "date_precision": (("source", None, "R016-45"),),
+    "to_date": (("source", "datetime", "R016-66"),),
+}
+
 
 def _expression_info(
     expression: Expression,
@@ -352,6 +366,21 @@ def _expression_info(
                     requirement=requirement,
                 )
             )
+    elif operation in WINDOW_OPERATIONS and isinstance(payload, Mapping):
+        diagnostics.extend(
+            _window_references(operation, payload, operation_path, references, scope)
+        )
+    elif operation in _TEMPORAL_VARIABLES and isinstance(payload, Mapping):
+        references.extend(
+            _Reference(
+                payload[field],
+                f"{operation_path}.{field}",
+                expected,
+                requirement=requirement,
+            )
+            for field, expected, requirement in _TEMPORAL_VARIABLES[operation]
+            if isinstance(payload.get(field), str)
+        )
     elif operation in {"coalesce", "greatest", "least"} and isinstance(
         payload, Mapping
     ):
@@ -530,6 +559,78 @@ def _mapping_from_references(
             )
         )
     return []
+
+
+# R007-12 types each window field as a variable, so each may name a current
+# output column or a qualified source variable of the row's driver.
+_WINDOW_VARIABLES: dict[str, tuple[str, ...]] = {
+    "row_number": (),
+    "rank": (),
+    "row_value": ("source",),
+    "previous_non_missing": ("source",),
+    "baseline_flag": ("date", "reference_date"),
+    "baseline_value": ("value", "flag"),
+}
+
+
+def _window_references(
+    operation: str,
+    payload: Mapping[str, object],
+    operation_path: str,
+    references: list[_Reference],
+    scope: _Scope,
+) -> list[ExecutionDiagnostic]:
+    """Collect what one window reads, and reject the contexts R007 refuses."""
+    if not scope.column_phase:
+        # R007-41: a window partitions constructed output rows, which do not
+        # exist until row construction has finished.
+        return [
+            _diagnostic(
+                "phase_boundary",
+                operation_path,
+                {
+                    "operation": operation,
+                    "available_phase": "column_derivation",
+                    "required_phase": "row_construction",
+                },
+                requirement="R007-41",
+            )
+        ]
+    diagnostics: list[ExecutionDiagnostic] = []
+    if operation == "row_value" and payload.get("offset") == 0:
+        # R007-43: the current row's own value is `source`, and a window must
+        # not be a second spelling of it.
+        diagnostics.append(
+            _diagnostic(
+                "zero_offset",
+                f"{operation_path}.offset",
+                {"offset": 0},
+                requirement="R007-43",
+            )
+        )
+    for field in _WINDOW_VARIABLES[operation]:
+        name = payload.get(field)
+        if isinstance(name, str):
+            references.append(_Reference(name, f"{operation_path}.{field}"))
+    for index, name in enumerate(_as_names(payload.get("group_by")) or ()):
+        references.append(_Reference(name, f"{operation_path}.group_by[{index}]"))
+    for index, term in enumerate(payload.get("order_by") or ()):
+        variable = term if isinstance(term, str) else None
+        if isinstance(term, Mapping) and isinstance(term.get("variable"), str):
+            variable = str(term["variable"])
+        if isinstance(variable, str):
+            references.append(
+                _Reference(variable, f"{operation_path}.order_by[{index}]")
+            )
+    predicate = payload.get("filter")
+    if isinstance(predicate, str):
+        filter_path = f"{operation_path}.filter"
+        ast = _parse_predicate_at(predicate, filter_path, diagnostics)
+        if ast is not None:
+            references.extend(
+                _Reference(name, filter_path) for name in _predicate_identifiers(ast)
+            )
+    return diagnostics
 
 
 def _aggregate_references(

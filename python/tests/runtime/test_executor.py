@@ -346,7 +346,7 @@ def test_valid_but_unimplemented_operations_have_unsupported_status() -> None:
             "derivation": age.derivation.model_copy(
                 update={
                     "value": age.derivation.value.model_copy(
-                        update={"root": {"row_number": {"order_by": ["SUBJID"]}}}
+                        update={"root": {"function": {"name": "f", "args": []}}}
                     )
                 }
             )
@@ -365,7 +365,7 @@ def test_valid_but_unimplemented_operations_have_unsupported_status() -> None:
     result = execute_specification(changed, sources)
 
     assert isinstance(result, ExecutionUnsupported)
-    assert result.features[0].operation == "row_number"
+    assert result.features[0].operation == "function"
 
 
 def test_invalid_column_type_fails_before_any_source_is_ingested() -> None:

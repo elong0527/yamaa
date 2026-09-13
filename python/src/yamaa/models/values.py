@@ -95,6 +95,22 @@ class DateValue(_FrozenModel):
     def ordering_key(self) -> tuple[int, int, int]:
         return (self.year, self.month, self.day)
 
+    def __eq__(self, other: object) -> bool:
+        """Compare two dates by their fields alone.
+
+        R016-35 keeps collected precision out of every comparison, and
+        R016-10 makes it a property read off the value rather than part of
+        its identity. Equality is that comparison, so a completed date and a
+        collected one naming the same day are one value wherever a join
+        matches, a partition groups, or a dictionary keys.
+        """
+        if not isinstance(other, DateValue):
+            return NotImplemented
+        return self.ordering_key == other.ordering_key
+
+    def __hash__(self) -> int:
+        return hash(self.ordering_key)
+
 
 class DateTimeValue(_FrozenModel):
     """A complete zone-free local civil datetime at whole-second precision."""
@@ -289,6 +305,35 @@ def normalize_runtime_value(
         "incompatible_input_type",
         {"actual": type(value).__name__},
     )
+
+
+def ordering_key(value: RuntimeValue) -> object:
+    """Return the key one value orders by."""
+    key = getattr(value, "ordering_key", None)
+    return key if key is not None else value
+
+
+def compare_values(left: RuntimeValue, right: RuntimeValue) -> int:
+    """Compare two non-missing values in the order their type owns.
+
+    R007-17 gives numeric order to R010, text order to R019, and chronological
+    order to R016, so one comparison serves every ordered operation rather
+    than each reimplementing its type's order. Two values of types that are
+    not mutually comparable raise, because R007-39 refuses to convert an
+    operand to make a comparison work.
+    """
+    if not values_comparable(left, right):
+        raise TypeError(
+            f"incomparable values {runtime_type_name(left)!r} "
+            f"and {runtime_type_name(right)!r}"
+        )
+    ordered_left = ordering_key(left)
+    ordered_right = ordering_key(right)
+    if ordered_left < ordered_right:  # type: ignore[operator]
+        return -1
+    if ordered_left > ordered_right:  # type: ignore[operator]
+        return 1
+    return 0
 
 
 def values_comparable(left: RuntimeValue, right: RuntimeValue) -> bool:

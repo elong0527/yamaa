@@ -83,6 +83,15 @@ before it reaches dispatch.
 | `str_upper`, `str_lower` | R019 | the exact ASCII casing substitution |
 | `mapping_from` | R003, R007 | one right-side column reached by declared key pairs |
 | `aggregate` | R003, R007, R013 | one relation, or one partition, reduced to one value |
+| `date_diff` | R016 | whole calendar units between two dates |
+| `study_day` | R016 | the CDISC study day, counting from 1 with no day zero |
+| `date_impute` | R016 | a truncated date completed under a declared rule |
+| `date_precision` | R016 | `Y`, `M`, or `D` for how much of a date was collected |
+| `to_date` | R016 | the calendar date of a datetime |
+| `row_number`, `rank` | R007 | the position of a row in its ordered partition |
+| `row_value` | R007 | one source read from another row of that partition |
+| `previous_non_missing` | R007 | the closest strictly earlier non-missing source |
+| `baseline_flag`, `baseline_value` | R007 | the one baseline row, and its value broadcast |
 
 `compute` reads the closed R010 grammar: the operators `+ - * /` with unary
 sign, and exactly `ABS`, `CEIL`, `FLOOR`, `TRUNC`, `SQRT`, `POWER`, `EXP`,
@@ -90,7 +99,7 @@ sign, and exactly `ABS`, `CEIL`, `FLOOR`, `TRUNC`, `SQRT`, `POWER`, `EXP`,
 `eval`: a formula is tokenized, parsed, and evaluated in the association it
 was written in, and a division by zero, a negative `SQRT`, a non-positive
 `LN`, an invalid `POWER`, or an integer overflow fails the run rather than
-becoming missing. The temporal, window, and project function families remain
+becoming missing. Only the R018 project function family remains
 unsupported.
 
 `aggregate` reads the closed R013 grammar over that same arithmetic, with
@@ -286,9 +295,9 @@ components.
 Execution supports every operation in the registered table above, along with
 record-driven and grouped row templates, their filters, record lookups,
 explicit absent-source defaults, and earlier output-column references.
-Inheritance and the temporal, window, and project function families return an
-explicit unsupported result rather than a fabricated output. Execution never
-reads an `expected/` artifact.
+Inheritance and the R018 project function family return an explicit
+unsupported result rather than a fabricated output. Execution never reads an
+`expected/` artifact.
 
 Run the focused tests from the repository root:
 
@@ -376,6 +385,72 @@ uv run --project python --isolated --extra test pytest \
   python/tests/expressions/test_aggregate.py python/tests/runtime/test_joins.py \
   python/tests/runtime/test_lookups.py \
   python/tests/runtime/test_relational_examples.py python/tests/planning
+```
+
+## Temporal values and ordered windows
+
+R016 owns both temporal types completely, so the date operations compute
+rather than decide. A `date` and a `datetime` each parse from exactly one
+lexical form, carry no zone and no fractional second, and render back as
+canonical text.
+
+Every value also records its **collected precision**: the finest field the
+collected source supplied. `date_impute` completes a truncated date and the
+completed value keeps the precision of the text it came from, so
+`date_precision` reads how much was collected off the value itself rather
+than off the text beside it:
+
+```yaml
+- name: ASTDT
+  type: date
+  derivation:
+    date_impute:
+      source: AESTDTC          # "2025-01"
+      month: 6
+      day: 15
+      minimum_source_precision: month
+      not_before: TRTSDT       # moves only what imputation supplied
+- name: ASTDTPR
+  type: str
+  derivation:
+    date_precision: {source: ASTDT}   # "M"
+```
+
+R016-32 keeps precision out of the artifact on purpose: a column stores the
+day its value names, and a specification carrying precision further derives
+a column from `date_precision`. R016-35 keeps it out of every comparison
+too, so an imputed date and a collected one naming the same day are one
+value wherever a join matches or a partition groups.
+
+### The temporal matrix
+
+Every case R016 defines is executed. #166 owned the month and year counting
+that was once undefined; it closed as completed, and R016-72 through R016-77
+now pin it, so nothing in this family is blocked:
+
+| Case | Rule | Status |
+|---|---|---|
+| `unit: day`, all three `bounds` | R016-76 | executed |
+| `unit: week`, whole seven-day blocks | R016-72 | executed |
+| `unit: month` and `unit: year` anniversaries | R016-73 | executed |
+| February 29 anniversary in a common year | R016-74 | executed |
+| An earlier `end` negating the count | R016-75 | executed |
+| Non-`exclusive` `bounds` beyond `unit: day` | R016-77 | rejected, as the rule requires |
+| A `datetime` operand to a date operation | R016-65 | rejected, as the rule requires |
+
+A window reads the constructed output rows of its partition and preserves
+row count: a row its `filter` excludes receives missing rather than
+disappearing, and ties fall back to construction order, so every numbering
+is total. `previous_non_missing` searches a separate completed source column
+and never the column being derived, which is why reaching one's own value
+that way stays a cycle rather than an iteration.
+
+Run this component's focused tests from the repository root:
+
+```bash
+uv run --project python --isolated --extra test pytest \
+  python/tests/expressions/test_dates.py python/tests/expressions/test_windows.py \
+  python/tests/runtime/test_temporal_examples.py python/tests/planning
 ```
 
 ## Verified tables and published artifacts

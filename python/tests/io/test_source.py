@@ -78,15 +78,18 @@ def test_loads_ordered_typed_polars_table_without_inference(tmp_path: Path) -> N
     assert loaded.table.frame.filter(pl.col("DATE") > dt.date(2025, 1, 15)).height == 1
 
 
-def test_a_date_below_day_precision_has_no_host_column() -> None:
+def test_a_date_below_day_precision_stores_the_day_it_names() -> None:
     # Ingestion never produces one, because R011 admits only the complete
-    # R016 forms. A native column cannot carry the precision, so storing one
-    # fails loudly instead of dropping it.
+    # R016 forms, but `date_impute` does. R016-32 makes collected precision
+    # unobservable outside the derivation, so the column carries the fields
+    # and a specification needing the precision derives it from
+    # `date_precision` instead.
     column = TypedColumn(name="DATE", type="date")
     partial = DateValue(year=2025, month=2, day=1, collected_precision="month")
 
-    with pytest.raises(ValueError, match="day precision"):
-        frame_from_values((column,), [[partial]])
+    table = frame_from_values((column,), [[partial]])
+
+    assert table.frame.item() == dt.date(2025, 2, 1)
 
 
 @pytest.mark.parametrize("text", ["NA", "NULL", ".", "unknown"])

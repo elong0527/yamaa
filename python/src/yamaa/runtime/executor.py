@@ -232,7 +232,7 @@ def _evaluate_row_filter(
 # The phases whose failures name the record they happened on. A failure
 # decided before any row exists reports no key.
 _ROW_PHASES = frozenset(
-    {"derivation", "join", "mapping", "row_construction", "convert"}
+    {"derivation", "impute", "join", "mapping", "row_construction", "convert"}
 )
 
 
@@ -292,7 +292,13 @@ def _evaluate_one(
             planned,
             column_types[planned.column],  # type: ignore[arg-type]
             candidate.values,
-            lambda values: RowResolver(context, candidate, values, row_phase=row_phase),
+            lambda values: RowResolver(
+                context,
+                candidate,
+                values,
+                row_phase=row_phase,
+                column=planned.column,
+            ),
             dispatcher,
             counter,
         )
@@ -445,6 +451,10 @@ def _construct_rows(
             if planned.grouped and not _grouped_filter(planned, candidate):
                 continue
             constructed.append(candidate)
+    for position, candidate in enumerate(constructed):
+        # R001-9 fixes where each row was appended, which is the order a
+        # window falls back to when its own terms tie.
+        candidate.output_position = position
     context.rows.extend(constructed)
     return constructed
 
