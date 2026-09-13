@@ -493,7 +493,7 @@ def render_example(example, previous=None, next=None):
                 f"{output_rows} row presented to the failing check"
                 if output_rows == 1
                 else f"{output_rows} rows presented to the failing check"
-            ) + " — not an accepted artifact"
+            ) + " - not an accepted artifact"
         else:
             output_caption = "No artifact is produced"
     else:
