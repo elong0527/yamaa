@@ -25,6 +25,14 @@ import decimal
 from collections.abc import Iterable, Sequence
 from typing import NamedTuple
 
+_CSV_REQUIREMENTS = {
+    "invalid_text": "R019-21",
+    "source_field_name_duplicate": "R023-22",
+    "source_field_name_empty": "R023-22",
+    "source_record_width": "R023-22",
+    "source_quote_unterminated": "R023-22",
+}
+
 
 class CsvSource(NamedTuple):
     """An ordered header and records parsed from one CSV snapshot."""
@@ -40,6 +48,7 @@ class CsvProfileFailure(ValueError):
         self.condition = condition
         self.record = record
         self.field = field
+        self.requirement = _CSV_REQUIREMENTS.get(condition)
         super().__init__(f"{condition} at record {record}, field {field!r}")
 
 

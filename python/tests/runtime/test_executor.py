@@ -379,6 +379,7 @@ def test_invalid_column_type_fails_before_any_source_is_ingested() -> None:
         "phase": "validation",
         "condition": "value_not_permitted",
         "spec_paths": ["columns.AVAL.type"],
+        "requirement": "R011-29",
         "context": {
             "value": "number",
             "permitted": ["str", "int", "float", "date", "datetime"],
