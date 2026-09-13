@@ -200,10 +200,9 @@ def _unicode_scalar_diagnostics(
     return []
 
 
-def read_yaml_document(path: str | Path) -> object:
-    """Read one ASCII YAML document using YAML 1.2 core scalar rules."""
-    source_path = Path(path)
-    raw = source_path.read_bytes()
+def read_yaml_bytes(raw: bytes, source_path: str | Path) -> object:
+    """Read one retained ASCII YAML snapshot using YAML 1.2 core rules."""
+    source_path = Path(source_path)
     try:
         text = raw.decode("ascii")
     except UnicodeDecodeError as error:
@@ -232,3 +231,9 @@ def read_yaml_document(path: str | Path) -> object:
     if diagnostics:
         raise SpecificationError(diagnostics)
     return document
+
+
+def read_yaml_document(path: str | Path) -> object:
+    """Read one ASCII YAML document using YAML 1.2 core scalar rules."""
+    source_path = Path(path)
+    return read_yaml_bytes(source_path.read_bytes(), source_path)

@@ -15,24 +15,26 @@ from yamaa.io import (
     ProjectResources,
     approve_roots,
     build_artifact,
-    load_source_tables,
     publish_artifact,
 )
-from yamaa.planning import ExecutionDiagnostic, UnsupportedFeature
+from yamaa.planning import (
+    ExecutionDiagnostic,
+    UnsupportedFeature,
+    execute_workflow,
+    plan_workflow,
+)
 from yamaa.runtime import (
     ExecutionFailure,
     ExecutionResult,
     ExecutionSuccess,
     ExecutionUnsupported,
-    execute_with_source_provider,
 )
 from yamaa.specification import (
     Specification,
     SpecificationError,
     ValidationDiagnostic,
-    load_specification,
 )
-from yamaa.specification.models import DatasetSource
+from yamaa.specification.schema import load_schema_bundle
 
 _ISSUE_COLUMNS = (
     "severity",
@@ -219,30 +221,26 @@ def yamaa_domain(
         read_project_configuration=read_project_configuration,
     )
 
-    try:
-        loaded = load_specification(entry, selected_schema)
-    except SpecificationError as error:
-        issues = _issues_frame(_diagnostic_rows(error.diagnostics))
-        return DomainRun(entry, None, {}, None, issues)
-
     resources = ProjectResources(
         approved.project_root,
         base_directory=entry.parent,
         data_roots=approved.data_roots,
     )
-    sources: dict[str, LoadedDataset] = {}
+    try:
+        workflow = plan_workflow(entry, load_schema_bundle(selected_schema), resources)
+    except SpecificationError as error:
+        issues = _issues_frame(_diagnostic_rows(error.diagnostics))
+        return DomainRun(entry, None, {}, None, issues)
 
-    def provide(
-        datasets: Mapping[str, DatasetSource],
-    ) -> Mapping[str, LoadedDataset]:
-        loaded_sources = load_source_tables(datasets, resources)
-        sources.update(loaded_sources)
-        return loaded_sources
-
-    result = execute_with_source_provider(loaded.specification, provide)
+    entry_node = next(
+        node for node in workflow.nodes if node.entry_path == workflow.entry_path
+    )
+    execution = execute_workflow(workflow, resources)
+    sources = dict(execution.sources.get(workflow.entry_path, {}))
+    result = execution.result
     return DomainRun(
         entry,
-        loaded.specification,
+        entry_node.resolved.specification,
         sources,
         result,
         _result_issues(result),

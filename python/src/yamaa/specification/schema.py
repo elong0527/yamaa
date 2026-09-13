@@ -992,3 +992,51 @@ def normalize_specification(
 ) -> object:
     """Materialize defaults and R006 collection/class shorthands."""
     return _normalize_single(document, "root_class", bundle, frozenset())
+
+
+# R017 validates schema-shaped fragments instead of complete root objects.  Keep
+# that component behind this deliberately small adapter rather than teaching it
+# the schema interpreter's private representation.
+def class_fields(
+    bundle: SchemaBundle, class_name: str
+) -> dict[str, dict[str, Any]]:
+    """Return one class's fields in schema order."""
+    return _class_fields(bundle, class_name)
+
+
+def validate_descriptor_value(
+    value: object,
+    descriptor: dict[str, Any],
+    bundle: SchemaBundle,
+    path: str,
+) -> list[ValidationDiagnostic]:
+    """Validate one complete field value against its descriptor."""
+    return _validate_descriptor(value, descriptor, bundle, path)
+
+
+def normalize_descriptor_value(
+    value: object,
+    descriptor: dict[str, Any],
+    bundle: SchemaBundle,
+) -> object:
+    """Normalize one already validated field value."""
+    return _normalize_descriptor(value, descriptor, bundle, frozenset())
+
+
+def matching_type(
+    value: object, type_value: object, bundle: SchemaBundle
+) -> str | None:
+    """Return the first schema union member a value satisfies."""
+    return next(
+        (
+            member
+            for member in _members(type_value)
+            if _matches(value, member, bundle, frozenset())
+        ),
+        None,
+    )
+
+
+def split_type_arguments(value: str) -> tuple[str, str]:
+    """Split the two members of a validated dictionary type expression."""
+    return _split_arguments(value)

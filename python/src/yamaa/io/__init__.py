@@ -35,6 +35,8 @@ from yamaa.io.project import (
 from yamaa.io.publish import ArtifactTarget, publish_artifact
 from yamaa.io.source import (
     LoadedDataset,
+    ProducerContract,
+    ProducerField,
     SourceDiagnostic,
     SourceError,
     load_source_table,
@@ -50,6 +52,8 @@ __all__ = [
     "ArtifactProfile",
     "ArtifactTarget",
     "LoadedDataset",
+    "ProducerContract",
+    "ProducerField",
     "ProjectConfigurationError",
     "ProjectResources",
     "ResourceFailure",

@@ -63,6 +63,16 @@ class ResourceSnapshot(BaseModel):
     content: bytes
 
 
+@dataclass
+class _SnapshotStore:
+    """Run-wide snapshots shared by resource views with different bases."""
+
+    by_identity: dict[tuple[int, int], ResourceSnapshot]
+    paths: dict[int, list[tuple[tuple[str, ...], str]]]
+    path_snapshots: dict[tuple[str, ...], ResourceSnapshot]
+    capture_reads: int = 0
+
+
 class ResourceFailure(ValueError):
     """A stable R021 failure that never exposes a host path."""
 
@@ -288,11 +298,6 @@ class ProjectResources:
         if not base.is_dir():
             raise ValueError("resource base must be a directory")
 
-        try:
-            base_components: tuple[str, ...] | None = base.relative_to(root).parts
-        except ValueError:
-            base_components = None
-
         required_flags = ("O_DIRECTORY", "O_NOFOLLOW")
         if (
             os.open not in os.supports_dir_fd
@@ -305,11 +310,14 @@ class ProjectResources:
             )
 
         approved: list[_ApprovedRoot] = []
+        approved_paths: list[Path] = []
         try:
             approved.append(self._approve(project_root, root))
+            approved_paths.append(root)
             for candidate in data_roots:
                 resolved = _existing_directory(candidate, "approved data root")
                 approved.append(self._approve(candidate, resolved))
+                approved_paths.append(resolved)
         except BaseException:
             for opened in approved:
                 os.close(opened.descriptor)
@@ -317,17 +325,58 @@ class ProjectResources:
 
         descriptors = [opened.descriptor for opened in approved]
         self._roots = tuple(approved)
+        self._root_paths = tuple(approved_paths)
         self._root_finalizer = weakref.finalize(self, self._close_all, descriptors)
-        self._base_components = base_components
-        self._by_identity: dict[tuple[int, int], ResourceSnapshot] = {}
-        self._paths: dict[int, list[tuple[tuple[str, ...], str]]] = {}
-        self._path_snapshots: dict[tuple[str, ...], ResourceSnapshot] = {}
-        self._capture_reads = 0
+        self._project_root = root
+        self._base_root_index, self._base_components = self._relative_base(base)
+        self._store = _SnapshotStore({}, {}, {})
 
     @property
     def capture_reads(self) -> int:
         """Number of physical files read to create snapshots."""
-        return self._capture_reads
+        return self._store.capture_reads
+
+    def with_base_directory(self, base_directory: str | Path) -> ProjectResources:
+        """Share this run's roots and snapshots from another spec directory."""
+        try:
+            base = Path(base_directory).resolve(strict=True)
+        except OSError as error:
+            raise ValueError("resource base directory must exist") from error
+        if not base.is_dir():
+            raise ValueError("resource base must be a directory")
+        clone = object.__new__(ProjectResources)
+        cloned_roots = tuple(
+            _ApprovedRoot(
+                descriptor=os.dup(root.descriptor),
+                canonical=root.canonical,
+                spellings=root.spellings,
+            )
+            for root in self._roots
+        )
+        clone._roots = cloned_roots
+        clone._root_paths = self._root_paths
+        clone._root_finalizer = weakref.finalize(
+            clone,
+            self._close_all,
+            [root.descriptor for root in cloned_roots],
+        )
+        clone._project_root = self._project_root
+        clone._base_root_index, clone._base_components = clone._relative_base(base)
+        clone._store = self._store
+        return clone
+
+    def _relative_base(self, base: Path) -> tuple[int | None, tuple[str, ...] | None]:
+        candidates: list[tuple[int, int, tuple[str, ...]]] = []
+        for index, root in enumerate(self._root_paths):
+            try:
+                components = base.relative_to(root).parts
+            except ValueError:
+                continue
+            candidates.append((len(root.parts), index, components))
+        if not candidates:
+            return None, None
+        _, index, components = max(candidates)
+        return index, components
 
     @staticmethod
     def _close_all(descriptors: list[int]) -> None:
@@ -425,8 +474,10 @@ class ProjectResources:
                 components.pop()
             else:
                 components.append(segment)
-        project = self._roots[0]
-        return _Anchor(project, (*project.canonical, *components), None)
+        if self._base_root_index is None:
+            raise ResourceFailure("resource_path_outside_project", written_path)
+        root = self._roots[self._base_root_index]
+        return _Anchor(root, (*root.canonical, *components), None)
 
     def _open_component(
         self,
@@ -572,15 +623,15 @@ class ProjectResources:
 
         descriptor = opened.descriptor
         try:
-            accepted = self._path_snapshots.get(opened.key)
+            accepted = self._store.path_snapshots.get(opened.key)
             if accepted is not None:
                 return accepted
 
             identity = (opened.status.st_dev, opened.status.st_ino)
-            accepted = self._by_identity.get(identity)
+            accepted = self._store.by_identity.get(identity)
             if accepted is not None:
-                self._path_snapshots[opened.key] = accepted
-                self._paths[id(accepted)].append((opened.key, written_path))
+                self._store.path_snapshots[opened.key] = accepted
+                self._store.paths[id(accepted)].append((opened.key, written_path))
                 return accepted
 
             with os.fdopen(descriptor, "rb") as handle:
@@ -607,10 +658,10 @@ class ProjectResources:
         snapshot = ResourceSnapshot(
             sha256=hashlib.sha256(content).hexdigest(), content=content
         )
-        self._capture_reads += 1
-        self._by_identity[identity] = snapshot
-        self._path_snapshots[opened.key] = snapshot
-        self._paths[id(snapshot)] = [(opened.key, written_path)]
+        self._store.capture_reads += 1
+        self._store.by_identity[identity] = snapshot
+        self._store.path_snapshots[opened.key] = snapshot
+        self._store.paths[id(snapshot)] = [(opened.key, written_path)]
         return snapshot
 
     def validate(self, written_path: str) -> None:
@@ -621,9 +672,13 @@ class ProjectResources:
             raise ResourceFailure("resource_path_missing", written_path) from error
         os.close(opened.descriptor)
 
+    def validate_location(self, written_path: str) -> None:
+        """Validate the written form and approved-root location of a path."""
+        self._anchor(written_path)
+
     def verify(self, snapshot: ResourceSnapshot) -> None:
         """Verify accepted path bytes before parsing the retained snapshot."""
-        paths = self._paths.get(id(snapshot))
+        paths = self._store.paths.get(id(snapshot))
         if not paths:
             raise ValueError("snapshot was not captured by this project")
         for expected_key, written_path in paths:

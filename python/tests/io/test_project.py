@@ -367,6 +367,41 @@ def test_rejects_non_regular_runtime_file_kinds() -> None:
             server.close()
 
 
+def test_resource_views_share_one_snapshot_across_spec_directories(
+    tmp_path: Path,
+) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    source = tmp_path / "shared.csv"
+    source.write_bytes(b"ID\n01\n")
+    resources = ProjectResources(tmp_path, base_directory=first)
+
+    from_first = resources.capture("../shared.csv")
+    from_second = resources.with_base_directory(second).capture("../shared.csv")
+
+    assert from_first is from_second
+    assert resources.capture_reads == 1
+
+
+def test_resource_view_may_resolve_relative_to_an_approved_data_root(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    data = tmp_path / "data"
+    producer = data / "producer"
+    project.mkdir()
+    producer.mkdir(parents=True)
+    (producer / "source.csv").write_bytes(b"ID\n01\n")
+    resources = ProjectResources(project, data_roots=(data,))
+
+    snapshot = resources.with_base_directory(producer).capture("source.csv")
+
+    assert snapshot.content == b"ID\n01\n"
+    assert resources.capture_reads == 1
+
+
 def test_rejects_file_as_intermediate_component(tmp_path: Path) -> None:
     (tmp_path / "input").write_text("not a directory")
     resources = ProjectResources(tmp_path)
