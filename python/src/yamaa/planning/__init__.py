@@ -10,6 +10,7 @@ from yamaa.planning.execution import (
     ResolvedJoin,
     UnsupportedFeature,
     UnsupportedPlanningError,
+    expression_path,
     plan_execution,
     preflight_execution,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "ResolvedJoin",
     "UnsupportedFeature",
     "UnsupportedPlanningError",
+    "expression_path",
     "plan_execution",
     "preflight_execution",
 ]
