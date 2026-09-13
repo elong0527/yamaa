@@ -59,7 +59,6 @@ columns:
 
 rows:
   - id: collected
-    dataset: ADEG_IN
     derivations:
       STUDYID: {source: ADEG_IN.STUDYID}
       USUBJID: {source: ADEG_IN.USUBJID}
@@ -75,7 +74,6 @@ rows:
       ROW_PROVENANCE: {literal: collected}
 
   - id: qtcbr
-    dataset: ADEG_IN
     group_by: [ADEG_IN.STUDYID, ADEG_IN.USUBJID, ADEG_IN.AVISIT]
     filter: >-
       QTVAL IS NOT NULL

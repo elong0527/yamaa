@@ -1822,6 +1822,8 @@ def _preflight_findings(
     for index, row in enumerate(rows):
         if not specification.parents:
             driver = row.dataset
+            if driver is None and len(specification.datasets) == 1:
+                driver = next(iter(specification.datasets))
             if driver not in specification.datasets:
                 diagnostics.append(
                     _diagnostic(
@@ -1831,6 +1833,8 @@ def _preflight_findings(
                     )
                 )
         driver = row.dataset
+        if driver is None and len(specification.datasets) == 1:
+            driver = next(iter(specification.datasets))
         diagnostics.extend(_group_by_declaration(row, index, driver))
         scope = _row_scope(specification, row, driver)
         for name, declaration in row.derivations.items():

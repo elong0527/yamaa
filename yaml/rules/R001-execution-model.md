@@ -30,6 +30,9 @@ does not define what an expression means (R007), how a name binds to a source
    change row count.
 
 **R001-4.** Each `rows` entry uses its explicit `dataset` as the row driver.
+When `datasets` declares exactly one dataset, that dataset drives every
+entry without an explicit `dataset`. When more than one dataset is declared,
+every entry must declare an explicit `dataset`.
 
 **R001-5.** A row template has one of two modes:
 
@@ -187,7 +190,8 @@ evaluation order to mapping order or to repeated reads of one partition.
 
 ## Errors
 
-- **R001-32.** A row without an explicit `dataset`: fail.
+- **R001-32.** A row without an explicit `dataset` when more than one dataset
+  is declared: fail.
 - **R001-33.** A specification with no `rows` entry and no default driver:
   fail. The default driver is root `base`, or the single declared dataset
   when `base` is omitted.

@@ -80,7 +80,6 @@ columns:
 
 rows:
   - id: item
-    dataset: QS
     filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE'"
     derivations:
       PARAMCD:
@@ -91,7 +90,6 @@ rows:
         source: QS.QSSTRESN
 
   - id: subscale
-    dataset: QS
     filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE' AND QS.QSTESTCD = 'PF01'"
     derivations:
       PARAMCD:

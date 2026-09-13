@@ -93,6 +93,5 @@ columns:
 
 rows:
   - id: fever_occurrence
-    dataset: VS
     filter: "VS.VSCAT = 'REACTOGENICITY' AND VS.VSTESTCD = 'TEMP'"
     derivations: {}

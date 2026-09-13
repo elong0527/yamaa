@@ -75,7 +75,6 @@ columns:
 
 rows:
   - id: alt
-    dataset: LB
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
       PARAMCD:
@@ -86,7 +85,6 @@ rows:
         source: LB.LBSTRESN
 
   - id: ast
-    dataset: LB
     filter: "LB.LBTESTCD = 'AST'"
     derivations:
       PARAMCD:
@@ -97,7 +95,6 @@ rows:
         source: LB.LBSTRESN
 
   - id: ast_alt_ratio
-    dataset: LB
     filter: "LB.LBTESTCD = 'ALT'"
     derivations:
       PARAMCD:

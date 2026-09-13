@@ -35,5 +35,4 @@ columns:
 
 rows:
   - id: record
-    dataset: DM
     derivations: {}

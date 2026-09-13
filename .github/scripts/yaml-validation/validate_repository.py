@@ -2925,6 +2925,11 @@ def prune_inheritance_collections(spec, env):
     base = pruned.get('base')
     if isinstance(base, str):
         live_datasets.add(base)
+    pruned_datasets = pruned.get('datasets')
+    if isinstance(pruned_datasets, dict):
+        sole = [name for name in pruned_datasets if isinstance(name, str)]
+        if len(sole) == 1:
+            live_datasets.add(sole[0])
     live_lookups = set()
 
     references = set()
@@ -4428,6 +4433,12 @@ def validate_spec_contracts(
     rows = spec.get('rows')
     row_entries = rows if isinstance(rows, list) else []
     default_driver = default_driver_dataset(spec)
+    datasets = spec.get('datasets')
+    dataset_names = (
+        [name for name in datasets if isinstance(name, str)]
+        if isinstance(datasets, dict)
+        else []
+    )
     full_spec = all(
         field in spec
         for field in ('domain', 'datasets', 'keys', 'output', 'columns')
@@ -4438,10 +4449,15 @@ def validate_spec_contracts(
             "or empty and more than one dataset is declared"
         )
     for index, row in enumerate(row_entries):
-        if full_spec and isinstance(row, dict) and 'dataset' not in row:
+        if (
+            full_spec
+            and isinstance(row, dict)
+            and 'dataset' not in row
+            and len(dataset_names) > 1
+        ):
             errors.append(
                 f"ERROR: {spec_label}.rows[{index}].dataset: row requires an "
-                "explicit dataset"
+                "explicit dataset when more than one dataset is declared"
             )
 
     columns = spec.get('columns')

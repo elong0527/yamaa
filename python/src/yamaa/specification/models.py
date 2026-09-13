@@ -90,7 +90,7 @@ class Column(_StrictModel):
 
 class Row(_StrictModel):
     id: str
-    dataset: str
+    dataset: str | None = None
     group_by: list[str] | None = None
     filter: str | None = None
     derivations: dict[str, HandledExpression]

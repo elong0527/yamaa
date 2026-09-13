@@ -41,6 +41,5 @@ columns:
 
 rows:
   - id: subject
-    dataset: ODM
     filter: "ODM.ItemOID = 'IT.DM.RANDDT'"
     derivations: {}

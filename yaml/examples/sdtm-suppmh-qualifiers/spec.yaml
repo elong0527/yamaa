@@ -75,7 +75,6 @@ columns:
 
 rows:
   - id: family_history
-    dataset: MH_PRE
     filter: "MH_PRE.MHFAMHX IS NOT NULL"
     derivations:
       QNAM:
@@ -86,7 +85,6 @@ rows:
         source: MH_PRE.MHFAMHX
 
   - id: medical_record_confirmation
-    dataset: MH_PRE
     filter: "MH_PRE.MHCONF IS NOT NULL"
     derivations:
       QNAM:

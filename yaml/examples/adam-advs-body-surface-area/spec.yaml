@@ -47,7 +47,6 @@ columns:
 
 rows:
   - id: collected
-    dataset: ADVSIN
     derivations:
       STUDYID: {source: ADVSIN.STUDYID}
       USUBJID: {source: ADVSIN.USUBJID}
@@ -60,7 +59,6 @@ rows:
       DTYPE: {literal: null}
 
   - id: derived_bsa
-    dataset: ADVSIN
     group_by: [ADVSIN.STUDYID, ADVSIN.USUBJID, ADVSIN.VISIT]
     filter: "HEIGHT_VAL IS NOT NULL AND WEIGHT_VAL IS NOT NULL"
     derivations:
