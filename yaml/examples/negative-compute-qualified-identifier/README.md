@@ -1,24 +1,34 @@
-# ADaM ADEX: reject a doubled dose read straight from exposure
+# Reject a doubled dose read straight from exposure
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-compute-qualified-identifier.html)
 
-This example uses a subject-treatment inventory with its component exposure
-records to attempt one record per subject:
+**Goal:** double the administered exposure dose in `DOSEDBL` for
+each subject.
 
-- `DOSEDBL` is meant to be twice the administered dose.
+**Input:** a subject-treatment inventory carrying `EXTRT` with
+matching exposure records carrying the exposure sequence number
+and `EXDOSE`.
 
-A subject has several exposure records, so a formula naming the exposure dose
-does not say which record it means. Silently choosing one, or totalling them,
-would each give a different result from the same specification, so the run must
-fail and no artifact is accepted. A formula computes from values the record
-already carries, and a value taken from another source becomes one of those
-first.
+**Variables:**
+
+- `DOSEDBL` would contain twice the exposure dose (`EXDOSE * 2`)
+  for the subject, but no row is produced.
+
+A subject can have several exposure records, so a formula naming
+`EX.EXDOSE` does not say which record it means. Choosing one
+without a stated rule, or totalling them, would each give a
+different result from the same request, so the run is rejected
+before any data is read and no artifact is accepted. A formula
+computes from values the record already carries, and a value
+taken from another source is bound to one of those first.
+
+**Standard:** ADaM | **Domain:** ADEX
 
 ## How to fix
 
-Choose the exposure record explicitly, bind its dose to an output column, and
-then compute from the unqualified column. For example, to use the earliest
-administration:
+Choose the exposure record explicitly, bind its dose to an output column,
+and then compute from the unqualified column. For example, to use the
+earliest administration:
 
 ```yaml
 - name: DOSE
@@ -39,5 +49,5 @@ administration:
 
 Keep `DOSE` internal by omitting it from `output.columns`.
 
-If the intended value is cumulative dose instead, use a qualified `aggregate`
-rather than selecting one record.
+If the intended value is cumulative dose instead, use a qualified
+`aggregate` rather than selecting one record.

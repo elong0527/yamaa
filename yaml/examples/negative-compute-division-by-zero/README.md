@@ -1,16 +1,28 @@
-# ADaM ADLB: reject a percent change from a zero baseline
+# Reject a percent change from a zero baseline
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-compute-division-by-zero.html)
 
-This example uses collected laboratory results with their baseline values to
-attempt one record per subject and parameter:
+**Goal:** work out `PCHG`, the percent change from baseline, from
+the collected result in `AVAL` and its baseline in `BASE`.
 
-- `AVAL` is the collected result and `BASE` the baseline it is compared with;
-- `PCHG` is the change from baseline as a percentage of it.
+**Input:** laboratory results with baseline values from LB,
+carrying the collected numeric result (`LBSTRESN`) and the
+baseline it is compared with (`LBBLRESN`).
 
-One subject's baseline is zero, so the percentage has no value. Reporting it as
-absent would hide a rule the specification never stated, so the run must fail
-and no artifact is accepted.
+**Variables:**
+
+- `AVAL` would be the collected numeric result, taken from
+  `LBSTRESN`.
+- `BASE` would be the baseline it is compared with, taken from
+  `LBBLRESN`.
+- `PCHG` would be the change from baseline as a percentage of
+  it, worked out as `100 * (AVAL - BASE) / BASE`.
+
+One subject's baseline is zero, so the percentage has no value.
+Leaving it missing would assume a rule the specification never
+stated, so the run fails and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

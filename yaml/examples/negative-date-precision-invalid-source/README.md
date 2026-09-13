@@ -1,24 +1,29 @@
-# ADaM ADAE: reject a completeness flag read from text that is not a date
+# Reject a start-date completeness flag read from text that is not a date
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-date-precision-invalid-source.html)
 
-This example uses collected adverse events whose start dates are sometimes
-incomplete to attempt one record per event:
+**Goal:** one analysis record for each collected event, carrying
+the start-date completeness flag `ASTDTF`.
 
-- `ASTDTF` says how much of the start date was collected, so that a reader can
-  tell a recorded day from a supplied one.
+**Input:** collected event records carrying the reported term
+(`AETERM`) and the collected start (`AESTDTC`).
 
-One start date was entered as a word rather than as a date or the beginning of
-one, and the specification answers only for a date that was never collected.
-Reporting the text as fully collected, or as collected to no precision at all,
-would each describe a value nobody can read as a date, so the run must fail and
-no artifact is accepted.
+**Variables:**
+
+- `ASTDTF` would contain the start-date completeness read from
+  `AESTDTC`: blank when the full date was collected and when the
+  source was never collected, and `D` when only the year and month
+  were collected. Text that is neither a date nor the beginning of
+  one has no completeness to report, so the run stops when it
+  tries to read precision from it and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 
-Correct the source text when a date can be recovered. If invalid date text is
-intentionally represented by a missing precision flag, declare that separately
-from the existing missing-source behavior:
+Correct the source text when a date can be recovered. If invalid date text
+is intentionally represented by a missing precision flag, declare that
+separately from the existing missing-source behavior:
 
 ```yaml
 date_precision:
@@ -27,5 +32,5 @@ date_precision:
   invalid: null
 ```
 
-The `invalid` handler covers `ONGOING`; `missing` covers a source value that
+The `invalid` outcome covers `ONGOING`; `missing` covers a source value that
 was not collected.

@@ -1,12 +1,23 @@
-# ADaM ADSL: analysis age
+# Analysis age at randomization
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-analysis-age.html)
 
-This example derives the analysis age from the demographic birth date and the
-reference randomization date:
+**Goal:** derive each subject's analysis age (`AAGE`) and its unit
+(`AAGEU`) at randomization for the subject-level dataset.
 
-- `BRTHDT` and `RANDDT` are carried through as given: the subject's birth date
-  and randomization date;
-- `AAGE` is the subject's age in whole years between their birth and
-  randomization, or missing when either date is absent.
-- `AAGEU` is the unit of the analysis age, fixed to `YEARS`.
+**Input:** demographics (DM) records carrying the birth date
+(`BRTHDT`) and the randomization date (`RANDDT`); both dates are
+carried through unchanged, and the unit is fixed to `YEARS`.
+
+**Variables:**
+
+- `AAGE` is the count of yearly anniversaries of `BRTHDT` falling
+  on or before `RANDDT`; missing when either date is absent. A
+  February 29 birthday falls on February 28 in common years, and a
+  randomization date before the birth date gives the negated count
+  with the dates exchanged.
+
+**Note:** `AAGEU` stays `YEARS` on every record, even where `AAGE`
+is missing for absent dates.
+
+**Standard:** ADaM | **Domain:** ADSL

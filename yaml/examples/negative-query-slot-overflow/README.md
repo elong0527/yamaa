@@ -1,29 +1,45 @@
-# ADaM ADAE: reject an event belonging to more queries than it has places
+# Reject an event claimed twice in one query place
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-query-slot-overflow.html)
 
-This example uses collected adverse events and the study's query dictionary to
-attempt one row per adverse event:
+**Goal:** show for each adverse event the reported term (`AETERM`),
+the coded term (`AEDECOD`), and the two safety groupings
+(`SMQ01NAM`, `SMQ01CD`, `SMQ02NAM`, `SMQ02CD`).
 
-- `AETERM` is the term the site reported and `AEDECOD` the dictionary term it
-  was coded to;
-- `SMQ01NAM` and `SMQ01CD` name the first standardized query the event belongs
-  to and its dictionary identifier, and `SMQ02NAM` and `SMQ02CD` say the same
-  for the second. Each pair is empty when the event's term is not in that
-  query.
+**Input:** collected adverse events carrying the reported term
+(`AETERM`) and the coded term (`AEDECOD`), plus a query dictionary
+carrying each coded term (`TERM`) under a grouping name (`GRPNAME`)
+with code (`GRPID`) and place (`PREFIX`).
 
-The dictionary gives every query a place to be reported in, and one place
-holds one query. A term that two queries in the same place both claim has no
-answer: choosing either would drop the other, and which one was dropped would
-depend on the order the dictionary happened to be stored in. The run must
-therefore fail and no artifact is accepted.
+**Variables:**
+
+- `SMQ01NAM` would be the name from the dictionary entry whose
+  place is `SMQ01` and whose term matches the coded term; blank
+  when no entry matches.
+- `SMQ01CD` would be the code from that same `SMQ01` entry;
+  missing when no entry matches.
+- `SMQ02NAM` would be the name from the dictionary entry whose
+  place is `SMQ02` and whose term matches the coded term; blank
+  when no entry matches.
+- `SMQ02CD` would be the code from that same `SMQ02` entry;
+  missing when no entry matches.
+
+A coded term claimed by two dictionary entries in the same place
+has no single answer: choosing either entry would drop the other,
+and which one was dropped would depend on the order the dictionary
+happened to be stored in. The run is rejected with no artifact
+accepted.
+
+**Note:** one place holds one grouping, so a term claimed twice in
+the same place cannot be reported without choosing.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 
 First decide how many queries the study reports. Every query the study
-analyses needs a place of its own before the run, and the dictionary is where
-that is decided, so move the second query to the next free place. The second is
-already taken by hepatic disorders here, so hypersensitivity takes the third:
+analyses needs a place of its own, so move the second query to the next free
+place:
 
 ```csv
 PREFIX,GRPNAME,GRPID,TERM
@@ -31,12 +47,8 @@ SMQ01,Severe Cutaneous Adverse Reactions,20000020,STEVENS-JOHNSON SYNDROME
 SMQ03,Hypersensitivity,20000214,STEVENS-JOHNSON SYNDROME
 ```
 
-A new place is not free: it needs its own lookup and its own `SMQ03NAM` and
-`SMQ03CD`, because how many an artifact carries is fixed when the
-specification is written and not when the dictionary is read. A study whose
-dictionary grows past what the specification declares must be re-read against
-it rather than left to fill the places it already has.
-
-Do not resolve the clash by keeping whichever query is stored first. It
-answers with a query the study did not choose, and it stops reporting the
-other one at all.
+A new place needs its own lookup and its own `SMQ03NAM` and `SMQ03CD`,
+because how many groupings an artifact carries is fixed when the study rules
+are written and not when the dictionary is read. Do not resolve the clash by
+keeping whichever query is stored first: it answers with a query the study did
+not choose, and it stops reporting the other one at all.

@@ -1,11 +1,22 @@
-# ADaM ADAE: reject a review flag that names an unavailable date
+# Reject a review flag that names an unavailable date
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adae-review-unknown-date.html)
 
-The collected adverse events produce one analysis row per reported event:
+**Goal:** derive `REVIEWFL` to flag adverse events (AEs) for
+protocol review.
 
-- `REVIEWFL` is rejected because its decision names a date that the output
-  does not provide.
+**Input:** collected adverse event records carrying the collected
+onset date (`AESTDTC`) alongside the study, subject, and event
+sequence identifiers.
+
+**Variables:**
+
+- `REVIEWFL`: would contain `Y` when the named date is on or
+  after `DATE '2025-01-01'` and `N` otherwise; the decision names
+  `UNKNOWNDT`, which no declared column provides, so the
+  specification is rejected before any data is read.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 

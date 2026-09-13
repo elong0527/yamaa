@@ -1,17 +1,25 @@
-# ADaM ADSL: reject a subject listing that names one field twice
+# Reject a subject listing that names one field twice
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-duplicate-field-name.html)
 
-This example uses a collected subject listing to attempt one record per
-subject:
+**Goal:** build a subject-level listing carrying `SITEID` and
+`SEX`.
 
-- `SITEID` is the site the subject enrolled at;
-- `SEX` is the sex recorded at screening.
+**Input:** collected demographics records carrying `SITEID` and
+two fields both named `SEX`.
 
-The listing carries two fields named `SEX`. A value asked for by that name
-could come from either of them, so two readers of the same file can store
-different sexes for the same subject and neither is wrong. The run must fail
-and no artifact is accepted.
+**Variables:**
+
+- `SITEID` would contain the site the subject enrolled at, copied
+  from the collected records.
+- `SEX` would contain the recorded sex, copied from the collected
+  records, but a value asked for by that name could come from
+  either of the two fields.
+
+The run is rejected when the listing is read and no artifact is
+accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

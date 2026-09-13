@@ -1,16 +1,24 @@
-# ADaM ADSL: reject a body surface area from a negative weight
+# Reject a body surface area from a negative weight
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-compute-sqrt-of-negative.html)
 
-This example uses collected height and weight to attempt one record per
-subject:
+**Goal:** derive body surface area (`BSA`) for each subject from
+collected height and weight.
 
-- `BSA` is body surface area in square metres, derived from the collected
-  height and weight.
+**Input:** demographic records carrying collected height
+(`HEIGHTCM`) and weight (`WEIGHTKG`).
 
-One weight carries a leading minus sign, so the area has no real value. Any
-answer would be invented rather than derived, so the run must fail and no
+**Variables:**
+
+- `BSA` would contain body surface area in square meters, the
+  square root of the collected height (`HEIGHTCM`) times the
+  collected weight (`WEIGHTKG`) divided by `3600`.
+
+A negative weight leaves the area with no real value. Any answer
+would be invented rather than derived, so the run fails and no
 artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

@@ -1,21 +1,25 @@
-# ADaM ADVS: derive body mass index
+# Derive body mass index at each weight visit
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-body-mass-index.html)
 
-The artifact contains collected ADVS records and one derived body mass index
-parameter per eligible subject and visit:
+**Goal:** add one body mass index (BMI) record for each collected
+weight record, holding `BMI` as its code, `Body Mass Index
+(kg/m^2)` as its name, the computed index in `AVAL`, and
+`CALCULATION` in `DTYPE`.
 
-- `PARAMCD` retains each collected code and is `BMI` for the derived record;
-- `PARAM` retains each collected name and is body mass index for the derived
-  record;
-- `AVAL` retains each collected value. For BMI, it is weight in kilograms
-  divided by the square of the subject's once-measured height in metres. No BMI
-  record is added when weight is missing or when height is missing or zero;
-- `DTYPE` is `CALCULATION` on a derived BMI record and missing on a collected
-  record.
+**Input:** vital signs with the subject's height record (`HEIGHT`
+named `Height (cm)`) and weight records across visits (`WEIGHT`
+named `Weight (kg)`), each carrying its measured value and visit.
 
-Input containing a pre-existing BMI parameter is rejected. The derived BMI
-row is generated for each collected weight record using one height per subject.
-The formula and once-measured-height behavior follow
-[`pharmaverse/admiral`](https://github.com/pharmaverse/admiral) commit
-`e32e5689d7fd03e224ddbcfc369c332c5df837d9`, `R/derive_param_bmi.R`.
+**Variables:**
+
+- `AVAL` carries each collected measurement through. On a derived
+  record it is the weight in kilograms divided by the square of
+  the once-measured height in meters (the squared centimeter
+  height divided by 10000); it is missing when that height is
+  missing or zero. A weight record with a missing value yields no
+  derived record.
+- `DTYPE` is `CALCULATION` on a derived body mass index record and
+  blank on a collected record.
+
+**Standard:** ADaM | **Domain:** ADVS

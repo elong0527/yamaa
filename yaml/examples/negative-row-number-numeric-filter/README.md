@@ -1,24 +1,28 @@
-# ADaM ADLB: reject a sequence filtered by a number
+# Reject a sequence filtered by a number
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-row-number-numeric-filter.html)
 
-This example uses collected laboratory results to record one row per
-result:
+**Goal:** number collected laboratory results within each subject,
+with `VISITSEQ` giving the collection sequence for each result.
 
-- `LBSTRESN` is the numeric result of the laboratory test.
-- `VISITSEQ` numbers the results in collection order within each
-  subject.
+**Input:** collected laboratory results carrying the numeric
+result (`LBSTRESN`) and the collection sequence.
 
-The row filter arrives as a number instead of a predicate over the
-rows. No implementation may guess which rows a bare number keeps, so
-the specification is rejected before any data is read and no artifact
-is accepted.
+**Variables:**
+
+- `VISITSEQ` would number each result within its subject in
+  collection-sequence order, keeping only rows where the filter
+  holds. The filter arrives as a bare number instead of a
+  comparison, so no reader may guess which rows it keeps, and the
+  run is rejected before any data is read and no artifact is
+  accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 
-Decide which rows the study numbers, then state the rule as a
-predicate. When every collected result counts, leave the filter out
-entirely:
+Decide which rows the study numbers, then state the rule as a comparison.
+When every collected result counts, leave the filter out entirely:
 
 ```yaml
 - name: VISITSEQ
@@ -30,5 +34,5 @@ entirely:
         - {variable: LBSEQ, direction: asc}
 ```
 
-When only some rows count, write the condition they satisfy rather
-than numbering the rows by hand.
+When only some rows count, write the condition they satisfy rather than
+numbering the rows by hand.

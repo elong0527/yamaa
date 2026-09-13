@@ -1,16 +1,27 @@
-# ADaM ADSL: reject a comment whose quoted text never closes
+# Reject a comment whose quoted text never closes
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-unterminated-quote.html)
 
-This example uses a collected subject listing to attempt one record per
-subject:
+**Goal:** carry the investigator comment (`CMNT`) for each subject,
+one record per subject.
 
-- `CMNT` is the comment the investigator recorded about the subject.
+**Input:** collected subject listing holding the investigator
+comment (`COMMENT`).
 
-The last comment opens quoting that it never closes, so the file says its
-text continues past the end of the file. Where that record ends, and
-therefore how many subjects the listing holds, depends on how far a reader
-chooses to read. The run must fail and no artifact is accepted.
+**Variables:**
+
+- `CMNT` would be the comment the investigator recorded about the
+  subject, copied from `COMMENT`.
+
+The result would carry `CMNT` beside the study and subject
+identifiers, but no row is produced: the last comment opens quoting
+that it never closes, so the file says its text continues past the
+end of the file. Where that record ends, and therefore how many
+subjects the listing holds, depends on how far a reader chooses to
+read, so the run is rejected while reading the listing and no
+artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

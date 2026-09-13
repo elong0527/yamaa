@@ -1,18 +1,31 @@
-# SDTM LB: build one record per collected lab result
+# Build one record per collected result
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-lb-findings.html)
 
-This example uses collected long-form lab data and a `yamaa` specification to
-derive one record per calcium and creatinine result:
+**Goal:** build one record per collected calcium and creatinine
+result with `LBTESTCD`, `LBTEST`, `LBORRES`, `LBORRESU`,
+`LBSTRESN`, `LBSTRESU` and `LBDTC`.
 
-- `LBTESTCD` and `LBTEST` identify the test, and `LBORRES` and `LBORRESU` keep
-  the collected result and its unit exactly as reported;
-- `LBSTRESN` and `LBSTRESU` are the result in standard form. A result reported
-  as text rather than a number, such as `NOT DONE`, keeps its text in
-  `LBORRES` and leaves `LBSTRESN` empty rather than failing;
-- `LBDTC` is the collection date for the visit the result belongs to;
-- `LBSEQ` numbers a subject's records in date and test order, and is assigned
-  once all records exist so that it is unique within the subject.
+**Input:** long-form Operational Data Model (ODM) rows, one row
+per collected item, with the collected entry in the value field.
+Calcium rows carry one item, creatinine rows carry another, and
+the collection date rides along in the same visit group.
 
-A test with no collected value produces no record at all, so a subject's
-records are the results actually reported rather than one per scheduled test.
+**Variables:**
+
+- `LBTESTCD` is `CA` for calcium rows and `CREAT` for creatinine
+  rows.
+- `LBTEST` is `Calcium` when the test code is `CA` and
+  `Creatinine` when it is `CREAT`.
+- `LBORRES` is the collected entry, kept exactly as reported,
+  including text such as `NOT DONE`.
+- `LBORRESU` is `mg/dL` for every record.
+- `LBSTRESN` is the numeric form of the collected entry; missing
+  when the entry is text rather than a number, such as `NOT DONE`.
+- `LBSTRESU` is `mg/dL` for every record.
+- `LBDTC` is the collection date from the same visit group.
+
+**Note:** a test with no collected entry produces no record, so the
+records are only results actually reported.
+
+**Standard:** SDTM | **Domain:** LB

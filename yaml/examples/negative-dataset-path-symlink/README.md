@@ -1,19 +1,31 @@
-# ADaM ADLB: reject reference limits reached through a stand-in name
+# Reject reference limits read through a stand-in name
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-dataset-path-symlink.html)
 
-This example uses collected laboratory results with a table of reference
-limits by test and sex to attempt one record per subject and parameter:
+**Goal:** build analysis records for laboratory tests carrying
+`SEX`, `AVAL`, and `ANRHI`, with the upper limit chosen for each
+test and sex.
 
-- `SEX` is the sex the limits are chosen by;
-- `AVAL` is the collected result;
-- `ANRHI` is the upper limit of normal for that test and sex.
+**Input:** collected laboratory results carrying the collected
+result (`LBSTRESN`), test code (`LBTESTCD`), and sex (`SEX`),
+plus a reference table of upper limits by test code and sex.
 
-The name the study reads is a stand-in that points at another file. Where it
-points can be changed without changing the study, so the limits that were
-reviewed and the limits that are read need not be the same, and nothing in
-the study records the difference. The run must fail and no artifact is
-accepted.
+**Variables:**
+
+- `SEX` would hold the sex the limit is chosen by, copied from
+  the collected record.
+- `AVAL` would hold the collected result, copied from `LBSTRESN`.
+- `ANRHI` would hold the upper limit of normal for that test and
+  sex, taken from the reference table for the matching test code
+  and `SEX`.
+
+The name the study reads for the reference table is a stand-in
+that points at another file. Where it points can be changed
+without changing the study, so the limits that were reviewed and
+the limits that are read need not be the same. The run is
+rejected before any data is read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

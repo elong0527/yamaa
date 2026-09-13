@@ -1,17 +1,24 @@
-# ADaM ADSL: reject a subject listing stored under an unnamed format
+# Reject a listing stored under an unnamed format
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-unknown-profile.html)
 
-This example uses a collected subject listing to attempt one record per
-subject:
+**Goal:** build a subject listing carrying `SITEID`.
 
-- `SITEID` is the site the subject enrolled at.
+**Input:** collected subject listing stored as `input/dm.txt`,
+holding `SITEID`.
 
-The listing is stored under a name that says nothing about how to read it.
-Its bytes happen to be separated by commas today, but nothing states that,
-and a reader that decided by looking inside would read a file the study never
-described -- differently in another season, or differently from the next
-reader. The run must fail and no artifact is accepted.
+**Variables:**
+
+- `SITEID` would be the site the subject enrolled at, taken
+  directly from the collected listing.
+
+The file name says nothing about how to read it. Its bytes happen
+to use commas today, but nothing states that, and a reader that
+decided by looking inside could read the same file differently
+another time or differently from the next reader. The run is
+rejected before any data is read, so no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

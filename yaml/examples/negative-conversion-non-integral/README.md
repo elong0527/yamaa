@@ -1,16 +1,20 @@
-# ADaM ADVS: reject a pulse rate recorded between whole beats
+# Reject a fractional pulse rate that cannot become a whole number
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-conversion-non-integral.html)
 
-This example uses collected pulse rates to attempt one record per measurement:
+**Goal:** derive `AVAL` from the collected pulse rate.
 
-- `AVAL` is the pulse in beats per minute, which the analysis holds as a whole
-  number.
+**Input:** collected vital signs (VS) records carrying `VSTESTCD`
+and `VSSTRESN`.
 
-One rate was averaged over a half-minute count and recorded with a fraction.
-Dropping the fraction and moving to the nearest whole number disagree, and both
-report a rate that was not measured, so the run must fail and no artifact is
-accepted.
+**Variables:**
+
+- `AVAL` would be the analysis value taken directly from
+  `VSSTRESN`; a fractional collected value cannot take a
+  whole-number value, so the run fails and no artifact is
+  accepted.
+
+**Standard:** ADaM | **Domain:** ADVS
 
 ## How to fix
 

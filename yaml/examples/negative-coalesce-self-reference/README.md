@@ -1,13 +1,25 @@
-# ADaM ADVS: reject a severity carried from its own column
+# Reject a severity that falls back to its own column
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-coalesce-self-reference.html)
 
-This example uses vital-sign records with a `yamaa` specification to derive
-one row per measurement:
+**Goal:** fill `SEVAL`, the severity recorded at the visit, from
+the collected severity when present, otherwise from `SEVAL`
+itself, defaulting to `0` when neither gives a value.
 
-- `SEVAL` is the severity recorded at the visit, or the severity carried
-  forward from the earlier rows when the visit has none. A severity that
-  falls back to its own column has no earlier value to carry.
+**Input:** vital-sign records carrying study, subject, and sequence
+entries plus the collected severity (`SEVAL`), which is missing
+when no severity was recorded.
+
+**Variables:**
+
+- `SEVAL`: the collected severity when one was recorded at the
+  visit, otherwise the value of `SEVAL` itself, otherwise `0`.
+
+`SEVAL` reads its own value, so there is no earlier value to carry
+and the definition loops back on itself. The run is rejected
+before any data is read, and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADVS
 
 ## How to fix
 

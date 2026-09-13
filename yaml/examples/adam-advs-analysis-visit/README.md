@@ -1,21 +1,33 @@
-# ADaM ADVS: assign records to analysis windows
+# Assign vital signs records to analysis windows
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-analysis-visit.html)
 
-This example uses a pre-derived ADVS slice and a `yamaa` specification to
-derive one row per record:
+**Goal:** assign each systolic blood pressure (`SYSBP`) record to
+its analysis window, adding `AVISITN` and `ANL01FL`.
 
-- `ADT`, `ADY`, and `AVAL` are the record's analysis date, its study day, and
-  the value measured, all carried through as given;
-- `VISIT` and `VISITNUM` are what the site recorded, kept unchanged;
-- `AVISIT` and `AVISITN` are the analysis window the record falls in, and its
-  order, decided from the study day rather than from what the site called the
-  visit. Windows run from the lower bound up to but not including the next, so
-  every day belongs to exactly one. A visit the site left unscheduled still
-  lands in whichever window its day falls in, and one recorded past the last
-  boundary falls in the open-ended final window;
-- `ANL01FL` marks the record that represents its subject in that window: the
-  earliest by study day, and the lower sequence number if two share a day. A
-  record with no analysis date belongs to no window and is never marked.
+**Input:** vital signs records carrying the collected visit number
+(`VISITNUM`), the analysis date (`ADT`), the relative analysis day
+(`ADY`), and the measured value (`AVAL`).
 
-Because study day has no day zero, the baseline window can only hold day one.
+**Variables:**
+
+- `AVISITN` is the numeric order of the record's analysis window:
+  `-1` for `SCREENING` (days before day 0), `0` for `BASELINE`
+  (day 1 only, since study days skip from day `-1` to day `1`),
+  `2` for `WEEK 2` (day 2 up to but not including day 22), `4`
+  for `WEEK 4` (day 22 up to but not including day 43), and `99`
+  for `POST-TREATMENT` (day 43 onward, with no upper bound). It
+  is missing when the relative day is missing, so such a record
+  belongs to no window.
+- `ANL01FL` is `Y` for the record that represents its subject and
+  parameter in each window: the earliest by relative day, with
+  the lower sequence number breaking ties on the same day;
+  missing otherwise. A record with no relative day is never
+  flagged.
+
+**Note:** windows follow the relative day rather than the
+collected visit name, so a record the site left unscheduled still
+belongs to whichever window its day falls in, and one recorded
+past the last boundary falls in the open-ended final window.
+
+**Standard:** ADaM | **Domain:** ADVS

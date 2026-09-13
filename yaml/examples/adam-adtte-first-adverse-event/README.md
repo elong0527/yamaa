@@ -1,21 +1,37 @@
-# ADaM ADTTE: derive the time to first adverse event
+# Time to first adverse event
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adtte-first-adverse-event.html)
 
-This example uses treatment start dates, end of study dates, and adverse
-events to derive one time-to-first-adverse-event record per subject:
+**Goal:** derive `STARTDT`, `ADT`, `AVAL`, `CNSR`, `EVNTDESC`,
+`SRCDOM`, `SRCVAR`, and `SRCSEQ` for the `TTAE` (`Time to First
+Adverse Event`) record of each subject, measuring time from
+treatment start to the first adverse event (AE), or to end of
+study when no event occurred.
 
-- `STARTDT` is the treatment start date. `ADT` is the selected adverse event
-  date, or the end of study date when no event exists. The selected date is
-  clamped to `STARTDT` when it predates treatment start. When neither source
-  date exists, `ADT` is missing and the subject row remains.
-- `AVAL` is the inclusive number of days from treatment start through `ADT`.
-- `CNSR` is zero for an adverse event and one for censoring, while `EVNTDESC`
-  states whether the record represents an adverse event or end-of-study
-  censoring.
-- `SRCDOM`, `SRCVAR`, and `SRCSEQ` identify the selected event or censor
-  source.
+**Input:** subject-level treatment start (`TRTSDT`) and
+end-of-study (`EOSDT`) dates, with AE records carrying onset
+date (`ASTDT`).
 
-The time-to-event precedence, earliest event, and tie-breaking behavior follow
-[`pharmaverse/admiral`](https://github.com/pharmaverse/admiral) commit
-`01669e09c5a49064826ab1c1f470835b71c1c27f`, `R/derive_param_tte.R`.
+**Variables:**
+
+- `STARTDT`: treatment start, copied from `TRTSDT`; missing
+  when `TRTSDT` is missing.
+- `ADT`: earliest `ASTDT` across the subject's AE records, or
+  `EOSDT` when no AE record exists; ties break by lowest
+  sequence number. The selected date is moved up to `STARTDT`
+  when earlier than treatment start; missing when neither
+  source date exists.
+- `AVAL`: inclusive day count from `STARTDT` through `ADT`;
+  missing when either date is missing.
+- `CNSR`: `0` for an AE, `1` when censored at end of study.
+- `EVNTDESC`: `AE` for an event, `END OF STUDY` for censoring.
+- `SRCDOM`: `ADAE` for an event, `ADSL` for censoring.
+- `SRCVAR`: `ASTDT` for an event, `EOSDT` for censoring.
+- `SRCSEQ`: sequence number of the selected AE record; blank
+  when the record is censored.
+
+**Note:** clamping moves the date only: a selected date earlier
+than treatment start is moved up to `STARTDT`, keeping its
+censoring, description, and source, with `AVAL` of `1`.
+
+**Standard:** ADaM | **Domain:** ADTTE

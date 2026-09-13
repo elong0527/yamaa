@@ -1,30 +1,46 @@
-# ADaM ADLB: classify a result, its shift from baseline, and one criterion
+# Classify each result, its shift from baseline, and one criterion
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adlb-shift-and-criteria.html)
 
-This example uses a pre-derived ADLB slice and a `yamaa` specification to
-derive one row per subject, parameter, and record:
+**Goal:** derive `ANRIND`, `BASE`, `BNRIND`, `SHIFT1`, `R2BASE`,
+`CRIT1`, and `CRIT1FL`: mark where each analysis value sits
+against its normal range, how that mark moved since baseline, and
+whether the record met one high-result criterion.
 
-- `AVAL` is the analysis value, and `ANRLO` and `ANRHI` the normal limits the
-  parameter is read against. `ANRIND` places the value between them as `LOW`,
-  `NORMAL`, or `HIGH`, and is empty without a value, or without limits to read
-  it against;
-- `ABLFL` marks the record taken as the subject's baseline for the parameter.
-  `BASE` repeats that record's value on every record of the parameter and
-  `BNRIND` repeats its classification;
-- `SHIFT1` reads as the baseline classification, then the one this record
-  carries, so a result that stayed normal and one that moved out of range are
-  told apart. It is empty when this record has no classification of its own;
-- `R2BASE` is the analysis value as a multiple of the baseline value. A
-  parameter whose baseline is zero has no ratio, since the multiple is not
-  defined there;
-- `CRIT1` states the criterion the record was assessed against, here a result
-  more than three times the upper normal limit, and `CRIT1FL` says whether the
-  record met it, `Y` or `N`. Both are empty on a record the criterion could not
-  be assessed on, which differs from one assessed and not met.
+**Input:** input records carrying the analysis value `AVAL`, the
+normal range limits `ANRLO` and `ANRHI`, and the baseline flag
+`ABLFL` (`Y` on the record taken as the baseline for the subject
+and parameter).
 
-`BASE` and `BNRIND` are read from the one record the parameter's baseline flag
-marks, so the shift and the ratio that rest on them are empty for a parameter
-with no marked baseline. The classification and the criterion are read from the
-record's own value and limits instead, and are empty for a parameter the limits
-do not cover.
+**Variables:**
+
+- `ANRIND` is the record's own mark: `LOW` below `ANRLO`, `HIGH`
+  above `ANRHI`, and `NORMAL` between them; empty when `AVAL`,
+  `ANRLO`, or `ANRHI` is missing.
+- `BASE` repeats the baseline record's `AVAL` on every record of the
+  subject and parameter; empty when no record carries the flag.
+- `BNRIND` repeats the baseline record's `ANRIND` the same way;
+  empty with no flagged baseline.
+- `SHIFT1` joins the baseline mark and the record's own mark, baseline
+  first, so a result that stayed normal reads `NORMAL to NORMAL` and
+  one that moved out of range reads `NORMAL to HIGH`; empty when
+  either mark is missing — the record's own or the baseline's.
+- `R2BASE` divides `AVAL` by `BASE`, so the baseline record itself
+  reads 1 when the ratio can be computed; empty when `AVAL` is
+  missing, when there is no baseline, and when the baseline is zero
+  since the multiple is not defined there.
+- `CRIT1` states the criterion the record was assessed against, a
+  result greater than three times the upper limit of normal (ULN):
+  `Result greater than 3 x ULN`; empty when `AVAL` or `ANRHI` is
+  missing, since the comparison cannot be made.
+- `CRIT1FL` says whether the record met it, `Y` or `N`; empty where it
+  could not be assessed, which differs from assessed and not met.
+
+**Note:** the shift joins the baseline mark with the record's own
+mark and the ratio rests on the flagged baseline value, while the
+mark and the criterion rest on the record's own value and limits;
+the criterion text and its flag always arrive together, as do the mark
+and the shift. A record that breaks these pairings stops the run, and
+no output is written.
+
+**Standard:** ADaM | **Domain:** ADLB

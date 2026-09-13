@@ -1,34 +1,45 @@
-# ADaM ADVS: reject a record that no analysis visit identifies
+# Reject a record that no analysis visit identifies
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-keys-missing-value.html)
 
-This example uses a pre-derived ADVS slice to attempt one record per subject,
-parameter, and analysis visit:
+**Goal:** carry the analysis date (`ADT`), study day (`ADY`), and
+measured value (`AVAL`) through from a pre-derived ADVS slice
+(`ADVSPRE`), placing each record in the analysis window its study
+day falls in.
 
-- `VSSEQ`, `ADT`, and `ADY` are the collected record number, the record's
-  analysis date, and its study day, all carried through as given;
-- `AVAL` is the value measured;
-- `AVISIT` is the analysis window the record falls in, decided from the study
-  day rather than from what the site called the visit. Windows run from the
-  lower bound up to but not including the next, so every day belongs to exactly
-  one. A record with no study day belongs to no window and is left without one.
+**Input:** pre-derived ADVS slice carrying analysis date (`ADT`),
+study day (`ADY`), and measured value (`AVAL`).
 
-A record is identified here by its study, subject, parameter, and analysis
-window. A record left without a window carries no identity: nothing states
-which measurement it is, and a later run has nowhere to put the same record.
-The values are complete before that is checked, and the expected file records
-the rows presented to the check, but the run still fails and no artifact is
-accepted.
+**Variables:**
+
+- `ADT` would be the record's analysis date, carried through from
+  the pre-derived slice as given, and missing when the slice date
+  is missing.
+- `ADY` would be the record's study day, carried through from the
+  pre-derived slice as given, and missing when the slice day is
+  missing.
+- `AVAL` would be the value measured, carried through from the
+  pre-derived slice as given.
+- `AVISIT` would be the analysis window the study day falls in,
+  and blank when the study day is missing so the record belongs
+  to no window.
+
+A record is identified here by study, subject, parameter, and
+analysis window. A record left with a blank window carries no
+identity. The values are complete before that is checked, and the
+expected file records the completed rows presented to the check,
+but the run still fails and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADVS
 
 ## How to fix
 
-Decide which grain the dataset is on.
-
-If it is one record per analysis visit, every record must fall in a window.
-Recover the analysis date in the governed source where it is available. Where
-it is not, keep the record out of the dataset rather than give it a place it
-does not have. A row template selects the records that become rows, so move
-one column's derivation into it and leave the rest where they are:
+Decide which grain the dataset is on. If it is one record per analysis visit,
+every record must fall in a window. Recover the analysis date in the governed
+source where it is available. Where it is not, keep the record out of the
+dataset rather than give it a place it does not have. A row template selects
+the records that become rows, so move one column's derivation into it and
+leave the rest where they are:
 
 ```yaml
 - name: AVAL
@@ -42,7 +53,7 @@ rows:
         source: ADVSPRE.AVAL
 ```
 
-If it is one record per collected measurement, identify rows by the collected
+If it is one record per collected record, identify rows by the collected
 record instead, and a record with no window keeps an empty one:
 
 ```yaml

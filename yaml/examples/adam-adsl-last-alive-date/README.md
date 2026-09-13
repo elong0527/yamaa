@@ -1,30 +1,27 @@
-# ADaM ADSL: derive the last known alive date from multiple sources
+# Last known alive date from several sources
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-last-alive-date.html)
 
-This example uses ADSL, ADAE, and ADVS inputs to derive one row per subject:
+**Goal:** derive `LSTCNTDT` and `LSTALVDT` for each subject from the
+contact, treatment, adverse event, and vital signs dates.
 
-- `TRTEDT` is the subject's treatment end date, already available in `ADSL`.
-- `LSTCNTDC` is the date of last contact as collected, which may carry only a
-  year, or a year and month, or nothing at all.
-- `LSTCNTDT` is that contact date completed to a day. Where a component was
-  not collected it is placed as late as the collected text still allows: a
-  year and month keep their month and take its final day, and a year alone
-  takes the final day of December. A last known alive date is a claim that the
-  subject was alive at least until then, so the latest day the collected text
-  admits is the reading that claims no more than the text supports.
-- `LSTALVDT` is the subject's last known alive date. It is derived as the
-  latest date among the treatment end date, the completed contact date, the
-  subject's latest adverse event end date (`AENDT`), and the subject's latest
-  vital signs date (`ADATE`).
+**Input:** subject-level records carrying `TRTEDT` and the collected
+contact text `LSTCNTDC`, alongside adverse event end dates (`AENDT` in
+ADAE) and vital signs dates (`ADATE` in ADVS).
 
-A completed date competes on the day it names. For `S1` the contact date was
-collected as February 2025 and its final day, the 28th, is later than every
-date collected in full, so it is the last known alive date. `S3` shows the
-same for a year collected alone. For `S2` the contact date was collected in
-full and an adverse event ends one day later, so the event date is retained
-instead.
+**Variables:**
 
-A subject whose dates are all missing has no last known alive date. When a
-subject has dates in some sources but not others, the latest of the available
-dates is retained.
+- `LSTCNTDT` is the contact text completed to a day: a year and month
+  take the last day of that month, a year alone takes the last day of
+  December, and missing or unusable text leaves the date missing.
+- `LSTALVDT` is the latest of `TRTEDT`, `LSTCNTDT`, the subject's
+  latest `AENDT`, and the subject's latest `ADATE`. A completed date
+  competes on the day it names. When every source is missing the date
+  stays missing; otherwise the latest available date is kept.
+
+**Note:** a contact collected as `2025-02` completes to `2025-02-28`,
+which beats every date collected in full, while `2025` alone becomes
+`2025-12-31`. A contact collected in full can still lose: an adverse
+event ending one day later is kept instead.
+
+**Standard:** ADaM | **Domain:** ADSL

@@ -1,21 +1,30 @@
-# ADaM ADSL: reject a treatment and dose taken from an unchosen record
+# Reject a treatment and dose taken from an unchosen record
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-record-lookup-unordered-choice.html)
 
-This example uses collected demographics with exposure records to attempt one
-record per subject:
+**Goal:** carry the treatment a subject received and the dose they
+received of it onto `TRT01A` and `TRT01DOSE`.
 
-- `TRT01A` and `TRT01DOSE` are the treatment the subject received and the dose
-  they received of it, and are meant to describe one administration.
+**Input:** demographics records for each subject, with exposure
+records carrying treatment (`EXTRT`), dose (`EXDOSE`), sequence
+number (`EXSEQ`), and start date (`EXSTDTC`).
 
-The subject has two administrations and nothing says which one the record
-describes. Naming the pair together guarantees that both come from one
-administration, and it cannot say which, so the run must fail and no artifact
-is accepted.
+**Variables:**
+
+- `TRT01A` would contain the treatment from the subject's chosen
+  exposure record.
+- `TRT01DOSE` would contain the dose from that same record.
+
+**Note:** the pair must come from one administration, but nothing
+says which one, so a subject matching more than one exposure
+record has no single answer, and the run is rejected with no
+artifact accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
-Declare a total ordering and which end of that order to retain. To choose the
+State the full order and which end of that order to keep. To choose the
 earliest administration:
 
 ```yaml
@@ -26,4 +35,4 @@ record_lookups:
     keep: first
 ```
 
-Both `TRT01A` and `TRT01DOSE` then come from that same selected record.
+Both `TRT01A` and `TRT01DOSE` then come from that same chosen record.

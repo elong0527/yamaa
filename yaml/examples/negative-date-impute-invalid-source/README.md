@@ -1,17 +1,27 @@
-# ADaM ADAE: reject a start date completed from text that is not a date
+# Reject a start date completed from text that is not a date
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-date-impute-invalid-source.html)
 
-This example uses collected adverse events whose start dates are sometimes
-incomplete to attempt one record per event:
+**Goal:** complete the analysis start date (`ASTDT`) of each
+collected adverse event (AE) from its collected onset text.
 
-- `ASTDT` is the start date of the event, completed from the earliest date the
-  collected text still allows.
+**Input:** collected adverse event records carrying onset text
+(`AESTDTC`).
 
-One start date was entered as a word rather than as a date or the beginning of
-one. A date that was never collected and text that cannot be read as a date are
-different defects, and the specification states an answer for neither, so the
-run must fail and no artifact is accepted.
+**Variables:**
+
+- `ASTDT` would be the analysis start date of the event,
+  completed to the earliest calendar date the collected onset
+  text (`AESTDTC`) still allows, and missing when the text
+  carries no date at all.
+
+Onset text entered as a word rather than as a date or the
+beginning of one has no stated completion. A date that was never
+collected and text that cannot be read as a date are different
+defects, so the run stops when it reaches the unreadable text and
+no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 
@@ -27,5 +37,5 @@ derivation:
     invalid: null
 ```
 
-The `invalid` handler applies to non-missing text that is not an ISO 8601 date
-or date prefix; it is distinct from the `missing` handler.
+The `invalid` outcome applies to text that is not a calendar date or date
+beginning; it is distinct from text that was never collected.

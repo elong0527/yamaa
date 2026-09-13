@@ -1,17 +1,30 @@
-# ADaM ADSL: reject a subject listing record with an extra field
+# Reject a record with an extra field
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-record-width.html)
 
-This example uses a collected subject listing to attempt one record per
-subject:
+**Goal:** build a subject-level result carrying the enrollment
+site (`SITEID`) and the recorded sex (`SEX`) for each subject.
 
-- `SITEID` is the site the subject enrolled at;
-- `SEX` is the sex recorded at screening.
+**Input:** subject listing records holding the enrollment site
+(`SITEID`) and the recorded sex (`SEX`). One record carries one
+more field than the header names, and nothing says what the
+surplus value holds.
 
-One record carries a field more than the listing names. Nothing says what the
-surplus value is, so reading the record means either dropping a collected
-value or shifting every value after it into the wrong field. The run must
-fail and no artifact is accepted.
+**Variables:**
+
+- `SITEID` would be the site the subject enrolled at, taken from
+  the collected listing.
+- `SEX` would be the recorded sex, taken from the collected
+  listing.
+
+The result would carry `SITEID` and `SEX` beside the study and
+subject identifiers, but no row is produced: one record carries a
+field more than the listing names, so reading it would mean either
+dropping a collected value or shifting every value after it into
+the wrong field, and the run is rejected while reading the listing
+with no artifact accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

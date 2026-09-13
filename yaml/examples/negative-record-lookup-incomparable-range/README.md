@@ -1,15 +1,24 @@
-# SDTM VS: reject an epoch range with incomparable endpoints
+# Reject an epoch range with incomparable endpoints
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-record-lookup-incomparable-range.html)
 
-This example uses one vital-sign date and an epoch table expressed in integer
-study days to attempt one output record:
+**Goal:** attach the epoch (`EPOCH`) containing each collected
+vital-sign date.
 
-- `VSDTC` is the collected calendar date;
-- `EPOCH` is meant to be the period containing the corresponding study day.
+**Input:** vital-sign records carrying a collected calendar date
+(`VSDTC`), plus an epoch table carrying a period name (`EPOCH`)
+with integer day bounds (`DYLO`, `DYHI`).
 
-A calendar date cannot be ordered directly against integer day bounds. The run
-must fail rather than rely on implementation-specific coercion.
+**Variables:**
+
+- `EPOCH` would be the period name from the epoch-table row whose
+  day range contains the visit.
+
+A calendar date cannot be ordered directly against integer day
+bounds, so the run is rejected before any data is read and no
+artifact is accepted.
+
+**Standard:** SDTM | **Domain:** VS
 
 ## How to fix
 

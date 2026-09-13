@@ -1,29 +1,40 @@
-# ADaM ADLB: reject a baseline chosen between two same-day results
+# Reject a baseline tied on one collection date
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-baseline-flag-tied-date.html)
 
-This example uses collected lab data with ADSL to prepare one record per
-subject, parameter, and collected result:
+**Goal:** mark the baseline record of each subject and parameter
+with `ABLFL` and repeat its value with `BASE`.
 
-- `ADT` is the collection date and `TRTSDT` the subject's treatment start date;
-- `AVAL` is the analysis value of the result;
-- `ABLFL` marks the baseline record of each subject and parameter: the latest
-  result on or before treatment start;
-- `BASE` repeats that record's value on every result for the parameter, so each
-  result can be compared with it.
+**Input:** collected laboratory results with test code, collection
+date, and numeric result (`LBTESTCD`, `LBDTC`, `LBSTRESN`), plus
+subject treatment start dates from ADSL (`TRTSDT`).
 
-A subject whose last two results before treatment were drawn on the same day
-has two candidates for that mark and nothing that separates them. Either
-candidate gives the parameter a different baseline and moves every comparison
-against it, so the run must fail and no artifact is accepted.
+**Variables:**
+
+- `ADT` would contain the collection date, taken from `LBDTC`.
+- `TRTSDT` would contain the subject's treatment start date,
+  taken from ADSL `TRTSDT`.
+- `AVAL` would contain the analysis value, taken from `LBSTRESN`.
+- `ABLFL` would be `Y` on the baseline record for the subject
+  and parameter: the latest result on or before treatment start,
+  and blank on every other record.
+- `BASE` would contain the baseline record's `AVAL` on every
+  record for the subject and parameter; missing when no result
+  falls on or before treatment start.
+
+Results sharing one collection date can tie for latest, and either
+candidate gives the parameter a different baseline. The run fails
+and no dataset is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 
 Decide which of the two draws is the baseline before choosing how to state it.
 Two results drawn on the same day are usually a sample and its repeat, and the
-governed source should carry the result the study reports, or a collection time
-that separates the draws. Correcting it there leaves the rule saying what it
-means: the latest result before treatment.
+source data system should carry the result the study reports, or a collection
+time that separates the draws. Correcting it there leaves the rule saying what
+it means: the latest result before treatment.
 
 When both draws are reportable and the study states a tie-break, choose the
 record explicitly instead of by date alone. Order the eligible results and mark
