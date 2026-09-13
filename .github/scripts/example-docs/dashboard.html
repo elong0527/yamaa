@@ -26,9 +26,11 @@
   </header>
   <main class="dashboard" aria-label="Example dashboard">
     <section id="readme" class="panel readme-panel" aria-labelledby="readme-heading">
-      <header class="panel-header"><h2 id="readme-heading">README</h2><span class="panel-caption">What this example means</span></header>
+      <header class="panel-header"><span class="panel-title"><h2 id="readme-heading">Summary</h2><a class="edit-button" href="$readme_edit_url">Edit</a></span><span class="panel-caption">What this example means</span></header>
+      <div class="source-path"><code>README.md</code></div>
       <div class="prose" aria-label="README content">$readme</div>
     </section>
+    $failure_section
     <div class="comparison-bar">
       <button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-controls="specification" aria-expanded="true" hidden><svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1.5" y="2.5" width="15" height="13" rx="2" stroke="currentColor"/><path d="M6.5 3v12" stroke="currentColor"/></svg><span>Hide Spec</span></button>
       <div class="subject-control" hidden>
@@ -39,7 +41,8 @@
     </div>
     <div class="workbench">
       <aside id="specification" class="panel schema-panel" aria-labelledby="schema-heading">
-        <header class="panel-header"><h2 id="schema-heading">YAML specification</h2><span class="panel-caption">$spec_lines lines</span></header>
+        <header class="panel-header"><span class="panel-title"><h2 id="schema-heading">YAML specification</h2><a class="edit-button" href="$spec_edit_url">Edit</a></span><span class="panel-caption">$spec_lines lines</span></header>
+        <div class="source-path"><code>$spec_file_name</code></div>
         <div class="code-scroll" tabindex="0" aria-label="Complete YAML specification"><pre><code>$spec_code</code></pre></div>
       </aside>
       <div id="spec-resizer" class="panel-resizer" role="separator" aria-label="Resize specification panel" aria-controls="specification" aria-orientation="vertical" aria-valuemin="240" aria-valuemax="720" aria-valuenow="350" tabindex="0" title="Drag to resize the specification panel"><span aria-hidden="true"></span></div>
@@ -49,7 +52,7 @@
           $input_files
         </section>
         <section id="outputs" aria-labelledby="outputs-heading">
-          <header class="section-header"><h2 id="outputs-heading">Expected output</h2><span class="panel-caption">$output_caption</span></header>
+          <header class="section-header"><h2 id="outputs-heading">$datasets_heading</h2><span class="panel-caption">$output_caption</span></header>
           $output_files
           <div class="data-legend"><span><i class="derived-swatch" aria-hidden="true"></i> Shaded columns are derived</span><span>&mdash; = missing value</span></div>
         </section>

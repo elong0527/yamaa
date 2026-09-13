@@ -72,9 +72,21 @@ explicit planning relation at that grain and may be enriched from collected
 relations through record lookups. Dynamically counted expansion must happen
 upstream and its expanded records enter the specification as ordinary input.
 
-**R001-12.** When `rows` is absent or empty, row construction produces exactly
-one output row per `base` record, in base-record order. `base` is required in
-that case, unless `datasets` declares exactly one dataset, which drives.
+**R001-12.** Row construction first derives the distinct combination of `keys`
+over the driver records, in first-appearance order. That key table is
+standalone: one row per unique key combination, with no link back to the
+driver records. When `rows` is absent or empty, the key table is the output
+row set. When `rows` is present, each row template is one section: its filter
+selects feeding records, each surviving record yields its rows for that key
+combination, and the sections concatenate. `base` is required when `rows` is
+absent or empty, unless `datasets` declares exactly one dataset, which
+drives. `keys` must be declared.
+
+**R001-12a.** A column derivation must yield exactly one value per row: zero
+values is missing, more than one value for one key combination is a failure
+under R001-44. In a specification without `rows`, a key column derivation
+must not depend on a non-key output column (R001-43); keys are derived before
+any row logic runs.
 
 ## Expression evaluation
 
@@ -183,3 +195,8 @@ evaluation order to mapping order or to repeated reads of one partition.
 - **R001-41.** A dependency cycle: fail and report the cycle path.
 - **R001-42.** An expression that changes row count during column derivation:
   fail.
+- **R001-43.** In a specification without `rows`, a key column derivation
+  depending on a non-key output column: fail. Keys are derived before any row
+  logic runs.
+- **R001-44.** A column derivation yielding more than one value for one key
+  combination: fail and report the column and the keys.

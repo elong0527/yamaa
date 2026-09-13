@@ -48,6 +48,23 @@ def specification(
     )
 
 
+def test_a_key_column_must_not_depend_on_a_non_key_column_without_rows() -> None:
+    spec = specification(
+        [
+            Column(name="B", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="K", type="str", derivation=derivation({"source": "B"})),
+        ]
+    ).model_copy(update={"keys": ["K"]})
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": source_table()})
+
+    (diagnostic,) = raised.value.diagnostics
+    assert diagnostic.condition == "key_dependency"
+    assert diagnostic.requirement == "R001-43"
+    assert diagnostic.context == {"column": "K", "dependency": "B"}
+
+
 def test_a_later_column_reference_is_not_silently_sorted() -> None:
     spec = specification(
         [
