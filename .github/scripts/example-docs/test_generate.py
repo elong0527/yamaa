@@ -121,8 +121,43 @@ class DashboardTests(unittest.TestCase):
         example = generate.EXAMPLES / "negative-source-record-width"
         page = generate.render_example(example).decode("ascii")
         self.assertIn("raw CSV", page)
-        self.assertIn("Expected artifacts", page)
+        self.assertIn("No artifact is produced", page)
         self.assertIn(generate.escape((example / "expected/error.yaml").read_text()), page)
+
+    def test_negative_failure_has_banner_and_own_section(self):
+        example = generate.EXAMPLES / "negative-output-duplicate-subject"
+        page = generate.render_example(example).decode("ascii")
+        self.assertIn('<div class="result-rejected"><dt>result</dt><dd>Rejected</dd></div>', page)
+        self.assertIn('id="expected-failure"', page)
+        self.assertIn('<h2 id="outputs-heading">Unexpected Output</h2>', page)
+        self.assertIn("not an accepted artifact", page)
+        self.assertIn('<div><dt>phase</dt><dd>output</dd></div>', page)
+        self.assertIn('<div><dt>requirement</dt><dd>R005-52</dd></div>', page)
+        self.assertIn("<details><summary>expected/error.yaml</summary>", page)
+        base = "https://github.com/elong0527/yamaa/edit/main/yaml/examples/negative-output-duplicate-subject"
+        self.assertIn(
+            '<h2 id="expected-failure-heading">Expected failure</h2>'
+            f'<a class="edit-button" href="{base}/expected/error.yaml">Edit</a>',
+            page,
+        )
+        self.assertNotIn("<dt>spec paths</dt>", page)
+        self.assertIn("<code>README.md</code>", page)
+        self.assertIn(f'<a class="edit-button" href="{base}/README.md">Edit</a>', page)
+        self.assertIn(f'<a class="edit-button" href="{base}/spec.yaml">Edit</a>', page)
+        self.assertIn(f'<a class="edit-button" href="{base}/input/dm.csv">Edit</a>', page)
+        self.assertIn(f'<a class="edit-button" href="{base}/expected/adsl.csv">Edit</a>', page)
+        # error.yaml leaves the datasets: one pane per CSV, none for the YAML.
+        content = DashboardContent(page)
+        self.assertIn("expected-failure", content.sections)
+        self.assertNotIn('aria-label="expected/error.yaml"', page)
+        self.assertEqual(
+            [pane["aria-label"] for pane in content.file_panes],
+            ["input/dm.csv", "expected/adsl.csv"],
+        )
+        positive = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
+        self.assertNotIn('class="result-rejected"', positive)
+        self.assertNotIn('id="expected-failure"', positive)
+        self.assertIn('<h2 id="outputs-heading">Expected output</h2>', positive)
 
     def test_subject_identity_includes_study(self):
         first = generate.subject_key({"STUDYID": "STUDY-A", "USUBJID": "001"})
