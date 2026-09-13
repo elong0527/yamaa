@@ -46,8 +46,8 @@ def test_source_distinguishes_absence_present_missing_and_resolution_failure() -
     )
 
     class BrokenResolver:
-        def resolve(self, variable: str) -> FailedResolution:
-            del variable
+        def resolve(self, variable: str, read: object = None) -> FailedResolution:
+            del variable, read
             return FailedResolution(condition=failure)
 
     failed = evaluate_expression({"source": "BROKEN"}, BrokenResolver())

@@ -1,11 +1,18 @@
 phase: derivation
-condition: multiple_values_per_key
+condition: multiple_rows_per_key
 spec_paths:
   - columns.AGE.derivation.source
 requirement: R001-44
 context:
   identifier: DM.AGE
-  value_count: 2
+  row_count: 2
+  values:
+    - "58"
+    - "59"
+  differing_columns:
+    AGE:
+      - "58"
+      - "59"
   keys:
     - STUDYID: PILOT9
       USUBJID: P9-812

@@ -22,7 +22,7 @@ def _fixture_plan():
     return build_binding_plan(loaded_spec.specification, sources), sources
 
 
-def test_plan_resolves_output_dataset_and_complete_odm_item_names() -> None:
+def test_plan_resolves_output_and_dataset_names_only() -> None:
     plan, _ = _fixture_plan()
 
     assert plan.bind("LBDTC") == BoundReference(
@@ -36,26 +36,15 @@ def test_plan_resolves_output_dataset_and_complete_odm_item_names() -> None:
         dataset="ODM",
         field="StudyOID",
     )
-    item = plan.bind("ODM.IT.LB.LBDTC")
-    assert isinstance(item, BoundReference)
-    assert item.kind == "odm_item"
-    assert item.item_oid == "IT.LB.LBDTC"
-    assert item.context_columns == (
-        "StudyOID",
-        "MetaDataVersionOID",
-        "SubjectKey",
-        "StudyEventOID",
-        "StudyEventRepeatKey",
-        "FormOID",
-        "FormRepeatKey",
-        "ItemGroupOID",
-        "ItemGroupRepeatKey",
-    )
 
-    period_free_item = plan.bind("ODM.AGE")
-    assert isinstance(period_free_item, BoundReference)
-    assert period_free_item.kind == "odm_item"
-    assert period_free_item.item_oid == "AGE"
+    # An item identifier is a value of the ItemOID column, not a name: a read
+    # reaches it by filtering records, so binding one is R002-27's unresolved
+    # reference like any other suffix the dataset does not carry.
+    for identifier in ("ODM.IT.LB.LBDTC", "ODM.AGE"):
+        item = plan.bind(identifier)
+        assert isinstance(item, BindingFailure)
+        assert item.condition.condition == "unknown_field"
+        assert item.condition.context == {"identifier": identifier}
 
 
 @pytest.mark.parametrize(

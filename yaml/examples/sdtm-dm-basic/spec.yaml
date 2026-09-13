@@ -31,14 +31,16 @@ columns:
     type: str
     label: Subject Identifier for the Study
     derivation:
-      source: ODM.SubjectKey
+      source: USUBJID
 
   - name: SEXRAW
     type: str
     label: Sex as Collected
     derivation:
       source:
-        variable: ODM.IT.DM.SEX
+        variable: ODM.Value
+        filter: ODM.ItemOID = 'IT.DM.SEX'
+        on: [StudyOID, SubjectKey]
         missing: null
 
   - name: SEX
@@ -58,7 +60,9 @@ columns:
     label: Age
     derivation:
       source:
-        variable: ODM.IT.DM.AGE
+        variable: ODM.Value
+        filter: ODM.ItemOID = 'IT.DM.AGE'
+        on: [StudyOID, SubjectKey]
         missing: null
 
   - name: ARM
@@ -66,7 +70,9 @@ columns:
     label: Description of Planned Arm
     derivation:
       source:
-        variable: ODM.IT.DM.ARM
+        variable: ODM.Value
+        filter: ODM.ItemOID = 'IT.DM.ARM'
+        on: [StudyOID, SubjectKey]
         missing: Unassigned
 
   - name: ACTARM

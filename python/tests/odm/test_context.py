@@ -8,7 +8,6 @@ from yamaa.io.polars import frame_from_values, runtime_rows
 from yamaa.models import (
     MISSING,
     ConditionResult,
-    DateValue,
     TypedColumn,
     TypedTable,
     ValueResult,
@@ -52,16 +51,23 @@ def _specification(column_names: list[str]) -> Specification:
 def _index(
     table: TypedTable,
     *,
-    batch_size: int | None = None,
     output_columns: list[str] | None = None,
 ) -> BindingIndex:
     specification = _specification(output_columns or ["OUT"])
     sources = {"ODM": table}
-    return BindingIndex(
-        build_binding_plan(specification, sources),
-        sources,
-        batch_size=batch_size,
-    )
+    return BindingIndex(build_binding_plan(specification, sources), sources)
+
+
+def _read(item: str, on: list[str], **options: object) -> dict[str, object]:
+    """The filtered read that reaches one collected item under R002-20."""
+    return {
+        "source": {
+            "variable": "ODM.Value",
+            "filter": f"ODM.ItemOID = '{item}'",
+            "on": on,
+            **options,
+        }
+    }
 
 
 def test_form_scoped_fixture_resolves_only_the_current_form() -> None:
@@ -74,7 +80,6 @@ def test_form_scoped_fixture_resolves_only_the_current_form() -> None:
     index = BindingIndex(
         build_binding_plan(loaded_spec.specification, sources),
         sources,
-        batch_size=3,
     )
     rows = [
         row
@@ -147,7 +152,7 @@ def test_dm_fixture_resolves_contextual_age_and_arm_without_dropping_rows() -> N
     ]
 
 
-def test_every_available_context_level_is_part_of_the_index_key() -> None:
+def test_a_read_matches_on_every_context_column_it_names() -> None:
     base = ["S1", "M1", "P1", "E1", "1", "F1", "1", "G1", "1"]
     contexts = [base]
     for position, replacement in enumerate(
@@ -169,9 +174,10 @@ def test_every_available_context_level_is_part_of_the_index_key() -> None:
     table = _table(names, rows)
     binding_index = _index(table)
 
+    read = _read("IT.TEST.VALUE", list(ODM_CONTEXT_COLUMNS))
     for expected, target in enumerate(runtime_rows(table)[::2]):
-        resolved = binding_index.context({"ODM": target}).resolve("ODM.IT.TEST.VALUE")
-        assert resolved == ResolvedValue(value=f"value-{expected}")
+        resolved = evaluate_expression(read, binding_index.context({"ODM": target}))
+        assert resolved == ValueResult(value=f"value-{expected}")
 
 
 def test_direct_dataset_and_completed_output_names_resolve() -> None:
@@ -185,19 +191,6 @@ def test_direct_dataset_and_completed_output_names_resolve() -> None:
 
     assert context.resolve("ODM.StudyOID") == ResolvedValue(value="S1")
     assert context.resolve("EARLIER") == ResolvedValue(value="completed")
-
-
-def test_period_free_odm_item_oid_resolves_contextually() -> None:
-    table = _table(
-        ["StudyOID", "ItemOID", "Value"],
-        [
-            ["S1", "IT.TEST.TARGET", "target"],
-            ["S1", "AGE", "42"],
-        ],
-    )
-    context = _index(table).context({"ODM": runtime_rows(table)[0]})
-
-    assert context.resolve("ODM.AGE") == ResolvedValue(value="42")
 
 
 def test_unknown_names_and_item_references_without_context_are_failures() -> None:
@@ -238,7 +231,7 @@ def test_absent_item_and_matched_missing_value_take_different_paths(
     )
     index = _index(loaded.table)
     first, _, second = runtime_rows(loaded.table)
-    expression = {"source": {"variable": "ODM.IT.TEST.VALUE", "missing": "fallback"}}
+    expression = _read("IT.TEST.VALUE", ["StudyOID"], missing="fallback")
 
     present_missing = evaluate_expression(
         expression,
@@ -265,16 +258,21 @@ def test_duplicate_context_requires_or_reports_multiple_match_selection() -> Non
     target = runtime_rows(table)[0]
     context = index.context({"ODM": target})
 
-    duplicate = evaluate_expression({"source": "ODM.IT.TEST.VALUE"}, context)
+    duplicate = evaluate_expression(_read("IT.TEST.VALUE", ["StudyOID"]), context)
     assert isinstance(duplicate, ConditionResult)
-    assert duplicate.condition.phase == "join"
-    assert duplicate.condition.condition == "multiple_matches"
+    assert duplicate.condition.phase == "derivation"
+    assert duplicate.condition.condition == "multiple_rows_per_key"
+    assert duplicate.condition.requirement == "R001-44"
     assert duplicate.condition.applicable_handler == "multiple_matches"
+    assert duplicate.condition.context["row_count"] == 3
+    assert duplicate.condition.context["values"] == ["excluded", "first", "last"]
 
     first = evaluate_expression(
         {
             "source": {
-                "variable": "ODM.IT.TEST.VALUE",
+                "variable": "ODM.Value",
+                "filter": "ODM.ItemOID = 'IT.TEST.VALUE'",
+                "on": ["StudyOID"],
                 "multiple_matches": {
                     "filter": "ODM.Include = 'Y'",
                     "order_by": [
@@ -293,7 +291,9 @@ def test_duplicate_context_requires_or_reports_multiple_match_selection() -> Non
     last = evaluate_expression(
         {
             "source": {
-                "variable": "ODM.IT.TEST.VALUE",
+                "variable": "ODM.Value",
+                "filter": "ODM.ItemOID = 'IT.TEST.VALUE'",
+                "on": ["StudyOID"],
                 "multiple_matches": {
                     "filter": "ODM.Include = 'Y'",
                     "order_by": [
@@ -333,7 +333,9 @@ def test_multiple_match_count_requires_more_than_one_filtered_survivor() -> None
     one = evaluate_expression(
         {
             "source": {
-                "variable": "ODM.IT.TEST.VALUE",
+                "variable": "ODM.Value",
+                "filter": "ODM.ItemOID = 'IT.TEST.VALUE'",
+                "on": ["StudyOID"],
                 "multiple_matches": {**policy, "filter": "ODM.Rank = 2"},
             }
         },
@@ -342,7 +344,9 @@ def test_multiple_match_count_requires_more_than_one_filtered_survivor() -> None
     none = evaluate_expression(
         {
             "source": {
-                "variable": "ODM.IT.TEST.VALUE",
+                "variable": "ODM.Value",
+                "filter": "ODM.ItemOID = 'IT.TEST.VALUE'",
+                "on": ["StudyOID"],
                 "missing": "fallback",
                 "multiple_matches": {**policy, "filter": "ODM.Rank > 9"},
             }
@@ -368,7 +372,9 @@ def test_order_terms_are_validated_when_filter_leaves_one_survivor() -> None:
     result = evaluate_expression(
         {
             "source": {
-                "variable": "ODM.IT.TEST.VALUE",
+                "variable": "ODM.Value",
+                "filter": "ODM.ItemOID = 'IT.TEST.VALUE'",
+                "on": ["StudyOID"],
                 "multiple_matches": {
                     "filter": "ODM.Include = 'Y'",
                     "order_by": [
@@ -403,7 +409,9 @@ def test_multiple_match_filter_also_applies_to_one_contextual_match() -> None:
     result = evaluate_expression(
         {
             "source": {
-                "variable": "ODM.IT.TEST.VALUE",
+                "variable": "ODM.Value",
+                "filter": "ODM.ItemOID = 'IT.TEST.VALUE'",
+                "on": ["StudyOID"],
                 "missing": "fallback",
                 "multiple_matches": {
                     "filter": "ODM.Include = 'Y'",
@@ -441,7 +449,9 @@ def test_duplicate_order_applies_direction_and_null_placement_independently() ->
         return evaluate_expression(
             {
                 "source": {
-                    "variable": "ODM.IT.TEST.VALUE",
+                    "variable": "ODM.Value",
+                    "filter": "ODM.ItemOID = 'IT.TEST.VALUE'",
+                    "on": ["StudyOID"],
                     "multiple_matches": {
                         "order_by": [
                             {
@@ -465,49 +475,10 @@ def test_duplicate_order_applies_direction_and_null_placement_independently() ->
     )
 
 
-def test_index_batching_preserves_source_order_tie_breaks() -> None:
-    table = _table(
-        ["StudyOID", "ItemOID", "Value", "Rank"],
-        [
-            ["S1", "IT.TEST.TARGET", "target", 0],
-            ["S1", "IT.TEST.VALUE", "one", 1],
-            ["S1", "IT.TEST.VALUE", "two", 1],
-            ["S1", "IT.TEST.VALUE", "three", 1],
-        ],
-        types={"Rank": "int"},
-    )
-    target = runtime_rows(table)[0]
-    expression = {
-        "source": {
-            "variable": "ODM.IT.TEST.VALUE",
-            "multiple_matches": {
-                "order_by": [
-                    {
-                        "variable": "ODM.Rank",
-                        "direction": "asc",
-                        "nulls": "last",
-                    }
-                ],
-                "keep": "last",
-            },
-        }
-    }
-
-    results = [
-        evaluate_expression(
-            expression,
-            _index(table, batch_size=batch_size).context({"ODM": target}),
-        )
-        for batch_size in (None, 1, 2, 3, 20)
-    ]
-
-    assert results == [ValueResult(value="three", handled_by="multiple_matches")] * 5
-
-
-def test_one_value_on_several_records_of_a_key_reads_as_that_value() -> None:
-    # R001-12b counts values, not records: the visit date is collected on
-    # every item record of the subject, and two datings of one day are one
-    # value under R016-35.
+def test_records_of_one_key_are_counted_not_their_values() -> None:
+    # R001-12b: the visit date is collected on every item record of the
+    # subject, and a read that does not say which record it means has two
+    # records, not one value seen twice.
     table = _table(
         ["StudyOID", "SubjectKey", "VISITDT", "ItemOID", "Value"],
         [
@@ -519,29 +490,30 @@ def test_one_value_on_several_records_of_a_key_reads_as_that_value() -> None:
     feeding = runtime_rows(table)
     context = _index(table).context({"ODM": feeding[0]}, feeding_rows={"ODM": feeding})
 
-    result = evaluate_expression({"source": "ODM.VISITDT"}, context)
+    agreeing = evaluate_expression({"source": "ODM.VISITDT"}, context)
 
-    assert result == ValueResult(value=DateValue(year=2025, month=1, day=2))
+    assert isinstance(agreeing, ConditionResult)
+    assert agreeing.condition.condition == "multiple_rows_per_key"
+    assert agreeing.condition.requirement == "R001-44"
+    assert agreeing.condition.context["row_count"] == 2
+    assert agreeing.condition.context["differing_columns"] == {
+        "ItemOID": ["IT.A", "IT.B"],
+        "Value": ["a", "b"],
+    }
 
 
-def test_two_values_on_the_records_of_a_key_fail_and_count_the_values() -> None:
+def test_a_read_that_names_the_record_it_means_resolves_one_value() -> None:
     table = _table(
         ["StudyOID", "SubjectKey", "VISITDT", "ItemOID", "Value"],
         [
             ["S1", "001", "2025-01-02", "IT.A", "a"],
-            ["S1", "001", "2025-01-03", "IT.B", "b"],
+            ["S1", "001", "2025-01-02", "IT.B", "b"],
         ],
         {"VISITDT": "date"},
     )
     feeding = runtime_rows(table)
     context = _index(table).context({"ODM": feeding[0]}, feeding_rows={"ODM": feeding})
 
-    result = evaluate_expression({"source": "ODM.VISITDT"}, context)
+    resolved = evaluate_expression(_read("IT.B", ["StudyOID", "SubjectKey"]), context)
 
-    assert isinstance(result, ConditionResult)
-    assert result.condition.condition == "multiple_values_per_key"
-    assert result.condition.requirement == "R001-44"
-    assert result.condition.context == {
-        "identifier": "ODM.VISITDT",
-        "value_count": 2,
-    }
+    assert resolved == ValueResult(value="b")

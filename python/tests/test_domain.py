@@ -105,7 +105,7 @@ def test_a_repeated_subject_row_fails_at_the_output_gate() -> None:
     assert context["keys"] == [{"STUDYID": "PILOT7", "USUBJID": "P7-722"}]
 
 
-def test_two_values_for_one_key_fail_where_the_column_is_read() -> None:
+def test_two_records_for_one_key_fail_where_the_column_is_read() -> None:
     pilot = yamaa_domain(EXAMPLES / "negative-keys-conflicting-values/spec.yaml")
 
     assert pilot.spec is not None
@@ -113,12 +113,15 @@ def test_two_values_for_one_key_fail_where_the_column_is_read() -> None:
     issue = pilot.issues.row(0, named=True)
     assert issue["severity"] == "error"
     assert issue["phase"] == "derivation"
-    assert issue["condition"] == "multiple_values_per_key"
+    assert issue["condition"] == "multiple_rows_per_key"
     assert issue["spec_paths"] == ["columns.AGE.derivation.source"]
     context = json.loads(issue["context"])
     assert context["identifier"] == "DM.AGE"
-    assert context["value_count"] == 2
+    assert context["row_count"] == 2
     assert context["keys"] == [{"STUDYID": "PILOT9", "USUBJID": "P9-812"}]
+    # The columns the matched records disagree on name what the read did not
+    # say, which is the one thing the author needs in order to fix it.
+    assert context["differing_columns"] == {"AGE": ["58", "59"]}
 
 
 def test_sequence_keys_derive_from_base_before_unique_logic() -> None:

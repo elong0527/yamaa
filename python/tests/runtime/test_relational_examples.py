@@ -571,13 +571,12 @@ columns:
 """
 
 
-def test_a_contextual_odm_item_is_not_reachable_through_the_join(
+def test_a_long_form_relation_is_not_reachable_through_the_join(
     tmp_path: Path,
 ) -> None:
-    # A long-form ODM item is resolved from the current row's complete R002
-    # context, never widened to whichever records a key happens to reach. A
-    # relation that is not the row driver carries no such context, so the
-    # join refuses rather than answering across item groups.
+    # A long-form relation that is not the row driver carries no key the
+    # output shares, so R003 refuses rather than answering with whichever
+    # records a partial key happens to reach.
     (tmp_path / "input").mkdir()
     (tmp_path / "spec.yaml").write_text(textwrap.dedent(_ODM_SPEC), encoding="utf-8")
     (tmp_path / "input/dm.csv").write_text(
@@ -620,5 +619,5 @@ columns:
     derivation: {source: DM_RAW.USUBJID}
   - name: DIAG
     type: str
-    derivation: {source: ODM.IT.DM.DIAGGRP}
+    derivation: {source: ODM.Value}
 """

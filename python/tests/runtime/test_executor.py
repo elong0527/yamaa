@@ -288,7 +288,7 @@ def test_key_grain_without_rows_emits_one_row_per_key_combination() -> None:
     assert result.artifact.frame.rows() == [("one", "kept"), ("two", "kept")]
 
 
-def test_key_grain_reads_a_field_constant_over_the_records_of_one_key() -> None:
+def test_key_grain_counts_records_even_where_they_agree() -> None:
     def derive(expression):
         return HandledExpression(value=Expression(root=expression))
 
@@ -320,11 +320,16 @@ def test_key_grain_reads_a_field_constant_over_the_records_of_one_key() -> None:
 
     result = execute_specification(specification, sources)
 
-    assert isinstance(result, ExecutionSuccess)
-    assert result.artifact.frame.rows() == [("one", "kept")]
+    # R001-12b: agreeing records are still three records, and the read has
+    # not said which one it means.
+    assert isinstance(result, ExecutionFailure)
+    (diagnostic,) = result.diagnostics
+    assert diagnostic.condition == "multiple_rows_per_key"
+    assert diagnostic.context["row_count"] == 3
+    assert diagnostic.context["differing_columns"] == {}
 
 
-def test_key_grain_without_rows_rejects_multiple_values_per_key() -> None:
+def test_key_grain_without_rows_rejects_several_records_per_key() -> None:
     def derive(expression):
         return HandledExpression(value=Expression(root=expression))
 
@@ -358,11 +363,11 @@ def test_key_grain_without_rows_rejects_multiple_values_per_key() -> None:
     assert isinstance(result, ExecutionFailure)
     (diagnostic,) = result.diagnostics
     assert diagnostic.phase == "derivation"
-    assert diagnostic.condition == "multiple_values_per_key"
+    assert diagnostic.condition == "multiple_rows_per_key"
     assert diagnostic.spec_paths == ("columns.VALUE.derivation.source",)
     assert diagnostic.requirement == "R001-44"
     assert diagnostic.context["identifier"] == "SRC.X"
-    assert diagnostic.context["value_count"] == 2
+    assert diagnostic.context["row_count"] == 2
     assert diagnostic.context["keys"] == [{"GRP": "one"}]
 
 

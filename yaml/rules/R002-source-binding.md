@@ -135,7 +135,8 @@ a long-form relation:
 ```yaml
 source:
   variable: ODM.Value
-  filter: "ODM.ItemOID = 'IT.DM.SEX'"
+  filter: ODM.ItemOID = 'IT.DM.SEX'
+  on: [StudyOID, SubjectKey]
   missing: U
 ```
 
@@ -144,17 +145,18 @@ dataset. It names that dataset's columns and literals only: it cannot
 read the row being derived, and it cannot aggregate.
 
 **R002-22.** A selected record reaches the current row only when it
-agrees with that row on every matching column. The matching columns are
-the output keys, and any column the read names in `on`.
+agrees with the row's own record on every column named in `on`. Nothing
+else narrows the read: what the row is matched on is what it says.
 
-**R002-23.** The row's value for a matching column is the value its
-driver record carries, and where the row has no driver record, the value
-its key column derives from the read dataset. A key column derives from
-that dataset when its derivation is a direct read of one of its columns.
+**R002-23.** The row's own record is the driver record it was
+constructed from. Without `rows` a row has no driver record, and `on`
+may then name only columns the key columns read directly, which every
+record of one key combination carries the same values for.
 
 **R002-24.** `on` names columns of the read dataset. Naming the columns
-that identify a collection setting is how a read is scoped to one event,
-form, or item group; a read that names none is scoped by the keys alone.
+that identify a collection setting is how a read is scoped to one
+subject, event, form, or item group. A read naming none reaches every
+record its filter keeps, which answers only where that is one record.
 
 **R002-25.** Exactly one matching record yields its value. No matching
 record is missing, and a declared `missing` substitutes under R008. More
@@ -193,6 +195,5 @@ the row being derived, or aggregating: fail.
 **R002-33.** More than one record matching a filtered read for one row:
 fail under R001-44 unless the read declares `multiple_matches`.
 
-**R002-34.** A filtered read whose matching columns cannot be
-determined, because a key column is not a direct read of the read
-dataset and the row has no driver record: fail.
+**R002-34.** An `on` naming a column the read dataset does not carry:
+fail.

@@ -22,6 +22,7 @@ from yamaa.expressions import (
     PredicateAst,
     PredicateError,
     PredicateValue,
+    ReadOptions,
     Resolution,
     ResolvedValue,
     TruthValue,
@@ -193,28 +194,24 @@ class RowResolver:
     def _phase(self) -> ConditionPhase:
         return "row_construction" if self._row_phase else "derivation"
 
-    def resolve(self, variable: str) -> Resolution:
-        qualifier = variable.split(".", 1)[0] if "." in variable else None
-        if qualifier is None:
-            return self._base.resolve(variable)
-        if self._context.lookups.declares(qualifier):
-            return self._record_lookup(qualifier, variable.split(".", 1)[1])
-        if self._joins(qualifier):
-            return self._join(qualifier, variable.split(".", 1)[1], None)
-        return self._base.resolve(variable)
-
-    def resolve_with_multiple_matches(
+    def resolve(
         self,
         variable: str,
-        multiple_matches: Mapping[str, object],
+        read: ReadOptions | None = None,
     ) -> Resolution:
         qualifier = variable.split(".", 1)[0] if "." in variable else None
-        if qualifier is not None and self._joins(qualifier):
-            return self._join(qualifier, variable.split(".", 1)[1], multiple_matches)
-        if qualifier is not None and self._context.lookups.declares(qualifier):
+        if qualifier is None:
+            return self._base.resolve(variable, read)
+        if self._context.lookups.declares(qualifier):
             # R015 already chose the record; the source reads a column of it.
             return self._record_lookup(qualifier, variable.split(".", 1)[1])
-        return self._base.resolve_with_multiple_matches(variable, multiple_matches)
+        if self._joins(qualifier):
+            return self._join(
+                qualifier,
+                variable.split(".", 1)[1],
+                read.multiple_matches if read is not None else None,
+            )
+        return self._base.resolve(variable, read)
 
     def _joins(self, qualifier: str) -> bool:
         """Return whether reaching this relation needs the R003 join.

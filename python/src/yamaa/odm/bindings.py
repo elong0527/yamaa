@@ -49,35 +49,16 @@ class BoundReference(_FrozenModel):
     """One source name classified before row-level resolution."""
 
     name: str = Field(min_length=1)
-    kind: Literal["output", "dataset", "odm_item"]
+    kind: Literal["output", "dataset"]
     dataset: str | None = None
     field: str | None = None
-    item_oid: str | None = None
-    context_columns: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def validate_shape(self) -> BoundReference:
-        if self.kind == "output" and (
-            self.dataset is not None
-            or self.field is None
-            or self.item_oid is not None
-            or self.context_columns
-        ):
+        if self.kind == "output" and (self.dataset is not None or self.field is None):
             raise ValueError("an output binding carries only its field")
-        if self.kind == "dataset" and (
-            self.dataset is None
-            or self.field is None
-            or self.item_oid is not None
-            or self.context_columns
-        ):
+        if self.kind == "dataset" and (self.dataset is None or self.field is None):
             raise ValueError("a dataset binding requires a dataset and field")
-        if self.kind == "odm_item" and (
-            self.dataset is None
-            or self.field is not None
-            or self.item_oid is None
-            or not self.context_columns
-        ):
-            raise ValueError("an ODM item binding requires its complete context")
         return self
 
 
@@ -125,20 +106,9 @@ class BindingPlan(_FrozenModel):
                 dataset=dataset_name,
                 field=field,
             )
-
-        # Dataset fields take precedence above. Every other suffix on a
-        # long-form ODM relation is a complete ItemOID; R002-20 permits, but
-        # does not require, periods inside that identifier.
-        if dataset.is_long_form_odm:
-            if not dataset.context_columns:
-                return _unknown(name)
-            return BoundReference(
-                name=name,
-                kind="odm_item",
-                dataset=dataset_name,
-                item_oid=field,
-                context_columns=dataset.context_columns,
-            )
+        # A suffix that is not a column of the dataset is unresolved under
+        # R002-27. Reading one collected item out of a long-form relation is
+        # a filtered read over its own columns, not a name.
         return _unknown(name)
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Literal, Protocol, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
@@ -57,19 +57,30 @@ class FailedResolution(_FrozenModel):
 Resolution: TypeAlias = ResolvedValue | AbsentValue | FailedResolution
 
 
+class ReadOptions(_FrozenModel):
+    """How a structured source chooses the record it reads, under R002.
+
+    A read carrying neither `filter` nor `on` is the concise form: it reads
+    the record the row already has. One carrying either selects among the
+    records of the named dataset instead.
+    """
+
+    filter: str | None = None
+    on: tuple[str, ...] = ()
+    multiple_matches: Mapping[str, object] | None = None
+
+    @property
+    def selects_records(self) -> bool:
+        return self.filter is not None or bool(self.on)
+
+
 class Resolver(Protocol):
     """Resolve one name without coupling evaluation to a table or join engine."""
 
-    def resolve(self, variable: str) -> Resolution: ...
-
-
-class MultipleMatchResolver(Protocol):
-    """Optional resolver extension for structured R008 source selection."""
-
-    def resolve_with_multiple_matches(
+    def resolve(
         self,
         variable: str,
-        multiple_matches: Mapping[str, object],
+        read: ReadOptions | None = None,
     ) -> Resolution: ...
 
 
@@ -79,18 +90,15 @@ class MappingResolver:
     def __init__(self, values: Mapping[str, object]) -> None:
         self._values = dict(values)
 
-    def resolve(self, variable: str) -> Resolution:
+    def resolve(
+        self,
+        variable: str,
+        read: ReadOptions | None = None,
+    ) -> Resolution:
+        del read
         if variable not in self._values:
             return AbsentValue(variable=variable)
         return ResolvedValue(value=self._values[variable])
-
-    def resolve_with_multiple_matches(
-        self,
-        variable: str,
-        multiple_matches: Mapping[str, object],
-    ) -> Resolution:
-        del multiple_matches
-        return self.resolve(variable)
 
 
 ExpressionHandler: TypeAlias = Callable[[object, Resolver], EvaluationResult]
@@ -156,17 +164,34 @@ def _source(payload: object, resolver: Resolver) -> EvaluationResult:
             "invalid_field_type",
             {"field": "multiple_matches", "expected": "mapping"},
         )
-    if multiple is None:
-        resolved = resolver.resolve(variable)
-    else:
-        resolve_multiple = getattr(resolver, "resolve_with_multiple_matches", None)
-        if not callable(resolve_multiple):
-            return expression_condition(
-                "validation",
-                "invalid_field_type",
-                {"field": "multiple_matches", "reason": "resolver unsupported"},
-            )
-        resolved = resolve_multiple(variable, multiple)
+    predicate = options.get("filter")
+    if predicate is not None and not isinstance(predicate, str):
+        return expression_condition(
+            "validation",
+            "invalid_field_type",
+            {"field": "filter", "expected": "str"},
+        )
+    on = options.get("on", ())
+    if isinstance(on, str) or not isinstance(on, Sequence | tuple):
+        return expression_condition(
+            "validation",
+            "invalid_field_type",
+            {"field": "on", "expected": "list[str]"},
+        )
+    if not all(isinstance(column, str) for column in on):
+        return expression_condition(
+            "validation",
+            "invalid_field_type",
+            {"field": "on", "expected": "list[str]"},
+        )
+    resolved = resolver.resolve(
+        variable,
+        ReadOptions(
+            filter=predicate,
+            on=tuple(on),
+            multiple_matches=multiple,
+        ),
+    )
     if isinstance(resolved, ResolvedValue):
         normalized = normalize_runtime_value(resolved.value)
         if isinstance(normalized, ValueResult) and resolved.handled_by is not None:

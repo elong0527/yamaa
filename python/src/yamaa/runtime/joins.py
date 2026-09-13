@@ -24,6 +24,7 @@ from yamaa.expressions import (
     PredicateAst,
     PredicateError,
     PredicateValue,
+    ReadOptions,
     Resolution,
     ResolvedValue,
     TruthValue,
@@ -238,7 +239,12 @@ class RecordResolver:
         self._fields = frozenset(fields)
         self._record = record
 
-    def resolve(self, variable: str) -> Resolution:
+    def resolve(
+        self,
+        variable: str,
+        read: ReadOptions | None = None,
+    ) -> Resolution:
+        del read
         if "." not in variable:
             return _failed("validation", "unknown_field", {"identifier": variable})
         qualifier, field = variable.split(".", 1)

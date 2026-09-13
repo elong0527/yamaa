@@ -12,7 +12,6 @@ from yamaa.odm.bindings import (
 from yamaa.odm.context import (
     BindingIndex,
     MultipleMatchSelection,
-    OdmItemIndex,
     RuntimeContext,
 )
 from yamaa.odm.parquet import write_odm_parquet
@@ -30,7 +29,6 @@ __all__ = [
     "ClinicalItemRow",
     "DatasetBinding",
     "MultipleMatchSelection",
-    "OdmItemIndex",
     "ParquetWriteResult",
     "RuntimeContext",
     "build_binding_plan",
