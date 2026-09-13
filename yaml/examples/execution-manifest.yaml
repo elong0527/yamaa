@@ -728,6 +728,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  sdtm-ae-partial-dates:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   sdtm-ae-seriousness-criteria:
     status: blocked
     blocked_by: "#101"

@@ -1,0 +1,128 @@
+schema_version: "1.0"
+domain: AE
+datasets:
+  AE_RAW: {path: input/ae_raw.csv, types: {AESEQ: int}}
+  DM: {path: input/dm.csv, types: {RFSTDTC: date}}
+base: AE_RAW
+keys: [STUDYID, USUBJID, AESEQ]
+
+output:
+  path: ae.csv
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AEENDTC, AESTDY, AEENDY]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: AE
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: AE_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: AE_RAW.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: AE_RAW.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation:
+      source: AE_RAW.AETERM
+
+  - name: AESTDTC
+    type: str
+    label: Start Date/Time of Adverse Event
+    derivation:
+      case:
+        branches:
+          - when: "AE_RAW.AESTDD IS NOT NULL"
+            then:
+              str_template: "{AE_RAW.AESTYY}-{AE_RAW.AESTMM}-{AE_RAW.AESTDD}"
+          - when: "AE_RAW.AESTMM IS NOT NULL"
+            then:
+              str_template: "{AE_RAW.AESTYY}-{AE_RAW.AESTMM}"
+        otherwise:
+          source: AE_RAW.AESTYY
+
+  - name: AESTPR0
+    type: str
+    label: Start Date Precision
+    derivation:
+      date_precision:
+        source: AESTDTC
+
+  - name: AESTDT0
+    type: date
+    label: Complete Start Date
+    derivation:
+      case:
+        branches:
+          - when: "AESTPR0 = 'D'"
+            then:
+              source: AESTDTC
+
+  - name: AEENDTC
+    type: str
+    label: End Date/Time of Adverse Event
+    derivation:
+      case:
+        branches:
+          - when: "AE_RAW.AEENDD IS NOT NULL"
+            then:
+              str_template: "{AE_RAW.AEENYY}-{AE_RAW.AEENMM}-{AE_RAW.AEENDD}"
+          - when: "AE_RAW.AEENMM IS NOT NULL"
+            then:
+              str_template: "{AE_RAW.AEENYY}-{AE_RAW.AEENMM}"
+        otherwise:
+          source: AE_RAW.AEENYY
+
+  - name: AEENPR0
+    type: str
+    label: End Date Precision
+    derivation:
+      date_precision:
+        source: AEENDTC
+
+  - name: AEENDT0
+    type: date
+    label: Complete End Date
+    derivation:
+      case:
+        branches:
+          - when: "AEENPR0 = 'D'"
+            then:
+              source: AEENDTC
+
+  - name: RFSTDTC
+    type: date
+    label: Subject Reference Start Date/Time
+    derivation:
+      source: DM.RFSTDTC
+
+  - name: AESTDY
+    type: int
+    label: Study Day of Start of Adverse Event
+    derivation:
+      study_day:
+        date: AESTDT0
+        reference: RFSTDTC
+
+  - name: AEENDY
+    type: int
+    label: Study Day of End of Adverse Event
+    derivation:
+      study_day:
+        date: AEENDT0
+        reference: RFSTDTC

@@ -222,6 +222,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`odm-form-scoped-item-resolution`](odm-form-scoped-item-resolution/) | resolve items within their collection form |
 | [`sdtm-ae-dictionary-coding`](sdtm-ae-dictionary-coding/) | code reported terms against a medical dictionary |
 | [`sdtm-ae-effective-transaction`](sdtm-ae-effective-transaction/) | take the effective state of a record from a transaction log |
+| [`sdtm-ae-partial-dates`](sdtm-ae-partial-dates/) | keep partial dates at collected precision |
 | [`sdtm-ae-seriousness-criteria`](sdtm-ae-seriousness-criteria/) | mark serious events from collected seriousness criteria |
 | [`sdtm-dm-basic`](sdtm-dm-basic/) | build one subject record from collected data |
 | [`sdtm-dm-metadata-contract`](sdtm-dm-metadata-contract/) | declare the metadata a submission needs |
