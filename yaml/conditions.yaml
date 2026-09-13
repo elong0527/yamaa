@@ -35,6 +35,7 @@ conditions:
   invalid_regex: {rules: [R022], phases: [validation]}
   invalid_string_template: {rules: [R012], phases: [validation]}
   invalid_text: {rules: [R019], phases: [ingest]}
+  key_dependency: {rules: [R001], phases: [validation]}
   length_failed: {rules: [R009], phases: [verification]}
   ln_of_nonpositive: {rules: [R010], phases: [derivation]}
   matches_failed: {rules: [R009], phases: [verification]}

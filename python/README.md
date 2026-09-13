@@ -62,10 +62,12 @@ table contract, and R004 predicate evaluation.
 
 ### Registered operations
 
-Dispatch supports exactly these sixteen operations. Every other registered
-keyword returns an explicit `UnsupportedResult` until its owning runtime
-component is implemented, and an unregistered keyword fails schema validation
-before it reaches dispatch.
+Dispatch supports exactly these operations. Every other registered keyword
+returns an explicit `UnsupportedResult` until its owning runtime component is
+implemented, and an unregistered keyword fails schema validation before it
+reaches dispatch. `function` is the one operation a component registers
+rather than the table declaring: it appears once a runner activates a
+project environment, and not before.
 
 | Operation | Rule | What it returns |
 |---|---|---|
@@ -92,6 +94,7 @@ before it reaches dispatch.
 | `row_value` | R007 | one source read from another row of that partition |
 | `previous_non_missing` | R007 | the closest strictly earlier non-missing source |
 | `baseline_flag`, `baseline_value` | R007 | the one baseline row, and its value broadcast |
+| `function` | R018 | one scalar from the pinned project code an activated environment binds |
 
 `compute` reads the closed R010 grammar: the operators `+ - * /` with unary
 sign, and exactly `ABS`, `CEIL`, `FLOOR`, `TRUNC`, `SQRT`, `POWER`, `EXP`,
@@ -99,8 +102,7 @@ sign, and exactly `ABS`, `CEIL`, `FLOOR`, `TRUNC`, `SQRT`, `POWER`, `EXP`,
 `eval`: a formula is tokenized, parsed, and evaluated in the association it
 was written in, and a division by zero, a negative `SQRT`, a non-positive
 `LN`, an invalid `POWER`, or an integer overflow fails the run rather than
-becoming missing. Only the R018 project function family remains
-unsupported.
+becoming missing.
 
 `aggregate` reads the closed R013 grammar over that same arithmetic, with
 exactly the reducers `SUM`, `COUNT`, `MIN`, `MAX`, `MEAN`, and `ONLY`, plus
@@ -294,10 +296,10 @@ components.
 
 Execution supports every operation in the registered table above, along with
 record-driven and grouped row templates, their filters, record lookups,
-explicit absent-source defaults, and earlier output-column references.
-Inheritance and the R018 project function family return an explicit
-unsupported result rather than a fabricated output. Execution never reads an
-`expected/` artifact.
+explicit absent-source defaults, and earlier output-column references. A
+call to an R018 project function needs a project root the runner selected;
+without one, it and inheritance return an explicit unsupported result rather
+than a fabricated output. Execution never reads an `expected/` artifact.
 
 Run the focused tests from the repository root:
 
@@ -451,6 +453,46 @@ Run this component's focused tests from the repository root:
 uv run --project python --isolated --extra test pytest \
   python/tests/expressions/test_dates.py python/tests/expressions/test_windows.py \
   python/tests/runtime/test_temporal_examples.py python/tests/planning
+```
+
+## Project functions
+
+A specification names a logical function and a project supplies the code, so
+running one needs a project root the runner selects:
+
+```python
+from yamaa.functions import execute_with_project_functions
+
+result = execute_with_project_functions(
+    specification,
+    lambda datasets: load_source_tables(datasets, resources),
+    "python/tests/projects/bmi-python",  # the selected project root
+    "yaml",
+)
+```
+
+The root's `environment.yaml` is resolved and validated on its own, the
+calls the specification writes are held to the contracts it provides, its
+artifact is verified against the SHA-256 identity it pinned, and every
+activation vector runs -- all before a source is read. Only then does the
+run execute, with `function` registered on the dispatcher every other
+operation already uses.
+
+`python/tests/projects/bmi-python` implements in Python the same logical
+`bmi` contract the committed `adam-adsl-bmi-function` example implements in
+R. The two roots calculate one contract fingerprint and run byte-identical
+vectors, and `yaml/examples/adam-adsl-bmi-function/spec.yaml` is unchanged
+between them, which is the portability R018 exists for. This runner refuses
+that example's own R project root under R018-6 rather than running it.
+
+See the [project function documentation](src/yamaa/functions/README.md) for
+the artifact resolver, the digest a directory hashes to, and what each stage
+owns.
+
+Run this component's focused tests from the repository root:
+
+```bash
+uv run --project python --isolated --extra test pytest python/tests/functions
 ```
 
 ## Verified tables and published artifacts

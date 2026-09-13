@@ -54,10 +54,18 @@ class ExpressionDispatcher:
     def __init__(
         self,
         handlers: Mapping[str, ExpressionHandler] | None = None,
+        *,
+        extensions: Mapping[str, ExpressionHandler] | None = None,
     ) -> None:
-        self._handlers = dict(
-            build_expression_handlers(self) if handlers is None else handlers
-        )
+        """Build one closed map, optionally extended by a supplied component.
+
+        R018 is the registry's one extension point: a project environment a
+        runner activated registers its `function` operation here, so a call
+        nested inside another operation dispatches through the same map its
+        parent did rather than through a registry that lacks it.
+        """
+        base = build_expression_handlers(self) if handlers is None else handlers
+        self._handlers = {**base, **(extensions or {})}
 
     @property
     def supported_operations(self) -> tuple[str, ...]:

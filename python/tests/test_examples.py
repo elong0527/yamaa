@@ -28,7 +28,6 @@ KNOWN_REQUIREMENT_GAPS = {
     "negative-adsl-randomization-date-retyped": ("R014-10", None),
     "negative-adsl-remote-parent": ("R017-40", None),
     "negative-function-contract-mismatch": ("R018-38", None),
-    "negative-keys-missing-value": ("R005-52", "R001-43"),
 }
 
 
