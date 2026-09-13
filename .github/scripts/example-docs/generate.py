@@ -432,10 +432,13 @@ def render_code_panel(files):
 
 def render_example(example, previous=None, next=None):
     source_url = REPOSITORY + "/blob/main/yaml/examples/" + quote(example.name)
+    edit_base = REPOSITORY + "/edit/main/yaml/examples/" + quote(example.name)
+    readme_edit_url = edit_base + "/README.md"
     readme_path = example / "README.md"
     spec_path, chain = example_entry(example)
     if spec_path is None:
         raise ValueError(f"example has no spec file: {example.name}")
+    spec_edit_url = edit_base + "/" + quote(spec_path.name)
     title, readme = render_readme(readme_path.read_text(encoding="utf-8"), source_url)
     spec_text = spec_path.read_text(encoding="utf-8")
     # Parse metadata for labels and visual emphasis only; this does not execute the spec.
@@ -532,6 +535,8 @@ def render_example(example, previous=None, next=None):
         category=escape(category), description=description,
         failure_section=failure_section,
         datasets_heading=datasets_heading,
+        readme_edit_url=readme_edit_url,
+        spec_file_name=escape(spec_path.name), spec_edit_url=spec_edit_url,
         source_url=REPOSITORY + "/tree/main/yaml/examples/" + quote(example.name),
         prev_link=page_link(previous, "Previous example", "prev"),
         next_link=page_link(next, "Next example", "next"),
