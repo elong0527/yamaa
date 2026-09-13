@@ -1,21 +1,32 @@
-# ADaM ADLB: reject reference limits named by an unapproved location
+# Reject reference limits named by an absolute location
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-dataset-path-absolute.html)
 
-This example uses collected laboratory results with a table of reference
-limits by test and sex to attempt one record per subject and parameter:
+**Goal:** attempt one record per subject and parameter carrying
+the collected result in `AVAL` with the upper limit of normal for
+that test and sex in `ANRHI`, chosen by `SEX`.
 
-- `SEX` is the sex the limits are chosen by;
-- `AVAL` is the collected result;
-- `ANRHI` is the upper limit of normal for that test and sex.
+**Input:** collected laboratory records carrying the collected
+result (`LBSTRESN`), test code (`LBTESTCD`), and sex (`SEX`),
+plus a reference table of upper limits by test code and sex.
 
-The limits are named by a location on the machine that runs the study. A run
-may read such a location, because code and data are commonly kept apart, but
-only one that whoever starts the run approved in advance. This study was
-started with its own directory as the only approved place to read from, so
-these limits name nothing the run may open. Naming a location cannot approve
-it: if it could, the file under review would decide what the run reads. The
-run must fail and no artifact is accepted.
+**Variables:**
+
+- `SEX` would be the collected sex, taken from `SEX` in the
+  collected records, and also chooses the limit.
+- `AVAL` would be the collected numeric result, taken from
+  `LBSTRESN`.
+- `ANRHI` would be the upper limit of normal from the reference
+  table for the record's test code and sex, matched on test code
+  and `SEX`.
+
+The reference table is named by an absolute location,
+`/shared/reference/lbref.csv`, which names a place on the machine
+that runs the study rather than a file the study carries. A run
+may only open files the study holds, so the run is rejected before
+any data is read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

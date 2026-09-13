@@ -1,16 +1,23 @@
-# ADaM ADLB: reject an analysis value with an ambiguous numeric type
+# Reject an analysis value with an ambiguous numeric type
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-column-type-unknown.html)
 
-This example uses collected laboratory results to attempt one record per
-result:
+**Goal:** attempt one laboratory analysis record per collected
+laboratory result, carrying `AVAL` for the numeric analysis value.
 
-- `AVAL` is the numeric analysis value of the result.
+**Input:** collected laboratory results with the result in
+standard units (`LBSTRESN`).
 
-A result distinguishes whole numbers from fractional numbers, but the declared
-type says only that the value is a number. Choosing either representation would
-invent a precision decision the specification did not make, so the run must
-fail and no artifact is accepted.
+**Variables:**
+
+- `AVAL` would be the numeric analysis value, copying `LBSTRESN`.
+  A result distinguishes whole numbers from fractional numbers,
+  but the declared kind says only `number`. Choosing either
+  representation would invent a precision decision the
+  declaration did not make, so the run is rejected before any
+  data is read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

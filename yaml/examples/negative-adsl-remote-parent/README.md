@@ -1,12 +1,22 @@
-# ADaM ADSL: reject shared definitions from a remote location
+# Reject shared definitions from a remote location
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adsl-remote-parent.html)
 
-This example attempts to prepare subject records from definitions named by a
-web address.
+**Goal:** attempt to prepare subject records reusing shared
+definitions named by `https://example.test/organization.yaml`.
 
-A remote resource can change independently and cannot provide a reproducible
-local build, so the run must fail before any source data is read.
+**Input:** demographics records carrying the unique subject
+identifier.
+
+**Variables:**
+
+The requested result names no variables. It would carry subject
+records prepared from the shared definitions, but no row is
+produced because the run is rejected before any data is read: a
+remote resource can change independently and cannot provide a
+reproducible local build.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

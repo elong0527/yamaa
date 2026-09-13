@@ -1,23 +1,34 @@
-# ADaM ADAE: reject an unlisted tie-numbering method
+# Reject an unlisted severity tie-numbering method
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-rank-invalid-method.html)
 
-This example uses collected adverse events to record one row per event:
+**Goal:** rank each subject's adverse events (AEs) by reported
+severity, carrying through `AESEV` and numbering ties with
+`SEVRANK`.
 
-- `AESEV` is the reported severity of the event.
-- `SEVRANK` numbers the events by severity, sharing one number across
-  ties so equally severe events compare as equal.
+**Input:** collected adverse event records carrying the reported
+severity (`AESEV`).
 
-The numbering method arrives as a structured value instead of one of
-the two named methods. No implementation may guess which method a
-mapping means, so the specification is rejected before any data is read
+**Variables:**
+
+- `AESEV` would be the reported severity of the event, carried
+  through unchanged; blank when no severity was reported.
+- `SEVRANK` would be the number of the event among the subject's
+  events ordered by severity, worst first, with equally severe
+  events sharing one number so they compare as equal.
+
+The tie-numbering choice arrives as a structured value instead of
+one of the two named methods. No reader may guess which method a
+structure means, so the run is rejected before any data is read
 and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 
-Decide how ties consume numbers, then name the method. When equally
-severe events share the lowest position they occupy and the next
-severity continues after the gap, write it plainly:
+Decide how ties consume numbers, then name the method. When equally severe
+events share the lowest position they occupy and the next severity continues
+after the gap, write it plainly:
 
 ```yaml
 - name: SEVRANK
@@ -30,5 +41,5 @@ severity continues after the gap, write it plainly:
         - {variable: AESEV, direction: desc}
 ```
 
-When no numbers may be skipped, name the dense method instead. Do not
-encode the choice in a structure the vocabulary does not define.
+When no numbers may be skipped, name the dense method instead. Do not encode
+the choice in a structure the vocabulary does not define.

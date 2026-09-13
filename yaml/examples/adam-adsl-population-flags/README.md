@@ -1,17 +1,23 @@
-# ADaM ADSL: derive the safety and intent-to-treat flags
+# Flag the safety and intent-to-treat populations
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-population-flags.html)
 
-This example uses a pre-derived ADSL slice and a `yamaa` specification to
-derive one row per subject:
+**Goal:** flag each subject for the safety population (`SAFFL`)
+and the intent-to-treat (ITT) population (`ITTFL`).
 
-- `ARMCD` and `TRTSDT` are carried through as given: the subject's planned
-  treatment arm and the date they started treatment;
-- `SAFFL` is `Y` for a subject who has a treatment start date and `N`
-  otherwise, so it marks the subjects who received any treatment;
-- `ITTFL` is `Y` for a subject who has a planned arm and `N` otherwise, so it
-  marks the subjects who were randomized.
+**Input:** subject-level data carrying the planned arm (`ARMCD`)
+and the treatment start date (`TRTSDT`), either of which may be
+missing.
 
-The two flags are independent: a subject can be randomized without being
-treated, and each flag names the one fact that justifies it. Taking the arm and
-the treatment start date as given keeps the flag rules visible on their own.
+**Variables:**
+
+- `SAFFL` is `Y` when `TRTSDT` is present and `N` when it is
+  missing, marking the subjects who received any treatment.
+- `ITTFL` is `Y` when `ARMCD` is present and `N` when it is
+  missing, marking the subjects who were randomized.
+
+**Note:** the two flags are independent: a subject can be
+randomized without being treated, and each flag rests on the one
+fact that justifies it.
+
+**Standard:** ADaM | **Domain:** ADSL

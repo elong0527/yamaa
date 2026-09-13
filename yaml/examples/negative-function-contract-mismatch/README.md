@@ -1,10 +1,23 @@
-# Project function: reject an unavailable project-routine contract
+# Reject an unavailable project-routine contract
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-function-contract-mismatch.html)
 
-The source contains one numeric value, but the requested project routine
-version is not the version the selected project provides. Execution stops
-before the value is processed.
+**Goal:** carry the source identifier through as `ID` and return
+the project routine result as `RESULT`.
+
+**Input:** a source file with `ID` and `VALUE`, where `VALUE`
+holds the numeric value passed to the routine.
+
+**Variables:**
+
+- `RESULT` would be the numeric result of passing the source
+  `VALUE` to the `project_value` routine under contract `2.0.0`.
+
+The requested contract `2.0.0` does not match the provided
+contract `1.0.0`, so the run is rejected before any data is read
+and no artifact is accepted.
+
+**Standard:** TEST | **Domain:** TEST
 
 ## How to fix
 

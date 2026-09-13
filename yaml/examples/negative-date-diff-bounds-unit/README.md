@@ -1,22 +1,32 @@
-# ADaM ADSL: reject endpoint counting beside a month count
+# Reject endpoint counting beside a month count
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-date-diff-bounds-unit.html)
 
-This example uses collected demographics to record one row per subject:
+**Goal:** carry the exposure start (`STDT`) and end (`ENDT`) dates
+forward for each subject and count whole months between them in
+`DURM`.
 
-- `STDT` is the start date of the exposure.
-- `ENDT` is the end date of the exposure.
-- `DURM` counts whole months between them, both endpoints included.
+**Input:** collected demographics (DM) records carrying a start
+date (`STDT`) and an end date (`ENDT`), one record for each
+subject.
 
-Counting endpoints has no meaning beside months: one greater than a
-month count is not an age anyone recognizes, so no implementation may
-accept the combination silently. The specification is rejected before
-any data is read and no artifact is accepted.
+**Variables:**
+
+- `STDT` would be the start date of the exposure, taken from
+  `STDT` in the demographics input.
+- `ENDT` would be the end date of the exposure, taken from `ENDT`
+  in the demographics input.
+- `DURM` would be whole months between `STDT` and `ENDT`,
+  counting both endpoints, which has no meaning beside a month
+  count. The request is rejected before any data is read and no
+  artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
-Decide whether the study counts days or whole months, then state only
-that. A month count stands on its own with no endpoint adjustment:
+Decide whether the study counts days or whole months, then state only that. A
+month count stands on its own with no endpoint adjustment:
 
 ```yaml
 - name: DURM
@@ -28,5 +38,5 @@ that. A month count stands on its own with no endpoint adjustment:
       unit: month
 ```
 
-When the study counts days with both endpoints included, keep
-`unit: day` beside the endpoint adjustment instead.
+When the study counts days with both endpoints included, keep `unit: day`
+beside `bounds: inclusive` instead.

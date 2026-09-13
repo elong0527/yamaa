@@ -1,22 +1,26 @@
-# ADaM ADVS: express a measurement as a growth percentile
+# Growth percentiles from a sex-and-age reference
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-growth-percentile.html)
 
-This example uses collected body measurements, a sex-and-age growth reference,
-and a `yamaa` specification to derive one row per collected measurement:
+**Goal:** add a growth-percentile record for each collected body
+measurement, holding the percentile in `AVAL`. A body mass index
+(`BMI`) becomes `BMIPCTL`, named `BMI-for-Age Percentile`, and a
+weight (`WEIGHT`) becomes `WGTPCTL`, named `Weight-for-Age
+Percentile`.
 
-- `PARAMCD` and `PARAM` restate the measurement as the percentile it converts
-  to: a body mass index becomes a BMI-for-age percentile and a weight a
-  weight-for-age percentile;
-- `AVAL` is that percentile. The measurement, the subject's sex, and the
-  subject's age in days select the reference coefficients that convert it; a
-  measurement with no matching reference leaves the percentile empty.
+**Input:** collected measurements carrying the measurement code,
+the collected result (`AVAL`), sex (`SEX`), and age in days
+(`AGE`), alongside a sex-and-age growth reference carrying the
+coefficients `L`, `M`, and `S` for each measurement code, sex,
+and age in days.
 
-A percentile says where a measurement stands among children of the same sex
-and age, so the same value means different things at different ages and is not
-compared to the collected number. The growth reference is study data, not a
-fixed constant, and is supplied beside the measurements.
+**Variables:**
 
-The logical specification calls `normal_cdf`. The project environment selects
-one R runtime and binds that logical routine to the runtime's normal cumulative
-distribution function.
+- `AVAL`: the growth percentile, equal to 100 times the standard
+  normal cumulative probability of the z-score ((collected `AVAL`
+  / `M`) raised to the power `L`, minus 1) divided by (`L` times
+  `S`), where `L`, `M`, and `S` are the reference coefficients
+  matched on measurement code, `SEX`, and `AGE`. A measurement
+  with no matching reference row leaves `AVAL` missing.
+
+**Standard:** ADaM | **Domain:** ADVS

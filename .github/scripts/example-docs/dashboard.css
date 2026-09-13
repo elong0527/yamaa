@@ -33,7 +33,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, [tabindex]:focus-vi
 .gallery-link { font-weight: 600; }
 .title-row { margin-top: 18px; align-items: flex-end; }
 .title-block { max-width: 900px; min-width: 0; }
-.eyebrow { margin: 0 0 6px; color: var(--green); font-size: 12px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+.eyebrow { margin: 0 0 6px; color: var(--green); font-size: 12px; font-weight: 750; letter-spacing: .06em; }
 h1 { margin: 0; font-size: clamp(24px, 2.1vw, 32px); line-height: 1.2; font-weight: 650; letter-spacing: -.025em; }
 .metrics { display: flex; gap: 24px; margin: 0; padding: 0 4px 1px 20px; flex-shrink: 0; }
 .metrics div { display: flex; flex-direction: column-reverse; gap: 3px; }
@@ -51,12 +51,15 @@ h1 { margin: 0; font-size: clamp(24px, 2.1vw, 32px); line-height: 1.2; font-weig
 h2 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -.015em; }
 .panel-caption { color: var(--muted); font-size: 13px; text-align: right; }
 .prose { padding: 16px 22px; font-size: 16px; line-height: 1.6; columns: 2; column-gap: 40px; }
+.prose-short { max-width: 78ch; columns: 1; }
 .prose p { margin: 0 0 12px; break-inside: avoid; }
 .prose p:last-child { margin-bottom: 0; }
 .prose ul, .prose ol { margin: 0 0 12px; padding-left: 22px; }
 .prose li { margin: 0 0 9px; padding-left: 3px; break-inside: avoid; }
 .prose li::marker { color: #4c8a73; }
-.prose h2, .prose h3 { margin: 18px 0 10px; line-height: 1.4; break-after: avoid; }
+.prose h2, .prose h3 { margin: 18px 0 10px; line-height: 1.4; break-after: avoid-column; }
+.prose :is(h2, h3, p:has(> strong:only-child)) + * { break-before: avoid-column; }
+.prose p:has(> strong:only-child) { break-after: avoid-column; }
 .prose h1 { font-size: 20px; }
 .prose blockquote { margin: 16px 0; border-left: 3px solid #8cb6a3; padding-left: 15px; color: var(--muted); }
 code, .filename, .data-table th { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
@@ -79,7 +82,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .datasets { min-width: 0; display: grid; gap: 22px; }
 .section-header { min-height: 36px; margin-bottom: 10px; }
 .files-grid { display: grid; grid-template-columns: var(--dataset-columns, minmax(0, 1fr)); gap: 14px; align-items: start; }
-.file-heading { min-height: 42px; padding: 10px 14px; gap: 8px; }
+.file-heading { min-height: 42px; padding: 10px 14px; gap: 8px; background: var(--surface); }
 .filename { margin: 0; font-size: 13px; font-weight: 550; color: var(--muted); overflow-wrap: anywhere; }
 .file-count { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .table-scroll { overflow: auto; padding-bottom: 3px; scrollbar-width: thin; scrollbar-color: #bacbc1 transparent; }
@@ -112,9 +115,12 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
 .failure-panel details[open] summary { margin-bottom: 6px; }
 .failure-panel details .plain-file { padding: 10px 14px 14px; background: #f5f8f6; border-radius: 6px; }
 .derived-swatch { display: inline-block; width: 10px; height: 10px; border: 1px solid #b5d3c1; background: var(--derived); border-radius: 2px; }
-.schema-panel { position: sticky; top: 60px; display: flex; flex-direction: column; height: min(680px, calc(100dvh - 80px)); min-height: 200px; }
-.schema-panel h2 { font-size: 16px; }
-.schema-panel .panel-header { flex-shrink: 0; padding-left: 14px; padding-right: 14px; }
+.schema-section { position: sticky; top: 60px; display: flex; flex-direction: column; height: min(680px, calc(100dvh - 80px)); min-width: 0; min-height: 200px; }
+.schema-section .section-header { flex-shrink: 0; }
+.schema-panel { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.schema-panel > .file-heading { flex-shrink: 0; border-bottom: 1px solid #e5ece7; }
+.spec-file-heading select { min-width: 0; min-height: 30px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 13px; }
+.schema-section.has-spec-picker .spec-pane .file-heading { display: none; }
 .code-toolbar { display: flex; min-height: 48px; padding: 6px 12px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .code-toolbar select { width: 100%; }
 .code-panel { margin-top: 22px; }
@@ -125,6 +131,10 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
 .code-scroll pre { margin: 0; font-size: 14px; line-height: 1.65; tab-size: 2; }
 .code-line { display: block; width: max-content; min-width: 100%; padding-right: 18px; }
 .line-number { position: sticky; left: 0; display: inline-block; width: 40px; padding-right: 10px; text-align: right; color: #85948c; user-select: none; background: #f8faf9; font-size: 12px; }
+.schema-panel .code-scroll { padding: 0 0 3px; background: var(--surface); }
+.schema-panel .code-line { display: flex; border-bottom: 1px solid #e5ece7; background: var(--surface); }
+.schema-panel .code-line:last-child { border-bottom: 0; }
+.schema-panel .line-number { flex: 0 0 40px; background: var(--surface); }
 .yaml-key { color: #125cad; }
 .yaml-string { color: #35733a; }
 .yaml-literal { color: #995213; }
@@ -146,7 +156,7 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
 @media (max-width: 799px) {
   .workbench { grid-template-columns: minmax(0, 1fr); }
   .panel-resizer { display: none; }
-  .schema-panel { position: static; height: 350px; }
+  .schema-section { position: static; height: 400px; }
   .prose { columns: 1; }
   .title-row { flex-direction: column; align-items: flex-start; gap: 16px; }
   .metrics { padding: 0; gap: 28px; }
@@ -171,7 +181,8 @@ body.has-js .subject-button { color: var(--green); text-decoration: underline; t
   .dashboard { padding: 0; }
   .comparison-bar, .code-toolbar, .panel-resizer, .page-footer, .comments-panel { display: none !important; }
   .workbench { display: block; }
-  .schema-panel, .schema-panel[hidden] { position: static; display: block !important; height: auto; margin: 16px 0; }
+  .schema-section, .schema-section[hidden] { position: static; display: block !important; height: auto; margin: 16px 0; }
+  .schema-panel { display: block; }
   .panel, .code-scroll, .table-scroll { overflow: visible; }
   .panel { break-inside: avoid; }
   .datasets { gap: 16px; }

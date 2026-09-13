@@ -1,12 +1,21 @@
-# ADaM ADSL: reject shared definitions from another language version
+# Reject shared definitions from another language version
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adsl-parent-version-mismatch.html)
 
-This example attempts to prepare subject records from definitions written for
-a different version of the language.
+**Goal:** prepare subject records from definitions shared
+through a reusable file.
 
-Combining meanings from two versions could silently reinterpret the requested
-dataset, so the run must fail before any source data is read.
+**Input:** demographics (DM) records identified by subject.
+
+**Variables:**
+
+No variables are requested, so no output is produced. The entry
+file reuses `layers/parent.yaml`, which declares language version
+`2.0` while the entry file declares `1.0`, so the two files cannot
+be combined into one set of definitions, and the run is rejected
+before any data is read.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

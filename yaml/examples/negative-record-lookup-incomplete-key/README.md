@@ -1,22 +1,30 @@
-# SDTM LB: reject a reference limit chosen without a sex
+# Reject an upper-limit lookup with a missing sex
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-record-lookup-incomplete-key.html)
 
-This example uses collected laboratory results with a table of reference limits
-by test and sex to attempt one record per result:
+**Goal:** look up the sex-specific reference upper limit
+(`LBSTNRHI`) for each collected laboratory result by its test
+code and sex.
 
-- `LBSTNRHI` is the upper limit of normal for the test and sex of the result.
+**Input:** collected results carrying the test code (`LBTESTCD`),
+sex (`SEX`), and numeric result (`LBSTRESN`), plus a limits table
+carrying the upper limit (`NRHI`) by test code and sex.
 
-One subject's sex was never collected, so no record of limits can be looked
-for. Reporting the limit as absent would say the table has no entry for this
-result, when the truth is that nothing was asked of it, so the run must fail
-and no artifact is accepted.
+**Variables:**
+
+- `LBSTNRHI` would be the upper limit from the limits table for
+  the matching test code and sex.
+
+One collected result has a blank sex, so its lookup key is
+incomplete and the run is rejected with no artifact accepted.
+
+**Standard:** SDTM | **Domain:** LB
 
 ## How to fix
 
-Recover the missing sex when possible. If an incomplete lookup key is intended
-to make every value read from the lookup missing, declare that policy on the
-record lookup:
+Recover the missing sex when possible. If an incomplete lookup key is
+intended to make every value read from the lookup missing, state that policy
+on the record lookup:
 
 ```yaml
 record_lookups:
@@ -27,5 +35,5 @@ record_lookups:
     incomplete: missing
 ```
 
-This is separate from `unmatched`, which handles a complete key that the table
-does not contain.
+A complete key the table does not contain is a separate condition needing its
+own policy.

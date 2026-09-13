@@ -1,17 +1,25 @@
-# ADaM ADSL: flag the subjects who completed the study
+# Flag subjects who completed the study
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-completion-flag.html)
 
-This example uses a subject-level dataset and the disposition dataset with a
-`yamaa` specification to derive one row per subject:
+**Goal:** flag subjects who completed the study, adding `COMPFL`
+and carrying `TRTSDT` through.
 
-- `TRTSDT` is the date of the subject's first dose, carried across. A subject
-  never dosed has none;
-- `COMPFL` is `Y` when the subject has a disposition record whose standardized
-  outcome is a completion, and `N` otherwise. A subject whose only disposition
-  record reports a discontinuation reason, and a subject with no disposition
-  record at all, are both `N`.
+**Input:** subject-level records carrying first treatment date
+(`TRTSDT`) when treated, plus disposition records carrying
+standardized outcome (`DSDECOD`) and collection date (`DSDTC`).
 
-The flag answers whether a completion record exists, not whether that record's
-date was collected or how a later follow-up period ended. A subject who both
-completed and later discontinued therefore keeps `Y` for the completion.
+**Variables:**
+
+- `COMPFL`: `Y` when at least one disposition record carries
+  standardized outcome `COMPLETED`; `N` otherwise. A subject
+  whose records carry only other outcomes, such as
+  `ADVERSE EVENT`, and a subject with no disposition record
+  at all, are both `N`.
+
+**Note:** the flag answers whether a completion record exists,
+not whether its collection date was filled in or how a later
+period ended, so a subject who completed and later discontinued
+keeps `Y`.
+
+**Standard:** ADaM | **Domain:** ADSL

@@ -1,17 +1,20 @@
-# ADaM ADSL: reject an age recorded as NA
+# Reject an age recorded as NA
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-missing-sentinel.html)
 
-This example uses a collected subject listing to attempt one record per
-subject:
+**Goal:** carry `AGE` unchanged for analysis, keeping the collected
+age for each subject.
 
-- `AGE` is the age in years at screening.
+**Input:** collected demographics records holding `AGE`.
 
-One age is stored as the letters `NA`. Those letters are not a number, and
-reading them as an age nobody collected would decide, on the study's behalf,
-that this is how it records absence. A study that records absence with a code
-says so where a reader can see it, so the run must fail and no artifact is
-accepted.
+**Variables:**
+
+- `AGE` would contain the collected age copied from the collected
+  records, but no row is produced because `NA` is not a number and
+  the run stops while reading the stored value, so no artifact is
+  accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

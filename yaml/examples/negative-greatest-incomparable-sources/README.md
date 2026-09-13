@@ -1,19 +1,25 @@
-# ADaM ADSL: reject a last-known-alive date taken from a day number
+# Reject a last alive date from mixed scales
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-greatest-incomparable-sources.html)
 
-This example uses collected demographics to attempt one record per subject:
+**Goal:** carry `DTHDT` and `LSTVSDY` through and take the later
+of the two in `LSTALVDT` as the last known alive date.
 
-- `DTHDT` is the collected date of death and is empty for a subject who is
-  alive;
-- `LSTVSDY` is the study day of the last visit, counted from the first dose;
-- `LSTALVDT` is meant to be the latest date on which the subject was known to
-  be alive.
+**Input:** collected demographics carrying the date of death
+(`DTHDTC`) and the last-visit study day (`LSTVSDY`).
 
-A calendar date and a day number are not on the same scale, so asking which of
-the two is later has no answer. Comparing the day number with the year, or
-reading it as a date, would each invent a rule the specification never stated,
-so the run must fail and no artifact is accepted.
+**Variables:**
+
+- `DTHDT` would be the date of death, carried over from `DTHDTC`,
+  and missing when no death date was collected.
+- `LSTVSDY` would be the study day of the last visit, counted
+  from the first dose and carried over from `LSTVSDY`.
+- `LSTALVDT` would be the later of `DTHDT` and `LSTVSDY` as the
+  last known alive date, but a calendar date and a day number
+  share no common order, so the run is rejected before any data
+  is read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

@@ -74,6 +74,28 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual([pane["aria-label"] for pane in content.file_panes], ["input/ae.csv", "input/dm.csv", "expected/adae.csv"])
         self.assertTrue(all("hidden" not in pane for pane in content.file_panes))
 
+    def test_readme_taxonomy_moves_above_title_and_short_summary_is_one_column(self):
+        example = generate.EXAMPLES / "adam-adae-serious-event-listing"
+        page = generate.render_example(example).decode("ascii")
+        header, _, summary = page.partition('<section id="readme"')
+        self.assertIn('<p class="eyebrow">ADaM.ADAE</p>', header)
+        self.assertIn('<h1>Serious event listing</h1>', header)
+        self.assertNotIn("text-transform: uppercase", page)
+        self.assertIn('<div class="prose prose-short"', summary)
+        self.assertNotIn("Standard:", summary.partition("</section>")[0])
+        self.assertNotIn("Domain:", summary.partition("</section>")[0])
+        self.assertEqual(generate.readme_body_line_count(example.joinpath("README.md").read_text()), 10)
+
+    def test_long_summary_keeps_multicolumn_class(self):
+        example = generate.EXAMPLES / "adam-adae-query-flags"
+        self.assertGreater(
+            generate.readme_body_line_count(example.joinpath("README.md").read_text()),
+            10,
+        )
+        page = generate.render_example(example).decode("ascii")
+        self.assertIn('<div class="prose" aria-label="README content">', page)
+        self.assertNotIn('<div class="prose prose-short"', page)
+
     def test_bytes_do_not_depend_on_checkout_location_or_mtime(self):
         original = generate.render_example(EXAMPLE)
         with tempfile.TemporaryDirectory() as directory:
@@ -116,6 +138,13 @@ class DashboardTests(unittest.TestCase):
         _, readme = generate.render_readme('# Example\n\n<script>alert("unsafe")</script>\n\n[File](input/ae.csv)', "https://example.org/fixture")
         self.assertNotIn("<script>", readme)
         self.assertIn('href="https://example.org/fixture/input/ae.csv"', readme)
+
+    def test_readme_taxonomy_is_metadata_not_summary_content(self):
+        source = "# Example\n\nBody.\n\n**Standard:** ADaM | **Domain:** ADAE\n"
+        self.assertEqual(generate.readme_taxonomy(source), ("ADaM", "ADAE"))
+        title, readme = generate.render_readme(source, "https://example.org/fixture")
+        self.assertEqual(title, "Example")
+        self.assertEqual(readme, "<p>Body.</p>\n")
 
     def test_negative_fixture_is_shown_without_repair(self):
         example = generate.EXAMPLES / "negative-source-record-width"
@@ -169,6 +198,16 @@ class DashboardTests(unittest.TestCase):
         page = generate.render_example(EXAMPLE).decode("ascii")
         self.assertIn('<span>Hide Spec</span>', page)
         self.assertIn('role="separator" aria-label="Resize specification panel"', page)
+        self.assertIn('aria-valuenow="740"', page)
+        self.assertIn("const DEFAULT_SPEC_WIDTH = 740", page)
+        self.assertIn("setSpecWidth(preferredSpecWidth)", page)
+        self.assertNotIn("setSpecWidth(specification.getBoundingClientRect().width)", page)
+        self.assertIn(
+            '<div class="file-heading spec-file-heading"><span class="file-title">'
+            '<h3 class="filename">spec.yaml</h3>',
+            page,
+        )
+        self.assertIn('<span class="panel-caption">1 spec file</span>', page)
         self.assertNotIn('id="section-select"', page)
         self.assertNotIn("Jump to section", page)
 
@@ -177,8 +216,23 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(page.count('src="https://giscus.app/client.js"'), 1)
         self.assertIn('data-mapping="specific" data-term="yaml/examples/adam-adae-death-outcome" data-strict="1"', page)
         self.assertIn('data-repo="elong0527/yamaa"', page)
+        self.assertIn(
+            'data-theme="https://elong0527.github.io/yamaa/assets/giscus-yamaa.css?v=2"',
+            page,
+        )
         other = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
         self.assertIn('data-term="yaml/examples/sdtm-dm-basic"', other)
+
+    def test_giscus_theme_limits_reactions_to_thumbs_with_counts(self):
+        theme = (generate.ROOT / "docs/assets/giscus-yamaa.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('aria-label*="+1"', theme)
+        self.assertIn('aria-label*="-1"', theme)
+        self.assertIn('content: "\\1f44d  0"', theme)
+        self.assertIn('content: "\\1f44e  0"', theme)
+        self.assertNotIn("::details-content", theme)
+        self.assertIn(".gsc-social-reaction-summary-item-count", theme)
 
     def test_code_panel_lists_example_scripts(self):
         example = generate.EXAMPLES / "sdtm-dm-basic"
@@ -221,6 +275,17 @@ class DashboardTests(unittest.TestCase):
             ["spec_organization.yaml", "spec_compound.yaml", "spec_study.yaml", "spec_resolved.yaml"],
         )
         self.assertIn("Choose specification document", page)
+        self.assertIn('<span class="panel-caption">4 spec files</span>', page)
+        base = "https://github.com/elong0527/yamaa/edit/main/yaml/examples/spec-inheritance"
+        for path in [
+            "spec_organization.yaml",
+            "spec_compound.yaml",
+            "spec_study.yaml",
+            "expected/spec_resolved.yaml",
+        ]:
+            self.assertIn(f'data-edit-url="{base}/{path}"', page)
+        self.assertIn('fileHeading.className = "file-heading spec-file-heading"', page)
+        self.assertIn('edit.href = active.dataset.editUrl', page)
         self.assertNotIn('aria-label="expected/spec_resolved.yaml"', page)
         self.assertNotIn('id="section-select"', page)
         base = "https://github.com/elong0527/yamaa/edit/main/yaml/examples/spec-inheritance"
@@ -229,7 +294,10 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(
             f'<a class="edit-button" href="{base}/expected/spec_resolved.yaml">Edit</a>', page
         )
-        self.assertIn('<h2 id="schema-heading">YAML specification</h2></span>', page)
+        self.assertIn(
+            '<header class="section-header"><h2 id="schema-heading">YAML specification</h2>',
+            page,
+        )
 
     def test_spec_prefixed_example_gets_its_own_gallery_category(self):
         example = generate.EXAMPLES / "spec-inheritance"

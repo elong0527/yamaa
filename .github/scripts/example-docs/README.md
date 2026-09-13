@@ -46,12 +46,18 @@ those bytes and never writes files.
 The HTML embeds its CSS, JavaScript, and full rendered content. It opens
 directly from disk, works offline apart from comments, and is copied
 unchanged by GitHub Pages because it has no Jekyll front matter. The README
-renders as the Summary panel spanning the top.
+renders as the Summary panel spanning the top. Its Standard and Domain metadata
+appear as the dotted context above the page title instead of being repeated in
+the Summary. Summaries with no more than ten non-empty source lines use one
+left-aligned column; longer summaries use two columns, keeping each section
+label with the content that follows it.
 The YAML specification occupies a left sidebar with a Hide Spec / Show Spec
 button; hiding it gives the datasets the full width. On desktop, a drag handle
-resizes the sidebar and supports the arrow, Home, and End keys. A menu inside
-the sidebar jumps to top-level YAML sections. Input datasets appear side by
-side, with expected output below. An example carrying `expected/error.yaml`
+resizes the sidebar and supports the arrow, Home, and End keys. Its default
+width fits 80-character YAML lines when the viewport has room. The active spec
+path, Edit link, and line count share the same file-heading treatment as the
+input panes; inherited examples use the path menu to switch all three. Input
+datasets appear side by side, with expected output below. An example carrying `expected/error.yaml`
 instead renders an `Expected failure` section with the rejection facts and the
 assertion collapsed, a red `Rejected` result metric, and its datasets under an
 `Unexpected Output` heading. All datasets stay visible without tabs, and
@@ -59,10 +65,13 @@ there are no downloads. Small screens stack the layout. Content remains
 readable with JavaScript disabled and when printing.
 
 Below the datasets, every dashboard has a Comments section powered by
-[giscus](https://giscus.app). Visitors sign in with GitHub to comment or react;
-each comment is stored in this repository's GitHub Discussions, so comments
-persist across rebuilds and deployments and can be moderated there. Each
-example maps to one discussion titled `yaml/examples/<example-name>`
+[giscus](https://giscus.app). Visitors sign in with GitHub to comment or react.
+The embedded reaction controls expose only thumbs up and thumbs down, with a
+count beside each; the custom giscus theme for that focused presentation lives
+at `docs/assets/giscus-yamaa.css`. Each comment and reaction is stored in this
+repository's GitHub Discussions, so feedback persists across rebuilds and
+deployments and can be moderated there. Each example maps to one discussion
+titled `yaml/examples/<example-name>`
 (`data-mapping="specific"`), so the thread follows the example directory rather
 than the page URL; renaming the directory starts a new thread unless the
 discussion is retitled to match. The comment widget is the only part of a page

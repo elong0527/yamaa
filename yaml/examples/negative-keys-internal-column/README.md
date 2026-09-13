@@ -1,20 +1,27 @@
-# ADaM ADSL: reject a site-scoped subject identity
+# Reject a site-scoped subject identity
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-keys-internal-column.html)
 
-This example uses collected demographics to attempt one record per subject:
+**Goal:** derive `INVID` for each subject.
 
-- `INVID` is the investigator responsible for the subject's site.
+**Input:** collected demographics carrying input site (`SITEID`)
+and investigator (`INVID`).
 
-Each record is meant to be identified by its study, subject, and site, but the
-site is used only while deriving and is not part of the result. An identity
-that depends on a value the result does not carry cannot be checked by a reader
-of the result, so the run must fail and no artifact is accepted.
+**Variables:**
+
+- `INVID` would be the investigator responsible for the subject
+  site, read from `INVID`.
+
+The record identity depends on a site value the result does not
+carry, so a reader of the result could not check it. The run is
+rejected before any data is read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
 Every key column must be present in the output. If `SITEID` is part of the
-record identity, add it to `output.columns`:
+record identity, add it to the output columns:
 
 ```yaml
 output:
@@ -22,5 +29,5 @@ output:
 ```
 
 If study and subject already form the intended unique identity, remove
-`SITEID` from `keys` instead. Choose the option that matches the output's
-actual grain.
+`SITEID` from the record identity instead. Choose the option that matches the
+output's actual grain.

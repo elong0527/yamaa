@@ -4,8 +4,9 @@
 
 **Goal:** list serious adverse events.
 
-**Input:** collected adverse event (AE) records, each with a reported
-term (`AETERM`) and a serious flag (`AESER`).
+**Input:** collected adverse event (AE) records, including serious and
+non-serious events, each with a reported term (`AETERM`) and a serious
+flag (`AESER`).
 
 **Variables:**
 

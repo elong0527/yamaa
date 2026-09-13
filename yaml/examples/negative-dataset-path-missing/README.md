@@ -1,21 +1,35 @@
-# ADaM ADLB: reject reference limits the study does not hold
+# Reject a run whose reference table is missing
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-dataset-path-missing.html)
 
-This example uses collected laboratory results with a table of reference
-limits by test and sex to attempt one record per subject and parameter:
+**Goal:** build one analysis row for each collected laboratory
+result, carrying `SEX` and `AVAL` through and adding `ANRHI` from
+a reference table of limits by test and sex.
 
-- `SEX` is the sex the limits are chosen by;
-- `AVAL` is the collected result;
-- `ANRHI` is the upper limit of normal for that test and sex.
+**Input:** collected laboratory results carrying the collected
+result (`LBSTRESN`), test code (`LBTESTCD`), and sex (`SEX`),
+plus the reference table of upper limits by test code and sex.
 
-The study reads a table of limits it does not carry. Nothing else in the
-study supplies an upper limit, so no result could be compared against the
-range it was collected under, and a reader could not tell a table that was
-forgotten from one deliberately left out. The run must fail and no artifact
-is accepted.
+**Variables:**
+
+- `SEX` would contain the subject's sex, carried from `SEX` in
+  the laboratory results.
+- `AVAL` would contain the collected numeric result, carried from
+  `LBSTRESN`.
+- `ANRHI` would be the upper limit of normal taken from the
+  reference row whose test code matches the collected test code
+  and whose sex matches the subject's sex.
+
+The reference table is absent from the study, so the run is
+rejected before any data is read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
+
+Decide first whether the study should carry reference limits: add the approved
+table when the limits exist, and state an explicit policy only when the study
+genuinely has none.
 
 Add the approved limit table to the study under the name it is read by, with
 one row per test and sex:

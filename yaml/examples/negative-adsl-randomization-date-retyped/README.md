@@ -1,16 +1,26 @@
-# ADaM ADSL: reject a randomization date described twice
+# Reject a randomization date described twice
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adsl-randomization-date-retyped.html)
 
-This example uses an ODM demographics projection to produce one record per
-subject:
+**Goal:** carry the subject randomization date `RANDDT` from
+demographics into the subject-level analysis file.
 
-- `RANDDT` is the subject's randomization date.
+**Input:** a subject-level demographics file holding the study and
+subject identifiers with `RANDDT`, produced from an Operational
+Data Model (ODM) extract.
 
-The randomization date already carries its data type. Describing it again
-beside the source would leave two authorities for the same field even when they
-currently agree, so the specification must be rejected and no artifact is
+**Variables:**
+
+- `RANDDT` would be the subject's randomization date, taken from
+  `RANDDT` in the demographics file, but no row is produced.
+
+The date's value kind is already fixed where the demographics
+file is produced. Stating it again beside the source would leave
+two authorities for the same field even when they agree, so the
+run is rejected before any data is read and no artifact is
 accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

@@ -1,23 +1,33 @@
-# ADaM ADLB: reject a parameter that reads the dataset it is part of
+# Reject a parameter that reads the dataset it builds
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-output-self-reference.html)
 
-This example uses collected liver-function results, together with a file of
-analysis values for the same dataset, to attempt one row per subject,
-collection date, and analysis parameter:
+**Goal:** build analysis records for alanine aminotransferase
+(`ALT`), aspartate aminotransferase (`AST`), and their ratio
+(`ASTALT`), carrying `ADT` and `AVAL` for each subject, date, and
+parameter.
 
-- `PARAMCD` and `PARAM` name the parameter. Each transaminase collected
-  becomes one, and the ratio between the two becomes one more;
-- `ADT` is the date the sample was collected;
-- `AVAL` is the analysis value: the result as collected on a transaminase
-  record, and the aspartate result over the alanine result on the ratio
-  record. The ratio is empty when either result is absent from the day.
+**Input:** collected results carrying the collection date, test
+code (either `ALT` or `AST`), and numeric result, plus a file of
+analysis values.
 
-The values the ratio reaches for are named as though they came from somewhere
-else, but they are the values this run is producing, under the same name.
-Nothing can distinguish the record that a run is writing from the record it is
-reading back, so the run must fail before any data is read and no artifact is
-accepted.
+**Variables:**
+
+- `ADT` would be the collection date from the collected date.
+- `AVAL` would be the collected result on each transaminase
+  record, and the aspartate value read from the dataset being
+  built divided by the alanine result on the ratio record, missing
+  when either result is absent.
+
+The ratio read matches subject, date, and the code `AST` in the
+dataset being built; the denominator is the alanine result, with
+division by zero returning missing. The values the ratio reaches
+for are the values this run is producing under the same name.
+Nothing can distinguish the record being written from the record
+being read back, so the run is rejected before any data is read
+and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 
@@ -32,7 +42,7 @@ datasets:
   ADLBIN: {path: input/adlb.csv, types: {AVAL: float, ADT: date}}
 ```
 
-Renaming the declaration alone leaves the lookup pointing at a name that no
+Renaming the declaration alone leaves the read pointing at a name that no
 longer exists, so change where it reads from as well:
 
 ```yaml
@@ -40,11 +50,7 @@ mapping_from:
   dataset: ADLBIN
 ```
 
-The lookup then reads a completed dataset by its own name, which is an
-ordinary source like any other.
-
-If the aspartate values are not final, they are being produced by this run,
-and renaming the source does not change that: it reads whatever the previous
-run left behind, which is stale exactly when the two runs disagree. Split the
-work instead, so the transaminase parameters are complete and written before
+The read then uses a completed dataset by its own name, which is an ordinary
+source like any other. If the aspartate values are not final, splitting the
+work applies instead: complete and write the transaminase parameters before
 the run that reads them starts.

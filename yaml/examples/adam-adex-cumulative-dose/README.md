@@ -1,18 +1,25 @@
-# ADaM ADEX: summarize cumulative exposure
+# Summarize cumulative exposure
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adex-cumulative-dose.html)
 
-This example uses a subject-treatment inventory with its component exposure
-records to derive one record per subject and treatment:
+**Goal:** summarize exposure for each planned subject-treatment,
+carrying `EXTRT` (treatment name) and `EXDOSU` (dose units) through
+and adding `DOSECUM` (cumulative dose), `NCYCLES` (cycle count), and
+`RDI` (relative dose intensity).
 
-- `EXTRT` identifies the regimen component and `EXDOSU` its dose unit;
-- `DOSECUM` is the sum of administered doses and `NCYCLES` is the number of
-  administration records, including an administered zero dose;
-- `RDI` is cumulative dose as a percentage of planned dose across the planned
-  cycles. It is empty when the planned total dose is zero.
+**Input:** planned treatments with dose units and planned totals,
+plus exposure records holding administered doses.
 
-`DOSECUM` and `NCYCLES` use qualified `EX` aggregate expressions without an
-explicit `group_by`. They therefore reduce the exposure records by the
-applicable output keys (`STUDYID`, `USUBJID`, and `EXTRT`) before joining the
-results to each subject-treatment row; omission does not reduce all `EX`
-records as one group.
+**Variables:**
+
+- `DOSECUM` is the total administered dose across the subject's
+  exposure records for the treatment.
+- `NCYCLES` is the number of exposure records for the treatment.
+- `RDI` is cumulative dose as a percentage of the planned total
+  dose across its cycles; empty when the planned total is zero.
+
+**Note:** an administered zero dose adds nothing to the total but its
+record still counts, so a treatment given only as zero doses has a
+zero total alongside a nonzero count.
+
+**Standard:** ADaM | **Domain:** ADEX

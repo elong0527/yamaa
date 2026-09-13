@@ -1,18 +1,27 @@
-# ADaM ADLB: reject a log result from an undetectable value
+# Reject a log result from an undetectable value
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-compute-ln-of-zero.html)
 
-This example uses collected viral-load results to attempt one record per
-subject and parameter:
+**Goal:** carry each collected viral-load result into `AVAL` and
+add its natural logarithm as `AVALLN`, with one record for each
+subject and parameter.
 
-- `AVAL` is the collected number of copies per millilitre;
-- `AVALLN` is its natural logarithm, which the analysis models rather than the
-  untransformed result.
+**Input:** laboratory records carrying test code (`LBTESTCD`) and
+numeric result (`LBSTRESN`), including a viral-load test whose
+result was reported as zero because the assay detected nothing.
 
-One result was reported as zero because the assay detected nothing, and zero
-has no logarithm. A result below the limit of detection needs a stated
-substitution before it can be transformed, so the run must fail and no artifact
-is accepted.
+**Variables:**
+
+- `AVAL` would be the analysis value, mapped from the collected
+  numeric result (`LBSTRESN`).
+- `AVALLN` would be the natural logarithm of `AVAL`, which the
+  analysis models rather than the untransformed result.
+
+Zero has no logarithm, and a result below the limit of detection
+needs a stated substitution before it can be transformed. The run
+fails and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

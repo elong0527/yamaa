@@ -28,7 +28,7 @@
     <section id="readme" class="panel readme-panel" aria-labelledby="readme-heading">
       <header class="panel-header"><span class="panel-title"><h2 id="readme-heading">Summary</h2><a class="edit-button" href="$readme_edit_url">Edit</a></span><span class="panel-caption">What this example means</span></header>
       <div class="source-path"><code>README.md</code></div>
-      <div class="prose" aria-label="README content">$readme</div>
+      <div class="$prose_class" aria-label="README content">$readme</div>
     </section>
     $failure_section
     <div class="comparison-bar">
@@ -40,12 +40,14 @@
       <span id="selection-status" class="visually-hidden" role="status" aria-live="polite"></span>
     </div>
     <div class="workbench">
-      <aside id="specification" class="panel schema-panel" aria-labelledby="schema-heading">
-        <header class="panel-header"><span class="panel-title"><h2 id="schema-heading">YAML specification</h2>$spec_header_edit</span><span class="panel-caption">$spec_lines lines</span></header>
-        $spec_path_row
-        <div class="code-scroll" tabindex="0" aria-label="Complete YAML specification"><pre><code>$spec_code</code></pre></div>
+      <aside id="specification" class="schema-section" aria-labelledby="schema-heading">
+        <header class="section-header"><h2 id="schema-heading">YAML specification</h2><span class="panel-caption">$spec_caption</span></header>
+        <div class="panel schema-panel">
+          $spec_file_header
+          <div class="code-scroll" tabindex="0" aria-label="Complete YAML specification"><pre><code>$spec_code</code></pre></div>
+        </div>
       </aside>
-      <div id="spec-resizer" class="panel-resizer" role="separator" aria-label="Resize specification panel" aria-controls="specification" aria-orientation="vertical" aria-valuemin="240" aria-valuemax="720" aria-valuenow="350" tabindex="0" title="Drag to resize the specification panel"><span aria-hidden="true"></span></div>
+      <div id="spec-resizer" class="panel-resizer" role="separator" aria-label="Resize specification panel" aria-controls="specification" aria-orientation="vertical" aria-valuemin="240" aria-valuemax="740" aria-valuenow="740" tabindex="0" title="Drag to resize the specification panel"><span aria-hidden="true"></span></div>
       <div class="datasets">
         <section id="inputs" aria-labelledby="inputs-heading">
           <header class="section-header"><h2 id="inputs-heading">Inputs</h2><span class="panel-caption">$input_caption</span></header>
@@ -62,7 +64,7 @@
     <section id="comments" class="panel comments-panel" aria-labelledby="comments-heading">
       <header class="panel-header"><h2 id="comments-heading">Comments</h2><span class="panel-caption">Signed in with GitHub; saved in <a href="$discussions_url">repository Discussions</a></span></header>
       <div class="comments-body">
-        <script src="https://giscus.app/client.js" data-repo="$giscus_repo" data-repo-id="$giscus_repo_id" data-category="$giscus_category" data-category-id="$giscus_category_id" data-mapping="specific" data-term="$comment_term" data-strict="1" data-reactions-enabled="1" data-emit-metadata="0" data-input-position="bottom" data-theme="light" data-lang="en" data-loading="lazy" crossorigin="anonymous" async></script>
+        <script src="https://giscus.app/client.js" data-repo="$giscus_repo" data-repo-id="$giscus_repo_id" data-category="$giscus_category" data-category-id="$giscus_category_id" data-mapping="specific" data-term="$comment_term" data-strict="1" data-reactions-enabled="1" data-emit-metadata="0" data-input-position="bottom" data-theme="$giscus_theme" data-lang="en" data-loading="lazy" crossorigin="anonymous" async></script>
         <noscript><p>Comments need JavaScript. Read or join the discussion in <a href="$discussions_url">GitHub Discussions</a>.</p></noscript>
       </div>
     </section>

@@ -1,19 +1,32 @@
-# ADaM ADVS: reject a weight carried forward from a carried-forward weight
+# Reject a weight carried from its own filled value
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-row-value-self-reference.html)
 
-This example uses a series of collected weights to attempt one analysis record
-per measurement:
+**Goal:** fill a missing weight from the most recent earlier
+weight, carrying `ADT`, `AVAL`, and `AVALF` for each measurement.
 
-- `AVAL` is the collected weight and is empty when no measurement was taken;
-- `AVALF` is meant to hold the collected weight, or the most recent earlier
-  weight when none was collected.
+**Input:** collected weight records carrying the collection date
+(`VSDTC`), the test code (`VSTESTCD`), and the collected result
+(`VSSTRESN`).
 
-Two consecutive measurements are missing, so the second gap would have to take
-its value from a record that was itself filled in, and `AVALF` is stated in
-terms of its own earlier value. Filling one gap and stopping, or resolving the
-rule in an order nothing states, would each give a different answer from the
-same data, so the run must fail and no artifact is accepted.
+**Variables:**
+
+- `ADT` would be the analysis date taken from the collection
+  date.
+- `AVAL` would be the collected weight taken from the collected
+  result, and missing when no measurement was taken.
+- `AVALF` would be the current weight, or the earlier filled
+  value from the most recent earlier measurement when the current
+  weight is missing. When a gap follows a filled gap, the value
+  would have to come from a record that was itself filled in, so
+  the filled value is stated in terms of its own earlier value.
+
+**Note:** filling one gap and stopping, or resolving the records
+in an order nothing states, would each give a different answer
+from the same data, so the run is rejected before any data is
+read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADVS
 
 ## How to fix
 

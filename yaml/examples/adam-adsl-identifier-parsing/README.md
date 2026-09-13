@@ -1,17 +1,27 @@
-# ADaM ADSL: parse the site from USUBJID with a collected fallback
+# Parse the site from the identifier with a collected fallback
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-identifier-parsing.html)
 
-This example uses sample DM data and a `yamaa` specification to derive one row
-per subject:
+**Goal:** derive the parsed site, the site to use, and the display
+reference (`SITEIDP`, `SITEID`, and `SUBJREF`) for each subject, carrying
+the collected identifiers through.
 
-- `SUBJID` is the subject number as collected;
-- `SITEIDP` is the site read out of the middle of `USUBJID`, which is formed as
-  study, site, and a four-digit subject number. A `USUBJID` not in that form
-  leaves it empty;
-- `SITEID` is the site to use: the parsed value when there is one, otherwise
-  the collected site, and `UNKNOWN` when there is neither. Publishing both it
-  and `SITEIDP` shows which subjects fell back;
-- `SUBJREF` is a display reference combining `SITEID` and `SUBJID`, separated
-  by a colon. A subject with no subject number gets `UNKNOWN` in its place
-  rather than a partial reference.
+**Input:** demographics with the study identifier, the unique subject
+identifier, the collected subject number, and the collected site
+(`SITEID`).
+
+**Variables:**
+
+- `SITEIDP` is the site code read from the middle of the unique subject
+  identifier when it has the study, site, and exactly four-digit
+  subject-number form; empty otherwise.
+- `SITEID` is the site to use: the parsed value when present, else the
+  collected site, else `UNKNOWN`.
+- `SUBJREF` is the display reference combining the site to use and the
+  collected subject number with a colon; `UNKNOWN` when the subject
+  number is absent.
+
+**Note:** keeping both the parsed and the final site shows which subjects
+fell back to the collected value.
+
+**Standard:** ADaM | **Domain:** ADSL

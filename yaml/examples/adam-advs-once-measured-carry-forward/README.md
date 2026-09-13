@@ -1,24 +1,37 @@
-# ADaM ADVS: carry forward a once-measured characteristic
+# Carry forward a once-measured characteristic
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-once-measured-carry-forward.html)
 
-This example uses a planned-measurement spine, long-form vital signs, and
-subject treatment dates to derive one record per planned measurement:
+**Goal:** derive `ADT`, `AVAL`, `TRTSDT`, and `HEIGHTBL` for each
+planned measurement: height is planned once under the code
+`HEIGHT` and weight is planned repeatedly under the code
+`WEIGHT`.
 
-- `ASEQ` numbers the planned measurements and `VSSEQ` identifies the collected
-  record when the measurement occurred;
-- `PARAMCD` and `ADT` identify the planned measurement and its analysis date;
-- `AVAL` is the collected value when present, otherwise the most recent
-  earlier collected value for that subject and parameter. It remains empty
-  before the first collected value;
-- `TRTSDT` is the subject's treatment start date;
-- `HEIGHTBL` is the latest height on or before treatment. It is repeated on
-  both height and weight records so later weights retain the once-measured
-  subject characteristic, and is empty on every record for a subject without
-  a pre-treatment height.
+**Input:** a planned-measurement spine per subject carrying the
+planned order, the parameter code, and `ADT`; long-form vital
+signs carrying the test code (`VSTESTCD`), the collection date
+(`VSDTC`), the numeric result (`VSSTRESN`) that supplies the
+analysis value, and the sequence number; and subject treatment
+dates (`TRTSDT`). A collected record belongs to a planned
+measurement when the test code matches the planned parameter and
+the collection date matches `ADT`.
 
-Weight is planned repeatedly, while height is planned only at screening. A
-weight can cross any number of unattended planned measurements, but never
-crosses subjects or parameters. `HEIGHTBL` instead broadcasts one selected
-height across both parameters. A subject with no collected height has no
-baseline height even when later weights are available.
+**Variables:**
+
+- `ADT`: the planned analysis date, carried through unchanged.
+- `AVAL`: the collected numeric result when the planned
+  measurement was collected, otherwise the most recent earlier
+  collected value for the same subject and parameter; missing
+  before the first collected value.
+- `TRTSDT`: the subject treatment start date, repeated on every
+  record of the subject.
+- `HEIGHTBL`: the latest height collected on or before treatment
+  start, repeated on every record of the subject so later weight
+  records retain the once-measured characteristic; missing for a
+  subject with no pre-treatment height.
+
+**Note:** a carried value never crosses subjects or parameters,
+while `HEIGHTBL` repeats one selected height across both
+parameters.
+
+**Standard:** ADaM | **Domain:** ADVS

@@ -1,24 +1,34 @@
-# ADaM ADRS: select the best overall response
+# Take each subject's best overall response from a prepared ordering
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adrs-best-overall-response.html)
 
-This example uses a subject's randomization date and their prepared,
-priority-ordered response assessments to derive one best-response record per
-subject:
+**Goal:** write one best overall response record for each subject,
+carrying the randomization date (`RANDDT`) through and adding the
+response (`AVALC`), its rank (`AVAL`), and its supporting date
+(`ADT`).
 
-- `RANDDT` is the randomization date the response window is measured from;
-- `AVALC` is the best response the subject achieved and `AVAL` its rank, `1`
-  for a complete response through `6` for an assessment that was not
-  evaluable. A complete or partial response counts whenever it occurred;
-  stable disease and neither-complete-nor-progressive disease count only from
-  42 days after randomization, so a subject assessed as stable too early does
-  not qualify on it. Progression is next, and an assessment qualifying for
-  none of these leaves the subject not evaluable. A subject with no assessment
-  at all has no best response;
-- `ADT` is the date of the earliest assessment supporting that response, which
-  for a subject who is not evaluable is the earliest assessment that was not
-  progression.
+**Input:** subject-level records with randomization date (`RANDDT`),
+plus a prepared response selection in which the record with
+`BORSEQ` equal to `1` holds the subject's winning category
+(`BORCAT`) and date (`ADT`).
 
-The order is the definition, not a preference: a subject whose only stable
-assessment came too early is progressive when a progression follows, and not
-evaluable when none does. Both outcomes rest on the same assessment.
+**Variables:**
+
+- `AVALC` is the best overall response: complete response (CR),
+  partial response (PR), stable disease (SD), neither complete
+  response nor progressive disease (NON-CR/NON-PD), progressive
+  disease (PD), or not evaluable (NE); empty when the subject has
+  no record with `BORSEQ` equal to `1`.
+- `AVAL` ranks that response as `1` (complete response), `2`
+  (partial response), `3` (stable disease), `4` (neither complete
+  response nor progressive disease), `5` (progressive disease), or
+  `6` (not evaluable); empty when `AVALC` is empty.
+- `ADT` is the analysis date supporting the response, taken from
+  that record's date; empty when the subject has no record with
+  `BORSEQ` equal to `1`.
+
+**Note:** response, rank, and date agree with each other: all three
+are empty for a subject with no record with `BORSEQ` equal to `1`,
+and the supporting date is never before the randomization date.
+
+**Standard:** ADaM | **Domain:** ADRS

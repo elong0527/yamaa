@@ -1,22 +1,27 @@
-# SDTM RELREC: record relationships between events and medications
+# Relate adverse events and medications sharing a link
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-relrec-many-to-many.html)
 
-This example uses collected adverse-event and concomitant-medication data and a
-`yamaa` specification to derive one record per participation in a relationship:
+**Goal:** emit one related-records row per relationship
+participation, carrying `IDVARVAL`, `RELTYPE`, and `RELID`.
 
-- `RDOMAIN`, `IDVAR`, and `IDVARVAL` identify the related record: the domain it
-  lives in, the variable that identifies a record there, and that record's
-  sequence number as text;
-- `RELID` names the relationship the record takes part in. Records sharing a
-  `RELID` are related to one another;
-- `RELTYPE` is empty throughout, because every record here identifies an
-  individual record rather than a whole dataset.
+**Input:** collected adverse events (AE) each carrying two link
+identifiers, plus collected concomitant medications (CM) each
+carrying two link identifiers.
 
-A record may take part in more than one relationship and contributes one output
-record for each, so an event linked to two relationships appears twice,
-differing only in `RELID`. A record in no relationship contributes nothing.
+**Variables:**
 
-How many relationships a record can join is fixed by how many link fields the
-collection carries, so a record in a third relationship would need the
-collected data and the specification to grow together.
+- `IDVARVAL` is the sequence number of the related record as text;
+  always present.
+- `RELTYPE` is blank throughout, because each row points at one
+  record rather than a whole dataset.
+- `RELID` names the relationship the row takes part in; rows
+  sharing a value are related to one another, and every row
+  carries one.
+
+**Note:** a record with no link identifier contributes no row,
+while a record naming two link identifiers contributes one row per
+identifier; carrying a third relationship would need another link
+field on the collected record.
+
+**Standard:** SDTM | **Domain:** RELREC

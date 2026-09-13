@@ -1,22 +1,32 @@
-# ADaM ADSL: reject an uppercased country chosen inside the same step
+# Reject an uppercased country chosen inside the same step
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-variable-nested-expression.html)
 
-This example uses collected demographics with a site-level country to attempt
-one record per subject:
+**Goal:** carry `COUNTRY` on one record per subject, holding the
+subject's collected country in capitals, or the site country when
+the subject's own entry is blank.
 
-- `COUNTRY` is the collected country in capitals, taken from the site when the
-  subject's own country was not collected.
+**Input:** collected demographics records carrying the collected
+country (`COUNTRY`) and the site country (`SITECNTY`).
 
-The step that converts the text also chooses which text to convert, so the
-choice is buried inside another operation and nothing names the value being
-chosen. A specification states one step at a time and gives each result a name,
-so the run must fail and no artifact is accepted.
+**Variables:**
+
+- `COUNTRY` would be the subject's own country in capitals, or the
+  site country in capitals when the subject's own entry is blank,
+  but no row is produced.
+
+The uppercasing step also picks which text to uppercase, so the
+pick sits inside another operation and no named value feeds the
+step. Each result is built one step at a time from a named value,
+so the run is rejected before any data is read and no artifact is
+accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
-Derive the selected source in an intermediate column, then pass that variable
-to `str_upper`:
+Derive the selected source in a helper column, then pass that value to the
+uppercasing step:
 
 ```yaml
 - name: COUNTRYSRC
@@ -32,7 +42,5 @@ to `str_upper`:
       source: COUNTRYSRC
 ```
 
-Keep `COUNTRYSRC` internal by omitting it from `output.columns`.
-
-Fields typed as `variable`, including `str_upper.source`, accept a variable
-name rather than a nested expression.
+Keep the helper column out of the artifact by leaving it off the artifact
+column list.

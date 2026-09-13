@@ -1,25 +1,32 @@
-# SDTM DM: reject a subject identifier longer than the study permits
+# Reject a subject identifier that exceeds its length limit
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-usubjid-exceeds-length.html)
 
-This example uses collected demographics to attempt one record per subject:
+**Goal:** attempt the subject-level demographics dataset carrying
+the site identifier (`SITEID`).
 
-- `USUBJID` is the unique subject identifier, built from the study, the site,
-  and the subject number.
+**Input:** collected demographics rows, each carrying the site
+identifier (`SITEID`) and the subject number.
 
-The study fixes how long a subject identifier may be, because every dataset
-that refers to a subject repeats the same value and a submission states its
-width once. One site's identifier is long enough that the value built for its
-subjects exceeds that width. Cutting the value to fit would break the link to
-every other dataset carrying it, and keeping the longer value would contradict
-the width already stated, so the run must fail and no artifact is accepted.
+**Variables:**
+
+- `SITEID` would be the study site identifier, carried through
+  unchanged from the matching input field; it is present on every
+  record.
+
+**Note:** the 20-character limit applies to the joined identifier
+on every record. A site identifier long enough to push the joined
+value past that limit is rejected after the dataset completes, so
+no artifact is accepted.
+
+**Standard:** SDTM | **Domain:** DM
 
 ## How to fix
 
 Decide which is authoritative: the width the study declares, or the site
 identifier the data carries. If the site identifier can be shortened at
-source, correct it there, so that every dataset referring to the subject keeps
-one value:
+source, correct it there, so that every dataset referring to the subject
+keeps one value:
 
 ```
 CATH,0003,STMARY
@@ -45,6 +52,6 @@ subject identifier is described:
         max: 30
 ```
 
-Do not lower the bound below the values the study produces merely to make this
-input pass. A subject identifier that no longer fits its stated width is a
-defect wherever it is carried.
+Do not lower the bound below the values the study produces merely to make
+this input pass. A subject identifier that no longer fits its stated width is
+a defect wherever it is carried.

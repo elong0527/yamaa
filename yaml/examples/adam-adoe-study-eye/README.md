@@ -1,23 +1,29 @@
-# ADaM ADOE: tell the study eye from the fellow eye
+# Tell the study eye from the fellow eye
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adoe-study-eye.html)
 
-This example uses collected ophthalmic measurements and subject-level eye
-assignments with a `yamaa` specification to derive one row per collected
-measurement:
+**Goal:** one ophthalmic row per collected ophthalmic examination
+(OE) measurement, adding `AFEYE`.
 
-- `OESEQ` is the collected sequence number that identifies the measurement
-  within its subject;
-- `PARAMCD` is the measurement, `OELAT` the eye it was taken in, and `AVAL`
-  the measured value. A measurement collected without a value is kept and its
-  value left empty;
-- `AFEYE` is the eye's role in the study: the measurement belongs to the
-  study eye when its laterality matches the laterality the study assigned to
-  the subject, to both eyes when the measurement is bilateral, and to the
-  fellow eye when it is the opposite unilateral eye. Either unilateral eye is
-  a study eye for a bilateral assignment. A subject with no assigned eye has
-  no role for either eye.
+**Input:** ophthalmic measurements carrying sequence number
+(`OESEQ`), test code (`PARAMCD`), laterality (`OELAT`), and
+numeric result (`AVAL`), together with the subject's assigned
+eye from the subject-level analysis dataset (ADSL). A
+measurement collected without a value is kept with its value
+empty.
 
-The assignment is a property of the subject, not of the measurement, so the
-same eye is the study eye at every visit; only the collected laterality moves
-a record between roles.
+**Variables:**
+
+- `AFEYE` is the eye's role in the study: `Study Eye` when the
+  measured eye matches the subject's assigned eye, `Both Eyes`
+  for a bilateral measurement when the subject has an assigned
+  eye, and `Fellow Eye` for the opposite eye. Either eye counts
+  as the study eye when both eyes are assigned and the collected
+  laterality is present. When the assigned eye or the collected
+  laterality is missing, `AFEYE` stays empty.
+
+**Note:** the assigned eye belongs to the subject, so the same eye
+is the study eye at every visit; only the collected laterality
+moves a record between roles.
+
+**Standard:** ADaM | **Domain:** ADOE

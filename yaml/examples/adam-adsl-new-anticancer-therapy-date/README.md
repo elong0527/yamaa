@@ -1,20 +1,33 @@
-# ADaM ADSL: date the subject started new anti-cancer therapy
+# New anti-cancer therapy start
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-new-anticancer-therapy-date.html)
 
-This example uses a subject list with the concomitant medications and
-procedures collected beside it to derive one record per subject:
+**Goal:** derive the start date of new anti-cancer therapy given during
+the study (`NACTDT`), its study day relative to the start of study
+treatment (`NACTDY`), and a flag marking subjects who started such
+therapy (`NACTFL`).
 
-- `TRTSDT` is the day study treatment started;
-- `NACTDT` is the earliest start of an anti-cancer therapy given during the
-  study, whether it was recorded as a medication or as a procedure. Therapy
-  the subject received before the study does not count, and neither does a
-  procedure recorded for a reason other than the cancer;
-- `NACTDY` is the study day of that start, counting the first day of treatment
-  as day one;
-- `NACTFL` is `Y` for a subject who started such a therapy and is empty
+**Input:** one subject-level table carrying the treatment start date
+`TRTSDT`, alongside concomitant medication records carrying `CMCAT` and
+`CMSTDTC`, plus procedure records carrying `PRCAT`, `PRSCAT`, and
+`PRSTDTC`.
+
+**Variables:**
+
+- `NACTDT` is the earlier of the first qualifying medication start
+  (`CMSTDTC` with `CMCAT` equal to `ON TREATMENT`) and the first
+  qualifying procedure start (`PRSTDTC` with `PRCAT` equal to `CANCER
+  RELATED` and `PRSCAT` equal to `ON TREATMENT`); it is absent when the
+  subject started no qualifying therapy during the study. Therapy
+  recorded as `PRIOR TREATMENT` does not qualify, nor do procedures
+  given for reasons other than the cancer.
+- `NACTDY` is the study day of `NACTDT` counted from `TRTSDT`, with the
+  treatment start date itself as day 1; it is absent when `NACTDT` is
+  absent.
+- `NACTFL` holds `Y` when `NACTDT` is present and is absent
   otherwise.
 
-A subject whose only anti-cancer therapy predates the study looks the same as
-one who never received any, because both leave the study without a date to
-censor at.
+**Note:** a flagged therapy start falls on or after the treatment
+start date.
+
+**Standard:** ADaM | **Domain:** ADSL

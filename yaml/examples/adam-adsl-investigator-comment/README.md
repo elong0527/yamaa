@@ -1,15 +1,22 @@
-# ADaM ADSL: keep an investigator comment exactly as collected
+# Keep an investigator comment exactly as collected
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-investigator-comment.html)
 
-This example uses sample DM text and produces one row per subject:
+**Goal:** keep the investigator comment in `CMNT` and whether one
+was collected in `CMNTFL`.
 
-- `CMNT` is the comment the investigator recorded, kept exactly as it was
-  collected: a comma inside it, a pair of quotation marks around a subject's
-  own words, and a line break in the middle of it all reach the result
-  unchanged;
-- `CMNTFL` is `Y` when a comment was collected and `N` when none was.
+**Input:** demographics (DM) rows carrying the `COMMENT` field.
 
-A comment left deliberately blank is still a comment, because the investigator
-was asked and answered with nothing. It stays distinct from a comment that was
-never collected at all, and only the second of the two is absent.
+**Variables:**
+
+- `CMNT` is the comment exactly as the investigator recorded it: a
+  comma inside it, quotation marks around a subject's own words, and
+  a line break in the middle of it all reach the result unchanged;
+  it is absent when no comment was collected.
+- `CMNTFL` is `Y` when a comment was collected and `N` when none
+  was.
+
+**Note:** when the flag shows no comment was collected, the comment
+itself is absent.
+
+**Standard:** ADaM | **Domain:** ADSL

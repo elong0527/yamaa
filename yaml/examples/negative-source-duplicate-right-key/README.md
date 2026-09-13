@@ -1,20 +1,28 @@
-# ADaM ADSL: reject duplicate subject enrichment
+# Reject an actual treatment with two source records for one subject
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-duplicate-right-key.html)
 
-This example uses one demographics record and two analysis-subject records for
-the same subject to attempt one output record:
+**Goal:** build one record per subject carrying the actual
+treatment for period 01 (`TRT01A`).
 
-- `TRT01A` is meant to carry the subject's actual treatment from the
-  analysis-subject source.
+**Input:** demographics records plus analysis-subject records
+carrying a treatment (`TRT01A`).
 
-The subject keys identify two possible source records and no selection rule is
-declared. Choosing either treatment would be arbitrary, so the run must fail
-and no artifact is accepted.
+**Variables:**
+
+- `TRT01A` would contain the treatment from the analysis-subject
+  record for the same subject.
+
+When more than one analysis-subject record shares one subject's
+identifiers, nothing says which treatment answers. Taking either
+one would report a treatment the study data does not single out,
+so the run is rejected with no artifact accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
-Reconcile the analysis-subject source so each subject key has one supported
+Reconcile the analysis-subject source so each subject has one supported
 treatment. If multiple records are legitimate, add a field that expresses the
 choice, such as an effective timestamp, and select by it explicitly:
 
@@ -26,4 +34,4 @@ source:
     keep: last
 ```
 
-Do not use file order or treatment text as a substitute for a business rule.
+Do not use file order or treatment text as a substitute for a study rule.

@@ -1,15 +1,22 @@
-# ADaM ADSL: select the first rescue medication
+# Select the first rescue medication
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-rescue-medication.html)
 
-This example uses collected demographics with the medications taken alongside
-study treatment to derive one record per subject:
+**Goal:** derive the first rescue medication for each subject,
+carried in `RESCTRT`.
 
-- `RESCTRT` is the medication a subject first received as rescue, taken from
-  the earliest one recorded as rescue and, where two share a start date, the
-  one recorded first.
+**Input:** demographics records listing the subjects, plus
+medication records with treatment name, category, start date, and
+sequence number.
 
-A subject whose medications include none given as rescue has no such
-medication, and the value is empty. That is the same result a subject with no
-recorded medications at all receives, because in both cases nothing was
-selected rather than something being selected badly.
+**Variables:**
+
+- `RESCTRT` is the treatment name from `CMTRT` on the earliest
+  qualifying medication record, where qualifying means `CMCAT`
+  equals `RESCUE MEDICATION`; any other category does not qualify.
+  Earliest means the smallest `CMSTDTC`, and ties go to the
+  smallest `CMSEQ`. Left blank when the subject has no qualifying
+  record, whether the subject has other medications or none at all,
+  not filled with placeholder text.
+
+**Standard:** ADaM | **Domain:** ADSL

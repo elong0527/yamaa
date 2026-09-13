@@ -1,16 +1,29 @@
-# ADaM ADLB: reject a total written as a formula
+# Reject a subject total written as a row formula
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-compute-aggregate-function.html)
 
-This example uses collected laboratory results to attempt one record per
-subject and parameter:
+**Goal:** attempt the subject-level total result (`AVALTOT`)
+from the collected results for a subject, written as the row
+formula `SUM(AVAL)`.
 
-- `AVAL` is the collected result;
-- `AVALTOT` is meant to total the results across the records of a subject.
+**Input:** laboratory (LB) records carrying the study and
+subject identifiers, the test code (`LBTESTCD`) used for the
+parameter code, and the collected numeric result (`LBSTRESN`).
 
-A formula describes one record at a time and cannot reach the other records it
-would have to total. Assuming a group from the output identity would answer a
-question nobody asked, so the run must fail and no artifact is accepted.
+**Variables:**
+
+- `AVAL`: the collected numeric result copied from `LBSTRESN`;
+  missing when the collected result is missing.
+- `AVALTOT`: would be the total of `AVAL` across the subject's
+  records, repeated on each record for that subject, but no value
+  is produced.
+
+The expression `SUM(AVAL)` is written as a row formula, but a row
+formula sees one record at a time and cannot reach the other
+records it would have to total, so the run is rejected before any
+data is read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 
