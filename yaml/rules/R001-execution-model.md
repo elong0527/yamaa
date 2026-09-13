@@ -94,10 +94,11 @@ sharing a key combination is writing the grain `keys` already states, and
 that specification omits `rows` instead.
 
 **R001-12b.** A column derivation must yield exactly one value per row, and
-it counts values rather than the records carrying them: no value is missing,
-repeated readings of one value are that one value, and two records of one key
-combination carrying different values are two values, which fails under
-R001-44. In a specification without `rows`, a key column derivation must not
+it counts values rather than the records carrying them: repeated readings of
+one value are that one value, and two records of one key combination carrying
+different present values are two values, which fails under R001-44. A missing
+result is still the row's one value but never creates a second value for the
+R001-44 count. In a specification without `rows`, a key column derivation must not
 depend on a non-key output column (R001-43); keys are derived before any row
 logic runs.
 
@@ -213,4 +214,4 @@ evaluation order to mapping order or to repeated reads of one partition.
   logic runs.
 - **R001-44.** A column derivation yielding more than one value for one key
   combination: fail and report the column, how many values it yielded, and
-  the keys.
+  the keys. Missing results are excluded from the count.
