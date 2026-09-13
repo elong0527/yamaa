@@ -1960,7 +1960,9 @@ def plan_execution(
             )
     else:
         for index, row in enumerate(rows):
-            driver = row.dataset or specification.default_driver
+            driver = row.dataset
+            if driver is None and len(specification.datasets) == 1:
+                driver = next(iter(specification.datasets))
             if driver is None or driver not in specification.datasets:
                 continue
             row_scope = _row_scope(specification, row, driver)
