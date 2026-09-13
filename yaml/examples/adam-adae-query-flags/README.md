@@ -1,5 +1,7 @@
 # ADaM ADAE: record which queries a coded event belongs to
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-query-flags.html)
+
 This example uses collected adverse events and the study's query dictionary to
 derive one row per adverse event:
 

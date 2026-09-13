@@ -1,4 +1,6 @@
-# ADaM ADLB: reject reference limits named by a machine location
+# ADaM ADLB: reject reference limits named by an unapproved location
+
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-dataset-path-absolute.html)
 
 This example uses collected laboratory results with a table of reference
 limits by test and sex to attempt one record per subject and parameter:
@@ -7,10 +9,13 @@ limits by test and sex to attempt one record per subject and parameter:
 - `AVAL` is the collected result;
 - `ANRHI` is the upper limit of normal for that test and sex.
 
-The limits are named by a location on the machine that runs the study rather
-than by a file the study carries. What that location holds depends on the
-machine, so the study cannot be rebuilt anywhere else and cannot be reviewed
-from what it contains. The run must fail and no artifact is accepted.
+The limits are named by a location on the machine that runs the study. A run
+may read such a location, because code and data are commonly kept apart, but
+only one that whoever starts the run approved in advance. This study was
+started with its own directory as the only approved place to read from, so
+these limits name nothing the run may open. Naming a location cannot approve
+it: if it could, the file under review would decide what the run reads. The
+run must fail and no artifact is accepted.
 
 ## How to fix
 
@@ -23,7 +28,7 @@ datasets:
     path: input/lbref.csv
 ```
 
-If several studies share one limit table, give each study the version it was
-run against instead of pointing every study at one machine location. A shared
-location that is edited between runs changes results that were already
-reported.
+Keep a shared limit table outside the study only when the runner approves the
+directory that holds it as a data root, and then name it by its rooted path.
+Give each study the version it was run against either way: a shared location
+that is edited between runs changes results that were already reported.

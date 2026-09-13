@@ -1,5 +1,7 @@
 # ADaM ADSL: record randomization timing
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-randomization-timing.html)
+
 This example uses an ODM demographics projection to produce one record per
 subject:
 

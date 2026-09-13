@@ -1,5 +1,7 @@
 # ADaM ADEG: derive an RR interval
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adeg-rr-interval.html)
+
 This example uses ADEG HR records to preserve collected records and add one RRR
 parameter record per subject and analysis visit:
 

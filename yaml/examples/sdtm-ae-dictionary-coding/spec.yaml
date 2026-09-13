@@ -11,20 +11,20 @@ metadata:
 
 output:
   path: ae.csv
-  columns: [STUDYID, DOMAIN, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS]
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AEDECOD, AEBODSYS]
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation:
-      source: AE_RAW.STUDYID
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation:
       literal: AE
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: AE_RAW.STUDYID
 
   - name: USUBJID
     type: str

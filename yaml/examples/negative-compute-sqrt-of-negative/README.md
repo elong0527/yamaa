@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a body surface area from a negative weight
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-compute-sqrt-of-negative.html)
+
 This example uses collected height and weight to attempt one record per
 subject:
 

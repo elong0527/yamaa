@@ -1,0 +1,35 @@
+schema_version: "1.0"
+domain: ADLB
+datasets:
+  LB: {path: input/lb.csv, types: {AVAL: float}}
+keys: [STUDYID, USUBJID]
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, AVAL, AVALDOUBLED]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: LB.USUBJID
+
+  - name: AVALDOUBLED
+    type: float
+    label: Doubled Analysis Value
+    derivation:
+      compute:
+        expr: "AVAL * 2"
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      source: LB.AVAL

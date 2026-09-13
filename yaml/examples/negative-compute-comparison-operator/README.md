@@ -1,5 +1,7 @@
 # ADaM ADLB: reject an above-range flag written as a formula
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-compute-comparison-operator.html)
+
 This example uses collected laboratory results with their reference limits to
 attempt one record per subject and parameter:
 

@@ -1,5 +1,7 @@
 # ADaM ADAE: flag the first occurrence at three levels
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-occurrence-flags.html)
+
 This example uses a pre-classified ADAE slice and a `yamaa` specification to
 derive one row per adverse event:
 

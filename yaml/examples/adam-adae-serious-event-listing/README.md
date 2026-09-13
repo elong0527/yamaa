@@ -1,5 +1,7 @@
 # ADaM ADAE: list the serious adverse events
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-serious-event-listing.html)
+
 This example uses sample AE records and produces one row per serious event:
 
 - `AETERM` is the term the investigator reported for the event;

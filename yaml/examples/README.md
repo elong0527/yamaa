@@ -42,6 +42,7 @@ the safest correction and shows the smallest useful YAML change.
 | Example | Derives |
 |---|---|
 | [`adam-adae-death-outcome`](adam-adae-death-outcome/) | carry each subject's death onto every event |
+| [`adam-adae-event-severity`](adam-adae-event-severity/) | carry each event's severity from its supplemental record |
 | [`adam-adae-occurrence-flags`](adam-adae-occurrence-flags/) | flag the first occurrence at three levels |
 | [`adam-adae-partial-dates`](adam-adae-partial-dates/) | impute partial dates |
 | [`adam-adae-post-dose-onset`](adam-adae-post-dose-onset/) | classify an event by the moment it started |
@@ -71,7 +72,6 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adlb-order-sensitive-sum`](adam-adlb-order-sensitive-sum/) | sum floating-point values in source record order |
 | [`adam-adlb-reported-precision`](adam-adlb-reported-precision/) | report a result against the lower limit of normal |
 | [`adam-adlb-shift-and-criteria`](adam-adlb-shift-and-criteria/) | classify a result, its shift from baseline, and one criterion |
-| [`adam-adlb-standardized-result`](adam-adlb-standardized-result/) | carry standardized results into analysis |
 | [`adam-adoe-study-eye`](adam-adoe-study-eye/) | tell the study eye from the fellow eye |
 | [`adam-adqs-subscale-score`](adam-adqs-subscale-score/) | score a questionnaire subscale from its item records |
 | [`adam-adrs-best-overall-response`](adam-adrs-best-overall-response/) | select the best overall response |
@@ -89,6 +89,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adsl-dependency-order`](adam-adsl-dependency-order/) | derive a chain of population flags |
 | [`adam-adsl-disposition`](adam-adsl-disposition/) | select the final subject disposition from DS |
 | [`adam-adsl-dose-adjustment-flag`](adam-adsl-dose-adjustment-flag/) | derive a dose adjustment flag from multiple sources |
+| [`adam-adsl-duration-weeks-months`](adam-adsl-duration-weeks-months/) | exposure duration in weeks and months |
 | [`adam-adsl-geography-normalization`](adam-adsl-geography-normalization/) | normalize collected country and group it into a region |
 | [`adam-adsl-identifier-parsing`](adam-adsl-identifier-parsing/) | parse the site from USUBJID with a collected fallback |
 | [`adam-adsl-investigator-comment`](adam-adsl-investigator-comment/) | keep an investigator comment exactly as collected |
@@ -134,7 +135,12 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-adsl-remote-parent`](negative-adsl-remote-parent/) | reject shared definitions from a remote location |
 | [`negative-adsl-subject-reference`](negative-adsl-subject-reference/) | reject a malformed subject reference |
 | [`negative-advs-overlapping-analysis-windows`](negative-advs-overlapping-analysis-windows/) | reject overlapping analysis windows |
+| [`negative-all-or-none-partial-row`](negative-all-or-none-partial-row/) | reject a row with only some paired dates present |
+| [`negative-allowed-values-mismatch`](negative-allowed-values-mismatch/) | reject a recorded sex the study does not recognize |
 | [`negative-baseline-flag-tied-date`](negative-baseline-flag-tied-date/) | reject a baseline chosen between two same-day results |
+| [`negative-baseline-value-multiple-flags`](negative-baseline-value-multiple-flags/) | reject a baseline carried from two flagged visits |
+| [`negative-coalesce-self-reference`](negative-coalesce-self-reference/) | reject a severity carried from its own column |
+| [`negative-column-forward-reference`](negative-column-forward-reference/) | reject a doubled value built from a later column |
 | [`negative-column-type-unknown`](negative-column-type-unknown/) | reject an analysis value with an ambiguous numeric type |
 | [`negative-compute-aggregate-function`](negative-compute-aggregate-function/) | reject a total written as a formula |
 | [`negative-compute-comparison-operator`](negative-compute-comparison-operator/) | reject an above-range flag written as a formula |
@@ -146,12 +152,15 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-conversion-incomplete-date`](negative-conversion-incomplete-date/) | reject an event start date that names no day |
 | [`negative-conversion-non-integral`](negative-conversion-non-integral/) | reject a pulse rate recorded between whole beats |
 | [`negative-conversion-unparseable-number`](negative-conversion-unparseable-number/) | reject a viral load reported below the assay limit |
-| [`negative-dataset-path-absolute`](negative-dataset-path-absolute/) | reject reference limits named by a machine location |
+| [`negative-cut-non-numeric-source`](negative-cut-non-numeric-source/) | reject age bands grouped from a coded value |
+| [`negative-dataset-path-absolute`](negative-dataset-path-absolute/) | reject reference limits named by an unapproved location |
 | [`negative-dataset-path-directory`](negative-dataset-path-directory/) | reject reference limits that name a folder |
 | [`negative-dataset-path-missing`](negative-dataset-path-missing/) | reject reference limits the study does not hold |
 | [`negative-dataset-path-parent-escape`](negative-dataset-path-parent-escape/) | reject reference limits stored above the study |
 | [`negative-dataset-path-symlink`](negative-dataset-path-symlink/) | reject reference limits reached through a stand-in name |
 | [`negative-dataset-path-url`](negative-dataset-path-url/) | reject reference limits named by a web address |
+| [`negative-date-diff-bounds-unit`](negative-date-diff-bounds-unit/) | reject endpoint counting beside a month count |
+| [`negative-date-diff-datetime-endpoints`](negative-date-diff-datetime-endpoints/) | reject counting days between two moments |
 | [`negative-date-impute-invalid-source`](negative-date-impute-invalid-source/) | reject a start date completed from text that is not a date |
 | [`negative-date-impute-month-out-of-range`](negative-date-impute-month-out-of-range/) | reject a start date completed with no month of the year |
 | [`negative-date-impute-nonexistent-day`](negative-date-impute-nonexistent-day/) | reject an end date completed past the end of its month |
@@ -164,6 +173,8 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-ingest-unparseable-field`](negative-ingest-unparseable-field/) | reject a dose recorded with its unit |
 | [`negative-keys-internal-column`](negative-keys-internal-column/) | reject a site-scoped subject identity |
 | [`negative-keys-missing-value`](negative-keys-missing-value/) | reject a record that no analysis visit identifies |
+| [`negative-least-incomparable-sources`](negative-least-incomparable-sources/) | reject an earliest-alive date taken from a day number |
+| [`negative-literal-non-scalar`](negative-literal-non-scalar/) | reject a fixed value written as a structure |
 | [`negative-mapping-case-fold-collision`](negative-mapping-case-fold-collision/) | reject a smoking flag whose dictionary answers twice |
 | [`negative-mapping-from-duplicate-key`](negative-mapping-from-duplicate-key/) | reject a reference range stated twice |
 | [`negative-mapping-from-key-length-mismatch`](negative-mapping-from-key-length-mismatch/) | reject a reference range chosen by an unpaired key |
@@ -171,10 +182,13 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-mapping-from-unmapped-key`](negative-mapping-from-unmapped-key/) | reject a result with no reference range |
 | [`negative-mapping-unmapped-value`](negative-mapping-unmapped-value/) | reject an unmapped response |
 | [`negative-matches-unreadable-pattern`](negative-matches-unreadable-pattern/) | reject a sex code checked against an unreadable match rule |
+| [`negative-not-missing-absent-age`](negative-not-missing-absent-age/) | reject a missing age |
 | [`negative-output-duplicate-subject`](negative-output-duplicate-subject/) | reject a repeated demographics record |
 | [`negative-output-order-repeated-term`](negative-output-order-repeated-term/) | reject an order that places one value twice |
 | [`negative-output-order-unknown-column`](negative-output-order-unknown-column/) | reject a submission order over a value the dataset does not carry |
+| [`negative-previous-non-missing-non-variable-source`](negative-previous-non-missing-non-variable-source/) | reject carrying forward a fixed value |
 | [`negative-query-slot-overflow`](negative-query-slot-overflow/) | reject an event belonging to more queries than it has places |
+| [`negative-rank-invalid-method`](negative-rank-invalid-method/) | reject an unlisted tie-numbering method |
 | [`negative-record-lookup-id-collision`](negative-record-lookup-id-collision/) | reject a first treatment named after its own source |
 | [`negative-record-lookup-incomparable-range`](negative-record-lookup-incomparable-range/) | reject an epoch range with incomparable endpoints |
 | [`negative-record-lookup-incomplete-key`](negative-record-lookup-incomplete-key/) | reject a reference limit chosen without a sex |
@@ -182,6 +196,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-record-lookup-unordered-choice`](negative-record-lookup-unordered-choice/) | reject a treatment and dose taken from an unchosen record |
 | [`negative-record-lookup-unordered-keep`](negative-record-lookup-unordered-keep/) | reject a treatment ordered but not chosen |
 | [`negative-record-lookup-unpaired-key`](negative-record-lookup-unpaired-key/) | reject a reference limit matched against nothing |
+| [`negative-row-number-numeric-filter`](negative-row-number-numeric-filter/) | reject a sequence filtered by a number |
 | [`negative-row-value-self-reference`](negative-row-value-self-reference/) | reject a weight carried forward from a carried-forward weight |
 | [`negative-row-value-zero-offset`](negative-row-value-zero-offset/) | reject a previous weight that names no earlier visit |
 | [`negative-source-duplicate-field-name`](negative-source-duplicate-field-name/) | reject a subject listing that names one field twice |
@@ -191,12 +206,16 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-source-missing-sentinel`](negative-source-missing-sentinel/) | reject an age recorded as NA |
 | [`negative-source-output-self-reference`](negative-source-output-self-reference/) | reject a parameter that reads the dataset it is part of |
 | [`negative-source-record-width`](negative-source-record-width/) | reject a subject listing record with an extra field |
+| [`negative-source-undeclared-field`](negative-source-undeclared-field/) | reject a copy from an undeclared field |
 | [`negative-source-unknown-profile`](negative-source-unknown-profile/) | reject a subject listing stored under an unnamed format |
 | [`negative-source-unterminated-quote`](negative-source-unterminated-quote/) | reject a comment whose quoted text never closes |
 | [`negative-str-extract-undeclared-group`](negative-str-extract-undeclared-group/) | reject a site identifier taken from an uncaptured part |
+| [`negative-str-lower-non-string-source`](negative-str-lower-non-string-source/) | reject a site name folded from a number |
+| [`negative-study-day-datetime-input`](negative-study-day-datetime-input/) | reject a study day measured from a moment |
 | [`negative-sum-non-numeric-source`](negative-sum-non-numeric-source/) | reject a severity burden totalled from severity words |
 | [`negative-to-date-date-source`](negative-to-date-date-source/) | reject extracting a date from a date |
 | [`negative-types-unknown-field`](negative-types-unknown-field/) | reject a total over a field the source does not have |
+| [`negative-unique-duplicate-values`](negative-unique-duplicate-values/) | reject a site shared by two subjects |
 | [`negative-usubjid-exceeds-length`](negative-usubjid-exceeds-length/) | reject a subject identifier longer than the study permits |
 | [`negative-variable-nested-expression`](negative-variable-nested-expression/) | reject an uppercased country chosen inside the same step |
 | [`negative-verification-implausible-age`](negative-verification-implausible-age/) | reject an implausible age |
@@ -219,3 +238,4 @@ the safest correction and shows the smallest useful YAML change.
 | [`sdtm-suppmh-qualifiers`](sdtm-suppmh-qualifiers/) | reshape extra qualifiers into supplemental records |
 | [`sdtm-vs-unit-standardization`](sdtm-vs-unit-standardization/) | standardize collected results into the study's units |
 | [`sdtm-vs-visit-study-day`](sdtm-vs-visit-study-day/) | attach visit metadata and study day to a result |
+| [`spec-inheritance`](spec-inheritance/) | spec inheritance |

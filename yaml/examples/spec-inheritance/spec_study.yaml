@@ -1,0 +1,14 @@
+schema_version: "1.0"
+parents: [spec_organization.yaml, spec_compound.yaml]
+domain: ADLB
+keys: [USUBJID, PARAMCD]
+output:
+  path: adlb.csv
+  columns: [USUBJID, PARAMCD, AVAL, AVALU]
+columns:
+  - name: AVAL
+    label: Analysis Value
+  - name: AVALU
+    label: Standardized Analysis Unit
+metadata:
+  scope: study

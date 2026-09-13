@@ -1,0 +1,8 @@
+phase: validation
+condition: invalid_field_type
+spec_paths:
+  - columns.PRIORBP.derivation.previous_non_missing.source
+requirement: R007-37
+context:
+  expected: variable
+  actual: mapping

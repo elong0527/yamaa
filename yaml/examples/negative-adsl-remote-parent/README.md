@@ -1,5 +1,7 @@
 # ADaM ADSL: reject shared definitions from a remote location
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adsl-remote-parent.html)
+
 This example attempts to prepare subject records from definitions named by a
 web address.
 

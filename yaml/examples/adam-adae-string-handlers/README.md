@@ -1,5 +1,7 @@
 # ADaM ADAE: clean text and handle invalid IDs
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-string-handlers.html)
+
 This example uses sample AE data and a `yamaa` specification to:
 
 - convert `AETERM` to lowercase as `AETERMLO`;
@@ -9,8 +11,5 @@ This example uses sample AE data and a `yamaa` specification to:
 - extract the number from an `AESPID` such as `AE-001` as `AEREFNUM`. A
   missing `AESPID` becomes `0`, and an invalid `AESPID` becomes `-1`.
 
-An `AESPID` recorded as blank is a collected answer rather than an absent
-one, so it is an invalid identifier and its `AEREFNUM` is `-1`, not the `0`
-that stands for an identifier nobody recorded. The two blanks stay apart
-in the result: a recorded blank is written as an empty pair of quotation
-marks and an uncollected one as nothing at all.
+A blank `AESPID` is missing whether it was recorded bare or quoted, so it
+becomes the `0` that stands for an identifier nobody recorded.

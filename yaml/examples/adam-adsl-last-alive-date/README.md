@@ -1,5 +1,7 @@
 # ADaM ADSL: derive the last known alive date from multiple sources
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-last-alive-date.html)
+
 This example uses ADSL, ADAE, and ADVS inputs to derive one row per subject:
 
 - `TRTEDT` is the subject's treatment end date, already available in `ADSL`.

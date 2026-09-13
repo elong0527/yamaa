@@ -1,5 +1,7 @@
 # ADaM ADOE: tell the study eye from the fellow eye
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adoe-study-eye.html)
+
 This example uses collected ophthalmic measurements and subject-level eye
 assignments with a `yamaa` specification to derive one row per collected
 measurement:

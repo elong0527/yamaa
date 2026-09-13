@@ -5,6 +5,7 @@ import csv
 import datetime as dt
 import decimal
 import hashlib
+import importlib.util
 import io
 import json
 import keyword
@@ -255,6 +256,7 @@ def validation_diagnostic(
 # when its required context differs by operation family.
 VALIDATION_CONTEXT_FIELDS = {
     ('R001', 'dependency_cycle'): {'cycle'},
+    ('R001', 'forward_reference'): {'column', 'dependency'},
     ('R002', 'duplicate_identifier'): {'identifier'},
     ('R002', 'unknown_field'): {'identifier'},
     ('R004', 'invalid_predicate'): {'predicate'},
@@ -324,7 +326,7 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R021', 'resource_path_missing'): {'path'},
     ('R021', 'resource_path_not_regular_file'): {'path'},
     ('R021', 'resource_path_not_relative'): {'path'},
-    ('R021', 'resource_path_parent_traversal'): {'path'},
+    ('R021', 'resource_path_outside_project'): {'path'},
     ('R021', 'resource_path_symlink'): {'path'},
     ('R021', 'resource_path_uri_scheme'): {'path'},
     # The engine's wording is additional context an implementation may
@@ -474,14 +476,6 @@ UniqueKeyLoader.add_constructor(
 )
 
 
-class PredicateError(ValueError):
-    """A portable predicate cannot be tokenized or parsed."""
-
-    def __init__(self, message, position):
-        super().__init__(f"{message} at character {position + 1}")
-        self.position = position
-
-
 class PredicateSemanticIssue(str):
     def __new__(cls, message, condition, context, span):
         value = super().__new__(cls, message)
@@ -491,341 +485,22 @@ class PredicateSemanticIssue(str):
         return value
 
 
-def tokenize_predicate(text):
-    """Tokenize the closed R004 predicate language."""
-    tokens = []
-    index = 0
-    length = len(text)
-    while index < length:
-        char = text[index]
-        if char.isspace():
-            index += 1
-            continue
-
-        if char == "'":
-            start = index
-            index += 1
-            value = []
-            while index < length:
-                if text[index] != "'":
-                    value.append(text[index])
-                    index += 1
-                    continue
-                if index + 1 < length and text[index + 1] == "'":
-                    value.append("'")
-                    index += 2
-                    continue
-                index += 1
-                tokens.append(('STRING', ''.join(value), start))
-                break
-            else:
-                raise PredicateError('unterminated string literal', start)
-            continue
-
-        number = re.match(
-            r'[+-]?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?',
-            text[index:],
-        )
-        if number is not None:
-            value = number.group(0)
-            tokens.append(('NUMBER', value, index))
-            index += len(value)
-            continue
-
-        name = re.match(r'[A-Za-z_][A-Za-z0-9_]*', text[index:])
-        if name is not None:
-            value = name.group(0)
-            end = index + len(value)
-            if end < length and text[end] == '.':
-                suffix = re.match(
-                    r'[A-Za-z_][A-Za-z0-9_]*', text[end + 1:]
-                )
-                if suffix is None:
-                    raise PredicateError('invalid qualified identifier', index)
-                value += '.' + suffix.group(0)
-                end += 1 + len(suffix.group(0))
-            tokens.append(('NAME', value, index))
-            index = end
-            continue
-
-        two_char = text[index:index + 2]
-        if two_char in {'<>', '<=', '>='}:
-            tokens.append(('OP', two_char, index))
-            index += 2
-            continue
-        if char in {'=', '<', '>'}:
-            tokens.append(('OP', char, index))
-            index += 1
-            continue
-        if char == '(':
-            tokens.append(('LPAREN', char, index))
-            index += 1
-            continue
-        if char == ')':
-            tokens.append(('RPAREN', char, index))
-            index += 1
-            continue
-        if char == ',':
-            tokens.append(('COMMA', char, index))
-            index += 1
-            continue
-
-        raise PredicateError(f"unexpected character {char!r}", index)
-
-    tokens.append(('EOF', '', length))
-    return tokens
-
-
-def valid_temporal_literal(kind, value):
-    if kind == 'date':
-        if re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', value) is None:
-            return False
-        try:
-            dt.date.fromisoformat(value)
-            return True
-        except ValueError:
-            return False
-
-    if re.fullmatch(
-        r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}'
-        r'(?::[0-9]{2})?',
-        value,
-    ) is None:
-        return False
-    completed = value if len(value) == 19 else value + ':00'
-    try:
-        dt.datetime.strptime(completed, '%Y-%m-%dT%H:%M:%S')
-        return True
-    except ValueError:
-        return False
-
-
-def like_pattern_has_dangling_escape(pattern, escape):
-    escaped = False
-    for character in pattern:
-        if escaped:
-            escaped = False
-        elif character == escape:
-            escaped = True
-    return escaped
-
-
-class PredicateParser:
-    def __init__(self, text):
-        self.text = text
-        self.tokens = tokenize_predicate(text)
-        self.index = 0
-
-    @property
-    def token(self):
-        return self.tokens[self.index]
-
-    def advance(self):
-        token = self.token
-        self.index += 1
-        return token
-
-    def keyword(self, value):
-        return self.token[0] == 'NAME' and self.token[1].upper() == value
-
-    def take_keyword(self, value):
-        if self.keyword(value):
-            return self.advance()
-        return None
-
-    def require(self, kind, message):
-        if self.token[0] != kind:
-            raise PredicateError(message, self.token[2])
-        return self.advance()
-
-    def parse(self):
-        node = self.parse_disjunction()
-        if self.token[0] != 'EOF':
-            raise PredicateError('unexpected trailing token', self.token[2])
-        return node
-
-    def parse_disjunction(self):
-        node = self.parse_conjunction()
-        while self.take_keyword('OR') is not None:
-            node = {
-                'kind': 'or',
-                'left': node,
-                'right': self.parse_conjunction(),
-            }
-        return node
-
-    def parse_conjunction(self):
-        node = self.parse_negation()
-        while self.take_keyword('AND') is not None:
-            node = {
-                'kind': 'and',
-                'left': node,
-                'right': self.parse_negation(),
-            }
-        return node
-
-    def parse_negation(self):
-        if self.take_keyword('NOT') is not None:
-            return {'kind': 'not', 'value': self.parse_negation()}
-        return self.parse_boolean()
-
-    def parse_boolean(self):
-        if self.token[0] == 'LPAREN':
-            self.advance()
-            node = self.parse_disjunction()
-            self.require('RPAREN', "expected ')' to close predicate")
-            return node
-        if self.take_keyword('TRUE') is not None:
-            return {'kind': 'boolean', 'value': True}
-        if self.take_keyword('FALSE') is not None:
-            return {'kind': 'boolean', 'value': False}
-
-        left = self.parse_operand()
-        if self.token[0] == 'OP':
-            operator = self.advance()[1]
-            return {
-                'kind': 'comparison',
-                'operator': operator,
-                'left': left,
-                'right': self.parse_operand(),
-            }
-        if self.take_keyword('IS') is not None:
-            negated = self.take_keyword('NOT') is not None
-            if self.take_keyword('NULL') is None:
-                raise PredicateError("expected NULL after IS", self.token[2])
-            return {'kind': 'null_test', 'value': left, 'negated': negated}
-
-        negated = False
-        if self.take_keyword('NOT') is not None:
-            negated = True
-        if self.take_keyword('IN') is not None:
-            self.require('LPAREN', "expected '(' after IN")
-            values = [self.parse_operand()]
-            while self.token[0] == 'COMMA':
-                self.advance()
-                values.append(self.parse_operand())
-            self.require('RPAREN', "expected ')' after IN operands")
-            return {
-                'kind': 'in',
-                'value': left,
-                'values': values,
-                'negated': negated,
-            }
-        if self.take_keyword('BETWEEN') is not None:
-            lower = self.parse_operand()
-            if self.take_keyword('AND') is None:
-                raise PredicateError(
-                    'expected AND in BETWEEN predicate', self.token[2]
-                )
-            return {
-                'kind': 'between',
-                'value': left,
-                'lower': lower,
-                'upper': self.parse_operand(),
-                'negated': negated,
-            }
-        if self.take_keyword('LIKE') is not None:
-            pattern = self.parse_operand()
-            escape = None
-            if self.take_keyword('ESCAPE') is not None:
-                token = self.require(
-                    'STRING', 'ESCAPE requires a string literal'
-                )
-                if len(token[1]) != 1:
-                    raise PredicateError(
-                        'ESCAPE requires exactly one code point', token[2]
-                    )
-                escape = token[1]
-            if (
-                escape is not None
-                and pattern.get('kind') == 'literal'
-                and pattern.get('type') == 'str'
-                and like_pattern_has_dangling_escape(
-                    pattern.get('value', ''), escape
-                )
-            ):
-                raise PredicateError(
-                    'LIKE pattern has a dangling escape', pattern['position']
-                )
-            return {
-                'kind': 'like',
-                'value': left,
-                'pattern': pattern,
-                'escape': escape,
-                'negated': negated,
-            }
-        if negated:
-            raise PredicateError(
-                'NOT must precede IN, BETWEEN, or LIKE', self.token[2]
-            )
-        raise PredicateError(
-            'operand must be followed by a Boolean operator', self.token[2]
-        )
-
-    def parse_operand(self):
-        token = self.token
-        if token[0] == 'NUMBER':
-            self.advance()
-            value_type = (
-                'float'
-                if '.' in token[1] or 'e' in token[1].lower()
-                else 'int'
-            )
-            return {
-                'kind': 'literal',
-                'type': value_type,
-                'value': token[1],
-                'position': token[2],
-            }
-        if token[0] == 'STRING':
-            self.advance()
-            return {
-                'kind': 'literal',
-                'type': 'str',
-                'value': token[1],
-                'position': token[2],
-            }
-        if self.take_keyword('NULL') is not None:
-            return {
-                'kind': 'literal',
-                'type': None,
-                'value': None,
-                'position': token[2],
-            }
-        if self.keyword('DATE') or self.keyword('DATETIME'):
-            value_type = self.advance()[1].lower()
-            text_token = self.require(
-                'STRING', f'{value_type.upper()} requires a string literal'
-            )
-            if not valid_temporal_literal(value_type, text_token[1]):
-                raise PredicateError(
-                    f'invalid {value_type} literal', text_token[2]
-                )
-            return {
-                'kind': 'literal',
-                'type': value_type,
-                'value': text_token[1],
-                'position': token[2],
-            }
-        if token[0] == 'NAME':
-            if token[1].upper() in {
-                'AND', 'BETWEEN', 'ESCAPE', 'FALSE', 'IN', 'IS', 'LIKE',
-                'NOT', 'OR', 'TRUE',
-            }:
-                raise PredicateError('expected operand', token[2])
-            self.advance()
-            return {
-                'kind': 'identifier',
-                'name': token[1],
-                'position': token[2],
-            }
-        raise PredicateError('expected operand', token[2])
-
-
-def parse_predicate(text):
-    if not isinstance(text, str) or not text:
-        raise PredicateError('predicate must be a non-empty string', 0)
-    return PredicateParser(text).parse()
+# R004's closed vocabulary. `yaml/grammar/predicate.yaml` is its single
+# source, and validate_grammar_contracts fails when the two drift apart.
+# The parser itself is the runtime's: `yamaa.expressions.predicates` already
+# returns this validator's AST shape, so this file owns no second grammar.
+try:
+    from yamaa.expressions.predicates import (
+        COMPARISON_OPERATORS as PREDICATE_COMPARISON_OPERATORS,
+        RESERVED_NAMES as PREDICATE_RESERVED_NAMES,
+        PredicateError,
+        parse_predicate,
+    )
+except ImportError as error:
+    raise SystemExit(
+        "validate_repository.py requires the yamaa package "
+        "(run: uv sync --project python --locked)"
+    ) from error
 
 
 def predicate_operand_type(operand, resolver, errors):
@@ -2646,8 +2321,10 @@ def _rebase_local_path(value, layer_path, entry_path):
     if not isinstance(value, str) or _is_nonlocal_parent_reference(value):
         return value
     written = Path(value)
-    if written.is_absolute():
-        return str(written.resolve())
+    if rooted_project_segments(value) is not None or written.is_absolute():
+        # R021-14: a rooted path resolves against the approved root it names,
+        # and R021-15 reads that written form, so rebasing leaves it alone.
+        return value
     target = (layer_path.parent / written).resolve()
     try:
         relative = os.path.relpath(target, entry_path.parent.resolve())
@@ -2907,7 +2584,10 @@ def predicate_identifier_names(text):
         ast = parse_predicate(text)
     except PredicateError:
         return set()
+    return ast_identifier_names(ast)
 
+
+def ast_identifier_names(ast):
     names = set()
 
     def visit(node):
@@ -2933,22 +2613,7 @@ def numeric_expression_identifier_names(text):
         ast = parse_numeric_expression(text)
     except NumericExpressionError:
         return set()
-
-    names = set()
-
-    def visit(node):
-        if node.get('kind') == 'identifier':
-            names.add(node['name'])
-        for value in node.values():
-            if isinstance(value, dict):
-                visit(value)
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, dict):
-                        visit(item)
-
-    visit(ast)
-    return names
+    return ast_identifier_names(ast)
 
 
 def aggregate_expression_identifier_names(text):
@@ -2958,22 +2623,7 @@ def aggregate_expression_identifier_names(text):
         ast = parse_aggregate_expression(text)
     except AggregateExpressionError:
         return set()
-
-    names = set()
-
-    def visit(node):
-        if node.get('kind') == 'identifier':
-            names.add(node['name'])
-        for value in node.values():
-            if isinstance(value, dict):
-                visit(value)
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, dict):
-                        visit(item)
-
-    visit(ast)
-    return names
+    return ast_identifier_names(ast)
 
 
 class StringTemplateError(ValueError):
@@ -2986,15 +2636,36 @@ class StringTemplateError(ValueError):
 
 
 def parse_string_template(text):
-    """Parse R012 and return its placeholder names and source spans."""
+    """Parse R012 and return its literal text and placeholder parts.
+
+    A part is the unit the grammar scans: a `text` part carries the literal
+    value a brace pair already unescaped, and a `placeholder` part carries
+    the name it binds. Callers that only need the bindings use
+    string_template_placeholders.
+    """
     if not isinstance(text, str):
         raise StringTemplateError(
             'string template must be a string', 0, 0, 'invalid_template'
         )
-    placeholders = []
+    parts = []
+    literal = []
+    literal_start = 0
+
+    def flush(end):
+        if literal:
+            parts.append({
+                'kind': 'text',
+                'value': ''.join(literal),
+                'span': (literal_start, end),
+            })
+            literal.clear()
+
     index = 0
     while index < len(text):
         if text.startswith('{{', index) or text.startswith('}}', index):
+            if not literal:
+                literal_start = index
+            literal.append(text[index])
             index += 2
             continue
         if text[index] == '}':
@@ -3005,6 +2676,9 @@ def parse_string_template(text):
                 'unmatched_brace',
             )
         if text[index] != '{':
+            if not literal:
+                literal_start = index
+            literal.append(text[index])
             index += 1
             continue
         end = text.find('}', index + 1)
@@ -3027,18 +2701,31 @@ def parse_string_template(text):
                 'invalid_placeholder',
                 placeholder,
             )
-        placeholders.append(
-            {'name': placeholder, 'span': (index + 1, end)}
-        )
+        flush(index)
+        parts.append({
+            'kind': 'placeholder',
+            'name': placeholder,
+            'span': (index + 1, end),
+        })
         index = end + 1
-    return placeholders
+    flush(len(text))
+    return parts
+
+
+def string_template_placeholders(text):
+    """Return only the placeholder parts of a parsed template."""
+    return [
+        part
+        for part in parse_string_template(text)
+        if part['kind'] == 'placeholder'
+    ]
 
 
 def string_template_identifier_names(text):
     try:
         return {
             placeholder['name']
-            for placeholder in parse_string_template(text)
+            for placeholder in string_template_placeholders(text)
         }
     except StringTemplateError:
         return set()
@@ -3535,6 +3222,26 @@ def example_spec_paths(example_dir: Path):
         for path in example_dir.iterdir()
         if path.is_file() and SPEC_FILE_PATTERN.fullmatch(path.name)
     )
+
+
+def example_entry_specs(example_dir: Path):
+    paths = example_spec_paths(example_dir)
+    parented = set()
+    for path in paths:
+        try:
+            with open(path, 'r', encoding='utf-8') as handle:
+                spec = yaml.load(handle, Loader=UniqueKeyLoader)
+        except (OSError, UnicodeError, yaml.YAMLError):
+            continue
+        if not isinstance(spec, dict):
+            continue
+        parents = spec.get('parents', [])
+        if isinstance(parents, str):
+            parents = [parents]
+        for parent in parents:
+            if isinstance(parent, str) and parent:
+                parented.add(Path(parent).name)
+    return [path for path in paths if path.name not in parented]
 
 
 def function_value_type(value):
@@ -4167,7 +3874,7 @@ def validate_grouped_rows(spec, spec_label):
                 f"{', '.join(duplicates)}"
             )
 
-        driver = row.get('dataset', spec.get('base'))
+        driver = row.get('dataset', default_driver_dataset(spec))
         if not isinstance(driver, str):
             continue
         for variable_index, variable in enumerate(group_by):
@@ -4408,9 +4115,8 @@ def validate_column_labels(spec, spec_label):
 # byte snapshot.
 
 RESOURCE_PATH_MESSAGES = {
-    'resource_path_not_relative': 'is not a relative project path',
+    'resource_path_not_relative': 'names no approved location',
     'resource_path_uri_scheme': 'declares a URI scheme',
-    'resource_path_parent_traversal': 'traverses a parent segment',
     'resource_path_not_normalized': 'is not normalized',
     'resource_path_symlink': 'passes through a symbolic link',
     'resource_path_outside_project': 'resolves outside the project root',
@@ -4420,44 +4126,151 @@ RESOURCE_PATH_MESSAGES = {
 }
 
 URI_SCHEME_PATTERN = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]*:')
-DRIVE_LETTER_PATTERN = re.compile(r'^[A-Za-z]:')
+DRIVE_ROOT_PATTERN = re.compile(r'^[A-Za-z]:/')
+
+
+PROJECT_CONFIGURATION_NAME = 'yamaa-project.yaml'
+PROJECT_CONFIGURATION_FIELDS = {'version', 'data_roots'}
+
+
+def read_project_configuration(project_root, label=None):
+    """Return (data_roots, errors) for the configuration at a named root.
+
+    R021-2 gives a runner that names the root the configuration sitting at
+    that root and no other. R021-29 fails a configuration a run cannot start
+    from; a root that holds none is a study that declared nothing.
+    """
+    directory = Path(project_root)
+    path = directory / PROJECT_CONFIGURATION_NAME
+    if not path.is_file():
+        return (), []
+    label = label or PROJECT_CONFIGURATION_NAME
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            document = yaml.load(handle, Loader=UniqueKeyLoader)
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        return (), [f"ERROR: {label}: {exc}"]
+    if not isinstance(document, dict):
+        return (), [f"ERROR: {label}: expected a mapping"]
+
+    errors = []
+    for field in sorted(set(document) - PROJECT_CONFIGURATION_FIELDS):
+        errors.append(f"ERROR: {label}.{field}: unknown field")
+    if document.get('version') != '1.0':
+        errors.append(f"ERROR: {label}.version: expected '1.0'")
+
+    declared = document.get('data_roots')
+    if declared is None:
+        declared = []
+    if not (
+        isinstance(declared, list)
+        and all(isinstance(item, str) and item for item in declared)
+    ):
+        errors.append(
+            f"ERROR: {label}.data_roots: expected a list of non-empty paths"
+        )
+        return (), errors
+
+    roots = []
+    for item in declared:
+        candidate = Path(item)
+        if not candidate.is_absolute():
+            # A relative entry names a directory beside the study, read from
+            # the project root the configuration itself marks.
+            candidate = directory / candidate
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError:
+            resolved = None
+        if resolved is None or not resolved.is_dir():
+            errors.append(
+                f"ERROR: {label}.data_roots: {item!r} is not an existing "
+                "directory"
+            )
+            continue
+        # The spelling the study wrote is kept, not its canonical form: a
+        # rooted path repeats that spelling, and R021-15 matches it there.
+        roots.append(candidate)
+    return tuple(roots), errors
+
+
+def project_data_roots(project_root):
+    """Data roots the configuration at a named project root approves."""
+    roots, _ = read_project_configuration(project_root)
+    return roots
+
+
+def validate_project_configurations(root: Path):
+    """Report every project configuration the repository cannot start from."""
+    errors = []
+    for path in sorted(root.rglob(PROJECT_CONFIGURATION_NAME)):
+        if any(
+            part in {'.git', '.claude', '.venv', 'node_modules'}
+            for part in path.parts
+        ):
+            continue
+        _, configuration_errors = read_project_configuration(
+            path.parent, label=str(path.relative_to(root))
+        )
+        errors.extend(configuration_errors)
+    return errors
+
+
+def rooted_project_segments(written):
+    """Split a rooted written path into its marker and segments, or None.
+
+    R021-7 spells a rooted path with a leading separator or with one ASCII
+    letter and ':/'. The marker leads the returned segments, so a path rooted
+    one way never repeats a root spelled the other way.
+    """
+    if not isinstance(written, str):
+        return None
+    if written.startswith('/'):
+        marker, head = '/', ''
+    else:
+        match = DRIVE_ROOT_PATTERN.match(written)
+        if match is None:
+            return None
+        marker, head = match.group(0), match.group(0)[:-1]
+    remainder = written[len(marker):]
+    return (head, *(remainder.split('/') if remainder else ()))
 
 
 def classify_written_project_path(written):
-    """Return the R021 condition a written project path violates, if any."""
-    if not isinstance(written, str) or not written:
-        return 'resource_path_not_relative'
-    if written.startswith('/') or '\\' in written:
-        return 'resource_path_not_relative'
-    if DRIVE_LETTER_PATTERN.match(written):
-        return 'resource_path_not_relative'
-    if URI_SCHEME_PATTERN.match(written):
+    """Return the R021 condition a written project path violates, if any.
+
+    R021-25 fixes the order: a scheme (R021-9), then a backslash (R021-10),
+    then an empty segment (R021-11), then a dot segment in a rooted path
+    (R021-12). Nothing here consults the filesystem.
+    """
+    if not isinstance(written, str):
+        return 'resource_path_not_normalized'
+    segments = rooted_project_segments(written)
+    if segments is None and URI_SCHEME_PATTERN.match(written):
         return 'resource_path_uri_scheme'
-    segments = written.split('/')
-    if '..' in segments:
-        return 'resource_path_parent_traversal'
-    if any(segment in ('', '.') for segment in segments):
+    if '\\' in written:
+        return 'resource_path_not_normalized'
+    parts = written.split('/') if segments is None else list(segments[1:])
+    if not parts or any(part == '' for part in parts):
+        return 'resource_path_not_normalized'
+    if segments is not None and any(part in ('.', '..') for part in parts):
         return 'resource_path_not_normalized'
     return None
 
 
-def resolve_project_path(written, base_dir, project_root):
-    """Walk a written project path under R021.
+def root_spellings(written, resolved):
+    """Return the rooted segment spellings that name one approved root."""
+    spellings = []
+    for candidate in (resolved, written):
+        segments = rooted_project_segments(Path(candidate).as_posix())
+        if segments is not None and segments not in spellings:
+            spellings.append(segments)
+    return spellings
 
-    Returns the accepted path and no condition, or no path and the stable
-    condition that rejected it. Nothing about the host is returned.
-    """
-    condition = classify_written_project_path(written)
-    if condition is not None:
-        return None, condition
 
-    try:
-        root = Path(project_root).resolve(strict=True)
-    except OSError:
-        return None, 'resource_path_outside_project'
-
-    segments = written.split('/')
-    current = Path(base_dir)
+def walk_below_anchor(written, anchor, segments, containment):
+    """Walk the components below an anchor, rejecting a link at each one."""
+    current = anchor
     for index, segment in enumerate(segments):
         current = current / segment
         if current.is_symlink():
@@ -4472,10 +4285,68 @@ def resolve_project_path(written, base_dir, project_root):
             return None, 'resource_path_not_regular_file'
 
     try:
-        current.resolve(strict=True).relative_to(root)
+        current.resolve(strict=True).relative_to(containment)
     except (OSError, ValueError):
         return None, 'resource_path_outside_project'
     return current, None
+
+
+def resolve_project_path(written, base_dir, project_root, data_roots=()):
+    """Walk a written project path under R021.
+
+    Returns the accepted path and no condition, or no path and the stable
+    condition that rejected it. Nothing about the host is returned.
+    """
+    condition = classify_written_project_path(written)
+    if condition is not None:
+        return None, condition
+
+    try:
+        root = Path(project_root).resolve(strict=True)
+    except OSError:
+        return None, 'resource_path_outside_project'
+
+    segments = rooted_project_segments(written)
+    if segments is not None:
+        # R021-15: a rooted path is anchored at the approved root whose
+        # leading segments it repeats, and the anchor is canonical, so the
+        # link a platform puts in front of a system directory is resolved
+        # once here rather than rejected below.
+        anchor = None
+        depth = -1
+        for candidate in (project_root, *data_roots):
+            try:
+                resolved = Path(candidate).resolve(strict=True)
+            except OSError:
+                continue
+            if not resolved.is_dir():
+                continue
+            for spelling in root_spellings(candidate, resolved):
+                size = len(spelling)
+                if size > depth and segments[:size] == spelling:
+                    anchor, depth = resolved, size
+        if anchor is None:
+            return None, 'resource_path_not_relative'
+        remainder = segments[depth:]
+        if not remainder:
+            return None, 'resource_path_not_regular_file'
+        return walk_below_anchor(written, anchor, remainder, anchor)
+
+    try:
+        depth = len(Path(base_dir).resolve().relative_to(root).parts)
+    except (OSError, ValueError):
+        return None, 'resource_path_outside_project'
+    for segment in written.split('/'):
+        if segment == '.':
+            continue
+        if segment == '..':
+            depth -= 1
+            if depth < 0:
+                return None, 'resource_path_outside_project'
+        else:
+            depth += 1
+
+    return walk_below_anchor(written, Path(base_dir), written.split('/'), root)
 
 
 def resource_path_error(path, written, condition):
@@ -4555,22 +4426,22 @@ def validate_spec_contracts(
 
     rows = spec.get('rows')
     row_entries = rows if isinstance(rows, list) else []
-    base = spec.get('base')
+    default_driver = default_driver_dataset(spec)
     full_spec = all(
         field in spec
         for field in ('domain', 'datasets', 'keys', 'output', 'columns')
     )
-    if full_spec and not row_entries and not isinstance(base, str):
+    if full_spec and not row_entries and not isinstance(default_driver, str):
         errors.append(
             f"ERROR: {spec_label}.base: base is required when rows is absent "
-            "or empty"
+            "or empty and more than one dataset is declared"
         )
     for index, row in enumerate(row_entries):
         if (
             full_spec
             and isinstance(row, dict)
             and 'dataset' not in row
-            and not isinstance(base, str)
+            and not isinstance(default_driver, str)
         ):
             errors.append(
                 f"ERROR: {spec_label}.rows[{index}].dataset: row requires a "
@@ -4837,7 +4708,8 @@ def validate_spec_contracts(
                 continue
             path = f"{spec_label}.datasets.{dataset_id}"
             resolved, condition = resolve_project_path(
-                source_path, spec_path.parent, project_root
+                source_path, spec_path.parent, project_root,
+                project_data_roots(project_root),
             )
             if condition is not None:
                 errors.append(
@@ -4921,6 +4793,9 @@ def dataset_type_catalog(spec, spec_path, env=None):
             isinstance(producer_path, str)
             and spec_path is not None
             and classify_written_project_path(producer_path) is None
+            # Only a relative path is read here; R021 decides a rooted one
+            # against the approved roots before anything opens it.
+            and rooted_project_segments(producer_path) is None
         ):
             resolved = spec_path.parent / producer_path
             try:
@@ -4943,6 +4818,7 @@ def dataset_type_catalog(spec, spec_path, env=None):
             and spec_path is not None
             and source_path.lower().endswith(('.csv', '.tsv'))
             and classify_written_project_path(source_path) is None
+            and rooted_project_segments(source_path) is None
         ):
             resolved = spec_path.parent / source_path
             delimiter = '\t' if source_path.lower().endswith('.tsv') else ','
@@ -5371,7 +5247,7 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
         for index, row in enumerate(rows):
             if not isinstance(row, dict):
                 continue
-            driver = row.get('dataset', spec.get('base'))
+            driver = row.get('dataset', default_driver_dataset(spec))
             driver_fields = (
                 datasets.get(driver, {}) if isinstance(driver, str) else {}
             )
@@ -5614,7 +5490,7 @@ def validate_spec_numeric_expressions(
         for index, row in enumerate(rows):
             if not isinstance(row, dict):
                 continue
-            driver = row.get('dataset', spec.get('base'))
+            driver = row.get('dataset', default_driver_dataset(spec))
             driver_fields = (
                 datasets.get(driver, {}) if isinstance(driver, str) else {}
             )
@@ -6188,7 +6064,7 @@ def validate_aggregate_at(payload, path, context):
 
 def validate_string_template_at(text, path, resolver):
     try:
-        placeholders = parse_string_template(text)
+        placeholders = string_template_placeholders(text)
     except StringTemplateError as exc:
         return [
             validation_diagnostic(
@@ -6582,6 +6458,21 @@ def validate_expression_static_semantics(expression, path, context):
                     resolver,
                 )
             )
+        if keyword == 'date_diff':
+            unit = payload.get('unit')
+            bounds = payload.get('bounds', 'exclusive')
+            if unit in ('week', 'month', 'year') and bounds != 'exclusive':
+                errors.append(
+                    validation_diagnostic(
+                        f"{operation_path}.bounds",
+                        'value_not_permitted',
+                        f"bounds {bounds!r} is defined only with unit 'day'",
+                        context={
+                            'value': bounds,
+                            'permitted': ['exclusive'],
+                        },
+                    )
+                )
         return errors
 
     if keyword == 'date_impute' and isinstance(payload, dict):
@@ -6840,10 +6731,22 @@ def validate_record_lookup_static_semantics(
     return errors
 
 
-def find_column_dependency_cycle(spec, env):
+def default_driver_dataset(spec):
+    base = spec.get('base')
+    if isinstance(base, str):
+        return base
+    datasets = spec.get('datasets')
+    if isinstance(datasets, dict):
+        names = [name for name in datasets if isinstance(name, str)]
+        if len(names) == 1:
+            return names[0]
+    return None
+
+
+def column_dependency_graph(spec, env):
     columns = spec.get('columns')
     if not isinstance(columns, list):
-        return None
+        return [], {}
     names = [
         column.get('name')
         for column in columns
@@ -6875,6 +6778,57 @@ def find_column_dependency_cycle(spec, env):
         }
         for name in names
     }
+    return names, dependencies
+
+
+def dependency_components(names, dependencies):
+    index_of = {}
+    lowlink = {}
+    stack = []
+    on_stack = set()
+    counter = [0]
+    component_of = {}
+
+    def connect(name):
+        index_of[name] = lowlink[name] = counter[0]
+        counter[0] += 1
+        stack.append(name)
+        on_stack.add(name)
+        for dependency in sorted(dependencies[name]):
+            if dependency not in index_of:
+                connect(dependency)
+                lowlink[name] = min(lowlink[name], lowlink[dependency])
+            elif dependency in on_stack:
+                lowlink[name] = min(lowlink[name], index_of[dependency])
+        if lowlink[name] == index_of[name]:
+            while True:
+                member = stack.pop()
+                on_stack.discard(member)
+                component_of[member] = name
+                if member == name:
+                    break
+
+    for name in names:
+        if name not in index_of:
+            connect(name)
+    return component_of
+
+
+def find_forward_reference(spec, env):
+    names, dependencies = column_dependency_graph(spec, env)
+    positions = {name: index for index, name in enumerate(names)}
+    component_of = dependency_components(names, dependencies)
+    for name in names:
+        for dependency in sorted(dependencies[name]):
+            if positions[dependency] > positions[name]:
+                if component_of.get(name) == component_of.get(dependency):
+                    continue
+                return name, dependency
+    return None
+
+
+def find_column_dependency_cycle(spec, env):
+    names, dependencies = column_dependency_graph(spec, env)
     state = {}
     stack = []
 
@@ -6981,7 +6935,7 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
         for index, row in enumerate(rows):
             if not isinstance(row, dict):
                 continue
-            driver = row.get('dataset', spec.get('base'))
+            driver = row.get('dataset', default_driver_dataset(spec))
             derivations = row.get('derivations')
             if not isinstance(derivations, dict):
                 continue
@@ -7051,6 +7005,18 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
                     context={'cycle': cycle},
                 )
             )
+    forward = find_forward_reference(spec, env)
+    if forward is not None:
+        name, dependency = forward
+        errors.append(
+            validation_diagnostic(
+                derivation_primary_path(spec, spec_label, name),
+                'forward_reference',
+                f'column {name!r} references later declared column '
+                f'{dependency!r}',
+                context={'column': name, 'dependency': dependency},
+            )
+        )
     return list(dict.fromkeys(errors))
 
 
@@ -7118,7 +7084,6 @@ def validate_spec_document(
             f"ERROR: {spec_label}: spec is empty or not a mapping"
         ]
 
-    has_inheritance = 'parents' in spec
     if project_root is None:
         project_root = spec_path.parent
     if snapshots is None:
@@ -7141,8 +7106,7 @@ def validate_spec_document(
     errors.extend(validate_type(spec, ['root_class'], env, spec_label))
     errors.extend(validate_grouped_rows(spec, spec_label))
     errors.extend(validate_spec_names(spec, spec_label))
-    if has_inheritance:
-        errors.extend(validate_column_labels(spec, spec_label))
+    errors.extend(validate_column_labels(spec, spec_label))
     errors.extend(
         validate_spec_contracts(
             spec, spec_label, spec_path, project_root, snapshots
@@ -7244,7 +7208,8 @@ def validate_producing_specs(
         if not isinstance(schema_ref, str):
             continue
         producer_path, condition = resolve_project_path(
-            schema_ref, spec_path.parent, project_root
+            schema_ref, spec_path.parent, project_root,
+            project_data_roots(project_root),
         )
         if condition is not None:
             errors.append(
@@ -7296,7 +7261,8 @@ def validate_producing_specs(
         if not isinstance(source_ref, str):
             continue
         source_path, condition = resolve_project_path(
-            source_ref, spec_path.parent, project_root
+            source_ref, spec_path.parent, project_root,
+            project_data_roots(project_root),
         )
         if condition is not None:
             continue
@@ -7336,6 +7302,8 @@ def validate_producing_specs(
 
 
 def expected_resolved_path(example_dir, spec_path):
+    if not (example_dir / 'spec.yaml').is_file():
+        return example_dir / 'expected' / 'spec_resolved.yaml'
     suffix = spec_path.stem.removeprefix('spec')
     return example_dir / 'expected' / f"resolved{suffix}.yaml"
 
@@ -7608,7 +7576,7 @@ def validate_examples_structure(root: Path, env, warnings=None, manifest=None):
 
         example_errors = []
         spec_labels = []
-        for spec_path in example_spec_paths(ex_dir):
+        for spec_path in example_entry_specs(ex_dir):
             try:
                 with open(spec_path, 'r', encoding='utf-8') as f:
                     spec = yaml.load(f, Loader=UniqueKeyLoader)
@@ -7731,6 +7699,123 @@ EXPECTED_ERROR_PHASES = {
 }
 
 
+def load_condition_registry(root: Path):
+    relative_path = Path('yaml/conditions.yaml')
+    path = root / relative_path
+    if not path.is_file():
+        examples_dir = root / 'yaml' / 'examples'
+        if not examples_dir.is_dir() or not any(
+            examples_dir.glob('negative-*/expected/error.yaml')
+        ):
+            return {'version': '1.0', 'conditions': {}}, []
+        return None, [f"ERROR: {relative_path}: condition registry is missing"]
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            registry = yaml.load(handle, Loader=UniqueKeyLoader)
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        return None, [f"ERROR: {relative_path}: {exc}"]
+    return registry, []
+
+
+def validate_condition_registry(root: Path, registry):
+    errors = []
+    label = 'yaml/conditions.yaml'
+    if not isinstance(registry, dict):
+        return [f"ERROR: {label}: expected a mapping"]
+    if registry.get('version') != '1.0':
+        errors.append(f"ERROR: {label}.version: expected '1.0'")
+    for field in sorted(set(registry) - {'version', 'conditions'}):
+        errors.append(f"ERROR: {label}.{field}: unknown field")
+    conditions = registry.get('conditions')
+    if not isinstance(conditions, dict):
+        errors.append(f"ERROR: {label}.conditions: expected a mapping")
+        return errors
+    condition_names = list(conditions)
+    if (
+        all(isinstance(condition, str) for condition in condition_names)
+        and condition_names != sorted(condition_names)
+    ):
+        errors.append(f"ERROR: {label}.conditions: expected sorted keys")
+
+    for condition, registration in conditions.items():
+        path = f"{label}.conditions.{condition}"
+        if not (
+            isinstance(condition, str)
+            and re.fullmatch(
+                r'[a-z][a-z0-9]*(?:_[a-z0-9]+)*', condition
+            )
+        ):
+            errors.append(f"ERROR: {path}: expected a snake-case name")
+        if not isinstance(registration, dict):
+            errors.append(f"ERROR: {path}: expected a mapping")
+            continue
+        for field in sorted(set(registration) - {'rules', 'phases'}):
+            errors.append(f"ERROR: {path}.{field}: unknown field")
+        rules = registration.get('rules')
+        if not (
+            isinstance(rules, list)
+            and rules
+            and all(
+                isinstance(rule, str)
+                and re.fullmatch(r'R[0-9]{3}', rule)
+                for rule in rules
+            )
+            and rules == sorted(set(rules))
+        ):
+            errors.append(
+                f"ERROR: {path}.rules: expected unique sorted rule ids"
+            )
+        phases = registration.get('phases')
+        if not (
+            isinstance(phases, list)
+            and phases
+            and all(
+                isinstance(phase, str) and phase in EXPECTED_ERROR_PHASES
+                for phase in phases
+            )
+            and phases == sorted(set(phases))
+        ):
+            errors.append(
+                f"ERROR: {path}.phases: expected unique sorted phases"
+            )
+
+    examples_dir = root / 'yaml' / 'examples'
+    if not examples_dir.is_dir():
+        return errors
+    for error_path in sorted(
+        examples_dir.glob('negative-*/expected/error.yaml')
+    ):
+        try:
+            with open(error_path, 'r', encoding='utf-8') as handle:
+                contract = yaml.load(handle, Loader=UniqueKeyLoader)
+        except (OSError, UnicodeError, yaml.YAMLError):
+            continue
+        if not isinstance(contract, dict):
+            continue
+        condition = contract.get('condition')
+        phase = contract.get('phase')
+        if not isinstance(condition, str) or not isinstance(phase, str):
+            continue
+        fixture_label = error_path.relative_to(root)
+        registration = conditions.get(condition)
+        if registration is None:
+            errors.append(
+                f"ERROR: {fixture_label}.condition: unregistered condition "
+                f"{condition!r}"
+            )
+            continue
+        if (
+            isinstance(registration, dict)
+            and isinstance(registration.get('phases'), list)
+            and phase not in registration['phases']
+        ):
+            errors.append(
+                f"ERROR: {fixture_label}.phase: condition {condition!r} is "
+                f"not registered for phase {phase!r}"
+            )
+    return errors
+
+
 def spec_path_exists(spec, path):
     node = spec
     for part in path.split('.'):
@@ -7786,7 +7871,7 @@ def validate_expected_error_contracts(root: Path):
             errors.append(f"ERROR: {label}: expected a mapping")
             continue
         unknown = sorted(
-            set(contract) - {'phase', 'condition', 'spec_paths', 'context'}
+            set(contract) - {'phase', 'condition', 'spec_paths', 'requirement', 'context'}
         )
         for field in unknown:
             errors.append(f"ERROR: {label}.{field}: unknown field")
@@ -7837,86 +7922,32 @@ BOM_UTF8 = '\ufeff'
 CANONICAL_INT = re.compile(r'0|-?[1-9][0-9]*')
 
 
-def parse_csv_profile(data: str):
-    """Parse R020's csv profile text into records of (text, quoted) fields.
-
-    A bare empty field is missing and parses to a text of None; a quoted
-    empty field is the collected empty string. Raises ValueError for text
-    the profile does not admit.
-    """
-    records = []
-    record = []
-    index = 0
-    size = len(data)
-    while index < size:
-        if data[index] == '"':
-            index += 1
-            chunks = []
-            while True:
-                if index >= size:
-                    raise ValueError('unterminated quoted field')
-                character = data[index]
-                if character == '"':
-                    if data[index + 1:index + 2] == '"':
-                        chunks.append('"')
-                        index += 2
-                        continue
-                    index += 1
-                    break
-                chunks.append(character)
-                index += 1
-            field = (''.join(chunks), True)
-        else:
-            start = index
-            while index < size and data[index] not in ',\n':
-                index += 1
-            raw = data[start:index]
-            if '"' in raw:
-                raise ValueError('a bare field carries U+0022')
-            if '\r' in raw:
-                raise ValueError('U+000D outside a quoted field')
-            field = (raw or None, False)
-        record.append(field)
-        if index >= size:
-            raise ValueError('the final record is not terminated by U+000A')
-        if data[index] == ',':
-            index += 1
-            continue
-        if data[index] != '\n':
-            raise ValueError('a quoted field is followed by ordinary text')
-        index += 1
-        records.append(record)
-        record = []
-    if record:
-        raise ValueError('the final record is not terminated by U+000A')
-    return records
-
-
-def render_csv_profile(records):
-    """Render records back under R020's exact quoting condition."""
-    lines = []
-    for record in records:
-        fields = []
-        for text, _quoted in record:
-            if text is None:
-                fields.append('')
-            elif text == '' or any(c in text for c in '",\r\n'):
-                fields.append('"' + text.replace('"', '""') + '"')
-            else:
-                fields.append(text)
-        lines.append(','.join(fields) + '\n')
-    return ''.join(lines)
+# R020's csv profile text. The runtime's `yamaa.io.csv` owns the profile:
+# `scan_records` reads records of text-or-missing under the unified
+# missing rule, and `render_records` writes the exact quoting condition.
+# This file owns no second dialect.
+try:
+    from yamaa.io.csv import (
+        CsvProfileFailure,
+        fixed_point,
+        render_records,
+        scan_records,
+    )
+    from yamaa.models import DateTimeValue, DateValue, convert_value
+except ImportError as error:
+    raise SystemExit(
+        "validate_repository.py requires the yamaa package "
+        "(run: uv sync --project python --locked)"
+    ) from error
 
 
 def canonical_float_text(value: str, decimals=None):
     """Return why value is not R020's text for its float, or None.
 
     Static validation reads a golden file rather than running a derivation,
-    so it checks the form of the text and not the value behind it. With no
-    declared precision that is the whole contract, because R011's shortest
-    round-trip text is unique per value. With a declared precision it is the
-    written width: proving that the digits are the ones the derivation would
-    have produced needs the executable suite.
+    so it checks the form of the text and not the value behind it. The form
+    itself comes from the runtime: R011's shortest text with no declared
+    precision, R020's exact display rounding with one.
     """
     try:
         number = float(value)
@@ -7925,30 +7956,13 @@ def canonical_float_text(value: str, decimals=None):
     if math.isnan(number) or math.isinf(number):
         return 'a non-finite float is the missing value'
     if decimals is None:
-        # repr supplies the shortest round-tripping digits but places them in
-        # exponential notation past its own thresholds; R011 writes the same
-        # digits positionally, so one value keeps one spelling.
-        canonical = format(decimal.Decimal(repr(number)), 'f')
-        if canonical.endswith('.0'):
-            canonical = canonical[:-2]
+        converted = convert_value(number, 'str')
+        canonical = converted.value
         if value != canonical:
             return f'expected the shortest round-trip text {canonical}'
         return None
-    # Rounding reads the exact binary64 value, which for an extreme magnitude
-    # or a large declared precision needs more digits than the default context.
-    exact = decimal.Decimal(number)
-    try:
-        with decimal.localcontext() as context:
-            context.prec = max(28, exact.adjusted() + decimals + 3)
-            rounded = exact.quantize(
-                decimal.Decimal(1).scaleb(-decimals),
-                rounding=decimal.ROUND_HALF_UP,
-            )
-    except decimal.InvalidOperation:
-        return f'cannot be rendered at decimals {decimals}'
-    if not rounded:
-        rounded = rounded.copy_abs()
-    if value != format(rounded, 'f'):
+    canonical = fixed_point(number, decimals)
+    if value != canonical:
         return (
             f'expected exactly {decimals} digit(s) after the decimal point '
             'in positional notation'
@@ -7965,28 +7979,27 @@ CANONICAL_DATETIME = re.compile(
 def canonical_temporal_text(value: str, declared: str):
     """Return why value is not R016's canonical text for its type, or None.
 
-    R016 fixes exactly one written form per temporal type, so the check is the
-    shape and then the calendar: a zone, an offset, a fractional second, a
-    truncated form, and an unpadded field are all outside the grammar, and a
-    field combination no calendar admits fails even when the shape matches.
+    R016 fixes exactly one written form per temporal type. The verdict comes
+    from the runtime's strict parsers; the shape patterns below only route
+    the message, telling a misspelled field from a date no calendar admits.
     """
     if declared == 'date':
-        match = CANONICAL_DATE.fullmatch(value)
-        if match is None:
-            return 'expected YYYY-MM-DD'
-        try:
-            dt.date(*(int(part) for part in match.groups()))
-        except ValueError as exc:
-            return f'not a date on the calendar: {exc}'
-        return None
-
-    match = CANONICAL_DATETIME.fullmatch(value)
-    if match is None:
-        return 'expected YYYY-MM-DDThh:mm:ss'
+        parsed_type = DateValue
+        pattern = CANONICAL_DATE
+        yours = 'expected YYYY-MM-DD'
+        calendar = 'not a date on the calendar'
+    else:
+        parsed_type = DateTimeValue
+        pattern = CANONICAL_DATETIME
+        yours = 'expected YYYY-MM-DDThh:mm:ss'
+        calendar = 'not a moment on the calendar'
     try:
-        dt.datetime(*(int(part) for part in match.groups()))
+        if parsed_type.parse(value).to_text() != value:
+            return yours
     except ValueError as exc:
-        return f'not a moment on the calendar: {exc}'
+        if pattern.fullmatch(value) is None:
+            return yours
+        return f'{calendar}: {exc}'
     return None
 
 
@@ -8004,12 +8017,12 @@ def validate_csv_artifact(csv_path: Path, label: str, spec):
     if data.startswith(BOM_UTF8):
         return [f"ERROR: {label}: csv carries a byte-order mark"]
     try:
-        records = parse_csv_profile(data)
+        records = scan_records(data)
     except ValueError as exc:
         return [f"ERROR: {label}: csv: {exc}"]
     if not records:
         return [f"ERROR: {label}: csv carries no header record"]
-    if render_csv_profile(records) != data:
+    if render_records(records[0], records[1:]).decode('utf-8') != data:
         errors.append(
             f"ERROR: {label}: csv quoting is not the exact condition R020 "
             "states, or a record is not terminated by U+000A"
@@ -8025,9 +8038,9 @@ def validate_csv_artifact(csv_path: Path, label: str, spec):
         if isinstance(column, dict) and isinstance(column.get('name'), str):
             types[column['name']] = column.get('type')
 
-    header = [text for text, _quoted in records[0]]
+    header = records[0]
     for number, record in enumerate(records[1:], 2):
-        for name, (text, _quoted) in zip(header, record):
+        for name, text in zip(header, record):
             if text is None:
                 continue
             declared = types.get(name)
@@ -8074,14 +8087,24 @@ def artifact_profile(output):
     return ARTIFACT_PROFILES.get(PurePosixPath(declared).suffix.lower())
 
 
-class SourceProfileError(Exception):
-    """Bytes R022's csv source profile does not admit."""
+# R023's syntax has one implementation. The package module loaded here is
+# the reader a runtime uses, and it imports the standard library alone so
+# this script can load it by path without installing anything. What a
+# repository check adds stays below: fixture wording, and reporting every
+# departure in one pass where a runtime stops at the first.
+_CSV_PROFILE_PATH = (
+    Path(__file__).resolve().parents[3]
+    / 'python' / 'src' / 'yamaa' / 'io' / 'csv.py'
+)
+_CSV_PROFILE_SPEC = importlib.util.spec_from_file_location(
+    'yamaa_io_csv', _CSV_PROFILE_PATH
+)
+CSV_PROFILE = importlib.util.module_from_spec(_CSV_PROFILE_SPEC)
+_CSV_PROFILE_SPEC.loader.exec_module(CSV_PROFILE)
 
-    def __init__(self, condition, record, field):
-        super().__init__(condition)
-        self.condition = condition
-        self.record = record
-        self.field = field
+SourceProfileError = CSV_PROFILE.CsvProfileFailure
+parse_source_profile = CSV_PROFILE.scan_records
+source_coordinates = CSV_PROFILE.record_coordinates
 
 
 SOURCE_PROFILE_CONDITIONS = {
@@ -8102,121 +8125,6 @@ SOURCE_PROFILE_CONDITIONS = {
 SOURCE_READ_CONDITIONS = (
     set(SOURCE_PROFILE_CONDITIONS) - {'source_profile_unknown'}
 ) | {'invalid_text'}
-
-
-def parse_source_profile(data: str):
-    """Parse a delimited source under R023 into records of (text, quoted).
-
-    A bare empty field parses to a text of None and a quoted empty field to
-    an empty string, so R014's distinction between an uncollected value and
-    a collected empty one survives reading. `U+000D U+000A` terminates a
-    record as `U+000A` does, and the final record may omit its terminator,
-    because neither spelling changes the records a file holds. Every other
-    difference raises rather than being repaired.
-    """
-    if not data:
-        return []
-    records = []
-    record = []
-    index = 0
-    size = len(data)
-    number = 1
-    field_number = 1
-    while True:
-        if data[index:index + 1] == '"':
-            index += 1
-            chunks = []
-            while True:
-                if index >= size:
-                    raise SourceProfileError(
-                        'source_quote_unterminated', number, field_number
-                    )
-                character = data[index]
-                if character == '"':
-                    if data[index + 1:index + 2] == '"':
-                        chunks.append('"')
-                        index += 2
-                        continue
-                    index += 1
-                    break
-                if character == '\r':
-                    raise SourceProfileError(
-                        'source_carriage_return', number, field_number
-                    )
-                chunks.append(character)
-                index += 1
-            field = (''.join(chunks), True)
-            if index < size and data[index] not in ',\r\n':
-                raise SourceProfileError(
-                    'source_text_after_quote', number, field_number
-                )
-        else:
-            start = index
-            while index < size and data[index] not in ',\n':
-                character = data[index]
-                if character == '"':
-                    raise SourceProfileError(
-                        'source_quote_in_bare_field', number, field_number
-                    )
-                if character == '\r':
-                    break
-                index += 1
-            field = (data[start:index] or None, False)
-        record.append(field)
-        if index >= size:
-            records.append(record)
-            break
-        if data[index] == ',':
-            index += 1
-            field_number += 1
-            continue
-        if data[index] == '\r':
-            if data[index + 1:index + 2] != '\n':
-                raise SourceProfileError(
-                    'source_carriage_return', number, field_number
-                )
-            index += 2
-        else:
-            index += 1
-        records.append(record)
-        record = []
-        number += 1
-        field_number = 1
-        if index >= size:
-            break
-    return records
-
-
-def source_coordinates(prefix: str):
-    """The record and field a reader stands at after reading `prefix`.
-
-    Records and fields are counted from one, and the header is record one,
-    so a failure names the same coordinates R023 requires of a runtime.
-    """
-    record = 1
-    field = 1
-    index = 0
-    size = len(prefix)
-    while index < size:
-        character = prefix[index]
-        if character == '"':
-            index += 1
-            while index < size:
-                if prefix[index] == '"':
-                    if prefix[index + 1:index + 2] == '"':
-                        index += 2
-                        continue
-                    index += 1
-                    break
-                index += 1
-            continue
-        if character == ',':
-            field += 1
-        elif character == '\n':
-            record += 1
-            field = 1
-        index += 1
-    return record, field
 
 
 def check_source_file(csv_path: Path):
@@ -8252,7 +8160,7 @@ def check_source_file(csv_path: Path):
         return [('source_header_absent', 1, 'source has no header record')]
 
     findings = []
-    header = [text for text, _quoted in records[0]]
+    header = records[0]
     if any(not name for name in header):
         findings.append(
             ('source_field_name_empty', 1, 'header contains an empty name')
@@ -8350,6 +8258,11 @@ README_KEY_COLUMNS = {
     'RSSEQ', 'ASEQ', 'PARAMCD', 'PARAM', 'AVISIT', 'VISIT', 'RDOMAIN',
     'IDVAR', 'QNAM',
 }
+README_FOOTER_PATTERN = re.compile(
+    r'\[!\[Dashboard\]\(https://img\.shields\.io/badge/Dashboard-view-0c5e4b\)\]'
+    r'\(https://elong0527\.github\.io/yamaa/examples/'
+    r'[a-z0-9]+(?:-[a-z0-9]+)*\.html\)',
+)
 
 
 def validate_example_readmes(root: Path):
@@ -8366,7 +8279,7 @@ def validate_example_readmes(root: Path):
         label = readme_path.relative_to(root)
         text = readme_path.read_text(encoding='utf-8')
         for line_number, line in enumerate(text.splitlines(), 1):
-            if len(line) > 79:
+            if len(line) > 79 and not README_FOOTER_PATTERN.fullmatch(line.strip()):
                 errors.append(
                     f"ERROR: {label}:{line_number}: line has {len(line)} "
                     "characters; maximum is 79"
@@ -8375,6 +8288,8 @@ def validate_example_readmes(root: Path):
         marker = '\n## How to fix\n'
         contract = text.split(marker, 1)[0]
         for line_number, line in enumerate(contract.splitlines(), 1):
+            if README_FOOTER_PATTERN.fullmatch(line.strip()):
+                continue
             if README_FORBIDDEN_PATTERN.search(line):
                 errors.append(
                     f"ERROR: {label}:{line_number}: schema vocabulary is "
@@ -8563,6 +8478,682 @@ def validate_unicode_scalars(value, path):
                     f'{path}.{diagnostic_path_key(key)}',
                 )
             )
+    return errors
+
+
+# One machine-readable grammar per closed language. Each file is the single
+# source for its rule's grammar block, for this validator's parser, and for
+# the R parser, so a copy that drifts from it fails validation instead of
+# quietly disagreeing at run time.
+GRAMMAR_DIR = PurePosixPath('yaml/grammar')
+GRAMMAR_CONTRACTS = {
+    'predicate': 'R004',
+    'numeric': 'R010',
+    'string-template': 'R012',
+    'aggregate': 'R013',
+}
+GRAMMAR_DOCUMENT_KEYS = {
+    'schema_version', 'contract', 'contract_version', 'rule', 'start',
+    'productions', 'imports', 'vocabulary', 'prohibited', 'reserved',
+    'cases',
+}
+GRAMMAR_REQUIRED_KEYS = (
+    'schema_version', 'contract', 'contract_version', 'rule', 'start',
+    'productions', 'imports', 'vocabulary', 'cases',
+)
+GRAMMAR_PRODUCTION_KEYS = {'name', 'definition', 'prose'}
+GRAMMAR_CASE_KEYS = {
+    'id', 'covers', 'text', 'parse', 'condition', 'identifiers', 'shape',
+}
+# The behavior each contract's vectors must exercise. A vector set that
+# stops covering one of these stops being evidence for it, and a vector that
+# invents a category outside them hides what it is evidence for.
+GRAMMAR_COVERS = {
+    'predicate': {
+        'between', 'comparison', 'escape', 'grouping', 'identifier', 'in',
+        'keyword-case', 'like', 'literal', 'logic', 'null-test',
+        'precedence', 'rejection', 'reserved', 'temporal',
+    },
+    'numeric': {
+        'arithmetic', 'call', 'grouping', 'identifier', 'keyword-case',
+        'literal', 'null-literal', 'precedence', 'prohibited',
+        'rejection', 'unary', 'vocabulary',
+    },
+    'string-template': {
+        'escape', 'identifier', 'placeholder', 'rejection', 'text',
+    },
+    'aggregate': {
+        'arithmetic', 'call', 'grouping', 'identifier', 'keyword-case',
+        'literal', 'null-literal', 'precedence', 'prohibited',
+        'reduction', 'rejection', 'star', 'unary', 'vocabulary',
+    },
+}
+# The failures a rejected vector may record. Every one is a condition its
+# owning rule registers, so a vector cannot pin a failure the language does
+# not name.
+GRAMMAR_CONDITIONS = {
+    'predicate': {'invalid_predicate'},
+    'numeric': {
+        'invalid_numeric_expression', 'prohibited_construct',
+        'prohibited_function',
+    },
+    'string-template': {'invalid_string_template'},
+    'aggregate': {
+        'invalid_aggregate_expression', 'nested_reduction',
+        'prohibited_construct', 'prohibited_function',
+    },
+}
+
+
+def grammar_numeric_resolver(_name):
+    """Type every identifier in a replayed vector as numeric.
+
+    A vector pins what the grammar and its closed vocabulary decide. Which
+    names are visible, and what they are typed, belongs to R001, R002, and
+    R007, so a replay resolves every identifier rather than importing a
+    binding context the vector does not declare.
+    """
+    return 'float', None
+
+
+def quote_grammar_scalar(value):
+    """Quote a literal for a shape the way R004 quotes a string."""
+    doubled = value.replace("'", "''")
+    return f"'{doubled}'"
+
+
+def predicate_operand_shape(node):
+    if node['kind'] == 'identifier':
+        return f"(id {node['name']})"
+    value_type = node['type']
+    if value_type is None:
+        return 'null'
+    if value_type in {'str', 'date', 'datetime'}:
+        return f"({value_type} {quote_grammar_scalar(node['value'])})"
+    return f"({value_type} {node['value']})"
+
+
+def predicate_shape(node):
+    """Render a parsed predicate as the prefix form a vector records."""
+    kind = node['kind']
+    if kind in {'and', 'or'}:
+        return (
+            f"({kind} {predicate_shape(node['left'])} "
+            f"{predicate_shape(node['right'])})"
+        )
+    if kind == 'not':
+        return f"(not {predicate_shape(node['value'])})"
+    if kind == 'boolean':
+        return 'true' if node['value'] else 'false'
+    if kind == 'comparison':
+        return (
+            f"({node['operator']} {predicate_operand_shape(node['left'])} "
+            f"{predicate_operand_shape(node['right'])})"
+        )
+    if kind == 'null_test':
+        name = 'is-not-null' if node['negated'] else 'is-null'
+        return f"({name} {predicate_operand_shape(node['value'])})"
+    if kind == 'in':
+        name = 'not-in' if node['negated'] else 'in'
+        operands = ' '.join(
+            predicate_operand_shape(operand) for operand in node['values']
+        )
+        return f"({name} {predicate_operand_shape(node['value'])} {operands})"
+    if kind == 'between':
+        name = 'not-between' if node['negated'] else 'between'
+        return (
+            f"({name} {predicate_operand_shape(node['value'])} "
+            f"{predicate_operand_shape(node['lower'])} "
+            f"{predicate_operand_shape(node['upper'])})"
+        )
+    if kind == 'like':
+        name = 'not-like' if node['negated'] else 'like'
+        rendered = (
+            f"({name} {predicate_operand_shape(node['value'])} "
+            f"{predicate_operand_shape(node['pattern'])}"
+        )
+        if node['escape'] is not None:
+            rendered += f" (escape {quote_grammar_scalar(node['escape'])})"
+        return rendered + ')'
+    raise AssertionError(f"unknown predicate AST node {kind!r}")
+
+
+def expression_shape(node):
+    """Render a parsed R010 or R013 expression as a vector's prefix form."""
+    kind = node['kind']
+    if kind == 'number':
+        return f"({node['type']} {node['value']})"
+    if kind == 'null':
+        return 'null'
+    if kind == 'identifier':
+        return f"(id {node['name']})"
+    if kind == 'qualified_star':
+        return f"(star {node['dataset']})"
+    if kind == 'unary':
+        name = 'neg' if node['operator'] == '-' else 'pos'
+        return f"({name} {expression_shape(node['value'])})"
+    if kind == 'binary':
+        return (
+            f"({node['operator']} {expression_shape(node['left'])} "
+            f"{expression_shape(node['right'])})"
+        )
+    if kind == 'reduction':
+        return (
+            f"(reduce {node['name'].upper()} "
+            f"{expression_shape(node['argument'])})"
+        )
+    if kind == 'call':
+        rendered = f"(call {node['name'].upper()}"
+        for argument in node['arguments']:
+            rendered += f" {expression_shape(argument)}"
+        return rendered + ')'
+    raise AssertionError(f"unknown expression AST node {kind!r}")
+
+
+def string_template_shape(parts):
+    """Render parsed template parts as the prefix form a vector records."""
+    rendered = '(template'
+    for part in parts:
+        if part['kind'] == 'text':
+            rendered += f" (text {quote_grammar_scalar(part['value'])})"
+        else:
+            rendered += f" (placeholder {part['name']})"
+    return rendered + ')'
+
+
+def decide_predicate(text):
+    try:
+        ast = parse_predicate(text)
+    except PredicateError:
+        return 'invalid_predicate', None, set()
+    return None, predicate_shape(ast), ast_identifier_names(ast)
+
+
+def decide_numeric(text):
+    try:
+        ast = parse_numeric_expression(text)
+    except NumericExpressionError as exc:
+        return exc.condition, None, set()
+    _, errors = validate_numeric_expression_ast(
+        ast, 'grammar', text, grammar_numeric_resolver
+    )
+    if errors:
+        return errors[0].condition, None, set()
+    return (
+        None,
+        expression_shape(ast),
+        numeric_expression_identifier_names(text),
+    )
+
+
+def decide_aggregate(text):
+    try:
+        ast = parse_aggregate_expression(text)
+    except AggregateExpressionError as exc:
+        return exc.condition, None, set()
+    identifiers = aggregate_expression_identifier_names(text)
+    _, errors = validate_aggregate_expression_ast(
+        ast, 'grammar', text, grammar_numeric_resolver, identifiers, None
+    )
+    if errors:
+        return errors[0].condition, None, set()
+    return None, expression_shape(ast), identifiers
+
+
+def decide_string_template(text):
+    try:
+        parts = parse_string_template(text)
+    except StringTemplateError:
+        return 'invalid_string_template', None, set()
+    return (
+        None,
+        string_template_shape(parts),
+        string_template_identifier_names(text),
+    )
+
+
+GRAMMAR_DECISIONS = {
+    'predicate': decide_predicate,
+    'numeric': decide_numeric,
+    'string-template': decide_string_template,
+    'aggregate': decide_aggregate,
+}
+
+
+def render_grammar_block(productions):
+    """Render productions as the grammar block a rule carries.
+
+    The name column is as wide as the longest production name. A
+    continuation line that opens an alternative aligns its bar under the
+    definition operator; every other continuation aligns under the
+    definition itself.
+    """
+    width = max(len(production['name']) for production in productions)
+    lines = []
+    for production in productions:
+        definition = production['definition'].split('\n')
+        lines.append(f"{production['name'].ljust(width)} := {definition[0]}")
+        for continuation in definition[1:]:
+            indent = width + (2 if continuation.startswith('|') else 4)
+            lines.append(' ' * indent + continuation)
+    return '\n'.join(lines)
+
+
+def rule_grammar_block(text):
+    """Return the grammar block written in a rule's Grammar section."""
+    section = re.search(r'\n## Grammar\n(.*?)(?=\n## |\Z)', text, re.DOTALL)
+    if section is None:
+        return None
+    block = re.search(r'```text\n(.*?)\n```', section.group(1), re.DOTALL)
+    return None if block is None else block.group(1)
+
+
+def grammar_symbol_references(definition):
+    """Return the non-terminals an EBNF definition refers to."""
+    without_terminals = re.sub(r'"[^"]*"', ' ', definition)
+    return set(re.findall(r'[A-Za-z_][A-Za-z0-9_]*', without_terminals))
+
+
+def grammar_defined_symbols(document):
+    """Return every symbol a grammar document defines or closes."""
+    defined = set()
+    productions = document.get('productions')
+    if isinstance(productions, list):
+        for production in productions:
+            if isinstance(production, dict) and isinstance(
+                production.get('name'), str
+            ):
+                defined.add(production['name'])
+    vocabulary = document.get('vocabulary')
+    if isinstance(vocabulary, dict):
+        defined.update(
+            name for name in vocabulary if isinstance(name, str)
+        )
+    for closed in ('prohibited', 'reserved'):
+        if closed in document:
+            defined.add(closed)
+    return defined
+
+
+def grammar_vocabulary_errors(contract, document, label):
+    """Compare a contract's closed vocabulary with this validator's."""
+    errors = []
+    vocabulary = document.get('vocabulary')
+    if not isinstance(vocabulary, dict):
+        return [f"ERROR: {label}: vocabulary must be a mapping"]
+
+    if contract == 'predicate':
+        reserved = document.get('reserved')
+        if not isinstance(reserved, list) or not all(
+            isinstance(name, str) for name in reserved
+        ):
+            errors.append(f"ERROR: {label}: reserved must be a list of names")
+        elif set(reserved) != set(PREDICATE_RESERVED_NAMES):
+            errors.append(
+                f"ERROR: {label}: reserved {sorted(reserved)} does not name "
+                f"the names this validator reserves, "
+                f"{sorted(PREDICATE_RESERVED_NAMES)}"
+            )
+        compare = next(
+            (
+                production
+                for production in document['productions']
+                if isinstance(production, dict)
+                and production.get('name') == 'compare'
+            ),
+            None,
+        )
+        declared = (
+            re.findall(r'"([^"]*)"', compare.get('definition', ''))
+            if isinstance(compare, dict)
+            else []
+        )
+        if declared != list(PREDICATE_COMPARISON_OPERATORS):
+            errors.append(
+                f"ERROR: {label}: compare declares {declared}, not the "
+                f"operators this validator tokenizes, "
+                f"{list(PREDICATE_COMPARISON_OPERATORS)}"
+            )
+        return errors
+
+    if contract == 'numeric':
+        functions = vocabulary.get('function')
+        if not isinstance(functions, dict):
+            errors.append(f"ERROR: {label}: vocabulary.function is missing")
+        else:
+            declared = {}
+            for name, arity in sorted(functions.items()):
+                if not isinstance(arity, dict) or set(arity) != {
+                    'min_arguments', 'max_arguments'
+                }:
+                    errors.append(
+                        f"ERROR: {label}: function {name} must declare "
+                        "min_arguments and max_arguments"
+                    )
+                    continue
+                declared[name] = (
+                    arity['min_arguments'], arity['max_arguments']
+                )
+            if declared != NUMERIC_FUNCTION_ARITIES:
+                errors.append(
+                    f"ERROR: {label}: vocabulary.function does not name the "
+                    "functions and arities this validator permits"
+                )
+        prohibited = document.get('prohibited')
+        if prohibited != PROHIBITED_NUMERIC_KEYWORDS:
+            errors.append(
+                f"ERROR: {label}: prohibited does not name the constructs "
+                "this validator refuses"
+            )
+        return errors
+
+    if contract == 'aggregate':
+        reducers = vocabulary.get('reducer')
+        if not isinstance(reducers, dict):
+            errors.append(f"ERROR: {label}: vocabulary.reducer is missing")
+        else:
+            if set(reducers) != AGGREGATE_REDUCERS:
+                errors.append(
+                    f"ERROR: {label}: vocabulary.reducer {sorted(reducers)} "
+                    f"does not name the reducers this validator permits, "
+                    f"{sorted(AGGREGATE_REDUCERS)}"
+                )
+            for name, entry in sorted(reducers.items()):
+                arguments = (
+                    entry.get('argument') if isinstance(entry, dict) else None
+                )
+                expected = ['expr', 'star'] if name == 'COUNT' else ['expr']
+                if arguments != expected:
+                    errors.append(
+                        f"ERROR: {label}: reducer {name} must declare "
+                        f"argument {expected}"
+                    )
+        imports = document.get('imports')
+        if not isinstance(imports, dict):
+            return errors
+        for symbol in ('function', 'prohibited'):
+            if imports.get(symbol) != 'numeric':
+                errors.append(
+                    f"ERROR: {label}: {symbol} must be imported from the "
+                    "numeric contract rather than restated"
+                )
+        return errors
+
+    if vocabulary:
+        errors.append(f"ERROR: {label}: vocabulary must be empty")
+    return errors
+
+
+def grammar_case_errors(contract, case, label):
+    """Replay one vector against this validator's parser."""
+    errors = []
+    unknown = sorted(set(case) - GRAMMAR_CASE_KEYS)
+    if unknown:
+        errors.append(f"ERROR: {label}: unknown keys {unknown}")
+
+    covers = case.get('covers')
+    if not isinstance(covers, list) or not covers:
+        errors.append(f"ERROR: {label}: covers must be a non-empty list")
+    else:
+        outside = sorted(set(covers) - GRAMMAR_COVERS[contract])
+        if outside:
+            errors.append(f"ERROR: {label}: unknown covers {outside}")
+
+    text = case.get('text')
+    if not isinstance(text, str):
+        errors.append(f"ERROR: {label}: text must be a string")
+        return errors
+
+    outcome = case.get('parse')
+    if outcome not in {'accept', 'reject'}:
+        errors.append(f"ERROR: {label}: parse must be 'accept' or 'reject'")
+        return errors
+
+    condition, shape, identifiers = GRAMMAR_DECISIONS[contract](text)
+
+    if outcome == 'reject':
+        for key in ('identifiers', 'shape'):
+            if key in case:
+                errors.append(
+                    f"ERROR: {label}: a rejected text records no {key}"
+                )
+        declared = case.get('condition')
+        if declared not in GRAMMAR_CONDITIONS[contract]:
+            errors.append(
+                f"ERROR: {label}: condition must be one of "
+                f"{sorted(GRAMMAR_CONDITIONS[contract])}"
+            )
+        elif condition is None:
+            errors.append(
+                f"ERROR: {label}: this validator accepts text {text!r} the "
+                "vector records as rejected"
+            )
+        elif condition != declared:
+            errors.append(
+                f"ERROR: {label}: this validator fails with {condition!r}, "
+                f"not the {declared!r} the vector records"
+            )
+        return errors
+
+    if 'condition' in case:
+        errors.append(f"ERROR: {label}: an accepted text records no condition")
+    if condition is not None:
+        errors.append(
+            f"ERROR: {label}: this validator rejects text {text!r} with "
+            f"{condition!r}, and the vector records it as accepted"
+        )
+        return errors
+
+    declared_identifiers = case.get('identifiers')
+    if not isinstance(declared_identifiers, list) or not all(
+        isinstance(name, str) for name in declared_identifiers
+    ):
+        errors.append(f"ERROR: {label}: identifiers must be a list of names")
+    elif declared_identifiers != sorted(declared_identifiers):
+        errors.append(f"ERROR: {label}: identifiers must be sorted")
+    elif declared_identifiers != sorted(identifiers):
+        errors.append(
+            f"ERROR: {label}: this validator collects "
+            f"{sorted(identifiers)}, not the {declared_identifiers} the "
+            "vector records"
+        )
+
+    declared_shape = case.get('shape')
+    if not isinstance(declared_shape, str):
+        errors.append(f"ERROR: {label}: shape must be a string")
+    elif declared_shape != shape:
+        errors.append(
+            f"ERROR: {label}: this validator parses {text!r} as "
+            f"{shape!r}, not the {declared_shape!r} the vector records"
+        )
+    return errors
+
+
+def validate_grammar_contract(root: Path, contract: str):
+    """Check one closed grammar against its rule and this validator."""
+    label = str(GRAMMAR_DIR / f'{contract}.yaml')
+    document_path = root / GRAMMAR_DIR / f'{contract}.yaml'
+    if not document_path.exists():
+        return [f"ERROR: {label}: missing machine-readable grammar"]
+
+    try:
+        with open(document_path, 'r', encoding='utf-8') as handle:
+            document = yaml.load(handle, Loader=UniqueKeyLoader)
+    except Exception as exc:
+        return [f"ERROR: {label}: {exc}"]
+
+    if not isinstance(document, dict):
+        return [f"ERROR: {label}: expected a mapping"]
+
+    errors = []
+    unknown = sorted(set(document) - GRAMMAR_DOCUMENT_KEYS)
+    if unknown:
+        errors.append(f"ERROR: {label}: unknown keys {unknown}")
+    missing = [key for key in GRAMMAR_REQUIRED_KEYS if key not in document]
+    if missing:
+        errors.append(f"ERROR: {label}: missing keys {missing}")
+        return errors
+    if document['contract'] != contract:
+        errors.append(
+            f"ERROR: {label}: contract must be {contract!r}, got "
+            f"{document['contract']!r}"
+        )
+    rule_id = GRAMMAR_CONTRACTS[contract]
+    if document['rule'] != rule_id:
+        errors.append(
+            f"ERROR: {label}: rule must be {rule_id!r}, got "
+            f"{document['rule']!r}"
+        )
+
+    productions = document['productions']
+    if not isinstance(productions, list) or not productions:
+        errors.append(f"ERROR: {label}: productions must be a non-empty list")
+        return errors
+
+    names = []
+    for index, production in enumerate(productions):
+        if not isinstance(production, dict):
+            errors.append(
+                f"ERROR: {label}: productions[{index}] must be a mapping"
+            )
+            continue
+        unknown = sorted(set(production) - GRAMMAR_PRODUCTION_KEYS)
+        if unknown:
+            errors.append(
+                f"ERROR: {label}: productions[{index}] unknown keys {unknown}"
+            )
+        name = production.get('name')
+        definition = production.get('definition')
+        if not isinstance(name, str) or not name:
+            errors.append(
+                f"ERROR: {label}: productions[{index}].name must be a name"
+            )
+            continue
+        if name in names:
+            errors.append(f"ERROR: {label}: {name}: duplicate production")
+            continue
+        names.append(name)
+        if not isinstance(definition, str) or not definition:
+            errors.append(
+                f"ERROR: {label}: {name}: definition must be a non-empty "
+                "string"
+            )
+        if 'prose' in production and production['prose'] is not True:
+            errors.append(
+                f"ERROR: {label}: {name}: prose must be true or absent"
+            )
+    if errors:
+        return errors
+
+    if document['start'] not in names:
+        errors.append(
+            f"ERROR: {label}: start {document['start']!r} names no production"
+        )
+
+    imports = document['imports']
+    if not isinstance(imports, dict):
+        errors.append(f"ERROR: {label}: imports must be a mapping")
+        imports = {}
+    defined = grammar_defined_symbols(document) | set(imports)
+    for production in productions:
+        if production.get('prose') is True:
+            continue
+        undefined = sorted(
+            grammar_symbol_references(production['definition']) - defined
+        )
+        if undefined:
+            errors.append(
+                f"ERROR: {label}: {production['name']}: undefined symbols "
+                f"{undefined}"
+            )
+
+    for symbol, source in sorted(imports.items()):
+        if source == 'schema':
+            continue
+        if source not in GRAMMAR_CONTRACTS:
+            errors.append(
+                f"ERROR: {label}: {symbol} is imported from unknown contract "
+                f"{source!r}"
+            )
+            continue
+        source_path = root / GRAMMAR_DIR / f'{source}.yaml'
+        try:
+            with open(source_path, 'r', encoding='utf-8') as handle:
+                source_document = yaml.load(handle, Loader=UniqueKeyLoader)
+        except Exception:
+            errors.append(
+                f"ERROR: {label}: {symbol} is imported from {source!r}, "
+                "which cannot be read"
+            )
+            continue
+        if symbol not in grammar_defined_symbols(source_document):
+            errors.append(
+                f"ERROR: {label}: the {source!r} contract defines no "
+                f"{symbol!r} to import"
+            )
+
+    errors.extend(grammar_vocabulary_errors(contract, document, label))
+
+    rule_path = next(
+        iter(sorted((root / 'yaml' / 'rules').glob(f'{rule_id}-*.md'))), None
+    )
+    if rule_path is None:
+        errors.append(f"ERROR: {label}: rule {rule_id} has no file")
+    else:
+        block = rule_grammar_block(rule_path.read_text(encoding='utf-8'))
+        rendered = render_grammar_block(productions)
+        if block is None:
+            errors.append(
+                f"ERROR: {rule_path.relative_to(root)}: no grammar block to "
+                f"compare with {label}"
+            )
+        elif block != rendered:
+            errors.append(
+                f"ERROR: {rule_path.relative_to(root)}: the grammar block is "
+                f"not the one {label} renders; replace it with:\n{rendered}"
+            )
+
+    cases = document['cases']
+    if not isinstance(cases, list) or not cases:
+        errors.append(f"ERROR: {label}: cases must be a non-empty list")
+        return errors
+
+    seen = set()
+    covered = set()
+    for index, case in enumerate(cases):
+        if not isinstance(case, dict):
+            errors.append(f"ERROR: {label}: cases[{index}] must be a mapping")
+            continue
+        case_id = case.get('id')
+        if not isinstance(case_id, str) or not case_id:
+            errors.append(
+                f"ERROR: {label}: cases[{index}].id must be a non-empty "
+                "string"
+            )
+            continue
+        if case_id in seen:
+            errors.append(f"ERROR: {label}: {case_id}: duplicate case id")
+            continue
+        seen.add(case_id)
+        if isinstance(case.get('covers'), list):
+            covered.update(
+                name for name in case['covers'] if isinstance(name, str)
+            )
+        errors.extend(
+            grammar_case_errors(contract, case, f"{label}: {case_id}")
+        )
+
+    missing_covers = sorted(GRAMMAR_COVERS[contract] - covered)
+    if missing_covers:
+        errors.append(f"ERROR: {label}: no case covers {missing_covers}")
+    return errors
+
+
+def validate_grammar_contracts(root: Path):
+    """Check every closed grammar the language defines."""
+    errors = []
+    for contract in sorted(GRAMMAR_CONTRACTS):
+        errors.extend(validate_grammar_contract(root, contract))
     return errors
 
 
@@ -8826,6 +9417,15 @@ def check_yaml_files(root: Path):
         errors.extend(
             validate_validation_manifest(root, validation_manifest)
         )
+    errors.extend(validate_project_configurations(root))
+    condition_registry, condition_registry_load_errors = (
+        load_condition_registry(root)
+    )
+    errors.extend(condition_registry_load_errors)
+    if condition_registry is not None:
+        errors.extend(
+            validate_condition_registry(root, condition_registry)
+        )
     errors.extend(
         validate_examples_structure(
             root, env, warnings, validation_manifest
@@ -8837,11 +9437,10 @@ def check_yaml_files(root: Path):
         )
     )
     errors.extend(validate_examples_layout(root))
-    errors.extend(validate_examples_index(root))
+    warnings.extend(validate_join_key_inference(root))
     errors.extend(validate_expected_error_contracts(root))
     errors.extend(validate_csv_shapes(root))
-    errors.extend(validate_example_readmes(root))
-    errors.extend(validate_rule_metadata(root))
+    errors.extend(validate_grammar_contracts(root))
     errors.extend(validate_regex_conformance(root))
 
     csv_errors, csv_warnings = validate_examples_csv(root, env)
@@ -8865,7 +9464,7 @@ def validate_examples_csv(root: Path, env=None):
         if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
             continue
 
-        for spec_path in example_spec_paths(ex_dir):
+        for spec_path in example_entry_specs(ex_dir):
             try:
                 with open(spec_path, 'r', encoding='utf-8') as f:
                     spec = yaml.load(f, Loader=UniqueKeyLoader)
@@ -9003,6 +9602,73 @@ def validate_examples_index(root: Path):
 
     return errors
 
+QUALIFIED_REFERENCE = re.compile(r'\b([A-Za-z][A-Za-z0-9_]*)\.([A-Za-z][A-Za-z0-9_]*)\b')
+
+
+def spec_qualified_datasets(spec):
+    """Return dataset qualifiers referenced as DATASET.COLUMN in a spec."""
+    found = set()
+
+    def visit(node):
+        if isinstance(node, str):
+            for match in QUALIFIED_REFERENCE.finditer(node):
+                found.add(match.group(1))
+        elif isinstance(node, dict):
+            for value in node.values():
+                visit(value)
+        elif isinstance(node, list):
+            for value in node:
+                visit(value)
+
+    visit(spec)
+    return found
+
+
+def validate_join_key_inference(root: Path):
+    """Surface the applicable keys R003 infers for every qualified source.
+
+    Applicable keys are output keys whose names also exist on the right
+    side, so a same-named column silently widens the join. Reporting the
+    inferred keys per dataset lets a reviewer see the join.
+    """
+    warnings = []
+    examples_dir = root / 'yaml' / 'examples'
+    if not examples_dir.exists():
+        return warnings
+    for ex_dir in sorted(examples_dir.iterdir()):
+        if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
+            continue
+        for spec_path in example_entry_specs(ex_dir):
+            try:
+                with open(spec_path, 'r', encoding='utf-8') as handle:
+                    spec = yaml.load(handle, Loader=UniqueKeyLoader)
+            except Exception:
+                continue
+            if not isinstance(spec, dict):
+                continue
+            keys = spec.get('keys') or []
+            datasets = spec.get('datasets') or {}
+            base = default_driver_dataset(spec)
+            if not isinstance(keys, list) or not isinstance(datasets, dict):
+                continue
+            for qualifier in sorted(spec_qualified_datasets(spec)):
+                if qualifier == base or qualifier not in datasets:
+                    continue
+                right = ex_dir / str(datasets[qualifier])
+                try:
+                    with open(right, 'r', encoding='utf-8', newline='') as handle:
+                        header = next(csv.reader(handle))
+                except (OSError, StopIteration):
+                    continue
+                applicable = [key for key in keys if key in header]
+                label = spec_path.relative_to(root)
+                warnings.append(
+                    f"WARNING: {label}: qualified source {qualifier} "
+                    f"matches on keys [{', '.join(applicable)}]"
+                )
+    return warnings
+
+
 def validate_examples_layout(root: Path):
     errors = []
     examples_dir = root / 'yaml' / 'examples'
@@ -9014,16 +9680,24 @@ def validate_examples_layout(root: Path):
             continue
 
         rel = ex_dir.relative_to(root)
-
-        # README.md
         readme = ex_dir / 'README.md'
         if not readme.exists():
             errors.append(f"ERROR: {rel} missing README.md")
-        else:
-            if ex_dir.name.startswith('negative-'):
-                content = readme.read_text(encoding='utf-8')
-                if '## How to fix' not in content:
-                    errors.append(f"ERROR: {rel}/README.md missing '## How to fix' section")
+        elif ex_dir.name.startswith('negative-'):
+            content = readme.read_text(encoding='utf-8')
+            if '## How to fix' not in content:
+                errors.append(f"ERROR: {rel}/README.md missing '## How to fix' section")
+        if readme.exists():
+            lines = readme.read_text(encoding='utf-8').splitlines()
+            expected_badge = (
+                "[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]"
+                f"(https://elong0527.github.io/yamaa/examples/{ex_dir.name}.html)"
+            )
+            if len(lines) < 3 or lines[2].strip() != expected_badge:
+                errors.append(
+                    f"ERROR: {rel}/README.md must place '{expected_badge}' "
+                    "right after the title"
+                )
 
         # Specification files
         spec_paths = example_spec_paths(ex_dir)
@@ -9059,6 +9733,34 @@ def validate_examples_layout(root: Path):
                 errors.append(f"ERROR: {rel}/expected has no artifacts")
 
     return errors
+
+
+def validate_examples_readme_presence(root: Path):
+    """Require each example's README and each negative README's fix section.
+
+    Documentation lint: lives behind check_documentation.py, not the
+    specification-validity gate, so a prose gap cannot mask a spec verdict.
+    """
+    errors = []
+    examples_dir = root / 'yaml' / 'examples'
+    if not examples_dir.exists():
+        return errors
+
+    for ex_dir in sorted(examples_dir.iterdir()):
+        if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
+            continue
+
+        rel = ex_dir.relative_to(root)
+        readme = ex_dir / 'README.md'
+        if not readme.exists():
+            errors.append(f"ERROR: {rel} missing README.md")
+        elif ex_dir.name.startswith('negative-'):
+            content = readme.read_text(encoding='utf-8')
+            if '## How to fix' not in content:
+                errors.append(f"ERROR: {rel}/README.md missing '## How to fix' section")
+
+    return errors
+
 
 def main():
     parser = argparse.ArgumentParser(description="Validate yamaa repository structure and specs.")

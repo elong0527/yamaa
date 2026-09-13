@@ -2,6 +2,7 @@ phase: validation
 condition: incompatible_input_type
 spec_paths:
   - columns.SEVTOT.derivation.aggregate.expr
+requirement: R013-45
 context:
   source: ASEV
   expected: numeric

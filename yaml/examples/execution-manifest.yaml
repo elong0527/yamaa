@@ -8,6 +8,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  adam-adae-event-severity:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   adam-adae-occurrence-flags:
     status: blocked
     blocked_by: "#101"
@@ -124,10 +128,6 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
-  adam-adlb-standardized-result:
-    status: blocked
-    blocked_by: "#101"
-    reason: no yaml executor in R or Python yet
   adam-adoe-study-eye:
     status: blocked
     blocked_by: "#101"
@@ -193,6 +193,10 @@ examples:
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
   adam-adsl-dose-adjustment-flag:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  adam-adsl-duration-weeks-months:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
@@ -376,11 +380,31 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  negative-allowed-values-mismatch:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-all-or-none-partial-row:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   negative-baseline-flag-tied-date:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  negative-baseline-value-multiple-flags:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   negative-column-type-unknown:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-coalesce-self-reference:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-column-forward-reference:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
@@ -424,6 +448,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  negative-cut-non-numeric-source:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   negative-dataset-path-absolute:
     status: blocked
     blocked_by: "#101"
@@ -445,6 +473,14 @@ examples:
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
   negative-dataset-path-url:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-date-diff-bounds-unit:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-date-diff-datetime-endpoints:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
@@ -496,6 +532,14 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  negative-least-incomparable-sources:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-literal-non-scalar:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   negative-mapping-case-fold-collision:
     status: blocked
     blocked_by: "#101"
@@ -524,6 +568,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  negative-not-missing-absent-age:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   negative-output-duplicate-subject:
     status: blocked
     blocked_by: "#101"
@@ -536,7 +584,15 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  negative-previous-non-missing-non-variable-source:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   negative-query-slot-overflow:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-rank-invalid-method:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
@@ -565,6 +621,10 @@ examples:
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
   negative-record-lookup-unpaired-key:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-row-number-numeric-filter:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
@@ -604,6 +664,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  negative-source-undeclared-field:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   negative-source-unknown-profile:
     status: blocked
     blocked_by: "#101"
@@ -613,6 +677,14 @@ examples:
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
   negative-str-extract-undeclared-group:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-str-lower-non-string-source:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-study-day-datetime-input:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
@@ -637,6 +709,10 @@ examples:
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
   negative-verification-implausible-age:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  negative-unique-duplicate-values:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
@@ -713,6 +789,10 @@ examples:
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
   sdtm-vs-visit-study-day:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  spec-inheritance:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet

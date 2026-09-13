@@ -1,5 +1,7 @@
 # SDTM LB: apply external reference ranges
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-lb-reference-range-indicator.html)
+
 This example uses collected laboratory results and a test-by-sex reference
 dictionary to derive one record per result:
 

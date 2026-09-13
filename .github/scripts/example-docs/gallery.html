@@ -1,0 +1,44 @@
+<!doctype html>
+<!-- Generated from yaml/examples. Edit the source files or generator. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Every YAMAA example: README, inputs, expected output, and YAML specification.">
+  <title>All examples | YAMAA examples</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230c5e4b'/%3E%3Cpath d='m8 8 8 10 8-10M16 18v7' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+  <style>
+    body { margin: 0; font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif; color: #1d2b25; background: #f4f7f5; }
+    .page-header { padding: 28px 36px 8px; }
+    .brand { font-size: 13px; letter-spacing: 1.5px; color: #0c5e4b; font-weight: 700; }
+    h1 { font-size: 30px; margin: 8px 0 4px; }
+    .lede { color: #4c5b54; max-width: 70ch; }
+    .gallery { padding: 8px 36px 40px; }
+    .gallery .outcome { border-top: 1px solid #d9e3dd; margin-top: 30px; padding-top: 18px; }
+    .gallery .outcome:first-child { border-top: 0; margin-top: 12px; padding-top: 0; }
+    .gallery h2 { font-size: 22px; margin: 0 0 4px; color: #1d2b25; }
+    .gallery h3 { font-size: 16px; margin: 24px 0 6px; color: #0c5e4b; }
+    .gallery .outcome-note { color: #4c5b54; max-width: 70ch; margin: 0; }
+    .gallery ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px 20px; }
+    .gallery li a { color: #125cad; text-decoration: none; }
+    .gallery li a:hover { text-decoration: underline; }
+    .gallery .count { color: #64766b; font-size: 12px; margin: 4px 0 0; }
+    .page-footer { padding: 16px 36px; color: #64766b; font-size: 12px; }
+    .outcome-jump { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 12px; }
+    .outcome-jump a { color: #125cad; text-decoration: none; font-weight: 600; }
+    .outcome-jump a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header class="page-header">
+    <div class="brand">YAMAA / Example explorer</div>
+    <h1>All examples</h1>
+    <p class="lede">$total example dashboards, generated from <a href="$source_url">yaml/examples</a>. Each page shows the README, the source fixtures, the expected artifacts, and the YAML specification.</p>
+    <nav class="outcome-jump" aria-label="Jump to a group">$summary</nav>
+  </header>
+  <main class="gallery" aria-label="Example gallery">
+$sections
+  </main>
+  <footer class="page-footer"><span>Source data and expected results, shown together.</span></footer>
+</body>
+</html>

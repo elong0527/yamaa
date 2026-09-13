@@ -2,7 +2,6 @@ schema_version: "1.0"
 domain: ADQS
 datasets:
   QS: {path: input/qs.csv, types: {QSSTRESN: float}}
-base: QS
 keys: [STUDYID, USUBJID, VISIT, PARAMCD]
 
 output:

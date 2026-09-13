@@ -1,0 +1,47 @@
+version: "1.0"
+
+# Vocabulary coverage for the admission policy in agents.md: an expression
+# enters the vocabulary when an example needs it, a negative example fixes
+# its failure behavior, and R and Python can implement it the same way.
+# Every registered expression and verification names either the negative
+# examples that fix its failure behavior or the open issue tracking the
+# gap. check_vocabulary_coverage.py enforces this file in CI.
+coverage:
+  aggregate: [negative-sum-non-numeric-source]
+  baseline_flag: [negative-baseline-flag-tied-date]
+  baseline_value: [negative-baseline-value-multiple-flags]
+  case: [negative-adae-review-condition-arithmetic]
+  coalesce: [negative-coalesce-self-reference]
+  compute: [negative-compute-comparison-operator]
+  cut: [negative-cut-non-numeric-source]
+  date_diff: [negative-date-diff-datetime-endpoints,
+    negative-date-diff-bounds-unit]
+  date_impute: [negative-date-impute-month-out-of-range]
+  date_precision: [negative-date-precision-invalid-source]
+  greatest: [negative-greatest-incomparable-sources]
+  least: [negative-least-incomparable-sources]
+  literal: [negative-literal-non-scalar]
+  mapping: [negative-mapping-case-fold-collision]
+  mapping_from: [negative-mapping-from-unmapped-key]
+  previous_non_missing: [negative-previous-non-missing-non-variable-source]
+  rank: [negative-rank-invalid-method]
+  row_number: [negative-row-number-numeric-filter]
+  row_value: [negative-row-value-zero-offset]
+  source: [negative-source-undeclared-field]
+  str_concat: [negative-usubjid-exceeds-length]
+  str_extract: [negative-str-extract-undeclared-group]
+  str_lower: [negative-str-lower-non-string-source]
+  str_template: [negative-adsl-subject-reference]
+  str_upper: [negative-variable-nested-expression]
+  study_day: [negative-study-day-datetime-input]
+  to_date: [negative-to-date-date-source]
+  verify:all_or_none: [negative-all-or-none-partial-row]
+  verify:allowed_values: [negative-allowed-values-mismatch]
+  verify:implies: [negative-adam-adeg-pre-existing-rrr]
+  verify:matches: [negative-matches-unreadable-pattern]
+  verify:max_length: [negative-usubjid-exceeds-length]
+  verify:not_missing: [negative-not-missing-absent-age]
+  verify:predicate: [negative-adam-adsl-stratification-reconciliation]
+  verify:range: [negative-verification-implausible-age]
+  verify:row_count: [negative-group-count-without-id]
+  verify:unique: [negative-unique-duplicate-values]

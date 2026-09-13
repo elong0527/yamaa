@@ -612,17 +612,12 @@ process_domain <- function(
   records <- list()
   current_record <- list()
   field_text <- integer()
-  field_quoted <- FALSE
   state <- "start"
   record_number <- 1L
   field_number <- 1L
   append_field <- function() {
-    current_record[[length(current_record) + 1L]] <<- list(
-      text = intToUtf8(field_text),
-      quoted = field_quoted
-    )
+    current_record[[length(current_record) + 1L]] <<- intToUtf8(field_text)
     field_text <<- integer()
-    field_quoted <<- FALSE
   }
   append_record <- function() {
     append_field()
@@ -675,7 +670,6 @@ process_domain <- function(
     }
     if (state == "start") {
       if (code_point == 34L) {
-        field_quoted <- TRUE
         state <- "quoted"
       } else if (code_point == 44L) {
         append_field()
@@ -715,7 +709,7 @@ process_domain <- function(
   if (tail(code_points, 1L) != 10L) {
     append_record()
   }
-  header <- vapply(records[[1L]], `[[`, character(1), "text")
+  header <- unlist(records[[1L]], use.names = FALSE)
   empty_name <- which(header == "")[1L]
   if (!is.na(empty_name)) {
     fail("source_field_name_empty", 1L, empty_name)
@@ -737,10 +731,10 @@ process_domain <- function(
   columns <- lapply(seq_along(header), function(column_index) {
     vapply(data_records, function(record) {
       field <- record[[column_index]]
-      if (!field$quoted && identical(field$text, "")) {
+      if (identical(field, "")) {
         NA_character_
       } else {
-        field$text
+        field
       }
     }, character(1))
   })

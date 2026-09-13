@@ -2,25 +2,24 @@ schema_version: "1.0"
 domain: EX
 datasets:
   EX_RAW: input/ex_raw.csv
-base: EX_RAW
 keys: [STUDYID, USUBJID, EXSEQ]
 
 output:
   path: ex.csv
-  columns: [STUDYID, DOMAIN, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC, EXENDTC, EXADJ]
+  columns: [DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC, EXENDTC, EXADJ]
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation:
-      source: EX_RAW.STUDYID
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation:
       literal: EX
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: EX_RAW.STUDYID
 
   - name: USUBJID
     type: str

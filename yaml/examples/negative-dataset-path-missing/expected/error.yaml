@@ -2,6 +2,7 @@ phase: validation
 condition: resource_path_missing
 spec_paths:
   - datasets.LBREF.path
+requirement: R021-19
 context:
   dataset: LBREF
   path: input/lbref.csv

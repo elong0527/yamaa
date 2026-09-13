@@ -25,7 +25,10 @@ expressions:
             description: >-
               Endpoints counted. exclusive counts from start to end excluding
               start; inclusive counts both endpoints and is one greater;
-              between counts neither and is one smaller.
+              between counts neither and is one smaller. The three values
+              are defined only with unit day; with unit week, month, or
+              year bounds must be absent or exclusive, and any other value
+              fails validation under R016.
     date_impute: # Completes a truncated ISO 8601 date and returns a date.
         # A complete source date is returned unchanged; a source carrying only a
         # year, or a year and month, is completed from month and day unless

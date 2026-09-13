@@ -1,4 +1,9 @@
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
 docs/.jekyll-cache/
 docs/_site/
+/study/
+docs/examples/*.html

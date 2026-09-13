@@ -1,5 +1,7 @@
 # ADaM ADEG: derive a Fridericia-corrected QT parameter
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adeg-fridericia-qtc.html)
+
 This example uses QT and RR records to add a Fridericia-corrected QT parameter
 at the same subject and visit:
 

@@ -1,0 +1,39 @@
+schema_version: "1.0"
+domain: ADSL
+datasets:
+  DM: input/dm.csv
+keys: [STUDYID, USUBJID]
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, RFSTD, DTHDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM.USUBJID
+
+  - name: RFSTD
+    type: date
+    label: Reference Start Date
+    derivation:
+      source: DM.RFSTDT
+
+  - name: DTHDT
+    type: date
+    label: Date of Death
+    derivation:
+      source: DM.DTHDTC
+
+verifications:
+  - all_or_none:
+      id: paired-death-dates
+      columns: [RFSTD, DTHDT]

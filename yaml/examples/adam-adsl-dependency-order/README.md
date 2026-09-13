@@ -1,5 +1,7 @@
 # ADaM ADSL: derive a chain of population flags
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-dependency-order.html)
+
 This example uses sample DM and EX data and a `yamaa` specification to derive
 one row per subject:
 

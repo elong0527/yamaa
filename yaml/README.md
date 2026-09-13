@@ -8,6 +8,12 @@ and SDTM-to-ADaM derivations. The design is under active development.
 - `schema.yaml` is the schema-bundle entry point and defines shared structure.
 - `schema_environment.yaml` is the separately validated project-environment
   entry point.
+- `schema_define.yaml` is the separately validated study-document entry point:
+  one document selects the specifications a Define-XML 2.1 document
+  represents and declares the standards, supporting documents, and codelists
+  they share.
+- `schema_metadata.yaml` registers the governed dataset and column submission
+  metadata that document is generated from.
 - `schema_derivation.yaml`, `schema_expression_*.yaml`, and
   `schema_verification.yaml` register and document closed derivation and
   verification types.
@@ -20,6 +26,8 @@ and SDTM-to-ADaM derivations. The design is under active development.
   issue.
 - `conformance/` contains language-wide fixtures that every implementation
   must reproduce, one file per contract.
+- `grammar/` contains one machine-readable grammar per closed language, with
+  the vectors every implementation must reproduce.
 - `agents.md` tells AI coding agents how to discover and maintain the design.
 
 The schema defines shape and operation-local behavior through adjacent comments
@@ -39,19 +47,54 @@ parenthesis, and a pattern that engine rejects fails validation rather than
 falling back to a host dialect. `conformance/regex.yaml` holds the fixtures
 R and Python must both reproduce.
 
+The four closed grammars are defined once, in `grammar/`. A grammar written
+in prose, in an R parser, and in a Python parser is three copies that can
+disagree, so each rule's grammar block is rendered from its grammar file,
+each closed vocabulary is compared with the constants its parser uses, and
+both implementations replay the same vectors. Changing a grammar therefore
+starts in `grammar/`, and a change that is not carried into every consumer
+fails validation.
+
+R024, R025, and R026 give a submission one generation contract. R024 closes
+the governed dataset and column metadata and derives everything a
+specification already states: `Mandatory` from `core` where the standard
+defines that mapping and never where it does not, a declared length from the
+`max_length` that enforces it, an origin source where a family fixes it, and a
+collected value's annotated-CRF reference. A standard's family decides which
+origin pairs it admits, and a declared origin the derivation graph refutes is
+rejected rather than carried into a document. What a governed field owns
+cannot also be written into the free-form `metadata` map, so the map is
+annotation rather than a second place provenance can hide. The graph never
+supplies an origin: it can prove a value was computed, but not who collected
+it. R025 makes a codelist one named, versioned object several columns share,
+enforces the values of a closed list, and requires a codelist binding and an
+`allowed_values` verification over the same column to name the same set.
+R026 composes them into one Define-XML 2.1 document whose identifiers are
+built from declared names, whose element and attribute order is fixed, and
+whose bytes two implementations must agree on exactly. Value-level metadata,
+analysis-results metadata, and split datasets are refusals with named re-entry
+triggers rather than silent omissions.
+
 R021 gives every declared source one resource contract: a run receives one
-approved project root, a declared path is a relative file inside it with no
-rooted form, URI scheme, parent traversal, or symbolic link, and each accepted
+approved project root and the data roots the study's own `yamaa-project.yaml`
+declares or its runner approved, a declared path is a relative file inside the
+project root or a rooted file inside an approved data root, with no URI scheme,
+no escape above its root, and no symbolic link below it, and each accepted
 physical file is read once as one immutable byte snapshot that cannot be
-substituted between validation and ingestion.
+substituted between validation and ingestion. A rooted path is how a study
+keeps code and data in different places. The roots are fixed before any
+specification is read and come from the entry study alone, so composition never
+widens them, and a runner can cap or decline what a study declares -- which is
+where a packaging run enforces the portability a submission needs.
 
 R023 gives every delimited source one syntax: UTF-8 without a byte-order mark,
 a comma between fields, `U+000A` or `U+000D U+000A` between records, and
 double-quote quoting whose doubled quote is one literal quote. It admits the
 second spelling of a terminator and a final record without one, because
 neither changes the records a file holds, and rejects every other difference
-rather than repairing it. A field reaches R014 with its quoting intact, so an
-uncollected value stays distinct from a collected empty one.
+rather than repairing it. A field reaches R014 as its text or as missing: one
+with no characters is missing whether it was bare or quoted, so quoting is
+transport and never meaning.
 
 ## Version 1.0 design boundary
 

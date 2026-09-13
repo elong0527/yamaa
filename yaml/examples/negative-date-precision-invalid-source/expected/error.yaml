@@ -2,6 +2,7 @@ phase: impute
 condition: invalid_date_text
 spec_paths:
   - columns.ASTDTF.derivation.date_precision
+requirement: R016-52
 context:
   source: AE.AESTDTC
   value: ONGOING

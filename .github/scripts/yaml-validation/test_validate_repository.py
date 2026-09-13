@@ -635,7 +635,7 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
 class TestStringTemplateLanguage(unittest.TestCase):
     def test_parses_placeholders_and_escaped_braces(self):
         template = '{{{SITEID}}}:{SUBJID}:{ODM.IT.DM.SEX}'
-        placeholders = VALIDATOR.parse_string_template(template)
+        placeholders = VALIDATOR.string_template_placeholders(template)
 
         self.assertEqual(
             [placeholder['name'] for placeholder in placeholders],
@@ -645,6 +645,19 @@ class TestStringTemplateLanguage(unittest.TestCase):
             VALIDATOR.string_template_identifier_names(template),
             {'SITEID', 'SUBJID', 'ODM.IT.DM.SEX'},
         )
+
+    def test_a_scan_unescapes_brace_pairs_into_literal_text(self):
+        # R012 makes the pairs take precedence while scanning, so a template
+        # carries the literal text they produce as well as its placeholders.
+        self.assertEqual(
+            VALIDATOR.parse_string_template('{{{SITEID}}}'),
+            [
+                {'kind': 'text', 'value': '{', 'span': (0, 2)},
+                {'kind': 'placeholder', 'name': 'SITEID', 'span': (3, 9)},
+                {'kind': 'text', 'value': '}', 'span': (10, 12)},
+            ],
+        )
+        self.assertEqual(VALIDATOR.parse_string_template(''), [])
 
     def test_rejects_operators_empty_and_unmatched_braces(self):
         for template in ('{A + B}', '{}', '{A', 'A}'):
@@ -847,6 +860,51 @@ class TestStaticSemanticContracts(unittest.TestCase):
         self.assertIsNotNone(cycle)
         self.assertEqual(set(cycle[:-1]), {'A', 'B'})
 
+    def test_forward_reference_reports_the_later_column(self):
+        root = TOOL_PATH.parents[3]
+        env, env_errors = VALIDATOR.build_schema_env(root)
+        self.assertEqual(env_errors, [])
+        spec = {
+            'columns': [
+                {
+                    'name': 'A', 'type': 'float',
+                    'derivation': {'coalesce': {'sources': ['B']}},
+                },
+                {
+                    'name': 'B', 'type': 'float',
+                    'derivation': {'literal': 1.5},
+                },
+            ]
+        }
+
+        self.assertEqual(
+            VALIDATOR.find_forward_reference(spec, env), ('A', 'B')
+        )
+
+    def test_forward_reference_skips_edges_inside_a_cycle(self):
+        root = TOOL_PATH.parents[3]
+        env, env_errors = VALIDATOR.build_schema_env(root)
+        self.assertEqual(env_errors, [])
+        spec = {
+            'columns': [
+                {
+                    'name': 'A', 'type': 'float',
+                    'derivation': {'coalesce': {'sources': ['B']}},
+                },
+                {
+                    'name': 'B', 'type': 'float',
+                    'derivation': {
+                        'row_value': {
+                            'source': 'A', 'offset': -1,
+                            'order_by': ['A'],
+                        }
+                    },
+                },
+            ]
+        }
+
+        self.assertIsNone(VALIDATOR.find_forward_reference(spec, env))
+
 
 class TestExecutionManifestGate(unittest.TestCase):
     def load_text(self, text):
@@ -975,6 +1033,56 @@ class TestExecutionManifestGate(unittest.TestCase):
                 document, ['blocked', 'executable']
             ),
             [],
+        )
+
+
+class TestConditionRegistry(unittest.TestCase):
+    def setUp(self):
+        self.root = TOOL_PATH.parents[3]
+        self.registry, load_errors = VALIDATOR.load_condition_registry(
+            self.root
+        )
+        self.assertEqual(load_errors, [])
+
+    def test_repository_registry_passes(self):
+        self.assertEqual(
+            VALIDATOR.validate_condition_registry(
+                self.root, self.registry
+            ),
+            [],
+        )
+
+    def test_unregistered_condition_is_rejected(self):
+        changed = copy.deepcopy(self.registry)
+        del changed['conditions']['aggregate_multiple_records']
+
+        errors = VALIDATOR.validate_condition_registry(self.root, changed)
+
+        self.assertEqual(
+            errors,
+            [
+                'ERROR: yaml/examples/negative-adlb-absolute-wbc-duplicate/'
+                'expected/error.yaml.condition: unregistered condition '
+                "'aggregate_multiple_records'"
+            ],
+        )
+
+    def test_wrong_phase_condition_is_rejected(self):
+        changed = copy.deepcopy(self.registry)
+        changed['conditions']['aggregate_multiple_records']['phases'] = [
+            'derivation'
+        ]
+
+        errors = VALIDATOR.validate_condition_registry(self.root, changed)
+
+        self.assertEqual(
+            errors,
+            [
+                'ERROR: yaml/examples/negative-adlb-absolute-wbc-duplicate/'
+                'expected/error.yaml.phase: condition '
+                "'aggregate_multiple_records' is not registered for phase "
+                "'row_construction'"
+            ],
         )
 
 
@@ -1629,6 +1737,61 @@ class TestRuleMetadata(unittest.TestCase):
 
         self.assertEqual(len(errors), 2)
         self.assertTrue(all('normative' in error for error in errors))
+
+
+class TestJoinKeyInference(unittest.TestCase):
+    def write_example(self, root, name, spec, files):
+        ex_dir = root / 'yaml' / 'examples' / name
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'spec.yaml').write_text(spec)
+        for filename, content in files.items():
+            (ex_dir / 'input' / filename).write_text(content)
+
+    def test_reports_inferred_keys_per_qualified_source(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.write_example(
+                root, 'ex',
+                'schema_version: "1.0"\n'
+                'datasets:\n'
+                '  AE: input/ae.csv\n'
+                '  SUPP: input/supp.csv\n'
+                'base: AE\n'
+                'keys: [STUDYID, USUBJID, AESEQ]\n'
+                'columns:\n'
+                '  - name: AESEV\n'
+                '    derivation:\n'
+                "      source: SUPP.AESEV\n",
+                {
+                    'ae.csv': 'STUDYID,USUBJID,AESEQ\n1,1,1\n',
+                    'supp.csv': 'STUDYID,USUBJID,AESEQ,AESEV\n1,1,1,MILD\n',
+                },
+            )
+            warnings = VALIDATOR.validate_join_key_inference(root)
+
+        self.assertEqual(len(warnings), 1)
+        self.assertIn('qualified source SUPP', warnings[0])
+        self.assertIn('[STUDYID, USUBJID, AESEQ]', warnings[0])
+
+    def test_skips_base_dataset_and_missing_right_side(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.write_example(
+                root, 'ex',
+                'schema_version: "1.0"\n'
+                'datasets:\n'
+                '  AE: input/ae.csv\n'
+                'base: AE\n'
+                'keys: [STUDYID]\n'
+                'columns:\n'
+                '  - name: X\n'
+                '    derivation:\n'
+                "      source: AE.X\n",
+                {'ae.csv': 'STUDYID,X\n1,a\n'},
+            )
+            warnings = VALIDATOR.validate_join_key_inference(root)
+
+        self.assertEqual(warnings, [])
 
 
 class TestSpecificationInheritance(unittest.TestCase):
@@ -2616,7 +2779,7 @@ class TestSpecContracts(unittest.TestCase):
     def test_rejects_missing_base_and_incomplete_column_coverage(self):
         spec = {
             "domain": "ADSL",
-            "datasets": {"DM": "dm.csv"},
+            "datasets": {"DM": "dm.csv", "VS": "vs.csv"},
             "keys": ["USUBJID"],
             "output": {"columns": ["USUBJID", "AGE"]},
             "columns": [
@@ -2631,6 +2794,38 @@ class TestSpecContracts(unittest.TestCase):
         self.assertIn("base is required", message)
         self.assertIn("AGE", message)
         self.assertIn("no derivation", message)
+
+    def test_accepts_missing_base_with_one_dataset(self):
+        spec = {
+            "domain": "ADSL",
+            "datasets": {"DM": "dm.csv"},
+            "keys": ["USUBJID"],
+            "output": {"columns": ["USUBJID"]},
+            "columns": [
+                {"name": "USUBJID", "derivation": {"source": "DM.USUBJID"}},
+            ],
+        }
+
+        self.assertEqual(
+            VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml"), []
+        )
+
+    def test_default_driver_dataset_prefers_base(self):
+        self.assertEqual(
+            VALIDATOR.default_driver_dataset(
+                {"base": "DM", "datasets": {"DM": "dm.csv", "VS": "vs.csv"}}
+            ),
+            "DM",
+        )
+        self.assertEqual(
+            VALIDATOR.default_driver_dataset({"datasets": {"DM": "dm.csv"}}),
+            "DM",
+        )
+        self.assertIsNone(
+            VALIDATOR.default_driver_dataset(
+                {"datasets": {"DM": "dm.csv", "VS": "vs.csv"}}
+            )
+        )
 
     def test_rejects_lookup_pairing_and_verification_constraints(self):
         spec = {
@@ -3065,19 +3260,19 @@ columns:
 
         self.assertIn("producer workflow dependency cycle", message)
 
-    def test_rejects_traversing_producer_link(self):
+    def test_rejects_escaping_producer_link(self):
         self.write_producer_spec(
             self.VALID_PRODUCER_SPEC.replace(
                 "datasets:\n  RAW: raw.csv",
-                "datasets:\n  RAW: ../input/raw.csv",
+                "datasets:\n  RAW: ../../escape.csv",
             )
         )
 
         message = "\n".join(self.validate())
 
         self.assertIn(
-            "resource_path_parent_traversal: '../input/raw.csv' traverses a "
-            "parent segment",
+            "resource_path_outside_project: '../../escape.csv' resolves "
+            "outside the project root",
             message,
         )
 
@@ -3117,37 +3312,108 @@ class TestProjectResourceBoundary(unittest.TestCase):
         self.assertIsNone(condition)
         self.assertEqual(accepted.read_bytes(), self.source.read_bytes())
 
-    def test_rejects_rooted_written_forms(self):
-        for written in ("/etc/passwd", "C:/data/dm.csv", "input\\dm.csv"):
+    def test_rejects_rooted_paths_naming_no_approved_root(self):
+        for written in ("/etc/passwd", "C:/data/dm.csv"):
             with self.subTest(written=written):
                 self.assertEqual(
                     self.resolve(written)[1], "resource_path_not_relative"
                 )
+
+    def test_accepts_a_rooted_path_under_an_approved_data_root(self):
+        store = self.root / "store"
+        store.mkdir()
+        held = store / "lbref.csv"
+        held.write_text("LBTESTCD\nALT\n", encoding="utf-8")
+        confined = self.root / "project"
+        confined.mkdir()
+
+        accepted, condition = VALIDATOR.resolve_project_path(
+            f"{store.as_posix()}/lbref.csv",
+            confined,
+            confined,
+            data_roots=[store],
+        )
+
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.read_bytes(), held.read_bytes())
+
+    def test_accepts_a_rooted_path_whose_anchor_is_a_symbolic_link(self):
+        # macOS spells a temporary directory through /var, a link into
+        # /private. R021-15 exempts the anchor, so the spelling a user writes
+        # is accepted without resolving the written path first.
+        store = self.root / "store"
+        store.mkdir()
+        (store / "lbref.csv").write_text("LBTESTCD\nALT\n", encoding="utf-8")
+        linked = self.root / "data"
+        linked.symlink_to(store, target_is_directory=True)
+
+        accepted, condition = VALIDATOR.resolve_project_path(
+            f"{linked.as_posix()}/lbref.csv",
+            self.root,
+            self.root,
+            data_roots=[linked],
+        )
+
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.name, "lbref.csv")
+
+    def test_rejects_a_symbolic_link_below_a_rooted_anchor(self):
+        store = self.root / "store"
+        store.mkdir()
+        (store / "lbref.csv").write_text("LBTESTCD\nALT\n", encoding="utf-8")
+        (store / "alias.csv").symlink_to("lbref.csv")
+
+        _, condition = VALIDATOR.resolve_project_path(
+            f"{store.as_posix()}/alias.csv",
+            self.root,
+            self.root,
+            data_roots=[store],
+        )
+
+        self.assertEqual(condition, "resource_path_symlink")
+
+    def test_rooted_and_relative_spellings_reach_one_file(self):
+        rooted, rooted_condition = self.resolve(
+            f"{self.root.as_posix()}/input/dm.csv"
+        )
+        relative, relative_condition = self.resolve("input/dm.csv")
+
+        self.assertIsNone(rooted_condition)
+        self.assertIsNone(relative_condition)
+        self.assertEqual(rooted.resolve(), relative.resolve())
 
     def test_rejects_uri_schemes(self):
         for written in (
             "https://example.org/dm.csv",
             "file:///etc/passwd",
             "s3://bucket/dm.csv",
+            "C:data/dm.csv",
         ):
             with self.subTest(written=written):
                 self.assertEqual(
                     self.resolve(written)[1], "resource_path_uri_scheme"
                 )
 
-    def test_rejects_parent_traversal(self):
-        for written in ("../dm.csv", "input/../../dm.csv", "..", "a/../b.csv"):
+    def test_traversal_within_root_resolves(self):
+        accepted, condition = self.resolve("input/../input/dm.csv")
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.name, "dm.csv")
+
+    def test_traversal_above_root_is_outside_project(self):
+        for written in ("../dm.csv", "input/../../dm.csv", ".."):
             with self.subTest(written=written):
                 self.assertEqual(
-                    self.resolve(written)[1], "resource_path_parent_traversal"
+                    self.resolve(written)[1], "resource_path_outside_project"
                 )
 
     def test_rejects_unnormalized_written_forms(self):
         for written in (
-            "./input/dm.csv",
             "input//dm.csv",
-            "input/./dm.csv",
             "input/dm.csv/",
+            "input\\dm.csv",
+            "",
+            "/",
+            "/data/../lbref.csv",
         ):
             with self.subTest(written=written):
                 self.assertEqual(
@@ -3264,6 +3530,94 @@ class TestProjectResourceBoundary(unittest.TestCase):
         self.assertEqual(accepted.csv_header(), ["STUDYID", "AGE"])
 
 
+class TestProjectConfiguration(unittest.TestCase):
+    """R021-1 to R021-5: the study says where its own data is kept."""
+
+    def setUp(self):
+        self.test_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.test_dir.name)
+        self.study = self.root / "study"
+        self.study.mkdir()
+        self.store = self.root / "data"
+        self.store.mkdir()
+        (self.store / "lbref.csv").write_text("LBTESTCD\nALT\n", encoding="utf-8")
+
+    def tearDown(self):
+        self.test_dir.cleanup()
+
+    def configure(self, body):
+        path = self.study / VALIDATOR.PROJECT_CONFIGURATION_NAME
+        path.write_text(body, encoding="utf-8")
+        return path
+
+    def test_a_root_with_no_configuration_declares_nothing(self):
+        roots, errors = VALIDATOR.read_project_configuration(self.study)
+
+        self.assertEqual(roots, ())
+        self.assertEqual(errors, [])
+
+    def test_a_declared_data_root_admits_a_rooted_path(self):
+        # self.root is a temporary directory nobody resolved, so on macOS the
+        # declared root is spelled through /var. Canonicalizing it here would
+        # reject the rooted path the study writes.
+        self.configure(f'version: "1.0"\ndata_roots:\n  - {self.store.as_posix()}\n')
+
+        accepted, condition = VALIDATOR.resolve_project_path(
+            f"{self.store.as_posix()}/lbref.csv",
+            self.study,
+            self.study,
+            VALIDATOR.project_data_roots(self.study),
+        )
+
+        self.assertIsNone(condition)
+        self.assertEqual(accepted.name, "lbref.csv")
+
+    def test_the_same_path_is_rejected_without_a_configuration(self):
+        _, condition = VALIDATOR.resolve_project_path(
+            f"{self.store.as_posix()}/lbref.csv",
+            self.study,
+            self.study,
+            VALIDATOR.project_data_roots(self.study),
+        )
+
+        self.assertEqual(condition, "resource_path_not_relative")
+
+    def test_a_relative_data_root_is_read_from_the_project_root(self):
+        self.configure('version: "1.0"\ndata_roots:\n  - ../data\n')
+
+        declared = VALIDATOR.project_data_roots(self.study)
+
+        self.assertEqual(
+            tuple(root.resolve() for root in declared), (self.store.resolve(),)
+        )
+
+    def test_reports_a_configuration_a_run_cannot_start_from(self):
+        cases = {
+            "- not a mapping\n": "expected a mapping",
+            'version: "2.0"\n': "version: expected '1.0'",
+            'version: "1.0"\nunknown: 1\n': "unknown: unknown field",
+            'version: "1.0"\ndata_roots: "/data"\n': "expected a list",
+            'version: "1.0"\ndata_roots:\n  - ./absent\n': "not an existing directory",
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                self.configure(body)
+                _, errors = VALIDATOR.read_project_configuration(self.study)
+                self.assertTrue(
+                    any(expected in error for error in errors),
+                    f"{expected!r} not in {errors!r}",
+                )
+
+    def test_the_repository_sweep_finds_a_broken_configuration(self):
+        self.configure('version: "1.0"\ndata_roots: 7\n')
+
+        errors = VALIDATOR.validate_project_configurations(self.root)
+
+        self.assertTrue(
+            any("data_roots" in error for error in errors), errors
+        )
+
+
 class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
     """R021 as the specification validator applies it."""
 
@@ -3307,7 +3661,7 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
     def test_reports_each_rejection_at_the_declaring_field(self):
         cases = {
             "/etc/passwd": "resource_path_not_relative",
-            "../dm.csv": "resource_path_parent_traversal",
+            "../dm.csv": "resource_path_outside_project",
             "https://example.org/ref.csv": "resource_path_uri_scheme",
             "input": "resource_path_not_regular_file",
             "input/absent.csv": "resource_path_missing",
@@ -3376,11 +3730,11 @@ class TestRegularExpressionContract(unittest.TestCase):
     # -- the pinned engine -------------------------------------------------
 
     def test_requirements_install_the_engine_the_validator_pins(self):
-        text = (TOOL_PATH.parent / 'requirements.txt').read_text()
-        self.assertIn(
-            f"{VALIDATOR.REGEX_ENGINE_DISTRIBUTION}=="
-            f"{VALIDATOR.REGEX_ENGINE_DISTRIBUTION_VERSION}",
-            text,
+        from importlib.metadata import version
+
+        self.assertEqual(
+            version(VALIDATOR.REGEX_ENGINE_DISTRIBUTION),
+            VALIDATOR.REGEX_ENGINE_DISTRIBUTION_VERSION,
         )
 
     def test_missing_engine_fails_rather_than_falling_back(self):
@@ -3693,6 +4047,267 @@ class TestRegularExpressionContract(unittest.TestCase):
         self.assertIn('missing R022', errors[0])
 
 
+class TestClosedGrammarContracts(unittest.TestCase):
+    """One machine-readable grammar per closed language, read by everyone."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.root = TOOL_PATH.parents[3]
+
+    def contract_root(self, temp_dir, **replacements):
+        """Copy the grammars and rules into a root, applying replacements."""
+        root = Path(temp_dir)
+        shutil.copytree(
+            self.root / 'yaml' / 'grammar', root / 'yaml' / 'grammar'
+        )
+        shutil.copytree(self.root / 'yaml' / 'rules', root / 'yaml' / 'rules')
+        for relative, (old, new) in replacements.items():
+            path = root / relative
+            text = path.read_text()
+            self.assertIn(old, text)
+            path.write_text(text.replace(old, new, 1))
+        return root
+
+    # -- the grammar is one source -----------------------------------------
+
+    def test_every_contract_replays_against_this_validator(self):
+        self.assertEqual(VALIDATOR.validate_grammar_contracts(self.root), [])
+
+    def test_every_rule_that_owns_a_grammar_has_a_contract(self):
+        for contract, rule_id in VALIDATOR.GRAMMAR_CONTRACTS.items():
+            with self.subTest(contract=contract):
+                path = self.root / 'yaml' / 'grammar' / f'{contract}.yaml'
+                self.assertTrue(path.is_file())
+                document = yaml.safe_load(path.read_text())
+                self.assertEqual(document['rule'], rule_id)
+
+    def test_a_continuation_aligns_under_its_definition_or_its_bar(self):
+        rendered = VALIDATOR.render_grammar_block([
+            {'name': 'comparison', 'definition': 'a b\n| c d'},
+            {'name': 'null_test', 'definition': 'e\nf'},
+        ])
+        self.assertEqual(
+            rendered,
+            'comparison := a b\n'
+            '            | c d\n'
+            'null_test  := e\n'
+            '              f',
+        )
+
+    def test_a_rule_block_that_drifts_from_its_grammar_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/rules/R012-string-templates.md': (
+                        'placeholder := "{" variable "}"',
+                        'placeholder := "{" variable "}" | variable',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(
+                root, 'string-template'
+            )
+        self.assertEqual(len(errors), 1)
+        self.assertIn('R012-string-templates.md', errors[0])
+        self.assertIn('the grammar block is not the one', errors[0])
+
+    def test_a_shape_that_drifts_from_this_parser_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/numeric.yaml': (
+                        'shape: (+ (id A) (* (id B) (id C)))',
+                        'shape: (* (+ (id A) (id B)) (id C))',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'numeric')
+        self.assertEqual(len(errors), 1)
+        self.assertIn('multiplication-binds-tighter-than-addition', errors[0])
+        self.assertIn('this validator parses', errors[0])
+
+    def test_an_identifier_set_that_drifts_from_this_parser_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/predicate.yaml': (
+                        'identifiers: [EX.EXDOSE]',
+                        'identifiers: [EXDOSE]',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'predicate')
+        self.assertEqual(len(errors), 1)
+        self.assertIn('this validator collects', errors[0])
+
+    def test_a_text_this_parser_accepts_cannot_be_recorded_as_rejected(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/aggregate.yaml': (
+                        '  - id: a-reduction-reads-one-relation-field\n'
+                        '    covers: [reduction]\n'
+                        '    text: "SUM(EX.EXDOSE)"\n'
+                        '    parse: accept\n'
+                        '    identifiers: [EX.EXDOSE]\n'
+                        '    shape: (reduce SUM (id EX.EXDOSE))\n',
+                        '  - id: a-reduction-reads-one-relation-field\n'
+                        '    covers: [reduction]\n'
+                        '    text: "SUM(EX.EXDOSE)"\n'
+                        '    parse: reject\n'
+                        '    condition: invalid_aggregate_expression\n',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'aggregate')
+        self.assertEqual(len(errors), 1)
+        self.assertIn('records as rejected', errors[0])
+
+    def test_a_condition_that_drifts_from_this_parser_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/numeric.yaml': (
+                        '    text: "ROUND(A, 2)"\n'
+                        '    parse: reject\n'
+                        '    condition: prohibited_function\n',
+                        '    text: "ROUND(A, 2)"\n'
+                        '    parse: reject\n'
+                        '    condition: prohibited_construct\n',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'numeric')
+        self.assertEqual(len(errors), 1)
+        self.assertIn("fails with 'prohibited_function'", errors[0])
+
+    # -- the vocabulary is one source --------------------------------------
+
+    def test_a_vocabulary_that_drifts_from_this_parser_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/numeric.yaml': (
+                        'SQRT: {min_arguments: 1, max_arguments: 1}',
+                        'SQRT: {min_arguments: 1, max_arguments: 2}',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'numeric')
+        self.assertEqual(len(errors), 1)
+        self.assertIn('vocabulary.function does not name', errors[0])
+
+    def test_a_reserved_list_that_drifts_from_this_parser_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{'yaml/grammar/predicate.yaml': ('  - "ESCAPE"\n', '')},
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'predicate')
+        self.assertEqual(len(errors), 1)
+        self.assertIn('does not name the names this validator', errors[0])
+
+    def test_a_reducer_list_that_drifts_from_this_parser_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/aggregate.yaml': (
+                        '    ONLY: {argument: [expr]}',
+                        '    AVG: {argument: [expr]}',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'aggregate')
+        self.assertTrue(
+            any('does not name the reducers' in error for error in errors),
+            errors,
+        )
+
+    # -- the file is machine-checkable -------------------------------------
+
+    def test_a_production_may_not_name_an_undefined_symbol(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/string-template.yaml': (
+                        'imports:\n  variable: schema\n',
+                        'imports: {}\n',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(
+                root, 'string-template'
+            )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("placeholder: undefined symbols ['variable']", errors[0])
+
+    def test_an_import_must_name_a_contract_that_defines_it(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(
+                temp_dir,
+                **{
+                    'yaml/grammar/numeric.yaml': (
+                        'imports:\n  name: predicate\n',
+                        'imports:\n  name: string-template\n',
+                    )
+                },
+            )
+            errors = VALIDATOR.validate_grammar_contract(root, 'numeric')
+        self.assertEqual(len(errors), 1)
+        self.assertIn("defines no 'name' to import", errors[0])
+
+    def test_replay_requires_a_case_for_every_named_category(self):
+        self.assertIn('rejection', VALIDATOR.GRAMMAR_COVERS['string-template'])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.contract_root(temp_dir)
+            source = root / 'yaml' / 'grammar' / 'string-template.yaml'
+            head, separator, cases = source.read_text().partition('cases:\n')
+            self.assertTrue(separator)
+            kept = [
+                block
+                for block in cases.split('  - id: ')[1:]
+                if 'parse: reject' not in block
+            ]
+            source.write_text(
+                head + separator
+                + ''.join(f'  - id: {block}' for block in kept)
+            )
+            errors = VALIDATOR.validate_grammar_contract(
+                root, 'string-template'
+            )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("no case covers ['rejection']", errors[0])
+
+    def test_a_missing_grammar_fails_validation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            errors = VALIDATOR.validate_grammar_contracts(Path(temp_dir))
+        self.assertEqual(len(errors), len(VALIDATOR.GRAMMAR_CONTRACTS))
+        for error in errors:
+            self.assertIn('missing machine-readable grammar', error)
+
+    # -- the R parser reads the same files ----------------------------------
+
+    def test_the_r_runner_reads_the_same_contracts(self):
+        runner = (
+            self.root / 'R' / 'cdiscbuilder' / 'inst' / 'conformance' /
+            'grammar_conformance.R'
+        )
+        text = runner.read_text()
+        for contract, rule_id in VALIDATOR.GRAMMAR_CONTRACTS.items():
+            with self.subTest(contract=contract):
+                self.assertIn(contract, text)
+                self.assertIn(rule_id, text)
+        self.assertIn('"grammar"', text)
+
+
 class TestDeclaredValidationErrors(unittest.TestCase):
     """A fixture must fail for the condition it declares."""
 
@@ -3776,15 +4391,24 @@ class TestDatasetPathExamples(unittest.TestCase):
 class TestValidatorCLI(unittest.TestCase):
     def setUp(self):
         self.tool_path = Path(__file__).parent / 'validate_repository.py'
+        self.doc_tool_path = Path(__file__).parent / 'check_documentation.py'
         self.test_dir = tempfile.TemporaryDirectory()
         self.root_dir = Path(self.test_dir.name)
-        # Every repository carries R022's shared fixtures, so a synthetic root
-        # that expects a clean run needs them too.
+        # Every repository carries R022's shared fixtures and the closed
+        # grammars, which are read against their rules, so a synthetic root
+        # that expects a clean run needs all of them too.
+        repository = TOOL_PATH.parents[3]
         conformance = self.root_dir / 'yaml' / 'conformance'
         conformance.mkdir(parents=True)
         shutil.copy(
-            TOOL_PATH.parents[3] / 'yaml' / 'conformance' / 'regex.yaml',
+            repository / 'yaml' / 'conformance' / 'regex.yaml',
             conformance / 'regex.yaml',
+        )
+        shutil.copytree(
+            repository / 'yaml' / 'grammar', self.root_dir / 'yaml' / 'grammar'
+        )
+        shutil.copytree(
+            repository / 'yaml' / 'rules', self.root_dir / 'yaml' / 'rules'
         )
 
     def tearDown(self):
@@ -4074,15 +4698,15 @@ class TestValidatorCLI(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_example_layout_missing_files(self):
+    def test_documentation_missing_readme(self):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'bad-example'
         ex_dir.mkdir(parents=True, exist_ok=True)
         # missing everything
-        result = subprocess.run([sys.executable, str(self.tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
+        result = subprocess.run([sys.executable, str(self.doc_tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('README.md', result.stdout)
 
-    def test_example_layout_negative_missing_how_to_fix(self):
+    def test_documentation_negative_missing_how_to_fix(self):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'negative-bad'
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'README.md').write_text('# bad')
@@ -4091,7 +4715,7 @@ class TestValidatorCLI(unittest.TestCase):
         (ex_dir / 'expected').mkdir()
         (ex_dir / 'expected' / 'error.yaml').write_text('{}')
 
-        result = subprocess.run([sys.executable, str(self.tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
+        result = subprocess.run([sys.executable, str(self.doc_tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('How to fix', result.stdout)
 
@@ -4113,7 +4737,7 @@ class TestValidatorCLI(unittest.TestCase):
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'README.md').write_text('# Index\n\n| [`stale`](stale/) | stale desc |\n')
 
-        result = subprocess.run([sys.executable, str(self.tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
+        result = subprocess.run([sys.executable, str(self.doc_tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('stale', result.stdout)
 
@@ -4127,7 +4751,7 @@ class TestValidatorCLI(unittest.TestCase):
         )
 
         result = subprocess.run(
-            [sys.executable, str(self.tool_path), '--root', str(self.root_dir)],
+            [sys.executable, str(self.doc_tool_path), '--root', str(self.root_dir)],
             capture_output=True,
             text=True,
         )
@@ -4146,7 +4770,7 @@ class TestValidatorCLI(unittest.TestCase):
         (good_ex / 'expected').mkdir()
         (good_ex / 'expected' / 'out.csv').write_text('h1')
 
-        result = subprocess.run([sys.executable, str(self.tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
+        result = subprocess.run([sys.executable, str(self.doc_tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('not in index', result.stdout)
 
@@ -4215,7 +4839,11 @@ bad_field: "what"
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'variant-example'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
-        (ex_dir / 'README.md').write_text('# Variant example\n')
+        (ex_dir / 'README.md').write_text(
+            '# Variant example\n'
+            '\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/variant-example.html)\n'
+        )
         (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
         (ex_dir / 'spec_r.yaml').write_text('value: valid\n')
         (ex_dir / 'spec_py.yaml').write_text(
@@ -4249,7 +4877,11 @@ bad_field: "what"
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'mixed-specs'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
-        (ex_dir / 'README.md').write_text('# Mixed specs\n')
+        (ex_dir / 'README.md').write_text(
+            '# Mixed specs\n'
+            '\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/mixed-specs.html)\n'
+        )
         (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
         (ex_dir / 'spec.yaml').write_text('value: base\n')
         (ex_dir / 'spec_r.yaml').write_text('value: variant\n')
@@ -4257,6 +4889,56 @@ bad_field: "what"
         errors = VALIDATOR.validate_examples_layout(self.root_dir)
         self.assertTrue(errors)
         self.assertIn('cannot mix', '\n'.join(errors))
+
+    def test_parented_spec_files_are_levels_not_entries(self):
+        ex_dir = self.root_dir / 'yaml' / 'examples' / 'leveled-specs'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'README.md').write_text(
+            '# Leveled specs\n'
+            '\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/leveled-specs.html)\n'
+        )
+        (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
+        (ex_dir / 'spec_organization.yaml').write_text('value: valid\n')
+        (ex_dir / 'spec_study.yaml').write_text(
+            'value: valid\nparents: spec_organization.yaml\n'
+        )
+
+        entries = VALIDATOR.example_entry_specs(ex_dir)
+        self.assertEqual([path.name for path in entries], ['spec_study.yaml'])
+        self.assertEqual(
+            VALIDATOR.expected_resolved_path(ex_dir, entries[0]).name,
+            'spec_resolved.yaml',
+        )
+        self.assertEqual(
+            VALIDATOR.validate_examples_layout(self.root_dir), []
+        )
+
+    def test_readme_dashboard_badge_must_follow_the_title(self):
+        ex_dir = self.root_dir / 'yaml' / 'examples' / 'link-check'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'spec.yaml').write_text('value: valid\n')
+        (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
+        badge = (
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]'
+            '(https://elong0527.github.io/yamaa/examples/link-check.html)'
+        )
+        (ex_dir / 'README.md').write_text('# No badge\n')
+        errors = VALIDATOR.validate_examples_layout(self.root_dir)
+        self.assertIn('right after the title', '\n'.join(errors))
+        (ex_dir / 'README.md').write_text(
+            '# Wrong badge\n\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]'
+            '(https://elong0527.github.io/yamaa/examples/other-dir.html)\n'
+        )
+        errors = VALIDATOR.validate_examples_layout(self.root_dir)
+        self.assertIn('right after the title', '\n'.join(errors))
+        (ex_dir / 'README.md').write_text(f'# Right badge\n\n{badge}\n')
+        self.assertEqual(
+            VALIDATOR.validate_examples_layout(self.root_dir), []
+        )
 
     def test_empty_spec_is_rejected(self):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'empty-spec'
@@ -4331,7 +5013,7 @@ bad_field: "what"
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'negative-declared'
         (ex_dir / 'expected').mkdir(parents=True)
         (ex_dir / 'spec.yaml').write_text(
-            'columns:\n  - name: COUNTRY\n    derivation: {nested: value}\n'
+            'columns:\n  - name: COUNTRY\n    label: Country\n    derivation: {nested: value}\n'
         )
         (ex_dir / 'expected' / 'error.yaml').write_text(
             'phase: validation\ncondition: invalid_field_type\n'
@@ -4344,6 +5026,7 @@ bad_field: "what"
                 ],
                 'column_class': [
                     {'name': {'type': 'str', 'required': True}},
+                    {'label': {'type': 'str', 'required': False}},
                     {'derivation': {'type': 'str', 'required': True}},
                 ],
             },
@@ -4431,35 +5114,40 @@ bad_field: "what"
 
 class TestCsvProfile(unittest.TestCase):
     def parse_render(self, data):
-        return VALIDATOR.render_csv_profile(VALIDATOR.parse_csv_profile(data))
+        records = VALIDATOR.scan_records(data)
+        return VALIDATOR.render_records(records[0], records[1:]).decode('utf-8')
 
-    def test_missing_and_empty_string_are_distinct(self):
-        records = VALIDATOR.parse_csv_profile('A,B\n1,\n2,""\n')
-        self.assertEqual(records[1][1], (None, False))
-        self.assertEqual(records[2][1], ('', True))
+    def test_bare_and_quoted_empty_are_both_missing(self):
+        records = VALIDATOR.scan_records('A,B\n1,\n2,""\n')
+        self.assertIsNone(records[1][1])
+        self.assertIsNone(records[2][1])
 
     def test_quoted_field_carries_delimiter_quote_and_newline(self):
         data = 'A\n"x, y"\n"say ""hi"""\n"two\nlines"\n'
-        records = VALIDATOR.parse_csv_profile(data)
+        records = VALIDATOR.scan_records(data)
         self.assertEqual(
-            [record[0][0] for record in records[1:]],
+            [record[0] for record in records[1:]],
             ['x, y', 'say "hi"', 'two\nlines'],
         )
         self.assertEqual(self.parse_render(data), data)
 
     def test_carriage_return_terminator_is_rejected(self):
-        with self.assertRaises(ValueError) as caught:
-            VALIDATOR.parse_csv_profile('A,B\r\n1,2\r\n')
-        self.assertIn('U+000D', str(caught.exception))
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / 'adsl.csv'
+            path.write_bytes(b'A,B\r\n1,2\r\n')
+            errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', {})
+        self.assertTrue(any('U+000A' in error for error in errors), errors)
 
     def test_unterminated_final_record_is_rejected(self):
-        with self.assertRaises(ValueError) as caught:
-            VALIDATOR.parse_csv_profile('A,B\n1,2')
-        self.assertIn('U+000A', str(caught.exception))
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / 'adsl.csv'
+            path.write_bytes(b'A,B\n1,2')
+            errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', {})
+        self.assertTrue(any('U+000A' in error for error in errors), errors)
 
     def test_unterminated_quote_is_rejected(self):
         with self.assertRaises(ValueError):
-            VALIDATOR.parse_csv_profile('A,B\n1,"open\n')
+            VALIDATOR.scan_records('A,B\n1,"open\n')
 
     def test_needless_quoting_does_not_render_back(self):
         data = 'A,B\n"1",2\n'
@@ -4467,7 +5155,7 @@ class TestCsvProfile(unittest.TestCase):
 
     def test_zero_row_artifact_is_the_header_alone(self):
         data = 'STUDYID,USUBJID\n'
-        self.assertEqual(len(VALIDATOR.parse_csv_profile(data)), 1)
+        self.assertEqual(len(VALIDATOR.scan_records(data)), 1)
         self.assertEqual(self.parse_render(data), data)
 
     def test_float_text_omits_a_trailing_zero_decimal(self):
@@ -4574,12 +5262,12 @@ class TestCsvProfile(unittest.TestCase):
                 ],
             }
             errors = VALIDATOR.validate_csv_artifact(path, 'ex/adsl.csv', spec)
-        self.assertTrue(any('U+000D' in error for error in errors), errors)
+        self.assertTrue(any('U+000A' in error for error in errors), errors)
 
     def test_artifact_check_accepts_a_conforming_artifact(self):
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / 'adsl.csv'
-            path.write_bytes(b'STUDYID,COMMENT,AVAL\nS1,"has, comma",10\nS1,"",\n')
+            path.write_bytes(b'STUDYID,COMMENT,AVAL\nS1,"has, comma",10\nS1,,\n')
             spec = {
                 'output': {'profile': 'csv',
                            'columns': ['STUDYID', 'COMMENT', 'AVAL']},
@@ -4680,23 +5368,23 @@ class TestSourceProfile(unittest.TestCase):
             VALIDATOR.parse_source_profile('A,B\n1,2\n'),
         )
 
-    def test_missing_and_empty_string_reach_r014_apart(self):
+    def test_missing_and_empty_reach_r014_as_missing(self):
         records = VALIDATOR.parse_source_profile('A,B\n"",\n')
-        self.assertEqual(records[1][0], ('', True))
-        self.assertEqual(records[1][1], (None, False))
+        self.assertEqual(records[1][0], None)
+        self.assertEqual(records[1][1], None)
 
     def test_quoted_field_carries_delimiter_quote_and_newline(self):
         records = VALIDATOR.parse_source_profile(
             'A\n"x, y"\n"say ""hi"""\n"two\nlines"\n'
         )
         self.assertEqual(
-            [record[0][0] for record in records[1:]],
+            [record[0] for record in records[1:]],
             ['x, y', 'say "hi"', 'two\nlines'],
         )
 
     def test_nothing_is_trimmed(self):
         records = VALIDATOR.parse_source_profile('A,B\n x , y \n')
-        self.assertEqual(records[1], [(' x ', False), (' y ', False)])
+        self.assertEqual(records[1], [' x ', ' y '])
 
     def test_carriage_return_outside_a_terminator_is_rejected(self):
         for data in ['A\n"x\ry"\n', 'A\nx\ry\n', 'A\n1\r']:
@@ -4836,7 +5524,7 @@ class TestSuiteSourceCoverage(unittest.TestCase):
             VALIDATOR.parse_source_profile(crlf.replace('\r\n', '\n')),
         )
 
-    def test_a_suite_source_keeps_missing_apart_from_empty(self):
+    def test_a_suite_source_reads_both_blanks_as_missing(self):
         path = (
             self.root / 'yaml' / 'examples'
             / 'adam-adsl-investigator-comment' / 'input' / 'dm.csv'
@@ -4845,10 +5533,12 @@ class TestSuiteSourceCoverage(unittest.TestCase):
             path.read_text(encoding='utf-8')
         )
         comments = [record[2] for record in records[1:]]
-        self.assertIn(('', True), comments, 'a collected empty comment')
-        self.assertIn((None, False), comments, 'no comment collected')
+        self.assertNotIn('', comments, 'no collected empty comment survives')
+        self.assertEqual(
+            comments.count(None), 2, 'both blanks are missing'
+        )
         self.assertIn(
-            ('Dose reduced, per protocol', True),
+            ('Dose reduced, per protocol'),
             comments,
             'a comment carrying the delimiter',
         )

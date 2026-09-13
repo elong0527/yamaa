@@ -8,6 +8,7 @@ includes:
     - schema_shared.yaml
     - schema_derivation.yaml
     - schema_verification.yaml
+    - schema_metadata.yaml
 
 root_class:
     - schema_version:
@@ -54,10 +55,14 @@ root_class:
         type: [dataset_verification, "list[dataset_verification]"]
         required: false
         description: Assertions over the completed dataset; R009 defines them.
+    - submission:
+        type: submission_dataset_class
+        required: false
+        description: Governed dataset metadata a submission document is generated from; R024 defines it.
     - metadata:
         type: "dict[str, str]"
         required: false
-        description: Free-form annotations carried with the specification; nothing validates their content.
+        description: Free-form annotations carried with the specification; R024 reserves the key names it governs.
 
 output_class:
     - path:
@@ -157,10 +162,14 @@ column_class:
         type: [column_verification, "list[column_verification]"]
         required: false
         description: Assertions over this column's completed values; R009 defines them.
+    - submission:
+        type: submission_column_class
+        required: false
+        description: Governed column metadata a submission document is generated from; R024 defines it.
     - metadata:
         type: "dict[str, str]"
         required: false
-        description: Free-form annotations carried with the column; nothing validates their content.
+        description: Free-form annotations carried with the column; R024 reserves the key names it governs.
 
 row_class:
     - id:
@@ -202,7 +211,7 @@ dataset_class:
     - path:
         type: project_path
         required: true
-        description: Source data path, resolved relative to the specification and confined by R021; R023 selects the delimited profile from its extension.
+        description: Source data path, relative to the specification or rooted at an approved data root and confined by R021; R023 selects the delimited profile from its extension.
     - types:
         type: "dict[dataset_column, column_type]"
         required: false

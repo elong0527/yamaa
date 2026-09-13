@@ -1,5 +1,7 @@
 # ADaM ADEG: derive a Bazett-corrected QT parameter
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adeg-bazett-qtc.html)
+
 This example uses an input ADEG dataset to derive a Bazett-corrected QT
 parameter per subject and visit:
 

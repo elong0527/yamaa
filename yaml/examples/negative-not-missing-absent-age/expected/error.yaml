@@ -1,0 +1,11 @@
+phase: verification
+condition: not_missing_failed
+spec_paths:
+  - columns.AGE.verifications[0].not_missing
+requirement: R009-9
+context:
+  column: AGE
+  failure_count: 1
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-812

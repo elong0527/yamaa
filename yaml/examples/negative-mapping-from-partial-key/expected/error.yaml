@@ -2,6 +2,7 @@ phase: mapping
 condition: missing_input
 spec_paths:
   - columns.ANRHI.derivation.mapping_from
+requirement: R007-49
 context:
   dataset: LBREF
   source: [PARAMCD, SEX]

@@ -2,6 +2,7 @@ phase: ingest
 condition: source_quote_unterminated
 spec_paths:
   - datasets.DM.path
+requirement: R023-22
 context:
   dataset: DM
   path: input/dm.csv

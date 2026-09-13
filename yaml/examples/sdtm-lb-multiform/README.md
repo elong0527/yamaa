@@ -1,5 +1,7 @@
 # SDTM LB: consolidate four collection forms into one dataset
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-lb-multiform.html)
+
 This example uses collected serum, skin-biopsy, saliva, and tape-strip data and
 a `yamaa` specification to derive one record per result actually reported:
 

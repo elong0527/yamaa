@@ -14,8 +14,8 @@ from `spec.yaml`; an empty cell is one the specification does not state.
 
 | Variable Name | Variable Label | Type | Length | Controlled Terms or Format | Origin | Core | Conversion Definition | Variable Type | Variable Order | Comments for Define |
 |---|---|---|---|---|---|---|---|---|---|---|
-| STUDYID | Study Identifier | Char | | | Collected | | AE_RAW.STUDYID | AE | 1 | |
-| DOMAIN | Domain Abbreviation | Char | | | Assigned | | "AE" | AE | 2 | |
+| DOMAIN | Domain Abbreviation | Char | | | Assigned | | "AE" | AE | 1 | |
+| STUDYID | Study Identifier | Char | | | Collected | | AE_RAW.STUDYID | AE | 2 | |
 | USUBJID | Unique Subject Identifier | Char | | | Collected | | AE_RAW.USUBJID | AE | 3 | |
 | AESEQ | Sequence Number | Num | | | Collected | | AE_RAW.AESEQ | AE | 4 | |
 | AETERM | Reported Term for the Adverse Event | Char | | | Collected | | AE_RAW.AETERM | AE | 5 | |

@@ -15,12 +15,17 @@ tracker, one work item per root cause.
 
     <standard>-<domain>-<subject>/
         README.md
-        spec.yaml | spec_<variant>.yaml ...
-        layers/*.yaml                       # when the entry inherits
+        spec.yaml                                   # one specification
+        spec_<variant>.yaml ...                     # alternative specifications, never mixed with spec.yaml
+        spec_<level>.yaml ...                       # multi-level specifications only: no spec.yaml;
+                                                    # the file no other file parents is the entry
+        define.yaml                                 # when the entry generates a document
         input/*.csv
         expected/<domain>.csv
-        expected/resolved[_<variant>].yaml  # when the entry inherits
-        excel-spec.md                       # when reviewed: the spec as Excel sheets
+        expected/define.xml                         # when the entry generates a document
+        expected/resolved[_<variant>].yaml          # single-entry inheritance
+        expected/spec_resolved.yaml                 # multi-level inheritance: resolution of the entry chain
+        excel-spec.md                               # when reviewed: the spec as Excel sheets
 
 Use `spec.yaml` for one specification. Use one or more `spec_<variant>.yaml`
 files when the example intentionally demonstrates a runtime or design variant
@@ -37,23 +42,51 @@ Use `expected/resolved.yaml` with `spec.yaml`, or
 `expected/resolved_<variant>.yaml` with `spec_<variant>.yaml`. This fixture
 must be complete, canonical, minimal, and free of `parents`.
 
+A multi-level example keeps each inheritance level beside the entry as
+`spec_<level>.yaml` and carries no top-level `spec.yaml`. The level no other
+file names in `parents` is the entry: it declares the complete `output`, and
+the chain resolves to `expected/spec_resolved.yaml`, which the dashboard shows
+in its specification dropdown (the default view) rather than as an expected
+dataset. Reserve this layout for examples whose point is the layering itself;
+a single specification with shared parents keeps `spec.yaml`.
+
 Name the directory for what it derives, not for the construct it uses:
-`sdtm-vs-visit-study-day`, not `sdtm-vs-mapping-from`.
+`sdtm-vs-visit-study-day`, not `sdtm-vs-mapping-from`. The exception is an
+example whose subject is the specification language itself: name it `spec-*`
+(`spec-inheritance`), and the gallery lists it under its own Specification
+category rather than a data domain.
 
 ## The README describes data, not the specification
 
-A reader of an example README wants to know what the output means. Write:
+A reader of an example README wants to know what the output means. The
+target audience is an average statistician or statistical programmer with a
+general understanding of SDTM and ADaM but limited engineering, ODM XML, or
+tooling detail: expand abbreviations on first use and state effects in
+study-data words. Write:
 
-- a title of the form `# <STANDARD> <DOMAIN>: <what the example does>`;
-- one sentence naming the input sources and the output grain, ending in a
-  colon;
-- one bullet per output variable, in output order, saying what its value means
-  and what it holds when the inputs do not support it;
-- at most one closing paragraph, for a rule that governs several variables at
-  once;
+- a short title of the form `# <what the example does>` (no
+  `<STANDARD> <DOMAIN>` prefix in the title), followed by a `Dashboard` badge
+  linking to the rendered page:
+  `[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/<directory>.html)`.
+  It is navigation, not data description: the validator exempts it from the
+  prose rules below, and the dashboard hides it on the page itself;
+- a `Goal:` line naming the variables derived;
+- an `Input:` line naming the source shape in plain words;
+- a `Variables:` list with one bullet per output variable, in output order,
+  saying what its value means and what it holds when the inputs do not
+  support it;
+- at most one closing `Note:` paragraph, for a rule that governs several
+  variables at once;
+- a final tags line of the form `Standard: <STANDARD> | Domain: <DOMAIN>`;
 - for every negative example, a final `## How to fix` section that recommends
   the safest correction first and uses a short YAML snippet when it clarifies
   the change.
+
+A `spec-*` example explains spec behavior rather than deriving data, so it
+carries no `Variables:` list: its `Input:` names the spec files and how they
+compose, and its `Note:` states the behavior rule. It still names every
+non-key golden column somewhere in the contract so the coverage check below
+stays silent.
 
 Keep bullets to the variables a reader must understand. Direct key copies and
 fixed values need no bullet.
@@ -150,6 +183,8 @@ and has these fields:
 - `phase`: the evaluation phase that rejects the run;
 - `condition`: a stable snake-case name for the failed condition;
 - `spec_paths`: one or more specification locations implicated in the failure;
+- `requirement`: the numbered rule requirement the example pins, such as
+  `R013-7`;
 - `context`: optional structured facts such as the dataset, offending keys,
   value, match count, or verification ID.
 
@@ -210,7 +245,10 @@ check merely to make the sample pass.
 ## Checks to run before finishing
 
     # every declared example column has a non-empty, human-readable label
-    ruby ../../.github/scripts/examples/check_labels.rb
+    # (validate_column_labels in validate_repository.py; the full prose gate
+    # is check_documentation.py)
+    uv run --project ../../python --no-sync \
+        python ../../.github/scripts/yaml-validation/validate_repository.py
 
     # no schema vocabulary reached the data-contract portion of a README,
     # and every negative example has exactly one remediation section
@@ -256,9 +294,8 @@ check reports is a variable the README does not explain.
    For a positive inherited example, also write its expected resolved YAML.
 2. Write the README to the contract above. A negative example must include its
    `## How to fix` section.
-3. Add a row to the index table in `README.md`. Its `Derives` column is the
-   README title with the standard and domain prefix removed, so the two cannot
-   drift apart.
+3. Add a row to the index table in `README.md`. Its `Derives` column copies
+   the README title, which now carries no standard/domain prefix.
 4. Record any finding it exposes as a gap on the matching work item in the
    issue tracker, or add the example's name to the gap that already states it.
 

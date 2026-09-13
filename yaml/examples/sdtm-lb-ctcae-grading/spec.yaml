@@ -2,25 +2,24 @@ schema_version: "1.0"
 domain: LB
 datasets:
   LB_RAW: {path: input/lb_raw.csv, types: {LBSTRESN: float}}
-base: LB_RAW
 keys: [STUDYID, USUBJID, LBSEQ]
 
 output:
   path: lb.csv
-  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTRESN, ATOXGR]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTRESN, ATOXGR]
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation:
-      source: LB_RAW.STUDYID
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation:
       literal: LB
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: LB_RAW.STUDYID
 
   - name: USUBJID
     type: str

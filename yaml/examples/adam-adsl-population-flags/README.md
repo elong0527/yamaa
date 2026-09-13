@@ -1,5 +1,7 @@
 # ADaM ADSL: derive the safety and intent-to-treat flags
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-population-flags.html)
+
 This example uses a pre-derived ADSL slice and a `yamaa` specification to
 derive one row per subject:
 

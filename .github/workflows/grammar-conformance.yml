@@ -1,0 +1,37 @@
+name: Grammar Conformance
+
+# `yaml/grammar/` defines each closed grammar once. Repository validation
+# reads those files against the rule that owns each grammar and replays every
+# vector through the Python parser; this workflow replays the same vectors
+# through the R parser, so a transcription that drifts in either runtime
+# fails here rather than at run time.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  r-vectors:
+    name: r-grammar-vectors
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install R
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends r-base-core \
+            r-cran-yaml
+
+      - name: Replay the shared grammar vectors
+        run: |
+          Rscript R/cdiscbuilder/inst/conformance/grammar_conformance.R

@@ -1,0 +1,43 @@
+schema_version: "1.0"
+domain: ADLB
+datasets:
+  LB: input/lb.csv
+keys: [STUDYID, USUBJID, VISIT]
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, VISIT, LBSTRESN, BAVL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: LB.USUBJID
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation:
+      source: LB.VISIT
+
+  - name: LBSTRESN
+    type: float
+    label: Numeric Result
+    derivation:
+      source: LB.LBSTRESN
+
+  - name: BAVL
+    type: float
+    label: Baseline Value
+    derivation:
+      baseline_value:
+        group_by: [STUDYID, USUBJID]
+        value: LBSTRESN
+        flag: LB.LBBLFL

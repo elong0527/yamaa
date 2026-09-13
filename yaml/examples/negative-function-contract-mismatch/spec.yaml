@@ -4,7 +4,6 @@ datasets:
   SOURCE:
     path: input/source.csv
     types: {VALUE: float}
-base: SOURCE
 keys: [ID]
 
 output:

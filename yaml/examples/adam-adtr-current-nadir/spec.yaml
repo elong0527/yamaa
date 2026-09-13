@@ -4,7 +4,6 @@ datasets:
   ADTRPRE:
     path: input/adtr_pre.csv
     types: {AVISITN: int, ADT: date, AVAL: float, NMEAS: int, NTARGET: int}
-base: ADTRPRE
 keys: [STUDYID, USUBJID, AVISIT]
 
 output:

@@ -1,0 +1,334 @@
+version: "1.0"
+
+# Separately validated entry point for the study document R026 defines. One
+# document selects the resolved dataset specifications a Define-XML 2.1
+# document represents, declares the standards, supporting documents, and
+# codelists they share, and fixes every value the generated document carries
+# that no specification supplies.
+#
+# A specification stays a single-dataset contract. Nothing here changes what
+# a specification derives.
+
+includes:
+    - schema_shared.yaml
+
+define_class:
+    - schema_version:
+        type: str
+        required: true
+        description: Schema bundle this document is written against; R006 requires an exact match.
+    - define_version:
+        type: define_version
+        required: true
+        description: Define-XML release the generated document conforms to.
+    - context:
+        type: str
+        required: true
+        values: [Submission, Other]
+        description: Context the document is used in; R026 states which requirements it adds.
+    - language:
+        type: language_tag
+        default: en
+        description: Language tag every generated translated text carries.
+    - file_oid:
+        type: str
+        required: true
+        min_length: 1
+        description: Identity of the generated file, declared rather than derived from a run.
+    - creation_datetime:
+        type: creation_datetime
+        required: true
+        description: Creation timestamp the document carries; declaring it keeps generation reproducible.
+    - originator:
+        type: str
+        required: false
+        min_length: 1
+        description: Party submitting the document.
+    - source_system:
+        type: str
+        required: false
+        min_length: 1
+        description: Application that generated the document.
+    - source_system_version:
+        type: str
+        required: false
+        min_length: 1
+        description: Version of that application; declared only with source_system.
+    - stylesheet:
+        type: relative_href
+        required: false
+        description: Stylesheet the generated document references, relative to the document.
+    - study:
+        type: study_class
+        required: true
+        description: Study the datasets belong to.
+    - metadata_version:
+        type: metadata_version_class
+        required: true
+        description: Identity and name of this metadata version.
+    - standards:
+        type: "list[standard_class]"
+        required: true
+        description: Standards the represented datasets and codelists conform to.
+    - default_standard:
+        type: standard_id
+        required: false
+        description: Foundational standard every dataset follows unless its entry names another.
+    - documents:
+        type: "list[document_class]"
+        required: false
+        description: Supporting documents referenced by datasets, origins, methods, and comments.
+    - codelists:
+        type: "list[codelist_class]"
+        required: false
+        description: Controlled terminology shared by bindings; R025 defines it.
+    - datasets:
+        type: "list[define_dataset_class]"
+        required: true
+        description: Represented datasets in the order the document presents them.
+    - output:
+        type: define_output_class
+        required: true
+        description: File this document produces.
+
+study_class:
+    - id:
+        type: define_id
+        required: true
+        description: Identifier the study's generated identity is built from.
+    - name:
+        type: str
+        required: true
+        min_length: 1
+        description: Name of the study.
+    - description:
+        type: str
+        required: true
+        min_length: 1
+        description: Description of the study.
+    - protocol_name:
+        type: str
+        required: true
+        min_length: 1
+        description: Protocol the study runs under.
+
+metadata_version_class:
+    - id:
+        type: define_id
+        required: true
+        description: Identifier this metadata version's generated identity is built from.
+    - name:
+        type: str
+        required: true
+        min_length: 1
+        description: Name of this metadata version.
+    - description:
+        type: str
+        required: false
+        min_length: 1
+        description: Description of what this metadata version covers.
+
+standard_class:
+    - id:
+        type: standard_id
+        required: true
+        description: Name datasets and codelists refer to this standard by.
+    - name:
+        type: standard_name
+        required: true
+        description: Published standard name.
+    - type:
+        type: str
+        required: true
+        values: [IG, CT]
+        description: Whether the standard is an implementation guide or controlled terminology.
+    - publishing_set:
+        type: str
+        required: false
+        values: [ADaM, CDASH, DEFINE-XML, SDTM, SEND]
+        description: Publishing set of a controlled-terminology standard.
+    - version:
+        type: str
+        required: true
+        min_length: 1
+        description: Version identifier exactly as the standard publishes it.
+    - status:
+        type: str
+        required: true
+        values: [Draft, Final, Provisional]
+        description: Publication status of that version.
+
+document_class:
+    - id:
+        type: document_id
+        required: true
+        description: Name references to this document use.
+    - kind:
+        type: str
+        required: true
+        values: [annotated_crf, supplemental, other]
+        description: Where the document is listed; an other document is listed only where it is referenced.
+    - href:
+        type: relative_href
+        required: true
+        description: File the document is, relative to the directory holding the generated document.
+    - title:
+        type: str
+        required: true
+        min_length: 1
+        description: Label a reader sees for the document.
+
+codelist_class:
+    - id:
+        type: codelist_id
+        required: true
+        description: Name column bindings refer to this codelist by.
+    - name:
+        type: str
+        required: true
+        min_length: 1
+        description: Name of the codelist, unique within the document.
+    - standard:
+        type: standard_id
+        required: false
+        description: Controlled-terminology standard this codelist is drawn from; omission declares it sponsor-defined.
+    - data_type:
+        type: str
+        default: text
+        values: [text, integer, float]
+        description: Type of the coded values.
+    - extensible:
+        type: bool
+        default: false
+        description: Whether a value outside the list is admitted; R025 states what each answer enforces.
+    - alias:
+        type: str
+        required: false
+        min_length: 1
+        description: Published concept identifier of the codelist itself.
+    - format_name:
+        type: str
+        required: false
+        min_length: 1
+        description: Transport format name carried for a reader.
+    - items:
+        type: "list[codelist_item_class]"
+        required: false
+        description: Coded values this codelist admits, in the order the document presents them.
+    - external:
+        type: external_codelist_class
+        required: false
+        description: Dictionary this codelist defers to instead of listing values.
+
+codelist_item_class:
+    - value:
+        type: literal_value
+        required: true
+        description: The coded value itself.
+    - decode:
+        type: str
+        required: false
+        min_length: 1
+        description: Text the coded value stands for.
+    - rank:
+        type: int
+        required: false
+        description: Ordering significance of this value relative to the others.
+    - alias:
+        type: str
+        required: false
+        min_length: 1
+        description: Published concept identifier of this value.
+    - extended:
+        type: bool
+        default: false
+        description: Whether the sponsor added this value to a published list.
+
+external_codelist_class:
+    - dictionary:
+        type: str
+        required: true
+        min_length: 1
+        description: Name of the external dictionary.
+    - version:
+        type: str
+        required: true
+        min_length: 1
+        description: Version of that dictionary.
+    - href:
+        type: str
+        required: false
+        min_length: 1
+        description: Location the dictionary is published at.
+
+define_dataset_class:
+    - id:
+        type: define_dataset_id
+        required: true
+        description: Name the generated document gives this dataset.
+    - spec:
+        type: project_path
+        required: true
+        description: Resolved specification whose output this dataset is.
+    - standard:
+        type: standard_id
+        required: false
+        description: Foundational standard this dataset follows; defaults to default_standard.
+    - has_no_data:
+        type: bool
+        default: false
+        description: Whether the dataset was planned but holds no records; R026 requires a comment with it.
+
+define_output_class:
+    - path:
+        type: define_path
+        required: true
+        description: File this document produces; its extension must be .xml.
+
+standard_id:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: Identifier of a standard this document declares.
+
+define_id:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_.-]*$'
+    description: Identifier a generated OID is built from.
+
+define_dataset_id:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+    description: Name of a dataset within the generated document.
+
+define_version:
+    type: str
+    pattern: '^2\.1\.(0|[1-9][0-9]*)$'
+    description: Define-XML release, written as Define-XML 2.1 publishes it.
+
+relative_href:
+    type: str
+    pattern: '^(?!/)(?!.*(^|/)\.\.(/|$))[^\\]+$'
+    description: Location referenced from the generated document, relative to
+        the directory holding it and never leaving that directory. R026 does
+        not require the file to exist when the document is generated.
+
+define_path:
+    type: str
+    pattern: '^[^/\\][^\\]*\.[Xx][Mm][Ll]$'
+    description: Relative file this document produces, named with an xml extension.
+
+creation_datetime:
+    type: str
+    pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$'
+    description: Local civil datetime resolved to a whole second, as R016 writes one.
+
+language_tag:
+    type: str
+    pattern: '^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$'
+    description: Language tag carried by every generated translated text.
+
+standard_name:
+    type: str
+    values: [ADaMIG, ADaMIG-MD, BIMO, CDISC/NCI, SDTMIG, SDTMIG-AP, SDTMIG-MD,
+        SENDIG, SENDIG-AR, SENDIG-DART, SENDIG-GENETOX]
+    description: Standard name, in the exact case Define-XML 2.1 publishes.

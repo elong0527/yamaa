@@ -1,0 +1,92 @@
+schema_version: "1.0"
+define_version: "2.1.11"
+context: Submission
+language: en
+file_oid: www.example.org/STUDY01/1/Define-XML_2.1
+creation_datetime: "2026-09-11T00:00:00"
+originator: Example Sponsor
+source_system: yamaa
+source_system_version: "1.0"
+
+study:
+  id: STUDY01
+  name: STUDY01
+  description: Example study demonstrating the Define-XML metadata contract
+  protocol_name: STUDY-01
+
+metadata_version:
+  id: STUDY01.1
+  name: Study STUDY01, Data Definitions
+  description: Tabulation data definitions for STUDY01
+
+standards:
+  - id: SDTMIG
+    name: SDTMIG
+    type: IG
+    version: "3.4"
+    status: Final
+  - id: CT_SDTM
+    name: CDISC/NCI
+    type: CT
+    publishing_set: SDTM
+    version: "2023-12-15"
+    status: Final
+
+default_standard: SDTMIG
+
+documents:
+  - id: acrf
+    kind: annotated_crf
+    href: acrf.pdf
+    title: Annotated Case Report Form
+  - id: csdrg
+    kind: supplemental
+    href: csdrg.pdf
+    title: Study Data Reviewer's Guide
+
+codelists:
+  - id: DOMAIN
+    name: Domain Abbreviation (DM)
+    standard: CT_SDTM
+    alias: C66734
+    format_name: $DMDOMAI
+    items:
+      - value: DM
+        decode: Demographics
+        alias: C49572
+  - id: AGEU
+    name: Age Unit
+    standard: CT_SDTM
+    alias: C66781
+    items:
+      - value: YEARS
+        alias: C29848
+  - id: SEX
+    name: Sex
+    standard: CT_SDTM
+    alias: C66731
+    format_name: $SEX
+    items:
+      - value: F
+        decode: Female
+        alias: C16576
+      - value: M
+        decode: Male
+        alias: C20197
+      - value: U
+        decode: Unknown
+        alias: C17998
+  - id: COUNTRY
+    name: Country Codes
+    standard: CT_SDTM
+    external:
+      dictionary: ISO 3166
+      version: "2020"
+      href: https://www.iso.org/iso-3166-country-codes.html
+
+datasets:
+  - id: DM
+    spec: spec.yaml
+
+output:
+  path: define.xml

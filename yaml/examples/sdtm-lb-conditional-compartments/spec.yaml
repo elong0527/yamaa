@@ -2,25 +2,24 @@ schema_version: "1.0"
 domain: LB
 datasets:
   BX_RAW: input/bx_raw.csv
-base: BX_RAW
 keys: [STUDYID, USUBJID, LBSEQ]
 
 output:
   path: lb.csv
-  columns: [STUDYID, DOMAIN, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESN, LBSTAT]
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBSPEC, LBLOC, LBORRES, LBORRESU, LBSTRESN, LBSTAT]
 
 columns:
-  - name: STUDYID
-    type: str
-    label: Study Identifier
-    derivation:
-      source: BX_RAW.STUDYID
-
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
     derivation:
       literal: LB
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: BX_RAW.STUDYID
 
   - name: USUBJID
     type: str

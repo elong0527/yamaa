@@ -1,5 +1,7 @@
 # ADaM ADTTE: derive the time to first adverse event
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adtte-first-adverse-event.html)
+
 This example uses treatment start dates, end of study dates, and adverse
 events to derive one time-to-first-adverse-event record per subject:
 

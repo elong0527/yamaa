@@ -1,7 +1,7 @@
-STUDYID,DOMAIN,USUBJID,AESEQ,AETERM,AEDECOD,AEBODSYS
-CATH,AE,CATH-701-001,1,Headache,Headache,Nervous system disorders
-CATH,AE,CATH-701-001,2,Nausea,Nausea,Gastrointestinal disorders
-CATH,AE,CATH-701-002,1,Dizziness,Dizziness,Nervous system disorders
-CATH,AE,CATH-702-003,1,Felt a bit off,NOT CODED,NOT CODED
-CATH,AE,CATH-702-004,1,,NOT CODED,NOT CODED
-CATH,AE,CATH-702-005,1,headache,NOT CODED,NOT CODED
+DOMAIN,STUDYID,USUBJID,AESEQ,AETERM,AEDECOD,AEBODSYS
+AE,CATH,CATH-701-001,1,Headache,Headache,Nervous system disorders
+AE,CATH,CATH-701-001,2,Nausea,Nausea,Gastrointestinal disorders
+AE,CATH,CATH-701-002,1,Dizziness,Dizziness,Nervous system disorders
+AE,CATH,CATH-702-003,1,Felt a bit off,NOT CODED,NOT CODED
+AE,CATH,CATH-702-004,1,,NOT CODED,NOT CODED
+AE,CATH,CATH-702-005,1,headache,NOT CODED,NOT CODED

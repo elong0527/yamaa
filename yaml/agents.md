@@ -29,13 +29,31 @@ outside the rule index until their contracts and example coverage are complete.
 - Keep handler fields local to the expression or result stage that can use them;
   do not recreate a generic exception list.
 - Store each cohesive semantic area in one rule file under `rules/`.
+- Declare governed submission metadata in `submission`, never in the free-form
+  `metadata` map. R024 reserves the key names it governs, so the map cannot
+  become a second place a governed fact lives.
+- Declare nothing a rule derives. `Mandatory` comes from `core`, a submission
+  length from `max_length`, an ADaM origin source from its type, and a
+  collected value's annotated-CRF reference from the document that declares
+  it.
+- Declare a codelist once in the study document and bind columns to its
+  identifier. Terminology restated per column is the shape R025 exists to
+  prevent.
+- Change a closed grammar in its `grammar/` file first. The rule's grammar
+  block is rendered from that file, each parser's closed vocabulary is
+  compared with it, and both implementations replay its vectors, so a change
+  made anywhere else fails validation. Add a vector for every behavior the
+  change decides.
 - Give every rule a stable ID and list it in `rules/README.md`.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.
 - Declare every source path as a relative file inside the example directory.
-  R021 confines what a run may read, so a rooted path, a URL, a parent
-  traversal, or a symbolic link belongs only in a negative example.
+  An example is validated with its own directory as the only approved root
+  and carries no `yamaa-project.yaml`, so a rooted path names no approved
+  location here, and it belongs with a URL, a parent traversal, and a symbolic
+  link in a negative example. A rooted path is for a study that declares a
+  data root, not for a fixture this repository carries.
 - Write every fixture under R023's source profile: UTF-8 without a byte-order
   mark, comma-separated fields, a named non-empty field per column, and the
   same field count in every record. A file that departs from it belongs only

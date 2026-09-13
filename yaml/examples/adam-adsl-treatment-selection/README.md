@@ -1,5 +1,7 @@
 # ADaM ADSL: select actual treatment and its duration from EX
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-treatment-selection.html)
+
 This example uses sample DM and EX data and a `yamaa` specification to derive
 one row per subject:
 

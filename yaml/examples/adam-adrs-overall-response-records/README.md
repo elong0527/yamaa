@@ -1,5 +1,7 @@
 # ADaM ADRS: prepare the overall response records an endpoint reads
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adrs-overall-response-records.html)
+
 This example uses collected tumour assessments and the subject's treatment
 start to derive one record per overall response recorded by the investigator:
 

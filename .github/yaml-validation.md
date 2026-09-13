@@ -122,6 +122,28 @@ The validation ensures:
    engine is a required dependency: without it the validator refuses to run
    rather than falling back to Python `re`.
 
+10. **Closed grammars**: `yaml/grammar/` defines the predicate (R004),
+    numeric (R010), string template (R012), and aggregate (R013) grammars
+    once. The validator renders each rule's grammar block from its grammar
+    file and fails when the rule carries a different block, compares each
+    closed vocabulary with the constants the parsers use, checks that every
+    non-terminal a production names is defined or imported, and replays every
+    vector: an accepted text must parse into the recorded shape and bind the
+    recorded identifiers, and a rejected text must fail with the recorded
+    condition. A vector set that stops covering one of a contract's named
+    categories fails the same way. The R parser replays the same files in the
+    `grammar-conformance` workflow.
+
+11. **Study documents**: `yaml/schema_define.yaml` is the study-document
+    entry point R026 defines. Its own YAML syntax, and the syntax of every
+    `define.yaml` beside an example, are checked with every other repository
+    YAML file. Nothing yet validates a `define.yaml` against
+    `define_class`, resolves its standard, codelist, and document
+    identifiers, applies the family-dependent requirements R024 defers to
+    composition, or compares a generated document with the committed
+    `expected/define.xml`. R024, R025, and R026 state those requirements and
+    the checks follow in a later pass.
+
 ## Explicit Non-Goals
 The validator ensures structural correctness and the static cross-field checks
 listed above. At this time, it **does not**:
@@ -130,30 +152,36 @@ listed above. At this time, it **does not**:
   Inherited specifications are canonicalized as part of producing their
   resolved data tree.
 - Reproduce golden output values in the `.csv` files.
+- Generate or compare a Define-XML document. `expected/define.xml` is a golden
+  fixture the repository carries; no check yet produces it from `define.yaml`
+  and the specifications that document names.
 - Prove that a regular expression behaves identically in R and Python. R022
   pins the engine both runtimes must bind and this validator replays the
   shared fixtures on the Python side, but executable R parity waits on the
-  dual-runtime conformance workflow in issue #101.
+  dual-runtime conformance workflow in issue #101. The four closed grammars
+  are the exception: both runtimes already replay `yaml/grammar/`.
 
 ## Local Commands
 From the repository root, use a Python 3.14 environment to match CI. Install
 the dependencies, run the tests, and validate the repository:
 
 ```bash
-python3 -m pip install -r .github/scripts/yaml-validation/requirements.txt
-python3 .github/scripts/yaml-validation/test_validate_repository.py
-python3 .github/scripts/yaml-validation/validate_repository.py --root .
+uv sync --project python --locked
+uv run --project python --no-sync python .github/scripts/yaml-validation/test_validate_repository.py
+uv run --project python --no-sync python .github/scripts/yaml-validation/validate_repository.py --root .
 ```
 
 By default, the script infers the repository root relative to its own path.
 
-The Ruby example checks and their tests can also run locally:
+The R side of the shared grammar vectors needs only R and the `yaml` package:
 
 ```bash
-ruby .github/scripts/examples/test_check_example_dependencies.rb
-ruby .github/scripts/examples/check_example_dependencies.rb
-ruby .github/scripts/examples/check_labels.rb
+Rscript R/cdiscbuilder/inst/conformance/grammar_conformance.R
 ```
+
+Column labels are checked by `validate_repository.py`
+(`validate_column_labels`, covering plain and inherited specs alike),
+so there is no separate label-check step anymore.
 
 ## Exit Behavior
 - Returns `0` if the repository structure is completely valid (no errors).
@@ -161,10 +189,11 @@ ruby .github/scripts/examples/check_labels.rb
 
 ## Warning Policy
 Warnings are printed to standard output but do not fail validation. The Python
-validator checks column labels for every resolved specification and orders
-inherited columns by dependency. The existing Ruby checks under
-`.github/scripts/examples/` continue to enforce these policies for non-inherited
-examples and discover linked producing specifications recursively.
+validator checks column labels for every resolved specification, orders
+inherited columns by dependency, and enforces declaration order, output
+contracts, and dependency cycles for every example, so no second semantic
+scan owns those policies. The remaining Ruby check under
+`.github/scripts/examples/` covers label text only.
 
 To treat warnings as errors, run with the `--warnings-as-errors` flag:
 

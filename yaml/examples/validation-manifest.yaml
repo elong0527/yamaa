@@ -72,6 +72,16 @@ fixtures:
     condition: value_not_permitted
     spec_paths: [columns.AVAL.type]
     validator: schema
+  negative-coalesce-self-reference:
+    rule: R001
+    condition: dependency_cycle
+    spec_paths: [columns.SEVAL.derivation.coalesce]
+    validator: dependency_graph
+  negative-column-forward-reference:
+    rule: R001
+    condition: forward_reference
+    spec_paths: [columns.AVALDOUBLED.derivation.compute]
+    validator: dependency_graph
   negative-compute-aggregate-function:
     rule: R010
     condition: prohibited_function
@@ -87,6 +97,11 @@ fixtures:
     condition: qualified_identifier
     spec_paths: [columns.DOSEDBL.derivation.compute.expr]
     validator: numeric_expression
+  negative-cut-non-numeric-source:
+    rule: R007
+    condition: incompatible_input_type
+    spec_paths: [columns.AGEGRP.derivation.cut.source]
+    validator: expression_contract
   negative-dataset-path-absolute:
     rule: R021
     condition: resource_path_not_relative
@@ -104,7 +119,7 @@ fixtures:
     validator: resource_path
   negative-dataset-path-parent-escape:
     rule: R021
-    condition: resource_path_parent_traversal
+    condition: resource_path_outside_project
     spec_paths: [datasets.LBREF.path]
     validator: resource_path
   negative-dataset-path-symlink:
@@ -127,6 +142,16 @@ fixtures:
     condition: value_not_permitted
     spec_paths: [columns.ASTDT.derivation.date_impute.day]
     validator: schema
+  negative-date-diff-bounds-unit:
+    rule: R016
+    condition: value_not_permitted
+    spec_paths: [columns.DURM.derivation.date_diff.bounds]
+    validator: temporal_contract
+  negative-date-diff-datetime-endpoints:
+    rule: R016
+    condition: incompatible_input_type
+    spec_paths: [columns.SURVDD.derivation.date_diff.start]
+    validator: temporal_contract
   negative-function-contract-mismatch:
     rule: R018
     condition: function_contract_mismatch
@@ -143,6 +168,16 @@ fixtures:
     condition: missing_verification_id
     spec_paths: ["verifications[1].row_count"]
     validator: spec_contract
+  negative-least-incomparable-sources:
+    rule: R007
+    condition: incomparable_sources
+    spec_paths: [columns.FSTALVDT.derivation.least]
+    validator: expression_contract
+  negative-literal-non-scalar:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: ["columns.AGEGRP.derivation.case.branches[0].then.literal"]
+    validator: schema
   negative-keys-internal-column:
     rule: R005
     condition: internal_column_in_keys
@@ -193,6 +228,21 @@ fixtures:
     condition: unpaired_fields
     spec_paths: ["record_lookups[0]"]
     validator: spec_contract
+  negative-previous-non-missing-non-variable-source:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: [columns.PRIORBP.derivation.previous_non_missing.source]
+    validator: schema
+  negative-rank-invalid-method:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: [columns.SEVRANK.derivation.rank.method]
+    validator: schema
+  negative-row-number-numeric-filter:
+    rule: R006
+    condition: invalid_field_type
+    spec_paths: [columns.VISITSEQ.derivation.row_number.filter]
+    validator: schema
   negative-row-value-self-reference:
     rule: R001
     condition: dependency_cycle
@@ -210,6 +260,11 @@ fixtures:
     condition: duplicate_identifier
     spec_paths: [datasets.ADLB, domain]
     validator: name_contract
+  negative-source-undeclared-field:
+    rule: R002
+    condition: unknown_field
+    spec_paths: [columns.AGE.derivation.source]
+    validator: name_contract
   negative-source-unknown-profile:
     rule: R023
     condition: source_profile_unknown
@@ -220,6 +275,16 @@ fixtures:
     condition: regex_group_out_of_range
     spec_paths: ["columns.SITEID.derivation.str_extract.group"]
     validator: regex
+  negative-str-lower-non-string-source:
+    rule: R007
+    condition: incompatible_input_type
+    spec_paths: [columns.SITE.derivation.str_lower.source]
+    validator: expression_contract
+  negative-study-day-datetime-input:
+    rule: R016
+    condition: incompatible_input_type
+    spec_paths: [columns.DTHDY.derivation.study_day.date]
+    validator: temporal_contract
   negative-sum-non-numeric-source:
     rule: R013
     condition: incompatible_input_type

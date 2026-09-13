@@ -1,0 +1,44 @@
+schema_version: "1.0"
+domain: ADAE
+datasets:
+  AE: input/ae.csv
+keys: [STUDYID, USUBJID, AESEQ]
+
+output:
+  path: adae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AESEV, SEVRANK]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: AE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: AE.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: AE.AESEQ
+
+  - name: AESEV
+    type: str
+    label: Severity
+    derivation:
+      source: AE.AESEV
+
+  - name: SEVRANK
+    type: int
+    label: Severity Rank
+    derivation:
+      rank:
+        method: {competition: true}
+        group_by: [STUDYID, USUBJID]
+        order_by:
+          - {variable: AESEV, direction: desc}

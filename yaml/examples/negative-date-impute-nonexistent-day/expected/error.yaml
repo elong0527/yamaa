@@ -2,6 +2,7 @@ phase: impute
 condition: invalid_calendar_date
 spec_paths:
   - columns.AENDT.derivation.date_impute
+requirement: R016-67
 context:
   value: "2023-04"
   completed: "2023-04-31"

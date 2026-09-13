@@ -1,5 +1,7 @@
 # ADaM ADVS: retain the latest earlier character result
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-prior-character-result.html)
+
 This example uses character results with incomplete series and visit values to
 derive one analysis record per collected row:
 
