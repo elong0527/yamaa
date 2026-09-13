@@ -329,6 +329,50 @@ def test_key_grain_counts_records_even_where_they_agree() -> None:
     assert diagnostic.context["differing_columns"] == {}
 
 
+def test_every_offending_row_of_the_failing_column_is_reported() -> None:
+    # R001-44: one run names every record the specification has not chosen
+    # between, so a study-wide mistake is one report rather than one per run.
+    def derive(expression):
+        return HandledExpression(value=Expression(root=expression))
+
+    specification = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        datasets={"SRC": DatasetSource(path="input/source.csv")},
+        base="SRC",
+        keys=["GRP"],
+        output=Output(path="out.csv", columns=["GRP", "VALUE"]),
+        columns=[
+            Column(name="GRP", type="str", derivation=derive({"source": "SRC.G"})),
+            Column(name="VALUE", type="str", derivation=derive({"source": "SRC.X"})),
+        ],
+    )
+    sources = {
+        "SRC": TypedTable(
+            columns=(
+                TypedColumn(name="G", type="str"),
+                TypedColumn(name="X", type="str"),
+            ),
+            frame=pl.DataFrame(
+                {"G": ["a", "a", "b", "b", "c"], "X": ["1", "2", "3", "4", "5"]},
+                schema={"G": pl.String, "X": pl.String},
+            ),
+        )
+    }
+
+    result = execute_specification(specification, sources)
+
+    assert isinstance(result, ExecutionFailure)
+    assert [item.context["keys"] for item in result.diagnostics] == [
+        [{"GRP": "a"}],
+        [{"GRP": "b"}],
+    ]
+    assert [item.context["values"] for item in result.diagnostics] == [
+        ["1", "2"],
+        ["3", "4"],
+    ]
+
+
 def test_key_grain_without_rows_rejects_several_records_per_key() -> None:
     def derive(expression):
         return HandledExpression(value=Expression(root=expression))

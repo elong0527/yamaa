@@ -597,18 +597,28 @@ def _derive_columns(
     for derivation in plan.columns:
         if key_grain and derivation.column in key_set:
             continue
-        values = [
-            _evaluate_one(
-                derivation,
-                column_types,
-                candidate,
-                context,
-                dispatcher,
-                counter,
-                specification.keys,
-            )
-            for candidate in candidates
-        ]
+        # R001-44 reports every offending row of the failing column, so one
+        # run names every record the specification has not chosen between
+        # rather than one per run.
+        values: list[object] = []
+        failures: list[ExecutionDiagnostic] = []
+        for candidate in candidates:
+            try:
+                values.append(
+                    _evaluate_one(
+                        derivation,
+                        column_types,
+                        candidate,
+                        context,
+                        dispatcher,
+                        counter,
+                        specification.keys,
+                    )
+                )
+            except _ExecutionAbort as abort:
+                failures.extend(abort.diagnostics)
+        if failures:
+            raise _ExecutionAbort(failures)
         if len(values) != constructed_count or len(candidates) != constructed_count:
             raise _ExecutionAbort(
                 [

@@ -104,7 +104,9 @@ column value, and no filter decides how many records come out.
   - name: SEXRAW
     derivation:
       source:
-        variable: ODM.IT.DM.SEX
+        variable: ODM.Value
+        filter: ODM.ItemOID = 'IT.DM.SEX'
+        on: [StudyOID, SubjectKey]
         missing: null
 
   - name: SEX
@@ -118,17 +120,25 @@ column value, and no filter decides how many records come out.
   - name: AGE
     derivation:
       source:
-        variable: ODM.IT.DM.AGE
+        variable: ODM.Value
+        filter: ODM.ItemOID = 'IT.DM.AGE'
+        on: [StudyOID, SubjectKey]
         missing: null
 ```
 
+A read of a long-form extract says three things and hides none of them: which
+column carries the value (`ODM.Value`), which records are eligible (`filter`),
+and what makes a record this subject's rather than another's (`on`). R002-20
+owns that form. Exactly one record must answer: none is missing, and two are
+two records the specification has not chosen between, which R001-44 rejects
+while naming the columns they differ on.
+
 Now the README's sentences have addresses. "Not collected and not recognised
 both become U" is `missing: U` beside `unmapped: U`. "Empty when age was never
-collected" is the structured `source` form with `missing: null` -- the concise
-`source: ODM.IT.DM.AGE` form has no handler, so an absent item would be fatal.
-`SEXRAW` reads the collected item under that same structured form and is the
-one column `output.columns` does not name, so it works inside the run and
-never reaches the artifact.
+collected" is `missing: null` on the read -- without it, an uncollected age
+would be fatal rather than blank. `SEXRAW` holds the collected sex for the
+mapping below it and is the one column `output.columns` does not name, so it
+works inside the run and never reaches the artifact.
 
 **Step 5 -- `expected/dm.csv`.** Confirm your reading against the artifact. Every
 sparse subject you predicted appears with the substituted value rather than
