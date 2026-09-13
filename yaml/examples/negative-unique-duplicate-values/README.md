@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a site shared by two subjects
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-unique-duplicate-values.html)
+
 This example uses collected demographics with a `yamaa` specification to
 derive one row per subject:
 
@@ -20,5 +22,3 @@ verifications:
 
 or, when one row per site is the intent, aggregate the subjects to site
 rows before asserting.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-unique-duplicate-values.html)

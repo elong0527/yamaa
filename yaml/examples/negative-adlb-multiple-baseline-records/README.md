@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a subject with two baseline records for one parameter
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adlb-multiple-baseline-records.html)
+
 This example uses a pre-derived analysis slice to prepare one record per
 subject, parameter, and analysis date:
 
@@ -36,5 +38,3 @@ arises:
 
 Do not widen the count to accept two records; a second baseline is a defect in
 the data rather than a policy the analysis can adopt.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adlb-multiple-baseline-records.html)

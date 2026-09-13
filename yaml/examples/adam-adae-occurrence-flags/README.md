@@ -1,5 +1,7 @@
 # ADaM ADAE: flag the first occurrence at three levels
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-occurrence-flags.html)
+
 This example uses a pre-classified ADAE slice and a `yamaa` specification to
 derive one row per adverse event:
 
@@ -17,5 +19,3 @@ never marked at any level, even when it is the subject's earliest event.
 The three levels nest: an event marked as the subject's first is necessarily
 also the first in its body system and its preferred term, while a term
 occurring later carries only the preferred-term flag.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-occurrence-flags.html)

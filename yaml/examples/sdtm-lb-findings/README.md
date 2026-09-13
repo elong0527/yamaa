@@ -1,5 +1,7 @@
 # SDTM LB: build one record per collected lab result
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-lb-findings.html)
+
 This example uses collected long-form lab data and a `yamaa` specification to
 derive one record per calcium and creatinine result:
 
@@ -14,5 +16,3 @@ derive one record per calcium and creatinine result:
 
 A test with no collected value produces no record at all, so a subject's
 records are the results actually reported rather than one per scheduled test.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-lb-findings.html)

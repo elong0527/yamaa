@@ -1,5 +1,7 @@
 # ADaM ADAE: reject an event start date that names no day
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-conversion-incomplete-date.html)
+
 This example uses collected adverse events to attempt one record per event:
 
 - `ASTDT` is the date the event started.
@@ -24,5 +26,3 @@ derivation:
 ```
 
 A complete source date is retained; `2023-06` becomes `2023-06-01`.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-conversion-incomplete-date.html)

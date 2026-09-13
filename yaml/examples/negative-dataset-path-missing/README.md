@@ -1,5 +1,7 @@
 # ADaM ADLB: reject reference limits the study does not hold
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-dataset-path-missing.html)
+
 This example uses collected laboratory results with a table of reference
 limits by test and sex to attempt one record per subject and parameter:
 
@@ -28,5 +30,3 @@ If a study genuinely has no reference limits for a test, say so explicitly by
 supplying a result for the unmatched case rather than by leaving the table
 out. A file that is simply absent cannot be told apart from one that was
 forgotten.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-dataset-path-missing.html)

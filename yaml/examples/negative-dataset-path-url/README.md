@@ -1,5 +1,7 @@
 # ADaM ADLB: reject reference limits named by a web address
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-dataset-path-url.html)
+
 This example uses collected laboratory results with a table of reference
 limits by test and sex to attempt one record per subject and parameter:
 
@@ -26,5 +28,3 @@ datasets:
 Retrieval belongs to the step that assembles study data, where the received
 version can be recorded and reviewed. It is not part of building the analysis
 dataset.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-dataset-path-url.html)

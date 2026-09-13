@@ -1,5 +1,7 @@
 # ADaM ADVS: carry forward a once-measured characteristic
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-once-measured-carry-forward.html)
+
 This example uses a planned-measurement spine, long-form vital signs, and
 subject treatment dates to derive one record per planned measurement:
 
@@ -20,5 +22,3 @@ weight can cross any number of unattended planned measurements, but never
 crosses subjects or parameters. `HEIGHTBL` instead broadcasts one selected
 height across both parameters. A subject with no collected height has no
 baseline height even when later weights are available.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-advs-once-measured-carry-forward.html)

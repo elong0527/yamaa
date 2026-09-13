@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a smoking flag whose dictionary answers twice
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-mapping-case-fold-collision.html)
+
 This example uses collected smoking status to attempt one record per subject:
 
 - `SMOKEFL` marks a subject who reported smoking.
@@ -26,5 +28,3 @@ mapping:
 
 Alternatively, set `case_sensitive: true` when differently cased values are
 intentionally distinct and give each one an explicit meaning.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-mapping-case-fold-collision.html)

@@ -1,5 +1,7 @@
 # ADaM ADSL: normalize non-finite numeric values to missing
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-non-finite-values.html)
+
 This example uses one subject record to show that every non-finite numeric
 value is stored as missing:
 
@@ -13,5 +15,3 @@ value is stored as missing:
 All nine derived numeric values therefore have the same missing value in the
 artifact. A quoted YAML spelling such as `".inf"` would remain text unless it
 were converted to a numeric type.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-non-finite-values.html)

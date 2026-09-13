@@ -1,5 +1,7 @@
 # ADaM ADRS: reject an unmapped response
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-mapping-unmapped-value.html)
+
 This example uses one overall-response assessment to attempt one analysis
 record:
 
@@ -24,5 +26,3 @@ mapping:
 
 If an unknown response should instead produce a missing result, declare
 `unmapped: null`. Prefer completing the dictionary when the value is valid.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-mapping-unmapped-value.html)

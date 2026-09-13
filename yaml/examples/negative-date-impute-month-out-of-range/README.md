@@ -1,5 +1,7 @@
 # ADaM ADAE: reject a start date completed with no month of the year
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-date-impute-month-out-of-range.html)
+
 This example uses collected adverse events whose start dates are sometimes
 recorded only as a year to attempt one record per event:
 
@@ -36,5 +38,3 @@ A year-and-month value such as `2023-06` then becomes `2023-06-01`. A year-only
 value such as `2023` is still left without an analysis date, because the
 declared minimum forbids supplying both a month and a day. Dropping
 `minimum_source_precision` as well would let `2023` become `2023-01-01`.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-date-impute-month-out-of-range.html)

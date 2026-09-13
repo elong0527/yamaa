@@ -1,5 +1,7 @@
 # ADaM ADSL: flag the subjects who completed the study
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-completion-flag.html)
+
 This example uses a subject-level dataset and the disposition dataset with a
 `yamaa` specification to derive one row per subject:
 
@@ -13,5 +15,3 @@ This example uses a subject-level dataset and the disposition dataset with a
 The flag answers whether a completion record exists, not whether that record's
 date was collected or how a later follow-up period ended. A subject who both
 completed and later discontinued therefore keeps `Y` for the completion.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-completion-flag.html)

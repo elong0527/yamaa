@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a treatment ordered but not chosen
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-record-lookup-unordered-keep.html)
+
 This example uses collected demographics with exposure records to attempt one
 record per subject:
 
@@ -23,5 +25,3 @@ record_lookups:
 ```
 
 Use `keep: last` only when the intended result is the latest treatment.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-record-lookup-unordered-keep.html)

@@ -1,5 +1,7 @@
 # ADaM ADLB: reject an unnamed baseline-count rule
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-group-count-without-id.html)
+
 This example uses a pre-derived analysis slice to attempt one record per
 subject, parameter, and analysis date:
 
@@ -31,5 +33,3 @@ verifications:
 A count over the whole artifact rather than within a group asserts its size
 instead of a study rule and needs no name, so `min` and `max` alone remain
 valid there.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-group-count-without-id.html)

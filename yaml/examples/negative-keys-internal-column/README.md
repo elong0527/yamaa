@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a site-scoped subject identity
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-keys-internal-column.html)
+
 This example uses collected demographics to attempt one record per subject:
 
 - `INVID` is the investigator responsible for the subject's site.
@@ -22,5 +24,3 @@ output:
 If study and subject already form the intended unique identity, remove
 `SITEID` from `keys` instead. Choose the option that matches the output's
 actual grain.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-keys-internal-column.html)

@@ -1,5 +1,7 @@
 # SDTM AE: code reported terms against a medical dictionary
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-ae-dictionary-coding.html)
+
 This example uses collected adverse events with a MedDRA extract and a `yamaa`
 specification to derive one record per event:
 
@@ -16,5 +18,3 @@ of an absent value.
 
 The dictionary is an ordinary input, and the study records which version was
 used, since the same term can code differently between releases.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-ae-dictionary-coding.html)

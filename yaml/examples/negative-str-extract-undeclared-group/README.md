@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a site identifier taken from an uncaptured part
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-str-extract-undeclared-group.html)
+
 This example uses collected demographics to record one row per subject:
 
 - `SITEID` is the study site identifier read out of the subject identifier.
@@ -31,5 +33,3 @@ str_extract:
   pattern: '^CATH-([^-]+)-([0-9]{4})$'
   group: 2
 ```
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-str-extract-undeclared-group.html)

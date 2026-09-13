@@ -1,5 +1,7 @@
 # ADaM ADEX: tell an uncollected dose from an absent administration
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adex-uncollected-exposure.html)
+
 This example uses a subject-treatment inventory with its component exposure
 records to derive one record per subject and treatment:
 
@@ -14,5 +16,3 @@ records to derive one record per subject and treatment:
 A component whose doses were all left blank stays distinguishable from one that
 was never administered: the first has administration records and no dose, and
 counts them as such, while the second has nothing to count.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adex-uncollected-exposure.html)

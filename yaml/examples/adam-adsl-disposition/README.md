@@ -1,5 +1,7 @@
 # ADaM ADSL: select the final subject disposition from DS
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-disposition.html)
+
 This example uses sample DM and DS data and a `yamaa` specification to derive
 one row per subject:
 
@@ -14,5 +16,3 @@ one row per subject:
   event at all;
 - `DCSREAS` repeats the reason only for a discontinued subject, and is empty
   for one who completed or is ongoing.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-disposition.html)

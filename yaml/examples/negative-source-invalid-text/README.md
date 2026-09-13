@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a site name stored in another encoding
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-invalid-text.html)
+
 This example uses a collected subject listing to attempt one record per
 subject:
 
@@ -21,5 +23,3 @@ was entered with:
 Converting a file after the fact is safe only while the original encoding is
 known. A study that stores names in an unstated encoding cannot say which
 letters it collected.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-source-invalid-text.html)

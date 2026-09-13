@@ -1,5 +1,7 @@
 # ADaM ADAE: impute partial dates
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-partial-dates.html)
+
 This example uses sample AE and ADSL data and a `yamaa` specification to derive
 one row per adverse event:
 
@@ -34,5 +36,3 @@ treatment start, so every completed date keeps it. For `CATH-UCSD-0002`
 treatment starts on 20 March: the March event moves from the 15th to the 20th,
 and the February event is left without an analysis date because February ends
 first.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-partial-dates.html)

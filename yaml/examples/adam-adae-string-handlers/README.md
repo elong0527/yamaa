@@ -1,5 +1,7 @@
 # ADaM ADAE: clean text and handle invalid IDs
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-string-handlers.html)
+
 This example uses sample AE data and a `yamaa` specification to:
 
 - convert `AETERM` to lowercase as `AETERMLO`;
@@ -11,5 +13,3 @@ This example uses sample AE data and a `yamaa` specification to:
 
 A blank `AESPID` is missing whether it was recorded bare or quoted, so it
 becomes the `0` that stands for an identifier nobody recorded.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-string-handlers.html)

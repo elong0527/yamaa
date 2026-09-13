@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a missing age
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-not-missing-absent-age.html)
+
 This example uses collected demographics to record one row per subject:
 
 - `AGE` is the age at enrollment, required for every subject.
@@ -24,5 +26,3 @@ is genuinely possible, drop the rule and let the column stay missing:
 
 Do not fill the gap with a placeholder age, which reports a value
 nobody recorded.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-not-missing-absent-age.html)

@@ -1,5 +1,7 @@
 # ADaM ADRS: confirm an objective response
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adrs-confirmed-response.html)
+
 This example uses an ordered series of overall tumour responses to derive one
 record per assessment:
 
@@ -11,5 +13,3 @@ record per assessment:
 
 Responses are read in date order within a subject, so a partial or complete
 response at a subject's last assessment cannot be confirmed.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adrs-confirmed-response.html)

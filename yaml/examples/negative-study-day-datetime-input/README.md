@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a study day measured from a moment
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-study-day-datetime-input.html)
+
 This example uses collected demographics to record one row per subject:
 
 - `RFSTD` is the calendar date treatment started.
@@ -27,5 +29,3 @@ day count has whole days to count:
 
 When the time of day carries meaning, a day count is the wrong result;
 keep the moment instead of forcing it into one.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-study-day-datetime-input.html)

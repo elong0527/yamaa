@@ -1,5 +1,7 @@
 # Create DM from EDC extract
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-dm-basic.html)
+
 **Goal:** derive DM common variables **SEX**, **AGE**, **ARM** and **ACTARM**.
 
 **Input:** one row per collected item from EDC (ODM XML); e.g. subject
@@ -17,5 +19,3 @@
 fallbacks fill the rest.
 
 **Standard:** SDTM | **Domain:** DM
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-dm-basic.html)

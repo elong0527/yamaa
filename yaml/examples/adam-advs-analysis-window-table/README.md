@@ -1,5 +1,7 @@
 # ADaM ADVS: assign analysis windows from the study's window table
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-analysis-window-table.html)
+
 This example uses a pre-derived ADVS slice and one study-wide analysis window
 table shared by all parameters to derive one row per record:
 
@@ -33,5 +35,3 @@ only within a study. The sample reuses one identifier under a second study
 whose table gives `WEEK 2` a different target day, so a record placed
 against the wrong study's table would sit a different distance from its
 target.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-advs-analysis-window-table.html)

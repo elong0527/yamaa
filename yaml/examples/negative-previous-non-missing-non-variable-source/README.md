@@ -1,5 +1,7 @@
 # ADaM ADVS: reject carrying forward a fixed value
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-previous-non-missing-non-variable-source.html)
+
 This example uses collected vital signs to record one row per
 measurement:
 
@@ -32,5 +34,3 @@ rule, search the pressure variable itself:
 
 When every gap should instead read a fixed fallback, state that as a
 separate rule over the carried result rather than inside the search.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-previous-non-missing-non-variable-source.html)

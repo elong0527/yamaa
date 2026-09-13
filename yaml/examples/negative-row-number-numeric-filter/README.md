@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a sequence filtered by a number
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-row-number-numeric-filter.html)
+
 This example uses collected laboratory results to record one row per
 result:
 
@@ -30,5 +32,3 @@ entirely:
 
 When only some rows count, write the condition they satisfy rather
 than numbering the rows by hand.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-row-number-numeric-filter.html)

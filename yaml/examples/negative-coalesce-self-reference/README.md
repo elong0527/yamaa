@@ -1,5 +1,7 @@
 # ADaM ADVS: reject a severity carried from its own column
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-coalesce-self-reference.html)
+
 This example uses vital-sign records with a `yamaa` specification to derive
 one row per measurement:
 
@@ -19,5 +21,3 @@ previous_non_missing:
 
 and, when the first row may itself be missing, keep the default for that
 row only.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-coalesce-self-reference.html)

@@ -8261,7 +8261,8 @@ README_KEY_COLUMNS = {
     'IDVAR', 'QNAM',
 }
 README_FOOTER_PATTERN = re.compile(
-    r'\[Rendered view\]\(https://elong0527\.github\.io/yamaa/examples/'
+    r'\[!\[Dashboard\]\(https://img\.shields\.io/badge/Dashboard-view-0c5e4b\)\]'
+    r'\(https://elong0527\.github\.io/yamaa/examples/'
     r'[a-z0-9]+(?:-[a-z0-9]+)*\.html\)',
 )
 
@@ -9695,13 +9696,14 @@ def validate_examples_layout(root: Path):
                 if '## How to fix' not in content:
                     errors.append(f"ERROR: {rel}/README.md missing '## How to fix' section")
             lines = readme.read_text(encoding='utf-8').splitlines()
-            expected_link = (
-                f"[Rendered view](https://elong0527.github.io/yamaa/"
-                f"examples/{ex_dir.name}.html)"
+            expected_badge = (
+                "[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]"
+                f"(https://elong0527.github.io/yamaa/examples/{ex_dir.name}.html)"
             )
-            if not lines or lines[-1].strip() != expected_link:
+            if len(lines) < 3 or lines[2].strip() != expected_badge:
                 errors.append(
-                    f"ERROR: {rel}/README.md must end with '{expected_link}'"
+                    f"ERROR: {rel}/README.md must place '{expected_badge}' "
+                    "right after the title"
                 )
 
         # Specification files

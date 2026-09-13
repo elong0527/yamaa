@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a baseline chosen between two same-day results
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-baseline-flag-tied-date.html)
+
 This example uses collected lab data with ADSL to prepare one record per
 subject, parameter, and collected result:
 
@@ -53,5 +55,3 @@ Keep `ABLRANK` internal by omitting it from `output.columns`.
 Order by the term the study names; the sequence number above stands in for it
 and is not itself a clinical rule. Do not average the two results into one
 baseline value, which reports a measurement nobody took.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-baseline-flag-tied-date.html)

@@ -1,5 +1,7 @@
 # ADaM ADAE: reject a start date completed from text that is not a date
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-date-impute-invalid-source.html)
+
 This example uses collected adverse events whose start dates are sometimes
 incomplete to attempt one record per event:
 
@@ -27,5 +29,3 @@ derivation:
 
 The `invalid` handler applies to non-missing text that is not an ISO 8601 date
 or date prefix; it is distinct from the `missing` handler.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-date-impute-invalid-source.html)

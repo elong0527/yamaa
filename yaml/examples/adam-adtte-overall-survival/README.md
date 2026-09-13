@@ -1,5 +1,7 @@
 # ADaM ADTTE: derive overall survival
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adtte-overall-survival.html)
+
 This example uses randomization dates, last known alive dates, and deaths to
 derive one overall-survival record per subject:
 
@@ -11,5 +13,3 @@ derive one overall-survival record per subject:
   and `CNSDTDSC` state whether the record represents death or censoring.
 - `SRCDOM`, `SRCVAR`, and `SRCSEQ` identify the selected event or censor
   source.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adtte-overall-survival.html)

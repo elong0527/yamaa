@@ -1,5 +1,7 @@
 # ADaM ADCM: flag a medication during treatment
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adcm-on-treatment-flag.html)
+
 This example uses sample CM and ADSL data and a `yamaa` specification to derive
 one row per concomitant medication:
 
@@ -19,5 +21,3 @@ one row per concomitant medication:
 
 A subject with no ADSL record keeps their medications and leaves both treatment
 dates empty.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adcm-on-treatment-flag.html)

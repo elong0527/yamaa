@@ -1,5 +1,7 @@
 # ADaM ADAE: apply an approved severity correction
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-severity-override.html)
+
 This example uses sample AE data and a `yamaa` specification to derive one row
 per adverse event:
 
@@ -10,5 +12,3 @@ per adverse event:
 
 `ASEVN` reads the severity after the correction, not the collected value, so a
 corrected event carries both the corrected term and its matching rank.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-severity-override.html)

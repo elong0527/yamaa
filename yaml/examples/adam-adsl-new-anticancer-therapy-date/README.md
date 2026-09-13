@@ -1,5 +1,7 @@
 # ADaM ADSL: date the subject started new anti-cancer therapy
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-new-anticancer-therapy-date.html)
+
 This example uses a subject list with the concomitant medications and
 procedures collected beside it to derive one record per subject:
 
@@ -16,5 +18,3 @@ procedures collected beside it to derive one record per subject:
 A subject whose only anti-cancer therapy predates the study looks the same as
 one who never received any, because both leave the study without a date to
 censor at.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-new-anticancer-therapy-date.html)

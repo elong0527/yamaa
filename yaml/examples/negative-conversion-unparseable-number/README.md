@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a viral load reported below the assay limit
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-conversion-unparseable-number.html)
+
 This example uses collected viral-load results as they were reported to attempt
 one record per subject and parameter:
 
@@ -27,5 +29,3 @@ derivation:
 If the study uses a numeric substitution for values below the assay limit,
 derive that documented value instead and keep the original character result
 for traceability.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-conversion-unparseable-number.html)

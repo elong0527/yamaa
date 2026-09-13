@@ -1,5 +1,7 @@
 # ADaM ADRS: select the best overall response
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adrs-best-overall-response.html)
+
 This example uses a subject's randomization date and their prepared,
 priority-ordered response assessments to derive one best-response record per
 subject:
@@ -20,5 +22,3 @@ subject:
 The order is the definition, not a preference: a subject whose only stable
 assessment came too early is progressive when a progression follows, and not
 evaluable when none does. Both outcomes rest on the same assessment.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adrs-best-overall-response.html)

@@ -1,5 +1,7 @@
 # ADaM ADVS: derive a body surface area parameter
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-body-surface-area.html)
+
 Collected ADVS vital signs records produce one output row per collected record
 plus one BSA row per complete subject and visit:
 
@@ -12,5 +14,3 @@ plus one BSA row per complete subject and visit:
 
 Input containing a BSA parameter is rejected. Each contributing parameter must
 occur at most once within a subject and visit.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-advs-body-surface-area.html)

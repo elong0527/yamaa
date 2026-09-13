@@ -1,5 +1,7 @@
 # SDTM DS: number each subject's disposition records in date order
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-ds-disposition-sequence.html)
+
 This example uses raw disposition records and a `yamaa` specification to
 derive one record per collected disposition:
 
@@ -13,5 +15,3 @@ derive one record per collected disposition:
   protocol milestone, and every other outcome is a disposition event;
 - `DSDTC` is the date the outcome occurred. A record whose form did not name a
   complete calendar day has none.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-ds-disposition-sequence.html)

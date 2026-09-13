@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a randomization date described twice
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adsl-randomization-date-retyped.html)
+
 This example uses an ODM demographics projection to produce one record per
 subject:
 
@@ -21,5 +23,3 @@ datasets:
     path: input/dm.csv
     schema: input/dm.schema.yaml
 ```
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adsl-randomization-date-retyped.html)

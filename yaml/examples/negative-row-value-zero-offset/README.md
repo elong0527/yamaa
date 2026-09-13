@@ -1,5 +1,7 @@
 # ADaM ADVS: reject a previous weight that names no earlier visit
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-row-value-zero-offset.html)
+
 This example uses collected weights to attempt one record per measurement:
 
 - `AVAL` is the weight collected at the visit;
@@ -26,5 +28,3 @@ row_value:
 The first row in each subject partition then receives missing because it has no
 preceding visit. If the current value is intended, reference `AVAL` directly
 instead of using `row_value`.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-row-value-zero-offset.html)

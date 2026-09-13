@@ -1,5 +1,7 @@
 # ADaM ADAE: reject an order that places one value twice
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-output-order-repeated-term.html)
+
 This example uses collected adverse events to attempt one record per event:
 
 - `AETERM` is the reported term for the event, and `ASTDT` the date it began.
@@ -29,5 +31,3 @@ output:
 Presenting the subjects in reverse instead means declaring `USUBJID`
 descending once, in the first position, rather than adding a second term for
 it.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-output-order-repeated-term.html)

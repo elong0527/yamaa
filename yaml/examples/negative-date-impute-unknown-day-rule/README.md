@@ -1,5 +1,7 @@
 # ADaM ADAE: reject a start date completed with an unrecognised day
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-date-impute-unknown-day-rule.html)
+
 This example uses collected adverse events whose start dates are sometimes
 recorded without a day to attempt one record per event:
 
@@ -26,5 +28,3 @@ date_impute:
 A value such as `2023-06` then becomes `2023-06-01`. Writing `day: last`
 instead gives `2023-06-30`, and writing `day: 15` names the fifteenth of the
 collected month directly.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-date-impute-unknown-day-rule.html)

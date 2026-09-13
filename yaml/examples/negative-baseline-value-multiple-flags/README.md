@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a baseline carried from two flagged visits
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-baseline-value-multiple-flags.html)
+
 This example uses laboratory records and a baseline flag with a `yamaa`
 specification to derive one row per visit:
 
@@ -18,5 +20,3 @@ LBBLFL: " "
 
 or, when both visits genuinely qualify, pick one by rule (for example the
 earliest) and flag only that row before deriving.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-baseline-value-multiple-flags.html)

@@ -1,5 +1,7 @@
 # ADaM ADSL: normalize collected country and group it into a region
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-geography-normalization.html)
+
 This example uses sample DM data and a `yamaa` specification to derive one row
 per subject:
 
@@ -9,5 +11,3 @@ per subject:
 - `REGION1` is the region the country belongs to. Countries the study does not
   map to a named region, `UNKNOWN` among them, fall into `Rest of World`, so
   every subject has a region.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-geography-normalization.html)

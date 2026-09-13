@@ -1,5 +1,7 @@
 # ADaM ADRS: prepare the overall response records an endpoint reads
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adrs-overall-response-records.html)
+
 This example uses collected tumour assessments and the subject's treatment
 start to derive one record per overall response recorded by the investigator:
 
@@ -24,5 +26,3 @@ exactly as it treats a date collected in full. What the completed date does
 keep is how much of it was collected, so a specification that needs to report
 which assessment dates rested on a supplied day can read it from `ADT` itself.
 This example does not report it, because nothing it derives turns on it.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adrs-overall-response-records.html)

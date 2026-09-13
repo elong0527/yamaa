@@ -1,5 +1,7 @@
 # SDTM AE: take the effective state of a record from a transaction log
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-ae-effective-transaction.html)
+
 This example uses an inventory of adverse-event records with the transaction
 log that amends them to derive one record per effective adverse event:
 
@@ -17,5 +19,3 @@ from the first.
 A record whose last transaction removed it does not appear. The removal
 decision is made from the completed effective state rather than from an earlier
 transaction.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-ae-effective-transaction.html)

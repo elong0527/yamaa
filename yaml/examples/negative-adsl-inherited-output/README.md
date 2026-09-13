@@ -1,5 +1,7 @@
 # ADaM ADSL: reject an inherited artifact layout
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adsl-inherited-output.html)
+
 This example attempts to prepare subject records while allowing a reusable
 parent to choose which variables appear in the final dataset.
 
@@ -15,5 +17,3 @@ default for reuse, but the entry must replace it explicitly:
 output:
   columns: [USUBJID]
 ```
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adsl-inherited-output.html)

@@ -1,5 +1,7 @@
 # ADaM ADEX: reject a total over a field the source does not have
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-types-unknown-field.html)
+
 This example uses a subject-treatment inventory with its component exposure
 records to attempt one record per subject and treatment:
 
@@ -25,5 +27,3 @@ datasets:
 ```
 
 The qualified aggregate can then resolve `EX.EXDOSE` as numeric.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-types-unknown-field.html)

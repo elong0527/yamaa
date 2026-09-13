@@ -1,5 +1,7 @@
 # ADaM ADTR: derive the current nadir
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adtr-current-nadir.html)
+
 This example uses prepared target-lesion assessments to derive one row per
 subject and assessment:
 
@@ -15,5 +17,3 @@ subject and assessment:
 
 An incomplete current assessment may retain a nadir established by an earlier
 complete assessment.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adtr-current-nadir.html)

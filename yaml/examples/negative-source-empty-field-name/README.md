@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a subject listing with an unnamed field
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-empty-field-name.html)
+
 This example uses a collected subject listing to attempt one record per
 subject:
 
@@ -19,5 +21,3 @@ the header has no further field:
 
 A field worth storing is worth naming, and its name is what every later
 reference to it uses.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-source-empty-field-name.html)

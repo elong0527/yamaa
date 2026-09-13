@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a subject listing that names one field twice
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-duplicate-field-name.html)
+
 This example uses a collected subject listing to attempt one record per
 subject:
 
@@ -21,5 +23,3 @@ study governs:
 
 If the two fields hold the same fact twice, remove one at the source. A
 listing that answers to one name twice cannot be read the same way twice.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-source-duplicate-field-name.html)

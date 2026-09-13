@@ -1,5 +1,7 @@
 # ADaM ADSL: reconcile randomization strata
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adam-adsl-stratification-reconciliation.html)
+
 This example uses demographics, disease history, and the strata recorded at
 randomization to prepare one record per subject:
 
@@ -21,5 +23,3 @@ Query the disagreement and correct whichever source is wrong. If both values
 are valid but serve different purposes, document which one governs the analysis
 and replace the equality check with that reconciliation policy. Do not silently
 prefer the randomization value or the independently collected value.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adam-adsl-stratification-reconciliation.html)

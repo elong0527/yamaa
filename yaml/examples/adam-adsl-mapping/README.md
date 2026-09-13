@@ -1,5 +1,7 @@
 # ADaM ADSL: translate collected values into a standard vocabulary
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-mapping.html)
+
 This example uses sample DM data and a `yamaa` specification to derive one row
 per subject:
 
@@ -19,5 +21,3 @@ per subject:
 
 One collected value can feed several output variables at once, and each carries
 its own translation: sex produces three, in three different vocabularies.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-mapping.html)

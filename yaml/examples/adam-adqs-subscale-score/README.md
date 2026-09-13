@@ -1,5 +1,7 @@
 # ADaM ADQS: score a questionnaire subscale from its item records
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adqs-subscale-score.html)
+
 This example uses collected questionnaire responses and a `yamaa`
 specification to derive one row per subject, visit, and analysis parameter:
 
@@ -16,5 +18,3 @@ A visit at which the questionnaire was administered carries a score record
 even when too few items were answered to score it, and a visit at which it was
 not administered carries no records at all. An unscorable visit is therefore
 still distinguishable from one the subject never reached.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adqs-subscale-score.html)

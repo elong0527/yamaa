@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a reference range stated twice
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-mapping-from-duplicate-key.html)
+
 This example uses collected laboratory results with a table of reference limits
 by test and sex to attempt one record per subject and parameter:
 
@@ -22,5 +24,3 @@ If both rows are valid for different conditions, add the distinguishing field
 to both the current-row `source` list and the lookup `key` list. For example, a
 method-specific table would use matching lists such as
 `source: [PARAMCD, SEX, METHOD]` and `key: [LBTESTCD, SEX, METHOD]`.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-mapping-from-duplicate-key.html)

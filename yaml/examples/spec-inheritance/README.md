@@ -1,5 +1,7 @@
 # Spec Inheritance
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/spec-inheritance.html)
+
 **Goal:** demonstrate spec inheritance from organization to compound to
 study level.
 
@@ -19,5 +21,3 @@ in the specification dropdown.
 study level wins on final wording.
 
 **Standard:** ADaM | **Domain:** ADLB
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/spec-inheritance.html)

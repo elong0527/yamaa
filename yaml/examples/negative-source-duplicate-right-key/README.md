@@ -1,5 +1,7 @@
 # ADaM ADSL: reject duplicate subject enrichment
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-duplicate-right-key.html)
+
 This example uses one demographics record and two analysis-subject records for
 the same subject to attempt one output record:
 
@@ -25,5 +27,3 @@ source:
 ```
 
 Do not use file order or treatment text as a substitute for a business rule.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-source-duplicate-right-key.html)

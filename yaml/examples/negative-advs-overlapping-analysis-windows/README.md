@@ -1,5 +1,7 @@
 # ADaM ADVS: reject overlapping analysis windows
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-advs-overlapping-analysis-windows.html)
+
 This example uses one analysis record and a study-wide window table to attempt
 one output record:
 
@@ -14,5 +16,3 @@ depend on an unstated policy, so the run must fail rather than assign one.
 First correct unintended overlap in the window table. If overlap is
 intentional, state and justify a deterministic selection policy with
 `order_by` and `keep`; do not rely on source-row order.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-advs-overlapping-analysis-windows.html)

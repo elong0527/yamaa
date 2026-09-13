@@ -1,5 +1,7 @@
 # ADaM ADVS: reject a pulse rate recorded between whole beats
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-conversion-non-integral.html)
+
 This example uses collected pulse rates to attempt one record per measurement:
 
 - `AVAL` is the pulse in beats per minute, which the analysis holds as a whole
@@ -25,5 +27,3 @@ precision by declaring the result as `float`:
 If the result must be an integer, the specification must choose an explicit
 rule such as `FLOOR`, `CEIL`, or `TRUNC` in a `compute` expression; conversion
 will not choose a rounding rule implicitly.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-conversion-non-integral.html)

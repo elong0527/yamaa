@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a percent change from a zero baseline
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-compute-division-by-zero.html)
+
 This example uses collected laboratory results with their baseline values to
 attempt one record per subject and parameter:
 
@@ -24,5 +26,3 @@ derivation:
 `NULLIF(BASE, 0)` returns missing for a zero baseline. Missing then propagates
 through the division, so `PCHG` is missing for that row instead of raising
 `division_by_zero`; nonzero baselines retain the original calculation.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-compute-division-by-zero.html)

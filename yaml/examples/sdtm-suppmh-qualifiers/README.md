@@ -1,5 +1,7 @@
 # SDTM SUPPMH: reshape extra qualifiers into supplemental records
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-suppmh-qualifiers.html)
+
 This example uses a pre-derived medical-history slice and a `yamaa`
 specification to derive one supplemental record per collected qualifier:
 
@@ -16,5 +18,3 @@ that was actually collected, so a record with only one of the two qualifiers
 contributes only one. The records are presented in submission order: by
 subject, then by the medical-history record they point at, then by qualifier
 name.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-suppmh-qualifiers.html)

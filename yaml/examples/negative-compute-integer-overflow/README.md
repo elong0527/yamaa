@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a cell total larger than the counter can hold
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-compute-integer-overflow.html)
+
 This example uses collected cell concentrations and sample volumes to attempt
 one record per subject:
 
@@ -20,5 +22,3 @@ integer, the specification cannot represent it exactly as `int`; change the
 measurement unit or representation upstream rather than allowing the
 multiplication to wrap or silently converting the count to an approximate
 value.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-compute-integer-overflow.html)

@@ -1,5 +1,7 @@
 # ADaM ADSL: parse the site from USUBJID with a collected fallback
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-identifier-parsing.html)
+
 This example uses sample DM data and a `yamaa` specification to derive one row
 per subject:
 
@@ -13,5 +15,3 @@ per subject:
 - `SUBJREF` is a display reference combining `SITEID` and `SUBJID`, separated
   by a colon. A subject with no subject number gets `UNKNOWN` in its place
   rather than a partial reference.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-identifier-parsing.html)

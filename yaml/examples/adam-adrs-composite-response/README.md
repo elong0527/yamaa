@@ -1,5 +1,7 @@
 # ADaM ADRS: combine efficacy, safety, and discontinuation into one response
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adrs-composite-response.html)
+
 This example uses a pre-derived ADRS slice with ADSL and a `yamaa`
 specification to derive one row per subject:
 
@@ -19,5 +21,3 @@ The order matters and is part of the definition: a subject who meets the
 efficacy threshold but had a serious adverse event is a non-responder, and a
 subject with no efficacy value who discontinued is a non-responder rather than
 not evaluable.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adrs-composite-response.html)

@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a log result from an undetectable value
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-compute-ln-of-zero.html)
+
 This example uses collected viral-load results to attempt one record per
 subject and parameter:
 
@@ -26,5 +28,3 @@ derivation:
 If the study instead substitutes a value related to the assay limit, derive
 that stated substitute first and apply `LN` to it. Do not replace zero with an
 unstated constant.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-compute-ln-of-zero.html)

@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a subject listing record with an extra field
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-record-width.html)
+
 This example uses a collected subject listing to attempt one record per
 subject:
 
@@ -20,5 +22,3 @@ is itself collected, name it in the header so that every record carries it:
 
 A bare separator inside a value produces the same surplus, so a value holding
 a separator is quoted rather than left bare.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-source-record-width.html)

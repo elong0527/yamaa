@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a parameter computed from the dataset being built
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adlb-computed-parameter.html)
+
 This example uses collected liver-function results to attempt one row per
 subject, collection date, and analysis parameter:
 
@@ -36,5 +38,3 @@ Do not reach the other parameter by counting rows instead. Which row sits one
 position away depends on how the records happen to be ordered, so a sample
 that answers correctly today stops doing so as soon as a third parameter is
 added.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adlb-computed-parameter.html)

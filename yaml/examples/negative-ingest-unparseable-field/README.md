@@ -1,5 +1,7 @@
 # ADaM ADEX: reject a dose recorded with its unit
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-ingest-unparseable-field.html)
+
 This example uses a subject-treatment inventory with its component exposure
 records to attempt one record per subject and treatment:
 
@@ -28,5 +30,3 @@ EX:
 If the composite text must remain unchanged, ingest it as `str`, preserve it
 for traceability, and derive a validated numeric dose before attempting the
 aggregate. A numeric type declaration must not strip ` mg` implicitly.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-ingest-unparseable-field.html)

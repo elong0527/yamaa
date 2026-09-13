@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a reference range chosen without a sex
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-mapping-from-partial-key.html)
+
 This example uses collected laboratory results with a table of reference limits
 by test and sex to attempt one record per subject and parameter:
 
@@ -31,5 +33,3 @@ mapping_from:
 
 This does not handle a complete key that is absent from `LBREF`; that separate
 condition uses `unmapped`.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-mapping-from-partial-key.html)

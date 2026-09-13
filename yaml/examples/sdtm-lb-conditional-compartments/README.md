@@ -1,5 +1,7 @@
 # SDTM LB: tell an inapplicable compartment from an uncollected sample
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-lb-conditional-compartments.html)
+
 This example uses collected skin-biopsy data and a `yamaa` specification to
 derive one record per compartment a subject actually has:
 
@@ -18,5 +20,3 @@ record is produced for them. A subject who has one whose sample was not
 analysed still gets a record, with an empty result and `LBSTAT` marking why.
 An empty result therefore always means a sample that was expected, and a
 missing record means a compartment that never existed.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-lb-conditional-compartments.html)

@@ -1,5 +1,7 @@
 # ADaM ADAE: reject a review flag that compares a date with text
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adae-review-text-date.html)
+
 The collected adverse events produce one analysis row per reported event:
 
 - `REVIEWFL` is rejected because its calendar date is compared with text,
@@ -12,5 +14,3 @@ Declare the constant as a date so both operands carry the same temporal type:
 ```yaml
 when: "ASTDT >= DATE '2025-01-01'"
 ```
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adae-review-text-date.html)

@@ -1,5 +1,7 @@
 # ADaM ADVS: assign records to analysis windows
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-analysis-visit.html)
+
 This example uses a pre-derived ADVS slice and a `yamaa` specification to
 derive one row per record:
 
@@ -17,5 +19,3 @@ derive one row per record:
   record with no analysis date belongs to no window and is never marked.
 
 Because study day has no day zero, the baseline window can only hold day one.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-advs-analysis-visit.html)

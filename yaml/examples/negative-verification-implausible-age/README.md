@@ -1,5 +1,7 @@
 # ADaM ADSL: reject an implausible age
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-verification-implausible-age.html)
+
 This example uses collected demographics to attempt one record per subject:
 
 - `AGE` is the age collected at screening, which the study restricts to adults
@@ -16,5 +18,3 @@ then rerun the unchanged range verification. If the protocol genuinely permits
 the confirmed value, revise the verification boundary to the protocol's
 documented limit. Do not remove or widen the check merely to make an
 unconfirmed value pass.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-verification-implausible-age.html)

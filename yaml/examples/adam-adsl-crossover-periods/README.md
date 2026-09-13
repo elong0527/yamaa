@@ -1,5 +1,7 @@
 # ADaM ADSL: derive period-scoped treatments and dates across a washout
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-crossover-periods.html)
+
 This example uses sample DM and EX data and a `yamaa` specification to derive
 one row per subject in a two-period crossover:
 
@@ -17,5 +19,3 @@ Every value is read only from the exposure records belonging to its own period,
 so one period's dates and treatment never mix with the other's. A subject who
 never entered period two has no exposure records there, and every period-two
 variable is empty for them.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-crossover-periods.html)

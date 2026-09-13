@@ -1,5 +1,7 @@
 # ADaM ADVS: reject a weight carried forward from a carried-forward weight
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-row-value-self-reference.html)
+
 This example uses a series of collected weights to attempt one analysis record
 per measurement:
 
@@ -34,5 +36,3 @@ earlier collected values, then coalesce that result with the current value:
 ```
 
 Keep `PRIOR` internal by omitting it from `output.columns`.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-row-value-self-reference.html)

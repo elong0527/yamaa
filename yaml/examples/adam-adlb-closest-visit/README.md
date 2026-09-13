@@ -1,5 +1,7 @@
 # ADaM ADLB: select the record closest to a window's target day
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adlb-closest-visit.html)
+
 This example uses a pre-derived ADLB slice and a `yamaa` specification to
 derive one row per record:
 
@@ -15,5 +17,3 @@ derive one row per record:
 
 Publishing `AWTARGET` and `ADIST` alongside the flag lets a reader see why a
 record was chosen rather than take the flag on trust.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adlb-closest-visit.html)

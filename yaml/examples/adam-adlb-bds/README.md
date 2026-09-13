@@ -1,5 +1,7 @@
 # ADaM ADLB: build a BDS dataset with baseline and change
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adlb-bds.html)
+
 This example uses collected lab data with ADSL and a `yamaa` specification to
 derive one row per subject, parameter, and visit:
 
@@ -25,5 +27,3 @@ A subject listed in ADSL with no collected result produces no record at
 all. The treatment start date and treatment carried across from ADSL
 enrich records that already exist and never bring one into being, so the
 row count follows the collected lab data alone.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adlb-bds.html)

@@ -1,5 +1,7 @@
 # ADaM ADTTE: derive the duration of a response
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adtte-duration-of-response.html)
+
 This example uses the subjects who responded, their later tumour assessments,
 and their deaths to derive one duration-of-response record per responder:
 
@@ -20,5 +22,3 @@ after it cannot be the event, and a subject still under observation at that
 point is censored there rather than at a later assessment. An event on the day
 the therapy started still counts, because that day is inside the period. A
 subject who never responded has no duration to measure and no record here.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adtte-duration-of-response.html)

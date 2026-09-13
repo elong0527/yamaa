@@ -1,5 +1,7 @@
 # ADaM ADRS: prepare assessments for best overall response
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adrs-best-response-selection.html)
+
 This example uses the overall response assessments to produce one record per
 assessment for the best-response endpoint:
 
@@ -26,5 +28,3 @@ consumes a number that a usable record would otherwise take.
 Subject identifiers are unique only within a study. The sample reuses one
 under a second study, and each study's records are ordered on their own, so
 one study's numbering never continues into the other's.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adrs-best-response-selection.html)

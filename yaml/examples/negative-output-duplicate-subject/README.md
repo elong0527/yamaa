@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a repeated demographics record
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-output-duplicate-subject.html)
+
 This example uses collected demographics to attempt one record per subject:
 
 - `AGE` is the age collected at screening;
@@ -19,5 +21,3 @@ multiple source records are legitimate, use a unique subject inventory as the
 row driver and declare an ordered record-selection rule for the demographics
 record; do not rely on source order to discard one. The completed output must
 contain exactly one row for each `[STUDYID, USUBJID]` key.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-output-duplicate-subject.html)

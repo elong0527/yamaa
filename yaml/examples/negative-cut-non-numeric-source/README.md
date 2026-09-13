@@ -1,5 +1,7 @@
 # ADaM ADSL: reject age bands grouped from a coded value
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-cut-non-numeric-source.html)
+
 This example uses collected demographics with a `yamaa` specification to
 derive one row per subject:
 
@@ -16,5 +18,3 @@ cut:
   breaks: [65]
   labels: [younger, elderly]
 ```
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-cut-non-numeric-source.html)

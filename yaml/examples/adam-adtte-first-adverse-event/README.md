@@ -1,5 +1,7 @@
 # ADaM ADTTE: derive the time to first adverse event
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adtte-first-adverse-event.html)
+
 This example uses treatment start dates, end of study dates, and adverse
 events to derive one time-to-first-adverse-event record per subject:
 
@@ -17,5 +19,3 @@ events to derive one time-to-first-adverse-event record per subject:
 The time-to-event precedence, earliest event, and tie-breaking behavior follow
 [`pharmaverse/admiral`](https://github.com/pharmaverse/admiral) commit
 `01669e09c5a49064826ab1c1f470835b71c1c27f`, `R/derive_param_tte.R`.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adtte-first-adverse-event.html)

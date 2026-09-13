@@ -1,5 +1,7 @@
 # ADaM ADSL: select the first rescue medication
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-rescue-medication.html)
+
 This example uses collected demographics with the medications taken alongside
 study treatment to derive one record per subject:
 
@@ -11,5 +13,3 @@ A subject whose medications include none given as rescue has no such
 medication, and the value is empty. That is the same result a subject with no
 recorded medications at all receives, because in both cases nothing was
 selected rather than something being selected badly.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-rescue-medication.html)

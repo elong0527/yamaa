@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a parameter that reads the dataset it is part of
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-output-self-reference.html)
+
 This example uses collected liver-function results, together with a file of
 analysis values for the same dataset, to attempt one row per subject,
 collection date, and analysis parameter:
@@ -46,5 +48,3 @@ and renaming the source does not change that: it reads whatever the previous
 run left behind, which is stale exactly when the two runs disagree. Split the
 work instead, so the transaminase parameters are complete and written before
 the run that reads them starts.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-source-output-self-reference.html)

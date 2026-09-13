@@ -1,5 +1,7 @@
 # ADaM ADEG: derive a Fridericia-corrected QT parameter
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adeg-fridericia-qtc.html)
+
 This example uses QT and RR records to add a Fridericia-corrected QT parameter
 at the same subject and visit:
 
@@ -13,5 +15,3 @@ The formula and parameter identity follow
 [`pharmaverse/admiral`](https://github.com/pharmaverse/admiral) commit
 `e32e5689d7fd03e224ddbcfc369c332c5df837d9`,
 `R/derive_param_qtc.R`.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adeg-fridericia-qtc.html)

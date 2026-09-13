@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a malformed subject reference
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adsl-subject-reference.html)
+
 This example uses one demographics record to attempt one subject record:
 
 - `SUBJREF` is meant to combine the collected site and subject identifiers,
@@ -21,5 +23,3 @@ derivation:
 
 This produces values such as `101:0007` without evaluating code embedded in
 the template.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adsl-subject-reference.html)

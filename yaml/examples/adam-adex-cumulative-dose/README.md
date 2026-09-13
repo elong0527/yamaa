@@ -1,5 +1,7 @@
 # ADaM ADEX: summarize cumulative exposure
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adex-cumulative-dose.html)
+
 This example uses a subject-treatment inventory with its component exposure
 records to derive one record per subject and treatment:
 
@@ -14,5 +16,3 @@ explicit `group_by`. They therefore reduce the exposure records by the
 applicable output keys (`STUDYID`, `USUBJID`, and `EXTRT`) before joining the
 results to each subject-treatment row; omission does not reduce all `EX`
 records as one group.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adex-cumulative-dose.html)

@@ -1,5 +1,7 @@
 # ADaM ADEG: reject a collected RR interval
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adam-adeg-pre-existing-rrr.html)
+
 This example uses ADEG HR records and one collected RRR record to attempt to
 preserve collected records and add one RRR parameter record per subject and
 analysis visit:
@@ -19,5 +21,3 @@ to the failing check.
 Remove the collected `RRR` record and retain its contributing `HR` record with
 `AVALU: beats/min`. The specification will then calculate the RR interval and
 mark it as produced by the calculation.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adam-adeg-pre-existing-rrr.html)

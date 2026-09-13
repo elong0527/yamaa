@@ -1,5 +1,7 @@
 # ADaM ADLB: reject reference limits reached through a stand-in name
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-dataset-path-symlink.html)
+
 This example uses collected laboratory results with a table of reference
 limits by test and sex to attempt one record per subject and parameter:
 
@@ -26,5 +28,3 @@ datasets:
 Storing the file itself where the study reads it works equally well. Either
 way one name reaches one file, and reviewing the study is reviewing what it
 reads.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-dataset-path-symlink.html)

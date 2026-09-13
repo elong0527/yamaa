@@ -1,5 +1,7 @@
 # ADaM ADAE: list the serious adverse events
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-serious-event-listing.html)
+
 This example uses sample AE records and produces one row per serious event:
 
 - `AETERM` is the term the investigator reported for the event;
@@ -9,5 +11,3 @@ A study whose events are all non-serious produces this listing with no rows in
 it. The result still carries its variable names, so a reader can tell an empty
 listing apart from a listing that was never produced, and a later step reads it
 without treating it as a special case.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-serious-event-listing.html)

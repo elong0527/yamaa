@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a sex code checked against an unreadable match rule
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-matches-unreadable-pattern.html)
+
 This example uses collected demographics to record one row per subject:
 
 - `SEX` is the subject's sex, constrained to the letters `M`, `F`, and `U`.
@@ -28,5 +30,3 @@ text rule at all and cannot drift from the codes it names:
 - allowed_values:
     values: [M, F, U]
 ```
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-matches-unreadable-pattern.html)

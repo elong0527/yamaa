@@ -1,5 +1,7 @@
 # ADaM ADSL: reject an age recorded as NA
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-missing-sentinel.html)
+
 This example uses a collected subject listing to attempt one record per
 subject:
 
@@ -27,5 +29,3 @@ datasets:
 If the code carries a meaning worth keeping, such as an age withheld rather
 than never taken, read the field as text and map the code to a value the
 study defines.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-source-missing-sentinel.html)

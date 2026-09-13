@@ -1,5 +1,7 @@
 # ADaM ADVS: derive body mass index
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-body-mass-index.html)
+
 The artifact contains collected ADVS records and one derived body mass index
 parameter per eligible subject and visit:
 
@@ -17,5 +19,3 @@ row is generated for each collected weight record using one height per subject.
 The formula and once-measured-height behavior follow
 [`pharmaverse/admiral`](https://github.com/pharmaverse/admiral) commit
 `e32e5689d7fd03e224ddbcfc369c332c5df837d9`, `R/derive_param_bmi.R`.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/adam-advs-body-mass-index.html)

@@ -1,5 +1,7 @@
 # ADaM ADVS: reject a record that no analysis visit identifies
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-keys-missing-value.html)
+
 This example uses a pre-derived ADVS slice to attempt one record per subject,
 parameter, and analysis visit:
 
@@ -50,5 +52,3 @@ keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
 Do not label the record into a placeholder window such as `NOT ASSIGNED`. That
 keeps the row by asserting an analysis visit the data does not support, and a
 second such record collides with the first.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-keys-missing-value.html)

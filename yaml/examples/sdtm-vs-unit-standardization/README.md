@@ -1,5 +1,7 @@
 # SDTM VS: standardize collected results into the study's units
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-vs-unit-standardization.html)
+
 This example uses collected vital signs and a `yamaa` specification to derive
 one row per collected record, describing each vital sign on its own:
 
@@ -22,5 +24,3 @@ A result that was not collected has no standardized value, no character form,
 and no unit. Nothing is rounded: a standardized value keeps the full precision
 of the arithmetic, and the four decimal places in the output file are how it is
 written rather than what is stored.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-vs-unit-standardization.html)

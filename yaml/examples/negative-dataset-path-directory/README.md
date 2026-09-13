@@ -1,5 +1,7 @@
 # ADaM ADLB: reject reference limits that name a folder
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-dataset-path-directory.html)
+
 This example uses collected laboratory results with a table of reference
 limits by test and sex to attempt one record per subject and parameter:
 
@@ -25,5 +27,3 @@ datasets:
 When limits arrive as several files, combine them into one reviewed table
 first. A study reads the table it was approved against, not a folder that
 grows.
-
-[Rendered view](https://elong0527.github.io/yamaa/examples/negative-dataset-path-directory.html)
