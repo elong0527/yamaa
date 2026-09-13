@@ -48,6 +48,26 @@ def test_a_root_that_is_not_a_directory_is_missing(tmp_path, repository) -> None
     assert failure.condition == "project_environment_missing"
 
 
+def test_an_unreadable_environment_is_missing(
+    bmi_project, repository, monkeypatch
+) -> None:
+    environment = bmi_project.path / "environment.yaml"
+    read_bytes = Path.read_bytes
+
+    def fail_environment(path):
+        if path == environment:
+            raise PermissionError("environment read denied")
+        return read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", fail_environment)
+
+    failure = _failure(bmi_project.path, repository.schema)
+
+    assert failure.condition == "project_environment_missing"
+    assert failure.requirement == "R018-33"
+    assert failure.context["host_error"] == "PermissionError"
+
+
 def test_an_environment_outside_its_schema_is_invalid(project, repository) -> None:
     project.write_code("def bmi():\n    return 1.0\n")
     project.write_vectors(repository.vectors)
@@ -97,6 +117,34 @@ def test_a_default_of_another_type_is_invalid(bmi_project, repository) -> None:
     assert failure.condition == "project_environment_invalid"
     assert failure.context["expected"] == "int"
     assert failure.context["actual"] == "float"
+
+
+def test_a_missing_default_is_valid_when_the_parameter_accepts_missing(
+    bmi_project, repository
+) -> None:
+    bmi_project.edit_environment(
+        "        default: 100\n        accepts_missing: false\n",
+        "        default: null\n        accepts_missing: true\n",
+    )
+
+    loaded = load_environment(bmi_project.path, repository.schema)
+    parameter = loaded.environment.functions["bmi"].parameters["cm_per_m"]
+
+    assert parameter.has_default
+    assert parameter.default is None
+
+
+def test_a_missing_default_is_invalid_when_the_parameter_rejects_missing(
+    bmi_project, repository
+) -> None:
+    bmi_project.edit_environment("        default: 100\n", "        default: null\n")
+
+    failure = _failure(bmi_project.path, repository.schema)
+
+    assert failure.condition == "project_environment_invalid"
+    assert failure.requirement == "R018-34"
+    assert failure.context["expected"] == "int"
+    assert failure.context["actual"] is None
 
 
 def test_a_binding_that_leaves_a_parameter_unmapped_is_invalid(

@@ -102,6 +102,17 @@ def _read_document(
         raise FunctionFailure(condition, requirement, {"document": path.name})
     try:
         document = read_yaml_document(path)
+    except OSError as error:
+        raise FunctionFailure(
+            condition,
+            requirement,
+            {
+                "document": path.name,
+                "reason": "document could not be read",
+                "host_error": type(error).__name__,
+                "host_message": str(error),
+            },
+        ) from error
     except SpecificationError as error:
         raise _invalid(
             "document could not be read",
@@ -162,15 +173,17 @@ def _check_signature(name: str, contract: FunctionContract) -> None:
                 function=path,
                 parameter=parameter.name,
             )
-        if parameter.has_default and function_value_type(parameter.default) != (
-            parameter.type
+        default_type = function_value_type(parameter.default)
+        if parameter.has_default and not (
+            default_type == parameter.type
+            or (default_type is None and parameter.accepts_missing)
         ):
             raise _invalid(
                 "a default must carry its declared exact type",
                 function=path,
                 parameter=parameter.name,
                 expected=parameter.type,
-                actual=function_value_type(parameter.default),
+                actual=default_type,
             )
     mapped = set(contract.binding.args)
     if mapped != seen:

@@ -11,8 +11,10 @@ read off the loaded environment rather than recomputed here.
 from __future__ import annotations
 
 import hashlib
+import inspect
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import FunctionType, MethodType
 
 from pydantic import JsonValue
 
@@ -33,6 +35,7 @@ from yamaa.functions.invocation import (
 from yamaa.functions.models import (
     ConformanceCase,
     ConformanceDocument,
+    FunctionContract,
     LoadedEnvironment,
 )
 from yamaa.models.values import ConditionResult, RuntimeValue, ValueResult
@@ -158,6 +161,106 @@ def _run_vectors(
             _run_case(functions[name], case)
 
 
+def _validate_target_signature(
+    name: str,
+    contract: FunctionContract,
+    target: object,
+) -> None:
+    identity = {
+        "function": name,
+        "contract_version": contract.contract_version,
+        "implementation_version": contract.implementation_version,
+        "call": contract.binding.call,
+    }
+    try:
+        signature = _concrete_signature(target)
+    except Exception as error:
+        raise FunctionFailure(
+            "project_environment_invalid",
+            "R018-34",
+            {
+                **identity,
+                "reason": "the Python callable signature could not be inspected",
+                "host_error": type(error).__name__,
+                "host_message": str(error),
+            },
+        ) from error
+
+    unsupported = [
+        {"name": parameter.name, "kind": parameter.kind.name.lower()}
+        for parameter in signature.parameters.values()
+        if parameter.kind
+        in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        )
+    ]
+    keyword_parameters = {
+        parameter.name
+        for parameter in signature.parameters.values()
+        if parameter.kind
+        in (
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        )
+    }
+    mapped = set(contract.binding.args.values())
+    missing = sorted(mapped - keyword_parameters)
+    extra = sorted(keyword_parameters - mapped)
+    if unsupported or missing or extra:
+        raise FunctionFailure(
+            "project_environment_invalid",
+            "R018-34",
+            {
+                **identity,
+                "reason": "the Python callable signature must match binding.args",
+                "unsupported": unsupported,
+                "missing": missing,
+                "extra": extra,
+            },
+        )
+
+
+def _concrete_signature(target: object) -> inspect.Signature:
+    bound_to: object | None = None
+    if inspect.ismethod(target):
+        function = target.__func__
+        bound_to = target.__self__
+    elif inspect.isfunction(target):
+        function = target
+    elif (
+        inspect.isbuiltin(target)
+        or inspect.ismethoddescriptor(target)
+        or inspect.ismethodwrapper(target)
+    ):
+        return inspect._signature_from_builtin(
+            inspect.Signature,
+            target,
+            skip_bound_arg=True,
+        )
+    else:
+        descriptor = inspect.getattr_static(type(target), "__call__", None)
+        if descriptor is None:
+            raise ValueError(f"{target!r} has no concrete call signature")
+        getter = inspect.getattr_static(type(descriptor), "__get__", None)
+        bound = (
+            descriptor if getter is None else getter(descriptor, target, type(target))
+        )
+        return _concrete_signature(bound)
+
+    concrete = FunctionType(
+        function.__code__,
+        function.__globals__,
+        function.__name__,
+        function.__defaults__,
+        function.__closure__,
+    )
+    concrete.__kwdefaults__ = function.__kwdefaults__
+    callable_target = concrete if bound_to is None else MethodType(concrete, bound_to)
+    return inspect.signature(callable_target, follow_wrapped=False)
+
+
 def activate(
     loaded: LoadedEnvironment,
     resolver: ArtifactResolver | None = None,
@@ -175,14 +278,15 @@ def activate(
     check_runner_language(environment)
     selected = ProjectArtifactDirectory(loaded.root) if resolver is None else resolver
     artifact = verify_artifact(environment.runtime, selected)
-    functions = {
-        name: BoundFunction(
+    functions: dict[str, BoundFunction] = {}
+    for name, contract in environment.functions.items():
+        target = artifact.load(contract.binding.call)
+        _validate_target_signature(name, contract, target)
+        functions[name] = BoundFunction(
             name=name,
             contract=contract,
-            target=artifact.load(contract.binding.call),
+            target=target,
         )
-        for name, contract in environment.functions.items()
-    }
 
     key = ActivationCache.key(loaded)
     cached = cache is not None and cache.passed(key)
