@@ -19,9 +19,11 @@ from yamaa.expressions.core import (
     Resolver,
     expression_condition,
 )
+from yamaa.expressions.dates import date_handlers
 from yamaa.expressions.numeric import numeric_handlers
 from yamaa.expressions.scalar import scalar_handlers
 from yamaa.expressions.strings import string_handlers
+from yamaa.expressions.windows import window_handlers
 from yamaa.models import EvaluationResult, UnsupportedResult
 from yamaa.specification.models import Expression
 
@@ -39,8 +41,10 @@ def build_expression_handlers(
         **CORE_EXPRESSION_HANDLERS,
         **numeric_handlers(),
         **aggregate_handlers(),
+        **date_handlers(),
         **scalar_handlers(dispatcher),
         **string_handlers(dispatcher),
+        **window_handlers(),
     }
 
 

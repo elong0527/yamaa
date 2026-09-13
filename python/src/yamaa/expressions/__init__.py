@@ -4,7 +4,6 @@ from yamaa.expressions.aggregate import (
     REDUCERS,
     AggregateAst,
     AggregateError,
-    RelationalResolver,
     aggregate_handlers,
     aggregate_identifiers,
     aggregate_star_datasets,
@@ -23,13 +22,16 @@ from yamaa.expressions.core import (
     MappingResolver,
     MultipleMatchResolver,
     NestedDispatcher,
+    RelationalResolver,
     Resolution,
     ResolvedValue,
     Resolver,
     evaluate_nested,
     expression_condition,
     handler_value,
+    relational_handler,
 )
+from yamaa.expressions.dates import collected_precision, date_handlers, whole_units
 from yamaa.expressions.dispatch import (
     DEFAULT_EXPRESSION_OPERATIONS,
     ExpressionDispatcher,
@@ -64,6 +66,12 @@ from yamaa.expressions.strings import (
     template_identifiers,
 )
 from yamaa.expressions.text import ascii_lower, ascii_upper
+from yamaa.expressions.windows import (
+    WINDOW_OPERATIONS,
+    Partition,
+    evaluate_window,
+    window_handlers,
+)
 
 __all__ = [
     "CORE_EXPRESSION_HANDLERS",
@@ -71,6 +79,7 @@ __all__ = [
     "FUNCTION_ARITIES",
     "PROHIBITED_KEYWORDS",
     "REDUCERS",
+    "WINDOW_OPERATIONS",
     "AbsentValue",
     "AggregateAst",
     "AggregateError",
@@ -83,6 +92,7 @@ __all__ = [
     "NestedDispatcher",
     "NumericAst",
     "NumericError",
+    "Partition",
     "PredicateAst",
     "PredicateError",
     "PredicateResult",
@@ -100,11 +110,14 @@ __all__ = [
     "ascii_lower",
     "ascii_upper",
     "build_expression_handlers",
+    "collected_precision",
+    "date_handlers",
     "evaluate_aggregate",
     "evaluate_expression",
     "evaluate_nested",
     "evaluate_numeric",
     "evaluate_predicate",
+    "evaluate_window",
     "expression_condition",
     "handler_value",
     "is_single_reduction",
@@ -117,6 +130,9 @@ __all__ = [
     "parse_predicate_cached",
     "parse_template",
     "parse_template_cached",
+    "relational_handler",
     "template_identifiers",
     "ungrouped_identifiers",
+    "whole_units",
+    "window_handlers",
 ]

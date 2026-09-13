@@ -23,7 +23,6 @@ from yamaa.models import TypedColumn, TypedTable
 from yamaa.runtime import (
     ExecutionFailure,
     ExecutionSuccess,
-    ExecutionUnsupported,
     execute_specification,
     execute_with_source_provider,
 )
@@ -41,6 +40,9 @@ ARTIFACT_EXAMPLES = [
     # R003-9 matches on the applicable keys as the two sides declare them, so
     # a sequence number joins once both sides say it is one.
     "adam-adae-event-severity",
+    # #217 could only gate this one on `row_number`; PY-14 supplies the
+    # window, so its joins and contextual ODM resolution now run end to end.
+    "sdtm-lb-multiform",
 ]
 
 # Committed error contracts this component reproduces field for field.
@@ -106,16 +108,6 @@ def test_a_committed_error_contract_is_reproduced(name: str) -> None:
     # Every field the contract records is reproduced; a runtime may report
     # more detail beside them, such as the group a reduction failed in.
     assert committed["context"].items() <= diagnostic.context.items()
-
-
-def test_the_multiform_example_is_gated_only_on_the_window_family() -> None:
-    # sdtm-lb-multiform is one of this component's fixture anchors, but its
-    # LBSEQ is a window expression #221 owns. Recording the gate here keeps
-    # the remaining dependency explicit rather than silently unrun.
-    result = _run(EXAMPLES / "sdtm-lb-multiform")
-
-    assert isinstance(result, ExecutionUnsupported)
-    assert [feature.operation for feature in result.features] == ["row_number"]
 
 
 def test_a_right_side_orphan_creates_no_row_and_studies_stay_apart() -> None:

@@ -16,15 +16,14 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from functools import lru_cache
-from typing import Any, Final, Protocol, TypeAlias
+from typing import Any, Final, TypeAlias
 
 from pydantic import JsonValue
 
 from yamaa.expressions.core import (
     ExpressionHandler,
     MappingResolver,
-    Resolver,
-    expression_condition,
+    relational_handler,
 )
 from yamaa.expressions.numeric import (
     FUNCTION_ARITIES,
@@ -709,44 +708,6 @@ def evaluate_aggregate(
     return evaluate_numeric(_substituted(ast), expr, MappingResolver(values))
 
 
-class RelationalResolver(Protocol):
-    """Resolver extension for the operations that read a whole relation.
-
-    R003's join and R013's reduction reach records scalar resolution cannot
-    see, so the runtime that owns the relation answers for them here rather
-    than every expression widening its contract to carry a join engine.
-    """
-
-    def resolve_relation(
-        self,
-        operation: str,
-        payload: Mapping[str, object],
-    ) -> EvaluationResult: ...
-
-
-def _relational(operation: str) -> ExpressionHandler:
-    def handler(payload: object, resolver: Resolver) -> EvaluationResult:
-        if isinstance(payload, str):
-            payload = {"expr": payload}
-        if not isinstance(payload, Mapping):
-            return expression_condition(
-                "validation",
-                "invalid_field_type",
-                {"operation": operation, "expected": "a mapping"},
-                requirement="R007-36",
-            )
-        resolve_relation = getattr(resolver, "resolve_relation", None)
-        if not callable(resolve_relation):
-            return expression_condition(
-                "validation",
-                "invalid_field_type",
-                {"operation": operation, "reason": "resolver unsupported"},
-            )
-        return resolve_relation(operation, dict(payload))
-
-    return handler
-
-
 def aggregate_handlers() -> dict[str, ExpressionHandler]:
     """Return the relational operations this component registers.
 
@@ -755,6 +716,6 @@ def aggregate_handlers() -> dict[str, ExpressionHandler]:
     comes back; this map fixes only that the keyword is registered.
     """
     return {
-        "aggregate": _relational("aggregate"),
-        "mapping_from": _relational("mapping_from"),
+        "aggregate": relational_handler("aggregate"),
+        "mapping_from": relational_handler("mapping_from"),
     }

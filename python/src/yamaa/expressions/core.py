@@ -348,3 +348,41 @@ def evaluate_nested(
         for observation in result.observations
     )
     return result, tuple(observations)
+
+
+class RelationalResolver(Protocol):
+    """Resolver extension for the operations that read a whole relation.
+
+    R003's join and R013's reduction reach records scalar resolution cannot
+    see, so the runtime that owns the relation answers for them here rather
+    than every expression widening its contract to carry a join engine.
+    """
+
+    def resolve_relation(
+        self,
+        operation: str,
+        payload: Mapping[str, object],
+    ) -> EvaluationResult: ...
+
+
+def relational_handler(operation: str) -> ExpressionHandler:
+    def handler(payload: object, resolver: Resolver) -> EvaluationResult:
+        if isinstance(payload, str):
+            payload = {"expr": payload}
+        if not isinstance(payload, Mapping):
+            return expression_condition(
+                "validation",
+                "invalid_field_type",
+                {"operation": operation, "expected": "a mapping"},
+                requirement="R007-36",
+            )
+        resolve_relation = getattr(resolver, "resolve_relation", None)
+        if not callable(resolve_relation):
+            return expression_condition(
+                "validation",
+                "invalid_field_type",
+                {"operation": operation, "reason": "resolver unsupported"},
+            )
+        return resolve_relation(operation, dict(payload))
+
+    return handler

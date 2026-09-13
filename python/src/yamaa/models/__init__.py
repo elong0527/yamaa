@@ -19,8 +19,10 @@ from yamaa.models.values import (
     TypedTable,
     UnsupportedResult,
     ValueResult,
+    compare_values,
     convert_value,
     normalize_runtime_value,
+    ordering_key,
     runtime_type_name,
     values_comparable,
 )
@@ -44,8 +46,10 @@ __all__ = [
     "TypedTable",
     "UnsupportedResult",
     "ValueResult",
+    "compare_values",
     "convert_value",
     "normalize_runtime_value",
+    "ordering_key",
     "runtime_type_name",
     "values_comparable",
 ]
