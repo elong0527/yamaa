@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Final
 
+from yamaa.expressions.aggregate import aggregate_handlers
 from yamaa.expressions.core import (
     CORE_EXPRESSION_HANDLERS,
     ExpressionHandler,
@@ -37,6 +38,7 @@ def build_expression_handlers(
     return {
         **CORE_EXPRESSION_HANDLERS,
         **numeric_handlers(),
+        **aggregate_handlers(),
         **scalar_handlers(dispatcher),
         **string_handlers(dispatcher),
     }
