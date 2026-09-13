@@ -135,8 +135,17 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('<div><dt>requirement</dt><dd>R005-52</dd></div>', page)
         self.assertIn("<details><summary>expected/error.yaml</summary>", page)
         base = "https://github.com/elong0527/yamaa/edit/main/yaml/examples/negative-output-duplicate-subject"
-        self.assertIn(f'<code>README.md</code> &#183; <a href="{base}/README.md">Edit</a>', page)
-        self.assertIn(f'<code>spec.yaml</code> &#183; <a href="{base}/spec.yaml">Edit</a>', page)
+        self.assertIn(
+            '<h2 id="expected-failure-heading">Expected failure</h2>'
+            f'<a class="edit-button" href="{base}/expected/error.yaml">Edit</a>',
+            page,
+        )
+        self.assertNotIn("<dt>spec paths</dt>", page)
+        self.assertIn("<code>README.md</code>", page)
+        self.assertIn(f'<a class="edit-button" href="{base}/README.md">Edit</a>', page)
+        self.assertIn(f'<a class="edit-button" href="{base}/spec.yaml">Edit</a>', page)
+        self.assertIn(f'<a class="edit-button" href="{base}/input/dm.csv">Edit</a>', page)
+        self.assertIn(f'<a class="edit-button" href="{base}/expected/adsl.csv">Edit</a>', page)
         # error.yaml leaves the datasets: one pane per CSV, none for the YAML.
         content = DashboardContent(page)
         self.assertIn("expected-failure", content.sections)

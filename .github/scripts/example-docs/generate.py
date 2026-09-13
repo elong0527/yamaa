@@ -226,9 +226,14 @@ def render_files(paths, group, example, derived, labels):
                 table = '<p class="no-rows">Showing raw CSV because the source is not a valid rectangular table.</p>' + table
         widths.append(f"minmax(0, {width}fr)")
         count_html = f'<span class="file-count">{count}</span>' if count else ""
+        edit_url = (
+            REPOSITORY + "/edit/main/yaml/examples/" + quote(example.name)
+            + "/" + "/".join(quote(part) for part in filename.split("/"))
+        )
         panes.append(
             f'<div id="{pane_id}" class="panel file-pane" role="region" aria-label="{escape(filename)}">'
-            f'<div class="file-heading"><h3 class="filename">{escape(filename)}</h3>{count_html}</div>'
+            f'<div class="file-heading"><span class="file-title"><h3 class="filename">{escape(filename)}</h3>'
+            f'<a class="edit-button" href="{edit_url}">Edit</a></span>{count_html}</div>'
             + table + "</div>"
         )
     content = "".join(panes) or '<p class="no-rows">No fixture files in this directory.</p>'
@@ -236,11 +241,11 @@ def render_files(paths, group, example, derived, labels):
     return content, row_count, subjects
 
 
-def render_failure_section(error_path):
+def render_failure_section(error_path, edit_url):
     """Render the expected-failure panel for an example the run must reject.
 
-    The raw assertion stays fully visible: context varies per failure, so the
-    definition list carries only the stable facts and the YAML below them.
+    The definition list carries only the stable facts; the full assertion,
+    including spec paths, lives in the collapsed raw YAML below it.
     """
     raw = error_path.read_text(encoding="utf-8")
     try:
@@ -253,17 +258,16 @@ def render_failure_section(error_path):
         value = failure.get(key)
         if value:
             facts.append((key, str(value)))
-    paths = failure.get("spec_paths")
-    if isinstance(paths, list) and paths:
-        facts.append(("spec paths", ", ".join(str(item) for item in paths)))
     facts_html = "".join(
         f"<div><dt>{escape(key)}</dt><dd>{escape(value)}</dd></div>"
         for key, value in facts
     )
     section = (
         '<section id="expected-failure" class="panel failure-panel" aria-labelledby="expected-failure-heading">\n'
-        '  <header class="panel-header"><h2 id="expected-failure-heading">Expected failure</h2>'
+        '  <header class="panel-header"><span class="panel-title"><h2 id="expected-failure-heading">Expected failure</h2>'
+        f'<a class="edit-button" href="{edit_url}">Edit</a></span>'
         '<span class="panel-caption">the run is rejected; no artifact is accepted</span></header>\n'
+        '  <div class="source-path"><code>expected/error.yaml</code></div>\n'
         f"  <dl>{facts_html}</dl>\n"
         '  <details><summary>expected/error.yaml</summary>\n'
         f'  <pre class="plain-file"><code>{escape(raw)}</code></pre></details>\n'
@@ -477,7 +481,9 @@ def render_example(example, previous=None, next=None):
     heading = heading[:1].upper() + heading[1:]
     has_csv = any(path.suffix == ".csv" for path in outputs)
     if is_failure:
-        failure, failure_section = render_failure_section(error_path)
+        failure, failure_section = render_failure_section(
+            error_path, edit_base + "/expected/error.yaml"
+        )
         datasets_heading = "Unexpected Output"
         description = escape(title + ": README, inputs, expected failure, and YAML specification.")
         metrics = [("Rejected", "result", "result-rejected"), (len(inputs), "input files", ""), (len(subjects), "subjects", "")]
