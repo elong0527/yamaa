@@ -176,43 +176,49 @@ def test_quoted_empty_is_missing_for_a_non_string_type(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("example", "dataset", "path", "condition"),
+    ("example", "dataset", "path", "condition", "requirement"),
     [
         (
             "negative-dataset-path-absolute",
             "LBREF",
             "/shared/reference/lbref.csv",
             "resource_path_not_relative",
+            "R021-15",
         ),
         (
             "negative-dataset-path-directory",
             "LBREF",
             "input/lbref",
             "resource_path_not_regular_file",
+            "R021-19",
         ),
         (
             "negative-dataset-path-missing",
             "LBREF",
             "input/lbref.csv",
             "resource_path_missing",
+            "R021-19",
         ),
         (
             "negative-dataset-path-parent-escape",
             "LBREF",
             "../reference/lbref.csv",
             "resource_path_outside_project",
+            "R021-18",
         ),
         (
             "negative-dataset-path-symlink",
             "LBREF",
             "input/lbref.csv",
             "resource_path_symlink",
+            "R021-17",
         ),
         (
             "negative-dataset-path-url",
             "LBREF",
             "https://reference.example.org/limits/lbref.csv",
             "resource_path_uri_scheme",
+            "R021-9",
         ),
     ],
 )
@@ -221,6 +227,7 @@ def test_path_fixtures_report_exact_diagnostics(
     dataset: str,
     path: str,
     condition: str,
+    requirement: str,
 ) -> None:
     root = REPOSITORY / "yaml" / "examples" / example
     with pytest.raises(SourceError) as raised:
@@ -234,6 +241,7 @@ def test_path_fixtures_report_exact_diagnostics(
         "phase": "validation",
         "condition": condition,
         "spec_paths": (f"datasets.{dataset}.path",),
+        "requirement": requirement,
         "context": {"dataset": dataset, "path": path},
     }
 
@@ -244,37 +252,45 @@ def test_committed_symlink_fixture_is_a_real_symlink() -> None:
 
 
 @pytest.mark.parametrize(
-    ("example", "condition", "context"),
+    ("example", "condition", "requirement", "context"),
     [
         (
             "negative-source-duplicate-field-name",
             "source_field_name_duplicate",
+            "R023-22",
             {"record": 1, "field": "SEX"},
         ),
         (
             "negative-source-empty-field-name",
             "source_field_name_empty",
+            "R023-22",
             {"record": 1, "field": 4},
         ),
         (
             "negative-source-invalid-text",
             "invalid_text",
+            "R019-21",
             {"record": 3, "field": 3},
         ),
         (
             "negative-source-record-width",
             "source_record_width",
+            "R023-22",
             {"record": 3, "field": 5},
         ),
         (
             "negative-source-unterminated-quote",
             "source_quote_unterminated",
+            "R023-22",
             {"record": 3, "field": 3},
         ),
     ],
 )
 def test_csv_fixtures_report_exact_diagnostics(
-    example: str, condition: str, context: dict[str, object]
+    example: str,
+    condition: str,
+    requirement: str,
+    context: dict[str, object],
 ) -> None:
     root = REPOSITORY / "yaml" / "examples" / example
     path = "input/dm.csv"
@@ -285,6 +301,7 @@ def test_csv_fixtures_report_exact_diagnostics(
         "phase": "ingest",
         "condition": condition,
         "spec_paths": ("datasets.DM.path",),
+        "requirement": requirement,
         "context": {"dataset": "DM", "path": path, **context},
     }
 
@@ -300,6 +317,7 @@ def test_unknown_profile_fails_before_snapshot_bytes_are_read() -> None:
         "phase": "validation",
         "condition": "source_profile_unknown",
         "spec_paths": ("datasets.DM.path",),
+        "requirement": "R023-23",
         "context": {"dataset": "DM", "path": "input/dm.txt"},
     }
     assert resources.capture_reads == 0
@@ -348,6 +366,7 @@ def test_typed_parse_fixtures_are_ingestion_failures(
         "phase": "ingest",
         "condition": "field_parse_failed",
         "spec_paths": (f"datasets.{dataset}.types.{field}",),
+        "requirement": "R014-23",
         "context": {
             "dataset": dataset,
             "field": field,
@@ -371,6 +390,7 @@ def test_unknown_typed_field_fails_in_validation(tmp_path: Path) -> None:
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": ("datasets.DM.types.AGEYRS",),
+        "requirement": "R014-19",
         "context": {"dataset": "DM", "field": "AGEYRS"},
     }
 
@@ -407,5 +427,6 @@ def test_changed_content_is_reported_at_ingest_with_written_path(
         "phase": "ingest",
         "condition": "resource_path_content_changed",
         "spec_paths": ("datasets.DM.path",),
+        "requirement": None,
         "context": {"dataset": "DM", "path": "dm.csv"},
     }

@@ -5,7 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from yamaa.specification import SpecificationError, load_specification
+from yamaa.specification import (
+    SpecificationError,
+    ValidationDiagnostic,
+    load_specification,
+)
 from yamaa.specification._yaml import read_yaml_document
 from yamaa.specification.schema import (
     load_schema_bundle,
@@ -179,6 +183,7 @@ def test_negative_column_type_matches_committed_diagnostic() -> None:
             "phase": "validation",
             "condition": "value_not_permitted",
             "spec_paths": ["columns.AVAL.type"],
+            "requirement": "R011-29",
             "context": {
                 "value": "number",
                 "permitted": ["str", "int", "float", "date", "datetime"],
@@ -198,8 +203,19 @@ def test_negative_nested_expression_matches_committed_diagnostic() -> None:
         "phase": "validation",
         "condition": "invalid_field_type",
         "spec_paths": ["columns.COUNTRY.derivation.str_upper.source"],
+        "requirement": "R007-37",
         "context": {"expected": "variable", "actual": "mapping"},
     }
+
+
+def test_validation_diagnostic_rejects_malformed_requirement() -> None:
+    with pytest.raises(ValueError):
+        ValidationDiagnostic(
+            condition="invalid_field_type",
+            spec_paths=("columns.VALUE.type",),
+            requirement="R11-29",
+            context={},
+        )
 
 
 def test_rejects_unknown_fields_with_a_stable_path(tmp_path: Path) -> None:
@@ -216,6 +232,7 @@ def test_rejects_unknown_fields_with_a_stable_path(tmp_path: Path) -> None:
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": ["unexpected"],
+        "requirement": None,
         "context": {"field": "unexpected", "class": "root_class"},
     }
 
@@ -240,6 +257,7 @@ def test_rejects_unknown_registry_operations_with_a_stable_path(
         "phase": "validation",
         "condition": "unknown_operation",
         "spec_paths": ["columns.STUDYID.derivation.unknown_operation"],
+        "requirement": None,
         "context": {
             "registry": "expressions",
             "operation": "unknown_operation",
@@ -446,6 +464,7 @@ def test_rejects_non_ascii_authored_source(tmp_path: Path) -> None:
         "phase": "validation",
         "condition": "non_ascii_source",
         "spec_paths": ["$"],
+        "requirement": None,
         "context": {"path": str(path), "line": 1, "column": 11},
     }
 
@@ -480,6 +499,7 @@ def test_rejects_surrogate_code_points_from_yaml_escapes(tmp_path: Path) -> None
         "phase": "validation",
         "condition": "invalid_text",
         "spec_paths": ["$.label"],
+        "requirement": None,
         "context": {"code_point": "U+D800", "offset": 0},
     }
 
@@ -496,6 +516,7 @@ def test_rejects_schema_version_mismatch(tmp_path: Path) -> None:
         "phase": "validation",
         "condition": "schema_version_mismatch",
         "spec_paths": ["schema_version"],
+        "requirement": None,
         "context": {"expected": "1.0", "actual": "9.9"},
     }
 
@@ -515,5 +536,6 @@ def test_malformed_schema_version_has_a_structured_diagnostic(tmp_path: Path) ->
         "phase": "validation",
         "condition": "schema_version_mismatch",
         "spec_paths": ["schema_version"],
+        "requirement": None,
         "context": {"expected": "1.0", "actual_type": "mapping"},
     }

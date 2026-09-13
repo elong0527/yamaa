@@ -239,6 +239,7 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
                 "validation",
                 "ambiguous_dictionary",
                 {"folded_key": folded_key, "entries": collisions[folded_key]},
+                requirement="R019-22",
             )
 
     resolved = resolver.resolve(variable)

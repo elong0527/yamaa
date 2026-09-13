@@ -399,12 +399,17 @@ PredicateResult: TypeAlias = PredicateValue | ConditionResult
 OperandResult: TypeAlias = ValueResult | ConditionResult
 
 
-def _condition(condition: str, context: dict[str, JsonValue]) -> ConditionResult:
+def _condition(
+    condition: str,
+    context: dict[str, JsonValue],
+    requirement: str,
+) -> ConditionResult:
     return ConditionResult(
         condition=RuntimeCondition(
             phase="validation",
             condition=condition,
             context=context,
+            requirement=requirement,
         )
     )
 
@@ -430,19 +435,25 @@ def _operand(node: PredicateAst, resolver: Resolver) -> OperandResult:
                 return _condition(
                     "invalid_predicate",
                     {"position": node.get("position", 0)},
+                    "R004-31",
                 )
             return ValueResult(value=temporal)
         except ValueError:
             return _condition(
                 "invalid_predicate",
                 {"position": node.get("position", 0)},
+                "R016-60",
             )
 
     resolved = resolver.resolve(node["name"])
     if isinstance(resolved, FailedResolution):
         return ConditionResult(condition=resolved.condition)
     if isinstance(resolved, AbsentValue):
-        return _condition("unknown_field", {"identifier": node["name"]})
+        return _condition(
+            "unknown_field",
+            {"identifier": node["name"]},
+            "R004-32",
+        )
     assert isinstance(resolved, ResolvedValue)
     return normalize_runtime_value(resolved.value)
 
@@ -493,6 +504,7 @@ def _comparison(
                 "left_type": runtime_type_name(left),
                 "right_type": runtime_type_name(right),
             },
+            "R004-33",
         )
     comparable_left = _ordered(left)
     comparable_right = _ordered(right)
@@ -620,6 +632,7 @@ def _evaluate(node: Mapping[str, Any], resolver: Resolver) -> PredicateResult:
                         value if not isinstance(value, str) else pattern
                     ),
                 },
+                "R004-33",
             )
         else:
             compiled = _like_pattern(pattern, node.get("escape"))
@@ -627,6 +640,7 @@ def _evaluate(node: Mapping[str, Any], resolver: Resolver) -> PredicateResult:
                 return _condition(
                     "invalid_predicate",
                     {"reason": "LIKE pattern has a dangling escape"},
+                    "R004-34",
                 )
             truth = (
                 TruthValue.TRUE
@@ -636,7 +650,7 @@ def _evaluate(node: Mapping[str, Any], resolver: Resolver) -> PredicateResult:
         if node["negated"]:
             truth = _not(truth)
         return PredicateValue(value=truth)
-    return _condition("invalid_predicate", {"kind": str(kind)})
+    return _condition("invalid_predicate", {"kind": str(kind)}, "R004-31")
 
 
 def evaluate_predicate(ast: PredicateAst, resolver: Resolver) -> PredicateResult:
