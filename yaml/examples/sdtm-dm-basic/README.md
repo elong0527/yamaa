@@ -5,7 +5,7 @@
 **Goal:** build one Demographics (DM) record per subject: sex (SEX), age
 (AGE), planned arm (ARM) and actual arm (ACTARM).
 
-**Input:** electronic data capture (EDC) output in long form, one row per
+**Input:** EDC output in long form, one row per
 collected item; e.g. subject 001 has **SEX**, **AGE** and **ARM** rows.
 
 **Variables:**
