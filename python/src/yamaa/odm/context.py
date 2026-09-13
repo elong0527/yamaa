@@ -96,10 +96,16 @@ def _ordered(value: RuntimeValue) -> object:
 
 
 def _same_value(left: RuntimeValue, right: RuntimeValue) -> bool:
-    """Return whether two readings carry the same value of the same type."""
+    """Return whether two readings carry one value rather than two.
+
+    Each runtime type owns that identity: R016-35 keeps collected precision
+    out of it, so two datings of one day are one value. The type name guards
+    the comparison, because a host equality that crosses runtime types would
+    read a number and a flag carrying it as one value.
+    """
     if runtime_type_name(left) != runtime_type_name(right):
         return False
-    return bool(_ordered(left) == _ordered(right))
+    return bool(left == right)
 
 
 def _distinct_values(readings: Iterable[object]) -> list[RuntimeValue]:

@@ -482,6 +482,9 @@ def test_source_provider_diagnostics_enter_the_execution_result() -> None:
 # Committed grain contracts: how many rows a specification emits is the
 # declared keys' answer (R001-12), so the two ways a key combination can
 # still come out wrong each keep an example pinning the error it raises.
+# test_examples.py compares every negative example's `requirement`; these
+# two also pin the phase, condition, spec paths and reported keys, which is
+# what tells the output gate and the derivation failure apart.
 @pytest.mark.parametrize(
     "name",
     ["negative-output-duplicate-subject", "negative-keys-conflicting-values"],

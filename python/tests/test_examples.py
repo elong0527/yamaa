@@ -29,7 +29,6 @@ KNOWN_REQUIREMENT_GAPS = {
     "negative-adsl-remote-parent": ("R017-40", None),
     "negative-function-contract-mismatch": ("R018-38", None),
     "negative-keys-missing-value": ("R005-52", "R001-43"),
-    "negative-output-duplicate-subject": ("R005-52", "R001-44"),
 }
 
 
