@@ -6,9 +6,10 @@
 treatment-emergent event for each subject and preferred term
 (`AEDECOD`), adding `AESEVN` and `AWSEVFL`.
 
-**Input:** adverse event (AE) records carrying dictionary-derived
-term (`AEDECOD`), analysis start date (`ASTDT`), severity (`AESEV`),
-and treatment-emergent flag (`TRTEMFL`).
+**Input:** adverse event (AE) records carrying body system or organ
+class (`AEBODSYS`), dictionary-derived term (`AEDECOD`), analysis
+start date (`ASTDT`), severity (`AESEV`), and treatment-emergent
+flag (`TRTEMFL`).
 
 **Variables:**
 
