@@ -7,6 +7,11 @@ const specification = document.getElementById("specification");
 const workbench = document.querySelector(".workbench");
 const specResizer = document.getElementById("spec-resizer");
 sidebarToggle.hidden = false;
+// The specification starts collapsed; the toggle reveals it on demand.
+specification.hidden = true;
+workbench.classList.add("without-sidebar");
+sidebarToggle.setAttribute("aria-expanded", "false");
+sidebarToggle.querySelector("span").textContent = "Show Spec";
 sidebarToggle.addEventListener("click", () => {
   specification.hidden = !specification.hidden;
   workbench.classList.toggle("without-sidebar", specification.hidden);
@@ -100,13 +105,12 @@ if (subjectSelect.options.length > 1) {
   });
 }
 
-const sectionSelect = document.getElementById("section-select");
-sectionSelect.hidden = false;
-sectionSelect.addEventListener("change", () => {
-  document.querySelectorAll(".code-line.is-target").forEach((line) => line.classList.remove("is-target"));
-  if (!sectionSelect.value) return;
-  const line = document.getElementById(sectionSelect.value);
-  const scroller = document.querySelector(".code-scroll");
-  line.classList.add("is-target");
-  scroller.scrollTop += line.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 12;
-});
+const codeSelect = document.getElementById("code-select");
+if (codeSelect) {
+  const codePanes = Array.from(document.querySelectorAll(".code-pane"));
+  codeSelect.addEventListener("change", () => {
+    codePanes.forEach((pane) => {
+      pane.hidden = pane.id !== codeSelect.value;
+    });
+  });
+}

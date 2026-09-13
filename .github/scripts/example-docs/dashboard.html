@@ -40,7 +40,6 @@
     <div class="workbench">
       <aside id="specification" class="panel schema-panel" aria-labelledby="schema-heading">
         <header class="panel-header"><h2 id="schema-heading">YAML specification</h2><span class="panel-caption">$spec_lines lines</span></header>
-        <div class="code-toolbar"><label class="visually-hidden" for="section-select">Jump to YAML section</label><select id="section-select" hidden><option value="">Jump to section</option>$section_options</select></div>
         <div class="code-scroll" tabindex="0" aria-label="Complete YAML specification"><pre><code>$spec_code</code></pre></div>
       </aside>
       <div id="spec-resizer" class="panel-resizer" role="separator" aria-label="Resize specification panel" aria-controls="specification" aria-orientation="vertical" aria-valuemin="240" aria-valuemax="720" aria-valuenow="350" tabindex="0" title="Drag to resize the specification panel"><span aria-hidden="true"></span></div>
@@ -56,6 +55,7 @@
         </section>
       </div>
     </div>
+    $code_panel
   </main>
   <footer class="page-footer"><span>$example_name</span><nav class="example-nav" aria-label="More examples"><span>$prev_link</span><a href="index.html">All examples</a><span>$next_link</span></nav></footer>
   <script>$script</script>
