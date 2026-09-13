@@ -39,13 +39,13 @@ jobs:
           PYTHONHASHSEED: '1'
           TZ: UTC
         run: python .github/scripts/example-docs/generate.py --all --quiet
-      - uses: actions/configure-pages@3e0d92b6602389ad65bbc7f7b2f558f0b12b9d1f # v6.0.1
-      - uses: actions/jekyll-build-pages@3b78dc0ffce0e0e527fc8df4f50008fd0ef347d # v1.0.3
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697 # v1.0.13
         with:
           source: ./docs
           destination: ./_site
-      - uses: actions/upload-pages-artifact@7b1a5fc5d8570d382669d073d5393a92677df3429 # v4.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: ./_site
-      - uses: actions/deploy-pages@592e1b4863d74d0e4d7b24b79771d462c0aaa # v5.0.0
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
         id: deployment
