@@ -20,6 +20,7 @@ tracker, one work item per root cause.
         input/*.csv
         expected/<domain>.csv
         expected/resolved[_<variant>].yaml  # when the entry inherits
+        excel-spec.md                       # when reviewed: the spec as Excel sheets
 
 Use `spec.yaml` for one specification. Use one or more `spec_<variant>.yaml`
 files when the example intentionally demonstrates a runtime or design variant
