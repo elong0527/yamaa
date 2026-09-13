@@ -217,7 +217,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('data-mapping="specific" data-term="yaml/examples/adam-adae-death-outcome" data-strict="1"', page)
         self.assertIn('data-repo="elong0527/yamaa"', page)
         self.assertIn(
-            'data-theme="https://elong0527.github.io/yamaa/assets/giscus-yamaa.css?v=2"',
+            'data-theme="https://elong0527.github.io/yamaa/assets/giscus-yamaa.css?v=3"',
             page,
         )
         other = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
@@ -229,9 +229,10 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertIn('aria-label*="+1"', theme)
         self.assertIn('aria-label*="-1"', theme)
-        self.assertIn('content: "\\1f44d  0"', theme)
-        self.assertIn('content: "\\1f44e  0"', theme)
-        self.assertNotIn("::details-content", theme)
+        self.assertIn('content: "0"', theme)
+        self.assertIn("content-visibility: visible !important", theme)
+        self.assertIn("visibility: visible !important", theme)
+        self.assertIn("transform: none !important", theme)
         self.assertIn(".gsc-social-reaction-summary-item-count", theme)
 
     def test_code_panel_lists_example_scripts(self):

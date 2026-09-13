@@ -66,9 +66,9 @@ readable with JavaScript disabled and when printing.
 
 Below the datasets, every dashboard has a Comments section powered by
 [giscus](https://giscus.app). Visitors sign in with GitHub to comment or react.
-The embedded reaction controls expose only thumbs up and thumbs down, with a
-count beside each; the custom giscus theme for that focused presentation lives
-at `docs/assets/giscus-yamaa.css`. Each comment and reaction is stored in this
+The embedded reaction controls directly expose only thumbs up and thumbs down,
+with a count beside each; the custom giscus theme for that focused presentation
+lives at `docs/assets/giscus-yamaa.css`. Each comment and reaction is stored in this
 repository's GitHub Discussions, so feedback persists across rebuilds and
 deployments and can be moderated there. Each example maps to one discussion
 titled `yaml/examples/<example-name>`

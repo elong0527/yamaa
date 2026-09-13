@@ -5,57 +5,85 @@
  */
 @import url("https://giscus.app/themes/light.css");
 
-/* Replace the aggregate reaction heading with focused thumb controls. Existing
- * reactions use giscus's own button and count; the disclosure summary shows an
- * explicit zero for each thumb that has no reactions yet. */
+/* Flatten giscus's reaction disclosure into two direct controls. Existing
+ * reactions use giscus's own button and count; a reaction with no votes uses
+ * the picker button plus an explicit zero. */
 .gsc-reactions-count,
-.gsc-upvote-button {
+.gsc-upvote-button,
+.gsc-reactions-button,
+.gsc-reactions-popover > .border-t {
   display: none;
 }
 
 :is(.gsc-reactions > div, .gsc-comment-reactions, .gsc-reply-reactions) {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
 }
 
-.gsc-reactions-button {
-  display: inline-flex;
-  min-height: 1.875rem;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--color-border-default);
-  border-radius: 0.375rem;
-  background: var(--color-canvas-subtle);
+:is(.gsc-reactions > div, .gsc-comment-reactions, .gsc-reply-reactions)
+  :is(
+    .gsc-reactions-menu,
+    .gsc-reactions-popover,
+    .gsc-reactions-popover > .m-2:last-child,
+    .gsc-direct-reaction-buttons
+  ) {
+  display: contents !important;
 }
 
-.gsc-reactions-button::marker,
-.gsc-reactions-button::-webkit-details-marker,
-.gsc-reactions-button > svg {
+.gsc-reactions-menu::details-content {
+  display: contents !important;
+  content-visibility: visible !important;
+}
+
+.gsc-reactions-popover {
+  position: static !important;
+  visibility: visible !important;
+  transform: none !important;
+}
+
+.gsc-reactions-popover > p {
   display: none;
-  content: "";
 }
 
-.gsc-reactions-button::before,
-.gsc-reactions-button::after {
+.gsc-reactions-popover > p:has(a) {
+  display: block;
+  order: 10;
+  width: 100%;
+  margin: 0.25rem 0 0;
+  text-align: center;
+}
+
+.gsc-emoji-button {
+  display: none !important;
+}
+
+.gsc-emoji-button:is([aria-label*="+1"], [aria-label*="-1"]) {
+  display: inline-flex !important;
+  width: auto;
+  min-width: 3rem;
+  height: 1.625rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0 0.25rem;
+  border: 1px solid var(--color-border-default);
+  border-radius: 999px;
+  background: transparent;
+}
+
+.gsc-emoji-button:is([aria-label*="+1"], [aria-label*="-1"])::after {
+  content: "0";
   color: var(--color-fg-muted);
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
-  white-space: pre;
 }
 
-.gsc-reactions-button::before {
-  content: "\1f44d  0";
-}
-
-.gsc-reactions-button::after {
-  content: "\1f44e  0";
-}
-
-.gsc-reactions-popover
-  .gsc-emoji-button:not(:is([aria-label*="+1"], [aria-label*="-1"])) {
-  display: none;
+.gsc-emoji-button:is([aria-label*="+1"], [aria-label*="-1"])
+  .gsc-emoji {
+  transform: none;
 }
 
 /* Direct buttons are emitted only for non-zero reactions. The nested title
@@ -66,22 +94,17 @@
   display: none;
 }
 
-/* When only +1 is non-zero, keep it before the summary's -1 zero state. */
-:is(.gsc-reactions > div, .gsc-comment-reactions, .gsc-reply-reactions):has(
-    > .gsc-direct-reaction-buttons
-      > .gsc-direct-reaction-button
-      > .gsc-social-reaction-summary-item-count[title*="+1"]
-  )
-  > .gsc-direct-reaction-buttons {
+.gsc-emoji-button[aria-label*="+1"],
+.gsc-direct-reaction-button:has(
+    > .gsc-social-reaction-summary-item-count[title*="+1"]
+  ) {
   order: 1;
 }
 
-:is(.gsc-reactions > div, .gsc-comment-reactions, .gsc-reply-reactions):has(
-    > .gsc-direct-reaction-buttons
-      > .gsc-direct-reaction-button
-      > .gsc-social-reaction-summary-item-count[title*="+1"]
-  )
-  > .gsc-reactions-menu {
+.gsc-emoji-button[aria-label*="-1"],
+.gsc-direct-reaction-button:has(
+    > .gsc-social-reaction-summary-item-count[title*="-1"]
+  ) {
   order: 2;
 }
 
@@ -90,28 +113,12 @@
       > .gsc-direct-reaction-button
       > .gsc-social-reaction-summary-item-count[title*="+1"]
   )
-  > .gsc-reactions-menu
-  > .gsc-reactions-button::before,
+  .gsc-emoji-button[aria-label*="+1"],
 :is(.gsc-reactions > div, .gsc-comment-reactions, .gsc-reply-reactions):has(
     > .gsc-direct-reaction-buttons
       > .gsc-direct-reaction-button
       > .gsc-social-reaction-summary-item-count[title*="-1"]
   )
-  > .gsc-reactions-menu
-  > .gsc-reactions-button::after {
-  content: none;
-}
-
-:is(.gsc-reactions > div, .gsc-comment-reactions, .gsc-reply-reactions):has(
-    > .gsc-direct-reaction-buttons
-      > .gsc-direct-reaction-button
-      > .gsc-social-reaction-summary-item-count[title*="+1"]
-  ):has(
-    > .gsc-direct-reaction-buttons
-      > .gsc-direct-reaction-button
-      > .gsc-social-reaction-summary-item-count[title*="-1"]
-  )
-  > .gsc-reactions-menu
-  > .gsc-reactions-button {
-  display: none;
+  .gsc-emoji-button[aria-label*="-1"] {
+  display: none !important;
 }
