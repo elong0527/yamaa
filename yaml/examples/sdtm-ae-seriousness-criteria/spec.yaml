@@ -1,0 +1,124 @@
+schema_version: "1.0"
+domain: AE
+datasets:
+  AE_RAW: input/ae_raw.csv
+base: AE_RAW
+keys: [STUDYID, USUBJID, AESEQ]
+
+output:
+  path: ae.csv
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AETERM, AESER, AESDTH,
+    AESLIFE, AESHOSP, AESDISAB, AESCONG, AESMIE]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: AE
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: AE_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: AE_RAW.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: AE_RAW.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation:
+      source: AE_RAW.AETERM
+
+  - name: AESER
+    type: str
+    label: Serious Event
+    derivation:
+      case:
+        branches:
+          - when: >-
+              AE_RAW.AESDTH = 'Y' OR AE_RAW.AESLIFE = 'Y'
+              OR AE_RAW.AESHOSP = 'Y' OR AE_RAW.AESDISAB = 'Y'
+              OR AE_RAW.AESCONG = 'Y' OR AE_RAW.AESMIE = 'Y'
+            then: {literal: Y}
+        otherwise: {literal: N}
+    verifications:
+      allowed_values: {values: [Y, N]}
+
+  - name: AESDTH
+    type: str
+    label: Results in Death
+    derivation:
+      source: AE_RAW.AESDTH
+    verifications:
+      allowed_values: {values: [Y, N]}
+
+  - name: AESLIFE
+    type: str
+    label: Is Life Threatening
+    derivation:
+      source: AE_RAW.AESLIFE
+    verifications:
+      allowed_values: {values: [Y, N]}
+
+  - name: AESHOSP
+    type: str
+    label: Requires or Prolongs Hospitalization
+    derivation:
+      source: AE_RAW.AESHOSP
+    verifications:
+      allowed_values: {values: [Y, N]}
+
+  - name: AESDISAB
+    type: str
+    label: Persist or Significant Disability/Incapacity
+    derivation:
+      source: AE_RAW.AESDISAB
+    verifications:
+      allowed_values: {values: [Y, N]}
+
+  - name: AESCONG
+    type: str
+    label: Congenital Anomaly or Birth Defect
+    derivation:
+      source: AE_RAW.AESCONG
+    verifications:
+      allowed_values: {values: [Y, N]}
+
+  - name: AESMIE
+    type: str
+    label: Other Medically Important Serious Event
+    derivation:
+      source: AE_RAW.AESMIE
+    verifications:
+      allowed_values: {values: [Y, N]}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 4
+      max: 4
+  - implies:
+      id: serious-event-names-a-criterion
+      when: "AESER = 'Y'"
+      then: >-
+        AESDTH = 'Y' OR AESLIFE = 'Y' OR AESHOSP = 'Y'
+        OR AESDISAB = 'Y' OR AESCONG = 'Y' OR AESMIE = 'Y'
+  - implies:
+      id: a-serious-criterion-marks-the-event-serious
+      when: >-
+        AESDTH = 'Y' OR AESLIFE = 'Y' OR AESHOSP = 'Y'
+        OR AESDISAB = 'Y' OR AESCONG = 'Y' OR AESMIE = 'Y'
+      then: "AESER = 'Y'"
