@@ -12,3 +12,5 @@ Declare the constant as a date so both operands carry the same temporal type:
 ```yaml
 when: "ASTDT >= DATE '2025-01-01'"
 ```
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adae-review-text-date.html)

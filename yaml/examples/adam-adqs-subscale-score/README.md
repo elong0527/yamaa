@@ -16,3 +16,5 @@ A visit at which the questionnaire was administered carries a score record
 even when too few items were answered to score it, and a visit at which it was
 not administered carries no records at all. An unscorable visit is therefore
 still distinguishable from one the subject never reached.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adqs-subscale-score.html)

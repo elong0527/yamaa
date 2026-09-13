@@ -12,3 +12,5 @@ record plus one MAP row per complete subject and visit:
 
 Input containing a MAP parameter is rejected. Each contributing parameter must
 occur at most once within a subject and visit; an ambiguous group is rejected.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-advs-mean-arterial-pressure.html)

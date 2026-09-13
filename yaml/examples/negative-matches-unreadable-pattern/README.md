@@ -28,3 +28,5 @@ text rule at all and cannot drift from the codes it names:
 - allowed_values:
     values: [M, F, U]
 ```
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-matches-unreadable-pattern.html)

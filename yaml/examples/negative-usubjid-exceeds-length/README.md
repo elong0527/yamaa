@@ -46,3 +46,5 @@ subject identifier is described:
 Do not lower the bound below the values the study produces merely to make this
 input pass. A subject identifier that no longer fits its stated width is a
 defect wherever it is carried.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-usubjid-exceeds-length.html)

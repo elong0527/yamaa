@@ -21,3 +21,5 @@ Query the disagreement and correct whichever source is wrong. If both values
 are valid but serve different purposes, document which one governs the analysis
 and replace the equality check with that reconciliation policy. Do not silently
 prefer the randomization value or the independently collected value.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adam-adsl-stratification-reconciliation.html)

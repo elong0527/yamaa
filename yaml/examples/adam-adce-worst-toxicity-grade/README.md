@@ -17,3 +17,5 @@ derive one row per event:
 
 Grading and flagging are kept separate so that the grade means the same thing
 on every event, while the flag answers a question about the subject.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adce-worst-toxicity-grade.html)

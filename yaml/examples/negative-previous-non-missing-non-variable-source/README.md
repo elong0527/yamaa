@@ -32,3 +32,5 @@ rule, search the pressure variable itself:
 
 When every gap should instead read a fixed fallback, state that as a
 separate rule over the carried result rather than inside the search.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-previous-non-missing-non-variable-source.html)

@@ -26,3 +26,5 @@ datasets:
 Storing the file itself where the study reads it works equally well. Either
 way one name reaches one file, and reviewing the study is reviewing what it
 reads.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-dataset-path-symlink.html)

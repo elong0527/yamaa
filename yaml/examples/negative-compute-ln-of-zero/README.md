@@ -26,3 +26,5 @@ derivation:
 If the study instead substitutes a value related to the assay limit, derive
 that stated substitute first and apply `LN` to it. Do not replace zero with an
 unstated constant.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-compute-ln-of-zero.html)

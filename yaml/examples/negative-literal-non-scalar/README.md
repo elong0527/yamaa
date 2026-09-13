@@ -22,3 +22,5 @@ the older group reads as one word, state the word:
 
 When the value genuinely has parts, each part needs its own result
 column rather than sharing one.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-literal-non-scalar.html)

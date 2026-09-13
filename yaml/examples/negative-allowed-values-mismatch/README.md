@@ -16,3 +16,5 @@ verifications:
   - allowed_values:
       values: [M, F, U]
 ```
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-allowed-values-mismatch.html)

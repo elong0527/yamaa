@@ -26,3 +26,5 @@ consumes a number that a usable record would otherwise take.
 Subject identifiers are unique only within a study. The sample reuses one
 under a second study, and each study's records are ordered on their own, so
 one study's numbering never continues into the other's.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adrs-best-response-selection.html)

@@ -40,3 +40,5 @@ Keep `ASEVN` internal by omitting it from `output.columns`.
 
 The numeric assignments are analysis policy and must be confirmed rather than
 inferred from the order of the words.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-sum-non-numeric-source.html)

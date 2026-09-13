@@ -13,3 +13,5 @@ derive one record per collected disposition:
   protocol milestone, and every other outcome is a disposition event;
 - `DSDTC` is the date the outcome occurred. A record whose form did not name a
   complete calendar day has none.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-ds-disposition-sequence.html)

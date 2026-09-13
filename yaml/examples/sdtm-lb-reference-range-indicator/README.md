@@ -15,3 +15,5 @@ test-and-sex combination must have one and only one reference entry.
 The sample includes a result that was not collected. Its indicator stays
 empty rather than falling through to `NORMAL`, while the unit and both
 limits for its test and sex are still read.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-lb-reference-range-indicator.html)

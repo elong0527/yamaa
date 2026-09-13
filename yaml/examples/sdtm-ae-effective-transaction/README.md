@@ -17,3 +17,5 @@ from the first.
 A record whose last transaction removed it does not appear. The removal
 decision is made from the completed effective state rather than from an earlier
 transaction.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-ae-effective-transaction.html)

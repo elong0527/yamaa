@@ -34,3 +34,5 @@ earlier collected values, then coalesce that result with the current value:
 ```
 
 Keep `PRIOR` internal by omitting it from `output.columns`.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-row-value-self-reference.html)

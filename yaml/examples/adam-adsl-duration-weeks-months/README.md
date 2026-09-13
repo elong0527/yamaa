@@ -16,3 +16,5 @@ short, in which case it is the last day of the month: the anniversary
 of January 31 is February 28, and of February 29 is February 28 in a
 common year. An end date before the start date gives the negated count
 with the dates exchanged.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-duration-weeks-months.html)

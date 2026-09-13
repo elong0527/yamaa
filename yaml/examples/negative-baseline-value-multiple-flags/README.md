@@ -18,3 +18,5 @@ LBBLFL: " "
 
 or, when both visits genuinely qualify, pick one by rule (for example the
 earliest) and flag only that row before deriving.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-baseline-value-multiple-flags.html)

@@ -39,3 +39,5 @@ Keep `DOSE` internal by omitting it from `output.columns`.
 
 If the intended value is cumulative dose instead, use a qualified `aggregate`
 rather than selecting one record.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-compute-qualified-identifier.html)

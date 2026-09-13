@@ -11,3 +11,5 @@ This example uses sample DM text and produces one row per subject:
 A comment left deliberately blank is still a comment, because the investigator
 was asked and answered with nothing. It stays distinct from a comment that was
 never collected at all, and only the second of the two is absent.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-investigator-comment.html)

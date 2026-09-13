@@ -22,3 +22,5 @@ output:
 If study and subject already form the intended unique identity, remove
 `SITEID` from `keys` instead. Choose the option that matches the output's
 actual grain.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-keys-internal-column.html)

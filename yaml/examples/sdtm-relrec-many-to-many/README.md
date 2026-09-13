@@ -18,3 +18,5 @@ differing only in `RELID`. A record in no relationship contributes nothing.
 How many relationships a record can join is fixed by how many link fields the
 collection carries, so a record in a third relationship would need the
 collected data and the specification to grow together.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-relrec-many-to-many.html)

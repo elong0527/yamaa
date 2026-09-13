@@ -20,3 +20,5 @@ after it cannot be the event, and a subject still under observation at that
 point is censored there rather than at a later assessment. An event on the day
 the therapy started still counts, because that day is inside the period. A
 subject who never responded has no duration to measure and no record here.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adtte-duration-of-response.html)

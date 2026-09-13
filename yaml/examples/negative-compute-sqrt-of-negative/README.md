@@ -28,3 +28,5 @@ derivation:
 ```
 
 With no `otherwise`, an invalid measurement produces missing.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-compute-sqrt-of-negative.html)

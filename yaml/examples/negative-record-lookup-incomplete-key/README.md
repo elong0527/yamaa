@@ -27,3 +27,5 @@ record_lookups:
 
 This is separate from `unmatched`, which handles a complete key that the table
 does not contain.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-record-lookup-incomplete-key.html)

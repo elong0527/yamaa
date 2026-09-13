@@ -19,3 +19,5 @@ one row per concomitant medication:
 
 A subject with no ADSL record keeps their medications and leaves both treatment
 dates empty.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adcm-on-treatment-flag.html)

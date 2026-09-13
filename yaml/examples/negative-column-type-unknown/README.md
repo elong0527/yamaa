@@ -23,3 +23,5 @@ are impossible; otherwise use `float`:
 ```
 
 The allowed column types are `str`, `int`, `float`, `date`, and `datetime`.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-column-type-unknown.html)

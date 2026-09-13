@@ -36,3 +36,5 @@ Do not reach the other parameter by counting rows instead. Which row sits one
 position away depends on how the records happen to be ordered, so a sample
 that answers correctly today stops doing so as soon as a third parameter is
 added.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adlb-computed-parameter.html)

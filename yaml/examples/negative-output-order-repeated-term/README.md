@@ -29,3 +29,5 @@ output:
 Presenting the subjects in reverse instead means declaring `USUBJID`
 descending once, in the first position, rather than adding a second term for
 it.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-output-order-repeated-term.html)

@@ -19,3 +19,5 @@ per subject:
 
 One collected value can feed several output variables at once, and each carries
 its own translation: sex produces three, in three different vocabularies.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-mapping.html)

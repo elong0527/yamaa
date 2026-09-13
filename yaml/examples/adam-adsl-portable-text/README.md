@@ -18,3 +18,5 @@ This example uses sample DM text and produces one row per subject:
 
 The data include ASCII, an accent in composed and decomposed forms, U+00DF,
 U+0130, U+0131, a supplementary-plane scalar, and missing text.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-portable-text.html)

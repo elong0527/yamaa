@@ -53,3 +53,5 @@ Keep `ABLRANK` internal by omitting it from `output.columns`.
 Order by the term the study names; the sequence number above stands in for it
 and is not itself a clinical rule. Do not average the two results into one
 baseline value, which reports a measurement nobody took.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-baseline-flag-tied-date.html)

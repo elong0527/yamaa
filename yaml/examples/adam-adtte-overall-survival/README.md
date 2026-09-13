@@ -11,3 +11,5 @@ derive one overall-survival record per subject:
   and `CNSDTDSC` state whether the record represents death or censoring.
 - `SRCDOM`, `SRCVAR`, and `SRCSEQ` identify the selected event or censor
   source.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adtte-overall-survival.html)

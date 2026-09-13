@@ -17,3 +17,5 @@ derive one row per record:
   record with no analysis date belongs to no window and is never marked.
 
 Because study day has no day zero, the baseline window can only hold day one.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-advs-analysis-visit.html)

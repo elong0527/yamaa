@@ -8,3 +8,5 @@ Derives pooled age group flags for subject analysis records using DM:
   set to `Missing` when age is missing.
 - `AGEGR1N`: Pooled age group numeric flag (`1`, `2`, or `3`), missing
   when age is missing.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-age-group.html)

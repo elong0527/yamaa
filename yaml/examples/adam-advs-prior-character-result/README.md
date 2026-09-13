@@ -13,3 +13,5 @@ derive one analysis record per collected row:
 
 The result retains character values unchanged and can cross consecutive empty
 results.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-advs-prior-character-result.html)

@@ -17,3 +17,5 @@ then compare that value with the integer bounds:
 ```yaml
 between: {value: VSDY, lower: DYLO, upper: DYHI}
 ```
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-record-lookup-incomparable-range.html)

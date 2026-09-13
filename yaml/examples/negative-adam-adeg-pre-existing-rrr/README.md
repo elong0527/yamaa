@@ -19,3 +19,5 @@ to the failing check.
 Remove the collected `RRR` record and retain its contributing `HR` record with
 `AVALU: beats/min`. The specification will then calculate the RR interval and
 mark it as produced by the calculation.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adam-adeg-pre-existing-rrr.html)

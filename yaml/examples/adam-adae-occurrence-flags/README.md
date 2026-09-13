@@ -17,3 +17,5 @@ never marked at any level, even when it is the subject's earliest event.
 The three levels nest: an event marked as the subject's first is necessarily
 also the first in its body system and its preferred term, while a term
 occurring later carries only the preferred-term flag.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-occurrence-flags.html)

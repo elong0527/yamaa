@@ -13,3 +13,5 @@ per subject:
 - `SUBJREF` is a display reference combining `SITEID` and `SUBJID`, separated
   by a colon. A subject with no subject number gets `UNKNOWN` in its place
   rather than a partial reference.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-identifier-parsing.html)

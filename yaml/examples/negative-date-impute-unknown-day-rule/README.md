@@ -26,3 +26,5 @@ date_impute:
 A value such as `2023-06` then becomes `2023-06-01`. Writing `day: last`
 instead gives `2023-06-30`, and writing `day: 15` names the fifteenth of the
 collected month directly.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-date-impute-unknown-day-rule.html)

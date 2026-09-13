@@ -24,3 +24,5 @@ derivation:
 ```
 
 A complete source date is retained; `2023-06` becomes `2023-06-01`.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-conversion-incomplete-date.html)

@@ -24,3 +24,5 @@ mapping:
 
 If an unknown response should instead produce a missing result, declare
 `unmapped: null`. Prefer completing the dictionary when the value is valid.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-mapping-unmapped-value.html)

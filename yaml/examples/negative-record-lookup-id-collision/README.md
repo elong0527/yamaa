@@ -26,3 +26,5 @@ record_lookups:
 derivation:
   source: FIRSTEX.EXTRT
 ```
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-record-lookup-id-collision.html)

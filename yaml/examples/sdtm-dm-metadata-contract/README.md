@@ -14,3 +14,5 @@ lengths, terminology, class, structure, and standard version a submission
 review needs, and the example carries the data-definition document those
 declarations produce beside the data itself. A subject identifier longer than
 30 characters is rejected rather than shortened.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-dm-metadata-contract.html)

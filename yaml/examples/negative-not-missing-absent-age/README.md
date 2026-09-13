@@ -24,3 +24,5 @@ is genuinely possible, drop the rule and let the column stay missing:
 
 Do not fill the gap with a placeholder age, which reports a value
 nobody recorded.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-not-missing-absent-age.html)

@@ -37,3 +37,5 @@ Do not keep the grain and widen the written-out rows to whatever the current
 extract needs. It answers correctly only for data that has already been seen,
 and the next extract with a longer record silently loses administrations
 again.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adex-single-dose-expansion.html)

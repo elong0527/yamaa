@@ -11,3 +11,5 @@ with a `yamaa` specification to derive one row per adverse event:
 Severity joins on the subject identifiers and the event sequence number
 together: two events of one subject carry different severities because the
 sequence number keeps their supplemental records apart.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-event-severity.html)

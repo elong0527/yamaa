@@ -16,3 +16,5 @@ cut:
   breaks: [65]
   labels: [younger, elderly]
 ```
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-cut-non-numeric-source.html)

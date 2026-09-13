@@ -19,3 +19,5 @@ measurement:
 The assignment is a property of the subject, not of the measurement, so the
 same eye is the study eye at every visit; only the collected laterality moves
 a record between roles.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adoe-study-eye.html)

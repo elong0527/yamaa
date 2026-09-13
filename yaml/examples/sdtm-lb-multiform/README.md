@@ -23,3 +23,5 @@ a `yamaa` specification to derive one record per result actually reported:
 A result that was not reported produces no record, whether the form was never
 applicable to that subject or the field was simply left blank. A numeric zero
 is a real result and is kept.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-lb-multiform.html)

@@ -24,3 +24,5 @@ derivation:
 `NULLIF(BASE, 0)` returns missing for a zero baseline. Missing then propagates
 through the division, so `PCHG` is missing for that row instead of raising
 `division_by_zero`; nonzero baselines retain the original calculation.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-compute-division-by-zero.html)

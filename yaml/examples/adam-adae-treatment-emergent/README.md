@@ -14,3 +14,5 @@ one row per adverse event:
 
 Treating both boundaries as inside the period is this study's rule rather than
 a universal one.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-treatment-emergent.html)

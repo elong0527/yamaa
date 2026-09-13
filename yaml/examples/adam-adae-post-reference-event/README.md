@@ -6,3 +6,5 @@ Derives one analysis record per AE event from AE, retaining `AEDECOD` and
 - `AFTCOVFL` is `Y` for an event ordered strictly after the subject's first
   COVID-19 event; otherwise it is missing, including when the subject has no
   COVID-19 event.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-post-reference-event.html)

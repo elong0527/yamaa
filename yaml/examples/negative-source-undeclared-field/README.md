@@ -22,3 +22,5 @@ the source carries the age under its own name, copy that field:
 
 When the source truly lacks the field, add it to the governed source
 first rather than pointing at a name nothing declares.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-source-undeclared-field.html)

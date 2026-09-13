@@ -11,3 +11,5 @@ This example uses sample AE data and a `yamaa` specification to:
 
 A blank `AESPID` is missing whether it was recorded bare or quoted, so it
 becomes the `0` that stands for an identifier nobody recorded.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-string-handlers.html)

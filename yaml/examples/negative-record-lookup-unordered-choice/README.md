@@ -25,3 +25,5 @@ record_lookups:
 ```
 
 Both `TRT01A` and `TRT01DOSE` then come from that same selected record.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-record-lookup-unordered-choice.html)

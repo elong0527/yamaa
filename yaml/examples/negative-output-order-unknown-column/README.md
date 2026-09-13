@@ -33,3 +33,5 @@ columns:
 
 When the visit number is not wanted at all, order by a variable the dataset
 already declares, such as `VSSEQ`.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-output-order-unknown-column.html)

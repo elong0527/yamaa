@@ -17,3 +17,5 @@ through to the combined population flag.
 
 The variables are declared from collected values through the dependent flag
 chain. `RANDFL` is used along the way but is not part of the output.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-dependency-order.html)

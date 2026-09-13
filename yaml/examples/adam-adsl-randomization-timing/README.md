@@ -8,3 +8,5 @@ subject:
   start date;
 - `RANDDTC` is the subject's local randomization date and time, rendered to
   whole-second precision.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-randomization-timing.html)

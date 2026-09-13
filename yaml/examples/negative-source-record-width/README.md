@@ -20,3 +20,5 @@ is itself collected, name it in the header so that every record carries it:
 
 A bare separator inside a value produces the same surplus, so a value holding
 a separator is quoted rather than left bare.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-source-record-width.html)

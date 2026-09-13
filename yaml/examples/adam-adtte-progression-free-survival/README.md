@@ -14,3 +14,5 @@ one progression-free-survival record per subject:
 Assessments made ineligible by subsequent therapy cannot become an event or a
 censoring record. The expected endpoint is calculated from the assessment and
 death inputs, not copied from the simulated endpoint form.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adtte-progression-free-survival.html)

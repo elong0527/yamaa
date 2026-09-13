@@ -13,3 +13,5 @@ The formula and parameter identity follow
 [`pharmaverse/admiral`](https://github.com/pharmaverse/admiral) commit
 `a221ff02e368cb3e9638417678e19c0838dbe368`,
 `R/derive_param_qtc.R`.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adeg-bazett-qtc.html)

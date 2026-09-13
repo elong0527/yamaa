@@ -26,3 +26,5 @@ record_lookups:
 
 The lookup then returns missing for all columns read through `REFRANGE` when a
 complete key has no match.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-record-lookup-unmatched-key.html)

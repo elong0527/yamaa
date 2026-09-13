@@ -29,3 +29,5 @@ mapping_from:
 
 The `unmapped` handler does not apply to an incomplete key; use `missing` for
 that condition.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-mapping-from-unmapped-key.html)

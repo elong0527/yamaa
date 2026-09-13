@@ -31,3 +31,5 @@ str_extract:
   pattern: '^CATH-([^-]+)-([0-9]{4})$'
   group: 2
 ```
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-str-extract-undeclared-group.html)

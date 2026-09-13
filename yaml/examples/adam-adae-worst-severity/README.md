@@ -21,3 +21,5 @@ all ineligible has no marked event at all.
 Exactly one event is marked even when several tie at the worst severity on the
 same day. That suits a flag meant to identify a single record, and not a study
 that wants every event tied at the worst severity marked.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-worst-severity.html)

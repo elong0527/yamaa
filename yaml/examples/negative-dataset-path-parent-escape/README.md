@@ -25,3 +25,5 @@ datasets:
 If the limits are maintained centrally, copy the approved version into the
 study when it is approved. A study that reaches above itself for data cannot
 state which version produced its results.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-dataset-path-parent-escape.html)

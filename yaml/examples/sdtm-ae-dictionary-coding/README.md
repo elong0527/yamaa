@@ -16,3 +16,5 @@ of an absent value.
 
 The dictionary is an ordinary input, and the study records which version was
 used, since the same term can code differently between releases.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-ae-dictionary-coding.html)

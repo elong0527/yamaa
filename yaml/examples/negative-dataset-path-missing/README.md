@@ -28,3 +28,5 @@ If a study genuinely has no reference limits for a test, say so explicitly by
 supplying a result for the unmatched case rather than by leaving the table
 out. A file that is simply absent cannot be told apart from one that was
 forgotten.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-dataset-path-missing.html)

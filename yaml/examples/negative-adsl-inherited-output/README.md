@@ -15,3 +15,5 @@ default for reuse, but the entry must replace it explicitly:
 output:
   columns: [USUBJID]
 ```
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adsl-inherited-output.html)

@@ -11,3 +11,5 @@ A subject whose medications include none given as rescue has no such
 medication, and the value is empty. That is the same result a subject with no
 recorded medications at all receives, because in both cases nothing was
 selected rather than something being selected badly.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-rescue-medication.html)

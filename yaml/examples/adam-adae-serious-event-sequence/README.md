@@ -10,3 +10,5 @@ This example uses collected adverse events to derive one record per event:
 A subject who reported no serious event keeps every record and receives no
 number on any of them. Numbering the earliest of their events instead would
 present an ordinary event as the first serious one.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-serious-event-sequence.html)

@@ -19,3 +19,5 @@ one row per subject:
 One row per subject means one row per subject collected in DM. An exposure
 record whose subject is absent from DM has no row to contribute to and
 creates none, so the row count never grows with the exposure source.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-treatment-selection.html)

@@ -28,3 +28,5 @@ so the count has whole days to count:
 When the hours matter, the study needs a finer unit than days, which
 this vocabulary does not offer; record that gap instead of rounding
 it away.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-date-diff-datetime-endpoints.html)

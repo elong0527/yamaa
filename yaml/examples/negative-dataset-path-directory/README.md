@@ -25,3 +25,5 @@ datasets:
 When limits arrive as several files, combine them into one reviewed table
 first. A study reads the table it was approved against, not a folder that
 grows.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-dataset-path-directory.html)

@@ -10,3 +10,5 @@ per adverse event:
 
 `ASEVN` reads the severity after the correction, not the collected value, so a
 corrected event carries both the corrected term and its matching rank.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-severity-override.html)

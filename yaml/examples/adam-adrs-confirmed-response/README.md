@@ -11,3 +11,5 @@ record per assessment:
 
 Responses are read in date order within a subject, so a partial or complete
 response at a subject's last assessment cannot be confirmed.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adrs-confirmed-response.html)

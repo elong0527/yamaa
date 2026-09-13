@@ -18,3 +18,5 @@ An event may belong to a standardized query and to the customized one at the
 same time, and each is reported in its own place. Which query occupies which
 place is decided by the dictionary rather than by the event, so two events
 coded to the same term always report it in the same place.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-query-flags.html)

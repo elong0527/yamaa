@@ -26,3 +26,5 @@ datasets:
 Retrieval belongs to the step that assembles study data, where the received
 version can be recorded and reviewed. It is not part of building the analysis
 dataset.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-dataset-path-url.html)

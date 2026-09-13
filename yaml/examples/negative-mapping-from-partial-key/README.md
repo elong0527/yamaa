@@ -31,3 +31,5 @@ mapping_from:
 
 This does not handle a complete key that is absent from `LBREF`; that separate
 condition uses `unmapped`.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-mapping-from-partial-key.html)

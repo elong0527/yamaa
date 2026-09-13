@@ -13,3 +13,5 @@ record at the source-record grain:
 - `VSSTRESN` preserves the numeric result used for the threshold.
 
 This covers the upstream branch in which no fever FA record already exists.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-fa-fever-occurrence.html)

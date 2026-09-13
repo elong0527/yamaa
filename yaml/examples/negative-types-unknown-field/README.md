@@ -25,3 +25,5 @@ datasets:
 ```
 
 The qualified aggregate can then resolve `EX.EXDOSE` as numeric.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-types-unknown-field.html)

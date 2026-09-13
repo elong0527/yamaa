@@ -10,3 +10,5 @@ local build, so the run must fail before any source data is read.
 
 Review and store the parent file locally, then reference it with a relative or
 absolute filesystem `parents` path. Do not use a URL or URI.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adsl-remote-parent.html)

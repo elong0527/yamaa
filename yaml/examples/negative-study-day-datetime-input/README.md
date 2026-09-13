@@ -27,3 +27,5 @@ day count has whole days to count:
 
 When the time of day carries meaning, a day count is the wrong result;
 keep the moment instead of forcing it into one.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-study-day-datetime-input.html)

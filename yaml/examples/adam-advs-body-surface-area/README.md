@@ -12,3 +12,5 @@ plus one BSA row per complete subject and visit:
 
 Input containing a BSA parameter is rejected. Each contributing parameter must
 occur at most once within a subject and visit.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-advs-body-surface-area.html)

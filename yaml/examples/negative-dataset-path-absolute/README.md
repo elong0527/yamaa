@@ -30,3 +30,5 @@ Keep a shared limit table outside the study only when the runner approves the
 directory that holds it as a data root, and then name it by its rooted path.
 Give each study the version it was run against either way: a shared location
 that is edited between runs changes results that were already reported.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-dataset-path-absolute.html)

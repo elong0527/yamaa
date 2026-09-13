@@ -19,3 +19,5 @@ the header has no further field:
 
 A field worth storing is worth naming, and its name is what every later
 reference to it uses.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-source-empty-field-name.html)

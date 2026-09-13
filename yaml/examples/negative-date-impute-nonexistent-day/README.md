@@ -27,3 +27,5 @@ If the analysis requires the actual last day of each month, one fixed `day`
 cannot express that policy for months of different lengths. Supply complete,
 calendar-valid end dates upstream or implement that separately defined rule
 through the project's extension point.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-date-impute-nonexistent-day.html)

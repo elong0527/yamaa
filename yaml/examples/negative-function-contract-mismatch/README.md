@@ -14,3 +14,5 @@ function:
   contract_version: "1.0.0"
   args: {x: SOURCE.VALUE}
 ```
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-function-contract-mismatch.html)

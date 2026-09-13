@@ -12,3 +12,5 @@ Use the declared analysis start date in the condition:
 ```yaml
 when: "ASTDT >= DATE '2025-01-01'"
 ```
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adae-review-unknown-date.html)

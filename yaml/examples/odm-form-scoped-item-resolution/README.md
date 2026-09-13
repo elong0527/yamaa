@@ -13,3 +13,5 @@ This example uses a long-form ODM projection with five laboratory forms and a
 
 Form identity is part of the collection context. Dates from another form at
 the same subject and visit cannot satisfy a missing date on the current form.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/odm-form-scoped-item-resolution.html)

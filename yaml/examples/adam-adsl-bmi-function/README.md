@@ -8,3 +8,5 @@ per subject:
   than by a formula written in the specification. The specification names the
   routine and its exact contract and says which values to pass it. The project
   environment selects one R runtime and binds that routine to `bmi`.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-bmi-function.html)

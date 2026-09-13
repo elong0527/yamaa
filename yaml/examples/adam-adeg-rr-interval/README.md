@@ -12,3 +12,5 @@ parameter record per subject and analysis visit:
 The formula and parameter identity follow
 [`pharmaverse/admiral`](https://github.com/pharmaverse/admiral) commit
 `e32e5689d7fd03e224ddbcfc369c332c5df837d9`, `R/derive_param_rr.R`.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adeg-rr-interval.html)

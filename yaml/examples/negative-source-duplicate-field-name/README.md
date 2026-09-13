@@ -21,3 +21,5 @@ study governs:
 
 If the two fields hold the same fact twice, remove one at the source. A
 listing that answers to one name twice cannot be read the same way twice.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-source-duplicate-field-name.html)

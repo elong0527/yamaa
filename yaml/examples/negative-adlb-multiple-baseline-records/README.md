@@ -36,3 +36,5 @@ arises:
 
 Do not widen the count to accept two records; a second baseline is a defect in
 the data rather than a policy the analysis can adopt.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adlb-multiple-baseline-records.html)

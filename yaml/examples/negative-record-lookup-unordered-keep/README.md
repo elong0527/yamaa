@@ -23,3 +23,5 @@ record_lookups:
 ```
 
 Use `keep: last` only when the intended result is the latest treatment.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-record-lookup-unordered-keep.html)

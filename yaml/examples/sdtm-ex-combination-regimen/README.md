@@ -14,3 +14,5 @@ component:
 
 A saline placebo dose of zero is an administered component and remains zero;
 it is not treated as an uncollected dose.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-ex-combination-regimen.html)

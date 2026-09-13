@@ -16,3 +16,5 @@ rather than overlooked. An event whose severity was not reported follows every
 reported severity, because an absent severity is not a mild one. Two events a
 reviewer cannot tell apart -- the same severity on the same date -- stay in
 collection order.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-review-order.html)

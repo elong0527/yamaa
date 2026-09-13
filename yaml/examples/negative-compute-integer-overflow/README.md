@@ -20,3 +20,5 @@ integer, the specification cannot represent it exactly as `int`; change the
 measurement unit or representation upstream rather than allowing the
 multiplication to wrap or silently converting the count to an approximate
 value.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-compute-integer-overflow.html)

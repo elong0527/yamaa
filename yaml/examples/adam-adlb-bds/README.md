@@ -25,3 +25,5 @@ A subject listed in ADSL with no collected result produces no record at
 all. The treatment start date and treatment carried across from ADSL
 enrich records that already exist and never bring one into being, so the
 row count follows the collected lab data alone.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adlb-bds.html)

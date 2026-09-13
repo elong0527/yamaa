@@ -23,3 +23,5 @@ record_lookups:
 ```
 
 `source` and `key` pair by position and must always be declared together.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-record-lookup-unpaired-key.html)

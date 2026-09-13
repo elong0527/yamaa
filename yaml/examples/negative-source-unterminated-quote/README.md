@@ -20,3 +20,5 @@ belongs to the text:
 
 A comment holding a separator, a quotation mark, or a line break stays
 quoted; one holding none of them needs no quoting at all.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-source-unterminated-quote.html)

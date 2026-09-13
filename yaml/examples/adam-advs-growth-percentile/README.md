@@ -18,3 +18,5 @@ fixed constant, and is supplied beside the measurements.
 The logical specification calls `normal_cdf`. The project environment selects
 one R runtime and binds that logical routine to the runtime's normal cumulative
 distribution function.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-advs-growth-percentile.html)

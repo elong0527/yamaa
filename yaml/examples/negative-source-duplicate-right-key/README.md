@@ -25,3 +25,5 @@ source:
 ```
 
 Do not use file order or treatment text as a substitute for a business rule.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-source-duplicate-right-key.html)

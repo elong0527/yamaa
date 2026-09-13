@@ -29,3 +29,5 @@ derivation:
 If the denominator is one treatment-level plan, store it once in the subject
 treatment source, bind it to a numeric column, and compute `RDI` from that
 column and `DOSECUM`. Do not select one exposure row arbitrarily.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adex-relative-dose-intensity.html)

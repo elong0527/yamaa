@@ -26,3 +26,5 @@ mapping:
 
 Alternatively, set `case_sensitive: true` when differently cased values are
 intentionally distinct and give each one an explicit meaning.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-mapping-case-fold-collision.html)

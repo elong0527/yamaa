@@ -16,3 +16,5 @@ that was actually collected, so a record with only one of the two qualifiers
 contributes only one. The records are presented in submission order: by
 subject, then by the medical-history record they point at, then by qualifier
 name.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-suppmh-qualifiers.html)

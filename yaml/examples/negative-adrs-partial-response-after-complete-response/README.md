@@ -21,3 +21,5 @@ Review the response sequence and correct the assessment that is inconsistent
 with the study definition. If the protocol genuinely permits a partial
 response after a complete response, revise the clinical rule and its check
 together; do not remove the check merely to accept an unexplained sequence.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adrs-partial-response-after-complete-response.html)

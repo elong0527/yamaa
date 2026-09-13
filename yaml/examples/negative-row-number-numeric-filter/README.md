@@ -30,3 +30,5 @@ entirely:
 
 When only some rows count, write the condition they satisfy rather
 than numbering the rows by hand.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-row-number-numeric-filter.html)

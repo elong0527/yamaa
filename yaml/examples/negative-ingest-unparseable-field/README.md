@@ -28,3 +28,5 @@ EX:
 If the composite text must remain unchanged, ingest it as `str`, preserve it
 for traceability, and derive a validated numeric dose before attempting the
 aggregate. A numeric type declaration must not strip ` mg` implicitly.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-ingest-unparseable-field.html)

@@ -29,3 +29,5 @@ Use `case` to ask the comparison and return the intended numeric flag:
 ```
 
 This makes the conversion from a yes-or-no answer to `1` or `0` explicit.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-compute-comparison-operator.html)

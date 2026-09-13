@@ -13,3 +13,5 @@ value is stored as missing:
 All nine derived numeric values therefore have the same missing value in the
 artifact. A quoted YAML spelling such as `".inf"` would remain text unless it
 were converted to a numeric type.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-non-finite-values.html)

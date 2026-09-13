@@ -30,3 +30,5 @@ severity continues after the gap, write it plainly:
 
 When no numbers may be skipped, name the dense method instead. Do not
 encode the choice in a structure the vocabulary does not define.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-rank-invalid-method.html)

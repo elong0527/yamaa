@@ -9,3 +9,5 @@ A study whose events are all non-serious produces this listing with no rows in
 it. The result still carries its variable names, so a reader can tell an empty
 listing apart from a listing that was never produced, and a later step reads it
 without treating it as a special case.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-serious-event-listing.html)

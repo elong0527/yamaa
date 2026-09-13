@@ -23,3 +23,5 @@ never part of this sum.
 A sum over an incomplete set of lesions is still reported, because whether it
 may be compared with an earlier one is a question for the analysis rather than
 for the record. `ANL01FL` is what carries the answer.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adtr-sum-of-target-diameters.html)

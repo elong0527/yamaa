@@ -28,3 +28,5 @@ that. A month count stands on its own with no endpoint adjustment:
 
 When the study counts days with both endpoints included, keep
 `unit: day` beside the endpoint adjustment instead.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-date-diff-bounds-unit.html)

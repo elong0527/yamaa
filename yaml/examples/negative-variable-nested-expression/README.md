@@ -34,3 +34,5 @@ Keep `COUNTRYSRC` internal by omitting it from `output.columns`.
 
 Fields typed as `variable`, including `str_upper.source`, accept a variable
 name rather than a nested expression.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-variable-nested-expression.html)

@@ -14,3 +14,5 @@ Fold the collected site name rather than its number:
 str_lower:
   source: DM.SITENM
 ```
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-str-lower-non-string-source.html)

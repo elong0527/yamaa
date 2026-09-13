@@ -20,3 +20,5 @@ parent. The reverse is not checked: a medical-history record whose qualifiers
 were never collected simply contributes nothing.
 
 Records are grouped by qualifier rather than by subject.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-suppmh-parent-linkage.html)

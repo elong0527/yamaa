@@ -33,3 +33,5 @@ carry the actual last-visit date in the source and compare two date columns:
 
 If only `LSTVSDY` is available, derive its calendar date from the study-day
 reference under a separately stated rule before using `greatest`.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-greatest-incomparable-sources.html)

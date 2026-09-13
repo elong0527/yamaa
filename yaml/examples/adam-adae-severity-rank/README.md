@@ -17,3 +17,5 @@ Events whose severity was not reported come after every reported severity and
 share one place with each other, because nothing tells them apart. A subject
 whose events are all of one severity has that severity in first place on every
 record.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-severity-rank.html)

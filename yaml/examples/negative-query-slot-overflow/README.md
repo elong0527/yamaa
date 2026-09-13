@@ -38,3 +38,5 @@ it rather than left to fill the places it already has.
 Do not resolve the clash by keeping whichever query is stored first. It
 answers with a query the study did not choose, and it stops reporting the
 other one at all.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-query-slot-overflow.html)

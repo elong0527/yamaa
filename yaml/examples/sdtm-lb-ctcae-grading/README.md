@@ -14,3 +14,5 @@ to derive one record per result:
 The independently supplied grade must equal the reproduced grade. Each test
 and sex combination owns its threshold set, so adding a combination requires
 adding its bands explicitly.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-lb-ctcae-grading.html)

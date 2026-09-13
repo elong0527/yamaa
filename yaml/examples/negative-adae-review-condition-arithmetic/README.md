@@ -12,3 +12,5 @@ State the equivalent comparison directly when no intermediate value is needed:
 ```yaml
 when: "AE.AESEQ > 0"
 ```
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-adae-review-condition-arithmetic.html)

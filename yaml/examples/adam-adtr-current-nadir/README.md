@@ -15,3 +15,5 @@ subject and assessment:
 
 An incomplete current assessment may retain a nadir established by an earlier
 complete assessment.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adtr-current-nadir.html)

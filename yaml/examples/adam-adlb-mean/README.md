@@ -9,3 +9,5 @@ derive one row per result:
 
 Missing results do not contribute to the mean. A subject with records but no
 collected result has a missing mean rather than a measured zero.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adlb-mean.html)

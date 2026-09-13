@@ -17,3 +17,5 @@
 fallbacks fill the rest.
 
 **Standard:** SDTM | **Domain:** DM
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-dm-basic.html)

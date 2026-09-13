@@ -27,3 +27,5 @@ derivation:
 If the study uses a numeric substitution for values below the assay limit,
 derive that documented value instead and keep the original character result
 for traceability.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-conversion-unparseable-number.html)

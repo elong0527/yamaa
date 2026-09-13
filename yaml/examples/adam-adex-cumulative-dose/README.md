@@ -14,3 +14,5 @@ explicit `group_by`. They therefore reduce the exposure records by the
 applicable output keys (`STUDYID`, `USUBJID`, and `EXTRT`) before joining the
 results to each subject-treatment row; omission does not reduce all `EX`
 records as one group.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adex-cumulative-dose.html)

@@ -19,3 +19,5 @@ Deciding emergence at the moment rather than at the day is the point of the
 example: an event that started earlier on the day of the first dose and one
 that started later the same day fall on opposite sides of the rule, and a start
 date alone cannot tell them apart.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adae-post-dose-onset.html)

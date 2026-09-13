@@ -10,3 +10,5 @@ This example uses ADSL, EX, EC, and FA data to return one record per subject:
 A qualifying record takes precedence over non-qualifying or missing records.
 Matches use both study and subject identifiers, and source records without a
 matching subject do not create output rows.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-dose-adjustment-flag.html)

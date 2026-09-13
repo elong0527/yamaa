@@ -27,3 +27,5 @@ derivation:
 
 The `invalid` handler applies to non-missing text that is not an ISO 8601 date
 or date prefix; it is distinct from the `missing` handler.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-date-impute-invalid-source.html)

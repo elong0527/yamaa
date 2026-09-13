@@ -25,3 +25,5 @@ columns:
 
 When two dates truly travel together, keep the pairing and correct the
 offending row instead of loosening the rule.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-all-or-none-partial-row.html)

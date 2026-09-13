@@ -9,3 +9,5 @@ per subject:
 - `REGION1` is the region the country belongs to. Countries the study does not
   map to a named region, `UNKNOWN` among them, fall into `Rest of World`, so
   every subject has a region.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-geography-normalization.html)

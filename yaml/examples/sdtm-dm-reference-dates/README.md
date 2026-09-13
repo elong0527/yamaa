@@ -28,3 +28,5 @@ Subject identifiers are unique only within a study. The sample reuses one
 under a second study, and each study reads only its own exposure,
 disposition, and adverse event records, so one study's dates never reach
 the other's row.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-dm-reference-dates.html)

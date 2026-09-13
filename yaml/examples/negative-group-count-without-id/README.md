@@ -31,3 +31,5 @@ verifications:
 A count over the whole artifact rather than within a group asserts its size
 instead of a study rule and needs no name, so `min` and `max` alone remain
 valid there.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-group-count-without-id.html)

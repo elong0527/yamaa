@@ -14,3 +14,5 @@ depend on an unstated policy, so the run must fail rather than assign one.
 First correct unintended overlap in the window table. If overlap is
 intentional, state and justify a deterministic selection policy with
 `order_by` and `keep`; do not rely on source-row order.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-advs-overlapping-analysis-windows.html)

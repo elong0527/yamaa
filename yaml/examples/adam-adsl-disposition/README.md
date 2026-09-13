@@ -14,3 +14,5 @@ one row per subject:
   event at all;
 - `DCSREAS` repeats the reason only for a discontinued subject, and is empty
   for one who completed or is ongoing.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-disposition.html)

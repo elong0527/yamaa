@@ -26,3 +26,5 @@ marks, so the shift and the ratio that rest on them are empty for a parameter
 with no marked baseline. The classification and the criterion are read from the
 record's own value and limits instead, and are empty for a parameter the limits
 do not cover.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adlb-shift-and-criteria.html)

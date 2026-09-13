@@ -20,3 +20,5 @@ verifications:
 
 or, when one row per site is the intent, aggregate the subjects to site
 rows before asserting.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-unique-duplicate-values.html)

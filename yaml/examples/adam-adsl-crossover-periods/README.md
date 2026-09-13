@@ -17,3 +17,5 @@ Every value is read only from the exposure records belonging to its own period,
 so one period's dates and treatment never mix with the other's. A subject who
 never entered period two has no exposure records there, and every period-two
 variable is empty for them.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-crossover-periods.html)

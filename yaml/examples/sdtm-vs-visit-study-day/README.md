@@ -22,3 +22,5 @@ transitions expressed relative to that reference date; a design whose epochs
 follow arm-specific or actual subject element dates needs a correspondingly
 keyed source. The epoch-range input is an example fixture, not a standard SDTM
 trial-design domain.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/sdtm-vs-visit-study-day.html)

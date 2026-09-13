@@ -22,3 +22,5 @@ derivation:
 ```
 
 The total is then broadcast to each parameter row for that subject.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-compute-aggregate-function.html)

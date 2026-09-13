@@ -27,3 +27,5 @@ date_precision:
 
 The `invalid` handler covers `ONGOING`; `missing` covers a source value that
 was not collected.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-date-precision-invalid-source.html)

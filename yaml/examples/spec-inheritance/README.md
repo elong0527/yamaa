@@ -19,3 +19,5 @@ in the specification dropdown.
 study level wins on final wording.
 
 **Standard:** ADaM | **Domain:** ADLB
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/spec-inheritance.html)

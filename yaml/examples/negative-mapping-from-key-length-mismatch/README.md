@@ -25,3 +25,5 @@ mapping_from:
 ```
 
 The two lists pair by position and must have equal lengths.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-mapping-from-key-length-mismatch.html)

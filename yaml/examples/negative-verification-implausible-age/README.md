@@ -16,3 +16,5 @@ then rerun the unchanged range verification. If the protocol genuinely permits
 the confirmed value, revise the verification boundary to the protocol's
 documented limit. Do not remove or widen the check merely to make an
 unconfirmed value pass.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-verification-implausible-age.html)

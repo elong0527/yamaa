@@ -26,3 +26,5 @@ instead.
 A subject whose dates are all missing has no last known alive date. When a
 subject has dates in some sources but not others, the latest of the available
 dates is retained.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/adam-adsl-last-alive-date.html)

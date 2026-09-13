@@ -26,3 +26,5 @@ reference start date first so both sides are dates:
 
 When only the day count exists, keep the count as a count instead of
 forcing it into a date column.
+
+[Rendered view](https://elong0527.github.io/yamaa/examples/negative-least-incomparable-sources.html)
