@@ -5,7 +5,8 @@
 **Goal:** flag each concomitant medication (CM) taken during the
 treatment period, adding `ONTRTFL`.
 
-**Input:** medication records carrying medication name (`CMTRT`),
+**Input:** medication records carrying sequence number (`CMSEQ`),
+medication name (`CMTRT`),
 start date (`ASTDT`) and end date (`AENDT`), together with the
 subject's treatment start (`TRTSDT`) and treatment end (`TRTEDT`)
 dates from the subject-level analysis dataset (ADSL). A date that
