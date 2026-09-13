@@ -400,7 +400,7 @@ def example_code_files(example):
     )
 
 
-def render_code_panel(files):
+def render_code_panel(files, edit_base=None):
     panes, options = [], []
     for path in files:
         slug = re.sub(r"[^a-z0-9]+", "-", path.name.lower()).strip("-")
@@ -411,9 +411,14 @@ def render_code_panel(files):
             for number, line in enumerate(lines, 1)
         )
         active = "" if path == files[0] else " hidden"
+        edit = (
+            f'<a class="edit-button" href="{edit_base}/{quote(path.name)}">Edit</a>'
+            if edit_base
+            else ""
+        )
         panes.append(
             f'<div class="code-pane" id="code-pane-{slug}" data-filename="{escape(path.name)}"{active}>'
-            f'<div class="file-heading"><h3 class="filename">{escape(path.name)}</h3>'
+            f'<div class="file-heading"><span class="file-title"><h3 class="filename">{escape(path.name)}</h3>{edit}</span>'
             f'<span class="file-count">{len(lines)} lines</span></div>'
             f'<div class="code-scroll" tabindex="0" aria-label="{escape(path.name)}"><pre><code>{code_lines}</code></pre></div></div>'
         )
@@ -549,7 +554,7 @@ def render_example(example, previous=None, next=None):
         spec_header_edit = ""
         spec_path_row = ""
     code_files = example_code_files(example)
-    code_panel = render_code_panel(code_files) if code_files else ""
+    code_panel = render_code_panel(code_files, edit_base) if code_files else ""
     template = Template((HERE / "dashboard.html").read_text(encoding="utf-8"))
     result = template.substitute(
         example_name=escape(example.name), page_title=escape(title), heading=escape(heading),

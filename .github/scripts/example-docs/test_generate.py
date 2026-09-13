@@ -178,6 +178,10 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('id="code"', page)
         self.assertIn('data-filename="run.py"', page)
         self.assertIn("import yamaa", page)
+        self.assertIn(
+            '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/yaml/examples/sdtm-dm-basic/run.py">Edit</a>',
+            page,
+        )
         self.assertNotIn('id="code-select"', page)
         plain = generate.render_example(EXAMPLE).decode("ascii")
         self.assertNotIn('id="code"', plain)
