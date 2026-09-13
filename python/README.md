@@ -354,6 +354,18 @@ An output key and the same-named right-side column must already carry one
 comparable type: nothing is converted implicitly to make a match work, so a
 disagreement is reported rather than quietly matching nothing.
 
+Because a join infers its keys, the plan states what it inferred.
+`ExecutionPlan.resolved_joins` names, for each qualified source and each
+reduction, the dataset it reaches and the columns it matches on -- the
+coarser grain when one is declared, the applicable keys otherwise -- and
+`ExecutionPlan.record_lookups` says the same for each named record:
+
+```python
+plan = plan_execution(specification, sources)
+for join in plan.resolved_joins:
+    print(join.spec_path, join.dataset, join.keys)
+```
+
 Run this component's focused tests from the repository root:
 
 ```bash

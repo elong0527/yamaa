@@ -634,3 +634,48 @@ def test_a_row_phase_lookup_cannot_match_on_a_later_phase_value() -> None:
     ]
     assert reported and reported[0].condition == "phase_boundary"
     assert reported[0].context["identifier"] == "LATE"
+
+
+def test_the_plan_reports_the_keys_every_qualified_source_matches_on() -> None:
+    # R003-38: a reviewer sees which same-named columns the join matches on
+    # rather than inferring them from two schemas.
+    plan = plan_two(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V", type="float", derivation=derivation({"source": "RIGHT.V"})
+            ),
+        ]
+    )
+
+    assert [
+        (join.spec_path, join.dataset, join.keys, join.declared_grain)
+        for join in plan.resolved_joins
+    ] == [("columns.V.derivation.source", "RIGHT", ("X",), False)]
+
+
+def test_a_reduction_reports_the_coarser_grain_it_matches_on_instead() -> None:
+    plan = plan_two(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            aggregate_column({"group_by": ["RIGHT.X"], "expr": "SUM(RIGHT.V)"}),
+        ]
+    )
+
+    assert [
+        (join.dataset, join.keys, join.declared_grain) for join in plan.resolved_joins
+    ] == [("RIGHT", ("X",), True)]
+
+
+def test_one_relation_is_reported_once_however_often_it_is_named() -> None:
+    # An aggregate names its right side from both `expr` and `filter`; the
+    # join it performs is still one join.
+    plan = plan_two(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            aggregate_column({"filter": "RIGHT.V > 0", "expr": "SUM(RIGHT.V)"}),
+        ]
+    )
+
+    assert len(plan.resolved_joins) == 1
+    assert plan.resolved_joins[0].keys == ("X",)

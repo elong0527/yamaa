@@ -507,3 +507,123 @@ def test_a_missing_cutoff_never_reduces_the_unrestricted_right_side(
     assert row["EPOCH"] is None
     # The coarser grain does not read the cutoff, so it still reduces.
     assert row["STUDYTOT"] == 60.0
+
+
+@pytest.mark.parametrize(
+    ("bound", "expected"),
+    [
+        ("{value: ADY, lower: EX.STARTDY}", [10.0, 30.0]),
+        ("{value: ADY, upper: EX.ENDDY}", [30.0, 20.0]),
+    ],
+    ids=["lower only", "upper only"],
+)
+def test_one_stated_bound_narrows_on_that_side_alone(
+    tmp_path: Path, bound: str, expected: list[float]
+) -> None:
+    # R003-25 and R013-7: omitting one bound makes the match one-sided; it
+    # does not exclude the stated endpoint and it does not open both ends.
+    (tmp_path / "input").mkdir()
+    (tmp_path / "spec.yaml").write_text(
+        textwrap.dedent(_OPEN_RANGE_SPEC).replace("{{BETWEEN}}", bound),
+        encoding="utf-8",
+    )
+    (tmp_path / "input/vs.csv").write_text(
+        "STUDYID,USUBJID,VSSEQ,ADY\nS1,P1,1,5\nS1,P1,2,25\n", encoding="utf-8"
+    )
+    (tmp_path / "input/ex.csv").write_text(
+        "STUDYID,USUBJID,EXDOSE,STARTDY,ENDDY\nS1,P1,10,1,10\nS1,P1,20,20,30\n",
+        encoding="utf-8",
+    )
+
+    result = _run(tmp_path)
+
+    assert isinstance(result, ExecutionSuccess), result
+    assert [row["EXPDOSE"] for row in result.artifact.frame.to_dicts()] == expected
+
+
+_OPEN_RANGE_SPEC = """\
+schema_version: "1.0"
+domain: ADVS
+datasets:
+  VS: {path: input/vs.csv, types: {VSSEQ: int, ADY: int}}
+  EX: {path: input/ex.csv, types: {EXDOSE: float, STARTDY: int, ENDDY: int}}
+base: VS
+keys: [STUDYID, USUBJID, VSSEQ]
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, VSSEQ, ADY, EXPDOSE]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation: {source: VS.STUDYID}
+  - name: USUBJID
+    type: str
+    derivation: {source: VS.USUBJID}
+  - name: VSSEQ
+    type: int
+    derivation: {source: VS.VSSEQ}
+  - name: ADY
+    type: int
+    derivation: {source: VS.ADY}
+  - name: EXPDOSE
+    type: float
+    derivation:
+      aggregate:
+        between: {{BETWEEN}}
+        expr: "SUM(EX.EXDOSE)"
+"""
+
+
+def test_a_contextual_odm_item_is_not_reachable_through_the_join(
+    tmp_path: Path,
+) -> None:
+    # A long-form ODM item is resolved from the current row's complete R002
+    # context, never widened to whichever records a key happens to reach. A
+    # relation that is not the row driver carries no such context, so the
+    # join refuses rather than answering across item groups.
+    (tmp_path / "input").mkdir()
+    (tmp_path / "spec.yaml").write_text(textwrap.dedent(_ODM_SPEC), encoding="utf-8")
+    (tmp_path / "input/dm.csv").write_text(
+        "STUDYID,USUBJID\nST1,P1\n", encoding="utf-8"
+    )
+    (tmp_path / "input/odm.csv").write_text(
+        "StudyOID,SubjectKey,StudyEventOID,ItemGroupOID,ItemOID,Value\n"
+        "ST1,P1,SE.A,IG.DM,IT.DM.DIAGGRP,AD\n",
+        encoding="utf-8",
+    )
+
+    result = _run(tmp_path)
+
+    assert isinstance(result, ExecutionFailure), result
+    diagnostic = result.diagnostics[0]
+    assert diagnostic.condition == "no_applicable_keys"
+    assert diagnostic.requirement == "R003-33"
+    assert diagnostic.context["dataset"] == "ODM"
+
+
+_ODM_SPEC = """\
+schema_version: "1.0"
+domain: DM
+datasets:
+  DM_RAW: input/dm.csv
+  ODM: input/odm.csv
+base: DM_RAW
+keys: [STUDYID, USUBJID]
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, DIAG]
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation: {source: DM_RAW.STUDYID}
+  - name: USUBJID
+    type: str
+    derivation: {source: DM_RAW.USUBJID}
+  - name: DIAG
+    type: str
+    derivation: {source: ODM.IT.DM.DIAGGRP}
+"""

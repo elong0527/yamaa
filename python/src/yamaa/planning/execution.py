@@ -117,6 +117,23 @@ class PlannedRecordLookup(_FrozenModel):
         return tuple(dict.fromkeys(names))
 
 
+class ResolvedJoin(_FrozenModel):
+    """The columns one qualified reference resolved to matching on.
+
+    R003-38 makes validation report the inferred applicable keys for every
+    qualified source, so a reviewer sees which same-named columns the join
+    matches on rather than having to infer them from two schemas. A record
+    lookup reports the same thing through `PlannedRecordLookup.match_fields`.
+    """
+
+    spec_path: str = Field(min_length=1)
+    dataset: str = Field(min_length=1)
+    keys: tuple[str, ...]
+    # R003-20 lets a reduction declare a grain coarser than the applicable
+    # keys, and the join then matches on that instead.
+    declared_grain: bool = False
+
+
 class PlannedRow(_FrozenModel):
     """One record-driven or group-driven row template.
 
@@ -154,6 +171,7 @@ class ExecutionPlan(_FrozenModel):
     columns: tuple[PlannedDerivation, ...]
     row_derived_columns: tuple[str, ...]
     record_lookups: tuple[PlannedRecordLookup, ...] = ()
+    resolved_joins: tuple[ResolvedJoin, ...] = ()
 
 
 class ExecutionPlanningError(ValueError):
@@ -1062,6 +1080,7 @@ def _with_relation_dependencies(
     drivers: Collection[str],
     diagnostics: list[ExecutionDiagnostic],
     column_types: Mapping[str, ColumnType],
+    resolved: list[ResolvedJoin],
 ) -> PlannedDerivation:
     """Add the current-row values a derivation needs to reach another relation.
 
@@ -1071,7 +1090,10 @@ def _with_relation_dependencies(
     inputs before the join in R001's declaration order.
     """
     extra: list[str] = []
-    checked: set[tuple[str, str]] = set()
+    # One reading per relation this derivation reaches: an aggregate names
+    # the same right side from its `expr` and its `filter`, and R003-38 asks
+    # for the keys the join matches on, not for one line per mention.
+    checked: set[str] = set()
     for reference in references:
         if "." not in reference.name:
             continue
@@ -1096,9 +1118,17 @@ def _with_relation_dependencies(
         else:
             continue
         extra.extend(keys)
-        if (reference.path, qualifier) in checked:
+        if qualifier in checked:
             continue
-        checked.add((reference.path, qualifier))
+        checked.add(qualifier)
+        resolved.append(
+            ResolvedJoin(
+                spec_path=reference.path,
+                dataset=qualifier,
+                keys=tuple(keys),
+                declared_grain=reference.join_group_by is not None,
+            )
+        )
         _validate_join_key_types(
             reference.path, qualifier, keys, bindings, column_types, diagnostics
         )
@@ -1789,6 +1819,7 @@ def plan_execution(
     column_positions = {name: index for index, name in enumerate(column_order)}
     column_types = {column.name: column.type for column in specification.columns}
     lookups = _plan_record_lookups(specification, bindings, column_types, diagnostics)
+    resolved_joins: list[ResolvedJoin] = []
     row_plans: list[PlannedRow] = []
     row_references: dict[tuple[int, str], tuple[_Reference, ...]] = {}
 
@@ -1882,6 +1913,7 @@ def plan_execution(
                     {driver},
                     diagnostics,
                     column_types,
+                    resolved_joins,
                 )
                 row_references[(index, name)] = references
 
@@ -2035,6 +2067,7 @@ def plan_execution(
                 drivers,
                 diagnostics,
                 column_types,
+                resolved_joins,
             )
         )
         for reference in references:
@@ -2160,4 +2193,5 @@ def plan_execution(
         columns=tuple(column_plans),
         row_derived_columns=row_derived,
         record_lookups=tuple(lookups.values()),
+        resolved_joins=tuple(resolved_joins),
     )
