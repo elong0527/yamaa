@@ -1,5 +1,7 @@
 # ADaM ADEX: reject a dose intensity measured against a per-record plan
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adex-relative-dose-intensity.html)
+
 This example uses a subject-treatment inventory with its component exposure
 records to attempt one record per subject and treatment:
 

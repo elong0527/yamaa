@@ -1,5 +1,7 @@
 # ADaM ADRS: combine efficacy, safety, and discontinuation into one response
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adrs-composite-response.html)
+
 This example uses a pre-derived ADRS slice with ADSL and a `yamaa`
 specification to derive one row per subject:
 

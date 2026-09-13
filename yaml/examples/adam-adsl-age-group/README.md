@@ -1,5 +1,7 @@
 # ADaM ADSL: derive age group
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-age-group.html)
+
 Derives pooled age group flags for subject analysis records using DM:
 
 - `AGE`: Subject age in years, directly copied from input.

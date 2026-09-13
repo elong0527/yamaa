@@ -1,5 +1,7 @@
 # ADaM ADTTE: derive overall survival
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adtte-overall-survival.html)
+
 This example uses randomization dates, last known alive dates, and deaths to
 derive one overall-survival record per subject:
 

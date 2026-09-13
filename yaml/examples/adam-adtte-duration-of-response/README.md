@@ -1,5 +1,7 @@
 # ADaM ADTTE: derive the duration of a response
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adtte-duration-of-response.html)
+
 This example uses the subjects who responded, their later tumour assessments,
 and their deaths to derive one duration-of-response record per responder:
 

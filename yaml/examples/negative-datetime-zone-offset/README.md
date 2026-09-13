@@ -1,5 +1,7 @@
 # ADaM ADAE: reject an event start recorded against another clock
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-datetime-zone-offset.html)
+
 This example uses collected adverse events to attempt one record per event:
 
 - `ASTDTM` is meant to be the moment each event started.

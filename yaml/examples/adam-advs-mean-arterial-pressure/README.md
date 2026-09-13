@@ -1,5 +1,7 @@
 # ADaM ADVS: derive mean arterial pressure
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-mean-arterial-pressure.html)
+
 Collected ADVS blood-pressure records produce one output row per collected
 record plus one MAP row per complete subject and visit:
 

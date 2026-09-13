@@ -183,6 +183,11 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(title, "Spec Inheritance")
         self.assertEqual(category, "Specification")
 
+    def test_dashboard_badge_is_not_rendered_on_its_own_page(self):
+        page = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
+        self.assertNotIn("shields.io", page)
+        self.assertIn("Create DM from EDC extract", page)
+
     def test_unterminated_csv_is_not_silently_repaired(self):
         page = generate.render_example(generate.EXAMPLES / "negative-source-unterminated-quote").decode("ascii")
         self.assertIn("raw CSV", page)

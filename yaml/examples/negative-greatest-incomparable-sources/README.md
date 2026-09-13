@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a last-known-alive date taken from a day number
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-greatest-incomparable-sources.html)
+
 This example uses collected demographics to attempt one record per subject:
 
 - `DTHDT` is the collected date of death and is empty for a subject who is

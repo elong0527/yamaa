@@ -1,5 +1,7 @@
 # SDTM VS: reject a submission order over a value the dataset does not carry
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-output-order-unknown-column.html)
+
 This example uses collected vital signs to attempt one record per measurement:
 
 - `VSTESTCD` names the measurement, and `VSSTRESN` is its result in standard

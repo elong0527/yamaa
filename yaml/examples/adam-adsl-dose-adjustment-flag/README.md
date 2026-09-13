@@ -1,5 +1,7 @@
 # ADaM ADSL: derive a dose adjustment flag from multiple sources
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-dose-adjustment-flag.html)
+
 This example uses ADSL, EX, EC, and FA data to return one record per subject:
 
 - `DOSADJFL` is `Y` if the subject has a dose adjustment reported in `EX`,

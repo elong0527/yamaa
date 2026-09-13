@@ -1,5 +1,7 @@
 # ADaM ADSL: date the subject started new anti-cancer therapy
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-new-anticancer-therapy-date.html)
+
 This example uses a subject list with the concomitant medications and
 procedures collected beside it to derive one record per subject:
 

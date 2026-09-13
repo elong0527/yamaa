@@ -1,5 +1,7 @@
 # ADaM ADVS: derive body mass index
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-body-mass-index.html)
+
 The artifact contains collected ADVS records and one derived body mass index
 parameter per eligible subject and visit:
 

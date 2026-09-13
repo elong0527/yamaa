@@ -1,5 +1,7 @@
 # ADaM ADAE: reject an end date completed past the end of its month
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-date-impute-nonexistent-day.html)
+
 This example uses collected adverse events whose end dates are sometimes
 recorded without a day to attempt one record per event:
 

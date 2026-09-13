@@ -1,5 +1,7 @@
 # ADaM ADSL: reject removal of a required variable property
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adsl-invalid-parent-clear.html)
+
 This example attempts to prepare subject records while removing information
 needed to interpret a subject identifier.
 

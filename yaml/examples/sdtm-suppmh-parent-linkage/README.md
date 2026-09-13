@@ -1,5 +1,7 @@
 # SDTM SUPPMH: link qualifiers collected on their own form to a parent record
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-suppmh-parent-linkage.html)
+
 This example uses a pre-derived medical-history domain with a separately
 collected qualifier form, and a `yamaa` specification to derive one
 supplemental record per collected qualifier:

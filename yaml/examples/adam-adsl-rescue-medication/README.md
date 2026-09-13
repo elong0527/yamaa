@@ -1,5 +1,7 @@
 # ADaM ADSL: select the first rescue medication
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-rescue-medication.html)
+
 This example uses collected demographics with the medications taken alongside
 study treatment to derive one record per subject:
 

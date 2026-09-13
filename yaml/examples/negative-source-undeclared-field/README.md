@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a copy from an undeclared field
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-undeclared-field.html)
+
 This example uses collected demographics to record one row per subject:
 
 - `AGE` is the age at enrollment, copied from the governed source.

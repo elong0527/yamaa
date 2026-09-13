@@ -1,5 +1,7 @@
 # SDTM LB: resolve items within their collection form
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/odm-form-scoped-item-resolution.html)
+
 This example uses a long-form ODM projection with five laboratory forms and a
 `yamaa` specification to derive one record per reported result:
 

@@ -1,5 +1,7 @@
 # ADaM ADSL: exposure duration in weeks and months
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-duration-weeks-months.html)
+
 This example derives whole-week and whole-month durations from a
 start and an end date, one row per subject:
 

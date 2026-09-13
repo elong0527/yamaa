@@ -1,5 +1,7 @@
 # ADaM ADEX: derive a dose reduction flag
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adex-dose-reduction-flag.html)
+
 This example reads exposure records and returns one row per exposure record:
 
 - `EXSEQ` identifies the collected exposure record;

@@ -1,5 +1,7 @@
 # ADaM ADAE: classify an event as treatment-emergent
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-treatment-emergent.html)
+
 This example uses sample AE and ADSL data and a `yamaa` specification to derive
 one row per adverse event:
 

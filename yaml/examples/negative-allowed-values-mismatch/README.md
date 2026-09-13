@@ -1,5 +1,7 @@
 # ADaM ADSL: reject a recorded sex the study does not recognize
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-allowed-values-mismatch.html)
+
 This example uses collected demographics with a `yamaa` specification to
 derive one row per subject:
 

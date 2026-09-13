@@ -1,5 +1,7 @@
 # ADaM ADLB: reject a doubled value built from a later column
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-column-forward-reference.html)
+
 This example doubles a collected laboratory result into one record per
 measurement:
 

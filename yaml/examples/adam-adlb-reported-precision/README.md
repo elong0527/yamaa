@@ -1,5 +1,7 @@
 # ADaM ADLB: report a result against the lower limit of normal
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adlb-reported-precision.html)
+
 This example uses sample LB results and produces one row per subject and test:
 
 - `AVAL` is the collected result;

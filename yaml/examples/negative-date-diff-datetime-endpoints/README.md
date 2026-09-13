@@ -1,5 +1,7 @@
 # ADaM ADSL: reject counting days between two moments
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-date-diff-datetime-endpoints.html)
+
 This example uses collected demographics to record one row per subject:
 
 - `RFSTDTM` is the moment treatment started, time of day included.

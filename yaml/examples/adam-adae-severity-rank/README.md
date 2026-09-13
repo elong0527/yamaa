@@ -1,5 +1,7 @@
 # ADaM ADAE: rank a subject's events by severity
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-severity-rank.html)
+
 This example uses collected adverse events to derive one record per event:
 
 - `ASEV` is the reported severity of the event, and is empty when severity was

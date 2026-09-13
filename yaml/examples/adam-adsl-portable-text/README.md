@@ -1,5 +1,7 @@
 # ADaM ADSL: preserve and compare international text predictably
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-portable-text.html)
+
 This example uses sample DM text and produces one row per subject:
 
 - `RAWTXT` preserves the collected scalar sequence;

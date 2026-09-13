@@ -1,5 +1,7 @@
 # Spec Inheritance
 
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/spec-inheritance.html)
+
 **Goal:** demonstrate spec inheritance from organization to compound to
 study level.
 
