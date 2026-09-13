@@ -179,11 +179,9 @@ The R side of the shared grammar vectors needs only R and the `yaml` package:
 Rscript R/cdiscbuilder/inst/conformance/grammar_conformance.R
 ```
 
-The Ruby label check can also run locally:
-
-```bash
-ruby .github/scripts/examples/check_labels.rb
-```
+Column labels are checked by `validate_repository.py`
+(`validate_column_labels`, covering plain and inherited specs alike),
+so there is no separate label-check step anymore.
 
 ## Exit Behavior
 - Returns `0` if the repository structure is completely valid (no errors).
