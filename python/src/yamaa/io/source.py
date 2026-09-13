@@ -60,6 +60,20 @@ class LoadedDataset(_FrozenModel):
     table: TypedTable
 
 
+class ProducerField(_FrozenModel):
+    """One stored field supplied by a producing specification."""
+
+    name: str = Field(min_length=1)
+    type: ColumnType
+    label: str = Field(min_length=1)
+
+
+class ProducerContract(_FrozenModel):
+    """The ordered R014 output contract of one producer."""
+
+    fields: tuple[ProducerField, ...] = Field(min_length=1)
+
+
 def _path_diagnostic(
     dataset: str, written_path: str, failure: ResourceFailure
 ) -> SourceDiagnostic:
@@ -100,8 +114,40 @@ def _profile_diagnostic(dataset: str, written_path: str) -> SourceDiagnostic:
 
 
 def _field_types(
-    dataset: str, source: DatasetSource, parsed: CsvSource
+    dataset: str,
+    source: DatasetSource,
+    parsed: CsvSource,
+    contract: ProducerContract | None = None,
 ) -> tuple[TypedColumn, ...]:
+    if contract is not None:
+        expected = tuple(field.name for field in contract.fields)
+        if parsed.names != expected:
+            missing = [name for name in expected if name not in parsed.names]
+            extra = [name for name in parsed.names if name not in expected]
+            raise SourceError(
+                [
+                    SourceDiagnostic(
+                        phase="validation",
+                        condition="producer_contract_mismatch",
+                        spec_paths=(
+                            f"datasets.{dataset}.schema",
+                            f"datasets.{dataset}.path",
+                        ),
+                        requirement="R014-22",
+                        context={
+                            "dataset": dataset,
+                            "expected": list(expected),
+                            "actual": list(parsed.names),
+                            "missing": missing,
+                            "extra": extra,
+                            "reordered": not missing and not extra,
+                        },
+                    )
+                ]
+            )
+        return tuple(
+            TypedColumn(name=field.name, type=field.type) for field in contract.fields
+        )
     names = parsed.names
     declared = source.types or {}
     for field in declared:
@@ -152,8 +198,13 @@ def _parse_field(
     return None if converted.value is MISSING else converted.value
 
 
-def _build_table(dataset: str, source: DatasetSource, parsed: CsvSource) -> TypedTable:
-    columns = _field_types(dataset, source, parsed)
+def _build_table(
+    dataset: str,
+    source: DatasetSource,
+    parsed: CsvSource,
+    contract: ProducerContract | None = None,
+) -> TypedTable:
+    columns = _field_types(dataset, source, parsed, contract)
     rows = [
         [
             _parse_field(dataset, column.name, column.type, record[index])
@@ -167,15 +218,43 @@ def _build_table(dataset: str, source: DatasetSource, parsed: CsvSource) -> Type
 def load_source_tables(
     datasets: Mapping[str, DatasetSource],
     resources: ProjectResources,
+    *,
+    producer_contracts: Mapping[str, ProducerContract] | None = None,
+    producer_snapshots: Mapping[str, ResourceSnapshot] | None = None,
 ) -> dict[str, LoadedDataset]:
     """Capture, verify, and ingest normalized CSV dataset declarations."""
-    if any(source.schema_path is not None for source in datasets.values()):
+    contracts = producer_contracts or {}
+    snapshots = producer_snapshots or {}
+    unresolved = [
+        dataset
+        for dataset, source in datasets.items()
+        if source.schema_path is not None and dataset not in contracts
+    ]
+    if unresolved:
         raise NotImplementedError("producer-linked sources require workflow resolution")
 
     diagnostics: list[SourceDiagnostic] = []
     for dataset, source in datasets.items():
+        if source.schema_path is not None and source.types is not None:
+            diagnostics.extend(
+                SourceDiagnostic(
+                    phase="validation",
+                    condition="redundant_field_type",
+                    spec_paths=(f"datasets.{dataset}.types.{field}",),
+                    requirement="R014-10",
+                    context={
+                        "dataset": dataset,
+                        "field": field,
+                        "type": value,
+                    },
+                )
+                for field, value in source.types.items()
+            )
         try:
-            resources.validate(source.path)
+            if dataset in snapshots:
+                resources.validate_location(source.path)
+            else:
+                resources.validate(source.path)
             if PurePosixPath(source.path).suffix.lower() != ".csv":
                 diagnostics.append(_profile_diagnostic(dataset, source.path))
         except ResourceFailure as failure:
@@ -187,12 +266,13 @@ def load_source_tables(
     loaded: dict[str, LoadedDataset] = {}
     for dataset, source in datasets.items():
         try:
-            snapshot = resources.capture(source.path)
-            if id(snapshot) not in seen:
+            injected = snapshots.get(dataset)
+            snapshot = injected or resources.capture(source.path)
+            if injected is None and id(snapshot) not in seen:
                 resources.verify(snapshot)
-                seen.add(id(snapshot))
+            seen.add(id(snapshot))
             parsed = parse_csv(snapshot.content)
-            table = _build_table(dataset, source, parsed)
+            table = _build_table(dataset, source, parsed, contracts.get(dataset))
         except ResourceFailure as failure:
             diagnostics.append(_path_diagnostic(dataset, source.path, failure))
             continue
@@ -217,6 +297,16 @@ def load_source_table(
     dataset: str,
     source: DatasetSource,
     resources: ProjectResources,
+    *,
+    producer_contract: ProducerContract | None = None,
+    producer_snapshot: ResourceSnapshot | None = None,
 ) -> LoadedDataset:
     """Load one normalized CSV dataset declaration."""
-    return load_source_tables({dataset: source}, resources)[dataset]
+    contracts = {dataset: producer_contract} if producer_contract is not None else None
+    snapshots = {dataset: producer_snapshot} if producer_snapshot is not None else None
+    return load_source_tables(
+        {dataset: source},
+        resources,
+        producer_contracts=contracts,
+        producer_snapshots=snapshots,
+    )[dataset]

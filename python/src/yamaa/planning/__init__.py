@@ -14,6 +14,14 @@ from yamaa.planning.execution import (
     plan_execution,
     preflight_execution,
 )
+from yamaa.planning.workflow import (
+    ProducerLink,
+    ProducerWorkflow,
+    WorkflowExecution,
+    WorkflowNode,
+    execute_workflow,
+    plan_workflow,
+)
 
 __all__ = [
     "ExecutionDiagnostic",
@@ -22,10 +30,16 @@ __all__ = [
     "PlannedDerivation",
     "PlannedRecordLookup",
     "PlannedRow",
+    "ProducerLink",
+    "ProducerWorkflow",
     "ResolvedJoin",
     "UnsupportedFeature",
     "UnsupportedPlanningError",
+    "WorkflowExecution",
+    "WorkflowNode",
+    "execute_workflow",
     "expression_path",
     "plan_execution",
+    "plan_workflow",
     "preflight_execution",
 ]

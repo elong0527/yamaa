@@ -242,10 +242,10 @@ with no characters as missing whether it was written bare or quoted, before
 applying declared types. A `str`, `int`, or `float` column lands in the
 matching native Polars type, a `date` column in `pl.Date`, and a `datetime`
 column in `pl.Datetime("us")`, so an ingested table answers ordinary Polars
-expressions. The reader does not create CSV or other intermediate files.
-Producer-linked `schema` workflow resolution and header-contract comparison
-remain part of the workflow component; this ingestion API rejects a declaration
-carrying `schema` until that component supplies its resolved producer contract.
+expressions. The reader does not create CSV or other intermediate files. A
+declaration carrying `schema` is accepted only when the workflow supplies the
+resolved producer contract; direct ingestion without that contract remains an
+error.
 
 The R023 syntax scanner in `yamaa.io.csv` imports the standard library alone.
 The repository validator loads that module by path rather than keeping a second
@@ -453,6 +453,40 @@ Run this component's focused tests from the repository root:
 uv run --project python --isolated --extra test pytest \
   python/tests/expressions/test_dates.py python/tests/expressions/test_windows.py \
   python/tests/runtime/test_temporal_examples.py python/tests/planning
+```
+
+## Inheritance and producer workflows
+
+`resolve_specification(entry, bundle)` resolves R017 parents before ordinary
+validation. Its result carries the canonical resolved document, its Pydantic
+`Specification`, the depth-first contribution order, and the source origin of
+each contributed root or keyed-member field.
+
+Producer links form an explicit acyclic plan. Every producer is resolved and
+executed once in producer-first order; its rendered artifact becomes an
+immutable in-memory source snapshot for consumers, under the producer's exact
+field order and declared types. The workflow does not publish intermediate
+files, so the facade's existing rule that only `save()` writes remains true.
+
+```python
+from yamaa.io import ProjectResources
+from yamaa.planning import execute_workflow, plan_workflow
+from yamaa.specification.schema import load_schema_bundle
+
+resources = ProjectResources("study", base_directory="study/adam/adsl")
+workflow = plan_workflow(
+    "study/adam/adsl/spec.yaml",
+    load_schema_bundle("yaml"),
+    resources,
+)
+execution = execute_workflow(workflow, resources)
+```
+
+Run this component's focused tests from the repository root:
+
+```bash
+uv run --project python --isolated --extra test pytest \
+  python/tests/schema/test_inheritance.py python/tests/planning/test_workflow.py
 ```
 
 ## Project functions

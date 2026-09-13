@@ -21,12 +21,7 @@ EXAMPLES = Path(__file__).parents[2] / "yaml/examples"
 SCHEMA_ROOT = EXAMPLES.parent
 
 KNOWN_REQUIREMENT_GAPS = {
-    "negative-adsl-cyclic-parent": ("R017-42", None),
-    "negative-adsl-inherited-output": ("R017-44", None),
-    "negative-adsl-invalid-parent-clear": ("R017-47", None),
-    "negative-adsl-parent-version-mismatch": ("R017-43", None),
     "negative-adsl-randomization-date-retyped": ("R014-10", None),
-    "negative-adsl-remote-parent": ("R017-40", None),
     "negative-function-contract-mismatch": ("R018-38", None),
 }
 

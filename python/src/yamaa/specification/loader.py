@@ -32,6 +32,21 @@ def load_specification(
     origin_path = written_path.resolve()
     bundle = load_schema_bundle(schema_root)
     document = read_yaml_document(origin_path)
+    if isinstance(document, dict) and "parents" in document:
+        # Imported lazily so the schema interpreter remains usable on its own.
+        from yamaa.schema.inheritance import resolve_specification
+
+        resolved = resolve_specification(
+            origin_path,
+            bundle,
+            entry_document=document,
+        )
+        return LoadedSpecification(
+            specification=resolved.specification,
+            written_path=written_path,
+            origin_path=origin_path,
+            schema_path=bundle.path,
+        )
     diagnostics = validate_specification(document, bundle)
     if diagnostics:
         raise SpecificationError(diagnostics)
