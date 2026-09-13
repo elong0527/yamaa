@@ -178,8 +178,6 @@ Rule coverage across the 51 questions below:
 | How do I look up a value in a table keyed on something other than my output keys? | R015 | [`sdtm-ae-dictionary-coding`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-ae-dictionary-coding) (MedDRA) and [`sdtm-suppmh-parent-linkage`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-suppmh-parent-linkage) use `mapping_from` |
 | How do I select a record by a range rather than by equality? | R015 | [`adam-advs-analysis-window-table`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-advs-analysis-window-table) -- a record lookup with `between: {value: ADY, lower: AWLO, upper: AWHI}`, so the window boundaries stay in the study's table |
 | How do I choose one of several matching records deterministically? | R003, R015 | [`adam-adsl-rescue-medication`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-rescue-medication) and [`adam-adsl-treatment-selection`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-treatment-selection) use `multiple_matches`; [`sdtm-lb-reference-range-indicator`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-lb-reference-range-indicator) uses an ordered record lookup |
-| How do I take the effective state from a transaction log? | R015 | [`sdtm-ae-effective-transaction`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-ae-effective-transaction) |
-
 ### Windows, baselines and ordering
 
 | Question | Rule | Example |
