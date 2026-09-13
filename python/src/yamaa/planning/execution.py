@@ -428,7 +428,11 @@ def _expression_info(
                     ast = _parse_predicate_at(when, f"{branch_path}.when", diagnostics)
                     if ast is not None:
                         references.extend(
-                            _Reference(name, f"{branch_path}.when")
+                            _Reference(
+                                name,
+                                f"{branch_path}.when",
+                                requirement="R004-32",
+                            )
                             for name in _predicate_identifiers(ast)
                         )
                 nest(branch.get("then"), f"{branch_path}.then")
@@ -1033,7 +1037,12 @@ def _validate_qualified_reference(
     bound = bindings.bind(reference.name)
     if isinstance(bound, BindingFailure):
         diagnostics.append(
-            _diagnostic("unknown_field", reference.path, {"identifier": reference.name})
+            _diagnostic(
+                "unknown_field",
+                reference.path,
+                {"identifier": reference.name},
+                requirement="R002-27",
+            )
         )
         return
     if bound.kind == "output":
@@ -1775,6 +1784,7 @@ def _preflight_findings(
                 "duplicate_identifier",
                 (f"datasets.{specification.domain}", "domain"),
                 {"identifier": specification.domain},
+                requirement="R002-28",
             )
         )
     if specification.parents:
@@ -2071,6 +2081,7 @@ def plan_execution(
                                 "unknown_field",
                                 reference.path,
                                 {"identifier": reference.name},
+                                requirement=reference.requirement,
                             )
                         )
                     elif reference.name not in row_names:
@@ -2187,6 +2198,7 @@ def plan_execution(
                         "unknown_field",
                         reference.path,
                         {"identifier": reference.name},
+                        requirement=reference.requirement,
                     )
                 )
             elif (
@@ -2245,6 +2257,7 @@ def plan_execution(
                         "dependency_order",
                         planned.expression_path,
                         {"column": planned.column, "dependency": dependency},
+                        requirement="R001-40",
                     )
                 )
 

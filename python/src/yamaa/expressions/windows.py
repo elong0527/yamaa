@@ -59,10 +59,6 @@ class Partition:
         if not 0 <= self.current < len(self.rows):
             raise ValueError("the current row must lie in its own partition")
 
-    @property
-    def current_row(self) -> RowValues:
-        return self.rows[self.current]
-
     def numbered(self) -> tuple[int, ...]:
         """Return the indexes the window numbers, in order."""
         return tuple(index for index, keep in enumerate(self.eligible) if keep)

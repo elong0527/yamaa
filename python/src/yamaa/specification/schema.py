@@ -34,10 +34,12 @@ def _diagnostic(
     path: str,
     condition: str,
     context: dict[str, JsonValue],
+    requirement: str | None = None,
 ) -> ValidationDiagnostic:
     return ValidationDiagnostic(
         condition=condition,
         spec_paths=(path or "$",),
+        requirement=requirement,
         context=context,
     )
 
@@ -463,11 +465,17 @@ def _actual_type(value: object) -> str:
     return type(value).__name__
 
 
-def _invalid_type(path: str, expected: str, value: object) -> ValidationDiagnostic:
+def _invalid_type(
+    path: str,
+    expected: str,
+    value: object,
+    requirement: str | None = "R006-46",
+) -> ValidationDiagnostic:
     return _diagnostic(
         path,
         "invalid_field_type",
         {"expected": expected, "actual": _actual_type(value)},
+        requirement,
     )
 
 
@@ -523,6 +531,7 @@ def _validate_constraints(
     value: object,
     descriptor: dict[str, Any],
     path: str,
+    requirement: str = "R006-46",
 ) -> list[ValidationDiagnostic]:
     diagnostics: list[ValidationDiagnostic] = []
     permitted = descriptor.get("values")
@@ -532,6 +541,7 @@ def _validate_constraints(
                 path,
                 "value_not_permitted",
                 {"value": value, "permitted": permitted},
+                requirement,
             )
         )
     pattern = descriptor.get("pattern")
@@ -544,6 +554,7 @@ def _validate_constraints(
                     path,
                     "invalid_regex",
                     {"pattern": pattern, "reason": error.reason},
+                    "R022-27",
                 )
             )
         else:
@@ -553,18 +564,23 @@ def _validate_constraints(
                         path,
                         "pattern_mismatch",
                         {"value": value, "pattern": pattern},
+                        requirement,
                     )
                 )
     minimum = descriptor.get("min_length")
     if minimum is not None and (
         not hasattr(value, "__len__") or len(value) < minimum  # type: ignore[arg-type]
     ):
-        diagnostics.append(_diagnostic(path, "minimum_length", {"minimum": minimum}))
+        diagnostics.append(
+            _diagnostic(path, "minimum_length", {"minimum": minimum}, requirement)
+        )
     size = descriptor.get("size")
     if size is not None and (
         not hasattr(value, "__len__") or len(value) != size  # type: ignore[arg-type]
     ):
-        diagnostics.append(_diagnostic(path, "invalid_size", {"size": size}))
+        diagnostics.append(
+            _diagnostic(path, "invalid_size", {"size": size}, requirement)
+        )
     return diagnostics
 
 
@@ -759,10 +775,15 @@ def _validate_single(
             and not has_matching_outer_type
             and all(item.condition == "invalid_field_type" for item in diagnostics)
         ):
-            return [_invalid_type(path, type_name, value)]
+            requirement = "R007-37" if type_name == "variable" else "R006-46"
+            return [_invalid_type(path, type_name, value, requirement)]
         if diagnostics:
             return diagnostics
-        return _validate_constraints(value, alias, path)
+        requirement = {
+            "column_type": "R011-29",
+            "day_rule": "R016-68",
+        }.get(type_name, "R006-46")
+        return _validate_constraints(value, alias, path, requirement)
 
     return [_diagnostic(path, "unknown_schema_type", {"type": type_name})]
 
