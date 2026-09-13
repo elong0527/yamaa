@@ -59,6 +59,13 @@
       </div>
     </div>
     $code_panel
+    <section id="comments" class="panel comments-panel" aria-labelledby="comments-heading">
+      <header class="panel-header"><h2 id="comments-heading">Comments</h2><span class="panel-caption">Signed in with GitHub; saved in <a href="$discussions_url">repository Discussions</a></span></header>
+      <div class="comments-body">
+        <script src="https://giscus.app/client.js" data-repo="$giscus_repo" data-repo-id="$giscus_repo_id" data-category="$giscus_category" data-category-id="$giscus_category_id" data-mapping="specific" data-term="$comment_term" data-strict="1" data-reactions-enabled="1" data-emit-metadata="0" data-input-position="bottom" data-theme="light" data-lang="en" data-loading="lazy" crossorigin="anonymous" async></script>
+        <noscript><p>Comments need JavaScript. Read or join the discussion in <a href="$discussions_url">GitHub Discussions</a>.</p></noscript>
+      </div>
+    </section>
   </main>
   <footer class="page-footer"><span>$example_name</span><nav class="example-nav" aria-label="More examples"><span>$prev_link</span><a href="index.html">All examples</a><span>$next_link</span></nav></footer>
   <script>$script</script>

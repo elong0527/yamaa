@@ -20,6 +20,18 @@ ROOT = HERE.parents[2]
 EXAMPLES = ROOT / "yaml/examples"
 DESTINATION = ROOT / "docs/examples"
 REPOSITORY = "https://github.com/elong0527/yamaa"
+# Comments are giscus threads in the repository's GitHub Discussions, so they
+# outlive any deployment. Each example maps to one discussion whose title is
+# COMMENT_TERM_PREFIX plus the example directory name; renaming a directory
+# starts a new thread. IDs come from https://giscus.app after the repository
+# enables Discussions and installs the giscus app.
+GISCUS = {
+    "repo": "elong0527/yamaa",
+    "repo_id": "R_kgDOTXVQTg",
+    "category": "Comments",
+    "category_id": "DIC_kwDOTXVQTs4DFe_t",
+}
+COMMENT_TERM_PREFIX = "yaml/examples/"
 OUTCOMES = (
     (
         "positive",
@@ -553,6 +565,10 @@ def render_example(example, previous=None, next=None):
         output_files=output_files, output_caption=output_caption,
         spec_lines=spec_line_count, spec_code=spec_code,
         code_panel=code_panel,
+        giscus_repo=escape(GISCUS["repo"]), giscus_repo_id=escape(GISCUS["repo_id"]),
+        giscus_category=escape(GISCUS["category"]), giscus_category_id=escape(GISCUS["category_id"]),
+        comment_term=escape(COMMENT_TERM_PREFIX + example.name),
+        discussions_url=REPOSITORY + "/discussions",
         styles=(HERE / "dashboard.css").read_text(encoding="utf-8"),
         script=(HERE / "dashboard.js").read_text(encoding="utf-8"),
     )
