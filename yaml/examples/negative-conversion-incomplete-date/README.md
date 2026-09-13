@@ -1,16 +1,24 @@
-# ADaM ADAE: reject an event start date that names no day
+# Reject an event start date that names no day
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-conversion-incomplete-date.html)
 
-This example uses collected adverse events to attempt one record per event:
+**Goal:** carry the collected adverse event (AE) start text
+(`AESTDTC`) into `ASTDT`.
 
-- `ASTDT` is the date the event started.
+**Input:** adverse event records, each identified by study,
+subject, and sequence, carrying reported term (`AETERM`) and
+start text (`AESTDTC`).
 
-One start date was collected as a month without a day. A date identifies one
-day, so choosing the first of the month, the last, or the middle would each
-answer with a day nobody recorded. Completing a partial date is a rule a
-specification states deliberately, and this one states none, so the run must
-fail and no artifact is accepted.
+**Variables:**
+
+- `ASTDT`: the event start date, which would carry the collected
+  start text (`AESTDTC`). The collected text `2023-06` names a
+  month with no day, and a date answers with one day, so
+  recording the first, the last, or the middle day would each
+  answer with a day nobody recorded. The text cannot be read as a
+  date, so the run fails and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 

@@ -1,21 +1,32 @@
-# ADaM ADSL: reject a first treatment named after its own source
+# Reject a first treatment named after its own source
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-record-lookup-id-collision.html)
 
-This example uses collected demographics with exposure records to attempt one
-record per subject:
+**Goal:** carry the first treatment received in `TRT01A`, one
+record per subject.
 
-- `TRT01A` is the treatment the subject received first.
+**Input:** demographics records plus exposure records carrying the
+administration sequence number (`EXSEQ`), the treatment name
+(`EXTRT`), and the administration start date (`EXSTDTC`).
 
-The chosen record is given the name the exposure records already have, so
-`EX.EXTRT` no longer says whether it means the treatment of one chosen record
-or of all of them. The two readings differ for every subject with more than one
-record, so the run must fail and no artifact is accepted.
+**Variables:**
+
+- `TRT01A` would contain the treatment name from the earliest
+  exposure record.
+
+The chosen-record name `EX` already names the exposure records, so
+a read of `EX.EXTRT` cannot say whether it means the treatment of
+the chosen record or of every exposure record. The two readings
+differ whenever a subject has more than a single administration, so
+the run is rejected before any data is read and no artifact is
+accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
-Give the record lookup an identifier that is distinct from every dataset and
-from the output domain, then read through that identifier:
+Give the record lookup a name that is distinct from every dataset and from
+the output domain, then read through that name:
 
 ```yaml
 record_lookups:

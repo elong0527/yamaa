@@ -1,18 +1,21 @@
-# ADaM ADAE: reject an event start recorded against another clock
+# Reject mixed clock readings in an event start
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-datetime-zone-offset.html)
 
-This example uses collected adverse events to attempt one record per event:
+**Goal:** carry each adverse event (AE) term into `AETERM` and its
+start moment into `ASTDTM`.
 
-- `ASTDTM` is meant to be the moment each event started.
+**Input:** collected adverse event records carrying term (`AETERM`)
+and start text (`AESTDTC`).
 
-One start is a plain reading of a wall clock and the other carries an offset
-from one. The two are not the same kind of value, and holding both in one
-column would first need a rule saying which clock a result is read on. Shifting
-the offset value to some other clock would move a collected time, and keeping
-the offset beside it would leave two records that cannot be ordered against
-each other, so the run must fail and no artifact is accepted. A study that
-records an offset keeps it in a column of its own, where it stays readable.
+**Variables:**
+
+- `ASTDTM` would contain the start moment copied from `AESTDTC`.
+  One value reads without a clock offset and another reads with
+  one, and the two are not the same kind of value, so the run
+  stops while converting values and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 
@@ -24,10 +27,10 @@ PILOT7,P7-971,2,HEADACHE,2025-03-04T09:00:00
 ```
 
 If the offset is real data, collect it as a field of its own and keep
-`AESTDTC` to the site clock. `ASTDTM` then holds the moment and a second
-`str` column holds the offset, where a later analysis can read it.
+`AESTDTC` to the site clock. `ASTDTM` then holds the moment and a second text
+column holds the offset, where a later analysis can read it.
 
-To see the malformed value rather than fail on it, declare `ASTDTM` as `str`.
+To see the collected value rather than fail on it, declare `ASTDTM` as text.
 It keeps the collected characters and still orders chronologically, and a
 column that converts it later can answer for the failure:
 

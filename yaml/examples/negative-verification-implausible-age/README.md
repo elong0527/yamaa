@@ -1,20 +1,26 @@
-# ADaM ADSL: reject an implausible age
+# Reject an implausible age
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-verification-implausible-age.html)
 
-This example uses collected demographics to attempt one record per subject:
+**Goal:** record `AGE` for every subject from the collected
+demographics, accepting only ages from 18 to 100.
 
-- `AGE` is the age collected at screening, which the study restricts to adults
-  under one hundred and one.
+**Input:** collected demographics carrying age (`AGE`).
 
-One collected age falls outside that range. Carrying it forward would publish a
-value the study's own entry criteria exclude, so the run must fail and no
-artifact is accepted.
+**Variables:**
+
+- `AGE` would be the subject's age, taken from the collected age.
+
+A collected age of `214` falls outside the accepted range of 18 to
+100, so it is rejected after the dataset completes and no artifact
+is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
-Query and correct the source age for `P7-732` if `214` is a data-entry error,
-then rerun the unchanged range verification. If the protocol genuinely permits
-the confirmed value, revise the verification boundary to the protocol's
+Query and correct the source age for `P7-732` if `214` is a data-entry
+error, then rerun the unchanged range check. If the protocol genuinely
+permits the confirmed value, revise the check boundary to the protocol's
 documented limit. Do not remove or widen the check merely to make an
 unconfirmed value pass.

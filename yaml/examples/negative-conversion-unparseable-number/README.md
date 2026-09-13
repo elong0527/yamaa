@@ -1,17 +1,22 @@
-# ADaM ADLB: reject a viral load reported below the assay limit
+# Reject a viral load reported below the assay limit
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-conversion-unparseable-number.html)
 
-This example uses collected viral-load results as they were reported to attempt
-one record per subject and parameter:
+**Goal:** one record for each subject and collected parameter,
+carrying the numeric analysis result (`AVAL`).
 
-- `AVAL` is the reported number of copies per millilitre.
+**Input:** collected laboratory results carrying the test code
+(`LBTESTCD`) and the reported character result (`LBSTRESC`).
 
-One result was reported as being under a limit rather than as a number. The
-limit it names is information, so reading it as that number, as zero, or as
-absent would each replace a reported fact with a chosen one, and the
-specification states none of them. The run must fail and no artifact is
-accepted.
+**Variables:**
+
+- `AVAL` would hold the reported number read from `LBSTRESC`
+  for the collected parameter. A result reported as a limit
+  instead of a number cannot be read as that number, as zero, or
+  as missing without a stated rule, so the run fails and no
+  artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

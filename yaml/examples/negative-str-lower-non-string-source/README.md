@@ -1,16 +1,24 @@
-# ADaM ADSL: reject a site name folded from a number
+# Reject a site name folded from a number
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-str-lower-non-string-source.html)
 
-This example uses collected demographics with a `yamaa` specification to
-derive one row per subject:
+**Goal:** fold `SITE` to lower case for analysis use.
 
-- `SITE` is the site name in lowercase. Folding a numeric site number has
-  no lowercase form.
+**Input:** collected demographics carrying the numeric site number
+(`SITENUM`).
+
+**Variables:**
+
+- `SITE` (site name) was specified from the numeric site number
+  (`SITENUM`), which has no lower-case form, so the run is rejected
+  before any data is read and no row is produced.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 
-Fold the collected site name rather than its number:
+Fold the collected site name rather than its number, once `SITENM` is
+present in the demographics extract:
 
 ```yaml
 str_lower:

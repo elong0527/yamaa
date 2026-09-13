@@ -1,23 +1,42 @@
-# ADaM ADEG: reject a collected RR interval
+# Reject a collected RR interval
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adam-adeg-pre-existing-rrr.html)
 
-This example uses ADEG HR records and one collected RRR record to attempt to
-preserve collected records and add one RRR parameter record per subject and
-analysis visit:
+**Goal:** keep each collected heart rate (HR) record and add a
+rederived RR duration (time between successive R waves) record
+under the code `RRR` for each subject and analysis visit with a
+non-missing, non-zero HR result, labeled `RR Duration Rederived
+(ms)` and carrying the new result in `AVAL` and its unit in
+`AVALU`.
 
-- `PARAMCD` is the source parameter code or `RRR` for an added record;
-- `PARAM` is the source parameter name or the rederived RR duration name;
-- `AVAL` is the source result or 60000 divided by HR for an added `RRR` record.
-  A missing or zero HR adds no `RRR` record;
-- `AVALU` is the source unit or `ms` for an added `RRR` record.
+**Input:** collected electrocardiogram (ECG) records with heart
+rate results under the code `HR` per subject and visit, carrying
+the record label, result, and result unit; one input record
+already carries the code `RRR`.
 
-An RRR record must be produced from HR rather than accepted as collected, so
-the run must fail. The expected output records the completed dataset presented
-to the failing check.
+**Variables:**
+
+- `AVAL`: the collected result on a kept record, or 60000 divided
+  by the heart rate (in beats/min) on an added `RRR` record. A
+  missing or zero heart rate adds no `RRR` record.
+- `AVALU`: the collected unit on a kept record, or milliseconds
+  (`ms`) on an added `RRR` record. A heart rate record that
+  contributes a result must use `beats/min`.
+
+Every `RRR` record must be produced from a heart rate by the
+calculation above rather than accepted as collected, so the
+collected `RRR` record breaks the stated requirement. The
+completed dataset is presented to that check and rejected, and no
+artifact is accepted from this input. The expected file records
+the completed rows presented to the check.
+
+**Standard:** ADaM | **Domain:** ADEG
 
 ## How to fix
 
-Remove the collected `RRR` record and retain its contributing `HR` record with
-`AVALU: beats/min`. The specification will then calculate the RR interval and
-mark it as produced by the calculation.
+First confirm the RR duration should come from the heart rate rather
+than from the collected record: the collected `RRR` record is the
+defect, not the calculation. Delete the collected `RRR` input record;
+keep each contributing `HR` record with `beats/min` as the unit. The
+run then calculates the RR interval itself instead of accepting one
+as collected.

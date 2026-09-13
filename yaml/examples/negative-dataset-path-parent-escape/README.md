@@ -1,18 +1,28 @@
-# ADaM ADLB: reject reference limits stored above the study
+# Reject reference limits stored above the study
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-dataset-path-parent-escape.html)
 
-This example uses collected laboratory results with a table of reference
-limits by test and sex to attempt one record per subject and parameter:
+**Goal:** one record for each subject and collected laboratory
+parameter carrying `SEX`, `AVAL`, and `ANRHI`.
 
-- `SEX` is the sex the limits are chosen by;
-- `AVAL` is the collected result;
-- `ANRHI` is the upper limit of normal for that test and sex.
+**Input:** collected laboratory results carrying the collected
+result (`LBSTRESN`), test code (`LBTESTCD`), and sex (`SEX`),
+together with a reference table of upper limits read from
+`../reference/lbref.csv`, a location above the study.
 
-The limits are read from a folder above the study. A file outside the study
-is not versioned, reviewed, or archived with it, and whoever reruns the study
-later receives whatever that folder holds at the time, so the run must fail
-and no artifact is accepted.
+**Variables:**
+
+- `SEX` would be the sex the limits are chosen by, taken from
+  `SEX`.
+- `AVAL` would be the collected result, taken from `LBSTRESN`.
+- `ANRHI` would be the upper limit of normal for that test and
+  sex, taken from the reference entry whose test code and sex
+  equal `LBTESTCD` and `SEX`.
+
+The limits live outside the study, so the run is rejected before
+any data is read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

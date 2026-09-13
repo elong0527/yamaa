@@ -1,20 +1,30 @@
-# ADaM ADLB: reject an unnamed baseline-count rule
+# Reject a baseline count check without a name
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-group-count-without-id.html)
 
-This example uses a pre-derived analysis slice to attempt one record per
-subject, parameter, and analysis date:
-
-- `AVAL` is the analysis value of the result;
-- `ABLFL` is `Y` on the record that serves as the subject's baseline for the
-  parameter, and is empty on every other record.
-
-The specification asserts a clinical rule -- each subject and parameter has
-exactly one baseline record -- without naming it. Counting rows within a group
-is a study decision rather than a property of the data, so a report that only
-said a count was wrong would not say which rule the data broke. The rule must
-carry a name, so the run must fail before any data is read and no artifact is
+**Goal:** carry the analysis date (`ADT`), the numeric result
+(`AVAL`), and the baseline flag (`ABLFL`, `Y` on the baseline
+result and blank otherwise) for each subject and parameter, and
+check that each subject and parameter has exactly one flagged
+baseline result. The count check carries no name, so a report of
+a wrong count could not say which study decision the data broke.
+The run is rejected before any data is read and no artifact is
 accepted.
+
+**Input:** collected laboratory results carrying analysis date
+(`ADT`), numeric result (`AVAL`), and baseline flag (`ABLFL`).
+
+**Variables:**
+
+- `ADT` would be the analysis date, carried over from the
+  collected records.
+- `AVAL` would be the numeric result, carried over from the
+  collected records.
+- `ABLFL` would be `Y` on the baseline result and blank
+  otherwise; the check counts rows where `ABLFL` equals `Y`
+  within each subject and parameter and expects exactly one.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 

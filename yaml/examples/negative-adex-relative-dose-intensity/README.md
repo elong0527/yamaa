@@ -1,20 +1,30 @@
-# ADaM ADEX: reject a dose intensity measured against a per-record plan
+# Reject a dose intensity measured against a per-record plan
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adex-relative-dose-intensity.html)
 
-This example uses a subject-treatment inventory with its component exposure
-records to attempt one record per subject and treatment:
+**Goal:** derive cumulative dose (`DOSECUM`) and relative dose
+intensity (`RDI`) by subject and treatment.
 
-- `EXDOSU` is the dose unit the component is administered in;
-- `DOSECUM` is the total dose administered across the component's records;
-- `RDI` is meant to be that total as a percentage of the dose planned for the
-  component.
+**Input:** a subject-treatment inventory carrying the dose unit
+(`EXDOSU`), with component exposure records carrying the
+treatment (`EXTRT`), the administered dose (`EXDOSE`), and the
+planned dose (`EXPLDOS`) on each administration record.
 
-The planned dose is recorded on each administration record rather than once
-for the treatment, so a total taken across those records has no single planned
-dose to measure against. Which record supplied it would decide the answer, so
-the rule is rejected whether or not the recorded values happen to agree, and
-no artifact is accepted.
+**Variables:**
+
+- `EXTRT` names the treatment component, and `EXDOSU` is the unit
+  that component is measured in.
+- `DOSECUM` is the total administered dose across the
+  component's exposure records.
+- `RDI` is meant to be that total as a percentage of the planned
+  dose, but would divide the summed actual doses by the planned
+  dose of one exposure record, and no row is produced because the
+  run is rejected before any data is read: the planned dose is
+  recorded on each administration record rather than once for
+  the treatment, so which record supplies it would decide the
+  answer.
+
+**Standard:** ADaM | **Domain:** ADEX
 
 ## How to fix
 

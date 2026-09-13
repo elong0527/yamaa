@@ -1,28 +1,40 @@
-# ADaM ADRS: prepare the overall response records an endpoint reads
+# Prepare investigator overall response records
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adrs-overall-response-records.html)
 
-This example uses collected tumour assessments and the subject's treatment
-start to derive one record per overall response recorded by the investigator:
+**Goal:** derive overall-response records for the `OVR` (Overall
+Response by Investigator) parameter, carrying the collected date
+`RSDTC` and result `AVALC` with the completed date `ADT`, study
+day `ADY`, response rank `AVAL`, and per-date flag `ANL01FL`.
 
-- `RSDTC` is the assessment date as collected, which may name only a year and
-  a month;
-- `ADT` is that date completed, taking the first day of any period the
-  collection did not narrow, and `ADY` is its study day with the first day of
-  treatment as day one;
-- `AVALC` is the assessment and `AVAL` its rank, `1` for a complete response
-  through `6` for an assessment that was not evaluable. Responses have no order
-  of their own, so the rank is what makes one assessment worse than another;
-- `ANL01FL` marks one record at each assessment date: the worst response
-  recorded that day, and the earliest of those when a day carries the same
-  response twice.
+**Input:** one record per collected response assessment carrying
+the test code `RSTESTCD`, the evaluator `RSEVAL`, the assessment
+date `RSDTC`, and the result `RSSTRESC`, plus the treatment start
+`TRTSDT` from the subject-level dataset. Only assessments the
+investigator (`INVESTIGATOR`) scored as overall response
+(`OVRLRESP`) leave a record; a target-lesion assessment
+(`TRGRESP`) and an independent assessor (`INDEPENDENT ASSESSOR`)
+assessment leave none.
 
-Assessments of an individual lesion, and assessments made by anyone other than
-the investigator, are not overall responses and leave no record here.
+**Variables:**
 
-Completing a date that was collected without a day settles which day it names,
-and every later comparison treats `ADT` on such a record as the day it names,
-exactly as it treats a date collected in full. What the completed date does
-keep is how much of it was collected, so a specification that needs to report
-which assessment dates rested on a supplied day can read it from `ADT` itself.
-This example does not report it, because nothing it derives turns on it.
+- `ADT` is the completed analysis date. A fully collected date is
+  used as it stands; a year and month without a day is completed to
+  the first of the month.
+- `ADY` is the study day of the assessment, counting the treatment
+  start as day one.
+- `AVAL` is the rank of the response, from best to worst: `1` for a
+  complete response (`CR`), `2` for a partial response (`PR`), `3`
+  for stable disease (`SD`), `4` for neither complete response nor
+  progressive disease (`NON-CR/NON-PD`), `5` for progressive disease
+  (`PD`), and `6` for not evaluable (`NE`).
+- `ANL01FL` is `Y` for one record at each assessment date: the worst
+  (largest `AVAL`) response that day, with the lowest `RSSEQ`
+  breaking ties when a day carries the same worst response twice. It
+  is missing otherwise.
+
+**Note:** a completed date counts exactly as a collected one in every
+comparison that follows, so grouping by date and measuring from the
+treatment start never depend on how much of the date was collected.
+
+**Standard:** ADaM | **Domain:** ADRS

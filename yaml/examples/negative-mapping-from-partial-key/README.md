@@ -1,26 +1,36 @@
-# ADaM ADLB: reject a reference range chosen without a sex
+# Reject a reference range chosen without a sex
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-mapping-from-partial-key.html)
 
-This example uses collected laboratory results with a table of reference limits
-by test and sex to attempt one record per subject and parameter:
+**Goal:** carry sex and the collected result into the output and
+attach the upper limit of normal (`ANRHI`) chosen by test and sex.
 
-- `SEX` is the sex the limits are chosen by;
-- `AVAL` is the collected result;
-- `ANRHI` is the upper limit of normal for that test and sex.
+**Input:** laboratory records carrying test code (`LBTESTCD`), sex
+(`SEX`), and collected result (`LBSTRESN`), plus a limit table
+carrying test code, sex, and upper limit (`ANRHI`).
 
-One subject's sex was never collected, so the pair that chooses a limit is
-incomplete and no entry can be looked for. Falling back to one sex, or to a
-combined limit, would answer with a range the study never stated, so the run
-must fail and no artifact is accepted. An uncollected sex is a different
-condition from a sex the limit table does not cover, and a specification may
-answer them differently.
+**Variables:**
+
+- `ANRHI` would be the upper limit of normal taken from the limit
+  table where the test matches the collected test and the sex
+  matches the carried sex.
+
+When the carried sex is blank, the pair that chooses a limit is
+incomplete and no entry can be looked for, so the run is rejected
+with no artifact accepted. Falling back to either sex, or to a
+combined limit, would answer with a range the study never stated.
+
+**Note:** a blank lookup value is a different condition from a
+complete test and sex the limit table does not cover, and each
+needs its own stated answer.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 
 Recover and correct the missing sex when possible. If the intended result is a
 missing reference limit whenever any lookup input is missing, state that with
-the mapping operation's `missing` handler:
+the lookup's missing-value answer:
 
 ```yaml
 mapping_from:
@@ -31,5 +41,5 @@ mapping_from:
   missing: null
 ```
 
-This does not handle a complete key that is absent from `LBREF`; that separate
-condition uses `unmapped`.
+A complete key that is absent from the reference table is a separate condition
+with its own answer.

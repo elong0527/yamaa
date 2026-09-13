@@ -1,30 +1,39 @@
-# ADaM ADRS: prepare assessments for best overall response
+# Prepare assessments for best overall response selection
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adrs-best-response-selection.html)
 
-This example uses the overall response assessments to produce one record per
-assessment for the best-response endpoint:
+**Goal:** prepare each collected overall response assessment for best
+overall response (BOR) selection, adding `BORCAT`, `BORPRI`, and
+`BORSEQ`.
 
-- `ADT` is the assessment date;
-- `RANDDY` is the assessment day relative to randomization;
-- `AVALC` is the collected overall response and `BORCAT` is the category the
-  record can support in the best-response decision. Stable disease and
-  neither-complete-nor-progressive disease become not evaluable before day 42;
-- `BORPRI` orders the supported categories from complete response through not
-  evaluable;
-- `BORSEQ` orders each subject's records by that category, assessment date,
-  and assessment sequence. The record numbered `1` supplies the subject's best
-  overall response and its supporting date.
+**Input:** overall response assessments carrying the analysis date
+(`ADT`), the assessment day relative to randomization (`RANDDY`), and
+the collected overall response (`AVALC`).
 
-The ordering fields make the clinical priority an independently testable data
-contract. A downstream endpoint can select the first prepared record without
-repeating the priority rules.
+**Variables:**
 
-A record whose collected response is neither one of those categories nor
-collected at all supports no category and takes no priority, so it is left
-out of the ordering entirely: it can never be numbered `1`, and it never
-consumes a number that a usable record would otherwise take.
+- `BORCAT` is the response category the record can support in the
+  best overall response decision: complete response as `CR`, partial
+  response as `PR`, stable disease as `SD`, neither complete response
+  nor progressive disease as `NON-CR/NON-PD`, progressive disease as
+  `PD`, or not evaluable as `NE`. Stable disease and
+  neither-complete-nor-progressive disease count only on or after
+  day 42 after randomization, and earlier ones fall back to not
+  evaluable. Any other collected value, including a missing one,
+  supports no category, so `BORCAT` stays empty.
+- `BORPRI` orders the supported categories as complete response
+  (`1`), partial response (`2`), stable disease (`3`),
+  neither-complete-nor-progressive disease (`4`), progressive
+  disease (`5`), not evaluable (`6`); empty when the record
+  supports no category.
+- `BORSEQ` numbers the usable records of each study and subject in
+  category order, then by analysis date, then by assessment
+  sequence. The record numbered `1` supplies the study-subject's
+  best overall response and its supporting date.
 
-Subject identifiers are unique only within a study. The sample reuses one
-under a second study, and each study's records are ordered on their own, so
-one study's numbering never continues into the other's.
+**Note:** a record that supports no category takes no priority and no
+number, so numbering passes over it to the next usable record: it can
+never be numbered `1`, and it never consumes a number a usable record
+would otherwise take.
+
+**Standard:** ADaM | **Domain:** ADRS

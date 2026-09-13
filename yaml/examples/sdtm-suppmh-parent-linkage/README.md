@@ -1,24 +1,29 @@
-# SDTM SUPPMH: link qualifiers collected on their own form to a parent record
+# Link separately collected qualifiers to parent records
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-suppmh-parent-linkage.html)
 
-This example uses a pre-derived medical-history domain with a separately
-collected qualifier form, and a `yamaa` specification to derive one
-supplemental record per collected qualifier:
+**Goal:** create one supplemental record per collected qualifier,
+carrying `IDVARVAL`, `QLABEL`, `QVAL`, `QORIG`, and `QEVAL`.
 
-- `RDOMAIN`, `IDVAR`, and `IDVARVAL` point back at the medical-history record
-  the qualifier belongs to. Neither form carries that record's sequence number
-  alongside the qualifier, so it is found by matching on the subject together
-  with the reported condition. Neither alone identifies a record: a subject may
-  report several conditions and a condition may be reported by several
-  subjects;
-- `QNAM` and `QLABEL` name the qualifier and `QVAL` carries its value;
-- `QORIG` records that the value came from the case report form, and `QEVAL` is
-  empty because a collected value is not an assessment.
+**Input:** two tables sharing study and subject identifiers: a
+parent medical history (MH) table with one record per condition,
+and a qualifier table with one record per condition carrying the
+two collected qualifiers.
 
-A qualifier that finds no medical-history record is an error rather than a
-record with an empty link, so every supplemental record here points at a real
-parent. The reverse is not checked: a medical-history record whose qualifiers
-were never collected simply contributes nothing.
+**Variables:**
 
-Records are grouped by qualifier rather than by subject.
+- `IDVARVAL` is the parent sequence number as text, matched on
+  subject and condition term.
+- `QLABEL` is the qualifier label, `Family History` or `Confirmed
+  by Medical Records`.
+- `QVAL` is the collected answer, `Y` or `N`.
+- `QORIG` is the origin, always case report form (`CRF`) for
+  collected values.
+- `QEVAL` is blank, since a collected value is not an assessment.
+
+**Note:** a qualifier that finds no parent record is an error
+rather than a record with an empty link, so every supplemental
+record points at a real parent. A parent record with no collected
+qualifiers simply contributes nothing.
+
+**Standard:** SDTM | **Domain:** SUPPMH

@@ -1,19 +1,34 @@
-# SDTM LB: apply external reference ranges
+# Flag laboratory results against reference ranges
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-lb-reference-range-indicator.html)
 
-This example uses collected laboratory results and a test-by-sex reference
-dictionary to derive one record per result:
+**Goal:** attach the reference unit and limits to each collected
+test result and flag the result against them: `LBORRESU`,
+`LBSTNRLO`, `LBSTNRHI`, and `LBNRIND`.
 
-- `LBTESTCD`, `SEX`, and `LBSTRESN` identify the result that is evaluated;
-- `LBORRESU`, `LBSTNRLO`, and `LBSTNRHI` are the unit, lower limit, and upper
-  limit read depends on the `SEX`;
-- `LBNRIND` is `LOW`, `NORMAL`, or `HIGH` according to the result's relation
-  to those limits, and is empty when the result itself is missing.
+**Input:** collected results, one row per result carrying the test
+code, recorded sex, and numeric result, plus a reference dictionary
+keyed by test code and sex giving the unit and the lower and upper
+limits.
 
-Units and ranges are not present in the collected laboratory source. The
-test-and-sex combination must have one and only one reference entry.
+**Variables:**
 
-The sample includes a result that was not collected. Its indicator stays
-empty rather than falling through to `NORMAL`, while the unit and both
-limits for its test and sex are still read.
+- `LBTESTCD` is the test code as collected; together with sex it
+  selects the reference entry.
+- `SEX` is recorded sex as collected; together with test code it
+  selects the reference entry.
+- `LBSTRESN` is the numeric result in standard units as collected;
+  missing when the result was not collected.
+- `LBORRESU` is the reference unit for the test-and-sex
+  combination.
+- `LBSTNRLO` is the lower reference limit in standard units.
+- `LBSTNRHI` is the upper reference limit in standard units.
+- `LBNRIND` is `LOW` when the result is below the lower limit,
+  `HIGH` when it is above the upper limit, and `NORMAL` otherwise;
+  blank when the result itself is missing.
+
+**Note:** each test-and-sex combination has one and only one
+reference entry, so the unit and both limits are present on every
+record, including one whose result is missing.
+
+**Standard:** SDTM | **Domain:** LB

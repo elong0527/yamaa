@@ -1,29 +1,40 @@
-# ADaM ADLB: reject a subject with two baseline records for one parameter
+# Reject two baseline records for one parameter
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adlb-multiple-baseline-records.html)
 
-This example uses a pre-derived analysis slice to prepare one record per
-subject, parameter, and analysis date:
+**Goal:** carry over the analysis value (`AVAL`) and the baseline
+record flag (`ABLFL`) for each laboratory record.
 
-- `AVAL` is the analysis value of the result;
-- `ABLFL` is `Y` on the record that serves as the subject's baseline for the
-  parameter, and is empty on every other record.
+**Input:** pre-derived laboratory records carrying study, subject,
+and parameter identifiers, the analysis date (`ADT`), the analysis
+value (`AVAL`), and the baseline record flag (`ABLFL`).
 
-A parameter has one baseline for a subject, because every change and percentage
-change is measured from it. Two flagged records leave that comparison
-undefined, and neither the earlier nor the later one can be preferred without
-inventing a rule the study did not state. The disagreement is reported against
-the subject and parameter rather than corrected, and no artifact is accepted
-from this input. The expected output records the completed rows presented to
-that check.
+**Variables:**
+
+- `ADT` is the analysis date, carried over from the input
+  analysis date (`ADT`).
+- `AVAL` is the analysis value, carried over from the input
+  analysis value (`AVAL`).
+- `ABLFL` is `Y` on the record that serves as the baseline for
+  the subject and parameter, carried over from the input baseline
+  flag (`ABLFL`); blank on every other record.
+
+Each subject and parameter combination has a single baseline. Two
+records flagged `Y` leave that comparison undefined, and neither
+record can be preferred without inventing a rule the study did not
+state. The run is rejected and no artifact is accepted. The
+expected output records the completed rows presented to that
+check.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 
-Correct the flag in the incoming slice so that one record carries it, choosing
-the record the study's baseline definition selects -- ordinarily the latest
-result on or before the first exposure. When the flag should be derived here
-instead of trusted from the slice, derive it and let a tie be reported where it
-arises:
+Correct the flag in the incoming records so that one record carries
+it, choosing the record the study's baseline definition selects,
+ordinarily the latest result on or before the first exposure. When
+the flag should be derived here instead of trusted from the input,
+derive it and let a tie be reported where it arises:
 
 ```yaml
 - name: ABLFL
@@ -36,5 +47,5 @@ arises:
       reference_date: TRTSDT
 ```
 
-Do not widen the count to accept two records; a second baseline is a defect in
-the data rather than a policy the analysis can adopt.
+Do not widen the count to accept two records; a second baseline is
+a defect in the data rather than a policy the analysis can adopt.

@@ -1,23 +1,35 @@
-# ADaM ADRS: combine efficacy, safety, and discontinuation into one response
+# Composite response from efficacy, safety, discontinuation
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adrs-composite-response.html)
 
-This example uses a pre-derived ADRS slice with ADSL and a `yamaa`
-specification to derive one row per subject:
+**Goal:** decide a composite responder value (`AVALC`), its numeric
+companion (`AVAL`), and the reason behind the assignment (`ARSN`)
+for each subject and visit.
 
-- `PCHG` is the percentage change in the efficacy measure, `SAEFL` says whether
-  the subject had a serious adverse event, and `DCSREAS` gives their reason for
-  discontinuing, if any;
-- `AVALC` is the responder value, decided in a fixed order. A subject with a
-  serious adverse event or any discontinuation reason is a non-responder
-  whatever their efficacy value. Otherwise a subject with no efficacy value is
-  not evaluable, one whose change is at least the response threshold is a
-  responder, and everyone else is a non-responder. `AVAL` is its numeric
-  companion;
-- `ARSN` records which of those four rules applied, because three of them
-  produce the same non-responder value and the value alone does not say why.
+**Input:** a table of percent change from baseline values (`PCHG`)
+under input parameter code EASI (Eczema Area and Severity Index),
+matched to a subject-level file with a serious adverse event flag
+(`SAEFL`) and a reason for discontinuation (`DCSREAS`). `PARAMCD`
+is fixed to `RESP75` and `PARAM` to `EASI-75 Response`.
 
-The order matters and is part of the definition: a subject who meets the
-efficacy threshold but had a serious adverse event is a non-responder, and a
-subject with no efficacy value who discontinued is a non-responder rather than
-not evaluable.
+**Variables:**
+
+- `AVALC` is the responder value: `RESPONDER`, `NON-RESPONDER`,
+  or `NOT EVALUABLE`.
+- `AVAL` is 1 for a responder, 0 for a non-responder, and missing
+  when the subject is not evaluable.
+- `ARSN` records which check assigned the value: `SAFETY OR
+  DISCONTINUATION RULE`, `COMPONENT MISSING`, `THRESHOLD MET`, or
+  `THRESHOLD NOT MET`.
+
+**Note:** the checks apply in a fixed order. A subject with a
+serious adverse event or any discontinuation reason is a
+non-responder whatever the efficacy value; otherwise a subject
+with no efficacy value is not evaluable, one with a percent change
+of -75 or less (a reduction of at least 75%) is a responder, and
+everyone else is a non-responder. So a subject meeting the
+efficacy mark but flagged for safety is a non-responder, and a
+subject with no efficacy value who discontinued is a non-responder
+rather than not evaluable.
+
+**Standard:** ADaM | **Domain:** ADRS

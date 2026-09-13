@@ -1,23 +1,34 @@
-# ADaM ADAE: reject an order that places one value twice
+# Reject a presentation order that repeats one value
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-output-order-repeated-term.html)
 
-This example uses collected adverse events to attempt one record per event:
+**Goal:** arrange adverse event (AE) records so each subject's
+events read together, newest onset first, carrying the reported
+term (`AETERM`) and onset date (`ASTDT`).
 
-- `AETERM` is the reported term for the event, and `ASTDT` the date it began.
+**Input:** collected adverse event records carrying the reported
+term (`AETERM`) and the onset date (`AESTDTC`).
 
-The records are to be presented by subject, then by onset date with the most
-recent first, and then by subject again in the opposite direction. The last
-term contradicts the first: the subject cannot both open the order and reverse
-it, and whichever the run applied would decide the artifact by accident. One
-value takes one place in an order, so the run must fail before any data is read
-and no artifact is accepted.
+**Variables:**
+
+- `AETERM` would be the reported term for the event, carried over
+  from the collected records.
+- `ASTDT` would be the date the event began, carried over from the
+  collected onset date.
+
+The records are to be presented by subject ascending, then by
+onset date with the most recent first, then by subject descending
+again: one value takes two places in the presentation, so there is
+no single order the run could give the records. The run is
+rejected before any data is read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADAE
 
 ## How to fix
 
-Decide which position the subject holds and state it once. Grouping a subject's
-events together while reading the newest first is the first term ascending and
-the date descending:
+Decide which position the subject holds and state it once. Grouping a
+subject's events together while reading the newest first is the subject
+ascending first and the date descending:
 
 ```yaml
 output:
@@ -28,6 +39,6 @@ output:
       direction: desc
 ```
 
-Presenting the subjects in reverse instead means declaring `USUBJID`
-descending once, in the first position, rather than adding a second term for
+Presenting the subjects in reverse instead means declaring the subject
+descending once, in the first position, rather than adding a second entry for
 it.

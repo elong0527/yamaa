@@ -1,32 +1,35 @@
-# SDTM DM: derive the reference dates from EX, DS, and AE
+# Reference start and end dates
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-dm-reference-dates.html)
 
-This example uses collected DM with the EX, DS, and AE domains and a `yamaa`
-specification to derive one row per enrolled subject:
+**Goal:** build one record per enrolled subject carrying informed
+consent date (`RFICDTC`), first and last exposure dates (`RFXSTDTC`,
+`RFXENDTC`), reference start date (`RFSTDTC`), and reference end
+date (`RFENDTC`).
 
-- `RFICDTC` is the date the subject gave informed consent, as collected;
-- `RFXSTDTC` is the subject's first exposure start date and `RFXENDTC` is
-  their last exposure end date;
-- `RFSTDTC` is the reference start date that study day counts run from. This
-  study defines it as the first exposure, so it repeats `RFXSTDTC`; the two are
-  distinct variables and their equality is a study decision rather than a
-  general rule;
-- `RFENDTC` is the last date the subject is known to have participated: the
-  latest of their last exposure end date, their last disposition event date,
-  and their last adverse event end date. A subject missing one of the three
-  takes the latest of the rest, and a subject missing all three has no value.
+**Input:** collected demographics rows with consent date, exposure
+rows with start and end dates and sequence number, disposition rows
+with category and start date, and adverse event rows with end date.
 
-Only disposition events count toward `RFENDTC`; other disposition records do
-not. A subject who was never exposed has no exposure dates and therefore no
-reference start date, which is how a screen failure appears in the output.
+**Variables:**
 
-One row per enrolled subject means one row per subject collected in DM. An
-exposure record whose subject is absent from DM contributes to no row and
-creates none, so no reference dates can appear for a subject who was never
-enrolled.
+- `RFICDTC` is the consent date as collected; always present.
+- `RFXSTDTC` is the earliest non-missing exposure start date;
+  missing when no exposure row carries a start date.
+- `RFXENDTC` is the end date of the last exposure row among rows
+  with a non-missing end date, ordered by end date then sequence
+  number; missing when none carries an end date.
+- `RFSTDTC` is the reference start date; repeats the first
+  exposure date, so missing whenever the first exposure date is
+  missing.
+- `RFENDTC` is the latest of the last exposure end date, the
+  latest disposition start date from rows coded `DISPOSITION EVENT`
+  in category, and the latest adverse event end date; missing when
+  all three are missing.
 
-Subject identifiers are unique only within a study. The sample reuses one
-under a second study, and each study reads only its own exposure,
-disposition, and adverse event records, so one study's dates never reach
-the other's row.
+**Note:** only rows coded `DISPOSITION EVENT` count toward the
+reference end date; exposure, disposition, and adverse event rows
+are read within the same subject only, and an enrolled subject with
+no exposure has missing exposure and reference start dates.
+
+**Standard:** SDTM | **Domain:** DM

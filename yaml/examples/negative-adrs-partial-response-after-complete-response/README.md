@@ -1,21 +1,35 @@
-# ADaM ADRS: reject a partial response recorded after a complete response
+# Reject a partial response after a complete response
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-adrs-partial-response-after-complete-response.html)
 
-This example uses a series of collected tumour assessments to prepare one
-record per assessment:
+**Goal:** carry each collected tumor assessment into an analysis
+record holding the assessment date (`ADT`) and the recorded
+response (`AVALC`), rejecting a partial response (PR) recorded
+directly after a complete response (CR).
 
-- `ADT` is the assessment date and `AVALC` the response recorded at it.
+**Input:** collected tumor assessments with the assessment date
+(`RSDTC`) and the assessed response (`RSSTRESC`), identified by
+study, subject, and sequence number.
 
-A subject whose disease has completely responded has no measurable disease
-left to respond partially, so a partial response directly after a complete one
-is a fault in the collected data rather than a course the disease can take.
-Confirming a response reads these records in date order, so an assessment that
-cannot be true would silently decide whether a subject counts as a responder.
-The disagreement is reported against the assessment rather than corrected, and
-no artifact is accepted from this input. The expected output records the
-completed rows presented to that check. An improvement in the other direction
-is ordinary and passes: a partial response may later become complete.
+**Variables:**
+
+- `ADT` is the assessment date, taken directly from `RSDTC`.
+- `AVALC` is the response recorded at that assessment, taken
+  directly from `RSSTRESC`: `CR`, `PR`, stable disease (`SD`),
+  `NON-CR/NON-PD`, progressive disease (`PD`), or not evaluable
+  (`NE`).
+
+A complete response leaves no measurable disease to respond
+partly, so an assessment recording `PR` directly after `CR` for
+the same subject is a fault in the collected data. The run is
+rejected and no artifact is accepted; the expected output records
+the completed rows presented to that check.
+
+**Note:** records are read in date order within a subject, so a
+partial response that later becomes complete is ordinary and
+passes: only a fall-back after a complete response is rejected.
+
+**Standard:** ADaM | **Domain:** ADRS
 
 ## How to fix
 

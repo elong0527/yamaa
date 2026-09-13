@@ -1,20 +1,25 @@
-# ADaM ADSL: exposure duration in weeks and months
+# Exposure duration in weeks and months
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-duration-weeks-months.html)
 
-This example derives whole-week and whole-month durations from a
-start and an end date, one row per subject:
+**Goal:** derive whole-week (`DURW`) and whole-month (`DURM`)
+exposure durations, carrying the exposure start (`STDT`) and end
+(`ENDT`) dates.
 
-- `STDT` and `ENDT` are carried through as given: the start date and
-  the end date of the exposure.
-- `DURW` is the number of whole seven-day blocks between them, or
+**Input:** one demographic record per subject carrying the exposure
+start and end dates.
+
+**Variables:**
+
+- `DURW` is the count of whole seven-day blocks from `STDT` to
+  `ENDT`; a leftover partial week adds nothing, and the count is
   missing when either date is absent.
-- `DURM` is the number of monthly anniversaries of the start date
-  falling on or before the end date, or missing when either date is
-  absent.
+- `DURM` is the count of monthly anniversaries of `STDT` falling
+  on or before `ENDT`; an anniversary keeps the start day, or the
+  last day of the month where the month is too short, and the
+  count is missing when either date is absent.
 
-A month anniversary keeps the start day except where the month is too
-short, in which case it is the last day of the month: the anniversary
-of January 31 is February 28, and of February 29 is February 28 in a
-common year. An end date before the start date gives the negated count
-with the dates exchanged.
+**Note:** when the end date falls before the start date, each
+duration is the negated count computed with the dates exchanged.
+
+**Standard:** ADaM | **Domain:** ADSL

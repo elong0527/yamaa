@@ -1,16 +1,24 @@
-# ADaM ADSL: reject a subject listing with an unnamed field
+# Reject a subject listing with an unnamed field
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-empty-field-name.html)
 
-This example uses a collected subject listing to attempt one record per
-subject:
+**Goal:** carry the enrollment site (`SITEID`) for each subject.
 
-- `SITEID` is the site the subject enrolled at.
+**Input:** collected demographics listing carrying a site field
+(`SITEID`), whose header ends with a separator that leaves its
+last field without a name.
 
-The listing's header ends with a separator, so its last field has no name.
-Nothing can ask that field for its values, and readers disagree about whether
-the field is there at all: one reports three fields in every record and
-another four. The run must fail and no artifact is accepted.
+**Variables:**
+
+- `SITEID` would be the site the subject enrolled at, copied from
+  the collected listing.
+
+The unnamed field can be asked for by no name, and readers
+disagree about whether the field is there at all: one reports
+three fields in every record and another four. The run is
+rejected and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADSL
 
 ## How to fix
 

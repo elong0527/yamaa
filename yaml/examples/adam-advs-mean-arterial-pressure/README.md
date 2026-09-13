@@ -1,16 +1,27 @@
-# ADaM ADVS: derive mean arterial pressure
+# Add a mean arterial pressure record per visit
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-mean-arterial-pressure.html)
 
-Collected ADVS blood-pressure records produce one output row per collected
-record plus one MAP row per complete subject and visit:
+**Goal:** add a mean arterial pressure (`MAP`) record, holding
+its result in `AVAL` and `CALCULATION` in `DTYPE`, at each
+subject and visit with both a systolic blood pressure (`SYSBP`)
+and a diastolic blood pressure (`DIABP`) result, keeping each
+collected record.
 
-- `PARAMCD` and `PARAM` retain each collected parameter and identify a new MAP
-  record as mean arterial pressure;
-- `AVAL` retains each collected value. For MAP, it is two-thirds of diastolic
-  pressure plus one-third of systolic pressure. No MAP row is added when either
-  contributor is absent or missing;
-- `DTYPE` is `CALCULATION` on a derived MAP row and missing on a collected row.
+**Input:** vital-signs records carrying a collected result
+(`AVAL`) for systolic (`SYSBP`) and diastolic (`DIABP`) blood
+pressure at each subject and visit.
 
-Input containing a MAP parameter is rejected. Each contributing parameter must
-occur at most once within a subject and visit; an ambiguous group is rejected.
+**Variables:**
+
+- `AVAL`: the collected result, or two-thirds of the diastolic
+  pressure plus one-third of the systolic pressure on the added
+  record; no record is added when either contributor is absent
+  or missing.
+- `DTYPE`: `CALCULATION` on the added record and blank on
+  collected records.
+
+**Note:** each subject and visit carries at most one `SYSBP`
+record and one `DIABP` record, and carries no `MAP` record.
+
+**Standard:** ADaM | **Domain:** ADVS

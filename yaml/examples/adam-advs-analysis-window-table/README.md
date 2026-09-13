@@ -1,37 +1,43 @@
-# ADaM ADVS: assign analysis windows from the study's window table
+# Assign records to analysis windows from a window table
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-analysis-window-table.html)
 
-This example uses a pre-derived ADVS slice and one study-wide analysis window
-table shared by all parameters to derive one row per record:
+**Goal:** place each systolic blood pressure (`SYSBP`) measurement
+into its analysis window, assigning the visit order number
+(`AVISITN`), the window target day (`AWTARGET`), and the distance
+from target (`AWTDIFF`), and marking `ANL01FL` on the record that
+represents its window.
 
-- `ADT`, `ADY`, and `AVAL` are the record's analysis date, its study day, and
-  the value measured, all carried through as given;
-- `AVISIT` and `AVISITN` identify the analysis visit assigned to the record and
-  its order. The table states each visit window's first and last study day, so
-  a record belongs to the one window whose range contains its day, and a
-  record with no study day belongs to none;
-- `AWTARGET` is the target analysis day defined by the window table, and
-  `AWTDIFF` is how far the record sits from it, negative before the target and
-  positive after;
-- `ANL01FL` marks the record that represents its subject and parameter in the
-  window: the one closest to the target day, and the lower sequence number
-  when two are equally close.
+**Input:** pre-derived measurement records carrying `ADT`
+(analysis date), `ADY` (relative study day), and `AVAL` (measured
+value) alongside the visit as collected, plus one study-wide
+window table shared by all parameters that gives, for each
+analysis visit, its order number, its first and last study day,
+and its target day.
 
-The window boundaries remain in the study table rather than being copied into
-the specification. A record with no study day, or with a complete day outside
-all declared windows, has no window, target, distance, or analysis flag. The
-sample includes two records equally close to one target to exercise the lower
-sequence-number decision.
+**Variables:**
 
-A window whose last study day was never stated cannot be used at all, so a
-record whose day sits at or above that window's first day still has no
-window: an absent bound is not an open-ended one. That is a different
-reason from a day falling in the gap between two stated ranges, and both
-differ again from a record that has no study day to place.
+- `AVISITN` is the order number of the analysis visit whose
+  window holds the record: the one window, matched within the
+  same study, whose range from its first through its last study
+  day, both ends inclusive, contains the record's study day. It
+  is missing when no window contains the day.
+- `AWTARGET` is the target day stated by the matched window;
+  missing when no window matched.
+- `AWTDIFF` is the record's study day minus its target day,
+  negative before the target and positive after; missing when
+  there is no window or no study day.
+- `ANL01FL` is `Y` on the record nearest its window target among
+  records for the same study, subject, parameter, and analysis
+  visit, with the lower sequence number breaking a tie; blank on
+  every other record, including any record with no window.
 
-A window table belongs to one study, and subject identifiers are unique
-only within a study. The sample reuses one identifier under a second study
-whose table gives `WEEK 2` a different target day, so a record placed
-against the wrong study's table would sit a different distance from its
-target.
+**Note:** an assigned window brings its order number and target
+day together, so a record with no window has none of the three. A
+record has no window when it has no study day, when its day falls
+in a gap between stated ranges, or when its day sits on or past
+the first day of a window whose last day was never stated: an
+absent bound is not an open-ended one. Window tables are
+study-specific.
+
+**Standard:** ADaM | **Domain:** ADVS

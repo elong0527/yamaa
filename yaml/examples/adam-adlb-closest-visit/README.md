@@ -1,19 +1,35 @@
-# ADaM ADLB: select the record closest to a window's target day
+# Select the record closest to a window's target day
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adlb-closest-visit.html)
 
-This example uses a pre-derived ADLB slice and a `yamaa` specification to
-derive one row per record:
+**Goal:** derive `AVISIT`, `AWTARGET`, `ADIST`, and `ANL01FL` to
+place each laboratory record in its analysis visit and flag the
+record closest to the visit's target day.
 
-- `ADT`, `ADY`, and `AVAL` are the record's analysis date, its study day, and
-  the value measured;
-- `AVISIT` is the analysis window the record falls in, and `AWTARGET` the day
-  that window aims at. A record outside every window has neither;
-- `ADIST` is how far the record's study day is from that target, in days and
-  without direction;
-- `ANL01FL` marks the record that represents its subject in the window: the one
-  closest to the target, and the later of two equally close. A record outside
-  every window is never marked.
+**Input:** one record per laboratory measurement, carrying `ADT`
+(analysis date), `ADY` (study day), and `AVAL` (measured result).
 
-Publishing `AWTARGET` and `ADIST` alongside the flag lets a reader see why a
-record was chosen rather than take the flag on trust.
+**Variables:**
+
+- `AVISIT` is the analysis visit the record falls in (`WEEK 2`
+  covers study days 8 through 22) and missing when the record
+  falls outside every window.
+- `AWTARGET` is the study day the visit aims at (day 15 for
+  `WEEK 2`) and missing when the record falls outside every
+  window.
+- `ADIST` is how far the record's study day lies from that
+  target, in days and without direction, and missing when the
+  record falls outside every window.
+- `ANL01FL` is `Y` for the record that stands for its subject and
+  parameter in the visit: the closest to the target, or the one
+  with the later study day when two are equally close. It is
+  missing otherwise, and a record outside every window is never
+  flagged.
+
+**Note:** the three window columns travel together: a record
+inside the window carries all three, while a record outside every
+window carries none and is never flagged, so every input record
+stays in the output and the distance beside each flag shows why
+that record was chosen.
+
+**Standard:** ADaM | **Domain:** ADLB

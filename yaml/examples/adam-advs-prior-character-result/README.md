@@ -1,17 +1,29 @@
-# ADaM ADVS: retain the latest earlier character result
+# Carry forward the latest earlier character result
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-advs-prior-character-result.html)
 
-This example uses character results with incomplete series and visit values to
-derive one analysis record per collected row:
+**Goal:** build one ADVS row per collected character-result row,
+carrying `SERIES`, `AVISITN`, and `AVALC` through unchanged and
+adding `PREVAVALC` for the closest earlier non-blank result.
 
-- `SERIES` identifies an analysis series; rows with no series value remain in
-  one shared series;
-- `AVISITN` orders the rows, with missing visits after numbered visits and
-  collection order settling equal visits;
-- `AVALC` is the current character result and can be empty;
-- `PREVAVALC` is the closest earlier non-empty result in the same series. It is
-  empty at the start of a series and ignores the current result.
+**Input:** collected character results with series, visit number,
+and character result.
 
-The result retains character values unchanged and can cross consecutive empty
-results.
+**Variables:**
+
+- `SERIES` identifies the analysis series and is carried through
+  unchanged; rows with no series value share one series.
+- `AVISITN` is the visit number used to order rows within a
+  series and is carried through unchanged; rows with a missing
+  visit number sort after numbered visits.
+- `AVALC` is the current character result, kept as collected;
+  blank when no result was collected.
+- `PREVAVALC` is the closest earlier non-blank result in the same
+  series, ignoring the current row; blank at the start of a
+  series.
+
+**Note:** ordering within a series is by visit number, with
+missing numbers last; the look-back skips blank results, so it
+can cross consecutive blank rows, but never crosses series.
+
+**Standard:** ADaM | **Domain:** ADVS

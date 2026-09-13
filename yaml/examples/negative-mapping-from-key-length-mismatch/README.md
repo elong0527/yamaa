@@ -1,22 +1,33 @@
-# ADaM ADLB: reject a reference range chosen by an unpaired key
+# Reject a reference limit chosen by an unpaired key
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-mapping-from-key-length-mismatch.html)
 
-This example uses collected laboratory results with a table of reference limits
-by test and sex to attempt one record per subject and parameter:
+**Goal:** carry sex and the numeric result into the output and
+choose the upper limit of normal (`ANRHI`) from a reference table
+by test and sex.
 
-- `SEX` is the sex the limits are chosen by;
-- `AVAL` is the collected result;
-- `ANRHI` is the upper limit of normal for that test and sex.
+**Input:** collected laboratory results carrying test code
+(`LBTESTCD`), sex (`SEX`), and numeric result (`LBSTRESN`), plus a
+reference table carrying test code, sex, and upper limit
+(`ANRHI`).
 
-The limits are looked up by test and sex, but only the test is paired with a
-column of the limit table. Dropping the unpaired value, or pairing it with a
-column chosen by name, would each look up a different limit, so the run must
-fail and no artifact is accepted.
+**Variables:**
+
+- `ANRHI` would be the upper limit of normal from the reference
+  table for the matching test and sex.
+
+**Note:** the lookup lists two current-row values, the test code
+and the sex, but pairs them with only one reference-table column,
+the test code. Dropping the unpaired value, or pairing it by name,
+would each choose a different limit, so the run is rejected before
+any data is read and no artifact is accepted.
+
+**Standard:** ADaM | **Domain:** ADLB
 
 ## How to fix
 
-Pair every current-row lookup value with its corresponding lookup-table column:
+Pair every current-row lookup value with its corresponding lookup-table
+column:
 
 ```yaml
 mapping_from:

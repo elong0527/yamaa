@@ -1,20 +1,30 @@
-# SDTM LB: reject a reference limit matched against nothing
+# Reject a reference limit matched against nothing
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-record-lookup-unpaired-key.html)
 
-This example uses collected laboratory results with a table of reference limits
-by test and sex to attempt one record per result:
+**Goal:** attach the reference-range upper limit (`LBSTNRHI`) to
+each collected result, carrying its test code and sex.
 
-- `LBSTNRHI` is the upper limit of normal for the test and sex of the result.
+**Input:** collected results carrying test code (`LBTESTCD`), sex
+(`SEX`), and numeric result (`LBSTRESN`), plus a reference-limit
+table carrying the upper limit (`NRHI`) by test code and sex.
 
-The record of limits is chosen by test and sex, but the specification never
-says which columns of the limit table those values are matched against.
-Matching them against columns of the same name would make a rule out of a
-coincidence of naming, so the run must fail and no artifact is accepted.
+**Variables:**
+
+- `LBSTNRHI` would contain the upper limit value from the
+  reference-limit table for the test code and sex of the result.
+
+**Note:** the current-row values are paired with the limit table
+by test code and sex, but nothing says which columns of the limit
+table those values are matched against; guessing by matching names
+would make a rule out of a coincidence of naming, so the run is
+rejected before any data is read and no artifact is accepted.
+
+**Standard:** SDTM | **Domain:** LB
 
 ## How to fix
 
-Declare the lookup-table columns paired with the current-row values:
+Name the lookup-table columns paired with the current-row values:
 
 ```yaml
 record_lookups:
@@ -24,4 +34,4 @@ record_lookups:
     key: [LBTESTCD, SEX]
 ```
 
-`source` and `key` pair by position and must always be declared together.
+The two lists pair by position and must always be stated together.

@@ -1,26 +1,40 @@
-# SDTM VS: attach visit metadata and study day to a result
+# Attach visit metadata and study day to a result
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-vs-visit-study-day.html)
 
-This example uses collected vital signs with DM, the trial-visits table, and a
-study-defined epoch-range table to derive one record per collected result:
+**Goal:** carry each collected vital-signs result with its test,
+result, and collection date, and add the planned visit number, the
+trial period, and the study day: `VSTESTCD`, `VSORRES`, `VSDTC`,
+`VISITNUM`, `EPOCH`, and `VSDY`.
 
-- `VSTESTCD`, `VSORRES`, `VSDTC`, and `VISIT` are the test, the result, the
-  date, and the visit label as collected;
-- `VISITNUM` is the visit's planned number, looked up by the collected visit
-  label. A visit the design does not name, such as an unscheduled one, has no
-  planned number;
-- `EPOCH` is the trial period whose study-day range contains the result. An
-  unscheduled result still has a period when its study day is known, while a
-  result with no study day has none;
-- `VSDY` is the study day of the result, counted from the subject's reference
-  start date. That date is day 1 and there is no day zero, so a result
-  collected before it counts back from -1. A result with no date, and one
-  belonging to a subject with no reference date, has no study day.
+**Input:** collected vital-signs rows with test, result,
+collection date, and visit label; demographics rows carrying the
+reference start date; a trial-visits table carrying the planned
+number per visit label; and an epoch-range table carrying the
+period with its study-day bounds.
 
-The reference date itself is not part of a VS record, so it is used to derive
-the study day and then dropped. This example assumes all subjects share epoch
-transitions expressed relative to that reference date; a design whose epochs
-follow arm-specific or actual subject element dates needs a correspondingly
-keyed source. The epoch-range input is an example fixture, not a standard SDTM
+**Variables:**
+
+- `VSTESTCD` is the test short name, carried over unchanged.
+- `VSORRES` is the result in original units, carried over
+  unchanged.
+- `VSDTC` is the collection date, carried over unchanged; missing
+  when no date was collected.
+- `VISITNUM` is the planned visit number from the trial-visits
+  table for the collected visit label; missing when the label
+  names no planned visit, such as `UNSCHEDULED`.
+- `EPOCH` is the trial period from the epoch-range table whose
+  range contains the study day: `SCREENING`, `TREATMENT`, or
+  `FOLLOW-UP`; blank when there is no study day.
+- `VSDY` is the study day of the collection date, counted from the
+  subject's reference start date: that date is day 1, there is no
+  day zero, and dates before it count back from -1; missing when
+  the result has no date or the subject has no reference start
+  date.
+
+**Note:** the reference start date is used to count the study day
+and then dropped, since it is not part of the result record; the
+epoch-range input is an example fixture rather than a standard
 trial-design domain.
+
+**Standard:** SDTM | **Domain:** VS
