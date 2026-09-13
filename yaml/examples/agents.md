@@ -76,6 +76,11 @@ study-data words. Write:
 - for every negative example, a final `## How to fix` section that recommends
   the safest correction first and uses a short YAML snippet when it clarifies
   the change.
+- a final footer link of the form
+  `[Rendered view](https://elong0527.github.io/yamaa/examples/<directory>.html)`,
+  after the tags line (and after `## How to fix` in a negative example). It is
+  navigation, not data description, and the validator exempts it from the
+  prose rules below.
 
 A `spec-*` example explains spec behavior rather than deriving data, so it
 carries no `Variables:` list: its `Input:` names the spec files and how they
