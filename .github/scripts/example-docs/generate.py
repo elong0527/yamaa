@@ -30,7 +30,7 @@ GISCUS = {
     "repo_id": "R_kgDOTXVQTg",
     "category": "Comments",
     "category_id": "DIC_kwDOTXVQTs4DFe_t",
-    "theme": "https://elong0527.github.io/yamaa/assets/giscus-yamaa.css",
+    "theme": "https://elong0527.github.io/yamaa/assets/giscus-yamaa.css?v=2",
 }
 COMMENT_TERM_PREFIX = "yaml/examples/"
 OUTCOMES = (
