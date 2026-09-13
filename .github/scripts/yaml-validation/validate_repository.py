@@ -257,6 +257,7 @@ def validation_diagnostic(
 VALIDATION_CONTEXT_FIELDS = {
     ('R001', 'dependency_cycle'): {'cycle'},
     ('R001', 'forward_reference'): {'column', 'dependency'},
+    ('R001', 'key_dependency'): {'column', 'dependency'},
     ('R002', 'duplicate_identifier'): {'identifier'},
     ('R002', 'unknown_field'): {'identifier'},
     ('R004', 'invalid_predicate'): {'predicate'},
@@ -6827,6 +6828,23 @@ def find_forward_reference(spec, env):
     return None
 
 
+def find_key_dependency(spec, env):
+    rows = spec.get('rows')
+    if isinstance(rows, list) and rows:
+        return None
+    keys = spec.get('keys')
+    if not isinstance(keys, list):
+        return None
+    key_names = {key for key in keys if isinstance(key, str)}
+    names, dependencies = column_dependency_graph(spec, env)
+    for name in names:
+        if name in key_names:
+            for dependency in sorted(dependencies[name]):
+                if dependency not in key_names:
+                    return name, dependency
+    return None
+
+
 def find_column_dependency_cycle(spec, env):
     names, dependencies = column_dependency_graph(spec, env)
     state = {}
@@ -7013,6 +7031,18 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
                 derivation_primary_path(spec, spec_label, name),
                 'forward_reference',
                 f'column {name!r} references later declared column '
+                f'{dependency!r}',
+                context={'column': name, 'dependency': dependency},
+            )
+        )
+    key_dependency = find_key_dependency(spec, env)
+    if key_dependency is not None:
+        name, dependency = key_dependency
+        errors.append(
+            validation_diagnostic(
+                derivation_primary_path(spec, spec_label, name),
+                'key_dependency',
+                f'key column {name!r} depends on non-key output column '
                 f'{dependency!r}',
                 context={'column': name, 'dependency': dependency},
             )

@@ -30,6 +30,16 @@ columns:
     derivation:
       source: DS_RAW.PATNUM
 
+  - name: DSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [DS_RAW.DSDTCOL]
+    verifications:
+      not_missing: {}
+
   - name: DSDECOD
     type: str
     label: Standardized Disposition Term
@@ -59,19 +69,12 @@ columns:
     type: date
     label: Date/Time of Collection
     derivation:
-      value:
+      date_impute:
         source: DS_RAW.DSDTCOL
-      conversion_failure: null
-
-  - name: DSSEQ
-    type: int
-    label: Sequence Number
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [DSDTC]
-    verifications:
-      not_missing: {}
+        month: 6
+        day: 15
+        missing: null
+        invalid: null
 
 verifications:
   - unique:

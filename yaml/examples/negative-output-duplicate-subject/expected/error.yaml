@@ -1,10 +1,11 @@
-phase: output
-condition: duplicate_key
+phase: derivation
+condition: multiple_values_per_key
 spec_paths:
-  - keys
-requirement: R005-52
+  - columns.AGE.derivation.source
+requirement: R001-44
 context:
-  duplicate_count: 1
+  identifier: DM.AGE
   keys:
     - STUDYID: PILOT7
       USUBJID: P7-722
+  match_count: 2

@@ -104,3 +104,36 @@ def test_duplicate_subject_fails_at_key_grain_derivation() -> None:
     assert context["identifier"] == "DM.AGE"
     assert context["match_count"] == 2
     assert context["keys"] == [{"STUDYID": "PILOT7", "USUBJID": "P7-722"}]
+
+
+def test_sequence_keys_derive_from_base_before_unique_logic() -> None:
+    expectations = {
+        "sdtm-ds-disposition-sequence": (
+            "DSSEQ",
+            [2, 1, 1, 1, 1, 1, 2],
+        ),
+        "sdtm-ex-combination-regimen": (
+            "EXSEQ",
+            [2, 3, 1, 5, 6, 4, 3, 2, 1],
+        ),
+    }
+    for example, (sequence_column, expected) in expectations.items():
+        pilot = yamaa_domain(EXAMPLES / f"{example}/spec.yaml")
+
+        assert pilot.issues.is_empty()
+        assert pilot.output is not None
+        assert pilot.output.get_column(sequence_column).to_list() == expected
+
+
+def test_key_reading_non_key_output_fails_at_validation() -> None:
+    pilot = yamaa_domain(EXAMPLES / "negative-keys-missing-value/spec.yaml")
+
+    assert pilot.spec is not None
+    assert pilot.output is None
+    issue = pilot.issues.row(0, named=True)
+    assert issue["severity"] == "error"
+    assert issue["phase"] == "validation"
+    assert issue["condition"] == "key_dependency"
+    assert issue["spec_paths"] == ["columns.AVISIT.derivation"]
+    context = json.loads(issue["context"])
+    assert context == {"column": "AVISIT", "dependency": "ADY"}
