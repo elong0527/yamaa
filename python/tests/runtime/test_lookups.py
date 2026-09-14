@@ -159,6 +159,21 @@ def test_a_declared_key_with_no_record_is_fatal_and_names_the_key() -> None:
     assert outcome.condition.condition.context["lookup_key"] == {"USUBJID": "S9"}
 
 
+def test_an_unhandled_multiple_match_names_the_key_it_matched_on() -> None:
+    # R015-34: one vocabulary for every record lookup failure, so a multiple
+    # match names its match under `key` and `lookup_key` the way an unmatched
+    # key does and leaves `keys` to the offending output row.
+    outcome = selector(declared()).select("REFRANGE", {"SUBJECT": "S1"})
+
+    assert outcome.condition is not None
+    context = outcome.condition.condition.context
+    assert outcome.condition.condition.condition == "multiple_matches"
+    assert context["key"] == ["USUBJID"]
+    assert context["lookup_key"] == {"USUBJID": "S1"}
+    assert context["match_count"] == 3
+    assert "keys" not in context
+
+
 def test_a_declared_unmatched_answer_replaces_the_failure() -> None:
     outcome = selector(declared(unmatched="missing")).select(
         "REFRANGE", {"SUBJECT": "S9"}

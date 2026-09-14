@@ -194,3 +194,8 @@ the columns that read it are plainly reading one record.
   value that is missing.
 - **R015-33.** An unmatched left row where `unmatched` resolves to `fail`:
   fail, reporting the record lookup and the offending keys.
+- **R015-34.** R015-28 and R015-33 report their facts under one vocabulary:
+  `key` and `lookup_key` name the fields the lookup matched on and the values
+  it matched them with, and `keys` names the offending output row. Neither
+  condition renames the other's fields, so `keys` never means the matched key
+  under one and the output row under the other.
