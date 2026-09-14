@@ -200,6 +200,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-row-number-numeric-filter`](negative-row-number-numeric-filter/) | reject a sequence filtered by a number |
 | [`negative-row-value-self-reference`](negative-row-value-self-reference/) | reject a weight carried forward from a carried-forward weight |
 | [`negative-row-value-zero-offset`](negative-row-value-zero-offset/) | reject a previous weight that names no earlier visit |
+| [`negative-sex-code-pattern-mismatch`](negative-sex-code-pattern-mismatch/) | reject a recorded sex outside the accepted codes |
 | [`negative-source-duplicate-field-name`](negative-source-duplicate-field-name/) | reject a subject listing that names one field twice |
 | [`negative-source-duplicate-right-key`](negative-source-duplicate-right-key/) | reject duplicate subject enrichment |
 | [`negative-source-empty-field-name`](negative-source-empty-field-name/) | reject a subject listing with an unnamed field |
