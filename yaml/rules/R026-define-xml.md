@@ -87,12 +87,12 @@ study that follows one writes its entries in it.
 **R026-9.** Every specification a document names must declare
 `root.submission`, and every column in its `output.columns` must declare both
 `label` and `column.submission`. A document reports on the whole artifact, so
-a column with nothing to report is a gap in the document rather than an
+a column with nothing to report is a gap in the document, not an
 omitted row.
 
 **R026-10.** Composition resolves the names R024 and R025 leave unresolved: a
 column's `codelist` and every document reference. A name matching no
-declaration fails. Resolution also determines each dataset's family, from the
+declaration fails. Resolution also determines each dataset's family from the
 standard R026-7 binds and R024-5's table, and every family-dependent
 requirement in R024 is applied here.
 
@@ -119,12 +119,11 @@ declared identifiers of the object's position. The construction is total:
 | `def:leaf`, document | `LF.<document.id>` |
 | `def:leaf`, dataset archive | `LF.<dataset.id>` |
 
-**R026-13.** Collisions are impossible rather than resolved. Dataset,
-codelist, standard, and document identifiers are each unique within the study
-document; a column name is unique within its specification; and the prefixes
-are disjoint. The one identifier space two kinds of object share is
-`def:leaf`, so a document identifier must not equal a dataset identifier, and
-that is checked rather than disambiguated.
+**R026-13.** Collisions are impossible rather than resolved. Dataset, codelist,
+standard, and document identifiers are each unique within the study document;
+a column name is unique within its specification; the prefixes are disjoint.
+Two kinds of object share one identifier space, `def:leaf`, so a document
+identifier must not equal a dataset identifier; checked, not disambiguated.
 
 **R026-14.** An implementation must not mint an identifier from a counter, a
 hash, or a random value. A generated identifier is a function of declarations
@@ -173,8 +172,7 @@ invalid. Within each repeated element the order above is this rule's choice,
 and it is fixed so that two implementations agree.
 
 **R026-18.** Comment definitions are emitted per dataset in entry order: the
-dataset's own comment first, then its columns' comments in `output.columns`
-order.
+dataset's own comment first, its columns' comments in `output.columns` order.
 
 **R026-19.** A dataset's `def:leaf` is a child of its `ItemGroupDef`, and a
 supporting document's `def:leaf` is a child of `MetaDataVersion`. That is
@@ -260,7 +258,9 @@ document reference on such an origin that names any other document fails.
 | `def:Class` | `submission.class`, with `def:SubClass` when declared |
 | `def:leaf` | the artifact, per R026-29 |
 
-**R026-28.** `Purpose` is derived from the family rather than declared. A
+The `Domain` default is the specification's `domain`.
+
+**R026-28.** `Purpose` is derived from the family alone, not declared. A
 declared value could only agree with or contradict the derivation.
 
 **R026-29.** The dataset's `def:leaf` names the artifact its specification
@@ -336,7 +336,7 @@ declared, carrying `PageRefs`, `Type`, and `Title` when declared.
 `def:IsNonStandard="Yes"` when `standard` is not declared and the codelist
 declares `items`, then `SASFormatName` from `format_name` when declared. A
 codelist declaring `items` therefore always carries exactly one of the two,
-which is the choice Define-XML requires of it. An external codelist that names
+the choice Define-XML requires of it. An external codelist naming
 no standard carries neither: `def:IsNonStandard` marks items a sponsor
 defined, and an external codelist has none.
 
@@ -380,8 +380,8 @@ and R025 as much as to this rule.
 ### Transport names
 
 **R026-44.** `SASDatasetName` and `SASFieldName` are written only for names of
-at most eight characters matching `^[A-Za-z_][A-Za-z0-9_]*$`. Longer names are
-omitted and fail under `Submission`. Define-XML carries a long name in an
+at most eight characters matching `^[A-Za-z_][A-Za-z0-9_]*$`. A longer name is
+omitted, and fails under `Submission` instead. Define-XML carries a long
 `Alias` element, which R026-49 defers.
 
 ## Requirements a submission context adds
@@ -410,7 +410,7 @@ places on a regulatory submission:
 
 ## Serialization
 
-**R026-47.** The document is encoded UTF-8 and carries no byte-order mark.
+**R026-47.** The document is encoded UTF-8 and carries no byte-order mark;
 `U+000A` terminates every line, including the last. `U+000D` is never written.
 
 **R026-48.** The remaining byte-level decisions are fixed exactly:

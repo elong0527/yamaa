@@ -49,10 +49,9 @@ carries. An internal column is not in the artifact, so it is not in the
 document that describes the artifact, and declaring metadata for one is an
 error rather than an ignored declaration.
 
-**R024-3.** The free-form `metadata` map remains uninterpreted annotation. No
-field below is read from the map. A study moves governed facts from the map to
-this rule. The map and submission metadata are not merged. The map is never a
-fallback.
+**R024-3.** The free-form `metadata` map remains uninterpreted annotation;
+no field below is read from it. A study moves governed facts from the map
+to submission metadata; the two are not merged and the map is never a fallback.
 
 **R024-4.** The map must not carry a key this rule governs. Root `metadata`
 rejects every field name of the dataset object above, and a column's
@@ -142,40 +141,41 @@ closed set:
 **R024-15.** A `str` column admits temporal submission types because a
 submission carries a partial or incomplete date as text. R016 does not admit
 those values as `date` or `datetime`. The two temporal column types admit only
-their matching submission type because R016 defines each as a complete value.
-A number's submission type is fixed because R011 already decides whether the
+their matching submission type because R016 defines each as a complete value,
+and the submission types of the same name mean the same thing. A number's
+submission type is fixed: R011 already decides whether the
 column holds an integer or binary64.
 
 **R024-16.** `data_type` never changes a value. It states how a value R011
-already typed is represented in the document, and no derivation, verification,
+already typed appears in the document, and no derivation, verification,
 key, order term, or artifact byte can observe it.
 
 ### Length and significant digits
 
 **R024-17.** `length` is the maximum expected value length, as the submission
-standard means it: a property of the column's declaration rather than of the
-data a particular run produced. It is a positive integer.
+standard means it: a property of the column declaration, not of the data one
+run produced. It is a positive integer.
 
 **R024-18.** `length` is required when `data_type` resolves to `text`,
 `integer`, or `float` unless R024-21 derives it, and must not be declared
 otherwise. The remaining
 submission types carry values of a fixed written form, so a length for one
-would be a second statement of that form.
+would restate that form.
 
 **R024-19.** `significant_digits` is required when `data_type` resolves to
 `float` and must not be declared otherwise. It is a non-negative integer
-stating how many digits follow the decimal point.
+counting digits after the decimal point.
 
 **R024-20.** A `length` on a `str` column is enforced. The column's completed
 values must contain at most `length` R019 scalar values, which is exactly what
-R009's `max_length` requires, so the declared length is the constraint rather
-than a note beside one.
+R009's `max_length` requires, so the declared length is the constraint, not
+a note beside one.
 
 **R024-21.** On a `str` column with a `max_length` verification, `length` is
 derived from the verification's `max` and need not be declared. The two state
-one bound. Stating the bound twice can make the values disagree. Declaring both
-is accepted when they are equal and rejected when they differ. The bound is
-checked once either way.
+one bound, and stating it twice only creates a way for them to disagree.
+Declaring both is accepted when they are equal and rejected when they differ,
+and the bound is checked once either way.
 
 **R024-22.** A `length` declared on any other column type is not enforced.
 R009 states why: the text a number or a temporal value renders as is a

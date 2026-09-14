@@ -50,18 +50,17 @@ rule reads back has one profile name in both directions. A second field could
 disagree with the path. A source declared as `csv` but named otherwise has a
 name that lies about its contents where the reader cannot check.
 
-**R023-3.** Sniffing is not permitted. A reader that inspected a file's
+**R023-3.** Sniffing is not permitted: a reader that inspected a file's
 contents to choose a delimiter or a quote character could read a conforming
-source wrongly without failing, and a reader that accepted an unknown
-extension under a default could read a container this profile does not
-describe at all.
+source wrongly without failing, and a reader that accepted an unknown extension
+under a default could read a container this profile does not describe at all.
 
 ## Two spellings are admitted only when they carry the same records
 
 **R023-4.** A writer controls its bytes and emits one spelling. A reader
 receives a study file as stored. Every refused spelling is a file a sponsor
-must repair before a run. This rule admits a second spelling only when the
-spellings cannot deliver different records. This rule refuses every other
+must repair before a run. This rule admits a second spelling only when both
+spellings deliver the same records. This rule refuses every other
 difference rather than silently repairing it.
 
 **R023-5.** Admitted: a record terminated by `U+000D U+000A` rather than
@@ -69,9 +68,9 @@ difference rather than silently repairing it.
 on the records these files hold.
 
 **R023-6.** Refused: a byte-order mark, a `U+000D` anywhere else, and every
-reader option in *Nothing here is configuration*. Each can change the records
-or values a file delivers. Admitting one would let two conforming runtimes
-disagree about the same bytes.
+reader option in *Nothing here is configuration*. Each changes which records
+or which values a file delivers, so admitting one would make two conforming
+runtimes disagree about the same bytes.
 
 ## Encoding
 
@@ -124,7 +123,7 @@ discarding a long one's surplus is an implementation option, because both
 accept a file whose shape the study did not intend.
 
 **R023-18.** A file with no bytes has no header and fails. A file whose only
-record is the header is a source with no records, which is not a failure: a
+record is the header is a source with no records, not a failure: a
 dataset a study collected nothing into still has its fields.
 
 ## Nothing here is configuration
@@ -135,7 +134,7 @@ prefix or skipped preamble, no alternate delimiter or quote character, no
 whitespace trimming, no header synthesis or renaming, and no missing-value
 sentinel.
 
-**R023-20.** The sentinel case is the one whose absence is easiest to mistake
+**R023-20.** The sentinel case is the absence easiest to mistake
 for an oversight. R014 fixes what a stored field means, including that no
 text spells absence, and a reader option that spelled it here would decide
 that question before any rule in this design could see the value.
@@ -147,19 +146,18 @@ implementation must preserve both. A field with no characters is missing
 whether it was bare or quoted, so quoting is a transport detail the reader
 does not report: R014 gives an empty field one meaning and never sees an
 empty string. Common dataframe readers discard text-versus-missing
-distinctions of their own by default; conformance is a property of what
+distinctions by default; conformance is a property of what
 the reader delivers, not of which library produced it.
 
 ## Rationale
 
-A writer controls its own bytes and emits one spelling of them, while a
-reader receives a study's file as the study stores it. Every spelling the
-reader refuses is a file the sponsor repairs before a run can proceed, so a
-second spelling is admitted exactly where the two cannot deliver different
-records. A reader that skipped a byte-order mark and one that kept it would
-disagree about the first field's name, and a reader that trimmed spaces would
-change a collected value. Fixing quoting, width, and names here lets R014
-decide what fields mean on text both runtimes deliver identically.
+A writer controls its own bytes and emits one spelling; a reader receives
+a study file as stored. Every refused spelling is a file the sponsor repairs
+before a run, so a second spelling is admitted exactly where both spellings
+deliver the same records. A reader that skipped a byte-order mark and one
+that kept it would disagree about the first field's name; trimming spaces
+would change a collected value. Fixing quoting, width, and names here lets
+R014 decide what fields mean on text both runtimes deliver identically.
 
 ## Errors
 
@@ -180,6 +178,8 @@ message carries no host path, for the reason R021 gives.
 | `source_quote_in_bare_field` | `U+0022` inside a bare field |
 | `source_text_after_quote` | text after a closing quote |
 | `source_carriage_return` | `U+000D` that does not begin a record terminator |
+
+`source_text_after_quote` excludes a delimiter or a terminator after the quote.
 
 **R023-23.** `source_profile_unknown` is decided from the written path before
 any byte is read and reports under the `validation` phase. Every other
