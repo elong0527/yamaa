@@ -3250,6 +3250,32 @@ def example_entry_specs(example_dir: Path):
     return [path for path in paths if path.name not in parented]
 
 
+def valid_temporal_literal(kind, text):
+    """True when text is a valid R016 temporal literal for kind.
+
+    R018-11 permits a tagged temporal form (``{"date": "2020-01-01"}``)
+    for a contract default, and R018-18 permits it for a call argument.
+    The verdict comes from the runtime's strict parsers (``DateValue`` /
+    ``DateTimeValue``, already imported for the csv-profile checks), so
+    the lexical rule is read from the one implementation: ``YYYY-MM-DD``
+    for ``date``, ``YYYY-MM-DDThh:mm[:ss]`` for ``datetime``, and both a
+    real date on the calendar.
+    """
+    if not isinstance(text, str):
+        return False
+    if kind == 'date':
+        parsed_type = DateValue
+    elif kind == 'datetime':
+        parsed_type = DateTimeValue
+    else:
+        return False
+    try:
+        parsed_type.parse(text)
+    except ValueError:
+        return False
+    return True
+
+
 def function_value_type(value):
     """Return the exact R018 scalar type, or a sentinel for invalid values."""
     value = normalize_non_finite_float(value)

@@ -1717,6 +1717,109 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
             VALIDATOR.function_contract_fingerprint('score', missing),
         )
 
+    def cutoff_contract(self):
+        return {
+            'contract_version': '1.0.0',
+            'implementation_version': '1.0.0',
+            'description': 'Return the reference date.',
+            'params': [
+                {
+                    'name': 'cutoff',
+                    'type': 'date',
+                    'required': False,
+                    'default': {'date': '2020-01-01'},
+                },
+            ],
+            'returns': 'date',
+            'binding': {
+                'call': 'projectdates.cutoff',
+                'args': {'cutoff': 'cutoff'},
+            },
+            'conformance': 'conformance/cutoff.yaml',
+        }
+
+    def test_valid_temporal_literal_accepts_r016_forms(self):
+        valid = [
+            ('date', '2020-01-01'),
+            ('date', '2021-06-30'),
+            ('datetime', '2020-01-01T10:20'),
+            ('datetime', '2020-01-01T10:20:30'),
+        ]
+        invalid = [
+            ('date', 'not-a-date'),
+            ('date', '2020-1-1'),
+            ('date', '2020-13-01'),
+            ('date', '2020-02-30'),
+            ('date', '2020-01-01T10:00:00'),
+            ('datetime', '2020-01-01'),
+            ('datetime', '2020-01-01T25:00:00'),
+            ('datetime', '2020-02-30T10:00:00'),
+            ('datetime', '2020-01-01T10:20:61'),
+            ('float', '2020-01-01'),
+            ('date', 20200101),
+        ]
+        for kind, text in valid:
+            with self.subTest(kind=kind, text=text):
+                self.assertTrue(
+                    VALIDATOR.valid_temporal_literal(kind, text)
+                )
+        for kind, text in invalid:
+            with self.subTest(kind=kind, text=text):
+                self.assertFalse(
+                    VALIDATOR.valid_temporal_literal(kind, text)
+                )
+
+    def test_function_value_type_resolves_tagged_temporal_values(self):
+        self.assertEqual(
+            VALIDATOR.function_value_type({'date': '2020-01-01'}), 'date'
+        )
+        self.assertEqual(
+            VALIDATOR.function_value_type(
+                {'datetime': '2021-06-30T10:20'}
+            ),
+            'datetime',
+        )
+        self.assertEqual(
+            VALIDATOR.function_value_type({'date': '2020-13-01'}),
+            '<invalid>',
+        )
+
+    def test_temporal_contract_default_validates(self):
+        contract = self.cutoff_contract()
+        fingerprint = VALIDATOR.function_contract_fingerprint(
+            'cutoff', contract
+        )
+        self.assertTrue(fingerprint.startswith('sha256:'))
+        self.assertEqual(
+            VALIDATOR.canonical_function_value(
+                {'date': '2020-01-01'}, 'date'
+            ),
+            {'type': 'date', 'value': '2020-01-01'},
+        )
+        bad_default = copy.deepcopy(contract)
+        bad_default['params'][0]['default'] = {'date': '2020-13-01'}
+        with self.assertRaises(ValueError):
+            VALIDATOR.function_contract_fingerprint('cutoff', bad_default)
+
+    def test_temporal_call_argument_validates(self):
+        contract = self.cutoff_contract()
+        self.assertEqual(
+            VALIDATOR.validate_function_arguments(
+                {'cutoff': {'date': '2021-06-30'}},
+                contract['params'],
+                'call.args',
+            ),
+            [],
+        )
+        errors = VALIDATOR.validate_function_arguments(
+            {'cutoff': {'date': '2021-13-40'}},
+            contract['params'],
+            'call.args',
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertIn('invalid_function_argument', errors[0])
+        self.assertIn("got '<invalid>'", errors[0])
+
 
 class TestRuleMetadata(unittest.TestCase):
     def test_requires_normative_rule_and_index_status(self):
