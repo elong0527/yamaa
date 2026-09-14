@@ -68,6 +68,30 @@ def test_range_failure_reproduces_the_committed_error_contract() -> None:
     assert reported(failures[0]) == committed("negative-verification-implausible-age")
 
 
+def test_warning_retains_all_keys_without_changing_fatal_diagnostic_shape() -> None:
+    completed = table(
+        [("STUDYID", "str"), ("USUBJID", "str"), ("AGE", "int")],
+        [["S", f"S-{index}", 214] for index in range(7)],
+    )
+
+    (failure,) = check_column(
+        completed,
+        column(
+            "AGE",
+            "int",
+            {"range": {"min": 18, "max": 100, "severity": "warning"}},
+        ),
+        KEYS,
+    )
+
+    assert failure.severity == "warning"
+    assert len(failure.context["keys"]) == 5
+    assert len(failure.offending_keys) == 7
+    assert "severity" not in reported(failure)
+    assert "offending_keys" not in reported(failure)
+    assert "log_context" not in reported(failure)
+
+
 def test_not_missing_failure_reproduces_the_committed_error_contract() -> None:
     completed = table(
         [("STUDYID", "str"), ("USUBJID", "str"), ("AGE", "int")],

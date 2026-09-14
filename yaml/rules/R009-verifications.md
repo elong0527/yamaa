@@ -2,7 +2,8 @@
 id: R009
 title: Verifications
 status: normative
-applies_to: [root.verifications, column.verifications, column_verifications, dataset_verifications]
+applies_to: [root.verifications, column.verifications, output.violation_log,
+  column_verifications, dataset_verifications]
 
 ---
 
@@ -10,8 +11,9 @@ applies_to: [root.verifications, column.verifications, column_verifications, dat
 
 ## Intent
 
-Define closed, portable assertions over completed output values without using a
-generic function or argument bag.
+Define closed, portable assertions over completed output values, distinguish
+fatal errors from reviewable warnings, and preserve every warning violation in
+a governed sidecar dataset.
 
 ## Boundaries
 
@@ -19,8 +21,10 @@ This rule owns what each verification asserts, when it runs, and how a failure
 is reported. R005 owns key uniqueness, which is checked by the output contract
 rather than declared as a verification, and it owns the artifact's row order,
 which no verification here observes. R004 owns the predicates that `implies`,
-`predicate`, and a grouped `row_count` evaluate.
-R019 owns string equality and scalar counting.
+`predicate`, and a grouped `row_count` evaluate. R019 owns string equality and
+scalar counting. R005 owns whether the primary artifact is complete and
+publication-eligible, and R020 owns the containers and publication of both it
+and the violation log.
 
 Verifications reach across rows only in fixed ways, deliberately. `unique` and
 `row_count` ask one question about the output as a whole, and `row_count` asks
@@ -77,10 +81,11 @@ They run after that column's derivation, conversion, and final override.
 Dataset verifications run after every column, output-key validation, and
 column verification is complete.
 
-**R009-7.** A failed verification fails execution. Implementations must
-report its stable specification path, failure count, and representative
+**R009-7.** A failed `error` verification fails execution. Implementations
+must report its stable specification path, failure count, and representative
 offending keys. Reporting limits may be implementation options but must not
-change pass or fail.
+change pass or fail. A `warning` violation records every offending key under
+R009-36 rather than applying the reporting limit.
 
 **R009-8.** `all_or_none`, `implies`, `predicate`, and a `row_count`
 declaring `group_by` require an `id`. These IDs must be unique across the
@@ -190,4 +195,94 @@ value at all is a column the specification should not declare, so
 - **R009-30.** A verification applied to an incompatible column type: fail.
 - **R009-31.** An unknown column in `unique`, `all_or_none`, `implies`,
   `predicate`, or `row_count.group_by`: fail.
-- **R009-32.** Any verification failure: fail and report it.
+- **R009-32.** Any `error` verification failure: fail and report it. A
+  `warning` violation follows R009-33 through R009-40 instead.
+
+## Severity and the violation log
+
+**R009-33.** Every column and dataset verification may declare `severity`
+inside its operation payload. Its value is exactly `error` or `warning`; it
+defaults to `error`. Omitting it therefore preserves the behavior of every
+version 1.0 specification written before severity existed.
+
+**R009-34.** A violated `warning` does not fail execution, remove or change a
+row, or make the primary artifact ineligible for publication. The executor
+continues through later column checks, key validation, and dataset checks and
+collects warning violations in that order. An `error` still stops at the same
+R005 stage as before; warning findings collected before a later error do not
+turn the failed run into a successful one and produce no accepted artifact.
+
+**R009-35.** A specification declaring any warning must declare
+`output.violation_log`. Its path must differ from `output.path` and selects an
+R020 profile by the same closed extension mapping. A successful run produces
+this sidecar even when no warning is violated; that case is a header-only
+dataset, so publication replaces a stale non-empty log from an earlier run.
+
+**R009-36.** The violation log is version 1.0 and has exactly these columns,
+in this order and with these R011 types:
+
+| Column | Type | Value |
+|---|---|---|
+| `LOG_VERSION` | `str` | `1.0` |
+| `ARTIFACT` | `str` | the specification's `output.path` |
+| `SEVERITY` | `str` | `warning` |
+| `CONDITION` | `str` | the stable failed condition |
+| `REQUIREMENT` | `str` | the numbered requirement defining the check |
+| `SPEC_PATH` | `str` | the violated check's stable specification path |
+| `VERIFICATION_ID` | `str` | its declared ID, or missing when it has none |
+| `FAILURE_COUNT` | `int` | the total number of offending rows or groups |
+| `OFFENDING_KEYS` | `str` | every offending key or group as canonical JSON |
+| `DETAILS` | `str` | remaining condition context as canonical JSON |
+
+**R009-37.** There is one row per violated warning declaration, keyed by
+`SPEC_PATH`. Rows keep execution order: column declaration order first, then
+dataset-verification order. `FAILURE_COUNT` is positive. `OFFENDING_KEYS` is
+the complete ordered sequence, not the bounded sample an error report may
+show. For grouped `row_count`, `DETAILS.counts` is the complete sequence of
+observed counts aligned with those groups.
+
+**R009-38.** The two JSON fields are compact ASCII JSON: no insignificant
+whitespace; object names ordered by R019; `null`, `true`, and `false` in lower
+case; numbers in R011's `str` form; and strings escaped to ASCII by JSON's
+short escapes where one exists and lower-case `\\u` hexadecimal escapes
+otherwise. A scalar above `U+FFFF` is its JSON surrogate-pair escape. The
+empty key sequence is `[]` and empty remaining context is `{}`.
+
+**R009-39.** The log is verified before it becomes an artifact: its columns,
+types, order, non-missing and unique `SPEC_PATH`, fixed version and severity,
+positive count, complete key sequence, and one-to-one correspondence with the
+executor's warning findings must hold. A malformed log is an execution defect,
+not a warning that can be logged inside itself.
+
+**R009-40.** The log is built only for a successful execution, after all
+verifications and before publication. A failure while building or serializing
+it fails the run and leaves the primary artifact ineligible for publication.
+R020 defines how a runner publishes the completed pair.
+
+## Worked warning example
+
+This check admits the completed ADSL artifact while recording the implausible
+age for review:
+
+```yaml
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AGE]
+  violation_log: adsl-violations.csv
+
+columns:
+  - name: AGE
+    type: int
+    verifications:
+      - range:
+          min: 18
+          max: 100
+          severity: warning
+```
+
+For subject `P7-732` with age `214`, the primary row survives and the log has
+one row: `CONDITION` is `range_failed`, `REQUIREMENT` is `R009-11`,
+`SPEC_PATH` is `columns.AGE.verifications[0].range`, `FAILURE_COUNT` is `1`,
+`OFFENDING_KEYS` is
+`[{"STUDYID":"PILOT7","USUBJID":"P7-732"}]`, and `DETAILS` is
+`{"column":"AGE"}`.

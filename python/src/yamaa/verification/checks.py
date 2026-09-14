@@ -42,6 +42,7 @@ from yamaa.verification.diagnostics import (
     DeclarationError,
     VerificationError,
     VerificationFailure,
+    VerificationSeverity,
 )
 
 _NUMERIC: frozenset[ColumnType] = frozenset({"int", "float"})
@@ -79,7 +80,7 @@ def _json(value: RuntimeValue) -> JsonValue:
 
 def _operation(
     expression: Expression, spec_path: str
-) -> tuple[str, Mapping[str, JsonValue]]:
+) -> tuple[str, Mapping[str, JsonValue], VerificationSeverity]:
     keyword = expression.operation
     arguments = expression.root[keyword]
     if arguments is None:
@@ -90,7 +91,16 @@ def _operation(
             "R009-23",
             "a verification takes named arguments",
         )
-    return keyword, arguments
+    severity = arguments.get("severity", "error")
+    if severity not in {"error", "warning"}:
+        raise DeclarationError(
+            f"{spec_path}.{keyword}.severity",
+            "R009-33",
+            "verification severity is error or warning",
+            condition="value_not_permitted",
+            context={"value": severity, "permitted": ["error", "warning"]},
+        )
+    return keyword, arguments, severity
 
 
 def _values(table: TypedTable, name: str) -> list[RuntimeValue]:
@@ -130,7 +140,15 @@ def _failure(
     count_name: str = "failure_count",
     phase: Literal["output", "verification"] = "verification",
     extra: dict[str, JsonValue] | None = None,
+    log_extra: dict[str, JsonValue] | None = None,
+    severity: VerificationSeverity = "error",
 ) -> VerificationFailure:
+    all_context = {
+        **context,
+        count_name: len(offending) if count is None else count,
+        "keys": list(offending),
+        **(log_extra if log_extra is not None else (extra or {})),
+    }
     return VerificationFailure(
         phase=phase,
         condition=condition,
@@ -142,6 +160,9 @@ def _failure(
             "keys": list(offending[:REPORTED_KEYS]),
             **(extra or {}),
         },
+        severity=severity,
+        offending_keys=tuple(offending),
+        log_context=all_context,
     )
 
 
@@ -323,7 +344,7 @@ def check_column(
     failures: list[VerificationFailure] = []
     for index, declaration in enumerate(declarations):
         path = f"columns.{column.name}.verifications[{index}]"
-        keyword, arguments = _operation(declaration, path)
+        keyword, arguments, severity = _operation(declaration, path)
         if keyword not in _COLUMN_REQUIREMENTS:
             raise DeclarationError(
                 f"{path}.{keyword}",
@@ -340,7 +361,12 @@ def check_column(
                 context["max"] = arguments["max"]
             failures.append(
                 _failure(
-                    condition, f"{path}.{keyword}", requirement, context, offending
+                    condition,
+                    f"{path}.{keyword}",
+                    requirement,
+                    context,
+                    offending,
+                    severity=severity,
                 )
             )
     return tuple(failures)
@@ -543,7 +569,7 @@ def check_dataset(
     ]
     for index, declaration in enumerate(verifications):
         path = f"verifications[{index}]"
-        keyword, arguments = _operation(declaration, path)
+        keyword, arguments, severity = _operation(declaration, path)
         if keyword not in _DATASET_REQUIREMENTS:
             raise DeclarationError(
                 f"{path}.{keyword}", "R009-23", "unknown dataset verification"
@@ -569,6 +595,7 @@ def check_dataset(
             key_maps,
             identifier,
             spec_path,
+            severity,
         )
         if failure is not None:
             failures.append(failure)
@@ -617,6 +644,7 @@ def _dataset_failure(
     key_maps: Sequence[KeyMap],
     identifier: str | None,
     spec_path: str,
+    severity: VerificationSeverity,
 ) -> VerificationFailure | None:
     condition, requirement = _DATASET_REQUIREMENTS[keyword]
     context: dict[str, JsonValue] = {}
@@ -634,6 +662,7 @@ def _dataset_failure(
             requirement,
             context,
             spec_path,
+            severity,
         )
 
     if keyword == "unique":
@@ -654,6 +683,7 @@ def _dataset_failure(
             context,
             [key_maps[position] for positions in repeated for position in positions],
             count=len(repeated),
+            severity=severity,
         )
 
     if keyword == "all_or_none":
@@ -690,7 +720,14 @@ def _dataset_failure(
 
     if not offending:
         return None
-    return _failure(condition, spec_path, requirement, context, offending)
+    return _failure(
+        condition,
+        spec_path,
+        requirement,
+        context,
+        offending,
+        severity=severity,
+    )
 
 
 def _column_list(
@@ -720,6 +757,7 @@ def _row_count_failure(
     requirement: str,
     context: dict[str, JsonValue],
     spec_path: str,
+    severity: VerificationSeverity,
 ) -> VerificationFailure | None:
     minimum = arguments.get("min")
     maximum = arguments.get("max")
@@ -776,10 +814,12 @@ def _row_count_failure(
     counts: dict[str, JsonValue]
     if len(offending) == 1:
         counts = {"count": offending[0][1]}
+        log_counts = counts
     else:
         # Each count is aligned to the group at the same position in `keys`.
         # Keeping only the first count would make every later group ambiguous.
         counts = {"counts": [count for _, count in shown]}
+        log_counts = {"counts": [count for _, count in offending]}
     return _failure(
         condition,
         spec_path,
@@ -787,6 +827,8 @@ def _row_count_failure(
         context,
         [group for group, _ in offending],
         extra=counts,
+        log_extra=log_counts,
+        severity=severity,
     )
 
 
@@ -809,12 +851,14 @@ def verify_completed_table(
     failures = [
         failure for column in columns for failure in check_column(table, column, keys)
     ]
-    if failures:
-        raise VerificationError(failures)
+    errors = [failure for failure in failures if failure.severity == "error"]
+    if errors:
+        raise VerificationError(errors)
 
     failures = list(check_keys(table, keys))
-    if failures:
-        raise VerificationError(failures)
+    errors = [failure for failure in failures if failure.severity == "error"]
+    if errors:
+        raise VerificationError(errors)
 
     failures = list(
         check_dataset(
@@ -825,6 +869,7 @@ def verify_completed_table(
             record_lookup_rows=record_lookup_rows,
         )
     )
-    if failures:
-        raise VerificationError(failures)
+    errors = [failure for failure in failures if failure.severity == "error"]
+    if errors:
+        raise VerificationError(errors)
     return table

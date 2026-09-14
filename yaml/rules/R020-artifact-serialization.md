@@ -2,7 +2,7 @@
 id: R020
 title: Artifact Serialization
 status: normative
-applies_to: [root.output, output.path, output.decimals]
+applies_to: [root.output, output.path, output.decimals, output.violation_log]
 
 ---
 
@@ -10,10 +10,11 @@ applies_to: [root.output, output.path, output.decimals]
 
 ## Intent
 
-Define how a completed, ordered artifact becomes bytes: which container carries
-it, what each value looks like inside that container, how an uncollected value
-differs from a collected empty one, the single point at which a float takes a
-display precision, and how a written artifact replaces its target.
+Define how a completed, ordered primary artifact and any R009 violation log
+become bytes: which container carries each, what each value looks like inside
+that container, how an uncollected value differs from a collected empty one,
+the single point at which a float takes a display precision, and how written
+artifacts replace their targets.
 
 ## Boundaries
 
@@ -41,9 +42,10 @@ itself admit a target.
 
 ## The artifact's path selects its profile
 
-**R020-1.** `output.path` names the file the specification produces. It is
-required: a specification that derives an artifact says what it produces, and
-there is no default name for one.
+**R020-1.** `output.path` names the primary file the specification produces. It
+is required: a specification that derives an artifact says what it produces,
+and there is no default name for one. `output.violation_log` names R009's
+sidecar when the specification declares one.
 
 **R020-2.** The path's extension selects the profile. The mapping is closed, so
 an extension outside it names no profile and fails validation rather than
@@ -346,3 +348,23 @@ mark, a `U+000D` record terminator, or a quoting that differs from the `csv`
 condition: none is an implementation option. **R020-49.** Rounding with a host
 routine whose ties do not go away from zero, or rounding a value any other stage
 can observe: neither is an implementation option.
+
+## Violation-log publication
+
+**R020-50.** `output.path` and `output.violation_log` must differ. Reusing one
+path fails validation with `artifact_path_collision` and reports both fields.
+Each path's extension independently selects its profile under R020-2; the
+primary may be Parquet while its log is CSV, or the reverse.
+
+**R020-51.** When a successful run has a violation log, a publisher renders
+and validates both complete artifacts before touching either target. It
+publishes the log first and the primary artifact last, applying R020-38 through
+R020-40 to each file. A successful publication therefore never exposes a new
+primary artifact without its completed log already visible.
+
+**R020-52.** Warning violations do not prevent publication. Failure to render
+or replace the log is an output failure, not a warning: the primary target is
+not touched. If replacing the primary fails after the log was replaced, the
+publication fails and the prior primary remains; the complete log may remain as
+the record of the completed candidate run. Atomic replacement is guaranteed per
+file, not simultaneously across two paths.

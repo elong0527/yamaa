@@ -57,6 +57,7 @@ from yamaa.specification.models import Column, DatasetSource, Specification
 from yamaa.verification import (
     DeclarationError,
     VerificationFailure,
+    build_violation_log,
     check_column,
     check_dataset,
     check_keys,
@@ -90,11 +91,13 @@ class _FrozenModel(BaseModel):
 
 
 class ExecutionSuccess(_FrozenModel):
-    """A completed typed table and its ordered, selected output artifact."""
+    """A completed table, primary artifact, and governed warning findings."""
 
     status: Literal["success"] = "success"
     table: TypedTable
     artifact: Artifact
+    warnings: tuple[VerificationFailure, ...] = ()
+    violation_log: Artifact | None = None
     handler_counts: tuple[HandlerCount, ...]
 
 
@@ -557,6 +560,7 @@ def _run_column_checks(
     candidates: Sequence[CandidateRow],
     completed: set[str],
     checked: set[str],
+    warnings: list[VerificationFailure],
     hooks: ExecutionHooks,
 ) -> None:
     if not set(specification.keys) <= completed:
@@ -568,8 +572,12 @@ def _run_column_checks(
         if column.name in checked:
             continue
         failures = hooks.column(table, column, specification.keys)
-        if failures:
-            raise _ExecutionAbort(_verification_diagnostics(failures))
+        warnings.extend(
+            failure for failure in failures if failure.severity == "warning"
+        )
+        errors = [failure for failure in failures if failure.severity == "error"]
+        if errors:
+            raise _ExecutionAbort(_verification_diagnostics(errors))
         checked.add(column.name)
 
 
@@ -580,6 +588,7 @@ def _derive_columns(
     dispatcher: ExpressionDispatcher,
     counter: HandlerCounter,
     hooks: ExecutionHooks,
+    warnings: list[VerificationFailure],
 ) -> TypedTable:
     specification = plan.specification
     column_types = {column.name: column.type for column in specification.columns}
@@ -592,7 +601,7 @@ def _derive_columns(
         completed |= key_set
     checked: set[str] = set()
     constructed_count = len(candidates)
-    _run_column_checks(specification, candidates, completed, checked, hooks)
+    _run_column_checks(specification, candidates, completed, checked, warnings, hooks)
 
     for derivation in plan.columns:
         if key_grain and derivation.column in key_set:
@@ -627,7 +636,9 @@ def _derive_columns(
         for candidate, value in zip(candidates, values, strict=True):
             candidate.values[derivation.column] = value
         completed.add(derivation.column)
-        _run_column_checks(specification, candidates, completed, checked, hooks)
+        _run_column_checks(
+            specification, candidates, completed, checked, warnings, hooks
+        )
 
     declared = {column.name for column in specification.columns}
     if completed != declared or any(
@@ -645,7 +656,7 @@ def _derive_columns(
             ]
         )
     table = _table_from_candidates(specification, candidates, completed)
-    _run_column_checks(specification, candidates, completed, checked, hooks)
+    _run_column_checks(specification, candidates, completed, checked, warnings, hooks)
     return table
 
 
@@ -660,6 +671,7 @@ def execute_specification(
     selected_dispatcher = dispatcher or ExpressionDispatcher()
     selected_hooks = hooks or ExecutionHooks()
     counter = HandlerCounter()
+    warnings: list[VerificationFailure] = []
     try:
         plan = plan_execution(
             specification,
@@ -699,6 +711,7 @@ def execute_specification(
             selected_dispatcher,
             counter,
             selected_hooks,
+            warnings,
         )
 
         key_failures = selected_hooks.keys(table, specification.keys)
@@ -709,11 +722,18 @@ def execute_specification(
             specification.verifications or (),
             specification.keys,
         )
-        if dataset_failures:
-            raise _ExecutionAbort(_verification_diagnostics(dataset_failures))
+        warnings.extend(
+            failure for failure in dataset_failures if failure.severity == "warning"
+        )
+        dataset_errors = [
+            failure for failure in dataset_failures if failure.severity == "error"
+        ]
+        if dataset_errors:
+            raise _ExecutionAbort(_verification_diagnostics(dataset_errors))
         artifact = selected_hooks.output(
             table, specification.output, specification.keys
         )
+        violation_log = build_violation_log(warnings, specification.output)
     except _ExecutionAbort as error:
         return ExecutionFailure(
             diagnostics=error.diagnostics,
@@ -738,6 +758,8 @@ def execute_specification(
     return ExecutionSuccess(
         table=table,
         artifact=artifact,
+        warnings=tuple(warnings),
+        violation_log=violation_log,
         handler_counts=counter.snapshot(),
     )
 

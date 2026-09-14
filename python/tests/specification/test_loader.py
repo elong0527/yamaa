@@ -285,7 +285,7 @@ def test_accepts_integer_for_float_schema_field(tmp_path: Path) -> None:
     )
     verification = studyid.verifications
     assert verification is not None
-    assert verification[0].root == {"range": {"min": 1}}
+    assert verification[0].root == {"range": {"min": 1, "severity": "error"}}
 
 
 def test_reports_invalid_schema_patterns(tmp_path: Path) -> None:

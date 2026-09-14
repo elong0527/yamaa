@@ -81,6 +81,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adrs-measurable-disease`](adam-adrs-measurable-disease/) | derive measurable disease at baseline |
 | [`adam-adrs-overall-response-records`](adam-adrs-overall-response-records/) | prepare the overall response records an endpoint reads |
 | [`adam-adsl-age-group`](adam-adsl-age-group/) | derive age group |
+| [`adam-adsl-age-quality-review`](adam-adsl-age-quality-review/) | retain an implausible age for data review |
 | [`adam-adsl-analysis-age`](adam-adsl-analysis-age/) | analysis age |
 | [`adam-adsl-bmi-compute`](adam-adsl-bmi-compute/) | compute BMI from height and weight |
 | [`adam-adsl-bmi-function`](adam-adsl-bmi-function/) | compute BMI by calling a routine the project supplies |

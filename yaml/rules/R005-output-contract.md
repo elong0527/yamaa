@@ -2,8 +2,8 @@
 id: R005
 title: Output Contract
 status: normative
-applies_to: [root.keys, root.output, root.columns, column.type,
-  row.derivations, derivation]
+applies_to: [root.keys, root.output, output.violation_log, root.columns,
+  column.type, row.derivations, derivation]
 ---
 
 # Output contract
@@ -27,20 +27,20 @@ ordered it.
 
 ## The artifact
 
-**R005-1.** The **artifact** is the single dataset this specification
-produces. Its columns are exactly the declared columns listed by
-`output.columns`, in that order, and its rows are the rows R001 constructs.
+**R005-1.** The **primary artifact** is the dataset this specification derives.
+Its columns are exactly the declared columns listed by `output.columns`, in
+that order, and its rows are the rows R001 constructs. A specification may
+also produce R009's governed warning-violation sidecar; that log reports the
+run and is not a second derivation target or a source within this specification.
 
 **R005-2.** Its rows leave in the order `output.order_by` declares, and in
 R001's construction order when it is omitted.
 
-**R005-3.** Its serialization is defined by R020. `output.path` names the
-file this specification produces and its extension selects one of two
-profiles, `parquet` or `csv`. That rule owns the container, the bytes each
-value becomes, the distinction between a missing value and a collected empty
-string, the one display precision a `float` may take, and the replacement of
-that file by a completed artifact. Everything below concerns the values
-themselves and their order, which the profiles carry rather than decide.
+**R005-3.** Serialization is defined by R020. `output.path` names the primary
+file and `output.violation_log`, when present, names R009's sidecar. Each
+extension selects `parquet` or `csv`. R020 owns their containers, bytes, and
+publication. Everything below concerns the primary values and their order,
+which those profiles carry rather than decide.
 
 ## The column list is declared
 
@@ -140,7 +140,8 @@ for one value, under R011.
 the first match's value, then stop, for one value, under R008.
 
 **R005-25.** Stage 5: run the column's verifications over the whole column,
-under R009.
+under R009. An error stops execution; warnings are accumulated without changing
+the column.
 
 **R005-26.** Stages 1 to 4 run on each value, in whichever phase its
 derivation belongs to. Stage 5 runs once, after every row holds that
@@ -219,8 +220,8 @@ that breaks it.
 
 **R005-38.** Ordering is presentation. It happens once, after every value
 has completed the lifecycle above, after key validation, and after every
-verification R009 runs, so it cannot change whether a run passes. It changes
-nothing about evaluation either: R001's dependency order, a window's
+verification R009 runs, so it cannot change whether a run passes or warns. It
+changes nothing about evaluation either: R001's dependency order, a window's
 partitions, and the neighbours `row_value` reads are all fixed before this
 order is applied, and each keeps construction order for its own tie-break.
 
@@ -293,4 +294,5 @@ offending rows. A specification without `rows` emits one row per key
 combination under R001-12, so a duplicate key can only come from the row
 templates R001-12a governs emitting one combination more than once.
 
-**R005-53.** A failed verification: fail under R009.
+**R005-53.** A failed error-level verification: fail under R009. A warning-level
+violation leaves the primary artifact intact and enters R009's violation log.

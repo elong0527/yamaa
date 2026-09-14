@@ -46,6 +46,7 @@ class Output(_StrictModel):
     path: str
     decimals: int | None = None
     columns: list[str]
+    violation_log: str | None = None
     order_by: list[OrderTerm] | None = None
 
 
