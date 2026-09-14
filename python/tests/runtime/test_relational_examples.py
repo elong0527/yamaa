@@ -55,6 +55,11 @@ ERROR_EXAMPLES = [
     "negative-record-lookup-incomplete-key",
     "negative-record-lookup-id-collision",
     "negative-record-lookup-incomparable-range",
+    # R015-34: an unhandled multiple match names the lookup's match under
+    # `key` and `lookup_key` and the offending output row under `keys`, the
+    # way an unmatched key already did.
+    "negative-query-slot-overflow",
+    "negative-advs-overlapping-analysis-windows",
     "negative-mapping-from-duplicate-key",
     "negative-mapping-from-unmapped-key",
     "negative-mapping-from-partial-key",

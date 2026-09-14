@@ -154,6 +154,7 @@ class RecordLookupSelector:
                     {
                         "record_lookup": plan.identifier,
                         "dataset": plan.dataset,
+                        **_matched_key(plan, values),
                         "match_count": len(narrowed),
                     },
                 ),
@@ -256,15 +257,30 @@ class RecordLookupSelector:
                 {
                     "record_lookup": plan.identifier,
                     "dataset": plan.dataset,
-                    "key": list(plan.match_fields),
-                    "lookup_key": {
-                        field: json_value(value)
-                        for field, value in zip(plan.match_fields, values, strict=True)
-                    },
+                    **_matched_key(plan, values),
                 },
             ),
             spec_path=plan.path,
         )
+
+
+def _matched_key(
+    plan: PlannedRecordLookup,
+    values: Sequence[RuntimeValue],
+) -> dict[str, JsonValue]:
+    """Return the fields the lookup matched on and the values it matched with.
+
+    R015-34 keeps one vocabulary for every record lookup failure, so an
+    unmatched key and an unhandled multiple match report the match the same
+    way and leave `keys` to the output row the failure belongs to.
+    """
+    return {
+        "key": list(plan.match_fields),
+        "lookup_key": {
+            field: json_value(value)
+            for field, value in zip(plan.match_fields, values, strict=True)
+        },
+    }
 
 
 def _equal(left: RuntimeValue, right: RuntimeValue) -> bool:

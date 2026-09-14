@@ -6,6 +6,12 @@ requirement: R015-28
 context:
   record_lookup: AWIN
   dataset: AWINDOW
+  key: [STUDYID]
+  lookup_key:
+    STUDYID: CATH
   match_count: 2
   keys:
     - STUDYID: CATH
+      USUBJID: CATH-UCSD-0099
+      PARAMCD: SYSBP
+      VSSEQ: 1
