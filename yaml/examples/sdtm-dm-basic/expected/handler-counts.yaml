@@ -1,0 +1,18 @@
+version: "1.0"
+specifications:
+  spec.yaml:
+    - spec_path: columns.SEXRAW.derivation.source.missing
+      handler: missing
+      count: 0
+    - spec_path: columns.SEX.derivation.mapping.missing
+      handler: missing
+      count: 1
+    - spec_path: columns.SEX.derivation.mapping.unmapped
+      handler: unmapped
+      count: 1
+    - spec_path: columns.AGE.derivation.source.missing
+      handler: missing
+      count: 2
+    - spec_path: columns.ARM.derivation.source.missing
+      handler: missing
+      count: 2

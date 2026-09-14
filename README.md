@@ -17,6 +17,7 @@ and minimal resolved form are defined by
 ## Repository
 
 - [`yaml/`](yaml/) - schemas, execution rules, and examples
+- [`conformance/`](conformance/) - shared runtime protocol and comparator
 - [`cdiscbuildeR/`](cdiscbuildeR/) and [`R/`](R/) - R implementation and workflows
 - [`python/`](python/) - Python implementation
 - [`docs/`](docs/) - diagrams and assets

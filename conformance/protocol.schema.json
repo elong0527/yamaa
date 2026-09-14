@@ -1,0 +1,779 @@
+{
+  "$defs": {
+    "ArtifactObservation": {
+      "additionalProperties": false,
+      "description": "One isolated artifact plus its ordered typed-table observation.",
+      "properties": {
+        "declared_path": {
+          "minLength": 1,
+          "title": "Declared Path",
+          "type": "string"
+        },
+        "produced_path": {
+          "minLength": 1,
+          "title": "Produced Path",
+          "type": "string"
+        },
+        "profile": {
+          "enum": [
+            "csv",
+            "parquet"
+          ],
+          "title": "Profile",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "violation_log"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "table": {
+          "$ref": "#/$defs/TableObservation"
+        }
+      },
+      "required": [
+        "role",
+        "declared_path",
+        "produced_path",
+        "profile",
+        "sha256",
+        "table"
+      ],
+      "title": "ArtifactObservation",
+      "type": "object"
+    },
+    "BlockedOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "blockers": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Blockers",
+          "type": "array"
+        },
+        "status": {
+          "const": "blocked",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "blockers"
+      ],
+      "title": "BlockedOutcome",
+      "type": "object"
+    },
+    "CellObservation": {
+      "additionalProperties": false,
+      "description": "One typed value, with missingness separate from its portable value.",
+      "properties": {
+        "missing": {
+          "title": "Missing",
+          "type": "boolean"
+        },
+        "precision": {
+          "anyOf": [
+            {
+              "enum": [
+                "year",
+                "month",
+                "day",
+                "second"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Precision"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "missing"
+      ],
+      "title": "CellObservation",
+      "type": "object"
+    },
+    "ColumnObservation": {
+      "additionalProperties": false,
+      "description": "One artifact column in artifact order.",
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "str",
+            "int",
+            "float",
+            "date",
+            "datetime"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "title": "ColumnObservation",
+      "type": "object"
+    },
+    "ComparisonSummary": {
+      "additionalProperties": false,
+      "description": "Concise per-example result suitable for a CI artifact.",
+      "properties": {
+        "checks": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Checks",
+          "type": "array"
+        },
+        "example": {
+          "title": "Example",
+          "type": "string"
+        },
+        "failures": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Failures",
+          "type": "array"
+        },
+        "protocol_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "runtimes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Runtimes",
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "example",
+        "status",
+        "runtimes",
+        "checks",
+        "failures"
+      ],
+      "title": "ComparisonSummary",
+      "type": "object"
+    },
+    "Diagnostic": {
+      "additionalProperties": false,
+      "description": "Portable diagnostic identity; messages and exception names stay out.",
+      "properties": {
+        "condition": {
+          "minLength": 1,
+          "title": "Condition",
+          "type": "string"
+        },
+        "context": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Context",
+          "type": "object"
+        },
+        "phase": {
+          "enum": [
+            "validation",
+            "ingest",
+            "row_construction",
+            "derivation",
+            "output",
+            "verification",
+            "bind",
+            "join",
+            "mapping",
+            "cut",
+            "extract",
+            "template",
+            "impute",
+            "convert",
+            "final"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
+        "requirement": {
+          "anyOf": [
+            {
+              "pattern": "^R[0-9]{3}-[0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requirement"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "spec_paths": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Spec Paths",
+          "type": "array"
+        }
+      },
+      "required": [
+        "severity",
+        "phase",
+        "condition",
+        "spec_paths",
+        "context"
+      ],
+      "title": "Diagnostic",
+      "type": "object"
+    },
+    "FailureOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/Diagnostic"
+          },
+          "minItems": 1,
+          "title": "Diagnostics",
+          "type": "array"
+        },
+        "status": {
+          "const": "failure",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "diagnostics"
+      ],
+      "title": "FailureOutcome",
+      "type": "object"
+    },
+    "FileDigest": {
+      "additionalProperties": false,
+      "description": "A portable path and the SHA-256 of the bytes read from it.",
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "title": "FileDigest",
+      "type": "object"
+    },
+    "HandlerCount": {
+      "additionalProperties": false,
+      "description": "The number of records that used one declared handler path.",
+      "properties": {
+        "count": {
+          "minimum": 0,
+          "title": "Count",
+          "type": "integer"
+        },
+        "handler": {
+          "minLength": 1,
+          "title": "Handler",
+          "type": "string"
+        },
+        "spec_path": {
+          "minLength": 1,
+          "title": "Spec Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "spec_path",
+        "handler",
+        "count"
+      ],
+      "title": "HandlerCount",
+      "type": "object"
+    },
+    "InfrastructureFailureOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "minLength": 1,
+          "title": "Condition",
+          "type": "string"
+        },
+        "context": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Context",
+          "type": "object"
+        },
+        "status": {
+          "const": "infrastructure_failure",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "condition",
+        "context"
+      ],
+      "title": "InfrastructureFailureOutcome",
+      "type": "object"
+    },
+    "Invocation": {
+      "additionalProperties": false,
+      "description": "One runtime's request to execute one example specification.",
+      "properties": {
+        "data_roots": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Data Roots",
+          "type": "array"
+        },
+        "entrypoint": {
+          "minLength": 1,
+          "title": "Entrypoint",
+          "type": "string"
+        },
+        "example": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Example",
+          "type": "string"
+        },
+        "output_directory": {
+          "minLength": 1,
+          "title": "Output Directory",
+          "type": "string"
+        },
+        "project_root": {
+          "minLength": 1,
+          "title": "Project Root",
+          "type": "string"
+        },
+        "protocol_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "run_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Run Id",
+          "type": "string"
+        },
+        "runtime": {
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "title": "Runtime",
+          "type": "string"
+        },
+        "schema_root": {
+          "minLength": 1,
+          "title": "Schema Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "example",
+        "runtime",
+        "project_root",
+        "schema_root",
+        "entrypoint",
+        "output_directory"
+      ],
+      "title": "Invocation",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "Report": {
+      "additionalProperties": false,
+      "description": "One adapter's complete observation of one invocation.",
+      "properties": {
+        "example": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Example",
+          "type": "string"
+        },
+        "handler_counts": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HandlerCount"
+          },
+          "title": "Handler Counts",
+          "type": "array"
+        },
+        "invocation_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Invocation Sha256",
+          "type": "string"
+        },
+        "outcome": {
+          "discriminator": {
+            "mapping": {
+              "blocked": "#/$defs/BlockedOutcome",
+              "failure": "#/$defs/FailureOutcome",
+              "infrastructure_failure": "#/$defs/InfrastructureFailureOutcome",
+              "success": "#/$defs/SuccessOutcome",
+              "unsupported": "#/$defs/UnsupportedOutcome"
+            },
+            "propertyName": "status"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SuccessOutcome"
+            },
+            {
+              "$ref": "#/$defs/FailureOutcome"
+            },
+            {
+              "$ref": "#/$defs/UnsupportedOutcome"
+            },
+            {
+              "$ref": "#/$defs/BlockedOutcome"
+            },
+            {
+              "$ref": "#/$defs/InfrastructureFailureOutcome"
+            }
+          ],
+          "title": "Outcome"
+        },
+        "protocol_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "runtime": {
+          "$ref": "#/$defs/RuntimeInformation"
+        },
+        "sources": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SourceObservation"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "specification": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpecificationObservation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "invocation_sha256",
+        "example",
+        "runtime",
+        "specification",
+        "outcome"
+      ],
+      "title": "Report",
+      "type": "object"
+    },
+    "ResolvedSpecification": {
+      "additionalProperties": false,
+      "description": "A decoded R017 result serialized as JSON in the runtime directory.",
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "title": "ResolvedSpecification",
+      "type": "object"
+    },
+    "RuntimeInformation": {
+      "additionalProperties": false,
+      "description": "Runtime and engine identity recorded without host-specific details.",
+      "properties": {
+        "implementation_version": {
+          "minLength": 1,
+          "title": "Implementation Version",
+          "type": "string"
+        },
+        "language_version": {
+          "minLength": 1,
+          "title": "Language Version",
+          "type": "string"
+        },
+        "name": {
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "language_version",
+        "implementation_version"
+      ],
+      "title": "RuntimeInformation",
+      "type": "object"
+    },
+    "SourceObservation": {
+      "additionalProperties": false,
+      "description": "One source byte snapshot consumed under a dataset identifier.",
+      "properties": {
+        "dataset": {
+          "minLength": 1,
+          "title": "Dataset",
+          "type": "string"
+        },
+        "declared_path": {
+          "minLength": 1,
+          "title": "Declared Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset",
+        "declared_path",
+        "sha256"
+      ],
+      "title": "SourceObservation",
+      "type": "object"
+    },
+    "SpecificationObservation": {
+      "additionalProperties": false,
+      "description": "The authored documents and optional resolved specification used.",
+      "properties": {
+        "documents": {
+          "items": {
+            "$ref": "#/$defs/FileDigest"
+          },
+          "minItems": 1,
+          "title": "Documents",
+          "type": "array"
+        },
+        "entrypoint": {
+          "minLength": 1,
+          "title": "Entrypoint",
+          "type": "string"
+        },
+        "resolved": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResolvedSpecification"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "entrypoint",
+        "documents"
+      ],
+      "title": "SpecificationObservation",
+      "type": "object"
+    },
+    "SuccessOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/ArtifactObservation"
+          },
+          "minItems": 1,
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "diagnostics": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Diagnostic"
+          },
+          "title": "Diagnostics",
+          "type": "array"
+        },
+        "status": {
+          "const": "success",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "artifacts"
+      ],
+      "title": "SuccessOutcome",
+      "type": "object"
+    },
+    "TableObservation": {
+      "additionalProperties": false,
+      "description": "An ordered, typed table independent of its serialized container.",
+      "properties": {
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/ColumnObservation"
+          },
+          "minItems": 1,
+          "title": "Columns",
+          "type": "array"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/CellObservation"
+            },
+            "type": "array"
+          },
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "columns",
+        "rows"
+      ],
+      "title": "TableObservation",
+      "type": "object"
+    },
+    "UnsupportedFeature": {
+      "additionalProperties": false,
+      "description": "One valid construct the adapter cannot execute.",
+      "properties": {
+        "operation": {
+          "minLength": 1,
+          "title": "Operation",
+          "type": "string"
+        },
+        "spec_path": {
+          "minLength": 1,
+          "title": "Spec Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation",
+        "spec_path"
+      ],
+      "title": "UnsupportedFeature",
+      "type": "object"
+    },
+    "UnsupportedOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "features": {
+          "items": {
+            "$ref": "#/$defs/UnsupportedFeature"
+          },
+          "minItems": 1,
+          "title": "Features",
+          "type": "array"
+        },
+        "status": {
+          "const": "unsupported",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "features"
+      ],
+      "title": "UnsupportedOutcome",
+      "type": "object"
+    }
+  },
+  "$id": "urn:yamaa:conformance:protocol:1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Invocation"
+    },
+    {
+      "$ref": "#/$defs/Report"
+    },
+    {
+      "$ref": "#/$defs/ComparisonSummary"
+    }
+  ],
+  "title": "YAMAA conformance protocol 1.0"
+}

@@ -1,0 +1,38 @@
+name: Conformance Contract
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  protocol:
+    name: protocol-and-comparator
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        run: python -m pip install uv==0.11.6
+
+      - name: Create locked environment
+        run: uv sync --project python --extra test --locked --no-editable
+
+      - name: Check protocol schema
+        run: uv run --project python --no-sync python -m conformance schema check
+
+      - name: Test protocol and comparator
+        run: uv run --project python --no-sync python -m pytest conformance/tests

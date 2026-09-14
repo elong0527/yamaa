@@ -248,6 +248,24 @@ capability exists. Neither is an accepted artifact from the current failed
 run. Its README still describes the expected variables under the same data-only
 contract as a positive example.
 
+An example promoted to executable conformance records every declared R008
+handler count in `expected/handler-counts.yaml`, including zero counts. The
+file has this versioned shape, keyed by the entry specification's path relative
+to the example directory so specification variants cannot collide:
+
+```yaml
+version: "1.0"
+specifications:
+  spec.yaml:
+    - spec_path: columns.VALUE.derivation.mapping.missing
+      handler: missing
+      count: 0
+```
+
+`spec_path` and `handler` identify an entry; their order in the file has no
+meaning. The shared conformance comparator requires exact counts and rejects a
+runtime observation whose specification has no committed entry.
+
 Every negative README ends with exactly one `## How to fix` section. It
 explains how to correct defective input and how to state an explicit policy
 when more than one valid outcome exists. It must not recommend weakening a
