@@ -10,9 +10,9 @@ applies_to: [root.keys, root.output, output.violation_log, root.columns,
 
 ## Intent
 
-Ensure every declared column is derived in exactly one place, that every value
-passes through the same ordered stages before anything consumes it, and that
-the completed dataset is uniquely identified.
+Ensure every declared column is derived in exactly one place, every value
+passes the same ordered stages before use, and the completed dataset
+is uniquely identified.
 
 ## Boundaries
 
@@ -71,12 +71,12 @@ same-named source variable; R002 forbids that inference.
 
 **R005-7.** A column is derived either at column level or at row level, never
 both. A column declaring `derivation` must not also appear in any `rows`
-entry's `derivations`, because the two would produce the same value twice
-with nothing to say which one survives.
+entry's `derivations`; the two would produce the same value twice
+with no rule for which one survives.
 
 **R005-8.** A row-derived column must be derived in every `rows` entry.
-Deriving it in some entries and not others leaves the remaining constructed
-rows with no value for it, so partial row coverage is an error rather than
+Deriving it in some entries only leaves other constructed rows
+with no value, so partial row coverage is an error, not
 an implied missing value.
 
 **R005-9.** A specification with no `rows` entry must derive every column at
@@ -97,7 +97,7 @@ Write `literal: null` rather than omitting the derivation.
 
 **R005-13.** A column listed in `output.columns` is part of the artifact. Any
 other declared column is internal: it is derived, converted, verified, and
-made available to dependents exactly as an output column is, but is omitted
+shared with dependents exactly as an output column is, but omitted
 from the artifact.
 
 **R005-14.** Internal columns exist so that a multi-step derivation does not
@@ -140,7 +140,7 @@ for one value, under R011.
 the first match's value, then stop, for one value, under R008.
 
 **R005-25.** Stage 5: run the column's verifications over the whole column,
-under R009. An error stops execution; warnings are accumulated without changing
+under R009. An error stops execution; warnings accumulate without changing
 the column.
 
 **R005-26.** Stages 1 to 4 run on each value, in whichever phase its
@@ -218,12 +218,12 @@ is undefined, and no specification declares a term merely to make the result
 deterministic. One that wants a particular tie broken declares the term
 that breaks it.
 
-**R005-38.** Ordering is presentation. It happens once, after every value
-has completed the lifecycle above, after key validation, and after every
-verification R009 runs, so it cannot change whether a run passes or warns. It
-changes nothing about evaluation either: R001's dependency order, a window's
-partitions, and the neighbours `row_value` reads are all fixed before this
-order is applied, and each keeps construction order for its own tie-break.
+**R005-38.** Ordering is presentation. It runs once, after the lifecycle
+above, key validation, and every verification R009 runs, so it cannot
+change whether a run passes or warns. It changes nothing about evaluation
+either: R001's dependency order, a window's partitions, and the neighbours
+`row_value` reads are all fixed before this order is applied, and each keeps
+construction order for its own tie-break.
 
 ## Specification-wide uniqueness
 

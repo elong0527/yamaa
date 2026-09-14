@@ -37,13 +37,13 @@ are errors. Every document in a bundle must declare the same version.
 Include order has no validation or execution meaning.
 
 **R006-3.** Implementations load the complete transitive bundle before
-resolving names. Except for registries, a declaration name may occur only
-once in the bundle.
+resolving names. Except for registries, a declaration name may occur once
+in the bundle.
 
-**R006-4.** A specification or project environment declares the bundle it is
-written against in `schema_version`. It must equal its entry point's bundle
-version. A document declaring any other version is an error and is not
-validated against that bundle.
+**R006-4.** A specification or project environment declares its entry-point
+bundle version in `schema_version`. The declared version must equal the bundle
+version. Any other version is an error, and the document is not validated
+against the bundle.
 
 **R006-5.** All schema documents must reject duplicate YAML keys, aliases,
 merge keys, explicit tags, and unknown schema constructs.
@@ -129,10 +129,10 @@ expressions:
 **R006-17.** Registry entry names must be unique across the complete bundle.
 An entry's payload shape is either a class or a value descriptor.
 
-**R006-18.** A value matching a registry-backed type must be a mapping with
-exactly one entry. Its key must exist in the referenced registry, and its
-value must match that entry's payload shape. Registry declaration order has
-no meaning.
+**R006-18.** A value matching a registry-backed type must be a one-entry
+mapping. Its key must exist in the referenced registry. Its value must match
+that registry entry's payload shape. Registry declaration order has no
+meaning.
 
 **R006-19.** An unreferenced registry, an empty registry, an unknown
 registry reference, or a duplicate registry entry is an error.
@@ -175,9 +175,9 @@ where YAML does require it is a parse error.
 ## Shorthand unions
 
 **R006-23.** Two union shapes are shorthand for a canonical form. An
-implementation expands a shorthand while validating, so a validated document
-contains only the canonical form and two implementations agree on what they
-validated.
+implementation expands shorthand while validating. A validated document
+therefore contains only the canonical form, so implementations agree on what
+they validated.
 
 **R006-24.** A union of `T` and `list[T]` accepts either. A bare `T`
 expands to a one-element list, and the list is canonical.

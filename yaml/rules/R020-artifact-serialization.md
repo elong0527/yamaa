@@ -11,10 +11,8 @@ applies_to: [root.output, output.path, output.decimals, output.violation_log]
 ## Intent
 
 Define how a completed, ordered primary artifact and any R009 violation log
-become bytes: which container carries each, what each value looks like inside
-that container, how an uncollected value differs from a collected empty one,
-the single point at which a float takes a display precision, and how written
-artifacts replace their targets.
+become bytes. This rule defines each container, value text, missing and empty
+strings, float display precision, and how an artifact replaces its target.
 
 ## Boundaries
 
@@ -37,7 +35,7 @@ This rule owns which file a specification declares it produces, the bytes that
 file receives, and the replacement of it. It does not own how that path is
 resolved against a project or which locations a run may write to: R002 owns
 resolution and containment for the paths a specification names, and an artifact
-path is written rather than read, so a boundary that admits a source does not by
+path is written, so a boundary that admits a source does not by
 itself admit a target.
 
 ## The artifact's path selects its profile
@@ -56,7 +54,7 @@ study that stores `ADSL.CSV` names the same container as one that stores
 | Extension | Profile | Container | What two runtimes must agree on |
 |---|---|---|---|
 | `.csv` | `csv` | delimited text | the bytes |
-| `.parquet` | `parquet` | Apache Parquet | the schema, column order, row order, and values that read back |
+| `.parquet` | `parquet` | Parquet | schema, column/row order, values |
 
 **R020-3.** One field carries both facts because a specification that produces
 an artifact needs a path regardless, and a separate profile beside it could
@@ -81,31 +79,31 @@ makes it usable as a golden contract.
 **R020-6.** A profile names a container, and the specification's
 `schema_version` fixes which release's contract it was written under. The two
 together identify the bytes exactly, and a consumer reading a stored artifact
-receives both, because the producing-specification link R014 defines carries the
+receives both, because R014's producing-specification link carries the
 whole producer document rather than the profile alone.
 
 **R020-7.** A later release that changes any byte-level or mapping decision
 below therefore changes what a profile means at that schema version, and an
 artifact keeps the meaning its producer's version gives it. A profile that ever
-has to diverge from the schema version is added as a further name rather than by
+has to diverge from the schema version is added as a name rather than by
 redefining one of these two.
 
 ## The csv profile
 
 ### Bytes
 
-- **R020-8.** The artifact is encoded UTF-8 and carries no byte-order mark. R019
+- **R020-8.** The artifact is UTF-8 and has no byte-order mark. R019
   owns the text being encoded.
 - **R020-9.** `U+000A` terminates every record, including the last, so every
   artifact ends with it. `U+000D` is never written as part of a terminator; it
   appears only inside a quoted field that contains one.
 - **R020-10.** `U+002C` separates fields. No other delimiter is defined.
-- **R020-11.** The first record is the header: the names of `output.columns`, in
+- **R020-11.** The first record is the header: `output.columns` names, in
   that order, written under the quoting rule below.
 - **R020-12.** Each following record is one row, in the order R005 fixes,
   holding one field per header name in the same order.
 - **R020-13.** An artifact with no rows is the header record and its terminator
-  alone. It is not an empty file, because the columns exist whether or not a row
+  alone. It is not empty, because the columns exist whether or not a row
   does.
 
 ### Quoting
@@ -161,7 +159,7 @@ collected empty string, and the first row's is missing.
 grouping, and without a leading zero; zero is `0`. A `float` that takes no
 display precision is written by R011's conversion to `str`: the shortest round-
 tripping digits in positional notation, with a trailing `.0` omitted. That
-conversion carries no exponent, which is what lets this profile promise bytes --
+conversion has no exponent, which lets this profile promise bytes --
 a value with two admissible spellings would leave two runtimes both conforming
 and different.
 
@@ -169,7 +167,7 @@ and different.
 
 ### Column mapping
 
-**R020-20.** Each declared type maps to exactly one Parquet physical and logical
+**R020-20.** Each declared type maps to exactly one Parquet physical/logical
 type.
 
 | Column type | Physical | Logical |
@@ -193,7 +191,7 @@ by the container instead of by a convention.
 
 ### Temporal values
 
-**R020-23.** A `date` is the count of days from 1970-01-01, and a `datetime` the
+**R020-23.** A `date` is days from 1970-01-01, and a `datetime` is the
 count of microseconds from 1970-01-01T00:00:00 on the same wall clock the value
 names.
 
@@ -205,8 +203,8 @@ native timestamp always carries one -- R016 names R's `POSIXct` as such a type
 shifting a value into or out of a machine timezone changes it, and two runtimes
 that each shift by their own offset do not agree.
 
-**R020-25.** A `datetime` is resolved to a whole second, so its microsecond part
-is always zero. Microseconds are chosen because the format offers no second unit
+**R020-25.** A `datetime` has whole-second resolution, so its microsecond part
+is always zero. Microseconds are used because the format offers no second unit
 and because both ecosystems' readers agree on this one; the finer resolution is
 never used.
 
@@ -220,17 +218,17 @@ and the same values, with every `DOUBLE` bit-identical.
 **R020-27.** An implementation writes uncompressed pages and adds no key-value
 metadata of its own beyond what the format requires.
 
-**R020-28.** The bytes themselves are not fixed. A Parquet writer stamps its own
+**R020-28.** The bytes are not fixed. A Parquet writer stamps its own
 identity and version into the file, and the row-group and page sizing, the
 encodings it selects, and the statistics it records are properties of the
 library rather than of this design. Requiring identical bytes would require
 every conforming implementation to abandon its ecosystem's writer, which buys
-less than it costs. An artifact whose bytes must be compared directly is written
+less than it costs. An artifact needing direct byte comparison is written
 under `csv`, whose byte guarantee is exactly that.
 
 ### Floats are stored, not rendered
 
-**R020-29.** A `float` reaches this profile as the binary64 value the derivation
+**R020-29.** A `float` reaches this profile as its derivation's binary64 value
 produced. `output.decimals` does not apply, and no rounding happens on the way
 out: a consumer that reads the artifact back receives the value the calculation
 used. Storing a container's native double is not a display, and this design
@@ -271,13 +269,13 @@ representation of it, and the difference is observable:
 | `2.675` | 2.674999999999999822364316059974953532218933105468750 | `2.67` |
 
 **R020-35.** `0.125` is representable, so it is a genuine tie and rounds away
-from zero. `2.675` is not representable and the nearest binary64 is below it, so
+from zero. `2.675` is not representable; its nearest binary64 is below it, so
 there is no tie to break and it rounds down. An implementation that first
 shortens the value to `2.675` and then rounds reports `2.68` and does not
 conform.
 
 **R020-36.** No host rounding or formatting routine may be assumed to do this.
-R's `round` and Python's `round` both send an exact tie to the even digit rather
+R's and Python's `round` both send an exact tie to the even digit rather
 than away from zero, and the C formatting both ecosystems build on does the
 same. Each of the three disagrees with this rule on `0.125`, so an
 implementation performs the exact scaling above rather than delegating.
@@ -287,7 +285,7 @@ implementation performs the exact scaling above rather than delegating.
 **R020-37.** A specification that reads an artifact another specification
 produced learns how those bytes are encoded from the producer, through the
 producing specification link R014 defines: the producer's `output.path` states
-the profile by its extension, exactly as its `output.columns` states the fields.
+the profile by its extension, just as `output.columns` states the fields.
 The consumer reads that from the producing specification rather than from the
 name it happens to know the file by, so a copy stored under another name is
 still read under the profile its producer wrote it with.
@@ -298,11 +296,11 @@ still read under the profile its producer wrote it with.
 
 1. writes the complete artifact into a temporary regular file in the same
    directory as the target;
-2. flushes and closes that file, so its bytes reach the filesystem rather than a
+2. flushes and closes that file, so its bytes reach the filesystem, not a
    buffer; and
 3. atomically replaces the target with it.
 
-**R020-39.** The temporary file is a regular file, and it is in the target's own
+**R020-39.** The temporary file is regular and is in the target's own
 directory so that the replacement stays within one filesystem and remains
 atomic. Its name is not fixed, but it must not collide with the target or with
 another run's temporary file.
@@ -334,7 +332,7 @@ artifact.
 
 **R020-42.** A missing `output.path`: fail validation and report the
 specification. **R020-43.** An `output.path` whose extension is outside the
-mapping above, or that has none: fail validation with `unknown_artifact_profile`
+mapping above, or none: fail validation with `unknown_artifact_profile`
 and report the path. No extension is treated as a default. **R020-44.** An
 `output.decimals` that is not a non-negative integer: fail validation.
 **R020-45.** An `output.decimals` declared on a path the mapping resolves to
@@ -346,7 +344,7 @@ A failed atomic replacement: fail and report the target. The run produces no
 artifact, and the previous one is unchanged. **R020-48.** Writing a byte-order
 mark, a `U+000D` record terminator, or a quoting that differs from the `csv`
 condition: none is an implementation option. **R020-49.** Rounding with a host
-routine whose ties do not go away from zero, or rounding a value any other stage
+routine whose ties do not go away from zero, or rounding a value another stage
 can observe: neither is an implementation option.
 
 ## Violation-log publication
