@@ -7,14 +7,11 @@ applies_to: [root.parents, root.schema_version, root]
 ---
 
 # Specification inheritance
-
 ## Intent
-
 Resolve reusable YAML layers into one complete, deterministic specification
 before any data is read.
 
 ## Boundaries
-
 This rule owns parent loading, graph traversal, composition, path provenance,
 pruning, and the resolved specification. R006 owns YAML and schema validation.
 R001 owns dependency inference and evaluation after this rule has ordered the
@@ -22,12 +19,11 @@ resolved columns. R002 and R015 own dataset and record-lookup references. R005
 owns column coverage, output membership, and final identifier constraints. R009
 owns verification behavior.
 
-This rule does not execute a derivation, read a source dataset, or define what
-an inherited field means. It composes declarations; the rule that already owns
-each declaration applies to the resolved result.
+This rule does not execute a derivation, read an input dataset, or define an
+inherited field's meaning. It composes declarations. The rule that owns each
+declaration applies to the resolved result.
 
 ## Terms
-
 **R017-1.** The file requested for validation or execution is the **entry
 file**. It and every file reached through `parents` are **layers**. A layer
 contributes the root fields and keyed declarations it writes. The **resolved
@@ -42,7 +38,6 @@ while it works. Provenance is diagnostic state and is not a field of the
 resolved specification.
 
 ## Parent references
-
 **R017-4.** `parents` accepts one `path` or an ordered `list[path]`. A single
 path is the R006 shorthand for a one-item list and is normalized before
 traversal.
@@ -57,12 +52,10 @@ symbolic links, before comparing file identity. Two spellings that reach the
 same file identify one layer, not two.
 
 ## Linearization
-
 **R017-7.** Starting at the entry file, visit each layer's normalized parents
-from left to right, depth first, and then visit the layer itself. A layer
-contributes once, at its first visit. Reaching a layer already on the active
-traversal path is a cycle and fails; reaching one whose contribution is complete
-skips it.
+from left to right, depth first, and then visit the layer. A layer contributes
+once at its first visit. Reaching a layer already on the active traversal path
+is a cycle and fails. Reaching a layer whose contribution is complete skips it.
 
 **R017-8.** For parents `A` then `B`, where both inherit `Common`, the
 contribution order is therefore:
@@ -76,8 +69,8 @@ resolved by their order; it is not a parent-conflict error. `parents` is
 consumed during traversal and is absent from the resolved specification.
 
 ## Layer validation
-
-**R017-9.** Every layer is parsed under R006 and must be a non-empty mapping. It
+**R017-9.** Every layer is parsed under R006 and must be a non-empty mapping.
+It
 must declare `schema_version`; the value must equal both the active schema
 bundle version and the value in every other contribution. A mismatch fails
 before composition. Inheritance never migrates schema versions.
@@ -94,7 +87,8 @@ the final artifact membership or order.
 of `record_lookups`, `columns`, or `rows` must carry its respective `id`,
 `name`, or `id` field. Two members of one layer must not share one identifier.
 
-**R017-12.** A non-null field supplied inside a keyed member is a complete value
+**R017-12.** A non-null field supplied inside a keyed member is a complete
+value
 at that field boundary. Its nested classes, mappings, lists, registries, and
 scalar constraints validate normally; they are not partial patches. A non-keyed
 root field supplied by a layer likewise validates as one complete field value.
@@ -104,7 +98,6 @@ composition. Equivalent long and short spellings therefore contribute the same
 value.
 
 ## Shallow composition
-
 **R017-14.** Composition merges the immediate fields of the root. A later field
 that is absent leaves the accumulated field unchanged. A later non-null field
 replaces the complete accumulated value unless the field is one of the keyed
@@ -122,7 +115,8 @@ collections below. There is no recursive merge inside a supplied field value.
 | `rows` | Keyed by `id` |
 | Every other root field | Complete field replacement |
 
-**R017-16.** Mappings and lists nested inside a replaced field are replaced with
+**R017-16.** Mappings and lists nested inside a replaced field are replaced
+with
 it. For example, later root `metadata`, `keys`, `output`, and `verifications`
 replace their complete inherited values.
 
@@ -142,7 +136,6 @@ declarations merge their immediate `path`, `types`, and `schema` fields by the
 same rule.
 
 ## Clearing an optional field
-
 **R017-19.** YAML null at an immediate composition boundary clears an inherited
 optional field. The marker is consumed and the field is absent from the
 accumulated object. Clearing a required field, an identity field,
@@ -150,7 +143,8 @@ accumulated object. Clearing a required field, an identity field,
 
 **R017-20.** The marker applies only to an immediate root field or keyed-member
 field. A null nested inside a supplied field value keeps its R006 meaning. In
-particular, `derivation: {literal: null}` replaces the derivation with a literal
+particular, `derivation: {literal: null}` replaces the derivation with a
+literal
 missing value; it does not clear `derivation`.
 
 **R017-21.** There is no separate `remove`, `drop`, `output.add`, or
@@ -158,7 +152,6 @@ missing value; it does not clear `derivation`.
 keyed declarations are pruned after composition.
 
 ## Path provenance
-
 **R017-22.** Every contributed value whose schema type is `path` is first
 interpreted relative to the layer that writes that value, as its owning rule
 requires. Composition must not silently reinterpret an inherited relative path
@@ -176,7 +169,6 @@ against the approved root it names and reads that written form.
 rebased `project_path` is accepted or rejected by R021 in its rebased form.
 
 ## Minimal resolved specification
-
 **R017-25.** After composition, the resolver removes declarations that cannot
 affect the artifact or a declared assertion. Definitions do not make themselves
 live. Reachability begins with:
@@ -204,7 +196,8 @@ because no other declaration names its `id`.
 
 **R017-28.** An inherited declaration excluded from `output.columns` may remain
 as an internal column when a derivation or verification uses it. If no semantic
-path reaches it, it and the declarations used only by it are removed. Structural
+path reaches it, it and the declarations used only by it are removed.
+Structural
 validation still applies to every written layer field, but semantic name and
 reference validation applies after pruning. An unresolved reference reachable
 from a semantic root fails; one contained only in a dead declaration is
@@ -233,17 +226,20 @@ The resolved specification:
 - **R017-32.** contains no `parents` or null clearing markers;
 - **R017-33.** uses the canonical long form of every R006 shorthand;
 - **R017-34.** contains only reachable keyed declarations;
-- **R017-35.** declares columns in the deterministic dependency order above; and
+- **R017-35.** declares columns in the deterministic dependency order above;
+  and
 - **R017-36.** retains ordinary root and member fields in schema order when
   materialized.
 
-**R017-37.** Free-form mappings whose owning field was replaced whole retain the
+**R017-37.** Free-form mappings whose owning field was replaced whole retain
+the
 order of the contribution that supplied them. The resolved YAML's presentation
 details such as indentation do not carry semantics; conformance compares its
 YAML data tree.
 
 **R017-38.** Only after resolution does the implementation apply complete
-`root_class` requiredness and every cross-field and semantic rule. A final error
+`root_class` requiredness and every cross-field and semantic rule. A final
+error
 is reported under its owning rule. Its diagnostic identifies the entry
 specification and the contributing file and field from which each implicated
 value came.
@@ -251,13 +247,16 @@ value came.
 ## Rationale
 
 Inheritance composes declarations before any data is read, so every
-specification resolves to one deterministic document: later contributions win by
+specification resolves to one deterministic document: later contributions win
+by
 position rather than by conflict, and `parents` order rather than a separate
 merge rule decides every difference. Shallow composition with complete-field
 replacement keeps each layer reviewable on its own, while null clearing handles
 the one exception an optional field needs. Pruning keeps reuse cheap: a shared
-layer can carry extra declarations without forcing them into every artifact, and
-reference checks run after pruning so a dead declaration cannot fail a live one.
+layer can carry extra declarations without forcing them into every artifact,
+and
+reference checks run after pruning so a dead declaration cannot fail a live
+one.
 Path rebasing preserves what an inherited relative path denotes instead of
 silently reinterpreting it from the entry directory.
 
@@ -271,7 +270,8 @@ silently reinterpreting it from the entry directory.
 `parent_not_found` and reports the declaring file and path. **R017-42.**
 Reaching a file already on the active traversal path fails with
 `inheritance_cycle` and reports the complete canonical path cycle. **R017-43.**
-A missing or inconsistent layer version fails with `schema_version_mismatch` and
+A missing or inconsistent layer version fails with `schema_version_mismatch`
+and
 reports every implicated file and value. **R017-44.** An entry file that omits
 `output` fails with `missing_entry_output`. **R017-45.** A malformed fragment
 fails under R006 at its contributing file and field. **R017-46.** A duplicate
