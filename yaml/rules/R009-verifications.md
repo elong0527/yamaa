@@ -136,7 +136,7 @@ independently of regular-expression matching behavior.
 **R009-20.** `row_count` counts completed output rows. `group_by` names
 declared columns and partitions **the artifact's rows** by the equality each
 value's type owns, including R019 for strings. Missing values group with
-other missing values as R001 partitions a driver relation. Both bounds then
+other missing values as R001 partitions an input dataset. Both bounds then
 apply to every group.
 
 **R009-21.** `filter` is an R004 predicate over one completed output row, and
@@ -159,7 +159,7 @@ group, so no `min` here can discover it. That assertion belongs to the
 derivation, where the relation defining the expected groups is readable: a
 record lookup declaring `unmatched: fail` under R015 rejects an expected
 group the data cannot supply, and a planning relation at the required grain
-gives every expected group a driver record under R001.
+gives every expected group an input record under R001.
 
 ## Rationale
 

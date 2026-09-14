@@ -52,15 +52,17 @@ forms exist and must not be mixed:
 
 - **Qualified.** Every identifier names the same declared dataset relation.
   During column derivation the expression reduces that right side before the
-  R003 join, even when its qualifier equals the current row driver. A scalar
-  source qualified to the driver reads one record; the aggregate keyword makes
-  the same qualifier relational.
+  R003 join, even when its qualifier equals the current row template's
+  input dataset. A scalar source qualified to the row template's input
+  dataset reads one record; the aggregate keyword makes the same
+  qualifier relational.
 - **Unqualified.** Every identifier names a current-output column. The
   expression reduces constructed output rows within the partition its `group_by`
   declares and broadcasts the result, which is R007's second aggregate context.
-- **Grouped row driver.** Every identifier is qualified to the row driver of the
-  enclosing grouped row template. The expression reduces only the records of the
-  current driver group, which is R007's third aggregate context.
+- **Grouped input.** Every identifier is qualified
+  to the input dataset of the enclosing grouped row template. The
+  expression reduces only the records of the current input group, which
+  is R007's third aggregate context.
 
 **R013-4.** A single expression naming two datasets, or mixing a qualified
 identifier with an unqualified one, is an error. A reduction is not a join: an
@@ -157,7 +159,7 @@ each later value is added to it using R010's `+` semantics; implementations must
 not reorder, reassociate, partition, or use a compensated or correctly rounded
 summation. The `filter`, when present, removes records without changing the
 order of those that remain. R014 defines stored-source record order, and R001
-defines constructed-output and grouped-driver record order. `MEAN` uses this
+defines constructed-output and grouped-input record order. `MEAN` uses this
 same ordered `SUM`, followed by division by `COUNT`, so it inherits the fold's
 binary64 rounding behavior.
 
@@ -294,8 +296,9 @@ unqualified one: fail. **R013-40.** A `COUNT(D.*)` whose dataset is not the
 expression's relation: fail. **R013-41.** An ODM contextual reference: fail.
 **R013-42.** A qualified `group_by` column that is not an output key, or an
 unqualified expression with no `group_by`: fail. **R013-43.** A grouped-row
-aggregate declaring its own `group_by`, naming an identifier outside its row
-driver, or being used by an ungrouped row template: fail. **R013-44.** A
+aggregate declaring its own `group_by`, naming an identifier outside its
+row template's input dataset, or being used by an ungrouped row template:
+fail. **R013-44.** A
 `between` on an unqualified or grouped-row aggregate, declaring neither bound,
 naming a bound outside the qualified relation, or using incomparable operands:
 fail. **R013-45.** `SUM` or `MEAN` over a non-numeric argument, or arithmetic

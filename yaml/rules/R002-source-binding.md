@@ -10,8 +10,8 @@ applies_to: [root.datasets, root.base, row.dataset, row.group_by, expression.sou
 
 ## Intent
 
-Bind source files, row drivers, and input variables without implicit same-name
-inference.
+Bind source files, row templates' input datasets, and input variables
+without implicit same-name inference.
 
 ## Boundaries
 
@@ -69,13 +69,13 @@ reads the current source record. A qualified reference to another
 dataset follows R003.
 
 **R002-11.** During grouped row construction there is no single current
-source record. A qualified reference to the row driver is scalar only
-when the exact variable appears in the enclosing `row.group_by`; it
-then returns that group's key value.
+source record. A qualified reference to the row template's input
+dataset is scalar only when the exact variable appears in the
+enclosing `row.group_by`; it then returns that group's key value.
 
-**R002-12.** Reading any other driver field with a scalar `source` is an
-error. An aggregate expression is how a grouped row reduces non-key
-fields, as R007 and R013 define.
+**R002-12.** Reading any other source field with a scalar `source` is
+an error. An aggregate expression is how a grouped row reduces
+non-key fields, as R007 and R013 define.
 
 **R002-13.** Operation operand fields typed as `variable` accept a
 concise source or current output variable. Compose operations through
@@ -181,7 +181,7 @@ condition.
 
 **R002-30.** An unresolved unqualified reference: fail.
 
-**R002-31.** A scalar source in a grouped row naming a driver field
+**R002-31.** A scalar source in a grouped row naming a source field
 absent from that row's `group_by`: fail.
 
 **R002-32.** An ODM contextual reference with no available context
