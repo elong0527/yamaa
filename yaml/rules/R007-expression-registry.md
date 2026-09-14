@@ -63,10 +63,10 @@ literals use their explicit tagged leaf forms.
 ## Evaluation kinds
 
 **R007-6.** Scalar expressions return one value per row. Window expressions
-partition constructed output rows by their local `group_by` and preserve row
-count. Omitting `group_by` creates one partition. Within a declared group,
-missing values equal other missing values, so rows with the same present
-values and missing in the same group positions share one partition.
+partition constructed output rows by local `group_by` and preserve row count.
+Omitting `group_by` creates one partition. Within a declared group, missing
+values equal other missing values. Rows with the same present values and the
+same missing group positions share one partition.
 
 **R007-7.** A window that declares `filter` still preserves row count: an
 excluded row receives missing rather than being dropped. A window that reads

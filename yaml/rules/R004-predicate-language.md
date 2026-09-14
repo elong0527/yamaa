@@ -64,11 +64,11 @@ temporal    := "DATE" string | "DATETIME" string
 ```
 
 **R004-3.** `grammar/predicate.yaml` is this grammar's single source. The
-block above is its rendering, its `reserved` list closes the keywords named
-below, and its cases record the text every implementation must accept or
-reject, the identifiers an accepted text binds, and the parse it produces.
-Repository validation and the R implementation both read that file, so no
-transcription of this grammar can drift from it without failing.
+block above renders that file. Its `reserved` list closes the keywords below.
+Its cases record the text every implementation must accept or reject, the
+identifiers an accepted text binds, and the parse each accepted text produces.
+Repository validation and the R implementation read that file, so a copied
+grammar cannot drift from it without failing.
 
 **R004-4.** Whitespace may separate tokens but cannot occur inside a number,
 identifier, or keyword. Precedence is `NOT`, then `AND`, then `OR`. Repeated
@@ -193,11 +193,11 @@ predicate as dependency-free.
 
 ## Determinism
 
-**R004-30.** Evaluation is deterministic and free of side effects. A
-conforming implementation must not inherit implicit coercion, collation,
-`LIKE` escape, or missing-value behavior from a host SQL engine. String
-comparison must use R019. An implementation either configures and overrides
-those behaviors to match these rules or evaluates the grammar itself.
+**R004-30.** Evaluation is deterministic and side-effect free. A conforming
+implementation must use R019 for string comparison and must not inherit
+implicit coercion, collation, `LIKE` escape, or missing-value behavior from a
+host SQL engine. It must either configure and override those behaviors to
+match these rules or evaluate the grammar itself.
 
 ## Rationale
 

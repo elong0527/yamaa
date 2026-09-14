@@ -21,10 +21,10 @@ Strings, dates, comparison, conditional selection, and row-wise extremes over
 non-numeric types keep their registered expressions under R007, so a general
 expression string cannot displace the typed registry. The Boolean-valued `sql`
 primitive is R004; the two share notation and identifier resolution but not
-their type or their permitted vocabulary. Reduction over many records is
-R013's `aggregate_expression`, which reuses this grammar's operators,
-functions, numeric types, and failure conditions; this rule stays per-row and
-admits no reduction.
+their type or their permitted vocabulary. Reduction over many records uses
+R013's `aggregate_expression`. It reuses this grammar's operators, functions,
+numeric types, and failure conditions. R010 evaluates one row and admits no
+reduction.
 
 ## Scope
 
@@ -72,9 +72,9 @@ input dataset.
 
 **R010-6.** An identifier that does not resolve in its phase is an error. A
 lookup field carries the type R014 assigns to the field in the lookup's
-dataset. R001 collects these identifiers and the lookup's source
-dependencies, so a `compute` derivation participates in dependency ordering
-exactly as a predicate does.
+dataset. R001 collects these identifiers and lookup source dependencies. A
+`compute` derivation therefore participates in dependency ordering like a
+predicate does.
 
 ## Grammar
 
@@ -133,10 +133,10 @@ Write `LN(x)` or `LN(x) / LN(b)`.
 ### There is no rounding function
 
 **R010-12.** A derivation must not round. `ROUND` is absent, not merely
-discouraged, and a specification cannot round a value at all. Analysis
-datasets carry the computed value at full precision and the number of places
-shown is decided when the value is reported. R011 keeps the same position at
-conversion, where a non-integral value fails rather than being truncated.
+discouraged, and a specification cannot round a value. Analysis datasets carry
+computed values at full precision. Reporting decides the displayed places. R011
+keeps the same position at conversion, where a non-integral value fails rather
+than being truncated.
 
 **R010-13.** `CEIL`, `FLOOR`, and `TRUNC` remain. They are not presentation
 rounding: they return an integral part exactly, with no mode to choose, and
@@ -174,10 +174,9 @@ by binding it to a numeric column first.
 
 ## Missing values
 
-**R010-22.** `NULL` propagates. Any operator or function argument that is
-`NULL` produces a `NULL` result, except `COALESCE`, `NULLIF`, `GREATEST`,
-and `LEAST`, whose argument-level behavior is defined in the table in
-R010-9.
+**R010-22.** `NULL` propagates. A `NULL` argument to an operator or function
+produces a `NULL` result, except `COALESCE`, `NULLIF`, `GREATEST`, and `LEAST`,
+whose argument-level behavior is defined in the table in R010-9.
 
 **R010-23.** A `compute` derivation therefore needs no guarding predicate to
 survive a missing input, and a formula that must yield missing rather than

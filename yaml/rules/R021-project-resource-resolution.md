@@ -10,9 +10,9 @@ applies_to: [project_path, dataset_source, dataset_class]
 
 ## Intent
 
-Bound every stored file a run reads to a location the study it belongs to
-declared or its runner approved, and bind the bytes a validated declaration
-names to the bytes ingestion receives.
+Limit every stored file a run reads to a location the study declares or the
+runner approves. Bind the bytes of a validated declaration to the bytes
+that ingestion receives.
 
 ## Boundaries
 
@@ -171,9 +171,9 @@ therefore decides a location a platform spells through a linked system
 directory the same way it decides any other approved root.
 
 **R021-18.** After the walk, the canonical resolved file is inside the
-canonical anchor. The written form and the symbolic-link rejection already
-imply this; the check is stated because a boundary defect must fail closed
-rather than silently.
+canonical anchor. The written-form checks and symbolic-link rejection already
+imply this. The check must fail closed rather than silently pass a boundary
+defect.
 
 **R021-19.** A path that reaches no entry is missing. A path that reaches a
 directory, FIFO, socket, device, or any other non-regular file is rejected,
@@ -246,7 +246,7 @@ are the values a rejected specification is probing for.
 | Condition | Rejects |
 |---|---|
 | `resource_path_uri_scheme` | a URI scheme, including `file:` and `https:` |
-| `resource_path_not_normalized` | a backslash, an empty segment, a trailing separator, an empty path, or a dot segment in a rooted path |
+| `resource_path_not_normalized` | a form R021-10 through R021-12 rejects |
 | `resource_path_not_relative` | a rooted path that names no approved root |
 | `resource_path_outside_project` | a path that resolves outside its anchor |
 | `resource_path_symlink` | a symbolic link at any component below the anchor |

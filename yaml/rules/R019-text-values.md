@@ -10,8 +10,8 @@ applies_to: [str, expression.str_upper, expression.str_lower,
 
 ## Intent
 
-Define one portable text model for source notation, runtime strings, casing,
-equality, and total order without consulting a host locale or Unicode library.
+Define a portable text model for source notation, runtime strings, casing,
+equality, and total order without a host locale or Unicode library.
 
 ## Boundaries
 
@@ -81,10 +81,10 @@ every `order_by` term, `greatest`, `least`, and aggregate `MIN` and `MAX`.
 Missing placement is not part of string order; the operation that admits
 missing values owns that placement or empty-result behavior.
 
-**R019-10.** The order performs no normalization or case folding and uses
-no locale, collator, character name, script property, encoded byte order,
-or UTF-16 code unit order. An implementation must compare a
-supplementary-plane scalar as one value rather than as a surrogate pair.
+**R019-10.** The order performs no normalization or case folding. It uses no
+locale, collator, character name, script property, encoded byte order, or
+UTF-16 code unit order. An implementation must compare a supplementary-plane
+scalar as one value, not as a surrogate pair.
 
 ## ASCII casing
 
