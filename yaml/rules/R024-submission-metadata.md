@@ -135,10 +135,9 @@ closed set:
 | `date` | `date` | none |
 | `datetime` | `datetime` | none |
 
-For `str`, the other admitted types are `date`, `datetime`, `time`,
-`partialDate`, `partialTime`, `partialDatetime`, `incompleteDate`,
-`incompleteTime`, `incompleteDatetime`, `durationDatetime`,
-`intervalDatetime`, and `URI`.
+`str` admits `date`, `datetime`, `time`, `partialDate`, `partialTime`,
+`partialDatetime`, `incompleteDate`, `incompleteTime`, `incompleteDatetime`,
+`durationDatetime`, `intervalDatetime`, and `URI`.
 
 **R024-15.** A `str` column admits temporal submission types because a
 submission carries a partial or incomplete date as text. R016 does not admit
