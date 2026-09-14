@@ -47,14 +47,16 @@ it. Omitting that binding column from `output.columns` keeps it out of the
 final dataset.
 
 **R010-4.** During ungrouped row construction an identifier is either a
-variable of the row driver, qualified exactly as `row.filter` qualifies one,
-or an unqualified column derived by the same `rows` entry.
+variable of the row template's input dataset, qualified exactly as
+`row.filter` qualifies one, or an unqualified column derived by the same
+`rows` entry.
 
-**R010-5.** During grouped row construction a qualified driver identifier
-must be one of the enclosing `row.group_by` variables; other values are
-first reduced to a row-derived column with `aggregate`. No other dataset may
-be qualified, because row construction precedes the R003 join and sees only
-the row driver.
+**R010-5.** During grouped row construction an identifier qualified to
+the row template's input dataset must be one of the enclosing
+`row.group_by` variables; other values are first reduced to a row-derived
+column with `aggregate`. No other dataset may be qualified, because row
+construction precedes the R003 join and sees only the row template's
+input dataset.
 
 ```yaml
 - name: HEIGHTCM

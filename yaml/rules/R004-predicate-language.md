@@ -168,7 +168,8 @@ filter: "AEDECOD LIKE '100!%' ESCAPE '!'"
 **R004-21.** R001 defines the names visible at each predicate site. In
 summary:
 
-- **R004-22.** an ungrouped row filter sees only fields of its row driver;
+- **R004-22.** an ungrouped row filter sees only fields of its row
+  template's input dataset;
 - **R004-23.** a grouped row filter sees only unqualified columns derived by
   that row;
 - **R004-24.** aggregate, record-lookup, and multiple-match filters see

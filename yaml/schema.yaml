@@ -50,7 +50,8 @@ root_class:
     - rows:
         type: "list[row_class]"
         required: false
-        description: Templates constructing output rows from driving records or groups; R001 evaluates them.
+        description: Row templates constructing output rows from
+            input records or groups; R001 evaluates them.
     - verifications:
         type: [dataset_verification, "list[dataset_verification]"]
         required: false
@@ -183,15 +184,19 @@ row_class:
     - group_by:
         type: "list[variable]"
         required: false
-        description: Non-empty driver-variable grain producing one candidate row per group; R001 defines grouped construction.
+        description: Non-empty input-record variable grain producing
+            one candidate row per group; R001 defines grouped construction.
     - filter:
         type: sql
         required: false
-        description: Predicate selecting driver records for an ungrouped template or completed candidate groups for a grouped template.
+        description: Predicate selecting input records for an ungrouped
+            row template or completed candidate groups for a grouped row
+            template.
     - derivations:
         type: "dict[column_name, derivation]"
         required: true
-        description: Columns this template derives; R005 owns coverage across templates.
+        description: Columns this row template derives; R005 owns
+            coverage across row templates.
 
 variable:
     type: str

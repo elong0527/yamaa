@@ -32,7 +32,7 @@ contract. A reader must deliver records in their stored order and must
 preserve that order after field decoding and typing; parallel reads, batches,
 partitions, or an engine's scan plan must not reorder them. Filtering
 preserves the relative order of the records that remain. R001 uses this
-sequence as base-record and grouped-driver order, R007 uses it to break
+sequence as base-record and grouped-input order, R007 uses it to break
 window ties, and R013 consumes it for ordered floating-point reduction.
 
 **R014-2.** Record order is not a substitute for a business key or a declared

@@ -193,8 +193,8 @@ used for enrichment and does not change the identity asserted here.
 
 **R005-33.** `output.order_by` declares the order the artifact's rows are
 presented in. It is optional, and an artifact whose specification omits it
-keeps R001's construction order: row-template order, and driver or
-first-occurrence group order within each template.
+keeps R001's construction order: row-template order, and input order or
+first-occurrence group order within each row template.
 
 **R005-34.** Its terms are R007's order terms, so a bare variable is
 ascending with missing values last, `direction` and `nulls` are declared per
@@ -248,7 +248,7 @@ column in an order term trades a small, stated cost -- a reader cannot
 always reproduce the artifact order from the artifact alone -- for not
 having to publish a column that exists only to withhold. Presentation
 ordering comes last so that it settles only the sequence a consumer
-receives; R001 drives row construction in base-record order, and R014's
+receives; R001 orders row construction in base-record order, and R014's
 producing-specification link makes a stored artifact the source another
 specification reads that way, so a declared order is what lets a
 two-specification workflow reproduce one result instead of leaving the

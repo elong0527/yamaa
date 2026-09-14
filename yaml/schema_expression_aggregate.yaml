@@ -3,7 +3,9 @@ version: "1.0"
 # R013 defines the reducer grammar, the results it pins, and its failures.
 
 expressions:
-    aggregate: # Reduces one relation or the current driver group to one value under R013.
+    # Reduces one relation or the current input group to one value
+    # under R013.
+    aggregate:
         type: [aggregate_expression, aggregate_class]
 
 aggregate_class:

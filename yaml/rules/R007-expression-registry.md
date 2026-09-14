@@ -78,23 +78,24 @@ grammar, the reducers it permits, and what each returns; this rule fixes
 where it may be used. It is valid in exactly three contexts. Context 1: its
 identifiers are qualified to one declared dataset relation during column
 derivation. It then reduces that right side before the R003 join, which R003
-defines. The qualifier may equal the current row driver because an aggregate
-reads the relation rather than the scalar driver record.
+defines. The qualifier may equal the current row template's input
+dataset because an aggregate reads the relation rather than the
+scalar input record.
 
 **R007-9.** Context 2: its identifiers are unqualified. It then declares
 `group_by`, reduces constructed output rows within each partition, and
 broadcasts the result to each row.
 
-**R007-10.** Context 3: it is a row derivation of a grouped row template and
-every identifier is qualified to that template's row driver. It reduces the
-records of the current driver group to one candidate-row value. The
-enclosing `row.group_by` owns the grain, so the aggregate itself omits
-`group_by`.
+**R007-10.** Context 3: it is a row derivation of a grouped row template
+and every identifier is qualified to that template's input
+dataset. It reduces the records of the current input group to one
+candidate-row value. The enclosing `row.group_by` owns the grain, so
+the aggregate itself omits `group_by`.
 
 **R007-11.** Any other aggregate context is an error. A `filter` narrows the
 records the owning expression already works in: right-side records for
 context 1, and constructed output rows for a window or for context 2, and
-current driver-group records for context 3. `between` is valid only in
+current input-group records for context 3. `between` is valid only in
 context 1 and narrows those right-side records separately for each current
 row under R013.
 
@@ -219,7 +220,7 @@ generic argument bag whose contents drift between implementations. Nesting
 is allowed only where selecting or composing expressions is the field's
 purpose, so an operation cannot silently become a second expression
 language. The three aggregate contexts mirror the three grains the language
-already has -- a joined relation, a constructed partition, and a driver
+already has -- a joined relation, a constructed partition, and an input
 group -- and fixing order-term defaults in the rule keeps SQL engine
 disagreement about null placement from leaking into results. Comparability
 on runtime types means an ordering term compares one type by construction,
@@ -255,8 +256,8 @@ own value is `source`, and a window must not be a second spelling of it.
 **R007-45.** An aggregate declaring `between` outside the qualified dataset
 context: fail.
 
-**R007-46.** A grouped-row aggregate naming a dataset other than its row
-driver or declaring its own `group_by`: fail.
+**R007-46.** A grouped-row aggregate naming a dataset other than its
+row template's input dataset or declaring its own `group_by`: fail.
 
 **R007-47.** An `aggregate` expression that violates R013: fail.
 

@@ -34,8 +34,9 @@ right side.
 ## Rule
 
 **R003-4.** A qualified source referring to a dataset other than the
-current row driver performs an automatic left join during column
-derivation. The implementation must take each of the following steps:
+current row template's input dataset performs an automatic left
+join during column derivation. The implementation must take each
+of the following steps:
 
 1. **R003-5.** Apply any right-side reduction described below.
 2. **R003-6.** Select applicable keys in output `keys` order.
@@ -83,10 +84,10 @@ its right side.
 partition, R013 reduces its eligible records to one value, and that
 value is joined back without changing row count.
 
-**R003-18.** The qualifier may equal the current row driver: a scalar
-source then reads the current driver record, while an aggregate reads
-the driver relation. R007 registers the expression and R013 defines
-what it computes.
+**R003-18.** The qualifier may equal the current row template's
+input dataset: a scalar source then reads the current input
+record, while an aggregate reads the input dataset. R007 registers
+the expression and R013 defines what it computes.
 
 **R003-19.** Its optional `filter` selects which right-side records
 enter that reduction:
@@ -138,7 +139,7 @@ removes the narrowing.
 R013 defines the complete aggregate contract.
 
 **R003-29.** This is not `row.filter`. R001 makes an ungrouped row
-filter select driver records before row derivation and a grouped row
+filter select input records before row derivation and a grouped row
 filter select completed candidate groups; neither is a right-side
 reduction filter.
 
