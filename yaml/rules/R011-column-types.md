@@ -34,8 +34,8 @@ normalization policy of `str`.
 ## Three type namespaces
 
 **R011-1.** The word `type` appears in three roles, distinguished by position
-rather than by name. No value is shared between their vocabularies except by
-coincidence of spelling:
+rather than by name. The vocabularies share no value except coincidental
+spelling:
 
 - Schema descriptor keyword: `type` inside a descriptor, in a class field or
   a value type. Vocabulary: R006 type expressions over `str`, `int`,
@@ -114,12 +114,11 @@ verifications that skip missing values skip it under R009, and an artifact
 carries it as the missing value its profile writes under R020. No artifact
 or canonical value has an infinity or NaN spelling.
 
-**R011-16.** The policy is value-based rather than a universal text
-sentinel. An unquoted YAML scalar matching a core-schema non-finite form
-first resolves to a float and is therefore normalized; quoting the same
-characters preserves a `str`. A stored or quoted string remains text when
-its declared destination is `str`. Only numeric parsing gives such text a
-numeric meaning, as defined below.
+**R011-16.** The policy is value-based, not a universal text sentinel. An
+unquoted YAML scalar matching a core-schema non-finite form first resolves to a
+float and is normalized; quoting the same characters preserves a `str`. A
+stored or quoted string stays text when its declared destination is `str`. Only
+numeric parsing gives such text a numeric meaning, as defined below.
 
 **R011-17.** Normalization does not bypass a constraint that prohibits
 missing. For example, a project binding that returns a non-finite float has
@@ -128,10 +127,9 @@ contract declares `may_return_missing: true`.
 
 ## Conversion
 
-**R011-18.** Conversion applies the completed derivation result to the
-declared column type at the point R005 defines. Conversion is
-deterministic, and a conversion that is not defined below fails rather than
-producing a substitute value.
+**R011-18.** At the point R005 defines, conversion applies the completed
+derivation result to the declared column type. Conversion is deterministic, and
+a conversion not defined below fails rather than producing a substitute value.
 
 **R011-19.** A table row is the runtime type of the value being converted
 and a table column is the declared type:
