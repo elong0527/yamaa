@@ -1,0 +1,4 @@
+LLTCODE,LLTNAME,PTCODE,PTNAME,HLTCODE,HLTNAME,HLGTCODE,HLGTNAME,SOCCODE,SOCNAME,SECONDARY_SOCCODE,SECONDARY_SOCNAME
+90000001,Braxalgia,91000001,Braxalgia disorder,92000001,Braxalgia signs,93000001,Cephalic complaints,94000001,Nervax disorders,,
+90000002,Dermabraxia,91000002,Dermabraxia eruption,92000002,Cutaneous signs,93000002,Skin complaints,94000002,Dermax disorders,94000003,Immunoax disorders
+90000003,Qualmia,91000003,Qualmia episodes,92000003,Systemic signs,93000003,General complaints,94000003,Immunoax disorders,,

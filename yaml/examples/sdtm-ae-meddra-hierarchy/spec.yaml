@@ -1,0 +1,162 @@
+schema_version: "1.0"
+domain: AE
+datasets:
+  AE_RAW: input/ae_raw.csv
+  MEDDRA: input/meddra.csv
+base: AE_RAW
+keys: [STUDYID, USUBJID, AESEQ]
+
+output:
+  path: ae.csv
+  columns: [DOMAIN, STUDYID, USUBJID, AESEQ, AELLT, AELLTCD, AEDECOD,
+    AEPTCD, AEHLT, AEHLTCD, AEHLGT, AEHLGTCD, AEBODSYS, AEBODSCD]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: AE
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: AE_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: AE_RAW.USUBJID
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: AE_RAW.AESEQ
+
+  - name: AELLTCD
+    type: str
+    label: Reported Term Code Chosen by the Coder
+    derivation:
+      source: AE_RAW.AELLTCD
+
+  - name: AELLT
+    type: str
+    label: Lowest Level Term
+    derivation:
+      mapping_from:
+        source: AE_RAW.AELLTCD
+        dataset: MEDDRA
+        key: LLTCODE
+        value: LLTNAME
+        missing: NOT CODED
+        unmapped: NOT CODED
+
+  - name: AEDECOD
+    type: str
+    label: Dictionary-Derived Term
+    derivation:
+      mapping_from:
+        source: AE_RAW.AELLTCD
+        dataset: MEDDRA
+        key: LLTCODE
+        value: PTNAME
+        missing: NOT CODED
+        unmapped: NOT CODED
+
+  - name: AEPTCD
+    type: str
+    label: Preferred Term Code
+    derivation:
+      mapping_from:
+        source: AE_RAW.AELLTCD
+        dataset: MEDDRA
+        key: LLTCODE
+        value: PTCODE
+        missing: NOT CODED
+        unmapped: NOT CODED
+
+  - name: AEHLT
+    type: str
+    label: High Level Term
+    derivation:
+      mapping_from:
+        source: AE_RAW.AELLTCD
+        dataset: MEDDRA
+        key: LLTCODE
+        value: HLTNAME
+        missing: NOT CODED
+        unmapped: NOT CODED
+
+  - name: AEHLTCD
+    type: str
+    label: High Level Term Code
+    derivation:
+      mapping_from:
+        source: AE_RAW.AELLTCD
+        dataset: MEDDRA
+        key: LLTCODE
+        value: HLTCODE
+        missing: NOT CODED
+        unmapped: NOT CODED
+
+  - name: AEHLGT
+    type: str
+    label: High Level Group Term
+    derivation:
+      mapping_from:
+        source: AE_RAW.AELLTCD
+        dataset: MEDDRA
+        key: LLTCODE
+        value: HLGTNAME
+        missing: NOT CODED
+        unmapped: NOT CODED
+
+  - name: AEHLGTCD
+    type: str
+    label: High Level Group Term Code
+    derivation:
+      mapping_from:
+        source: AE_RAW.AELLTCD
+        dataset: MEDDRA
+        key: LLTCODE
+        value: HLGTCODE
+        missing: NOT CODED
+        unmapped: NOT CODED
+
+  - name: AEBODSYS
+    type: str
+    label: Body System or Organ Class
+    derivation:
+      mapping_from:
+        source: AE_RAW.AELLTCD
+        dataset: MEDDRA
+        key: LLTCODE
+        value: SOCNAME
+        missing: NOT CODED
+        unmapped: NOT CODED
+
+  - name: AEBODSCD
+    type: str
+    label: Body System or Organ Class Code
+    derivation:
+      mapping_from:
+        source: AE_RAW.AELLTCD
+        dataset: MEDDRA
+        key: LLTCODE
+        value: SOCCODE
+        missing: NOT CODED
+        unmapped: NOT CODED
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 5
+      max: 5
+  - all_or_none:
+      id: hierarchy-level-completeness
+      columns: [AEDECOD, AEPTCD, AEHLT, AEHLTCD, AEHLGT, AEHLGTCD,
+        AEBODSYS, AEBODSCD]
