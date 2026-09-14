@@ -12,17 +12,16 @@ applies_to: [root.datasets, root.base, row.dataset, row.group_by,
 ## Intent
 
 Bind source files, row templates' input datasets, and input variables
-without implicit same-name inference.
+without inferring same-named variables.
 
 ## Boundaries
 
-This rule owns dataset declaration and how a name resolves to a value. What
-happens when a qualified name reaches another dataset is R003. What happens
-when a bound name is absent or matches several records is R008. R014 owns
-what a stored field becomes before binding, including a missing field and
-the type the field carries. R019 owns the text a string value contains.
-R021 owns which files a declared path may reach and which bytes a run reads
-from the path.
+This rule owns dataset declarations and name resolution. R003 owns a
+qualified name that reaches another dataset. R008 owns an absent bound name or
+a bound name matching several records. R014 owns the value and type of a
+stored field before binding, including a missing field. R019 owns string
+contents. R021 owns the declared files a path may reach and the bytes a run
+reads from a path.
 
 ## Dataset declarations
 
@@ -34,9 +33,9 @@ source variables, and `mapping_from`.
 carry; R014 owns that reading and the shorthand between the two forms.
 
 **R002-3.** A declared path is a `project_path`. R021 fixes its written form,
-the approved root it resolves against, and what a run may read from it. R017
-preserves that origin when a declaration is inherited and rebases a relative
-path in a materialized resolved specification.
+approved root, and readable bytes. R017 preserves the path origin when a
+declaration is inherited. R017 rebases a relative path in a materialized
+resolved specification.
 
 **R002-4.** Every referenced dataset identifier must exist in `datasets`.
 
