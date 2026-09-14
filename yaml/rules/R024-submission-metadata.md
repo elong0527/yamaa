@@ -11,12 +11,10 @@ applies_to: [root.submission, column.submission, submission_dataset_class,
 
 ## Intent
 
-Give a dataset and every column it declares one closed, typed place to carry
-the metadata a submission document represents: what the dataset is, what each
-column means, how long its values may be, where its values came from, and what
-algorithm produced them. Close the vocabularies, state which combinations each
-standard admits, and fix what the derivation graph may refute so a declared
-provenance is checked rather than believed.
+Give a dataset and each declared column one closed, typed place for submission
+metadata. This metadata says what the dataset and column are, value length,
+value source, and producing algorithm. This rule closes vocabularies, states
+standard-specific combinations, and says what the derivation graph may refute.
 
 ## Boundaries
 
@@ -51,10 +49,10 @@ carries. An internal column is not in the artifact, so it is not in the
 document that describes the artifact, and declaring metadata for one is an
 error rather than an ignored declaration.
 
-**R024-3.** The free-form `metadata` map keeps its purpose. It remains
-uninterpreted annotation, and no field below is read from it. A study that
-carried governed facts in that map moves them here; the two are not merged and
-the map is never a fallback.
+**R024-3.** The free-form `metadata` map remains uninterpreted annotation. No
+field below is read from the map. A study moves governed facts from the map to
+this rule. The map and submission metadata are not merged. The map is never a
+fallback.
 
 **R024-4.** The map must not carry a key this rule governs. Root `metadata`
 rejects every field name of the dataset object above, and a column's
@@ -131,19 +129,23 @@ closed set:
 
 | Declared type | Default | Also admits |
 |---|---|---|
-| `str` | `text` | `date`, `datetime`, `time`, `partialDate`, `partialTime`, `partialDatetime`, `incompleteDate`, `incompleteTime`, `incompleteDatetime`, `durationDatetime`, `intervalDatetime`, `URI` |
+| `str` | `text` | types listed below |
 | `int` | `integer` | none |
 | `float` | `float` | none |
 | `date` | `date` | none |
 | `datetime` | `datetime` | none |
 
-**R024-15.** A `str` column admits the temporal submission types because a
-submission carries a partial or incomplete date as text, which R016 does not
-admit as a `date` or a `datetime`. The two temporal column types admit only
-their own submission type, because R016 defines each as a complete value and
-the submission types of the same name mean the same thing. A number's
-submission type is fixed, because R011 already decided whether the column
-holds an integer or a binary64.
+For `str`, the other admitted types are `date`, `datetime`, `time`,
+`partialDate`, `partialTime`, `partialDatetime`, `incompleteDate`,
+`incompleteTime`, `incompleteDatetime`, `durationDatetime`,
+`intervalDatetime`, and `URI`.
+
+**R024-15.** A `str` column admits temporal submission types because a
+submission carries a partial or incomplete date as text. R016 does not admit
+those values as `date` or `datetime`. The two temporal column types admit only
+their matching submission type because R016 defines each as a complete value.
+A number's submission type is fixed because R011 already decides whether the
+column holds an integer or binary64.
 
 **R024-16.** `data_type` never changes a value. It states how a value R011
 already typed is represented in the document, and no derivation, verification,
@@ -170,11 +172,11 @@ values must contain at most `length` R019 scalar values, which is exactly what
 R009's `max_length` requires, so the declared length is the constraint rather
 than a note beside one.
 
-**R024-21.** On a `str` column carrying a `max_length` verification, `length`
-is derived from that verification's `max` and need not be declared. The two
-state one bound, and stating it twice only creates a way for them to disagree.
-Declaring both is accepted when they are equal and rejected when they differ,
-and the bound is checked once either way.
+**R024-21.** On a `str` column with a `max_length` verification, `length` is
+derived from the verification's `max` and need not be declared. The two state
+one bound. Stating the bound twice can make the values disagree. Declaring both
+is accepted when they are equal and rejected when they differ. The bound is
+checked once either way.
 
 **R024-22.** A `length` declared on any other column type is not enforced.
 R009 states why: the text a number or a temporal value renders as is a
@@ -283,10 +285,10 @@ form it was collected on. A column whose `origin.type` is `Collected` with a
 study's annotated case report form, and R026 rejects a reference to any other
 document there.
 
-**R024-40.** That reference is derived when `documents` is omitted, because
-the annotated case report form is the only document it could name. A column
-declares `documents` to say where in that form the value was collected;
-omitting it leaves the reference without a page.
+**R024-40.** The reference is derived when `documents` is omitted because the
+annotated case report form is the only document it can name. A column declares
+`documents` to say where in the form the value was collected. Omitting
+`documents` leaves the reference without a page.
 
 **R024-41.** A column whose `origin.type` is `Derived` must declare `method`.
 The algorithm is what a derived origin claims exists, and a claim with no
@@ -294,13 +296,12 @@ algorithm beside it is not traceable.
 
 ### What the graph refutes
 
-**R024-42.** The derivation graph R001 builds proves some facts about a
-column's value, and a declared origin that contradicts a proven fact is
-rejected. The graph never supplies an origin. It cannot distinguish a value an
-investigator recorded from one a vendor transmitted or one a protocol fixed,
-and a design that guessed between them would put an unverifiable claim into a
-submission document. Origin is therefore always declared and sometimes
-refuted, never inferred.
+**R024-42.** The R001 derivation graph proves some facts about a column value.
+A declared origin that contradicts a proven fact is rejected. The graph never
+supplies an origin. The graph cannot distinguish an investigator-recorded
+value from a vendor-transmitted or protocol-fixed value. Guessing would put an
+unverifiable claim in a submission document. Origin is always declared and
+sometimes refuted, never inferred.
 
 **R024-43.** A column whose derivation is anything other than a bare `source`
 or a bare `literal` computes its value from other values. Its `origin.type`
