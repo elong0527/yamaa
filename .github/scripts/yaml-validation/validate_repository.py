@@ -4051,26 +4051,32 @@ def validate_spec_names(spec, spec_label):
             output_names = set(output_columns)
             for index, key in enumerate(keys):
                 if isinstance(key, str) and key not in output_names:
-                    for path in (f"keys[{index}]", 'output.columns'):
-                        errors.append(
-                            validation_diagnostic(
-                                f"{spec_label}.{path}",
-                                'internal_column_in_keys',
-                                f"key column {key!r} is not in "
-                                'output.columns',
-                                context={'column': key},
-                            )
+                    errors.append(
+                        validation_diagnostic(
+                            f"{spec_label}.keys[{index}]",
+                            'internal_column_in_keys',
+                            f"key column {key!r} is not in output.columns",
+                            context={'column': key},
                         )
+                    )
 
     order_by = output.get('order_by') if isinstance(output, dict) else None
     if isinstance(order_by, list):
-        order_variables = []
+        order_variables = set()
         for index, term in enumerate(order_by):
             variable = order_term_variable(term)
             if variable is None:
                 continue
-            order_variables.append(variable)
-            if variable not in declared_columns:
+            if variable in order_variables:
+                errors.append(
+                    validation_diagnostic(
+                        f"{spec_label}.output.order_by[{index}]",
+                        'duplicate_order_term',
+                        f"duplicate order term {variable!r}",
+                        context={'column': variable},
+                    )
+                )
+            elif variable not in declared_columns:
                 errors.append(
                     validation_diagnostic(
                         f"{spec_label}.output.order_by[{index}]",
@@ -4079,16 +4085,7 @@ def validate_spec_names(spec, spec_label):
                         context={'column': variable},
                     )
                 )
-        for variable in sorted(set(order_variables)):
-            if order_variables.count(variable) > 1:
-                errors.append(
-                    validation_diagnostic(
-                        f"{spec_label}.output.order_by",
-                        'duplicate_order_term',
-                        f"duplicate order term {variable!r}",
-                        context={'column': variable},
-                    )
-                )
+            order_variables.add(variable)
 
     rows = spec.get('rows')
     if isinstance(rows, list):
@@ -5958,7 +5955,9 @@ def validate_aggregate_at(payload, path, context):
         expression = payload.get('expr')
         group_by = payload.get('group_by')
         between = payload.get('between')
-        expression_path = f"{path}.expr"
+        expression_path = (
+            path if set(payload) == {'expr'} else f"{path}.expr"
+        )
     else:
         return []
     if not isinstance(expression, str):

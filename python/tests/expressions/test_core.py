@@ -147,6 +147,7 @@ def test_mapping_detects_ascii_fold_collisions() -> None:
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "ambiguous_dictionary"
+    assert result.condition.path_suffix == "dict"
 
 
 def test_mapping_validates_dictionary_before_resolving_its_source() -> None:

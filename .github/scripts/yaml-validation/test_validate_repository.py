@@ -593,9 +593,11 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
         self.assertEqual(
             ungrouped[0].condition, 'aggregate_identifier_not_grouped'
         )
+        self.assertEqual(ungrouped[0].path, path)
         self.assertEqual(
             non_numeric[0].condition, 'incompatible_input_type'
         )
+        self.assertEqual(non_numeric[0].path, f'{path}.expr')
         self.assertEqual(
             wrong_row_context[0].condition, 'invalid_aggregate_context'
         )
@@ -2809,6 +2811,27 @@ class TestSpecNames(unittest.TestCase):
 
         self.assertIn("at least one key column", "\n".join(errors))
 
+    def test_an_internal_key_names_only_its_key_entry(self):
+        spec = {
+            'domain': 'ADSL',
+            'datasets': {'DM': 'dm.csv'},
+            'keys': ['USUBJID', 'SITEID'],
+            'output': {'columns': ['USUBJID']},
+            'columns': [{'name': 'USUBJID'}, {'name': 'SITEID'}],
+        }
+
+        errors = VALIDATOR.validate_spec_names(spec, 'example/spec.yaml')
+
+        diagnostics = [
+            error for error in errors
+            if isinstance(error, VALIDATOR.ValidationDiagnostic)
+            and error.condition == 'internal_column_in_keys'
+        ]
+        self.assertEqual(
+            [error.path for error in diagnostics],
+            ['example/spec.yaml.keys[1]'],
+        )
+
     def test_rejects_non_scalar_output_columns_without_crashing(self):
         for value, expected_type in (({}, 'dict'), ([], 'list')):
             with self.subTest(value=expected_type):
@@ -2879,7 +2902,9 @@ class TestSpecNames(unittest.TestCase):
         errors = VALIDATOR.validate_spec_names(spec, "example/spec.yaml")
 
         message = "\n".join(errors)
-        self.assertIn("output.order_by: duplicate order term 'USUBJID'", message)
+        self.assertIn(
+            "output.order_by[1]: duplicate order term 'USUBJID'", message
+        )
         self.assertIn(
             "output.order_by[2]: undeclared column 'DM.USUBJID'", message
         )

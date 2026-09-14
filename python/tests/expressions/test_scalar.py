@@ -184,6 +184,17 @@ def test_a_branch_predicate_outside_the_grammar_names_its_branch() -> None:
     assert result.condition.path_suffix == "branches[0].when"
 
 
+def test_a_branch_predicate_failure_names_its_branch() -> None:
+    result = _evaluate(
+        _case([{"when": "D = '2025-01-01'", "then": {"literal": "y"}}]),
+        {"D": DateValue.parse("2025-01-01")},
+    )
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "incompatible_input_type"
+    assert result.condition.path_suffix == "branches[0].when"
+
+
 def test_an_unsupported_nested_operation_does_not_bypass_validation() -> None:
     result = _evaluate(
         _case([{"when": "TRUE", "then": {"function": {"name": "f", "args": ["A"]}}}]),

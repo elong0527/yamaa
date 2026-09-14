@@ -443,6 +443,7 @@ def _fail(
     context: dict[str, JsonValue],
     *,
     phase: ConditionPhase = "derivation",
+    path_suffix: str | None = None,
 ) -> _ReductionFailure:
     return _ReductionFailure(
         ConditionResult(
@@ -451,6 +452,7 @@ def _fail(
                 condition=condition,
                 context=context,
                 requirement=requirement,
+                path_suffix=path_suffix,
             )
         )
     )
@@ -487,7 +489,7 @@ def _arithmetic(
         MappingResolver({"left": left, "right": right}),
     )
     if isinstance(result, ConditionResult):
-        raise _ReductionFailure(result)
+        raise _ReductionFailure(_at_expression(result))
     assert isinstance(result, ValueResult)
     return result.value
 
@@ -512,6 +514,7 @@ def _numeric_or_fail(
             "actual": runtime_type_name(value),
         },
         phase="validation",
+        path_suffix="expr",
     )
 
 
@@ -547,6 +550,7 @@ def _extreme(
                 ),
             },
             phase="validation",
+            path_suffix="expr",
         )
     chooser = max if largest else min
     return chooser(values, key=_ordering_key)  # type: ignore[return-value]
@@ -572,15 +576,16 @@ def _argument_value(
                 "R013-41",
                 {"expr": expr, "identifier": name},
                 phase="validation",
+                path_suffix="expr",
             )
         normalized = normalize_runtime_value(record[name])
         if isinstance(normalized, ConditionResult):
-            raise _ReductionFailure(normalized)
+            raise _ReductionFailure(_at_expression(normalized))
         assert isinstance(normalized, ValueResult)
         return normalized.value
     result = evaluate_numeric(argument, expr, MappingResolver(dict(record)))
     if isinstance(result, ConditionResult):
-        raise _ReductionFailure(result)
+        raise _ReductionFailure(_at_expression(result))
     assert isinstance(result, ValueResult)
     return result.value
 
@@ -705,7 +710,19 @@ def evaluate_aggregate(
     # every reduction and grouped identifier in it must be too, which is
     # exactly what R010's evaluator already requires of an identifier.
     values: dict[str, object] = {**dict(grouped or {}), **reductions}
-    return evaluate_numeric(_substituted(ast), expr, MappingResolver(values))
+    result = evaluate_numeric(_substituted(ast), expr, MappingResolver(values))
+    if isinstance(result, ConditionResult):
+        return _at_expression(result)
+    return result
+
+
+def _at_expression(result: ConditionResult) -> ConditionResult:
+    """Anchor a reduction failure to the aggregate expression field."""
+    suffix = result.condition.path_suffix
+    path_suffix = "expr" if suffix is None else f"expr.{suffix}"
+    return ConditionResult(
+        condition=result.condition.model_copy(update={"path_suffix": path_suffix})
+    )
 
 
 def aggregate_handlers() -> dict[str, ExpressionHandler]:

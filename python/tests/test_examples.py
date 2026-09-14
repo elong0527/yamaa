@@ -28,6 +28,13 @@ KNOWN_REQUIREMENT_GAPS = {
     "negative-function-contract-mismatch": ("R018-38", None),
 }
 
+KNOWN_SPEC_PATH_GAPS = {
+    "negative-function-contract-mismatch": (
+        ("columns.RESULT.derivation.function.contract_version",),
+        None,
+    ),
+}
+
 
 def positive_runners() -> tuple[Path, ...]:
     return tuple(
@@ -90,6 +97,19 @@ def test_producer_schema_without_workflow_is_unsupported() -> None:
         },
     )
     assert result.handler_counts == ()
+
+
+def test_negative_example_spec_paths_match_committed_contracts() -> None:
+    mismatches = {}
+    for contract_path in negative_contracts():
+        contract = read_yaml_document(contract_path)
+        assert isinstance(contract, dict)
+        diagnostic = _negative_diagnostic(contract_path.parents[1])
+        actual = diagnostic.spec_paths if diagnostic is not None else None
+        expected = tuple(contract["spec_paths"])
+        if actual != expected:
+            mismatches[contract_path.parents[1].name] = (expected, actual)
+    assert mismatches == KNOWN_SPEC_PATH_GAPS
 
 
 @pytest.mark.parametrize(

@@ -173,6 +173,25 @@ def _condition_diagnostic(
     )
 
 
+def _condition_at_operation(
+    condition: RuntimeCondition,
+    expression: Expression,
+) -> RuntimeCondition:
+    """Keep normalized scalar shorthand from inventing a child path."""
+    payload = expression.root[expression.operation]
+    suffix = condition.path_suffix
+    if (
+        expression.operation == "aggregate"
+        and isinstance(payload, Mapping)
+        and set(payload) == {"expr"}
+        and suffix is not None
+        and (suffix == "expr" or suffix.startswith("expr."))
+    ):
+        remainder = suffix.removeprefix("expr").removeprefix(".")
+        return condition.model_copy(update={"path_suffix": remainder or None})
+    return condition
+
+
 def _value_or_raise(
     result: ValueResult | ConditionResult | UnsupportedResult,
     path: str,
@@ -189,7 +208,10 @@ def _value_or_raise(
         )
     if isinstance(result, ConditionResult):
         raise LifecycleCondition(
-            _condition_diagnostic(result.condition, operation_path)
+            _condition_diagnostic(
+                _condition_at_operation(result.condition, expression),
+                operation_path,
+            )
         )
     counter.record_expression(path, expression, result)
     return result.value
@@ -227,7 +249,10 @@ def evaluate_derivation(
     if isinstance(converted, ConditionResult):
         if "conversion_failure" not in declaration.model_fields_set:
             raise LifecycleCondition(
-                _condition_diagnostic(converted.condition, planned.expression_path)
+                _condition_diagnostic(
+                    converted.condition,
+                    f"columns.{planned.column}",
+                )
             )
         handler_path = f"{planned.path}.conversion_failure"
         counter.increment(handler_path, "conversion_failure")

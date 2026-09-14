@@ -79,6 +79,7 @@ def test_a_later_column_reference_is_not_silently_sorted() -> None:
 
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "dependency_order"
+    assert diagnostic.spec_paths == ("columns.A.derivation.source",)
     assert diagnostic.context == {"column": "A", "dependency": "B"}
 
 
@@ -95,6 +96,10 @@ def test_a_column_cycle_is_reported_as_a_cycle_not_an_ordering_repair() -> None:
 
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "dependency_cycle"
+    assert diagnostic.spec_paths == (
+        "columns.A.derivation.source",
+        "columns.B.derivation.source",
+    )
     assert diagnostic.context == {"cycle": ["A", "B", "A"]}
 
 
@@ -545,11 +550,11 @@ def test_a_grouped_row_aggregate_declares_no_grain_of_its_own() -> None:
     assert raised.value.diagnostics[0].condition == "invalid_aggregate_context"
 
 
-def test_an_expression_outside_the_reducer_grammar_names_its_field() -> None:
+def test_a_one_field_aggregate_names_the_shared_shorthand_operation() -> None:
     diagnostic = aggregate_diagnostic({"expr": "AVG(RIGHT.V)"})
 
     assert diagnostic.condition == "prohibited_function"
-    assert diagnostic.spec_paths == ("columns.V.derivation.aggregate.expr",)
+    assert diagnostic.spec_paths == ("columns.V.derivation.aggregate",)
 
 
 def test_a_record_lookup_may_be_read_from_a_numeric_expression() -> None:

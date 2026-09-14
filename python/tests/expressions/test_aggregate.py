@@ -168,6 +168,7 @@ def test_only_rejects_a_group_of_several_records_rather_than_choosing() -> None:
 
     assert condition.condition.condition == "aggregate_multiple_records"
     assert condition.condition.requirement == "R013-36"
+    assert condition.condition.path_suffix is None
     assert condition.condition.context["record_count"] == 2
     assert condition.condition.context["reducer"] == "ONLY"
 
@@ -262,6 +263,7 @@ def test_sum_over_a_non_numeric_argument_fails() -> None:
 
     assert condition.condition.condition == "incompatible_input_type"
     assert condition.condition.requirement == "R013-45"
+    assert condition.condition.path_suffix == "expr"
     assert condition.condition.context["actual"] == "str"
 
 

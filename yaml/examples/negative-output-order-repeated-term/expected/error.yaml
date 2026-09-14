@@ -1,7 +1,7 @@
 phase: validation
 condition: duplicate_order_term
 spec_paths:
-  - output.order_by
+  - output.order_by[2]
 requirement: R005-49
 context:
   column: USUBJID
