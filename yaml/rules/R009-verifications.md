@@ -26,11 +26,10 @@ scalar counting. R005 owns whether the primary artifact is complete and
 publication-eligible, and R020 owns the containers and publication of both it
 and the violation log.
 
-Verifications reach across rows only in fixed ways, deliberately. `unique` and
-`row_count` ask one question about the output as a whole, and `row_count` asks
-it once per group when it declares one; `all_or_none`, `implies`, and
-`predicate` see one completed output row at a time. None of them compares rows
-in an order.
+Verifications reach across rows only in deliberately fixed ways. `unique` and
+`row_count` ask one question about the full output. A grouped `row_count` asks
+one question per group. `all_or_none`, `implies`, and `predicate` see one
+completed output row. No verification compares rows by order.
 
 ## An ordered frame is not a shape this rule has
 
