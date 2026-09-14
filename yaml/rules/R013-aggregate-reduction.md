@@ -122,8 +122,8 @@ number     := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
 `grammar/aggregate.yaml` is this grammar's single source. The block above is its
 rendering, its vocabulary closes the reducer table below, and its cases record
 the text every implementation must accept or reject, the identifiers an accepted
-text binds, and the parse it produces. Repository validation and the R
-implementation both read that file, so no transcription of this grammar can
+text binds, and the parse it produces. Both repository validation and the R
+implementation read that file, so no transcription of this grammar can
 drift from it without failing.
 
 **R013-11.** Precedence, associativity, and the permitted `function` names are
@@ -144,9 +144,9 @@ are not.
 
 **R013-13.** Any other reducer name, any window function or `OVER`, any
 subquery, any `CASE`, any comparison or Boolean operator, any string literal,
-and any host-language call are validation errors. Closing the vocabulary is what
-makes portability checkable; widening it requires amending this table, and that
-amendment is the whole cost of a new reduction.
+and any host-language call are validation errors. Closing the vocabulary
+makes portability checkable; widening it requires amending this table, the
+whole cost of a new reduction.
 
 **R013-14.** For a group with at least one non-missing value, `MEAN(x)` is
 evaluated as `SUM(x) / COUNT(x)` under this rule's `SUM` semantics and R010's
@@ -222,8 +222,8 @@ other expression. No implicit conversion happens inside this grammar.
 record whose operand is missing contributes a missing value rather than a zero:
 `SUM(EX.EXDOSE * EX.EXDUR)` skips a record missing either factor.
 
-**R013-27.** A reduction then ignores missing values. What remains is pinned
-here, because the three runtimes this design targets disagree:
+**R013-27.** A reduction then ignores missing values; the table pins the
+rest, because the three target runtimes disagree:
 
 | Condition | Result |
 |---|---|
@@ -258,7 +258,7 @@ would fit.
 
 ## Determinism
 
-**R013-32.** Evaluation must be deterministic and free of side effects, and R
+**R013-32.** Evaluation must be deterministic and side-effect free, and R
 and Python must produce identical results for every example. R010's determinism
 requirements apply unchanged, including that an implementation must not
 reassociate or algebraically simplify a written expression.

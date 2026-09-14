@@ -21,8 +21,8 @@ applies_to:
 Define the two temporal values this design admits, `date` and `datetime`: what
 each denotes, how much of it a study collected, the text it is read from and
 written back to, how two of them order, which operations read them, and what
-fails. R and Python must produce the same value, the same collected precision,
-the same order, the same output text, and the same failures from the same input.
+fails. R and Python must produce the same value, collected precision,
+order, output text, and failures from the same input.
 
 ## Boundaries
 
@@ -75,7 +75,7 @@ and no offset.
 moment, and every day or civil moment in range has one combination of fields.
 Both value spaces are total and gapless.
 
-**R016-6.** Every value is complete, and every value records how much of it was
+**R016-6.** Every value is complete and records how much of it was
 collected.** A value is complete or it is not a value of the type, so a
 truncated collected value stays text until something completes it; *Partial
 collected dates* below defines the one completion this design offers. Beside its
@@ -124,7 +124,7 @@ half of both types, so a date parses identically wherever it appears.
 either form permits. Nothing else is defaulted, no sign or surrounding
 whitespace is accepted, and no other separator or field order is recognised.
 
-**R016-14.** Rejecting everything else is what makes two implementations agree.
+**R016-14.** Rejecting everything else makes two implementations agree.
 Each runtime's own parser accepts a wider and a different set: a space
 separator, a lowercase `t`, a bare date read as a moment, and a trailing `Z` are
 each read by one of them and not the other, so a rule admitting whatever a
@@ -286,8 +286,8 @@ predicate the day satisfies. Every pair of non-missing values of one type stays
 ordered, which is what keeps an `order_by` term total and R007's comparability
 argument intact.
 
-**R016-36.** This is a decision and not an omission, and it is the one the
-imputed value itself forces. A completed date names a day: that is what
+**R016-36.** This is a decision the imputed value forces, not an omission.
+A completed date names a day: that is what
 completing it did. An imputed operand that lost a comparison would have to
 denote something else -- the interval its collected components still admit, or a
 day carrying a rank against collected ones -- and either is a different value
