@@ -227,6 +227,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`sdtm-ae-seriousness-criteria`](sdtm-ae-seriousness-criteria/) | mark serious events from collected seriousness criteria |
 | [`sdtm-dm-arm-assignment`](sdtm-dm-arm-assignment/) | assign planned and actual arms |
 | [`sdtm-dm-basic`](sdtm-dm-basic/) | build one subject record from collected data |
+| [`sdtm-dm-death`](sdtm-dm-death/) | derive death date and flag from disposition and adverse events |
 | [`sdtm-dm-metadata-contract`](sdtm-dm-metadata-contract/) | declare the metadata a submission needs |
 | [`sdtm-dm-reference-dates`](sdtm-dm-reference-dates/) | derive the reference dates from EX, DS, and AE |
 | [`sdtm-ds-disposition-sequence`](sdtm-ds-disposition-sequence/) | number each subject's disposition records in date order |

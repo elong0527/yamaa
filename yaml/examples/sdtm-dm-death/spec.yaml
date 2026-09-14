@@ -1,0 +1,96 @@
+schema_version: "1.0"
+domain: DM
+datasets:
+  DM_RAW: input/dm_raw.csv
+  DS: input/ds.csv
+  AE: input/ae.csv
+base: DM_RAW
+keys: [STUDYID, USUBJID]
+
+record_lookups:
+  - id: DTHDS
+    dataset: DS
+    source: [STUDYID, USUBJID]
+    key: [STUDYID, USUBJID]
+    filter: "DS.DSDECOD = 'DEATH'"
+    order_by: [DS.DSSTDTC]
+    keep: last
+    unmatched: missing
+  - id: DTHAE
+    dataset: AE
+    source: [STUDYID, USUBJID]
+    key: [STUDYID, USUBJID]
+    filter: "AE.AEOUT = 'FATAL'"
+    order_by: [AE.AEENDTC]
+    keep: last
+    unmatched: missing
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, DTHDTC, DTHFL]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: DM
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: DM_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: DM_RAW.USUBJID
+
+  - name: DSDTHDT
+    type: date
+    label: Death Date from Disposition
+    derivation:
+      source: DTHDS.DSSTDTC
+
+  - name: AEDTHDT
+    type: date
+    label: Death Date from Fatal Adverse Event
+    derivation:
+      source: DTHAE.AEENDTC
+
+  - name: DTHDTC
+    type: date
+    label: Date/Time of Death
+    derivation:
+      coalesce:
+        sources: [DSDTHDT, AEDTHDT]
+
+  - name: DTHFL
+    type: str
+    label: Subject Death Flag
+    derivation:
+      case:
+        branches:
+          - when: "DSDTHDT IS NOT NULL OR AEDTHDT IS NOT NULL"
+            then:
+              literal: Y
+    verifications:
+      allowed_values:
+        values: [Y]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 5
+      max: 5
+  - implies:
+      id: death-date-marks-flag
+      when: "DTHDTC IS NOT NULL"
+      then: "DTHFL = 'Y'"
+  - implies:
+      id: flag-needs-date
+      when: "DTHFL = 'Y'"
+      then: "DTHDTC IS NOT NULL"
