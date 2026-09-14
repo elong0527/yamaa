@@ -63,8 +63,8 @@ when the variable exists and holds a missing value.
 **R008-6.** `unmapped`, `no_match`, and `invalid` fire only when every
 input is present.
 
-**R008-7.** Which values an operation cannot use is its owning rule's to
-state; R016 states it for the two operations on the `impute` stage.
+**R008-7.** The owning rule states which values an operation cannot use.
+R016 states them for the two operations on the `impute` stage.
 
 **R008-8.** One stage name serves several operations when their
 conditions coincide. `date_impute` and `date_precision` read the same
@@ -72,8 +72,8 @@ source and answer the same two conditions about it, so both use
 `impute` in structured errors.
 
 **R008-9.** Where an operation takes several inputs, as `mapping_from`
-does, `missing` fires when any one of them is missing and the
-present-but-unusable handler fires only when all of them are present.
+does, `missing` fires when any one input is missing. The
+present-but-unusable handler fires only when all inputs are present.
 
 ## Source handlers
 
@@ -88,7 +88,7 @@ source:
 ```
 
 **R008-11.** Other expressions type their `source` as a plain `variable`
-and declare their own handler fields alongside it, so they take the
+and declare their own handler fields alongside it. They take the
 concise form only.
 
 **R008-12.** `multiple_matches` relaxes R003 right-side uniqueness.
@@ -108,8 +108,8 @@ one match survived the filter.
 **R008-16.** An aggregate declares no handler at all. A variable it
 names that does not exist is R002's unresolved reference, a right side
 that reduces to no matching record is R003's absent match, and a group
-whose records all hold missing values is neither condition: R013 states
-what each reducer returns there.
+whose records all hold missing values is neither condition. R013 states
+what each reducer returns for such a group.
 
 ## Result handlers
 
@@ -142,8 +142,8 @@ not an error.
 
 A value with no dictionary entry, a string the pattern does not match,
 and a source an operation cannot use are each a different defect from
-an uncollected value, and a specification may answer them differently;
-that is why the present-but-unusable handlers fire only when every
+an uncollected value, and a specification may answer each defect
+differently, so the present-but-unusable handlers fire only when every
 input is present. With several inputs the two conditions stay disjoint,
 so an incomplete key can never reach the second handler. Filtering to
 no surviving record is an ordinary absent match rather than a handled
