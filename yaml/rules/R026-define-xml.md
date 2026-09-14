@@ -10,10 +10,9 @@ applies_to: [define_class, define.datasets, define.standards, define.documents,
 
 ## Intent
 
-Compose several resolved specifications and the metadata they carry into one
-Define-XML 2.1 document: select the datasets, resolve the names their
-submission metadata uses, construct every identifier, fix every element and
-attribute and the order they appear in, and write the exact bytes. Two
+Compose resolved specifications and their metadata into one Define-XML 2.1
+document. Select datasets, resolve submission-metadata names, construct
+identifiers, fix element and attribute order, and write exact bytes. Two
 implementations given the same inputs produce the same file.
 
 ## Boundaries
@@ -246,7 +245,7 @@ document reference on such an origin that names any other document fails.
 |---|---|
 | `OID` | generated |
 | `Name` | the entry's `id` |
-| `Domain` | `submission.domain`, defaulting to the specification's `domain`; omitted for the `adam` family |
+| `Domain` | `submission.domain`, default `domain`; omit for `adam` |
 | `Purpose` | `Tabulation` for `sdtm` and `send`, `Analysis` for `adam` |
 | `SASDatasetName` | the entry's `id`, when R026-44 admits it |
 | `Repeating` | `Yes` when `submission.repeating`, else `No` |
@@ -261,9 +260,8 @@ document reference on such an origin that names any other document fails.
 | `def:Class` | `submission.class`, with `def:SubClass` when declared |
 | `def:leaf` | the artifact, per R026-29 |
 
-**R026-28.** `Purpose` is derived rather than declared. It is a function of the
-family alone, and a declared value could only agree with the derivation or
-contradict it.
+**R026-28.** `Purpose` is derived from the family rather than declared. A
+declared value could only agree with or contradict the derivation.
 
 **R026-29.** The dataset's `def:leaf` names the artifact its specification
 produces. `xlink:href` is the specification's `output.path` expressed relative
@@ -291,9 +289,9 @@ which states why a planned dataset holds no records.
 | `ItemOID` | the column's generated identifier |
 | `OrderNumber` | the column's one-based position in `output.columns` |
 | `Mandatory` | `Yes` when R024's mandatory resolution is true, else `No` |
-| `KeySequence` | the column's one-based position in `keys`, omitted when it is not a key |
+| `KeySequence` | one-based position in `keys`; omit when not a key |
 | `Role` | `submission.role`, when declared |
-| `MethodOID` | the column's generated method identifier, when `submission.method` is declared |
+| `MethodOID` | generated method identifier; omit without `submission.method` |
 
 **R026-33.** `OrderNumber` is written for every `ItemRef` of a container or for
 none of them, and this rule writes it for every one. Define-XML makes the
@@ -381,11 +379,10 @@ and R025 as much as to this rule.
 
 ### Transport names
 
-**R026-44.** `SASDatasetName` and `SASFieldName` are written when the name
-they carry is at most eight characters and matches
-`^[A-Za-z_][A-Za-z0-9_]*$`, which is the form the transport admits. A longer
-name is omitted, and under `Submission` it fails instead. Define-XML carries a
-long name through an `Alias` element, which R026-49 defers.
+**R026-44.** `SASDatasetName` and `SASFieldName` are written only for names of
+at most eight characters matching `^[A-Za-z_][A-Za-z0-9_]*$`. Longer names are
+omitted and fail under `Submission`. Define-XML carries a long name in an
+`Alias` element, which R026-49 defers.
 
 ## Requirements a submission context adds
 
@@ -471,14 +468,17 @@ specification that tries to declare one is rejected as an unknown field rather
 than generating a document that quietly omits it. That closure is the refusal:
 a construct is either declared and generated, or has nowhere to be written.
 
-| Construct | Re-entry trigger |
-|---|---|
-| `def:ValueListDef`, `def:WhereClauseDef`, value-level `def:Origin` | a row-template expansion that lets one specification declare per-value metadata over a `--TESTCD`-style column |
-| `arm:AnalysisResultDisplays` | an analysis-results metadata design |
-| Split datasets and their `Alias` domain description | a specification construct that produces one dataset in several files |
-| `def:IsNonStandard` on a dataset or column | a conformance-profile rule that owns what non-standard means |
-| A comment on a standard, a codelist, or the metadata version | a shared comment identifier space |
-| Multiple `def:Origin` elements on one column | the value-level metadata above, which is how Define-XML expresses several provenances |
+- `def:ValueListDef`, `def:WhereClauseDef`, and value-level `def:Origin`:
+  a row-template expansion for per-value `--TESTCD`-style column metadata
+- `arm:AnalysisResultDisplays`: an analysis-results metadata design
+- Split datasets and their `Alias` domain description: a specification that
+  produces one dataset in several files
+- `def:IsNonStandard` on a dataset or column: a conformance-profile rule
+  defining non-standard
+- A comment on a standard, codelist, or metadata version: a shared comment
+  identifier space
+- Multiple `def:Origin` elements on one column: value-level metadata, which
+  is how Define-XML expresses several provenances
 
 **R026-54.** Two further constructs have a declaration but no generation, and
 each is stated rather than silently dropped. An `Alias` carrying a transport

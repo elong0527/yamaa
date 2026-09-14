@@ -11,8 +11,8 @@ applies_to: [root.base, root.rows, row.dataset, row.group_by, row.filter,
 
 ## Intent
 
-Define the explicit, reviewable dependency order for evaluating output
-rows, columns, and derivation expressions.
+Define the explicit dependency order for evaluating output rows, columns, and
+derivation expressions.
 
 ## Boundaries
 
