@@ -38,7 +38,8 @@ coverage:
   verify:all_or_none: [negative-all-or-none-partial-row]
   verify:allowed_values: [negative-allowed-values-mismatch]
   verify:implies: [negative-adam-adeg-pre-existing-rrr]
-  verify:matches: [negative-matches-unreadable-pattern]
+  verify:matches: [negative-matches-unreadable-pattern,
+    negative-sex-code-pattern-mismatch]
   verify:max_length: [negative-usubjid-exceeds-length]
   verify:not_missing: [negative-not-missing-absent-age]
   verify:predicate: [negative-adam-adsl-stratification-reconciliation]
