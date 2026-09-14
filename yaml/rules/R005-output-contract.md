@@ -1,7 +1,7 @@
 ---
 id: R005
 title: Output Contract
-status: normative
+status: production
 applies_to: [root.keys, root.output, output.violation_log, root.columns,
   column.type, row.derivations, derivation]
 ---

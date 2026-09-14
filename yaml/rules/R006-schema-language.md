@@ -1,7 +1,7 @@
 ---
 id: R006
 title: Compact Schema Language
-status: normative
+status: production
 applies_to: [schema, root.schema_version, environment.schema_version]
 
 ---

@@ -1,7 +1,7 @@
 ---
 id: R003
 title: Cross-Dataset Left Join
-status: normative
+status: production
 applies_to: [expression.source, expression.aggregate]
 
 ---

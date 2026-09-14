@@ -48,8 +48,11 @@ def check_rule(path, errors, requirements):
         errors.append(f"ERROR: {label}: retired frontmatter keys: {sorted(unknown)}")
     if meta.get("id") != stem:
         errors.append(f"ERROR: {label}: id {meta.get('id')!r} does not match filename")
-    if meta.get("status") != "normative":
-        errors.append(f"ERROR: {label}: status must be normative")
+    if meta.get("status") not in ("draft", "production"):
+        errors.append(
+            f"ERROR: {label}: status must be draft or production, "
+            f"got {meta.get('status')!r}"
+        )
     if not isinstance(meta.get("applies_to"), list) or not meta.get("applies_to"):
         errors.append(f"ERROR: {label}: applies_to must be a non-empty list")
     headings = re.findall(r"^## (.+)$", body, re.M)

@@ -1,7 +1,7 @@
 ---
 id: R007
 title: Expression Registry
-status: normative
+status: production
 applies_to: [expression, expressions, schema_expression]
 ---
 

@@ -1,7 +1,7 @@
 ---
 id: R016
 title: Temporal Values
-status: normative
+status: production
 applies_to:
   - column_type
   - column.type

@@ -1,7 +1,7 @@
 ---
 id: R001
 title: Execution Model
-status: normative
+status: production
 applies_to: [root.base, root.rows, row.dataset, row.group_by, row.filter,
   root.columns, derivation]
 

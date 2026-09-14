@@ -1,7 +1,7 @@
 ---
 id: R025
 title: Controlled Terminology
-status: normative
+status: production
 applies_to: [define.codelists, codelist_class, codelist_item_class,
   external_codelist_class, column.submission.codelist]
 ---

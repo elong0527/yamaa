@@ -1,7 +1,7 @@
 ---
 id: R011
 title: Column Type Vocabulary, Missing Normalization, and Conversion
-status: normative
+status: production
 applies_to: [column.type, column_type, literal_value, derivation,
   conversion_failure]
 ---

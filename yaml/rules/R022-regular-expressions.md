@@ -1,7 +1,7 @@
 ---
 id: R022
 title: Regular Expressions
-status: normative
+status: production
 applies_to: [descriptor.pattern, regex, expression.str_extract,
   column_verifications.matches]
 

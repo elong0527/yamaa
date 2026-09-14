@@ -1824,7 +1824,7 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
 
 
 class TestRuleMetadata(unittest.TestCase):
-    def test_requires_normative_rule_and_index_status(self):
+    def test_rejects_status_outside_draft_and_production(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             rules = root / 'yaml' / 'rules'
@@ -1841,7 +1841,42 @@ class TestRuleMetadata(unittest.TestCase):
             errors = VALIDATOR.validate_rule_metadata(root)
 
         self.assertEqual(len(errors), 2)
-        self.assertTrue(all('normative' in error for error in errors))
+        self.assertTrue(all('draft' in error and 'production' in error or 'draft rules stay outside' in error for error in errors))
+
+    def test_accepts_draft_rule_outside_the_index(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            rules = root / 'yaml' / 'rules'
+            rules.mkdir(parents=True)
+            (rules / 'README.md').write_text(
+                '| ID | Rule | Status | Owns | Depends on |\n'
+                '|---|---|---|---|---|\n'
+            )
+            (rules / 'R001-rule.md').write_text(
+                '---\nid: R001\ntitle: Rule\nstatus: draft\n---\n'
+            )
+
+            errors = VALIDATOR.validate_rule_metadata(root)
+
+        self.assertEqual(errors, [])
+
+    def test_accepts_production_rule_indexed_as_production(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            rules = root / 'yaml' / 'rules'
+            rules.mkdir(parents=True)
+            (rules / 'README.md').write_text(
+                '| ID | Rule | Status | Owns | Depends on |\n'
+                '|---|---|---|---|---|\n'
+                '| R001 | Rule | production | Topic | -- |\n'
+            )
+            (rules / 'R001-rule.md').write_text(
+                '---\nid: R001\ntitle: Rule\nstatus: production\n---\n'
+            )
+
+            errors = VALIDATOR.validate_rule_metadata(root)
+
+        self.assertEqual(errors, [])
 
 
 class TestJoinKeyInference(unittest.TestCase):

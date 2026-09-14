@@ -1,7 +1,7 @@
 ---
 id: R015
 title: Record Lookup
-status: normative
+status: production
 applies_to: [root.record_lookups, record_lookup_class, expression.source,
   numeric_expression]
 

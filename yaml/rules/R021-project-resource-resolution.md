@@ -1,7 +1,7 @@
 ---
 id: R021
 title: Project Resource Resolution
-status: normative
+status: production
 applies_to: [project_path, dataset_source, dataset_class]
 
 ---

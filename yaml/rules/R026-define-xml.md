@@ -1,7 +1,7 @@
 ---
 id: R026
 title: Define-XML 2.1 Composition and Serialization
-status: normative
+status: production
 applies_to: [define_class, define.datasets, define.standards, define.documents,
   define.output, root.submission, column.submission]
 ---

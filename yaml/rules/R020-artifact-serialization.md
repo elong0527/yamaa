@@ -1,7 +1,7 @@
 ---
 id: R020
 title: Artifact Serialization
-status: normative
+status: production
 applies_to: [root.output, output.path, output.decimals, output.violation_log]
 
 ---
