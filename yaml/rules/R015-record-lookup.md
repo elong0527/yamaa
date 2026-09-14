@@ -11,9 +11,8 @@ applies_to: [root.record_lookups, record_lookup_class, expression.source,
 
 ## Intent
 
-Select one record of another dataset once, and read several of its columns,
-so that the values a specification takes from that record are known to have
-come from the same one.
+Select one record from another input dataset and read several columns. Each
+reading column then reads the same selected record.
 
 ## Boundaries
 
@@ -43,9 +42,9 @@ output `domain`.
 
 ## Matching
 
-**R015-3.** A record lookup matches its `dataset` where a derivation reads
-it: against a constructed current row during column derivation, or against
-the current candidate during grouped row construction:
+**R015-3.** A record lookup matches records from its `dataset` where a
+derivation reads the lookup: against a constructed current row during column
+derivation, or against the current candidate during grouped row construction:
 
 1. **R015-4.** `filter` selects eligible records. It is a predicate over
    records of the record lookup's dataset only, evaluated exactly as R003
@@ -96,9 +95,9 @@ lookup, exactly as a `source` variable is.
 
 ## Reading a record lookup
 
-**R015-13.** A variable qualified by a record lookup `id` reads that column of
-the selected record in any field typed as `variable`. R010 also permits the
-same qualified form as an identifier inside a column-level
+**R015-13.** A variable qualified by a record lookup `id` reads the named
+column of the selected record in any field typed as `variable`. R010 also
+permits the same qualified form as an identifier inside a column-level
 `numeric_expression`:
 
 ```yaml
@@ -120,13 +119,12 @@ same qualified form as an identifier inside a column-level
 **R015-14.** The named column must exist in the record lookup's dataset. A
 stored value carries the type R014 gives that field.
 
-**R015-15.** A record lookup is not evaluated ahead of the columns that read
-it. It resolves where they do. A record lookup's `filter` and `order_by` name
-records of its own dataset and contribute no output-column dependency. Its
-`source` and `between.value` variables do contribute dependencies, exactly as
-a column using `mapping_from` depends on its source variables. R001 therefore
-detects a cycle when a column reads a record lookup whose match depends
-directly or indirectly on that column.
+**R015-15.** A record lookup resolves where the columns that read it resolve.
+Its `filter` and `order_by` name records of its own dataset and contribute no
+output-column dependency. Its `source` and `between.value` variables do
+contribute dependencies, exactly as a column using `mapping_from` depends on
+its source variables. R001 therefore detects a cycle when a column reads a
+record lookup whose match depends directly or indirectly on that column.
 
 ## When no record is selected
 
