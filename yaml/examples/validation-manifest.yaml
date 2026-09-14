@@ -29,8 +29,8 @@ fixtures:
     rule: R001
     condition: dependency_cycle
     spec_paths:
-      - columns.AVAL.derivation.case
       - columns.ALTVAL.derivation.aggregate
+      - columns.AVAL.derivation.case
     validator: dependency_graph
   negative-adsl-cyclic-parent:
     rule: R017
@@ -181,7 +181,7 @@ fixtures:
   negative-keys-internal-column:
     rule: R005
     condition: internal_column_in_keys
-    spec_paths: ["keys[2]", output.columns]
+    spec_paths: ["keys[2]"]
     validator: name_contract
   negative-keys-missing-value:
     rule: R001
@@ -206,7 +206,7 @@ fixtures:
   negative-output-order-repeated-term:
     rule: R005
     condition: duplicate_order_term
-    spec_paths: [output.order_by]
+    spec_paths: ["output.order_by[2]"]
     validator: name_contract
   negative-output-order-unknown-column:
     rule: R005

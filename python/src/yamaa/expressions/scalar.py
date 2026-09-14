@@ -176,7 +176,14 @@ def _case(dispatcher: NestedDispatcher) -> ExpressionHandler:
                 )
             decided = evaluate_predicate(ast, resolver)
             if isinstance(decided, ConditionResult):
-                return decided
+                path_suffix = f"branches[{index}].when"
+                if decided.condition.path_suffix is not None:
+                    path_suffix = f"{path_suffix}.{decided.condition.path_suffix}"
+                return ConditionResult(
+                    condition=decided.condition.model_copy(
+                        update={"path_suffix": path_suffix}
+                    )
+                )
             assert isinstance(decided, PredicateValue)
             # R004 three-valued logic: only TRUE selects the branch.
             if decided.value is not TruthValue.TRUE:

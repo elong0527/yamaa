@@ -1,8 +1,19 @@
 from __future__ import annotations
 
-from yamaa.expressions import ExpressionDispatcher, MappingResolver, parse_predicate
+import pytest
+
+from yamaa.expressions import (
+    ExpressionDispatcher,
+    MappingResolver,
+    expression_condition,
+    parse_predicate,
+)
 from yamaa.planning import PlannedDerivation
-from yamaa.runtime.lifecycle import HandlerCounter, evaluate_derivation
+from yamaa.runtime.lifecycle import (
+    HandlerCounter,
+    LifecycleCondition,
+    evaluate_derivation,
+)
 from yamaa.specification.models import Expression, HandledExpression, OverrideRule
 
 
@@ -39,6 +50,42 @@ def test_conversion_failure_is_replaced_and_counted() -> None:
             "count": 1,
         }
     ]
+
+
+def test_normalized_scalar_aggregate_does_not_invent_an_expr_path() -> None:
+    declaration = HandledExpression(
+        value=Expression(root={"aggregate": {"expr": "SUM(A)"}})
+    )
+    planned = PlannedDerivation(
+        column="A",
+        path="columns.A.derivation",
+        expression_path="columns.A.derivation",
+        declaration=declaration,
+        dependencies=(),
+        override_predicates=(),
+    )
+    dispatcher = ExpressionDispatcher(
+        handlers={
+            "aggregate": lambda payload, resolver: expression_condition(
+                "validation",
+                "incompatible_input_type",
+                {"expected": "numeric", "actual": "str"},
+                field="expr",
+            )
+        }
+    )
+
+    with pytest.raises(LifecycleCondition) as raised:
+        evaluate_derivation(
+            planned,
+            "float",
+            {},
+            lambda output: MappingResolver(output),
+            dispatcher,
+            HandlerCounter(),
+        )
+
+    assert raised.value.diagnostic.spec_paths == ("columns.A.derivation.aggregate",)
 
 
 def test_only_the_first_matching_override_runs_and_all_paths_are_reported() -> None:

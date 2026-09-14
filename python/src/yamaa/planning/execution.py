@@ -79,6 +79,11 @@ class PlannedDerivation(_FrozenModel):
     dependencies: tuple[str, ...]
     override_predicates: tuple[dict[str, Any], ...]
 
+    @property
+    def operation_path(self) -> str:
+        """Return the authored operation that owns this graph node."""
+        return f"{self.expression_path}.{self.declaration.value.operation}"
+
 
 class PlannedRecordLookup(_FrozenModel):
     """One validated `record_lookups` entry, ready to select a record.
@@ -676,7 +681,9 @@ def _aggregate_references(
                 requirement="R007-36",
             )
         ]
-    expr_path = f"{operation_path}.expr"
+    # A one-field aggregate is R006's canonical form of the scalar shorthand,
+    # so the operation is the narrowest location both spellings share.
+    expr_path = operation_path if set(payload) == {"expr"} else f"{operation_path}.expr"
     try:
         ast = parse_aggregate_cached(expr)
     except AggregateError as error:
@@ -2205,7 +2212,7 @@ def plan_execution(
             if cycle is not None:
                 paths = tuple(
                     dict.fromkeys(
-                        derivations[name].expression_path for name in cycle[:-1]
+                        derivations[name].operation_path for name in cycle[:-1]
                     )
                 )
                 diagnostics.append(
@@ -2308,7 +2315,7 @@ def plan_execution(
     if cycle is not None:
         by_name = {planned.column: planned for planned in column_plans}
         paths = tuple(
-            dict.fromkeys(by_name[name].expression_path for name in cycle[:-1])
+            dict.fromkeys(by_name[name].operation_path for name in cycle[:-1])
         )
         diagnostics.append(
             _diagnostic(
@@ -2329,7 +2336,7 @@ def plan_execution(
                 diagnostics.append(
                     _diagnostic(
                         "dependency_order",
-                        planned.expression_path,
+                        planned.operation_path,
                         {"column": planned.column, "dependency": dependency},
                         requirement="R001-40",
                     )

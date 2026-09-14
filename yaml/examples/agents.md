@@ -191,6 +191,18 @@ An implementation may report additional context and may word its human-readable
 message differently. The expected fields and values must match. Stack traces
 and implementation-specific exception classes do not belong in this artifact.
 
+A `spec_paths` entry names the narrowest authored unit whose own contract
+failed, rather than every location an author might edit to repair the failure.
+A field-local failure names the exact field or list entry; an operation-wide
+failure names the operation; and a conversion failure names the column whose
+lifecycle could not complete. A failure involving several authored units names
+each one once, in specification order. Do not add a parent or an absent field
+merely because changing it would be another possible repair.
+
+When R006 makes a scalar and a one-field class interchangeable shorthand, the
+path names the operation: it is the narrowest authored unit shared by both
+spellings, and normalization must not invent a deeper location.
+
 Register every validation-phase negative fixture exactly once in
 `validation-manifest.yaml`. An implemented entry must match its primary
 condition at every declared specification path; an unimplemented entry must

@@ -171,10 +171,7 @@ def test_a_coalesce_cycle_is_reported_before_any_row_is_built() -> None:
     assert diagnostic.condition == committed["condition"]
     assert diagnostic.requirement == committed["requirement"]
     assert committed["context"].items() <= diagnostic.context.items()
-    # R001 owns the cycle report and names the derivation rather than the
-    # operation the committed contract names; that path is not this
-    # component's to change.
-    assert diagnostic.spec_paths == ("columns.SEVAL.derivation",)
+    assert list(diagnostic.spec_paths) == committed["spec_paths"]
 
 
 def test_changing_a_referenced_source_changes_the_artifact(tmp_path: Path) -> None:
