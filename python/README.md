@@ -567,3 +567,64 @@ Run this component's focused tests from the repository root:
 uv run --project python --isolated --extra test pytest \
   python/tests/verification python/tests/io
 ```
+
+## Conformance reports for one example
+
+`yamaa.adapters.conformance` runs a committed example through the same
+engine `yamaa_domain` exposes and says what the run observed. One command
+executes the examples it is given, writes one report each, and compares
+them with what those examples committed:
+
+```bash
+python -m yamaa.adapters.conformance \
+  --run-dir build/conformance \
+  sdtm-dm-basic negative-column-type-unknown
+```
+
+Artifacts land under `build/conformance/artifacts/` and reports under
+`build/conformance/reports/`, so a run never writes into the fixture it is
+being judged against. The command exits non-zero when an example drifts,
+and `--no-compare` writes the reports without judging them.
+
+A report carries what a cross-runtime comparison needs and nothing that
+belongs to one implementation: the artifact's column order, declared
+types, record count, R020 bytes and their digest; a failure's `phase`,
+`condition`, `spec_paths`, `requirement`, and context; each unsupported
+operation and where it was declared; and the R008-21 count for every
+declared handler path, including the ones that never fired.
+
+```python
+from yamaa.adapters.conformance import compare_example, execute_example
+
+report = execute_example(
+    "yaml/examples/sdtm-dm-basic",
+    schema_root="yaml",
+    output_dir="build/conformance/artifacts/sdtm-dm-basic",
+)
+verdict = compare_example(report, "yaml/examples/sdtm-dm-basic")
+```
+
+The two halves stay apart. `execute_example` opens a specification and the
+sources it declares, so a run cannot answer with the value it was supposed
+to produce; `compare_example` is the only half that reads `expected/`, and
+it reads a finished report rather than a live engine. Nothing is
+normalized on the way: column order, record order, a missing value, and a
+quoted empty string are compared as rendered, and an artifact's verdict is
+its complete bytes. An unsupported run and a crashed one each fail the
+example they were given rather than passing quietly, because neither one
+reproduced what the example committed.
+
+`REPORT_VERSION` carries a `-draft` suffix. #101 owns the conformance
+runner's invocation, report, and comparison protocol and has not published
+the serialization, so this envelope states the observations #101's
+requirements enumerate and expects to be renamed rather than re-derived
+when that contract lands. Promoting an example in
+`yaml/examples/execution-manifest.yaml` stays with #101, and parity stays
+with matching R evidence from #200; a passing report here is one runtime's
+evidence, not parity.
+
+Run this component's focused tests from the repository root:
+
+```bash
+uv run --project python --isolated --extra test pytest python/tests/adapters
+```
