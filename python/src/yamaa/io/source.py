@@ -51,6 +51,15 @@ class SourceError(ValueError):
         super().__init__(f"source ingestion failed: {conditions}")
 
 
+class ProducerSchemaUnresolved(ValueError):
+    def __init__(self, datasets: tuple[str, ...]) -> None:
+        self.datasets = datasets
+        super().__init__(
+            "producer-linked sources require workflow resolution: "
+            + ", ".join(self.datasets)
+        )
+
+
 class LoadedDataset(_FrozenModel):
     """One dataset declaration bound to snapshot bytes and a typed table."""
 
@@ -225,14 +234,6 @@ def load_source_tables(
     """Capture, verify, and ingest normalized CSV dataset declarations."""
     contracts = producer_contracts or {}
     snapshots = producer_snapshots or {}
-    unresolved = [
-        dataset
-        for dataset, source in datasets.items()
-        if source.schema_path is not None and dataset not in contracts
-    ]
-    if unresolved:
-        raise NotImplementedError("producer-linked sources require workflow resolution")
-
     diagnostics: list[SourceDiagnostic] = []
     for dataset, source in datasets.items():
         if source.schema_path is not None and source.types is not None:
@@ -261,6 +262,14 @@ def load_source_tables(
             diagnostics.append(_path_diagnostic(dataset, source.path, failure))
     if diagnostics:
         raise SourceError(diagnostics)
+
+    unresolved = tuple(
+        dataset
+        for dataset, source in datasets.items()
+        if source.schema_path is not None and dataset not in contracts
+    )
+    if unresolved:
+        raise ProducerSchemaUnresolved(unresolved)
 
     seen: set[int] = set()
     loaded: dict[str, LoadedDataset] = {}

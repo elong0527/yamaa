@@ -6,7 +6,12 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from yamaa.io import SourceError, load_source_table, load_source_tables
+from yamaa.io import (
+    ProducerSchemaUnresolved,
+    SourceError,
+    load_source_table,
+    load_source_tables,
+)
 from yamaa.io.polars import frame_from_values
 from yamaa.io.project import ProjectResources
 from yamaa.models import DateValue, TypedColumn
@@ -398,12 +403,74 @@ def test_unknown_typed_field_fails_in_validation(tmp_path: Path) -> None:
 def test_producer_link_requires_workflow_resolution(tmp_path: Path) -> None:
     (tmp_path / "dm.csv").write_text("ID\n001\n")
 
-    with pytest.raises(NotImplementedError, match="workflow resolution"):
+    with pytest.raises(ProducerSchemaUnresolved) as raised:
         load_source_table(
             "DM",
             DatasetSource(path="dm.csv", schema="dm.schema.yaml"),
             ProjectResources(tmp_path),
         )
+
+    assert raised.value.datasets == ("DM",)
+
+
+def test_unresolved_producer_links_preserve_declaration_order(tmp_path: Path) -> None:
+    (tmp_path / "lb.csv").write_text("ID\n001\n")
+    (tmp_path / "dm.csv").write_text("ID\n001\n")
+
+    with pytest.raises(ProducerSchemaUnresolved) as raised:
+        load_source_tables(
+            {
+                "LB": DatasetSource(path="lb.csv", schema="lb.schema.yaml"),
+                "DM": DatasetSource(path="dm.csv", schema="dm.schema.yaml"),
+            },
+            ProjectResources(tmp_path),
+        )
+
+    assert raised.value.datasets == ("LB", "DM")
+
+
+def test_producer_link_path_failure_precedes_workflow_resolution(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(SourceError) as raised:
+        load_source_table(
+            "DM",
+            DatasetSource(path="missing.csv", schema="dm.schema.yaml"),
+            ProjectResources(tmp_path),
+        )
+
+    assert _diagnostic(raised.value) == {
+        "phase": "validation",
+        "condition": "resource_path_missing",
+        "spec_paths": ("datasets.DM.path",),
+        "requirement": "R021-19",
+        "context": {"dataset": "DM", "path": "missing.csv"},
+    }
+
+
+def test_producer_link_with_inline_types_reports_redundant_type(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "dm.csv").write_text("ID\n001\n")
+
+    with pytest.raises(SourceError) as raised:
+        load_source_table(
+            "DM",
+            DatasetSource(
+                path="dm.csv",
+                schema="dm.schema.yaml",
+                types={"ID": "str"},
+            ),
+            ProjectResources(tmp_path),
+        )
+
+    assert _diagnostic(raised.value) == {
+        "phase": "validation",
+        "condition": "redundant_field_type",
+        "spec_paths": ("datasets.DM.types.ID",),
+        "requirement": "R014-10",
+        "context": {"dataset": "DM", "field": "ID", "type": "str"},
+    }
 
 
 def test_changed_content_is_reported_at_ingest_with_written_path(

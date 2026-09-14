@@ -244,8 +244,9 @@ matching native Polars type, a `date` column in `pl.Date`, and a `datetime`
 column in `pl.Datetime("us")`, so an ingested table answers ordinary Polars
 expressions. The reader does not create CSV or other intermediate files. A
 declaration carrying `schema` is accepted only when the workflow supplies the
-resolved producer contract; direct ingestion without that contract remains an
-error.
+resolved producer contract; execution without that contract reports an
+unsupported result. This mapping is Python-only because R has no
+producer-linked ingestion path.
 
 The R023 syntax scanner in `yamaa.io.csv` imports the standard library alone.
 The repository validator loads that module by path rather than keeping a second

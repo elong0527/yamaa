@@ -19,7 +19,7 @@ from yamaa.expressions import (
 )
 from yamaa.io import Artifact, ArtifactDiagnostic, ArtifactError, build_artifact
 from yamaa.io.polars import frame_from_values
-from yamaa.io.source import LoadedDataset, SourceError
+from yamaa.io.source import LoadedDataset, ProducerSchemaUnresolved, SourceError
 from yamaa.models import (
     MISSING,
     ConditionResult,
@@ -763,6 +763,17 @@ def execute_with_source_provider(
 
     try:
         sources = source_provider(specification.datasets)
+    except ProducerSchemaUnresolved as error:
+        return ExecutionUnsupported(
+            features=tuple(
+                UnsupportedFeature(
+                    operation="workflow_schema_resolution",
+                    spec_path=f"datasets.{dataset}.schema",
+                )
+                for dataset in error.datasets
+            ),
+            handler_counts=(),
+        )
     except SourceError as error:
         return ExecutionFailure(
             diagnostics=_source_diagnostics(error),
