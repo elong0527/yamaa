@@ -164,6 +164,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  adam-adsl-age-quality-review:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   adam-adsl-analysis-age:
     status: blocked
     blocked_by: "#101"
@@ -640,6 +644,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  negative-sex-code-pattern-mismatch:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   negative-source-duplicate-field-name:
     status: blocked
     blocked_by: "#101"
@@ -732,7 +740,15 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  sdtm-dm-arm-assignment:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   sdtm-dm-basic:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-dm-death:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
