@@ -74,10 +74,12 @@ One term per concept across all rules, schema comments, and messages:
   location here, and it belongs with a URL, a parent traversal, and a symbolic
   link in a negative example. A rooted path is for a study that declares a
   data root, not for a fixture this repository carries.
-- Write every fixture under R023's source profile: UTF-8 without a byte-order
-  mark, comma-separated fields, a named non-empty field per column, and the
-  same field count in every record. A file that departs from it belongs only
-  in a negative example that declares the condition it provokes.
+- Write every fixture under the source profile its extension selects. CSV
+  fixtures follow R023: UTF-8 without a byte-order mark, comma-separated
+  fields, a named non-empty field per column, and the same field count in
+  every record. Parquet fixtures follow R027's closed schema and value profile.
+  A file that departs from its profile belongs only in a negative example that
+  declares the condition it provokes.
 - Do not duplicate normative behavior across schema definitions, rules, or
   examples. Keep operation-local behavior beside its schema entry and shared
   behavior in the applicable rule.

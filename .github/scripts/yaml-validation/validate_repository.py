@@ -4469,7 +4469,7 @@ class ProjectSnapshots:
         return accepted, None
 
 
-SOURCE_PROFILES = {'.csv': 'csv'}
+SOURCE_PROFILES = {'.csv': 'csv', '.parquet': 'parquet'}
 
 
 def validate_spec_contracts(
@@ -4797,7 +4797,8 @@ def validate_spec_contracts(
                 continue
             # R023 selects the profile from the written path, so an extension
             # it does not map is rejected before the source is read.
-            if SOURCE_PROFILES.get(resolved.suffix.lower()) is None:
+            profile = SOURCE_PROFILES.get(resolved.suffix.lower())
+            if profile is None:
                 errors.append(validation_diagnostic(
                     f"{path}.path",
                     'source_profile_unknown',
@@ -4812,6 +4813,19 @@ def validate_spec_contracts(
                 )
                 continue
             if not isinstance(types, dict):
+                continue
+            if profile == 'parquet':
+                for field in sorted(types, key=str):
+                    errors.append(validation_diagnostic(
+                        f"{path}.types.{field}",
+                        'redundant_field_type',
+                        'field type is already supplied by the Parquet schema',
+                        context={
+                            'dataset': dataset_id,
+                            'field': field,
+                            'type': types[field],
+                        },
+                    ))
                 continue
             try:
                 header = snapshot.csv_header()

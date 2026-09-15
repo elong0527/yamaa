@@ -1,8 +1,9 @@
 # Sources in, artifacts out
 
 This module is the boundary between a run and the files around it. Reading
-is R023 and R014: `load_source_tables` captures a declared dataset and hands
-back an ordered, typed table. Writing is R020, below.
+is R023, R027, and R014: `load_source_tables` captures a declared `csv` or
+`parquet` dataset and hands back an ordered, typed table. Writing is R020,
+below.
 
 `yamaa.verification` asserts over a completed table; this module turns one
 into the bytes R020 fixes and replaces a permitted target with them.
@@ -73,9 +74,9 @@ specification's word alone.
 standard library alone because the repository validator loads it by path.
 Its writing half therefore takes text, not values: `artifact.py` maps each
 typed value to the text R011, R016, and R019 fix, and hands the fields over.
-`parquet.py` writes the typed container, `polars.py` decides how values are
-stored in and read back from a host table, and `project.py` and `source.py`
-read.
+`parquet.py` reads and writes the typed container, `polars.py` decides how
+values are stored in and read back from a host table, and `project.py` and
+`source.py` own resource capture and source dispatch.
 
 ## Focused tests
 

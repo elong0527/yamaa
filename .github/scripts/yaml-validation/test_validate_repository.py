@@ -3187,6 +3187,70 @@ class TestSpecContracts(unittest.TestCase):
         self.assertEqual(diagnostic.path, "example/spec.yaml.datasets.DM.path")
         self.assertEqual(diagnostic.context, {'path': 'input/dm.txt'})
 
+    def test_accepts_parquet_as_a_source_profile(self):
+        snapshots = VALIDATOR.ProjectSnapshots()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            example_dir = Path(temp_dir)
+            input_dir = example_dir / "input"
+            input_dir.mkdir()
+            # Static repository validation selects the profile and captures
+            # the file. The runtime owns R027 container ingestion.
+            (input_dir / "dm.parquet").write_bytes(b"PAR1")
+            spec_path = example_dir / "spec.yaml"
+            spec = {
+                "domain": "ADSL",
+                "datasets": {"DM": "input/dm.parquet"},
+                "base": "DM",
+                "keys": ["USUBJID"],
+                "output": {"columns": ["USUBJID"]},
+                "columns": [],
+            }
+
+            errors = VALIDATOR.validate_spec_contracts(
+                spec, "example/spec.yaml", spec_path, snapshots=snapshots
+            )
+
+        self.assertNotIn("source_profile_unknown", "\n".join(errors))
+        self.assertEqual(snapshots.reads, 1)
+
+    def test_rejects_inline_types_for_a_parquet_source(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            example_dir = Path(temp_dir)
+            input_dir = example_dir / "input"
+            input_dir.mkdir()
+            (input_dir / "dm.parquet").write_bytes(b"PAR1")
+            spec_path = example_dir / "spec.yaml"
+            spec = {
+                "domain": "ADSL",
+                "datasets": {
+                    "DM": {
+                        "path": "input/dm.parquet",
+                        "types": {"USUBJID": "str"},
+                    }
+                },
+                "base": "DM",
+                "keys": ["USUBJID"],
+                "output": {"columns": ["USUBJID"]},
+                "columns": [],
+            }
+
+            errors = VALIDATOR.validate_spec_contracts(
+                spec, "example/spec.yaml", spec_path
+            )
+
+        diagnostic = next(
+            error
+            for error in errors
+            if getattr(error, 'condition', None) == 'redundant_field_type'
+        )
+        self.assertEqual(
+            diagnostic.path, "example/spec.yaml.datasets.DM.types.USUBJID"
+        )
+        self.assertEqual(
+            diagnostic.context,
+            {"dataset": "DM", "field": "USUBJID", "type": "str"},
+        )
+
     def test_rejects_missing_source_and_type_for_absent_csv_field(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             example_dir = Path(temp_dir)

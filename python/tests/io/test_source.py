@@ -4,6 +4,8 @@ import datetime as dt
 from pathlib import Path
 
 import polars as pl
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 
 from yamaa.io import (
@@ -116,6 +118,215 @@ def test_csv_profile_extension_is_case_insensitive(tmp_path: Path) -> None:
     )
 
     assert loaded.table.frame.item() == "001"
+
+
+def test_loads_parquet_embedded_types_without_inference(tmp_path: Path) -> None:
+    path = tmp_path / "dm.parquet"
+    table = pa.Table.from_arrays(
+        [
+            pa.array(["007", "008"], type=pa.string()),
+            pa.array([42, None], type=pa.int64()),
+            pa.array([1.5, float("inf")], type=pa.float64()),
+            pa.array([dt.date(2025, 1, 2), dt.date(2025, 2, 3)], type=pa.date32()),
+            pa.array(
+                [dt.datetime(2025, 1, 2, 3, 4), None],  # noqa: DTZ001
+                type=pa.timestamp("us"),
+            ),
+            pa.array(["", None], type=pa.string()),
+        ],
+        names=["ID", "AGE", "SCORE", "DATE", "MOMENT", "TEXT"],
+    )
+    pq.write_table(table, path)
+
+    loaded = load_source_table(
+        "DM", DatasetSource(path="dm.parquet"), ProjectResources(tmp_path)
+    )
+
+    assert loaded.table.columns == (
+        TypedColumn(name="ID", type="str"),
+        TypedColumn(name="AGE", type="int"),
+        TypedColumn(name="SCORE", type="float"),
+        TypedColumn(name="DATE", type="date"),
+        TypedColumn(name="MOMENT", type="datetime"),
+        TypedColumn(name="TEXT", type="str"),
+    )
+    assert loaded.table.frame.to_dicts() == [
+        {
+            "ID": "007",
+            "AGE": 42,
+            "SCORE": 1.5,
+            "DATE": dt.date(2025, 1, 2),
+            "MOMENT": dt.datetime(2025, 1, 2, 3, 4),  # noqa: DTZ001
+            "TEXT": "",
+        },
+        {
+            "ID": "008",
+            "AGE": None,
+            "SCORE": None,
+            "DATE": dt.date(2025, 2, 3),
+            "MOMENT": None,
+            "TEXT": None,
+        },
+    ]
+
+
+def test_parquet_profile_extension_is_case_insensitive(tmp_path: Path) -> None:
+    path = tmp_path / "DM.PARQUET"
+    pq.write_table(pa.table({"ID": pa.array(["001"], type=pa.string())}), path)
+
+    loaded = load_source_table(
+        "DM", DatasetSource(path="DM.PARQUET"), ProjectResources(tmp_path)
+    )
+
+    assert loaded.table.frame.item() == "001"
+
+
+def test_parquet_rejects_inline_types_before_snapshot_bytes_are_read(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "dm.parquet"
+    pq.write_table(pa.table({"ID": pa.array(["001"], type=pa.string())}), path)
+    resources = ProjectResources(tmp_path)
+
+    with pytest.raises(SourceError) as raised:
+        load_source_table(
+            "DM",
+            DatasetSource(path="dm.parquet", types={"ID": "str"}),
+            resources,
+        )
+
+    assert _diagnostic(raised.value) == {
+        "phase": "validation",
+        "condition": "redundant_field_type",
+        "spec_paths": ("datasets.DM.types.ID",),
+        "requirement": "R014-20",
+        "context": {"dataset": "DM", "field": "ID", "type": "str"},
+    }
+    assert resources.capture_reads == 0
+
+
+def test_parquet_rejects_an_unsupported_embedded_type(tmp_path: Path) -> None:
+    path = tmp_path / "dm.parquet"
+    pq.write_table(pa.table({"FLAG": pa.array([True], type=pa.bool_())}), path)
+
+    with pytest.raises(SourceError) as raised:
+        load_source_table(
+            "DM", DatasetSource(path="dm.parquet"), ProjectResources(tmp_path)
+        )
+
+    assert _diagnostic(raised.value) == {
+        "phase": "ingest",
+        "condition": "source_field_type_unsupported",
+        "spec_paths": ("datasets.DM.path",),
+        "requirement": "R027-13",
+        "context": {
+            "dataset": "DM",
+            "path": "dm.parquet",
+            "field": "FLAG",
+            "stored_type": "bool",
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    ("names", "condition", "field"),
+    [
+        ([""], "source_field_name_empty", 1),
+        (["ID", "ID"], "source_field_name_duplicate", "ID"),
+    ],
+)
+def test_parquet_rejects_invalid_field_names(
+    tmp_path: Path,
+    names: list[str],
+    condition: str,
+    field: int | str,
+) -> None:
+    path = tmp_path / "dm.parquet"
+    pq.write_table(
+        pa.Table.from_arrays(
+            [pa.array(["x"], type=pa.string()) for _ in names], names=names
+        ),
+        path,
+    )
+
+    with pytest.raises(SourceError) as raised:
+        load_source_table(
+            "DM", DatasetSource(path="dm.parquet"), ProjectResources(tmp_path)
+        )
+
+    assert _diagnostic(raised.value) == {
+        "phase": "ingest",
+        "condition": condition,
+        "spec_paths": ("datasets.DM.path",),
+        "requirement": "R027-12",
+        "context": {
+            "dataset": "DM",
+            "path": "dm.parquet",
+            "field": field,
+        },
+    }
+
+
+def test_parquet_rejects_a_datetime_below_whole_seconds(tmp_path: Path) -> None:
+    path = tmp_path / "dm.parquet"
+    pq.write_table(
+        pa.table({"AT": pa.array([1], type=pa.timestamp("us"))}),
+        path,
+    )
+
+    with pytest.raises(SourceError) as raised:
+        load_source_table(
+            "DM", DatasetSource(path="dm.parquet"), ProjectResources(tmp_path)
+        )
+
+    assert _diagnostic(raised.value) == {
+        "phase": "ingest",
+        "condition": "source_field_value_invalid",
+        "spec_paths": ("datasets.DM.path",),
+        "requirement": "R027-14",
+        "context": {
+            "dataset": "DM",
+            "path": "dm.parquet",
+            "field": "AT",
+            "row": 1,
+            "value": 1,
+        },
+    }
+
+
+def test_parquet_rejects_invalid_container_bytes(tmp_path: Path) -> None:
+    (tmp_path / "dm.parquet").write_bytes(b"not parquet")
+
+    with pytest.raises(SourceError) as raised:
+        load_source_table(
+            "DM", DatasetSource(path="dm.parquet"), ProjectResources(tmp_path)
+        )
+
+    assert _diagnostic(raised.value) == {
+        "phase": "ingest",
+        "condition": "source_parquet_invalid",
+        "spec_paths": ("datasets.DM.path",),
+        "requirement": "R027-11",
+        "context": {"dataset": "DM", "path": "dm.parquet"},
+    }
+
+
+def test_parquet_rejects_an_empty_schema(tmp_path: Path) -> None:
+    path = tmp_path / "dm.parquet"
+    pq.write_table(pa.table({}), path)
+
+    with pytest.raises(SourceError) as raised:
+        load_source_table(
+            "DM", DatasetSource(path="dm.parquet"), ProjectResources(tmp_path)
+        )
+
+    assert _diagnostic(raised.value) == {
+        "phase": "ingest",
+        "condition": "source_parquet_invalid",
+        "spec_paths": ("datasets.DM.path",),
+        "requirement": "R027-11",
+        "context": {"dataset": "DM", "path": "dm.parquet"},
+    }
 
 
 def test_adae_fixture_treats_bare_and_quoted_empty_as_missing() -> None:

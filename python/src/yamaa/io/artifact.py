@@ -13,7 +13,6 @@ from __future__ import annotations
 import datetime as dt
 import math
 from collections.abc import Callable, Sequence
-from pathlib import PurePosixPath
 from typing import Annotated, Any, Literal, TypeAlias
 
 import polars as pl
@@ -22,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, InstanceOf, JsonValue
 from yamaa.io.csv import fixed_point, render_records
 from yamaa.io.parquet import render_parquet
 from yamaa.io.polars import column_dtype, runtime_value
+from yamaa.io.profiles import DATASET_PROFILES, DatasetProfile, profile_of
 from yamaa.models import (
     MISSING,
     DateTimeValue,
@@ -34,15 +34,11 @@ from yamaa.models import (
 )
 from yamaa.specification.models import Output
 
-ArtifactProfile: TypeAlias = Literal["csv", "parquet"]
+ArtifactProfile: TypeAlias = DatasetProfile
 
 # R020-46 reports the offending rows by key. The count beside them is the
 # whole count, so a bound on how many are printed never changes a failure.
 REPORTED_KEYS = 5
-
-# R020-2 fixes a closed extension mapping, matched without regard to case.
-# An extension outside it names no profile and never falls back to one.
-_PROFILES: dict[str, ArtifactProfile] = {".csv": "csv", ".parquet": "parquet"}
 
 # R020-23 stores a date as days and a datetime as microseconds from the
 # epoch. R016's calendar bounds the values either may carry.
@@ -109,11 +105,6 @@ def _diagnostic(
     )
 
 
-def profile_of(path: str) -> ArtifactProfile | None:
-    """Return the profile a written artifact path selects, if any."""
-    return _PROFILES.get(PurePosixPath(path).suffix.lower())
-
-
 def artifact_profile(path: str) -> ArtifactProfile:
     """Select the R020 profile the artifact path names, or fail."""
     profile = profile_of(path)
@@ -125,7 +116,7 @@ def artifact_profile(path: str) -> ArtifactProfile:
                     "unknown_artifact_profile",
                     "output.path",
                     "R020-43",
-                    {"path": path, "permitted": sorted(_PROFILES)},
+                    {"path": path, "permitted": sorted(DATASET_PROFILES)},
                 )
             ]
         )
@@ -145,7 +136,7 @@ def _declaration_diagnostics(
                 "unknown_artifact_profile",
                 "output.path",
                 "R020-43",
-                {"path": output.path, "permitted": sorted(_PROFILES)},
+                {"path": output.path, "permitted": sorted(DATASET_PROFILES)},
             )
         )
     if output.decimals is not None:

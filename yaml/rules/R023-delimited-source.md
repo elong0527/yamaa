@@ -1,24 +1,25 @@
 ---
 id: R023
-title: Delimited Source Profile
+title: Source Profile Selection and Delimited Source Profile
 status: normative
 applies_to: [dataset_source, dataset_class.path]
 
 ---
 
-# Delimited source profile
+# Source profile selection and delimited source profile
 
 ## Intent
 
-Fix the bytes a delimited source carries. This rule defines one file, its
-records and fields, and the spellings two runtimes must read alike or reject.
+Select the profile a source path names. For a delimited source, fix its bytes,
+records, fields, and the spellings two runtimes must read alike or reject.
 
 ## Boundaries
 
-This rule owns the syntax of a delimited source. It ends at the field: it
-delivers a header and a sequence of records whose fields carry their text and
-whether they were quoted, and R014 owns what those fields mean, which of them
-is missing, and what type each one takes. Nothing here decides a value.
+This rule owns source-profile selection and the syntax of the `csv` profile.
+It ends at the field: it delivers a header and a sequence of records whose
+fields carry their text and whether they were quoted, and R014 owns what those
+fields mean, which of them is missing, and what type each one takes. R027 owns
+the `parquet` source profile. Nothing here decides a value.
 
 R020 owns the other direction, and its `csv` profile is the writing
 counterpart of the form this rule reads. The two agree on the bytes, and
@@ -41,9 +42,10 @@ falling back to one. The extension is matched without regard to case, because
 a study that stores `DM.CSV` names the same container as one that stores
 `dm.csv`.
 
-| Extension | Profile | Container |
-|---|---|---|
-| `.csv` | `csv` | delimited text |
+| Extension | Profile | Container | Source-profile owner |
+|---|---|---|---|
+| `.csv` | `csv` | delimited text | this rule |
+| `.parquet` | `parquet` | Apache Parquet | R027 |
 
 **R023-2.** A source is selected like an artifact. A file R020 writes and this
 rule reads back has one profile name in both directions. A second field could
@@ -55,13 +57,13 @@ contents to choose a delimiter or a quote character could read a conforming
 source wrongly without failing, and a reader that accepted an unknown extension
 under a default could read a container this profile does not describe at all.
 
-## Two spellings are admitted only when they carry the same records
+## CSV spellings are admitted only when they carry the same records
 
-**R023-4.** A writer controls its bytes and emits one spelling. A reader
-receives a study file as stored. Every refused spelling is a file a sponsor
-must repair before a run. This rule admits a second spelling only when both
-spellings deliver the same records. This rule refuses every other
-difference rather than silently repairing it.
+**R023-4.** For the `csv` profile, a writer controls its bytes and emits one
+spelling. A reader receives a study file as stored. Every refused spelling is
+a file a sponsor must repair before a run. This rule admits a second spelling
+only when both spellings deliver the same records. This rule refuses every
+other difference rather than silently repairing it.
 
 **R023-5.** Admitted: a record terminated by `U+000D U+000A` rather than
 `U+000A`, and a final record with no terminator at all. Every reader agrees

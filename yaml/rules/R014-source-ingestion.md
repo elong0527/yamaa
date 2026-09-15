@@ -21,9 +21,9 @@ numeric parsing and non-finite normalization in addition to conversion of a
 completed derivation result, and R007 owns what each expression requires of an
 input it receives. R019 owns valid text and failures while decoding it. R021
 owns which file `path` and `schema` may reach and the byte snapshot this rule
-reads. R023 owns the syntax of a delimited source and delivers each field to
-this rule as its text together with whether it was quoted; this rule owns what
-that field then means.
+reads. R023 owns source-profile selection and the syntax of a delimited source;
+R027 owns the Parquet source profile. Each delivers ordered fields and records,
+and this rule owns what their values mean.
 
 ## Source record order
 
@@ -51,9 +51,8 @@ type.
 **R014-4.** Where the type comes from depends on the container:
 
 - A **self-describing source** supplies it. An ODM `ItemDef` data type, a
-  container's embedded schema, and a delimited artifact's producing
-  specification are each the field's type authority, and the consuming
-  specification does not restate it.
+  Parquet schema, and an artifact's producing specification are each the
+  field's type authority, and the consuming specification does not restate it.
 - A **typeless container**, such as a delimited text file, supplies none.
   Every one of its fields is `str` unless the specification declares
   otherwise.
@@ -101,21 +100,23 @@ another specification already above it in the workflow.
 **R014-9.** The producer's `output.columns` names every stored field exactly
 once and in artifact order. Each selected entry in its `columns` supplies
 that field's R011 type and label. Declared internal columns omitted from
-`output.columns` are not stored fields. A delimited artifact's header must
-equal `output.columns`; missing, extra, reordered, duplicate, or undeclared
-fields fail.
+`output.columns` are not stored fields. A delimited artifact's header and a
+Parquet artifact's schema fields must equal `output.columns`; missing, extra,
+reordered, duplicate, or undeclared fields fail. A Parquet field's embedded
+type must additionally equal the producer's declared type.
 
 **R014-10.** The producing specification remains the only type authority.
 `types` may be present only for a typeless source, so it must be absent
 whenever `schema` is present. This rejects even an inline entry that agrees
 with the producer instead of creating two authorities for one type.
 
-**R014-11.** The stored cells are still delimited text. After recognizing
-missing values, ingestion applies the `str` row of R011's conversion table
-to every non-missing cell. In particular, a producer column declared `date`
-or `datetime` uses R016's lexical grammar and representations, exactly as an
-inline `types` declaration or a column conversion does; the workflow link
-does not enable a runtime's more permissive temporal parser.
+**R014-11.** A stored cell in a delimited artifact is still text. After
+recognizing missing values, ingestion applies the `str` row of R011's
+conversion table to every non-missing cell. In particular, a producer column
+declared `date` or `datetime` uses R016's lexical grammar and representations,
+exactly as an inline `types` declaration or a column conversion does. A
+Parquet artifact instead supplies typed values under R027; a workflow link
+does not convert those values through text.
 
 ## Values are never inferred
 
@@ -126,14 +127,14 @@ field.
 
 ## Parsing a declared type
 
-**R014-13.** R011's `str` row parses stored text into its declared type.
+**R014-13.** For a typeless container, R011's `str` row parses stored text
+into its declared type.
 `int` and `float` use R011's numeric text parsing, including its
 non-finite normalization. `date` and `datetime` accept exactly the
 lexical forms R016 fixes. A value that does not parse fails the run. R011
 separately recognizes YAML 1.2 non-finite forms during declared numeric
 parsing. They remain text when the field's type is `str` and normalize
 only after parsing as numbers.
-
 
 **R014-14.** An ingestion failure is not a conversion failure.
 `conversion_failure` is declared on a column and answers for a value the
@@ -180,14 +181,15 @@ result where the specification can be read.
   fail.
 - **R014-20.** A `types` entry for a field whose container or producing
   specification already supplies a type: fail, rather than override the
-  source contract.
+  source contract. This includes every field of a Parquet source.
 - **R014-21.** A document named by `schema` that does not validate as a
   complete Yamaa specification, or whose producer dependency creates a cycle:
   fail.
-- **R014-22.** A stored artifact whose fields do not exactly match the
-  producing specification's `output.columns`: fail.
-- **R014-23.** A stored value that does not parse under its field's declared
-  type: fail, reporting the dataset, field, and value.
+- **R014-22.** A stored artifact whose field names, order, or self-describing
+  types do not exactly match the producing specification's output contract:
+  fail.
+- **R014-23.** A stored text value that does not parse under its field's
+  declared type: fail, reporting the dataset, field, and value.
 - **R014-24.** Inferring a field type from its values, or treating text as
   absence: neither is an implementation option.
 - **R014-25.** Reordering source records while reading, decoding, typing,

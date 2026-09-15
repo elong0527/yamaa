@@ -1,9 +1,9 @@
 """Secondary input/output adapters behind one common contract.
 
-Each format lives in its own module: ``csv`` today, ``xpt`` and
-``datajson`` next. Host-table treatment lives in ``polars``. Every
-adapter delivers plain text-or-missing values; quoting is a transport
-detail no adapter preserves.
+Each format lives in its own module. Host-table treatment lives in
+``polars``. The ``csv`` adapter delivers text-or-missing values and the
+``parquet`` adapter delivers the typed values in its embedded schema.
+Quoting is a CSV transport detail no adapter preserves.
 
 The same modules write the other way. ``artifact`` applies R005's column
 selection and row order to a completed table, refuses what R020 cannot
