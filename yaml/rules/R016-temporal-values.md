@@ -51,7 +51,7 @@ orders them as this rule defines; no other predicate behavior is owned here.
 ## The two values
 
 **R016-1.** A `date` is a complete proleptic Gregorian calendar date. It names
-day.
+one day.
 
 **R016-2.** A `datetime` is a complete local civil datetime: a date of the same
 kind together with a time of day resolved to a whole second. It names a reading
@@ -75,12 +75,11 @@ and no offset.
 moment, and every day or civil moment in range has one combination of fields.
 Both value spaces are total and gapless.
 
-**R016-6.** Every value is complete, and every value records how much of it was
-collected.** A value is complete or it is not a value of the type, so a
-truncated collected value stays text until something completes it; *Partial
-collected dates* below defines this design's one completion. Beside its
-fields, a value carries one further property: its **collected precision**, the
-finest field the collected source supplied.
+**R016-6.** Every value is complete and records how much was collected. A value
+is complete or is not a value of the type. A truncated collected value stays
+text until `date_impute` completes it. *Partial collected dates* below defines
+this design's only completion. Each value has a **collected precision**: the
+finest field its collected source supplied.
 
 **R016-7.** For a `date` that property is `year`, `month`, or `day`. For a
 `datetime` it is always `second`, because this rule admits no truncated moment:
@@ -160,10 +159,10 @@ can be stored.
 table, and the difference is worth naming. Every other row is a spelling of a
 value one of these two types holds; a clock reading carrying no date is not,
 because both types name a position on the calendar. A study that collects one,
-as the `--TM` family does, keeps the collected text as `str`. Admitting one
-be a third temporal type rather than a widening of `datetime` -- a new entry in
-R011's closed vocabulary -- and it enters when an example needs a time of day
-that no date accompanies.
+as the `--TM` family does, keeps the collected text as `str`. A time-only
+value would be a third temporal type, not a wider `datetime` -- a new R011
+vocabulary entry. The type enters when an example needs a time of day with no
+date.
 
 ## No zone, no offset
 
@@ -255,8 +254,8 @@ chronologically under R007.
 fixes rendered precision at one day and one second, so a project has nothing
 left to declare.
 
-**R016-32.** Canonical text carries the fields alone, so collected precision is
-not observable outside the derivation.** A temporal value converted to `str`
+**R016-32.** Canonical text carries fields alone, so its collected precision is
+not observable outside the derivation. A temporal value converted to `str`
 under R011's row, the artifact's record of a temporal column, and the typed
 value R018 encodes for a function argument all carry the day or the moment and
 nothing about how much of it was collected. This is deliberate: the property
@@ -369,7 +368,7 @@ flag and value in step only by convention, and drift is undetected.
 
 
 **R016-46.** A known day in an unknown month has no representation, and this
-rule does not invent one.** The collected text admitted above is prefix
+rule does not invent one. The collected text admitted above is prefix
 truncation only: a year, or a year and a month. A day known without its month
 cannot be collected in the first place, so there is no value for a precision to
 describe, and the ladder is a prefix ladder for exactly that reason. A study
@@ -391,8 +390,8 @@ year and 30 or 31 elsewhere. A study placing a partial date at the end of its
 month therefore declares one rule rather than one rule per month, and the
 completed value is a real calendar date by construction.
 
-**R016-49.** `not_before` bounds the completed date from below, and moves only
-what imputation supplied.** The collected components of a truncated source
+**R016-49.** `not_before` bounds the completed date from below and moves only
+what imputation supplied. The collected components of a truncated source
 admit a day interval: `2025` admits its year and `2025-01` admits its month.
 The bound may move the result only within that interval. A completed
 date on or after the bound stands. Otherwise the result is the earliest
