@@ -70,8 +70,7 @@ consumed during traversal and is absent from the resolved specification.
 
 ## Layer validation
 **R017-9.** Every layer is parsed under R006 and must be a non-empty mapping.
-It
-must declare `schema_version`; the value must equal both the active schema
+Every layer must declare `schema_version`; the value must equal both the active
 bundle version and the value in every other contribution. A mismatch fails
 before composition. Inheritance never migrates schema versions.
 
@@ -87,11 +86,10 @@ the final artifact membership or order.
 of `record_lookups`, `columns`, or `rows` must carry its respective `id`,
 `name`, or `id` field. Two members of one layer must not share one identifier.
 
-**R017-12.** A non-null field supplied inside a keyed member is a complete
-value
-at that field boundary. Its nested classes, mappings, lists, registries, and
-scalar constraints validate normally; they are not partial patches. A non-keyed
-root field supplied by a layer likewise validates as one complete field value.
+**R017-12.** A non-null keyed-member field is complete at that field boundary.
+Its nested classes, mappings, lists, registries, and scalar constraints
+validate normally; they are not partial patches. A non-keyed root
+field supplied by a layer likewise validates as one complete field value.
 
 **R017-13.** R006 shorthand is expanded in every supplied non-null field before
 composition. Equivalent long and short spellings therefore contribute the same
