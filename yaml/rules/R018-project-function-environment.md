@@ -9,7 +9,6 @@ applies_to: [environment, function, function_contract, function_binding]
 # Project function environment
 
 ## Intent
-
 Make a project-supplied scalar function reproducible and reviewable without
 placing host-language code or runtime selection in a derivation specification.
 One logical contract may have an R implementation in one project and a Python
@@ -19,7 +18,7 @@ execution environment.
 ## Boundaries
 
 This rule owns project-root resolution, logical function contracts, singular
-runtime bindings, invocation behavior, and activation conformance. R006 owns the
+runtime bindings, invocation, and activation conformance. R006 owns the
 schema notation and structural validation. R001 owns evaluation order and the
 scalar row-count invariant. R005 owns what happens to the completed result, and
 R011 owns column types and conversion. R016 owns temporal values.
@@ -42,7 +41,7 @@ validation do not select a project root and do not require an
 `environment.yaml`. They validate the call's closed schema shape, including its
 logical name, exact requested contract version, and permitted argument leaves.
 Contract existence, signature, argument types, missing permissions, and return
-type are deferred until an implementation environment is supplied. Omission does
+type checks wait until an implementation environment is supplied. Omission does
 not create or maintain an environment implicitly.
 
 **R018-2.** When actual project code is validated, activated, or executed, the
@@ -61,7 +60,7 @@ resolution fails before code activation or execution.
 
 **R018-4.** `runtime.language` is exactly `r` or `python`. It applies to every
 function in the project. An environment cannot contain language-specific sub-
-environments, parallel R and Python bindings, or a per-function language choice.
+environments, parallel R and Python bindings, or language choices per function.
 
 **R018-5.** `runtime.artifact.reference` names one organization-resolvable
 runtime artifact and `runtime.artifact.digest` supplies its verified SHA-256
@@ -77,7 +76,7 @@ before specification data is read.
 ## Logical contracts
 
 **R018-7.** `functions` is a non-empty mapping from logical function names to
-contracts. Each name has exactly one contract and one binding in an environment.
+contracts. Each name has one contract and one binding in an environment.
 A call contains that logical `name` and an exact `contract_version`; it never
 contains a runtime-specific callable name.
 
@@ -98,7 +97,7 @@ code without changing the logical contract changes `implementation_version` and
 the runtime artifact identity instead.
 
 **R018-10.** For comparison across projects, implementations calculate a
-contract fingerprint. The payload is the following logical object, identified by
+contract fingerprint. Its payload is the following logical object, called
 `yamaa-r018-contract-v1`:
 
 ```text
@@ -106,7 +105,7 @@ format, name, contract_version, params, returns,
 may_return_missing, comparison_decimals
 ```
 
-**R018-11.** `params` is an array in declared order. Each entry contains `name`,
+**R018-11.** `params` is an array in declared order. Each entry has `name`,
 `type`, the effective `required` and `accepts_missing` Booleans, and `default`.
 An absent default is `{present: false}`. A present default is `{present: true,
 value: typed-value}`. A typed value is encoded as follows:
@@ -116,28 +115,29 @@ value: typed-value}`. A typed value is encoded as follows:
 | missing | `{type: "missing"}` |
 | `str` | `{type: "str", value: R019-text}` |
 | `int` | `{type: "int", value: base-10-string}` |
-| finite `float` | `{type: "float", value: 16-lowercase-hex-big-endian-binary64-bits}` |
+| finite `float` | `{type: "float", value: binary64}` |
 | `bool` | `{type: "bool", value: JSON-Boolean}` |
 | `date` or `datetime` | `{type: type-name, value: R016-canonical-text}` |
 
-**R018-12.** R011's non-finite normalization runs before a default or other
-typed value is encoded, so this table has no non-finite representation.
+**R018-12.** R011 normalizes non-finite values before encoding a default or
+other typed value. This table has no non-finite representation. A binary64
+value is 16 lowercase hexadecimal big-endian bits.
 
 **R018-13.** `comparison_decimals` is its non-negative base-10 string. The
-object is serialized as UTF-8 JSON under the JSON Canonicalization Scheme in RFC
-8785, then hashed with SHA-256 and prefixed with `sha256:`. Strings retain their
-R019 value. Parameters remain in their declared array order; object member order
+object is UTF-8 JSON under the JSON Canonicalization Scheme in RFC
+8785, then hashed with SHA-256 and prefixed with `sha256:`. Strings use their
+R019 value. Parameters retain their declared order; object member order
 comes only from canonical JSON.
 
 **R018-14.** The runtime language, artifact, binding, description, and
 implementation version are excluded. Repository validation requires every
-discovered pair of logical name and contract version to have the same calculated
-fingerprint. Two projects do not claim the same logical function contract unless
+discovered logical-name and contract-version pair to have the same calculated
+fingerprint. Projects do not claim the same logical function contract unless
 these fingerprints are identical.
 
 ## Parameters and arguments
 
-**R018-15.** Signatures are closed and named. Every parameter name is unique and
+**R018-15.** Signatures are closed and named. Each parameter name is unique and
 a binding has no positional, variadic, or arbitrary keyword parameter bag.
 `required` defaults to `true`. Every optional parameter declares an environment
 `default`; a required parameter cannot declare one.
@@ -147,7 +147,7 @@ a binding has no positional, variadic, or arbitrary keyword parameter bag.
 so this extension introduces neither Boolean columns nor Boolean derivation
 results.
 
-**R018-17.** Every argument and default exactly matches its declared type. There
+**R018-17.** Every argument and default matches its declared exact type. There
 is no implicit conversion, including no `int`-to-`float` widening. R011
 conversion can run only after the function has returned under the R005
 lifecycle. Argument names, requiredness, and exact types are contract-dependent
@@ -167,8 +167,8 @@ another expression. A calculation needed by a function is first declared as an
 internal column and then passed by name, preserving its visible dependency.
 
 **R018-20.** Omitting an optional argument selects its environment default.
-Explicitly passing missing never selects the default. `accepts_missing` defaults
-to `false` for each parameter:
+Passing missing explicitly never selects the default. `accepts_missing` is
+`false` by default for each parameter:
 
 - if any supplied value is missing for a non-accepting parameter, the call is
   not invoked and its result is missing; and
@@ -184,8 +184,8 @@ therefore does not require `may_return_missing: true`.
 the selected runtime: an R package-qualified name such as `projectbmi::bmi`, or
 a Python module-qualified name such as `orgstats.normal_cdf`. The environment
 also maps every logical parameter name to one unique host argument name. The
-mapping must cover the logical signature exactly. A Python host name is an ASCII
-Python identifier and not a Python keyword. An R host name is an unquoted
+mapping must exactly cover the logical signature. A Python host name is an
+ASCII identifier and not a Python keyword. An R host name is an unquoted
 syntactic R name and not a reserved word, `...`, or a `..n` positional name.
 
 **R018-23.** Inline code, anonymous functions, evaluation, shell commands,
@@ -223,18 +223,18 @@ that case:
 | `normal` | A contract-defined ordinary case |
 | `boundary` | A contract-defined boundary case |
 | `default:name` | The named optional parameter is omitted |
-| `accepted-missing:name` | The named accepting parameter is explicitly missing |
-| `short-circuit-missing:name` | The named non-accepting parameter is missing and the result is missing |
+| `accepted-missing:name` | Accepting `name` is explicitly missing |
+| `short-circuit-missing:name` | Missing non-accepting `name`; missing result |
 | `nullable-output` | An invoked nullable binding returns missing |
-| `boolean-true:name`, `boolean-false:name` | The named Boolean parameter is supplied with that value |
-| `numeric-comparison` | A non-missing `float` result exercises decimal comparison |
+| `boolean-true:name`, `boolean-false:name` | `name` has stated Boolean value |
+| `numeric-comparison` | Non-missing `float` result tests decimal comparison |
 
 **R018-28.** Every contract covers `normal` and `boundary`. Every optional
 parameter covers its default, every parameter covers its applicable missing
 behavior, and both values of every Boolean parameter are covered. A nullable
 contract covers `nullable-output`, and a float-returning contract covers
-`numeric-comparison`. Static validation checks inferable evidence in each tagged
-case and rejects any missing obligation. The contract author identifies which
+`numeric-comparison`. Static validation checks each tagged case for inferable
+evidence and rejects missing obligations. The contract author identifies which
 input is its semantic boundary; activation checks the declared result.
 
 **R018-29.** A project claiming the same contract in another language runs the
@@ -242,16 +242,16 @@ same vector content.
 
 **R018-30.** Activation loads the verified artifact and runs all vectors before
 any specification may execute. Success may be cached only for the exact
-combination of environment version, artifact digest, every contract fingerprint,
+combination of environment version, artifact digest, contract fingerprints,
 every implementation version, and the complete vector-content identity. Any
 change invalidates the cache and requires activation again.
 
 ## Numeric conformance and rounding
 
-**R018-31.** Nonnumeric expected results and missingness compare by their type's
-equality, including R019 for strings. Numeric results compare temporary decimal
+**R018-31.** Nonnumeric expected results and missingness use equality for their
+type, including R019 for strings. Numeric results compare temporary decimal
 copies at the contract's non-negative `comparison_decimals`; the default is
-four. At an exact decimal tie the copy is rounded to the nearest value away from
+four. At an exact decimal tie, the copy rounds to the nearest value away from
 zero. For example, at four places, `1.23445` becomes `1.2345` and `-1.23445`
 becomes `-1.2345`.
 
@@ -267,7 +267,7 @@ differences.
 A specification stays portable by naming a logical contract instead of runnable
 code: the same derivation can run in an R project or a Python project because
 neither the language choice nor the callable ever appears in it. One immutable
-runtime per project, pinned by digest and verified before activation, keeps that
+runtime per project, pinned by digest and verified before activation, makes
 execution reproducible and reviewable. Exact types with no implicit conversion,
 closed signatures, and activation vectors run before any specification executes
 exist for the same reason: a project function must return the same scalar in
@@ -283,7 +283,7 @@ binding, vector document, or duplicate logical declaration:
 `project_environment_invalid`. **R018-35.** Unsupported or mismatched runner
 language: `runner_language_mismatch`. **R018-36.** Missing or mismatched
 immutable artifact: `runtime_artifact_mismatch`. **R018-37.** A call naming no
-declared logical function: `unknown_project_function`. **R018-38.** A call whose
+declared logical function: `unknown_project_function`. **R018-38.** A call with
 exact contract version is unavailable: `function_contract_mismatch`.
 **R018-39.** An unknown, missing required, or incorrectly typed argument or
 default: `invalid_function_argument`. **R018-40.** A host exception or enforced
