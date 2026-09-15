@@ -224,6 +224,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-verification-implausible-age`](negative-verification-implausible-age/) | reject an implausible age |
 | [`odm-form-scoped-item-resolution`](odm-form-scoped-item-resolution/) | resolve items within their collection form |
 | [`sdtm-ae-dictionary-coding`](sdtm-ae-dictionary-coding/) | code reported terms against a medical dictionary |
+| [`sdtm-ae-partial-dates`](sdtm-ae-partial-dates/) | assemble partial dates at collected precision |
 | [`sdtm-ae-seriousness-criteria`](sdtm-ae-seriousness-criteria/) | mark serious events from collected seriousness criteria |
 | [`sdtm-dm-arm-assignment`](sdtm-dm-arm-assignment/) | assign planned and actual arms |
 | [`sdtm-dm-basic`](sdtm-dm-basic/) | build one subject record from collected data |
