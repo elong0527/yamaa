@@ -17,10 +17,10 @@ per reducer and without host-language code.
 ## Boundaries
 
 This rule owns the `aggregate_expression` primitive: its grammar, reducer
-vocabulary, grain rule, result semantics, and failure conditions. It does not
-own the three contexts an aggregate is valid in, which is R007, the join that
-consumes a right-side reduction, which is R003, or the Boolean `filter`, which
-is R004. String reductions use R019's text equality and total order.
+vocabulary, grain rule, result semantics, and failure conditions. R007 owns
+the three contexts an aggregate is valid in. R003 owns the join that consumes
+a right-side reduction. R004 owns the Boolean `filter`. String reductions use
+R019's text equality and total order.
 
 Arithmetic outside a reduction is R010's, reused by reference: its operators,
 precedence, function table, numeric types, promotion, and failure conditions
@@ -35,11 +35,10 @@ accepts exactly one record and fails when several are present.
 ## Scope
 
 **R013-1.** An `aggregate_expression` evaluates over records of one relation
-and returns one value per group. The result is a single value for the group,
-so the expression never changes row count: R003 joins a right-side reduction
-to constructed rows, an output-row reduction broadcasts under R007, and a
-grouped row template asks the expression for one value while R001 owns whether
-that candidate row is appended.
+and returns one value per group. The expression therefore never changes row
+count. R003 joins a right-side reduction to constructed rows. An output-row
+reduction broadcasts under R007. A grouped row template asks the expression
+for one value while R001 owns whether that candidate row is appended.
 
 ## Relations and identifiers
 
@@ -65,7 +64,7 @@ forms exist and must not be mixed:
   is R007's third aggregate context.
 
 **R013-4.** A single expression naming two datasets, or mixing a qualified
-identifier with an unqualified one, is an error. A reduction is not a join: an
+identifier with an unqualified one, is an error. A reduction is not a join. An
 expression combining values from two dataset relations binds each of them to a
 column first and composes the results with `compute`. R010 admits a qualified
 identifier only for a record selected by an R015 record lookup; it still
@@ -92,7 +91,7 @@ records for each current row. `value` is a variable the current row can read.
 `lower` and `upper` are qualified columns of the aggregate expression's one
 right-side relation, and at least one is required. Every declared comparison is
 inclusive: `lower <= value` and `value <= upper`. Omitting one bound makes the
-match one-sided; it does not exclude the stated endpoint.
+match one-sided without excluding the stated endpoint.
 
 **R013-8.** The value and every stated bound must be mutually comparable under
 R007. A missing current-row value admits no right-side record, so the aggregate
@@ -155,7 +154,7 @@ instead of inheriting a host language's mean implementation.
 
 **R013-15.** `SUM(x)` is a left fold of the non-missing argument values in
 relation record order. The accumulator starts with the first such value, and
-each later value is added using R010's `+` semantics; implementations must
+each later value is added using R010's `+` semantics. Implementations must
 not reorder, reassociate, partition, or use a compensated or correctly rounded
 summation. The `filter`, when present, removes records without changing the
 order of those that remain. R014 defines stored-source record order, and R001
@@ -175,7 +174,7 @@ record and must reject duplicates.
 
 **R013-18.** Reductions do not nest. A reduction argument must contain no
 reduction, so `MAX(SUM(EX.EXDOSE))` is an error. Reducing at one grain and
-reducing that result at another uses two specifications: the first artifact
+reducing that result at another uses two specifications. The first artifact
 names and validates the intermediate grain, and the downstream specification
 declares that stored artifact as an ordinary source under R002. Pipeline
 orchestration supplies the execution and materialization boundary; it is not
@@ -218,7 +217,7 @@ other expression. No implicit conversion happens inside this grammar.
 ## Missing values and empty groups
 
 **R013-26.** Inside a reduction's argument, `NULL` propagates under R010, so a
-record whose operand is missing contributes a missing value rather than a zero:
+record whose operand is missing contributes a missing value rather than a zero.
 `SUM(EX.EXDOSE * EX.EXDUR)` skips a record missing either factor.
 
 **R013-27.** A reduction then ignores missing values; the table pins the
@@ -271,14 +270,14 @@ is declared.
 
 ## Rationale
 
-One expression with a closed reducer vocabulary keeps reductions portable:
-anything outside the table fails validation, and no host dialect applies.
+One expression with a closed reducer vocabulary keeps reductions portable.
+Anything outside the table fails validation, and no host dialect applies.
 A left-fold `SUM` in relation record order pins binary64 rounding identically
-in R and Python; `MEAN` inherits the fold through its defined division.
-Missing handling is pinned: target runtimes disagree, so an uncollected
+in R and Python. `MEAN` inherits the fold through its defined division.
+Missing handling is pinned. Target runtimes disagree, so an uncollected
 quantity stays missing and an absent group stays distinguishable from
 a collected zero. `ONLY` rejects rather than chooses, so a one-record
-calculation cannot silently depend on order; choosing by value order stays
+calculation cannot silently depend on order. Choosing by value order stays
 with windows and `multiple_matches`, which declare the value order.
 
 ## Errors

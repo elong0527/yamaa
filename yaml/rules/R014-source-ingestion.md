@@ -16,27 +16,27 @@ Define a stored field's type and missingness before expressions read it.
 ## Boundaries
 
 This rule owns the step from a stored field to a bound value. R002 owns how a
-name binds to a dataset or an ODM item once that value exists, R011 owns
+name binds to a dataset or an ODM item once that value exists. R011 owns
 numeric parsing and non-finite normalization in addition to conversion of a
-completed derivation result, and R007 owns what each expression requires of an
+completed derivation result. R007 owns what each expression requires of an
 input it receives. R019 owns valid text and failures while decoding it. R021
 owns which file `path` and `schema` may reach and the byte snapshot this rule
-reads. R023 owns source-profile selection and the syntax of a delimited source;
-R027 owns the Parquet source profile. Each delivers ordered fields and records,
+reads. R023 owns source-profile selection and the syntax of a delimited source.
+R027 owns the Parquet source profile. Both deliver ordered fields and records,
 and this rule owns what their values mean.
 
 ## Source record order
 
 **R014-1.** The sequence of records in a stored source is part of the input
-contract. A reader must deliver records in their stored order and must
-preserve that order after field decoding and typing; parallel reads, batches,
+contract. A reader must deliver records in stored order and must
+preserve that order after field decoding and typing. Parallel reads, batches,
 partitions, or an engine's scan plan must not reorder them. Filtering
 preserves the relative order of the records that remain. R001 uses this
 sequence as base-record and grouped-input order, R007 uses it to break
 window ties, and R013 consumes it for ordered floating-point reduction.
 
 **R014-2.** Record order is not a substitute for a business key or a declared
-sort. It is the stable sequence of this particular artifact: replacing an
+sort. It is the stable sequence of this artifact. Replacing an
 artifact with the same records in another order changes the input and can
 therefore change an order-sensitive result.
 
@@ -58,8 +58,8 @@ type.
   otherwise.
 
 **R014-5.** `dataset_class.types` declares each named field's type in a
-typeless container. Any unnamed field is `str`. This statement
-about the dataset as this specification reads it: two specifications may read
+typeless container. Any unnamed field is `str`. This statement covers
+the dataset as this specification reads it. Two specifications may read
 the same delimited file with different declarations, because the file carries
 no types to contradict either of them. A dataset whose types matter to more
 than one specification belongs in a container that carries them.
@@ -80,7 +80,7 @@ contract and workflow provenance of the Yamaa specification that produces it.
 It is a `project_path` resolved like `dataset_class.path`, so R021 confines
 both. The referenced document is a
 complete specification validated against the same `root_class` in
-`schema.yaml`; there is no second source-schema class or field-description
+`schema.yaml`. There is no second source-schema class or field-description
 language.
 
 ```yaml
@@ -91,8 +91,8 @@ datasets:
 ```
 
 **R014-8.** The referenced specification is an executable workflow
-predecessor. Its sources must exist and validate, its derivations must be
-complete, and its `schema` links are validated recursively. The dependency
+predecessor. Its sources must exist and validate. Its derivations must be
+complete. Its `schema` links are validated recursively. The dependency
 graph must be acyclic. The producer completes before the consumer reads the
 artifact named by `path`. A link cannot name the consuming specification or
 another specification already above it in the workflow.
@@ -115,13 +115,13 @@ recognizing missing values, ingestion applies the `str` row of R011's
 conversion table to every non-missing cell. In particular, a producer column
 declared `date` or `datetime` uses R016's lexical grammar and representations,
 exactly as an inline `types` declaration or a column conversion does. A
-Parquet artifact instead supplies typed values under R027; a workflow link
+A Parquet artifact instead supplies typed values under R027. A workflow link
 does not convert those values through text.
 
 ## Values are never inferred
 
 **R014-12.** An implementation must not infer a field's type from its
-values. A declared type states what the study collects, and a value that
+values. A declared type states what the study collects. A value that
 does not match it is a defect in the data rather than a reason to retype the
 field.
 
@@ -138,7 +138,7 @@ only after parsing as numbers.
 
 **R014-14.** An ingestion failure is not a conversion failure.
 `conversion_failure` is declared on a column and answers for a value the
-derivation produced, as R005 and R008 define; a stored value that does not
+derivation produced, as R005 and R008 define. A stored value that does not
 match its field's declared type is rejected before any derivation runs and
 no handler answers for it. A specification that wants to see such a value
 declares the field `str` and converts it at the column that consumes it,
@@ -146,13 +146,12 @@ where a handler exists.
 
 ## Missing values
 
-**R014-15.** A missing value is the absence of a value, and it is recognized
-before typing. Every type admits it, and R008's handlers answer for it.
+**R014-15.** A missing value is the absence of a value. It is recognized
+before typing. Every type admits it. R008's handlers answer for it.
 
 **R014-16.** In a delimited source, a field with no characters is missing,
 whether it was bare or quoted. No type admits an empty string from a
-delimited source: there is no collected-empty value distinct from a
-missing one.
+delimited source. No collected-empty value is distinct from a missing one.
 
 **R014-17.** No text is a missing-value sentinel. `NA`, `NULL`, `.`,
 `unknown`, and every other spelling are ordinary string values.
@@ -162,18 +161,18 @@ parse failure, because it holds no text to parse.
 
 ## Rationale
 
-Inference would make a type a property of one extract: a dose field of
+Inference would make a type a property of one extract. A dose field of
 digits is numeric in January and text in February when one result arrives as
-`<50`, and the run then fails on an expression that was correct; a site
+`<50`. The run then fails on an expression that was correct. A site
 identifier of `007` becomes the number seven, silently rewriting every value
-it identifies; a field complete with dates in a small extract becomes a
-date, and the partial value the study permits fails on arrival. Guessing
-substitutes a reading of the extract for the declaration of the study, and
-does so differently for every extract. A reader that treats a spelling such
-as `NA` or `.` as absence loses `NA` as a region, `.` as a separator, and a
-collected `unknown` as a recorded answer before any rule in this design can
-see the value; a study that records absence with a code maps that code to a
-result where the specification can be read.
+the identifier identifies. A field complete with dates in a small extract
+becomes a date. The partial value the study permits then fails on arrival.
+Guessing substitutes a reading of the extract for the declaration of the
+study, and does so differently for every extract. A reader that treats a
+spelling such as `NA` or `.` as absence loses `NA` as a region, `.` as a
+separator, and a collected `unknown` as a recorded answer before any rule in
+this design can see the value. A study that records absence with a code maps
+that code to a result where the specification can be read.
 
 ## Errors
 
