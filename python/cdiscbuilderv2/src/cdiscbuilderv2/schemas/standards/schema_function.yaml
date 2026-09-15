@@ -1,0 +1,11 @@
+version: "1.0"
+
+# The project environment resolves the function name.
+
+expressions:
+    function:
+        - name: {type: str, required: true, min_length: 1}
+        - args: {type: "dict[str, function_arg]", required: false, default: {}}
+
+function_arg:
+    type: [variable, int, float, bool, "null", expression]

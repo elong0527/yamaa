@@ -1,0 +1,45 @@
+version: "1.0"
+
+includes:
+    - schema_derivation.yaml
+    - schema_verification.yaml
+
+root_class:
+    - domain: {type: str, required: true}
+    - datasets: {type: "dict[str, path]", required: true}
+    - base: {type: str, required: false}
+    - parents: {type: [path, "list[path]"], required: false}
+    - keys: {type: "list[str]", required: true}
+    - columns: {type: "list[column_class]", required: true}
+    - rows: {type: "list[row_class]", required: false}
+    - verifications: {type: [dataset_verification, "list[dataset_verification]"], required: false}
+    - metadata: {type: "dict[str, str]", required: false}
+
+column_class:
+    - name: {type: str, required: true}
+    - type: {type: str, required: true}
+    - label: {type: str, required: false}
+    - derivation: {type: derivation, required: false}
+    - verifications: {type: [column_verification, "list[column_verification]"], required: false}
+    - metadata: {type: "dict[str, str]", required: false}
+
+row_class:
+    - id: {type: str, required: true}
+    - dataset: {type: str, required: false}
+    - filter: {type: sql, required: false}
+    - derivations: {type: "dict[str, derivation]", required: true}
+
+literal_value:
+    type: [str, int, float, bool, "null"]
+
+variable:
+    type: str
+    pattern: '^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$'
+
+path:
+    type: str
+    min_length: 1
+
+sql:
+    type: str
+    min_length: 1

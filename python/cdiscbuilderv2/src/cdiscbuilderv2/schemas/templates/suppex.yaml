@@ -1,0 +1,25 @@
+SUPPEX:
+  - formoid: ["FO.NCT00789880.EX"]
+    keys: ["StudyOID", "SubjectKey", "ItemGroupRepeatKey"]
+    columns:
+      STUDYID:
+        source: "StudyOID"
+      RDOMAIN:
+        literal: "EX"
+      USUBJID:
+        source: "SubjectKey"
+      IDVAR:
+        literal: "EXSEQ"
+      IDVARVAL:
+        source: "EX.EXSEQ"
+        merge_on: ["USUBJID", "ItemGroupRepeatKey"]
+      QNAM:
+        literal: "CMPLPCT"
+      QLABEL:
+        literal: "Treatment Compliance (%)"
+      QVAL:
+        source: "IT.NCT00789880.EX.COMPLIANCE_PCT"
+      QORIG:
+        literal: "DERIVED"
+      QEVAL:
+        literal: ""

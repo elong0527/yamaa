@@ -1,0 +1,22 @@
+version: "1.0"
+
+expressions:
+    mapping:
+        - source: {type: variable, required: true}
+        - dict: {type: "dict[str, literal_value]", required: true}
+        - case_sensitive: {type: bool, required: false, default: true}
+        - missing: {type: literal_value, required: false}
+        - unmapped: {type: literal_value, required: false}
+    mapping_from:
+        - source: {type: variable, required: true}
+        - dataset: {type: str, required: true}
+        - key: {type: str, required: true}
+        - value: {type: str, required: true}
+        - missing: {type: literal_value, required: false}
+        - unmapped: {type: literal_value, required: false}
+    cut:
+        - source: {type: variable, required: true}
+        - breaks: {type: "list[float]", required: true}
+        - labels: {type: "list[str]", required: true}
+        - right: {type: bool, required: false, default: false}
+        - missing: {type: literal_value, required: false}
