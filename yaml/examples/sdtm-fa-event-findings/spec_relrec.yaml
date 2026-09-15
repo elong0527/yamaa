@@ -1,0 +1,76 @@
+schema_version: "1.0"
+domain: RELREC
+datasets:
+  ODM: input/odm.csv
+keys: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
+
+output:
+  path: relrec.csv
+  columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      literal: null
+
+  - name: RDOMAIN
+    type: str
+    label: Related Domain Abbreviation
+
+  - name: IDVAR
+    type: str
+    label: Identifying Variable
+
+  - name: IDVARVAL
+    type: str
+    label: Identifying Variable Value
+    derivation:
+      literal: null
+
+  - name: RELTYPE
+    type: str
+    label: Relationship Type
+
+  - name: RELID
+    type: int
+    label: Relationship Identifier
+    derivation:
+      row_number:
+        group_by: [RDOMAIN]
+        order_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventRepeatKey]
+
+rows:
+  - id: fa_relrec
+    filter: "ODM.ItemOID = 'IT.FA.LINKID' AND ODM.Value IS NOT NULL"
+    derivations:
+      RDOMAIN:
+        literal: FA
+      IDVAR:
+        literal: FALNKID
+      RELTYPE:
+        literal: MANY
+
+  - id: ae_relrec
+    filter: "ODM.ItemOID = 'IT.AE.AETERM' AND ODM.Value = 'RASH'"
+    derivations:
+      RDOMAIN:
+        literal: AE
+      IDVAR:
+        literal: AELNKID
+      RELTYPE:
+        literal: ONE
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
+  - row_count:
+      min: 6
+      max: 6

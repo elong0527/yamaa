@@ -81,7 +81,6 @@ the safest correction and shows the smallest useful YAML change.
 | [`adam-adrs-measurable-disease`](adam-adrs-measurable-disease/) | derive measurable disease at baseline |
 | [`adam-adrs-overall-response-records`](adam-adrs-overall-response-records/) | prepare the overall response records an endpoint reads |
 | [`adam-adsl-age-group`](adam-adsl-age-group/) | derive age group |
-| [`adam-adsl-age-quality-review`](adam-adsl-age-quality-review/) | retain an implausible age for data review |
 | [`adam-adsl-analysis-age`](adam-adsl-analysis-age/) | analysis age |
 | [`adam-adsl-bmi-compute`](adam-adsl-bmi-compute/) | compute BMI from height and weight |
 | [`adam-adsl-bmi-function`](adam-adsl-bmi-function/) | compute BMI by calling a routine the project supplies |
@@ -201,7 +200,6 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-row-number-numeric-filter`](negative-row-number-numeric-filter/) | reject a sequence filtered by a number |
 | [`negative-row-value-self-reference`](negative-row-value-self-reference/) | reject a weight carried forward from a carried-forward weight |
 | [`negative-row-value-zero-offset`](negative-row-value-zero-offset/) | reject a previous weight that names no earlier visit |
-| [`negative-sex-code-pattern-mismatch`](negative-sex-code-pattern-mismatch/) | reject a recorded sex outside the accepted codes |
 | [`negative-source-duplicate-field-name`](negative-source-duplicate-field-name/) | reject a subject listing that names one field twice |
 | [`negative-source-duplicate-right-key`](negative-source-duplicate-right-key/) | reject duplicate subject enrichment |
 | [`negative-source-empty-field-name`](negative-source-empty-field-name/) | reject a subject listing with an unnamed field |
@@ -225,13 +223,12 @@ the safest correction and shows the smallest useful YAML change.
 | [`odm-form-scoped-item-resolution`](odm-form-scoped-item-resolution/) | resolve items within their collection form |
 | [`sdtm-ae-dictionary-coding`](sdtm-ae-dictionary-coding/) | code reported terms against a medical dictionary |
 | [`sdtm-ae-seriousness-criteria`](sdtm-ae-seriousness-criteria/) | mark serious events from collected seriousness criteria |
-| [`sdtm-dm-arm-assignment`](sdtm-dm-arm-assignment/) | assign planned and actual arms |
 | [`sdtm-dm-basic`](sdtm-dm-basic/) | build one subject record from collected data |
-| [`sdtm-dm-death`](sdtm-dm-death/) | derive death date and flag from disposition and adverse events |
 | [`sdtm-dm-metadata-contract`](sdtm-dm-metadata-contract/) | declare the metadata a submission needs |
 | [`sdtm-dm-reference-dates`](sdtm-dm-reference-dates/) | derive the reference dates from EX, DS, and AE |
 | [`sdtm-ds-disposition-sequence`](sdtm-ds-disposition-sequence/) | number each subject's disposition records in date order |
 | [`sdtm-ex-combination-regimen`](sdtm-ex-combination-regimen/) | represent a combination regimen |
+| [`sdtm-fa-event-findings`](sdtm-fa-event-findings/) | record supplemental rash findings for each adverse event and link them to it |
 | [`sdtm-fa-fever-occurrence`](sdtm-fa-fever-occurrence/) | fever occurrence |
 | [`sdtm-lb-conditional-compartments`](sdtm-lb-conditional-compartments/) | tell an inapplicable compartment from an uncollected sample |
 | [`sdtm-lb-ctcae-grading`](sdtm-lb-ctcae-grading/) | assign toxicity grades |
