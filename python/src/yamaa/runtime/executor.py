@@ -38,7 +38,7 @@ from yamaa.planning import (
     plan_execution,
     preflight_execution,
 )
-from yamaa.runtime.joins import RelationIndex, build_relation_indexes
+from yamaa.runtime.joins import KeyCorrelation, RelationIndex, build_relation_indexes
 from yamaa.runtime.lifecycle import (
     HandlerCount,
     HandlerCounter,
@@ -384,6 +384,204 @@ def _partition_scope(context: RelationalContext, rows: list[CandidateRow]):
         context._partitions = saved_partitions
 
 
+def _ordered_scalar_keys(
+    key_names: Sequence[str],
+    key_derivations_by_name: Mapping[str, PlannedDerivation],
+) -> tuple[str, ...]:
+    """Return scalar keys in an order that respects key-to-key references."""
+    remaining = set(key_names)
+    ordered: list[str] = []
+    while remaining:
+        ready = {
+            name
+            for name in remaining
+            if all(
+                dep in ordered or dep not in key_names
+                for dep in key_derivations_by_name[name].dependencies
+            )
+        }
+        if not ready:
+            # A cycle among keys should have been caught during planning.
+            # Fall back to declaration order to avoid hanging.
+            return tuple(name for name in key_names if name in remaining)
+        # Deterministic: prefer declaration order.
+        for name in key_names:
+            if name in ready:
+                ordered.append(name)
+                remaining.remove(name)
+    return tuple(ordered)
+
+
+def _build_key_correlation(
+    plan,
+    sources: Mapping[str, SourceTable],
+    column_types: Mapping[str, str],
+    dispatcher: ExpressionDispatcher,
+    counter: HandlerCounter,
+) -> KeyCorrelation | None:
+    """Compile new-style key derivations into per-record key functions."""
+    if plan.key_dataset is None or not plan.key_derivations:
+        return None
+    key_bindings = BindingIndex(plan.bindings, sources)
+    key_context = RelationalContext(
+        bindings=key_bindings,
+        relations={},
+        lookups=RecordLookupSelector((), {}),
+        output_keys=tuple(plan.specification.keys),
+    )
+    key_names = tuple(plan.specification.keys)
+    key_derivations_by_name = {
+        derivation.column: derivation for derivation in plan.key_derivations
+    }
+
+    scalar_keys = [
+        name
+        for name in key_names
+        if key_derivations_by_name[name].declaration.value.operation
+        not in WINDOW_OPERATIONS
+    ]
+    window_derivations = [
+        key_derivations_by_name[name]
+        for name in key_names
+        if key_derivations_by_name[name].declaration.value.operation in WINDOW_OPERATIONS
+    ]
+    ordered_scalar = _ordered_scalar_keys(key_names, key_derivations_by_name)
+    ordered_scalar = [name for name in ordered_scalar if name in scalar_keys]
+
+    def scalar_evaluator(record: Mapping[str, object]) -> dict[str, object]:
+        candidate = CandidateRow(
+            source_rows={plan.key_dataset: dict(record)},
+            values={},
+        )
+        values: dict[str, object] = {}
+        for name in ordered_scalar:
+            derivation = key_derivations_by_name[name]
+            value = _evaluate_one(
+                derivation,
+                column_types,
+                candidate,
+                key_context,
+                dispatcher,
+                counter,
+                key_names,
+            )
+            values[name] = value
+            candidate.values[name] = value
+        return values
+
+    def window_evaluator(
+        probes: Sequence[CandidateRow], relation: RelationIndex
+    ) -> Sequence[dict[str, object]]:
+        del relation
+        for position, probe in enumerate(probes):
+            probe.output_position = position
+        with _partition_scope(key_context, probes):
+            for probe in probes:
+                for derivation in window_derivations:
+                    probe.values[derivation.column] = _evaluate_one(
+                        derivation,
+                        column_types,
+                        probe,
+                        key_context,
+                        dispatcher,
+                        counter,
+                        key_names,
+                    )
+        return [dict(probe.values) for probe in probes]
+
+    return KeyCorrelation(
+        dataset=plan.key_dataset,
+        key_names=key_names,
+        scalar_evaluator=scalar_evaluator,
+        window_evaluator=window_evaluator if window_derivations else None,
+    )
+
+
+def _build_project_record(
+    plan,
+    sources: Mapping[str, SourceTable],
+    key_correlation: KeyCorrelation,
+    column_types: Mapping[str, str],
+    dispatcher: ExpressionDispatcher,
+    counter: HandlerCounter,
+) -> Callable[
+    [str, Mapping[str, object], frozenset[str], Mapping[str, object] | None],
+    dict[str, object],
+]:
+    """Return a function that projects a relation row onto output columns.
+
+    New-style aggregates group and reduce over output-column values
+    recomputed from the relation's native rows.  The projector evaluates the
+    minimal column derivation graph required by the caller.
+    """
+    key_context = RelationalContext(
+        bindings=BindingIndex(plan.bindings, sources),
+        relations={},
+        lookups=RecordLookupSelector((), {}),
+        output_keys=tuple(plan.specification.keys),
+        key_correlation=key_correlation,
+    )
+    column_plans_by_name = {
+        planned.column: planned for planned in plan.columns
+    }
+
+    def project(
+        dataset: str,
+        record: Mapping[str, object],
+        needed: frozenset[str],
+        seed: Mapping[str, object] | None = None,
+    ) -> dict[str, object]:
+        values: dict[str, object] = (
+            dict(seed) if seed is not None else dict(key_correlation.evaluate_scalar_keys(record))
+        )
+        pending = set(needed)
+        expanded = True
+        while expanded:
+            expanded = False
+            for name in list(pending):
+                derivation = column_plans_by_name.get(name)
+                if derivation is None:
+                    continue
+                for dep in derivation.dependencies:
+                    if dep in column_plans_by_name and dep not in pending:
+                        pending.add(dep)
+                        expanded = True
+        pending -= set(values)
+        computed = set(values)
+        while pending:
+            ready = {
+                name
+                for name in pending
+                if name in column_plans_by_name
+                and all(
+                    dep in computed
+                    for dep in column_plans_by_name[name].dependencies
+                )
+            }
+            if not ready:
+                break
+            for name in sorted(ready):
+                derivation = column_plans_by_name[name]
+                candidate = CandidateRow(
+                    source_rows={dataset: dict(record)},
+                    values=dict(values),
+                )
+                values[name] = _evaluate_one(
+                    derivation,
+                    column_types,
+                    candidate,
+                    key_context,
+                    dispatcher,
+                    counter,
+                    plan.specification.keys,
+                )
+                computed.add(name)
+            pending -= ready
+        return values
+
+    return project
+
+
 def _key_space(
     plan,
     driver_rows: Sequence[dict[str, object]],
@@ -403,6 +601,44 @@ def _key_space(
     in first-appearance order (R001-12). Records with a missing key keep one
     entry each so the missing key still fails at the output gate.
     """
+    key_correlation = context.key_correlation
+    if key_correlation is not None:
+        key_names = list(key_correlation.key_names)
+        groups: dict[_KeyToken, list[dict[str, object]]] = {}
+        order: list[_KeyToken] = []
+        key_values: dict[_KeyToken, tuple[object, ...]] = {}
+
+        scalar_values = [
+            key_correlation.scalar_evaluator(driver_row) for driver_row in driver_rows
+        ]
+        probes: list[CandidateRow] = []
+        for driver_row, values in zip(driver_rows, scalar_values):
+            probes.append(
+                CandidateRow(
+                    source_rows={driver: driver_row},
+                    values=dict(values),
+                )
+            )
+        if key_correlation.window_evaluator is not None:
+            driver_relation = context.relations.get(driver)
+            if driver_relation is not None:
+                window_values = key_correlation.window_evaluator(probes, driver_relation)
+                for probe, window_value in zip(probes, window_values):
+                    probe.values.update(window_value)
+
+        for position, probe in enumerate(probes):
+            values = tuple(probe.values[name] for name in key_names)
+            if any(value is MISSING for value in values):
+                token: _KeyToken = ("__missing_key__", position)
+            else:
+                token = values
+            if token not in groups:
+                groups[token] = []
+                order.append(token)
+                key_values[token] = values
+            groups[token].append(driver_rows[position])
+        return key_values, groups, order
+
     key_names = list(plan.specification.keys)
     key_plans = [planned for planned in plan.columns if planned.column in key_names]
     scalar_plans = [
@@ -415,9 +651,9 @@ def _key_space(
         for planned in key_plans
         if planned.declaration.value.operation in WINDOW_OPERATIONS
     ]
-    groups: dict[_KeyToken, list[dict[str, object]]] = {}
-    order: list[_KeyToken] = []
-    key_values: dict[_KeyToken, tuple[object, ...]] = {}
+    groups = {}
+    order = []
+    key_values = {}
     probes: list[CandidateRow] = []
     for driver_row in driver_rows:
         probe = CandidateRow(source_rows={driver: driver_row}, values={})
@@ -450,9 +686,9 @@ def _key_space(
     for position, probe in enumerate(probes):
         values = tuple(probe.values[planned.column] for planned in key_plans)
         if any(value is MISSING for value in values):
-            token: _KeyToken = ("__missing_key__", position)
+            token = ("__missing_key__", position)
         else:
-            token = tuple(values)
+            token = values
         if token not in groups:
             groups[token] = []
             order.append(token)
@@ -692,11 +928,26 @@ def execute_specification(
     _register_handler_paths(plan, counter)
     try:
         relations = build_relation_indexes(sources)
+        column_types = {
+            column.name: column.type for column in specification.columns
+        }
+        key_correlation = _build_key_correlation(
+            plan, sources, column_types, selected_dispatcher, counter
+        )
+        project_record = (
+            _build_project_record(
+                plan, sources, key_correlation, column_types, selected_dispatcher, counter
+            )
+            if key_correlation is not None
+            else None
+        )
         context = RelationalContext(
             bindings=BindingIndex(plan.bindings, sources),
             relations=relations,
             lookups=RecordLookupSelector(plan.record_lookups, relations),
             output_keys=tuple(specification.keys),
+            key_correlation=key_correlation,
+            project_record=project_record,
         )
         candidates = _construct_rows(
             plan,

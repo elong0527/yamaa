@@ -21,8 +21,12 @@ root_class:
         description: Name of the output dataset this specification derives.
     - datasets:
         type: "dict[dataset_id, dataset_source]"
-        required: true
+        required: false
         description: Source datasets readable by this specification, each under the name it is read through.
+    - input:
+        type: "dict[dataset_id, dataset_source]"
+        required: false
+        description: Alias for datasets; exactly one of datasets or input must be present.
     - base:
         type: dataset_id
         required: false

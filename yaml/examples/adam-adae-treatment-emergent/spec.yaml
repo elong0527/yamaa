@@ -10,24 +10,26 @@ output:
   path: adae.csv
   columns: [STUDYID, USUBJID, AESEQ, ASTDT, TRTSDT, TRTEDT, TRTA, TRTEMFL]
 
+rows:
+  - id: record
+    dataset: AE
+    derivations:
+      STUDYID: {source: AE.STUDYID}
+      USUBJID: {source: AE.USUBJID}
+      AESEQ: {source: AE.AESEQ}
+
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: AE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: AE.USUBJID
 
   - name: AESEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: AE.AESEQ
 
   - name: ASTDT
     type: date

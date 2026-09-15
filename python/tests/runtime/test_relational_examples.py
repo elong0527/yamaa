@@ -394,6 +394,12 @@ output:
   path: advs.csv
   columns: [STUDYID, USUBJID, VSSEQ, ADY, AVAL, EXPDOSE, EPOCH, EPOCHLIM, STUDYTOT]
 
+rows:
+  - id: record
+    dataset: VS
+    derivations:
+      VSSEQ: {source: VS.VSSEQ}
+
 columns:
   - name: STUDYID
     type: str
@@ -403,7 +409,6 @@ columns:
     derivation: {source: VS.USUBJID}
   - name: VSSEQ
     type: int
-    derivation: {source: VS.VSSEQ}
   - name: ADY
     type: int
     derivation: {source: VS.ADY}
@@ -555,6 +560,12 @@ output:
   path: advs.csv
   columns: [STUDYID, USUBJID, VSSEQ, ADY, EXPDOSE]
 
+rows:
+  - id: record
+    dataset: VS
+    derivations:
+      VSSEQ: {source: VS.VSSEQ}
+
 columns:
   - name: STUDYID
     type: str
@@ -564,7 +575,6 @@ columns:
     derivation: {source: VS.USUBJID}
   - name: VSSEQ
     type: int
-    derivation: {source: VS.VSSEQ}
   - name: ADY
     type: int
     derivation: {source: VS.ADY}
@@ -617,13 +627,18 @@ output:
   path: dm.csv
   columns: [STUDYID, USUBJID, DIAG]
 
+rows:
+  - id: subject
+    dataset: DM_RAW
+    derivations:
+      USUBJID: {source: DM_RAW.USUBJID}
+
 columns:
   - name: STUDYID
     type: str
     derivation: {source: DM_RAW.STUDYID}
   - name: USUBJID
     type: str
-    derivation: {source: DM_RAW.USUBJID}
   - name: DIAG
     type: str
     derivation: {source: ODM.IT.DM.DIAGGRP}

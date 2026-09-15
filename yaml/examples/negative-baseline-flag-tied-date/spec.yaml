@@ -10,30 +10,31 @@ output:
   path: adlb.csv
   columns: [STUDYID, USUBJID, PARAMCD, LBSEQ, ADT, TRTSDT, AVAL, ABLFL, BASE]
 
+rows:
+  - id: record
+    dataset: LB
+    derivations:
+      STUDYID: {source: LB.STUDYID}
+      USUBJID: {source: LB.USUBJID}
+      PARAMCD: {source: LB.LBTESTCD}
+      LBSEQ: {source: LB.LBSEQ}
+
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: LB.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: LB.USUBJID
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      source: LB.LBTESTCD
 
   - name: LBSEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: LB.LBSEQ
 
   - name: ADT
     type: date

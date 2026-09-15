@@ -73,6 +73,17 @@ class MultipleMatchResolver(Protocol):
     ) -> Resolution: ...
 
 
+class KeyedSourceResolver(Protocol):
+    """Optional resolver extension for structured sources with a filter."""
+
+    def resolve_keyed_source(
+        self,
+        variable: str,
+        filter_text: str | None,
+        multiple_matches: Mapping[str, object] | None,
+    ) -> Resolution: ...
+
+
 class MappingResolver:
     """Small in-memory resolver useful for scalar execution and tests."""
 
@@ -91,6 +102,21 @@ class MappingResolver:
     ) -> Resolution:
         del multiple_matches
         return self.resolve(variable)
+
+    def resolve_keyed_source(
+        self,
+        variable: str,
+        filter_text: str | None,
+        multiple_matches: Mapping[str, object] | None,
+    ) -> Resolution:
+        del filter_text, multiple_matches
+        return FailedResolution(
+            condition=RuntimeCondition(
+                phase="validation",
+                condition="unsupported_source",
+                context={"identifier": variable, "reason": "resolver has no relations"},
+            )
+        )
 
 
 ExpressionHandler: TypeAlias = Callable[[object, Resolver], EvaluationResult]
@@ -156,7 +182,17 @@ def _source(payload: object, resolver: Resolver) -> EvaluationResult:
             "invalid_field_type",
             {"field": "multiple_matches", "expected": "mapping"},
         )
-    if multiple is None:
+    filter_text = options.get("filter")
+    if filter_text is not None and isinstance(filter_text, str):
+        resolve_keyed = getattr(resolver, "resolve_keyed_source", None)
+        if not callable(resolve_keyed):
+            return expression_condition(
+                "validation",
+                "invalid_field_type",
+                {"field": "filter", "reason": "resolver unsupported"},
+            )
+        resolved = resolve_keyed(variable, filter_text, multiple)
+    elif multiple is None:
         resolved = resolver.resolve(variable)
     else:
         resolve_multiple = getattr(resolver, "resolve_with_multiple_matches", None)
@@ -200,14 +236,28 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
             "invalid_field_type",
             {"operation": "mapping", "expected": "mapping"},
         )
-    variable = payload.get("source")
+    source = payload.get("source")
     dictionary = payload.get("dict")
     case_sensitive = payload.get("case_sensitive", True)
-    if (
-        not isinstance(variable, str)
-        or not isinstance(dictionary, Mapping)
-        or type(case_sensitive) is not bool
-    ):
+    if not isinstance(dictionary, Mapping) or type(case_sensitive) is not bool:
+        return expression_condition(
+            "validation",
+            "invalid_field_type",
+            {"operation": "mapping", "expected": "source and dict"},
+        )
+    if isinstance(source, str):
+        variable = source
+        filter_text: str | None = None
+    elif isinstance(source, Mapping):
+        variable = source.get("variable")
+        filter_text = source.get("filter") if isinstance(source.get("filter"), str) else None
+        if not isinstance(variable, str):
+            return expression_condition(
+                "validation",
+                "invalid_field_type",
+                {"operation": "mapping", "expected": "source variable"},
+            )
+    else:
         return expression_condition(
             "validation",
             "invalid_field_type",
@@ -243,7 +293,17 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
                 field="dict",
             )
 
-    resolved = resolver.resolve(variable)
+    if filter_text is not None:
+        resolve_keyed = getattr(resolver, "resolve_keyed_source", None)
+        if not callable(resolve_keyed):
+            return expression_condition(
+                "validation",
+                "invalid_field_type",
+                {"field": "filter", "reason": "resolver unsupported"},
+            )
+        resolved = resolve_keyed(variable, filter_text, None)
+    else:
+        resolved = resolver.resolve(variable)
     if isinstance(resolved, FailedResolution):
         return ConditionResult(condition=resolved.condition)
     if isinstance(resolved, AbsentValue):

@@ -3291,6 +3291,221 @@ class TestSpecContracts(unittest.TestCase):
         )
 
 
+class TestSpecInputAliasAndNewStyle(unittest.TestCase):
+    def setUp(self):
+        self.env, schema_errors = VALIDATOR.build_schema_env(
+            TOOL_PATH.parents[3]
+        )
+        self.assertEqual(schema_errors, [])
+        self.test_dir = tempfile.TemporaryDirectory()
+        self.example_dir = Path(self.test_dir.name)
+        self.input_dir = self.example_dir / "input"
+        self.input_dir.mkdir()
+        self.spec_path = self.example_dir / "spec.yaml"
+        (self.input_dir / "dm.csv").write_text(
+            "STUDYID,USUBJID,AGE\nS1,P1,42\n", encoding="utf-8"
+        )
+        (self.input_dir / "vs.csv").write_text(
+            "STUDYID,USUBJID,VSSEQ\nS1,P1,1\n", encoding="utf-8"
+        )
+
+    def tearDown(self):
+        self.test_dir.cleanup()
+
+    def _spec(self, text):
+        self.spec_path.write_text(text, encoding="utf-8")
+        with open(self.spec_path, 'r', encoding='utf-8') as handle:
+            return yaml.load(handle, Loader=VALIDATOR.UniqueKeyLoader)
+
+    def test_accepts_input_alias(self):
+        spec = self._spec(
+            'schema_version: "1.0"\n'
+            'domain: ADSL\n'
+            'input:\n'
+            '  DM: input/dm.csv\n'
+            'keys: [STUDYID, USUBJID]\n'
+            'output:\n'
+            '  path: adsl.csv\n'
+            '  columns: [STUDYID, USUBJID]\n'
+            'columns:\n'
+            '  - name: STUDYID\n'
+            '    type: str\n'
+            '    label: Study Identifier\n'
+            '    derivation: {source: DM.STUDYID}\n'
+            '  - name: USUBJID\n'
+            '    type: str\n'
+            '    label: Unique Subject Identifier\n'
+            '    derivation: {source: DM.USUBJID}\n'
+        )
+
+        errors = VALIDATOR.validate_spec_document(
+            spec, 'example/spec.yaml', self.spec_path, self.env
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_rejects_both_input_and_datasets(self):
+        spec = self._spec(
+            'schema_version: "1.0"\n'
+            'domain: ADSL\n'
+            'datasets:\n'
+            '  DM: input/dm.csv\n'
+            'input:\n'
+            '  DM: input/dm.csv\n'
+            'keys: [STUDYID, USUBJID]\n'
+            'output:\n'
+            '  path: adsl.csv\n'
+            '  columns: [STUDYID, USUBJID]\n'
+            'columns:\n'
+            '  - name: STUDYID\n'
+            '    type: str\n'
+            '    label: Study Identifier\n'
+            '    derivation: {source: DM.STUDYID}\n'
+            '  - name: USUBJID\n'
+            '    type: str\n'
+            '    label: Unique Subject Identifier\n'
+            '    derivation: {source: DM.USUBJID}\n'
+        )
+
+        errors = VALIDATOR.validate_spec_document(
+            spec, 'example/spec.yaml', self.spec_path, self.env
+        )
+
+        message = "\n".join(errors)
+        self.assertIn("exactly one of 'datasets' or 'input'", message)
+        self.assertIn("both are declared", message)
+
+    def test_rejects_neither_input_nor_datasets(self):
+        spec = self._spec(
+            'schema_version: "1.0"\n'
+            'domain: ADSL\n'
+            'keys: [STUDYID, USUBJID]\n'
+            'output:\n'
+            '  path: adsl.csv\n'
+            '  columns: [STUDYID, USUBJID]\n'
+            'columns:\n'
+            '  - name: STUDYID\n'
+            '    type: str\n'
+            '    label: Study Identifier\n'
+            '    derivation: {literal: S1}\n'
+            '  - name: USUBJID\n'
+            '    type: str\n'
+            '    label: Unique Subject Identifier\n'
+            '    derivation: {literal: P1}\n'
+        )
+
+        errors = VALIDATOR.validate_spec_document(
+            spec, 'example/spec.yaml', self.spec_path, self.env
+        )
+
+        message = "\n".join(errors)
+        self.assertIn("exactly one of 'datasets' or 'input'", message)
+        self.assertIn("neither is declared", message)
+
+    def test_accepts_structured_source_with_filter(self):
+        spec = self._spec(
+            'schema_version: "1.0"\n'
+            'domain: ADSL\n'
+            'datasets:\n'
+            '  DM: input/dm.csv\n'
+            'keys: [STUDYID, USUBJID]\n'
+            'output:\n'
+            '  path: adsl.csv\n'
+            '  columns: [STUDYID, USUBJID, AGE]\n'
+            'columns:\n'
+            '  - name: STUDYID\n'
+            '    type: str\n'
+            '    label: Study Identifier\n'
+            '    derivation: {source: DM.STUDYID}\n'
+            '  - name: USUBJID\n'
+            '    type: str\n'
+            '    label: Unique Subject Identifier\n'
+            '    derivation: {source: DM.USUBJID}\n'
+            '  - name: AGE\n'
+            '    type: int\n'
+            '    label: Age\n'
+            '    derivation:\n'
+            '      source:\n'
+            '        variable: DM.AGE\n'
+            '        filter: "USUBJID <> \'X\'"\n'
+        )
+
+        errors = VALIDATOR.validate_spec_static_semantics(
+            spec, 'example/spec.yaml', self.spec_path, self.env
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_rejects_rows_in_new_style_spec(self):
+        spec = self._spec(
+            'schema_version: "1.0"\n'
+            'domain: ADSL\n'
+            'input:\n'
+            '  DM: input/dm.csv\n'
+            'keys: [STUDYID, USUBJID]\n'
+            'output:\n'
+            '  path: adsl.csv\n'
+            '  columns: [STUDYID, USUBJID]\n'
+            'rows:\n'
+            '  - id: record\n'
+            '    dataset: DM\n'
+            '    derivations:\n'
+            '      STUDYID: {source: DM.STUDYID}\n'
+            '      USUBJID: {source: DM.USUBJID}\n'
+            'columns:\n'
+            '  - name: STUDYID\n'
+            '    type: str\n'
+            '    label: Study Identifier\n'
+            '    derivation: {source: DM.STUDYID}\n'
+            '  - name: USUBJID\n'
+            '    type: str\n'
+            '    label: Unique Subject Identifier\n'
+            '    derivation: {source: DM.USUBJID}\n'
+        )
+
+        errors = VALIDATOR.validate_spec_static_semantics(
+            spec, 'example/spec.yaml', self.spec_path, self.env
+        )
+
+        message = "\n".join(errors)
+        self.assertIn("rows are not permitted in new-style specs", message)
+
+    def test_rejects_new_style_keys_from_multiple_datasets(self):
+        spec = self._spec(
+            'schema_version: "1.0"\n'
+            'domain: ADSL\n'
+            'input:\n'
+            '  DM: input/dm.csv\n'
+            '  VS: input/vs.csv\n'
+            'keys: [STUDYID, USUBJID]\n'
+            'output:\n'
+            '  path: adsl.csv\n'
+            '  columns: [STUDYID, USUBJID]\n'
+            'columns:\n'
+            '  - name: STUDYID\n'
+            '    type: str\n'
+            '    label: Study Identifier\n'
+            '    derivation: {source: DM.STUDYID}\n'
+            '  - name: USUBJID\n'
+            '    type: str\n'
+            '    label: Unique Subject Identifier\n'
+            '    derivation: {source: VS.USUBJID}\n'
+        )
+
+        errors = VALIDATOR.validate_spec_static_semantics(
+            spec, 'example/spec.yaml', self.spec_path, self.env
+        )
+
+        message = "\n".join(errors)
+        self.assertIn("key columns must all derive from a single dataset", message)
+        matched = [
+            error for error in errors
+            if getattr(error, 'condition', None) == 'mixed_key_datasets'
+        ]
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(sorted(matched[0].context.get('datasets', [])), ['DM', 'VS'])
+
+
 class TestProducingSpecs(unittest.TestCase):
     VALID_PRODUCER_SPEC = '''schema_version: "1.0"
 domain: DM

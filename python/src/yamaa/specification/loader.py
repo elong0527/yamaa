@@ -11,7 +11,11 @@ from yamaa.specification.diagnostics import (
     SpecificationError,
     ValidationDiagnostic,
 )
-from yamaa.specification.models import LoadedSpecification, Specification
+from yamaa.specification.models import (
+    LoadedSpecification,
+    Specification,
+    _normalize_input_alias_in_dict,
+)
 from yamaa.specification.schema import (
     load_schema_bundle,
     normalize_specification,
@@ -32,6 +36,8 @@ def load_specification(
     origin_path = written_path.resolve()
     bundle = load_schema_bundle(schema_root)
     document = read_yaml_document(origin_path)
+    if isinstance(document, dict):
+        document = _normalize_input_alias_in_dict(document)
     if isinstance(document, dict) and "parents" in document:
         # Imported lazily so the schema interpreter remains usable on its own.
         from yamaa.schema.inheritance import resolve_specification

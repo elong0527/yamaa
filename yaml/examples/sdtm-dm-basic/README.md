@@ -5,23 +5,24 @@
 **Goal:** build one Demographics (DM) record per subject: sex (SEX), age
 (AGE), planned arm (ARM) and actual arm (ACTARM).
 
-**Input:** EDC output in long form, one row per
-collected item; e.g. subject 001 has **SEX**, **AGE** and **ARM** rows.
+**Input:** EDC output in long form, one row per collected item; e.g.
+subject 001 has **SEX**, **AGE** and **ARM** rows. The `input:` block names
+the single source dataset, **ODM**.
 
-**Variables:**
+**Grain:** `keys: [STUDYID, USUBJID]` declares the grain, and each key's
+`source:` derivation builds the key relation from ODM rows: `STUDYID` from
+`ODM.StudyOID`, `USUBJID` from `ODM.SubjectKey`.
 
-- **SEX**: recorded sex coded `M` (Male), `F` (Female), `U` when missing,
-  blank, not collected at all, or any other value. The collected item is
-  read into a working column, **SEXRAW**, that the result does not carry.
-- **AGE**: age in whole years as collected; blank when missing.
-- **ARM**: planned arm as collected; `Unassigned` when none was collected.
-- **ACTARM**: actual arm; in this simple example it always equals the
-  planned arm (no mid-study crossover).
+**Columns:** each value column carries a filtered `source:` derivation
+that selects the matching item for the key tuple -- e.g. **SEX** maps the
+`ODM.Value` rows where `ODM.ItemOID = 'IT.DM.SEX'` through a `Male/Female`
+dictionary, **AGE** reads the `'IT.DM.AGE'` rows as an integer, and **ARM**
+coalesces the `'IT.DM.ARM'` rows with `Unassigned` as the default.
+**ACTARM** copies **ARM**. Subjects with no matching rows get the column's
+missing handling, so the four subjects appear with **SEX** `U` and empty
+**AGE** where items were not collected.
 
-**Note:** one record for each subject the extract carries, whichever items
-that subject has. The keys **STUDYID** and **USUBJID** set that grain, so
-no filter decides how many records come out, and a subject collected twice
-does not become two records. Defaults fill **SEX**, **AGE**, **ARM** and
-**ACTARM** when the item was not collected.
+There is no `rows:` block, no aggregate expression, and no per-column
+ODM item references -- correlation happens by recomputed key tuples.
 
 **Standard:** SDTM | **Domain:** DM

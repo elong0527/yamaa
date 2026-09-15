@@ -60,18 +60,23 @@ def test_loads_and_normalizes_basic_specification() -> None:
     assert loaded.schema_path == (SCHEMA_ROOT / "schema.yaml").resolve()
 
     columns = {column.name: column for column in specification.columns}
-    assert columns["STUDYID"].derivation is not None
     assert columns["STUDYID"].derivation.value.root == {
         "source": {"variable": "ODM.StudyOID"}
+    }
+    assert columns["AGE"].derivation.value.root == {
+        "source": {
+            "variable": "ODM.Value",
+            "filter": "ODM.ItemOID = 'IT.DM.AGE'",
+        }
     }
     assert columns["SEX"].derivation is not None
     mapping = columns["SEX"].derivation.value.root["mapping"]
     assert isinstance(mapping, dict)
     assert mapping["case_sensitive"] is True
-    assert columns["AGE"].derivation is not None
-    assert columns["AGE"].derivation.value.root == {
-        "source": {"variable": "ODM.IT.DM.AGE", "missing": None}
-    }
+
+    assert specification.rows is None
+    assert specification.is_new_style is True
+    assert specification.keys == ["STUDYID", "USUBJID"]
 
 
 def test_recursive_alias_tries_a_later_union_member(tmp_path: Path) -> None:

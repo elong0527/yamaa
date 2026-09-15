@@ -32,6 +32,14 @@ output:
   path: vs.csv
   columns: [DOMAIN, STUDYID, USUBJID, VSSEQ, VSTESTCD, VSORRES, VSDTC, VISIT, VISITNUM, EPOCH, VSDY]
 
+rows:
+  - id: record
+    dataset: VS_RAW
+    derivations:
+      STUDYID: {source: VS_RAW.STUDYID}
+      USUBJID: {source: VS_RAW.USUBJID}
+      VSSEQ: {source: VS_RAW.VSSEQ}
+
 columns:
   - name: DOMAIN
     type: str
@@ -42,20 +50,14 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: VS_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: VS_RAW.USUBJID
 
   - name: VSSEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: VS_RAW.VSSEQ
     verifications:
       not_missing: {}
 

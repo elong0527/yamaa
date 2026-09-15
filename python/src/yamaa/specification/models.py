@@ -100,7 +100,8 @@ class Row(_StrictModel):
 class Specification(_StrictModel):
     schema_version: str
     domain: str
-    datasets: dict[str, DatasetSource]
+    datasets: dict[str, DatasetSource] | None = None
+    input: dict[str, DatasetSource] | None = None
     base: str | None = None
     parents: list[str] | None = None
     record_lookups: list[RecordLookup] | None = None
@@ -111,13 +112,57 @@ class Specification(_StrictModel):
     verifications: list[Expression] | None = None
     metadata: dict[str, str] | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_input_alias(cls, data: object) -> object:
+        if isinstance(data, dict):
+            has_datasets = data.get("datasets") is not None
+            has_input = data.get("input") is not None
+            if has_datasets == has_input:
+                raise ValueError(
+                    "exactly one of 'datasets' or 'input' must be present"
+                )
+        return _normalize_input_alias_in_dict(data)
+
     @property
     def default_driver(self):
+        datasets = self.datasets
+        if datasets is None:
+            return None
         if self.base is not None:
             return self.base
-        if len(self.datasets) == 1:
-            return next(iter(self.datasets))
+        if len(datasets) == 1:
+            return next(iter(datasets))
         return None
+
+    @property
+    def is_new_style(self) -> bool:
+        """New-style specs derive every key from a column.
+
+        The gate is shape-only: every top-level key column must have a
+        non-None derivation.  ``input:`` and ``datasets:`` are aliases with
+        identical semantics; the spelling does not affect new-vs-legacy.
+        """
+        derivations = {
+            column.name: column.derivation
+            for column in self.columns
+            if column.derivation is not None
+        }
+        return all(derivations.get(key) is not None for key in self.keys)
+
+
+def _normalize_input_alias_in_dict(data: object) -> object:
+    """Rename 'input' to 'datasets' without enforcing exactly-one.
+
+    Parent layers may omit both aliases, and the fully resolved spec is
+    validated once by the Specification model validator.
+    """
+    if not isinstance(data, dict):
+        return data
+    if data.get("input") is not None:
+        data = dict(data)
+        data["datasets"] = data.pop("input")
+    return data
 
 
 class LoadedSpecification(_StrictModel):
