@@ -36,7 +36,7 @@ str_template:
   missing: UNKNOWN
 ```
 
-**R012-3.** The shorthand expands to `{template: <written value>}`. It
+**R012-3.** The shorthand expands to `{template: <written value>}` and
 adds no missing handler.
 
 ## Grammar
@@ -54,11 +54,11 @@ text        := one or more R019 scalar values other than "{" and "}"
 **R012-5.** `grammar/string-template.yaml` is this grammar's single
 source. The block above renders that grammar. The grammar file's cases
 record the literal text and placeholders every implementation must
-produce for a template, and record the templates every implementation
+produce, and record the templates every implementation
 must reject.
 
 **R012-6.** Repository validation and the R implementation both read
-that file, so no transcription of this grammar can drift from it
+that file, so no transcription of this grammar can drift
 without failing.
 
 **R012-7.** The `variable` contents must satisfy the schema type of that
@@ -68,7 +68,7 @@ name exactly. Whitespace is therefore not ignored inside braces.
 The pairs take precedence while scanning, so `{{{SITEID}}}` produces
 `{UCSD}` when `SITEID` is `UCSD`.
 
-**R012-9.** Every single brace must begin or end a valid placeholder.
+**R012-9.** Every brace must begin or end a valid placeholder.
 Empty placeholders, unmatched braces, format directives, operators,
 function calls, and nested placeholders are invalid. In particular,
 `{A + B}` is invalid rather than an expression to evaluate.
