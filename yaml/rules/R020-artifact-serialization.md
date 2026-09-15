@@ -78,11 +78,9 @@ pay for decimal text. `csv` is the reviewable container: a human can read it, a
 diff can show what moved in it, and its bytes are fixed exactly, which is what
 makes it usable as a golden contract.
 
-**R020-6.** A profile names a container, and the specification's
-`schema_version` fixes which release's contract it was written under. The two
-together identify the bytes exactly, and a consumer reading a stored artifact
-receives both, because R014's producing-specification link carries the
-whole producer document rather than the profile alone.
+**R020-6.** A profile and the specification's `schema_version` identify the
+bytes exactly. A consumer receives both because R014's producing-specification
+link carries the whole producer document, not only the profile.
 
 **R020-7.** A later release that changes any byte-level or mapping decision
 below therefore changes what a profile means at that schema version, and an
@@ -118,10 +116,10 @@ other field is written bare.
 text is written twice. Nothing else is escaped: a quoted field carries its
 newlines, delimiters, and every other scalar exactly.
 
-**R020-16.** The rule is stated as an exact condition rather than as a minimum,
-so two runtimes quote the same fields. A writer that quotes a field this rule
-leaves bare, or leaves bare a field it quotes, does not conform even though an
-ordinary reader accepts its output.
+**R020-16.** The exact condition makes both runtimes quote the same fields. A
+writer that quotes a field the condition leaves bare, or leaves bare a field
+the condition quotes, does not conform even if ordinary readers accept its
+output.
 
 ### Missing and the empty string
 

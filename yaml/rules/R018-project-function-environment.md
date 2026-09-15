@@ -9,9 +9,9 @@ applies_to: [environment, function, function_contract, function_binding]
 # Project function environment
 
 ## Intent
-Make a project-supplied scalar function reproducible and reviewable without
-placing host-language code or runtime selection in a derivation specification.
-One logical contract may have an R implementation in one project and a Python
+Make a project-supplied scalar function reproducible and reviewable. A
+specification contains no host-language code or runtime selection. One logical
+contract may have an R implementation in one project and a Python
 implementation in another, while each project remains a single-language
 execution environment.
 
@@ -28,9 +28,9 @@ never a reducer and cannot inspect a relation or other rows. Final artifact
 formatting is also outside this rule. In particular, comparison precision used
 for conformance does not round a derivation value.
 
-Bindings are trusted organization code run by an authorized user in an
-organization-controlled secure environment. This rule provides correctness,
-reproducibility, and traceability requirements; it does not claim to create a
+An authorized user runs bindings as trusted organization code in an
+organization-controlled secure environment. This rule sets correctness,
+reproducibility, and traceability requirements. This rule does not create a
 portable security sandbox.
 
 ## Project resolution

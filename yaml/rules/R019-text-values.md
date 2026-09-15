@@ -76,9 +76,9 @@ value. Compare the numeric code point at each position from left to right;
 the first unequal position decides the result. If one sequence is a prefix
 of the other, the shorter sequence is less. Equal sequences tie.
 
-**R019-9.** This is the one string order used by predicate comparisons,
+**R019-9.** Scalar-value order is the string order for predicate comparisons,
 every `order_by` term, `greatest`, `least`, and aggregate `MIN` and `MAX`.
-Missing placement is not part of string order; the operation that admits
+Missing placement is not part of string order. The operation that admits
 missing values owns that placement or empty-result behavior.
 
 **R019-10.** The order performs no normalization or case folding. It uses no
@@ -138,10 +138,10 @@ tooling must not normalize them while reading, writing, comparing, or
 checking them into version control.
 
 **R019-19.** Repository validation proves the ASCII source boundary and
-the structural validity of the Unicode data fixtures. Executable value
-and ordering parity is proved by the shared R and Python conformance
-workflow when that workflow supports these expressions; static validation
-alone is not runtime evidence.
+structural validity of Unicode data fixtures. The shared R and Python
+conformance workflow proves executable value and ordering parity when the
+workflow supports these expressions; static validation alone is not runtime
+evidence.
 
 ## Rationale
 
