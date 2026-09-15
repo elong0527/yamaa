@@ -11,11 +11,10 @@ applies_to: [root.submission, column.submission, submission_dataset_class,
 
 ## Intent
 
-Give a dataset and each declared column one closed, typed place for submission
-metadata. The metadata describes the dataset and column, the value length,
-the value source, and the producing algorithm. This rule closes
-vocabularies, states standard-specific combinations, and says what the
-derivation graph may refute.
+Give each dataset and declared column one closed, typed place for submission
+metadata. Submission metadata describes the dataset or column, value length,
+value source, and producing algorithm. R024 closes vocabularies, states
+standard-specific combinations, and says what the derivation graph can refute.
 
 ## Boundaries
 
@@ -50,9 +49,9 @@ carries. An internal column is not in the artifact, so it is not in the
 document that describes the artifact, and declaring metadata for an internal
 column is an error rather than an ignored declaration.
 
-**R024-3.** The free-form `metadata` map remains uninterpreted annotation;
-no field below is read from the map. A study moves governed facts from the
-map to submission metadata; the two are not merged and the map is never a
+**R024-3.** The free-form `metadata` map is uninterpreted annotation; no field
+below reads the map. A study moves governed facts from the map to submission
+metadata. The map and submission metadata are not merged. The map is never a
 fallback.
 
 **R024-4.** The map must not carry a key this rule governs. Root `metadata`
