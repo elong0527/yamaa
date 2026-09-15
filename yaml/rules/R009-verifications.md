@@ -19,12 +19,12 @@ a governed sidecar dataset.
 
 This rule owns what each verification asserts, when it runs, and how a failure
 is reported. R005 owns key uniqueness, which is checked by the output contract
-rather than declared as a verification, and it owns the artifact's row order,
-which no verification here observes. R004 owns the predicates that `implies`,
-`predicate`, and a grouped `row_count` evaluate. R019 owns string equality and
-scalar counting. R005 owns whether the primary artifact is complete and
-publication-eligible, and R020 owns the containers and publication of both it
-and the violation log.
+rather than declared as a verification, and R005 owns the artifact's row
+order, which no verification here observes. R004 owns the predicates that
+`implies`, `predicate`, and a grouped `row_count` evaluate. R019 owns string
+equality and scalar counting. R005 owns whether the primary artifact is
+complete and publication-eligible. R020 owns the containers and publication of
+the artifact and the violation log.
 
 Verifications reach across rows only in deliberately fixed ways. `unique` and
 `row_count` ask one question about the full output. A grouped `row_count` asks
@@ -99,8 +99,8 @@ addition to the stable specification path.
   listed value under its type's equality, including R019 for strings. Missing
   values pass; combine with `not_missing` when absence is invalid.
 - **R009-11.** `range` requires every non-missing numeric value to be greater
-  than or equal to `min` and less than or equal to `max`, for whichever bounds
-  are supplied. At least one bound is required.
+  than or equal to `min` and less than or equal to `max` for the supplied
+  bounds. At least one bound is required.
 - **R009-12.** `max_length` requires every non-missing string to contain at
   most `max` R019 scalar values. Missing values pass; combine with
   `not_missing` when absence is invalid. It is declared only on a `str`
@@ -112,7 +112,7 @@ addition to the stable specification path.
 
 **R009-14.** R019 scalar count rather than bytes or UTF-16 units is also the
 unit R006 uses for `min_length`, so a supplementary-plane scalar counts once
-in both R and Python. A length is therefore a check of its own rather than
+in both R and Python. A length is therefore a separate check rather than
 an anchored `matches` pattern: `max_length` counts scalar values directly,
 independently of regular-expression matching behavior.
 
@@ -169,9 +169,9 @@ gives every expected group an input record under R001.
 
 An ordered-series assertion would carry its own partition, ordering,
 frame-bound, and missing-value contract for a case no example has, and
-nothing weaker than all four would be portable, so the rule admits no frame
-shape until an example needs one that cannot be written as a producer and a
-consumer. Restating a cross-dataset match as a verification would duplicate
+nothing weaker than all four would be portable. The rule admits no frame
+shape until an example needs one that a producer and a consumer cannot
+express. Restating a cross-dataset match as a verification would duplicate
 R015's matching, filtering, and multiple-match semantics inside an assertion
 that runs long after the value it doubts was consumed, so the link is
 asserted where it is produced instead. A `max_length` on a rendered number
@@ -208,13 +208,13 @@ version 1.0 specification written before severity existed.
 row, or make the primary artifact ineligible for publication. The executor
 continues through later column checks, key validation, and dataset checks and
 collects warning violations in that order. An `error` still stops at the same
-R005 stage as before; warning findings collected before a later error do not
-turn the failed run into a successful one and produce no accepted artifact.
+R005 stage as before. Warning findings collected before a later error do not
+turn the failed run into a successful one. They produce no accepted artifact.
 
 **R009-35.** A specification declaring any warning must declare
 `output.violation_log`. Its path must differ from `output.path` and selects an
 R020 profile by the same closed extension mapping. A successful run produces
-this sidecar even when no warning is violated; that case is a header-only
+this sidecar even when no warning is violated; the empty case is a header-only
 dataset, so publication replaces a stale non-empty log from an earlier run.
 
 **R009-36.** The violation log is version 1.0 and has exactly these columns,

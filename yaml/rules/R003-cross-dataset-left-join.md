@@ -10,18 +10,16 @@ applies_to: [expression.source, expression.aggregate]
 
 ## Intent
 
-Enrich constructed rows from another dataset without repeating join keys in
-each specification.
+Enrich constructed rows from another dataset without repeating join keys.
 
 ## Boundaries
 
-This rule owns the implicit join a qualified cross-dataset source performs,
-and the right-side reduction that precedes it. It does not own
-`mapping_from`, whose keys are declared rather than derived from output
-`keys`, or any window or row-construction `filter` use; R007 owns
-`mapping_from` and those `filter` uses. A named record lookup reaching one
-record for several columns at once is R015, which performs this join and
-adds no other way of reaching a right side.
+This rule owns the implicit join from a qualified cross-dataset source and
+the source's right-side reduction. R007 owns `mapping_from`, whose keys are
+declared, not derived from output `keys`, and window or row-construction
+`filter` uses. R015 owns a named record lookup that reaches one record for
+several columns. The named record lookup performs the join and has no other
+way to reach a right side.
 
 ## Terminology
 
@@ -49,8 +47,8 @@ join during column derivation. The implementation must take these steps:
 **R003-12.** The join is many-to-one and preserves left row count and
 order.
 
-**R003-13.** Right records missing an applicable key cannot match.
-Key names must match exactly. String key equality is R019's.
+**R003-13.** Right records missing an applicable key cannot match. Key names
+must match exactly. R019 defines string key equality.
 
 **R003-13a.** The two sides of an applicable key must also carry mutually
 comparable types under R007-31, and the match converts no operand. R014-4
@@ -80,8 +78,8 @@ identifiers are qualified to a declared dataset reads the dataset as
 the aggregate's right side.
 
 **R003-17.** For each current row, applicable keys select a right-side
-partition, R013 reduces the partition's eligible records to one value,
-and the value joins back without changing row count.
+partition. R013 reduces eligible records in that partition to one value. The
+value joins back without changing row count.
 
 **R003-18.** The qualifier may equal the current row template's
 input dataset: a scalar source then reads the current input

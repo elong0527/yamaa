@@ -18,7 +18,7 @@ This rule owns the `numeric_expression` primitive: its grammar, function
 vocabulary, numeric types, missing-value behavior, and failure conditions.
 `compute` is the only arithmetic expression and is deliberately numeric.
 Strings, dates, comparison, conditional selection, and row-wise extremes over
-non-numeric types keep their registered expressions under R007, so a general
+non-numeric types keep their registered expressions under R007. A general
 expression string cannot displace the typed registry. The Boolean-valued `sql`
 primitive is R004; the two share notation and identifier resolution but not
 their type or their permitted vocabulary. Reduction over many records uses
@@ -34,9 +34,8 @@ returns one numeric value per current row. The grammar is a subset of SQL.
 
 ## Identifiers
 
-**R010-2.** An identifier resolves the way the `sql` primitive already
-resolves one in the same phase, so a formula and a predicate never disagree
-about a name.
+**R010-2.** An identifier resolves as the `sql` primitive resolves one
+in the same phase. A formula and a predicate never disagree about a name.
 
 **R010-3.** During column derivation an unqualified identifier is a
 current-output column. A qualified identifier is permitted only when its
@@ -91,9 +90,10 @@ number     := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
 ```
 
 `grammar/numeric.yaml` is this grammar's single source. The block above is
-its rendering, its vocabulary closes the function table below, and its cases
-record the text every implementation must accept or reject, the identifiers
-an accepted text binds, and the parse it produces. Repository validation and
+its rendering; the file vocabulary closes the function table below, and the
+file cases record the text every implementation must accept or reject, the
+identifiers an accepted text binds, and the resulting parse. Repository
+validation and
 the R implementation both read that file, so no transcription of this
 grammar can drift from it without failing.
 
@@ -180,7 +180,7 @@ whose argument-level behavior is defined in the table in R010-9.
 
 **R010-23.** A `compute` derivation therefore needs no guarding predicate to
 survive a missing input, and a formula that must yield missing rather than
-fail says so with `NULLIF`. Percentage change against a zero base is
+fail uses `NULLIF`. Percentage change against a zero base is
 `100 * (VALUE - BASE) / NULLIF(BASE, 0)`.
 
 **R010-24.** R011's non-finite normalization applies after every numeric
@@ -208,7 +208,7 @@ base and a non-integer exponent.
 **R010-31.** Floating-point results are not exact decimals. `POWER(x, 2)`
 and `x * x` are permitted to differ in the last place. A specification
 cannot round that away, so a derivation that needs a stable decimal must be
-written as the formula that produces one.
+written as a formula producing a stable decimal.
 
 ## Determinism
 
@@ -230,12 +230,12 @@ one that was written.
 
 Closing the vocabulary to one table keeps portability checkable: anything
 outside the grammar fails validation instead of inheriting a host dialect.
-There is deliberately no rounding function, because R, Python with `numpy`,
-and SAS disagree on exactly the half-way values a reviewer checks, so any
-rounding inherited from the host would disagree across runtimes. Carrying
+There is deliberately no rounding function. R, Python with `numpy`, and
+SAS disagree on exactly the half-way values a reviewer checks. Rounding
+inherited from the host would disagree across runtimes. Carrying
 full precision through the derivation and deciding display places at
-reporting time avoids that hazard entirely. Fixing association and
-forbidding reassociation serves the same goal: two formulas that differ only
+reporting time avoids the disagreement entirely. Fixing association and
+forbidding reassociation serves portability: two formulas that differ only
 in parenthesization may return different doubles, and each implementation
 returns the one that was written.
 

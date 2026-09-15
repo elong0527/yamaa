@@ -61,10 +61,10 @@ to Boolean. Every other alphabetic scalar, including `y`, `Y`, `n`, `N`,
 timestamp resolver, so an unquoted ISO-looking date or datetime is also a
 string.
 
-**R006-8.** Default parser settings do not satisfy this requirement. How an
-implementation meets it is its own choice, but it must not be met by
-requiring authors to quote values. R011's non-finite normalization applies
-immediately after core-schema scalar resolution.
+**R006-8.** Default parser settings do not satisfy this requirement. Each
+implementation chooses how to meet it, but must not require authors to quote
+values. R011's non-finite normalization applies immediately after
+core-schema scalar resolution.
 
 ## Named types
 
@@ -175,8 +175,8 @@ where YAML does require it is a parse error.
 ## Shorthand unions
 
 **R006-23.** Two union shapes are shorthand for a canonical form. An
-implementation expands shorthand while validating. A validated document
-therefore contains only the canonical form, so implementations agree on what
+implementation expands shorthand while validating, so a validated document
+contains only the canonical form, so both implementations agree on what
 they validated.
 
 **R006-24.** A union of `T` and `list[T]` accepts either. A bare `T`
@@ -194,10 +194,10 @@ against the union member it matched, so a constraint on the written form is
 checked before the value is expanded.
 
 **R006-27.** No other union is shorthand. A union matching neither shape,
-such as `literal_value`, selects a member and expands nothing. These are the
-only shorthand mechanisms in the language. A rule may say where a shorthand
-applies and what the expanded value means, but must not define a different
-expansion.
+such as `literal_value`, selects a member and expands nothing; these are
+the only shorthand mechanisms in the language. A rule may say where a
+shorthand applies and what the expanded value means, but must not define a
+different expansion.
 
 ## Descriptor keywords
 

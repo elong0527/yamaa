@@ -10,10 +10,9 @@ applies_to: [define.codelists, codelist_class, codelist_item_class,
 
 ## Intent
 
-Make a codelist one named, versioned object that several columns share, state
-exactly what binding one enforces, and reconcile that binding with the
-`allowed_values` verification a specification may also declare, so a study
-never states its terminology twice and never states it two ways.
+Make a codelist one named, versioned object that columns share. State what a
+binding enforces. Reconcile a binding with any `allowed_values` verification.
+A study must state terminology once and only one way.
 
 ## Boundaries
 
