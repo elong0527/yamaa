@@ -3250,32 +3250,6 @@ def example_entry_specs(example_dir: Path):
     return [path for path in paths if path.name not in parented]
 
 
-def valid_temporal_literal(kind, text):
-    """True when text is a valid R016 temporal literal for kind.
-
-    R018-11 permits a tagged temporal form (``{"date": "2020-01-01"}``)
-    for a contract default, and R018-18 permits it for a call argument.
-    The verdict comes from the runtime's strict parsers (``DateValue`` /
-    ``DateTimeValue``, already imported for the csv-profile checks), so
-    the lexical rule is read from the one implementation: ``YYYY-MM-DD``
-    for ``date``, ``YYYY-MM-DDThh:mm[:ss]`` for ``datetime``, and both a
-    real date on the calendar.
-    """
-    if not isinstance(text, str):
-        return False
-    if kind == 'date':
-        parsed_type = DateValue
-    elif kind == 'datetime':
-        parsed_type = DateTimeValue
-    else:
-        return False
-    try:
-        parsed_type.parse(text)
-    except ValueError:
-        return False
-    return True
-
-
 def function_value_type(value):
     """Return the exact R018 scalar type, or a sentinel for invalid values."""
     value = normalize_non_finite_float(value)
@@ -3992,31 +3966,6 @@ def validate_spec_names(spec, spec_label):
                 f"unknown_artifact_profile for {declared_path!r}; R020 maps "
                 + ', '.join(sorted(ARTIFACT_PROFILES)) + " and nothing else"
             )
-        violation_path = output.get('violation_log')
-        if (
-            isinstance(violation_path, str)
-            and artifact_profile({'path': violation_path}) is None
-        ):
-            errors.append(
-                f"ERROR: {spec_label}.output.violation_log: "
-                f"unknown_artifact_profile for {violation_path!r}; R020 maps "
-                + ', '.join(sorted(ARTIFACT_PROFILES)) + " and nothing else"
-            )
-        if (
-            isinstance(declared_path, str)
-            and isinstance(violation_path, str)
-            and declared_path == violation_path
-        ):
-            for path in ('output.path', 'output.violation_log'):
-                errors.append(
-                    validation_diagnostic(
-                        f"{spec_label}.{path}",
-                        'artifact_path_collision',
-                        'primary artifact and violation log must name different '
-                        'paths',
-                        context={'path': declared_path},
-                    )
-                )
 
     if isinstance(output, dict) and 'decimals' in output:
         decimals = output.get('decimals')
@@ -4051,32 +4000,26 @@ def validate_spec_names(spec, spec_label):
             output_names = set(output_columns)
             for index, key in enumerate(keys):
                 if isinstance(key, str) and key not in output_names:
-                    errors.append(
-                        validation_diagnostic(
-                            f"{spec_label}.keys[{index}]",
-                            'internal_column_in_keys',
-                            f"key column {key!r} is not in output.columns",
-                            context={'column': key},
+                    for path in (f"keys[{index}]", 'output.columns'):
+                        errors.append(
+                            validation_diagnostic(
+                                f"{spec_label}.{path}",
+                                'internal_column_in_keys',
+                                f"key column {key!r} is not in "
+                                'output.columns',
+                                context={'column': key},
+                            )
                         )
-                    )
 
     order_by = output.get('order_by') if isinstance(output, dict) else None
     if isinstance(order_by, list):
-        order_variables = set()
+        order_variables = []
         for index, term in enumerate(order_by):
             variable = order_term_variable(term)
             if variable is None:
                 continue
-            if variable in order_variables:
-                errors.append(
-                    validation_diagnostic(
-                        f"{spec_label}.output.order_by[{index}]",
-                        'duplicate_order_term',
-                        f"duplicate order term {variable!r}",
-                        context={'column': variable},
-                    )
-                )
-            elif variable not in declared_columns:
+            order_variables.append(variable)
+            if variable not in declared_columns:
                 errors.append(
                     validation_diagnostic(
                         f"{spec_label}.output.order_by[{index}]",
@@ -4085,7 +4028,16 @@ def validate_spec_names(spec, spec_label):
                         context={'column': variable},
                     )
                 )
-            order_variables.add(variable)
+        for variable in sorted(set(order_variables)):
+            if order_variables.count(variable) > 1:
+                errors.append(
+                    validation_diagnostic(
+                        f"{spec_label}.output.order_by",
+                        'duplicate_order_term',
+                        f"duplicate order term {variable!r}",
+                        context={'column': variable},
+                    )
+                )
 
     rows = spec.get('rows')
     if isinstance(rows, list):
@@ -4469,7 +4421,7 @@ class ProjectSnapshots:
         return accepted, None
 
 
-SOURCE_PROFILES = {'.csv': 'csv', '.parquet': 'parquet'}
+SOURCE_PROFILES = {'.csv': 'csv'}
 
 
 def validate_spec_contracts(
@@ -4477,7 +4429,6 @@ def validate_spec_contracts(
 ):
     """Validate static cross-field contracts from normative rules."""
     errors = []
-    output = spec.get('output')
 
     rows = spec.get('rows')
     row_entries = rows if isinstance(rows, list) else []
@@ -4615,7 +4566,6 @@ def validate_spec_contracts(
                 )
 
     verification_ids = []
-    warning_paths = []
     verifications = spec.get('verifications')
     if isinstance(verifications, dict):
         verifications = [verifications]
@@ -4627,8 +4577,6 @@ def validate_spec_contracts(
             if not isinstance(payload, dict):
                 continue
             path = f"{spec_label}.verifications[{index}].{keyword}"
-            if payload.get('severity', 'error') == 'warning':
-                warning_paths.append(f"{path}.severity")
             if keyword in {'all_or_none', 'implies', 'predicate', 'row_count'}:
                 verification_id = payload.get('id')
                 if isinstance(verification_id, str):
@@ -4728,8 +4676,6 @@ def validate_spec_contracts(
                 f"{spec_label}.columns.{column_name}.verifications[{index}]."
                 f"{keyword}"
             )
-            if payload.get('severity', 'error') == 'warning':
-                warning_paths.append(f"{path}.severity")
             if keyword == 'range':
                 if column_type not in {'int', 'float'}:
                     errors.append(
@@ -4758,19 +4704,6 @@ def validate_spec_contracts(
                     f"ERROR: {path}: {keyword} requires a str column"
                 )
 
-    if warning_paths and (
-        not isinstance(output, dict)
-        or not isinstance(output.get('violation_log'), str)
-    ):
-        errors.append(
-            validation_diagnostic(
-                f"{spec_label}.output.violation_log",
-                'missing_violation_log',
-                'warning verifications require a governed violation log',
-                context={'warnings': warning_paths},
-            )
-        )
-
     datasets = spec.get('datasets')
     if spec_path is not None and isinstance(datasets, dict):
         if project_root is None:
@@ -4797,8 +4730,7 @@ def validate_spec_contracts(
                 continue
             # R023 selects the profile from the written path, so an extension
             # it does not map is rejected before the source is read.
-            profile = SOURCE_PROFILES.get(resolved.suffix.lower())
-            if profile is None:
+            if SOURCE_PROFILES.get(resolved.suffix.lower()) is None:
                 errors.append(validation_diagnostic(
                     f"{path}.path",
                     'source_profile_unknown',
@@ -4813,19 +4745,6 @@ def validate_spec_contracts(
                 )
                 continue
             if not isinstance(types, dict):
-                continue
-            if profile == 'parquet':
-                for field in sorted(types, key=str):
-                    errors.append(validation_diagnostic(
-                        f"{path}.types.{field}",
-                        'redundant_field_type',
-                        'field type is already supplied by the Parquet schema',
-                        context={
-                            'dataset': dataset_id,
-                            'field': field,
-                            'type': types[field],
-                        },
-                    ))
                 continue
             try:
                 header = snapshot.csv_header()
@@ -5969,9 +5888,7 @@ def validate_aggregate_at(payload, path, context):
         expression = payload.get('expr')
         group_by = payload.get('group_by')
         between = payload.get('between')
-        expression_path = (
-            path if set(payload) == {'expr'} else f"{path}.expr"
-        )
+        expression_path = f"{path}.expr"
     else:
         return []
     if not isinstance(expression, str):
@@ -8195,18 +8112,6 @@ def validate_csv_artifact(csv_path: Path, label: str, spec):
 
 
 ARTIFACT_PROFILES = {'.csv': 'csv', '.parquet': 'parquet'}
-VIOLATION_LOG_TYPES = {
-    'LOG_VERSION': 'str',
-    'ARTIFACT': 'str',
-    'SEVERITY': 'str',
-    'CONDITION': 'str',
-    'REQUIREMENT': 'str',
-    'SPEC_PATH': 'str',
-    'VERIFICATION_ID': 'str',
-    'FAILURE_COUNT': 'int',
-    'OFFENDING_KEYS': 'str',
-    'DETAILS': 'str',
-}
 
 
 def artifact_profile(output):
@@ -9600,7 +9505,25 @@ def validate_examples_csv(root: Path, env=None):
         if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
             continue
 
-        for spec_path in example_entry_specs(ex_dir):
+        entry_spec_paths = example_entry_specs(ex_dir)
+        declared_artifacts = set()
+        for spec_path in entry_spec_paths:
+            try:
+                with open(spec_path, 'r', encoding='utf-8') as f:
+                    sibling_spec = yaml.load(f, Loader=UniqueKeyLoader)
+            except Exception:
+                continue
+            sibling_output = (
+                sibling_spec.get('output')
+                if isinstance(sibling_spec, dict)
+                else None
+            )
+            if isinstance(sibling_output, dict):
+                sibling_path = sibling_output.get('path')
+                if isinstance(sibling_path, str):
+                    declared_artifacts.add(PurePosixPath(sibling_path).name)
+
+        for spec_path in entry_spec_paths:
             try:
                 with open(spec_path, 'r', encoding='utf-8') as f:
                     spec = yaml.load(f, Loader=UniqueKeyLoader)
@@ -9624,62 +9547,44 @@ def validate_examples_csv(root: Path, env=None):
             )
             if not isinstance(expected_cols, list):
                 continue
-            primary_path = output.get('path')
-            primary_name = (
-                PurePosixPath(primary_path).name
-                if isinstance(primary_path, str)
-                else None
-            )
-            violation_path = output.get('violation_log')
-            violation_name = (
-                PurePosixPath(violation_path).name
-                if isinstance(violation_path, str)
-                else None
-            )
 
             expected_dir = ex_dir / 'expected'
             if not expected_dir.exists():
                 continue
             for csv_file in sorted(expected_dir.glob('*.csv')):
-                # Each golden CSV must be one of the two artifacts the
-                # specification names. The log has its own fixed R009 schema.
-                if csv_file.name == primary_name:
-                    file_columns = expected_cols
-                    file_output = output
-                    file_spec = spec
-                elif csv_file.name == violation_name:
-                    file_columns = list(VIOLATION_LOG_TYPES)
-                    file_output = {'path': violation_path}
-                    file_spec = {
-                        'output': file_output,
-                        'columns': [
-                            {'name': name, 'type': column_type}
-                            for name, column_type in VIOLATION_LOG_TYPES.items()
-                        ],
-                    }
-                else:
-                    permitted = [
-                        name for name in (primary_name, violation_name)
-                        if name is not None
-                    ]
+                # The golden file is the artifact the specification says it
+                # produces, so its name comes from output.path rather than a
+                # convention over the domain.
+                declared_path = output.get('path')
+                if not isinstance(declared_path, str):
+                    continue
+                declared_name = PurePosixPath(declared_path).name
+                if csv_file.name != declared_name:
+                    # A multi-artifact example may contain one spec per
+                    # expected CSV; silence the name mismatch when the CSV
+                    # belongs to a sibling spec and complain only about
+                    # truly orphaned artifacts.
+                    if csv_file.name in declared_artifacts:
+                        continue
                     errors.append(
                         f"ERROR: {ex_dir.name}/{csv_file.name}: expected "
-                        f"artifact name in {permitted!r}, which output "
-                        "declares"
+                        f"artifact name {declared_name}, which "
+                        f"output.path declares"
                     )
                     continue
+
                 try:
                     with open(csv_file, 'r', encoding='utf-8') as f:
                         reader = csv.reader(f)
                         header = next(reader)
-                        if header != file_columns:
+                        if header != expected_cols:
                             errors.append(
                                 f"ERROR: {ex_dir.name}/{csv_file.name}: "
                                 f"header mismatch for {spec_path.name}. "
-                                f"Expected {file_columns}, got {header}"
+                                f"Expected {expected_cols}, got {header}"
                             )
                 except StopIteration:
-                    if file_columns:
+                    if expected_cols:
                         errors.append(
                             f"ERROR: {ex_dir.name}/{csv_file.name} is "
                             f"empty for {spec_path.name}"
@@ -9687,14 +9592,14 @@ def validate_examples_csv(root: Path, env=None):
                 except (OSError, UnicodeError, csv.Error):
                     continue
 
-                profile = artifact_profile(file_output)
+                profile = artifact_profile(output)
                 if profile == 'csv' and csv_file not in profile_checked:
                     profile_checked.add(csv_file)
                     errors.extend(
                         validate_csv_artifact(
                             csv_file,
                             f"{ex_dir.name}/{csv_file.name}",
-                            file_spec,
+                            spec,
                         )
                     )
 
