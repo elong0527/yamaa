@@ -10,8 +10,8 @@ applies_to: [source.missing, source.multiple_matches, expression, derivation]
 
 ## Intent
 
-Attach expected data-defect handling to the expression or result stage that can
-encounter it. Handlers are not conditional mapping; use `case` for that.
+Attach expected defect handling to the expression or result stage that
+encounters the defect. Handlers are not conditional mapping; use `case`.
 There is no standalone handler registry. Closed expression and derivation
 schemas determine which handlers are legal.
 
