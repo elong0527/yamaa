@@ -131,9 +131,8 @@ named group `(?<name>...)` is also numbered, in the same order. Group `0` is
 the whole match.
 
 **R022-21.** `str_extract.group` selects by that number and defaults to `0`.
-A `group` greater than the number of capturing groups in its pattern is a
-specification defect and fails validation; a negative `group` fails the same
-way.
+A `group` above the number of capturing groups in its pattern, or a negative
+`group`, is a specification defect and fails validation.
 
 **R022-22.** A group that the pattern declares but the match does not enter
 has no value. `str_extract` then produces missing. `no_match` does not apply,
@@ -149,8 +148,8 @@ the match it keeps is empty. R019 keeps the empty string and missing
 distinct, and no consumer converts one into the other.
 
 **R022-24.** A `pattern` descriptor whose pattern matches only the empty
-string admits only the empty value, which `min_length` rather than the
-pattern is the way to prohibit.
+string admits only the empty value. `min_length`, not the pattern, prohibits
+the empty value.
 
 ## Determinism and parity
 
@@ -169,15 +168,15 @@ runtime that has not run the workflow.
 ## Rationale
 
 Host regular-expression libraries differ in syntax, flags, and match choice,
-so any behavior that depends on one cannot satisfy the parity requirement;
-pinning one engine version makes its verdict the contract even where the
-standard admits more than one reading. The `u` flag is set so a pattern
-operates on the same scalar values every other text rule counts, and the
-remaining flags stay clear so anchoring, dot, case, and iteration behavior
-are fixed rather than selectable. Repository fixtures replayed against the
-pinned engine prove the Python side agrees with them, while executable R
-parity needs the shared conformance workflow rather than the fixture file
-alone.
+so any behavior that depends on one host library cannot satisfy the parity
+requirement; pinning one engine version makes its verdict the contract even
+where the standard admits more than one reading. The `u` flag is set so a
+pattern operates on the same scalar values every other text rule counts,
+and the remaining flags stay clear so anchoring, dot, case, and iteration
+behavior are fixed rather than selectable. Repository fixtures replayed
+against the pinned engine prove the Python side agrees with them, while
+executable R parity needs the shared conformance workflow rather than the
+fixture file alone.
 
 ## Errors
 
