@@ -10,8 +10,8 @@ applies_to: [root.datasets, dataset_source, dataset_class, expression.source]
 
 ## Intent
 
-Define a stored field's value before an expression reads it: whether it is
-missing and its type.
+Define a stored field's type and missingness before expressions read it.
+
 
 ## Boundaries
 
@@ -58,8 +58,8 @@ type.
   Every one of its fields is `str` unless the specification declares
   otherwise.
 
-**R014-5.** `dataset_class.types` declares the type of a named field of a
-typeless container. A field it does not name is `str`. This is a statement
+**R014-5.** `dataset_class.types` declares each named field's type in a
+typeless container. Any unnamed field is `str`. This statement
 about the dataset as this specification reads it: two specifications may read
 the same delimited file with different declarations, because the file carries
 no types to contradict either of them. A dataset whose types matter to more
@@ -126,14 +126,14 @@ field.
 
 ## Parsing a declared type
 
-**R014-13.** A declared field type is applied to stored text by the `str` row
-of R011's conversion table. This is the parsing a `str` column uses to reach a
-declared type. `int` and `float` use R011's numeric text parsing, including its
-non-finite normalization; `date` and `datetime` accept exactly the lexical
-forms R016 fixes. A value that does not parse fails the run. R011 separately
-recognizes the YAML 1.2 non-finite forms during declared numeric parsing; they
-remain text when the field's type is `str` and normalize only after being
-parsed as numbers.
+**R014-13.** R011's `str` row parses stored text into its declared type.
+`int` and `float` use R011's numeric text parsing, including its
+non-finite normalization. `date` and `datetime` accept exactly the
+lexical forms R016 fixes. A value that does not parse fails the run. R011
+separately recognizes YAML 1.2 non-finite forms during declared numeric
+parsing. They remain text when the field's type is `str` and normalize
+only after parsing as numbers.
+
 
 **R014-14.** An ingestion failure is not a conversion failure.
 `conversion_failure` is declared on a column and answers for a value the
