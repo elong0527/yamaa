@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: RELREC
 datasets:
   ODM: input/odm.csv
-keys: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
+keys: [STUDYID, RDOMAIN, IDVAR, RELID]
 
 output:
   path: relrec.csv
@@ -70,7 +70,7 @@ rows:
 
 verifications:
   - unique:
-      columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELID]
+      columns: [STUDYID, RDOMAIN, IDVAR, RELID]
   - row_count:
       min: 6
       max: 6

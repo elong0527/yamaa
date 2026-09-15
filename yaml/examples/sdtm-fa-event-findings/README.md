@@ -16,8 +16,8 @@ events).
   link identifier that the FA and RELREC records share.
 - CM carries `CMSEQ`, `CMTRT`, and `CMSTDTC`; it is included as context
   for the collected medications.
-- `FAOBJ` is the finding object, fixed to RASH because every
-  supplementary record describes a rash event.
+- `FAOBJ` is the finding object, derived from the parent AE's
+  `AETERM` because every supplementary record describes a rash event.
 - `FASEQ` numbers each subject's FA records.
 - `FACAT` and `FASCAT` classify the record as a skin-finding
   supplement.
