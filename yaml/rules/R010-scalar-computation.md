@@ -9,8 +9,8 @@ applies_to: [expression.compute, numeric_expression]
 
 ## Intent
 
-Express arithmetic that combines several columns as one readable formula,
-without a registry entry per operator and without host-language code.
+Express arithmetic that combines several columns in one readable formula,
+without a registry entry per operator or host-language code.
 
 ## Boundaries
 
@@ -34,8 +34,8 @@ returns one numeric value per current row. The grammar is a subset of SQL.
 
 ## Identifiers
 
-**R010-2.** An identifier resolves as the `sql` primitive resolves one
-in the same phase. A formula and a predicate never disagree about a name.
+**R010-2.** An identifier uses the `sql` primitive's resolution in the same
+phase. A formula and a predicate never disagree about a name.
 
 **R010-3.** During column derivation an unqualified identifier is a
 current-output column. A qualified identifier is permitted only when its
@@ -135,8 +135,8 @@ Write `LN(x)` or `LN(x) / LN(b)`.
 **R010-12.** A derivation must not round. `ROUND` is absent, not merely
 discouraged, and a specification cannot round a value. Analysis datasets carry
 computed values at full precision. Reporting decides the displayed places. R011
-keeps the same position at conversion, where a non-integral value fails rather
-than being truncated.
+has the same rule at conversion, where a non-integral value fails rather than
+being truncated.
 
 **R010-13.** `CEIL`, `FLOOR`, and `TRUNC` remain. They are not presentation
 rounding: they return an integral part exactly, with no mode to choose, and
@@ -189,9 +189,8 @@ expression.
 
 ## Failure conditions
 
-**R010-25.** These fail the run. They are not silently converted to missing,
-consistent with R005: an implementation must not replace an error with a
-missing value.
+**R010-25.** The following conditions fail the run. Consistent with R005,
+implementations must not silently convert a failure to missing.
 
 **R010-26.** Division by zero, by `/` or by `MOD`. Write
 `NULLIF(denominator, 0)` to choose missing explicitly.

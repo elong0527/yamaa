@@ -65,9 +65,9 @@ artifact. R015's `unmatched: fail` rejects a value matching no record, and a
 same; `sdtm-suppmh-parent-linkage` links `IDVARVAL` to its medical-history
 record that way.
 
-**R009-4.** The opposite direction -- every parent record has a supplemental
-record -- is not a property of the artifact, so no verification here can
-state it. A specification that must assert it derives at the parent's grain.
+**R009-4.** The claim that every parent record has a supplemental record is
+not an artifact property, so no verification here can state the claim. A
+specification that must assert the claim derives at the parent's grain.
 
 ## Registration and timing
 
@@ -129,8 +129,8 @@ independently of regular-expression matching behavior.
   from `then` fails. When `when` is `FALSE` or `UNKNOWN`, the row passes
   because the rule does not apply.
 - **R009-18.** `predicate` evaluates `assert` for every output row. Every
-  result must be `TRUE`; `FALSE` and `UNKNOWN` fail. It is the escape hatch
-  for row-wise rules that do not match a more specific verification type.
+  result must be `TRUE`; `FALSE` and `UNKNOWN` fail. This verification covers
+  row-wise rules that lack a more specific verification type.
 - **R009-19.** `row_count` requires the output count to meet inclusive `min`
   and `max` bounds. At least one bound is required. `filter` and `group_by`
   narrow what it counts, as the next section defines.

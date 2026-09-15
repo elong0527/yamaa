@@ -10,8 +10,8 @@ applies_to: [column.type, column_type, literal_value, derivation,
 
 ## Intent
 
-Close the vocabulary a column may declare, normalize non-finite floats, and
-define value conversion into a declared type.
+Close the column vocabulary, normalize non-finite floats, and define
+conversion into a declared type.
 
 ## Boundaries
 
@@ -48,7 +48,7 @@ spelling:
 **R011-2.** `column_class` declares a field whose own name is `type`, so its
 declaration reads `- type: {type: column_type, required: true}`. The outer
 `type` is a specification field name and the inner `type` is the R006
-descriptor keyword; R006 resolves the two without ambiguity.
+descriptor keyword; R006 resolves both uses without ambiguity.
 
 **R011-3.** The schema vocabulary and the column vocabulary are not the same
 set. `str`, `int`, and `float` are spelled the same in both and mean the
@@ -70,7 +70,7 @@ types.
 
 **R011-6.** `date` and `datetime` are the two temporal types, and R016
 defines both: what each admits, the text it is read from and written back
-to, how two of them order, and which operations read them. This rule adds
+to, how two of them order, and which operations read them. R011 adds
 nothing to that definition. A value neither type admits is a `str` like any
 other, and ISO 8601 text orders chronologically under R007 comparison.
 
@@ -161,14 +161,13 @@ or `.NAN`. A recognized non-finite form is parsed as a float and
 immediately normalized to missing before conversion continues. Any other
 text fails.
 
-**R011-22.** A conversion entry citing **R016** applies that rule: the text
+**R011-22.** A conversion entry citing **R016** applies R016: the text
 a temporal value is parsed from, the canonical text the value is written
 back to, and the conversions the rule forbids are all stated there.
 The collected precision a temporal value carries is stated there too, and
 canonical text carries the fields alone, so a `date` or `datetime` converted
-to `str` does not carry that precision. The rule is named, not repeated, so
-the column-conversion form and the form any other reader applies cannot
-drift apart.
+to `str` does not carry that precision. R011 names R016 rather than repeats
+it, so column conversion and every other reader cannot drift apart.
 
 **R011-23.** Converting a numeric value to `int` succeeds only when the
 value is exactly integral and within the 64-bit signed range. A non-integral
