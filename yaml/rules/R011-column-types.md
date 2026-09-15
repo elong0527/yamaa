@@ -196,8 +196,8 @@ display rounding.
 **R011-27.** The text never carries an exponent, so one value has exactly
 one spelling: `0.0001` and not `1e-4`, and a large magnitude is written out
 in full. Shortest selects the digits, not the characters. R020 writes the
-same text into an artifact and states the bytes two runtimes agree on when
-one value has one text.
+same text into an artifact and states the bytes two runtimes must agree on,
+which they can only do if one value has one text.
 
 **R011-28.** Calculations, comparisons, verifications, and dependent
 derivations always use the unrounded value. Final artifact display precision
