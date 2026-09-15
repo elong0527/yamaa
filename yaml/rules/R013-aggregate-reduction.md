@@ -35,8 +35,8 @@ accepts exactly one record and fails when several are present.
 ## Scope
 
 **R013-1.** An `aggregate_expression` evaluates over records of one relation
-and returns one value per group. Its result is a single value for the group, so
-the expression never changes row count: R003 joins a right-side reduction
+and returns one value per group. The result is a single value for the group,
+so the expression never changes row count: R003 joins a right-side reduction
 to constructed rows, an output-row reduction broadcasts under R007, and a
 grouped row template asks the expression for one value while R001 owns whether
 that candidate row is appended.
@@ -52,10 +52,10 @@ forms exist and must not be mixed:
 
 - **Qualified.** Every identifier names the same declared dataset relation.
   During column derivation the expression reduces that right side before the
-  R003 join, even when its qualifier equals the current row template's
-  input dataset. A scalar source qualified to the row template's input
-  dataset reads one record; the aggregate keyword makes the same
-  qualifier relational.
+  R003 join, even when the expression qualifier equals the current row
+  template's input dataset. A scalar source qualified to the row
+  template's input dataset reads one record; the aggregate keyword makes
+  the same qualifier relational.
 - **Unqualified.** Every identifier names a current-output column. The
   expression reduces constructed output rows within its `group_by` partition
   and broadcasts the result, which is R007's second aggregate context.
@@ -159,9 +159,9 @@ each later value is added using R010's `+` semantics; implementations must
 not reorder, reassociate, partition, or use a compensated or correctly rounded
 summation. The `filter`, when present, removes records without changing the
 order of those that remain. R014 defines stored-source record order, and R001
-defines constructed-output and grouped-input record order. `MEAN` uses this
-same ordered `SUM`, followed by division by `COUNT`, so it inherits the fold's
-binary64 rounding behavior.
+defines constructed-output and grouped-input record order. `MEAN` uses the
+same ordered `SUM`, followed by division by `COUNT`, so `MEAN` inherits the
+fold's binary64 rounding behavior.
 
 **R013-16.** `AVG` is not an alias; the portable reducer name is `MEAN`. A
 median would have to fix its interpolation rule before two runtimes could
@@ -262,24 +262,24 @@ and Python must produce identical results for every example. R010's determinism
 requirements apply unchanged, including that an implementation must not
 reassociate or algebraically simplify a written expression.
 
-**R013-33.** A reduction does not sort its records. `SUM` and therefore
+**R013-33.** A reduction does not sort the records. `SUM` and therefore
 `MEAN` consume relation record order as specified above; `COUNT`, `MIN`, and
-`MAX` are independent of that order, while `ONLY` accepts no group in which an
-order could choose among records. A rule that needs one record chosen by value
-order still uses a window or `multiple_matches`, where that order is declared.
+`MAX` are independent of that order, while `ONLY` accepts no group in which
+an order could choose among records. A rule that needs one record chosen by
+value order still uses a window or `multiple_matches`, where the value order
+is declared.
 
 ## Rationale
 
 One expression with a closed reducer vocabulary keeps reductions portable:
-anything outside the table fails validation instead of inheriting a host
-dialect. Fixing `SUM` as a left fold in relation record order pins binary64
-rounding identically in R and Python, and `MEAN` inherits that fold through its
-defined division. Missing handling is pinned here because target runtimes
-disagree, so an uncollected quantity stays missing and an absent group stays
-distinguishable from a collected zero. `ONLY` rejects rather than chooses, so a
-grouped calculation that requires one record cannot silently depend on order;
-choosing by value order stays with windows and `multiple_matches`, where that
-order is declared.
+anything outside the table fails validation, and no host dialect applies.
+A left-fold `SUM` in relation record order pins binary64 rounding identically
+in R and Python; `MEAN` inherits the fold through its defined division.
+Missing handling is pinned: target runtimes disagree, so an uncollected
+quantity stays missing and an absent group stays distinguishable from
+a collected zero. `ONLY` rejects rather than chooses, so a one-record
+calculation cannot silently depend on order; choosing by value order stays
+with windows and `multiple_matches`, which declare the value order.
 
 ## Errors
 

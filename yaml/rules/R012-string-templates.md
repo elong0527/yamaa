@@ -52,9 +52,10 @@ text        := one or more R019 scalar values other than "{" and "}"
 ```
 
 **R012-5.** `grammar/string-template.yaml` is this grammar's single
-source. The block above is its rendering, and its cases record the
-literal text and placeholders every implementation must produce for a
-template, or the template it must reject.
+source. The block above renders that grammar. The grammar file's cases
+record the literal text and placeholders every implementation must
+produce for a template, and record the templates every implementation
+must reject.
 
 **R012-6.** Repository validation and the R implementation both read
 that file, so no transcription of this grammar can drift from it
@@ -96,12 +97,11 @@ template itself is empty.
 
 ## Rationale
 
-The template language admits only variable references and literal text,
-which keeps templates readable without admitting host-language code or
-a general string-expression language. Brace-pair escaping takes
-precedence while scanning so that literal braces stay expressible. The
-bare shorthand carries no missing handler so that specifications opt
-into a replacement explicitly through the canonical form.
+The template language admits only variable references and literal text.
+Brace-pair escaping takes precedence while scanning, so literal braces
+stay expressible. The bare shorthand carries no missing handler, so
+specifications opt into a replacement explicitly through the canonical
+form.
 
 ## Errors
 

@@ -83,7 +83,7 @@ implementation choice.
 ## Non-finite floats are missing
 
 **R011-9.** A non-finite float is positive infinity, negative infinity, or
-any NaN binary64 value. Every non-finite float is the missing value. It is
+any NaN binary64 value. Every non-finite float is the missing value,
 normalized immediately at every boundary where a float enters the language
 or a numeric operation produces one:
 
@@ -107,12 +107,13 @@ checks its declared result contract.
 conversion, comparison, equality, grouping, ordering, range selection, key
 validation, verification, contract fingerprinting, and artifact rendering.
 None of those operations can observe a non-finite float or fall back to
-host-runtime semantics for one. They observe the missing value and apply
-their existing missing-value behavior. In particular, a normalized output
-key fails R005's non-missing key requirement, `not_missing` fails while
-verifications that skip missing values skip it under R009, and an artifact
-carries it as the missing value its profile writes under R020. No artifact
-or canonical value has an infinity or NaN spelling.
+host-runtime semantics for a non-finite float. Those operations observe
+the missing value and apply their missing-value behavior. In particular, a
+normalized output key fails R005's non-missing key requirement,
+`not_missing` fails while verifications that skip missing values skip it
+under R009, and an artifact carries it as the missing value its profile
+writes under R020. No artifact or canonical value has an infinity or NaN
+spelling.
 
 **R011-16.** The policy is value-based, not a universal text sentinel. An
 unquoted YAML scalar matching a core-schema non-finite form first resolves to a
@@ -131,13 +132,12 @@ contract declares `may_return_missing: true`.
 derivation result to the declared column type. Conversion is deterministic, and
 a conversion not defined below fails rather than producing a substitute value.
 
-**R011-19.** A table row is the runtime type of the value being converted
-and a table column is the declared type:
+**R011-19.** Each entry below starts from the runtime type of the converted
+value and lists each declared type:
 
 - missing converts to missing in every type.
 - `str` converts to `str` by R019 identity; to `int` by parsing, then
-  numeric to `int`; to `float` by parsing; to `date` and `datetime` by
-  R016.
+  numeric to `int`; to `float` by parsing; to `date` and `datetime` by R016.
 - `int` converts to `str` as decimal text; to `int` by identity; to
   `float` by widening; to `date` and `datetime` by failing.
 - `float` converts to `str` as decimal text (see float-to-text below); to
@@ -161,14 +161,14 @@ or `.NAN`. A recognized non-finite form is parsed as a float and
 immediately normalized to missing before conversion continues. Any other
 text fails.
 
-**R011-22.** A cell reading **R016** applies that rule: the text a temporal
-value is parsed from, the canonical text it is written back to, and the
-conversions it does not permit are all stated there. The collected precision
-a temporal value carries is stated there too, and canonical text carries the
-fields alone, so a `date` or `datetime` converted to `str` does not carry
-it. Naming the rule rather than repeating its grammar is what keeps the form
-a column conversion applies and the form any other reader applies from
-drifting apart.
+**R011-22.** A conversion entry citing **R016** applies that rule: the text
+a temporal value is parsed from, the canonical text the value is written
+back to, and the conversions the rule forbids are all stated there.
+The collected precision a temporal value carries is stated there too, and
+canonical text carries the fields alone, so a `date` or `datetime` converted
+to `str` does not carry that precision. The rule is named, not repeated, so
+the column-conversion form and the form any other reader applies cannot
+drift apart.
 
 **R011-23.** Converting a numeric value to `int` succeeds only when the
 value is exactly integral and within the 64-bit signed range. A non-integral
@@ -195,9 +195,9 @@ display rounding.
 
 **R011-27.** The text never carries an exponent, so one value has exactly
 one spelling: `0.0001` and not `1e-4`, and a large magnitude is written out
-in full. Shortest selects the digits, not the characters. R020 writes this
-same text into an artifact and states the bytes two runtimes must agree on,
-which they can only do if one value has one text.
+in full. Shortest selects the digits, not the characters. R020 writes the
+same text into an artifact and states the bytes two runtimes agree on when
+one value has one text.
 
 **R011-28.** Calculations, comparisons, verifications, and dependent
 derivations always use the unrounded value. Final artifact display precision
@@ -208,16 +208,16 @@ specification.
 
 ## Rationale
 
-Normalizing every non-finite float to missing at the boundary where it
-enters keeps host floating-point semantics from leaking into the language:
-no downstream operation can observe an infinity or NaN, so none needs its
-own fallback for one. The policy is value-based rather than a text sentinel
-so that quoting still preserves text and only numeric parsing gives such
-text a numeric meaning. Failing an undefined conversion instead of choosing
-a representation keeps the type system conservative -- a later rule can
-define a mapping without invalidating specifications written under this
-one -- and shortest-round-trip float text gives one value one spelling so
-that two runtimes can agree on the bytes an artifact carries.
+Normalizing every non-finite float to missing at the boundary where the
+float enters keeps host floating-point semantics out of the language: no
+downstream operation can observe an infinity or NaN, so no operation needs
+a fallback for an infinity or NaN. The policy is value-based rather than a
+text sentinel, so quoting still preserves text and only numeric parsing
+gives such text a numeric meaning. Failing an undefined conversion instead
+of choosing a representation keeps the type system conservative -- a later
+rule can define a mapping without invalidating a specification written
+under this one -- and shortest-round-trip float text gives one value one
+spelling so that two runtimes can agree on the bytes an artifact carries.
 
 ## Errors
 
