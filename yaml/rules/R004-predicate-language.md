@@ -95,7 +95,7 @@ backslash. The literal has runtime type `str` under R019.
 
 **R004-8.** A temporal literal is `DATE '...'` or `DATETIME '...'`. Its text
 must parse under R016 for the named type. The keyword is required:
-`'2025-06-01'` alone is a `str`, not a date.
+`'2025-06-01'` alone is a `str`, not a `date`.
 
 **R004-9.** `NULL` is missing and has no runtime type. A comparison with it is
 `UNKNOWN`; `IS NULL` and `IS NOT NULL` are the tests for missingness.
@@ -155,8 +155,8 @@ one, and every other scalar matches by R019 equality. Matching is
 case-sensitive.
 
 **R004-20.** No escape character exists by default. `ESCAPE` declares a string
-literal of exactly one R019 scalar value. That character makes the following
-pattern scalar literal; a trailing escape character is invalid.
+literal of exactly one R019 scalar value. That character marks the next
+pattern scalar as literal; a trailing escape character is invalid.
 
 ```yaml
 filter: "AEDECOD LIKE '100!%' ESCAPE '!'"
