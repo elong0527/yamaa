@@ -11,9 +11,9 @@ applies_to: [descriptor.pattern, regex, expression.str_extract,
 
 ## Intent
 
-Pin one executable regular-expression contract so that repository validation,
-R, and Python accept the same patterns, reject the same patterns, and produce
-the same match for the same subject.
+Pin one executable regular-expression contract. Repository validation, R, and
+Python must accept and reject the same patterns. They must produce the same
+match for the same subject.
 
 ## Boundaries
 
@@ -42,11 +42,10 @@ requirement below applies to all three unless a section names one.
 **R022-3.** The normative syntax and semantics are the ECMA-262 `Pattern`
 grammar and its matching semantics, evaluated with the Unicode flag set.
 
-**R022-4.** The pinned engine is the Rust `regress` crate, version `0.10.4`.
-A Python consumer binds that crate version through the `regress`
-distribution `2025.10.1` on PyPI. An R consumer binds the same crate
-version. Repository validation uses the same binding as any other Python
-consumer, so no implementation reads a pattern with a host engine such as
+**R022-4.** The pinned engine is Rust `regress` crate version `0.10.4`.
+A Python consumer uses `regress` distribution `2025.10.1` on PyPI. An R
+consumer uses the same crate version. Repository validation uses the same
+Python binding. No implementation reads a pattern with a host engine such as
 Python `re`, POSIX ERE, PCRE, or TRE.
 
 **R022-5.** The pinned engine is the decisive authority. A pattern is well
@@ -59,11 +58,10 @@ that re-runs the fixtures in every consumer.
 
 ## Flags
 
-**R022-6.** Every pattern is evaluated with the Unicode flag `u` set and
-every other flag clear. A pattern does not select its own flags: ECMA-262
-has no inline flag syntax, so `(?i)` is a syntax error and stays one, and a
-consumer must not expose `i`, `m`, `s`, `g`, `y`, `d`, or `v` through a
-field, an environment, or a host default.
+**R022-6.** Every pattern uses the Unicode flag `u`. All other flags are
+clear. A pattern cannot select flags because ECMA-262 has no inline flag
+syntax. `(?i)` is a syntax error. A consumer must not expose `i`, `m`, `s`,
+`g`, `y`, `d`, or `v` through a field, environment, or host default.
 
 **R022-7.** `u` is set because it makes a pattern operate on the Unicode
 scalar values R019 defines. One supplementary-plane scalar is one character
@@ -107,11 +105,10 @@ supplementary-plane scalar.
 
 ## Full match and search
 
-**R022-16.** The R006 `pattern` keyword is a **full match**. The value
-satisfies it when the match starts before the first scalar and ends after
-the last. Implementations obtain this by evaluating the pattern source
-wrapped as `^(?:` and `)$`, which adds no capturing group and renumbers
-none.
+**R022-16.** The R006 `pattern` keyword is a **full match**. A value
+satisfies the keyword when the match starts before the first scalar and ends
+after the last. Implementations evaluate the pattern source wrapped as
+`^(?:` and `)$`. The wrapper adds no capturing group or group number.
 
 **R022-17.** `matches` is a **search**. A non-missing value satisfies it when
 the pattern matches at any position. A pattern that must describe the whole
@@ -161,13 +158,13 @@ pattern is the way to prohibit.
 reject the same patterns, and return the same match, group, and verification
 outcome for the same pattern and subject.
 
-**R022-26.** `conformance/regex.yaml` holds the shared fixtures. Every case
-names the pattern, the subject, and the outcome for all three consumers, or
-records that the pattern is rejected. Repository validation replays the
-fixtures against the pinned engine, which proves the Python side and the
-fixtures agree. Executable parity with R is proved by the shared conformance
-workflow when that workflow exists; a fixture file alone is not runtime
-evidence for a runtime that has not run it.
+**R022-26.** `conformance/regex.yaml` holds shared fixtures. Each case names
+the pattern, subject, and outcome for all three consumers, or records a
+rejected pattern. Repository validation replays the fixtures against the
+pinned engine. This replay proves that the Python consumer and fixtures
+agree. The shared conformance workflow proves executable parity with R when
+that workflow exists. A fixture file alone is not runtime evidence for an R
+runtime that has not run the workflow.
 
 ## Rationale
 

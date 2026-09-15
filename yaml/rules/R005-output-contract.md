@@ -10,9 +10,9 @@ applies_to: [root.keys, root.output, output.violation_log, root.columns,
 
 ## Intent
 
-Ensure every declared column is derived in exactly one place, that every value
-passes through the same ordered stages before anything consumes it, and that
-the completed dataset is uniquely identified.
+Ensure every declared column is derived in exactly one place, every value
+passes the same ordered stages before use, and the completed dataset
+is uniquely identified.
 
 ## Boundaries
 
@@ -31,7 +31,7 @@ ordered it.
 Its columns are exactly the declared columns listed by `output.columns`, in
 that order, and its rows are the rows R001 constructs. A specification may
 also produce R009's governed warning-violation sidecar; that log reports the
-run and is not a second derivation target or a source within this specification.
+run, not a second derivation target or source within this specification.
 
 **R005-2.** Its rows leave in the order `output.order_by` declares, and in
 R001's construction order when it is omitted.
@@ -45,8 +45,8 @@ which those profiles carry rather than decide.
 ## The column list is declared
 
 **R005-4.** The artifact's columns come from the specification and from
-nothing else. A source carrying more of something than the specification
-declares does not extend the artifact, and one carrying fewer does not
+nothing else. A source carrying more than the specification declares
+does not extend the artifact, and one carrying fewer does not
 shorten it. Each member of a numbered family (`SMQ01NAM`, `SMQ01CD`,
 `SMQ02NAM`, and onwards, or `CRIT1` beside `CRIT1FL`) is a declared column
 like any other, so the count is fixed when the specification is written. A
@@ -71,12 +71,12 @@ same-named source variable; R002 forbids that inference.
 
 **R005-7.** A column is derived either at column level or at row level, never
 both. A column declaring `derivation` must not also appear in any `rows`
-entry's `derivations`, because the two would produce the same value twice
-with nothing to say which one survives.
+entry's `derivations`; the two would produce the same value twice
+with no rule for which one survives.
 
 **R005-8.** A row-derived column must be derived in every `rows` entry.
-Deriving it in some entries and not others leaves the remaining constructed
-rows with no value for it, so partial row coverage is an error rather than
+Deriving it in some entries only leaves other constructed rows
+with no value, so partial row coverage is an error, not
 an implied missing value.
 
 **R005-9.** A specification with no `rows` entry must derive every column at
@@ -86,7 +86,7 @@ this states the base-driven case directly.
 **R005-10.** A `rows` derivation must target a declared column. A key in
 `derivations` that names no declared column is an error.
 
-**R005-11.** Mixing the two placements across different columns is normal
+**R005-11.** Mixing the two placements across columns is normal
 and expected: a specification with `rows` typically derives the columns that
 distinguish its row templates at row level and the rest at column level.
 
@@ -97,13 +97,13 @@ Write `literal: null` rather than omitting the derivation.
 
 **R005-13.** A column listed in `output.columns` is part of the artifact. Any
 other declared column is internal: it is derived, converted, verified, and
-made available to dependents exactly as an output column is, but is omitted
+shared with dependents exactly as an output column is, but omitted
 from the artifact.
 
-**R005-14.** Internal columns exist so that a multi-step derivation does not
-have to publish its own working values. They do not change evaluation. R001
-builds one dependency graph over all declared columns regardless of
-`output`, and an output column may depend on an internal one.
+**R005-14.** Internal columns hold working values a multi-step derivation
+does not publish. They do not change evaluation. R001 builds one dependency
+graph over all declared columns regardless of `output`, and an output column
+may depend on an internal one.
 
 **R005-15.** Column coverage applies unchanged; an internal column still
 needs a derivation in exactly one place.
@@ -140,7 +140,7 @@ for one value, under R011.
 the first match's value, then stop, for one value, under R008.
 
 **R005-25.** Stage 5: run the column's verifications over the whole column,
-under R009. An error stops execution; warnings are accumulated without changing
+under R009. An error stops execution; warnings accumulate without changing
 the column.
 
 **R005-26.** Stages 1 to 4 run on each value, in whichever phase its
@@ -187,8 +187,8 @@ twice.
 values of each row must be non-missing and unique across the artifact. Key
 validation happens before dataset verifications, which R009 runs last.
 String key values use R019 equality. Key order is significant to R003,
-which joins on the output keys a right side also carries. That is a subset
-used for enrichment and does not change the identity asserted here.
+which joins on the output keys a right side also carries. That subset
+is used for enrichment and does not change the identity asserted here.
 
 ## Artifact row order
 
@@ -212,18 +212,17 @@ value on a completed row to order by; a repeated term states nothing the
 first one did not.
 
 **R005-37.** Rows equal on every declared term keep their construction
-order, which is the tie-break R007 already applies to window ordering. The
-order is therefore total for every input: no tie is an error, no comparison
-is undefined, and no specification declares a term merely to make the result
-deterministic. One that wants a particular tie broken declares the term
-that breaks it.
+order, the tie-break R007 applies to window ordering. The order is therefore
+total for every input: no tie is an error, no comparison is undefined, and
+no specification declares a term merely to make the result deterministic;
+one that wants a particular tie broken declares the term that breaks it.
 
-**R005-38.** Ordering is presentation. It happens once, after every value
-has completed the lifecycle above, after key validation, and after every
-verification R009 runs, so it cannot change whether a run passes or warns. It
-changes nothing about evaluation either: R001's dependency order, a window's
-partitions, and the neighbours `row_value` reads are all fixed before this
-order is applied, and each keeps construction order for its own tie-break.
+**R005-38.** Ordering is presentation. It runs once, after the lifecycle
+above, key validation, and every R009 verification, so it cannot
+change whether a run passes or warns. It changes nothing about evaluation
+either: R001's dependency order, a window's partitions, and the neighbours
+`row_value` reads are all fixed before this order is applied, and each keeps
+construction order for its own tie-break.
 
 ## Specification-wide uniqueness
 
@@ -248,7 +247,7 @@ derivation because no portable construct can state it. Allowing an internal
 column in an order term trades a small, stated cost -- a reader cannot
 always reproduce the artifact order from the artifact alone -- for not
 having to publish a column that exists only to withhold. Presentation
-ordering comes last so that it settles only the sequence a consumer
+ordering comes last so it settles only the sequence a consumer
 receives; R001 orders row construction in base-record order, and R014's
 producing-specification link makes a stored artifact the source another
 specification reads that way, so a declared order is what lets a
@@ -291,8 +290,9 @@ fail.
 
 **R005-52.** A missing or duplicate combined key value: fail and report the
 offending rows. A specification without `rows` emits one row per key
-combination under R001-12, so a duplicate key can only come from the row
+combination under R001-12, so a duplicate key can come only from row
 templates R001-12a governs emitting one combination more than once.
 
-**R005-53.** A failed error-level verification: fail under R009. A warning-level
-violation leaves the primary artifact intact and enters R009's violation log.
+**R005-53.** A failed error-level verification: fail under R009. A
+warning-level violation leaves the primary artifact intact and enters R009's
+violation log.

@@ -10,7 +10,7 @@ applies_to: [expression.str_template, string_template]
 
 ## Intent
 
-Build readable strings from named variables and literal text without admitting
+Build readable strings from named variables and literal text. Do not admit
 host-language code or a general string-expression language.
 
 ## Boundaries
@@ -52,9 +52,10 @@ text        := one or more R019 scalar values other than "{" and "}"
 ```
 
 **R012-5.** `grammar/string-template.yaml` is this grammar's single
-source. The block above is its rendering, and its cases record the
-literal text and placeholders every implementation must produce for a
-template, or the template it must reject.
+source. The block above renders that grammar. The grammar file's cases
+record the literal text and placeholders every implementation must
+produce for a template, and record the templates every implementation
+must reject.
 
 **R012-6.** Repository validation and the R implementation both read
 that file, so no transcription of this grammar can drift from it
@@ -82,14 +83,13 @@ field typed as `variable`.
 evaluation; repeated placeholders contribute one dependency but are
 replaced at every position where they occur.
 
-**R012-12.** After its dependencies are complete, replace each
-placeholder with its string value and unescape brace pairs. Placeholder
-values are not implicitly converted.
+**R012-12.** When every dependency is complete, replace each placeholder with
+its string value and unescape brace pairs. Placeholder values stay unconverted.
 
 **R012-13.** If any value is not a string, evaluation fails under R007.
 
-**R012-14.** If any value is missing, return the declared `missing`
-literal; without that handler, the missing input is fatal under R008.
+**R012-14.** If a placeholder value is missing, return declared `missing`;
+without that handler, the missing value is fatal under R008.
 
 **R012-15.** Otherwise the result is R019's exact concatenation of
 literal text and replacement values, including an empty string when the
@@ -97,12 +97,11 @@ template itself is empty.
 
 ## Rationale
 
-The template language admits only variable references and literal text,
-which keeps templates readable without admitting host-language code or
-a general string-expression language. Brace-pair escaping takes
-precedence while scanning so that literal braces stay expressible. The
-bare shorthand carries no missing handler so that specifications opt
-into a replacement explicitly through the canonical form.
+The template language admits only variable references and literal text.
+Brace-pair escaping takes precedence while scanning, so literal braces
+stay expressible. The bare shorthand carries no missing handler, so
+specifications opt into a replacement explicitly through the canonical
+form.
 
 ## Errors
 

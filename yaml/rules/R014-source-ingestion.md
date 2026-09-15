@@ -10,8 +10,8 @@ applies_to: [root.datasets, dataset_source, dataset_class, expression.source]
 
 ## Intent
 
-Define what a stored field becomes before any expression reads it: when it is
-missing, and which type it carries.
+Define a stored field's type and missingness before expressions read it.
+
 
 ## Boundaries
 
@@ -57,8 +57,8 @@ type.
   Every one of its fields is `str` unless the specification declares
   otherwise.
 
-**R014-5.** `dataset_class.types` declares the type of a named field of a
-typeless container. A field it does not name is `str`. This is a statement
+**R014-5.** `dataset_class.types` declares each named field's type in a
+typeless container. Any unnamed field is `str`. This statement
 about the dataset as this specification reads it: two specifications may read
 the same delimited file with different declarations, because the file carries
 no types to contradict either of them. A dataset whose types matter to more
@@ -91,11 +91,11 @@ datasets:
 ```
 
 **R014-8.** The referenced specification is an executable workflow
-predecessor. Its own sources must exist and validate, its derivations must be
-complete, and any `schema` links it declares are validated recursively. The
-resulting dependency graph must be acyclic. The producer completes before the
-consumer reads the artifact named by `path`; a link cannot name the consuming
-specification or any other specification already above it in the workflow.
+predecessor. Its sources must exist and validate, its derivations must be
+complete, and its `schema` links are validated recursively. The dependency
+graph must be acyclic. The producer completes before the consumer reads the
+artifact named by `path`. A link cannot name the consuming specification or
+another specification already above it in the workflow.
 
 **R014-9.** The producer's `output.columns` names every stored field exactly
 once and in artifact order. Each selected entry in its `columns` supplies
@@ -127,14 +127,14 @@ field.
 
 ## Parsing a declared type
 
-**R014-13.** A declared field type on a typeless container is applied to the
-stored text by the `str` row of R011's conversion table, which is the same
-parsing a `str` column uses when it reaches a declared type. `int` and `float`
-use R011's numeric text parsing, including its non-finite normalization;
-`date` and `datetime` accept exactly the lexical forms R016 fixes. A value
-that does not parse fails the run. R011 separately recognizes the YAML 1.2
-non-finite forms during declared numeric parsing; they remain text when the
-field's type is `str` and normalize only after being parsed as numbers.
+**R014-13.** For a typeless container, R011's `str` row parses stored text
+into its declared type.
+`int` and `float` use R011's numeric text parsing, including its
+non-finite normalization. `date` and `datetime` accept exactly the
+lexical forms R016 fixes. A value that does not parse fails the run. R011
+separately recognizes YAML 1.2 non-finite forms during declared numeric
+parsing. They remain text when the field's type is `str` and normalize
+only after parsing as numbers.
 
 **R014-14.** An ingestion failure is not a conversion failure.
 `conversion_failure` is declared on a column and answers for a value the

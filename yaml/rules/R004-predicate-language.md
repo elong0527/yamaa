@@ -10,8 +10,8 @@ applies_to: [sql]
 
 ## Intent
 
-Define the portable Boolean predicate written in a field typed `sql`: its
-grammar, literals, comparisons, missing-value behavior, and failures.
+Define the portable Boolean predicate written in a `sql` field: grammar,
+literals, comparisons, missing-value behavior, and failures.
 
 ## Boundaries
 
@@ -63,12 +63,12 @@ non_quote   := any R019 string scalar other than "'"
 temporal    := "DATE" string | "DATETIME" string
 ```
 
-**R004-3.** `grammar/predicate.yaml` is this grammar's single source. The
-block above is its rendering, its `reserved` list closes the keywords named
-below, and its cases record the text every implementation must accept or
-reject, the identifiers an accepted text binds, and the parse it produces.
-Repository validation and the R implementation both read that file, so no
-transcription of this grammar can drift from it without failing.
+**R004-3.** `grammar/predicate.yaml` is the single grammar source. The block
+above renders the file. Its `reserved` list closes the keywords below. Its
+cases state the text every implementation must accept or reject, the bound
+identifiers in accepted text, and each accepted parse. Repository validation
+and the R implementation read the file. A copied grammar that drifts from the
+file fails validation.
 
 **R004-4.** Whitespace may separate tokens but cannot occur inside a number,
 identifier, or keyword. Precedence is `NOT`, then `AND`, then `OR`. Repeated
@@ -78,11 +78,10 @@ case-sensitive. `AND`, `BETWEEN`, `DATE`, `DATETIME`, `ESCAPE`, `FALSE`, `IN`,
 `IS`, `LIKE`, `NOT`, `NULL`, `OR`, and `TRUE` are reserved as bare names. A
 qualified field may use one of those spellings after its qualifier.
 
-**R004-5.** An operand is a name or literal and nothing else. Arithmetic,
-function calls, `CASE`, aggregates, windows, subqueries, host-language calls,
-and `!=` are not in the grammar. A value that must be computed before
-comparison is first bound to a named column; an internal column can be
-omitted from `output.columns`.
+**R004-5.** An operand is only a name or literal. Arithmetic, function calls,
+`CASE`, aggregates, windows, subqueries, host-language calls, and `!=` are not
+in the grammar. A value computed before comparison is first bound to a named
+column. An internal column may be omitted from `output.columns`.
 
 ## Literals
 
@@ -193,20 +192,19 @@ predicate as dependency-free.
 
 ## Determinism
 
-**R004-30.** Evaluation is deterministic and free of side effects. A
-conforming implementation must not inherit implicit coercion, collation,
-`LIKE` escape, or missing-value behavior from a host SQL engine. String
-comparison must use R019. An implementation either configures and overrides
-those behaviors to match these rules or evaluates the grammar itself.
+**R004-30.** Evaluation is deterministic and side-effect free. A conforming
+implementation must use R019 for string comparison. The implementation must
+not inherit implicit coercion, collation, `LIKE` escape, or missing-value
+behavior from a host SQL engine. The implementation must either configure and
+override those behaviors to match these rules or evaluate the grammar itself.
 
 ## Rationale
 
 A closed predicate grammar keeps row selection, overrides, and verifications
-reviewable as text and identical in R and Python. Operands are names or
-literals so that anything computed is bound to a named column first, where
-its type and missing-value behavior are already fixed. Three-valued logic
-with no implicit conversion means a predicate never depends on host SQL
-coercion, collation, or escape defaults.
+reviewable and identical in R and Python. Names and literals require each
+computed value to be bound first to a named column. The named column fixes type
+and missing-value behavior. Three-valued logic without implicit conversion
+prevents dependence on host SQL coercion, collation, and escape defaults.
 
 ## Errors
 

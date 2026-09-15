@@ -44,8 +44,8 @@ expression names its input variables directly, except in the following fields
 whose declared type contains `expression`. Each is evaluated recursively and
 nests because selecting or composing expressions is the field's purpose:
 
-- `case.branches[].then` and `case.otherwise`: selecting among expressions
-  is what `case` does.
+- `case.branches[].then` and `case.otherwise`: `case` selects among
+  expressions.
 - `str_concat.sources`: concatenation places literals beside sources.
 - `override[].value`: a final correction may select any expression.
 
@@ -63,15 +63,15 @@ literals use their explicit tagged leaf forms.
 ## Evaluation kinds
 
 **R007-6.** Scalar expressions return one value per row. Window expressions
-partition constructed output rows by their local `group_by` and preserve row
-count. Omitting `group_by` creates one partition. Within a declared group,
-missing values equal other missing values, so rows with the same present
-values and missing in the same group positions share one partition.
+partition constructed output rows by local `group_by` and preserve row count.
+Omitting `group_by` creates one partition. Within a declared group, missing
+values equal other missing values. Rows with the same present values and the
+same missing group positions share one partition.
 
 **R007-7.** A window that declares `filter` still preserves row count: an
 excluded row receives missing rather than being dropped. A window that reads
 another row of its partition returns missing when that row does not exist,
-which is the same result as a neighbouring row whose value is missing.
+the same result as a neighbouring row whose value is missing.
 
 **R007-8.** `aggregate` is the only aggregate expression. R013 defines its
 grammar, the reducers it permits, and what each returns; this rule fixes
@@ -119,7 +119,7 @@ engine's.
 
 **R007-16.** Terms apply in order, each with its own direction and
 placement. Records equal on every term preserve row-template order and then
-base-record order, which makes the result total, so ordering has no
+base-record order, which makes the result total: ordering has no
 undefined case and a row's neighbours are determined.
 
 **R007-17.** Non-missing values use the order their type owns: numeric order
@@ -209,7 +209,7 @@ gives `function` the return type declared by its logical contract.
 **R007-35.** Each operation is documented where it is registered in
 `schema_expression_*.yaml` or `schema_function.yaml`. An inline comment
 states the operation's result, and descriptor `description` fields explain
-its parameters. These adjacent definitions are authoritative for
+its parameters; these adjacent definitions are authoritative for
 operation-local behavior and do not affect schema validation.
 
 ## Rationale
@@ -224,8 +224,8 @@ already has -- a joined relation, a constructed partition, and an input
 group -- and fixing order-term defaults in the rule keeps SQL engine
 disagreement about null placement from leaking into results. Comparability
 on runtime types means an ordering term compares one type by construction,
-with the multi-variable expressions as the one place where comparability
-has to be stated as a requirement.
+with the multi-variable expressions as the one place stating
+comparability as a requirement.
 
 ## Errors
 

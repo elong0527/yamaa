@@ -11,8 +11,8 @@ applies_to: [root.base, root.rows, row.dataset, row.group_by, row.filter,
 
 ## Intent
 
-Define how output rows, columns, and derivation expressions are evaluated in
-an explicit, reviewable dependency order.
+Define the explicit dependency order for evaluating output rows, columns, and
+derivation expressions.
 
 ## Boundaries
 
@@ -30,9 +30,9 @@ does not define what an expression means (R007), how a name binds to a source
    change row count.
 
 **R001-4.** Each `rows` entry builds output rows from one input dataset, named
-by `row.dataset`. When `root.datasets` declares exactly one dataset, every
-entry omitting `dataset` builds from the single declared dataset. When
-`root.datasets` declares more than one, every entry must state `dataset`.
+by `row.dataset`. When `root.datasets` declares exactly one dataset, an entry
+omitting `dataset` builds from that dataset. When `root.datasets` declares
+more than one, every entry must state `dataset`.
 
 **R001-5.** A row template has one of two modes:
 
@@ -42,54 +42,51 @@ entry omitting `dataset` builds from the single declared dataset. When
 2. **R001-7.** A row template with `group_by` is group-driven. Its
    non-empty list names only qualified variables of its input dataset. The
    complete input dataset is partitioned by the equality each value's type
-   owns, including
-   R019 for strings, with missing values equal to other missing values for
-   grouping. Every group produces one candidate row.
+   owns, R019 for strings, with missing values equal to other missing
+   values. Every group produces one candidate row.
 
 **R001-8.** Groups are ordered by the position of their first input record.
 Within a group, records retain input order. For each group, evaluate every
 row derivation once and complete stages 1 through 4 of the R005 lifecycle.
 Then evaluate the row template's `filter`, when present, over the candidate's
 completed unqualified columns. Append the candidate only when the predicate
-is `TRUE`; `FALSE` or `UNKNOWN` suppresses it. A grouped `filter` therefore
-corresponds to filtering after a group reduction, while an ungrouped
-`filter` retains its existing input-record meaning.
+is `TRUE`; `FALSE` or `UNKNOWN` suppresses the candidate. A grouped `filter`
+therefore corresponds to filtering after a group reduction, while an
+ungrouped `filter` keeps the input-record meaning.
 
 **R001-9.** Constructed rows are appended in specification order, using input
 order for record-driven row templates and first-occurrence group order for
 group-driven row templates.
 
-**R001-10.** The output row grain belongs to the input datasets and the row
-templates written in the specification. Row construction has no operation
-that repeats a candidate a data-dependent number of times and no generated
-index for such a repetition. A source value may decide whether a written
-row template retains its one candidate, but it cannot create additional
-instances of that row template.
+**R001-10.** The input datasets and the row templates fix the output row
+grain. No operation repeats a candidate a data-dependent number of times,
+and no generated index supports such a repetition. A source value may
+decide whether a written row template retains its one candidate, but that
+value cannot create additional instances of that row template.
 
 **R001-11.** When the required artifact has one row per observation,
-administration, or planned event, an input dataset must therefore contain
-one input record per required row. Expected-but-uncollected rows use an
-explicit planning relation at that grain and may be enriched from collected
+administration, or planned event, an input dataset must contain one input
+record per required row. Expected-but-uncollected rows use an explicit
+planning relation at that grain and may be enriched from collected
 relations through record lookups. Dynamically counted expansion must happen
-upstream and its expanded records enter the specification as ordinary input.
+upstream and the expanded records enter the specification as ordinary input.
 
-**R001-12.** The declared `keys` state the output grain, and `keys` must be
+**R001-12.** The `keys` state the output grain, and `keys` must be
 declared. When `rows` is absent or empty, row construction derives the
 distinct combination of `keys` over the input records, in first-appearance
 order, and that key table is the output row set. The key table is standalone:
 one row per unique key combination, with no link back to the input records,
-so the input records a key combination was derived from decide its
-column values
-and never how many rows the artifact carries. `base` is required in that
-case, unless `datasets` declares exactly one dataset, which supplies the
-input records.
+so the input records a key combination was derived from decide its column
+values and never how many rows the artifact carries. `base` is required
+in that case, unless `datasets` declares exactly one dataset, which
+supplies the input records.
 
 **R001-12a.** When `rows` is present, the row templates construct the rows
 instead: each row template is one section over the records its `filter` keeps,
-every surviving record or group yields its row, and the sections concatenate
-in specification order. Row templates therefore build a grain finer than the
-input records only through the constructs R001-10 permits, and the grain
-they build must still be the one `keys` states: repeating a key combination
+every surviving record or group yields one row, and the sections concatenate
+in specification order. Row templates build a grain finer than the input
+records only through the constructs R001-10 permits, and the grain they
+build must still be the one `keys` states: repeating a key combination
 fails at the output gate under R005-52. A `filter` states which rows the
 artifact carries and never which record of a key combination stands for it,
 so a row template whose work is to leave one of the several input records
@@ -97,14 +94,13 @@ sharing a key combination is writing the grain `keys` already states, and
 that specification omits `rows` instead.
 
 **R001-12b.** A column derivation must yield exactly one value per row, and
-it counts values rather than the records carrying them: repeated readings of
-one value are that one value, and two input records of one key combination
-carrying different present values are two values, which fails under
-R001-44. A missing
-result is still the row's one value but never creates a second value for the
-R001-44 count. In a specification without `rows`, a key column derivation must not
-depend on a non-key output column (R001-43); keys are derived before any row
-logic runs.
+the derivation counts values rather than the records carrying them:
+repeated readings of one value are that one value, and two input records
+of one key combination carrying different present values are two values,
+which fails under R001-44. A missing result is still the row's one value
+but never creates a second value for the R001-44 count. In a specification
+without `rows`, a key column derivation must not depend on a non-key
+output column (R001-43); keys are derived before any row logic runs.
 
 ## Expression evaluation
 
@@ -121,10 +117,10 @@ All other expressions return one value per current row.
 **R001-15.** During group-driven row construction, a source field of the row
 template's input dataset is a scalar only when that exact qualified variable
 occurs in the row template's `group_by`. An aggregate expression may instead
-reduce the records of the current group under R007 and R013. Other
-row expressions
-consume group keys, literals, earlier row-derived columns, or a record lookup
-whose matching values are already complete, in the ordinary dependency order.
+reduce the records of the current group under R007 and R013. Other row
+expressions consume group keys, literals, earlier row-derived columns, or a
+record lookup whose matching values are already complete, in dependency
+order.
 
 ## Dependency execution
 
@@ -147,35 +143,36 @@ order and detect cycles. Recursively traverse each expression and collect:
 
 **R001-26.** Predicates include `case.branches[].when`, `override[].when`,
 `row.filter`, aggregate `filter`, and window `filter`. An ungrouped
-`row.filter` resolves only qualified variables of its input dataset and runs
-before its derivation graph. A grouped `row.filter` resolves unqualified
-columns derived by that row template and runs after the whole graph
-completes. Identifier extraction
-requires parsing the predicate under the R004 grammar, the numeric expression
-under the R010 grammar, the string template under the R012 grammar, and the
-reducer expression under the R013 grammar; an implementation must not treat
-any of them as dependency-free.
+`row.filter` resolves only qualified variables of that row template's input
+dataset and runs before that row template's derivation graph. A grouped
+`row.filter` resolves unqualified columns derived by that row template and
+runs after that graph completes. Identifier extraction requires parsing the
+predicate under the R004 grammar, the numeric expression under the R010
+grammar, the string template under the R012 grammar, and the reducer
+expression under the R013 grammar; an implementation must not treat any of
+those four as dependency-free.
 
-**R001-27.** For each row definition, evaluate row derivations using a
+**R001-27.** For each row template, evaluate row derivations using a
 dependency graph. Row derivations cannot depend on values produced only
 during the column phase. Every unqualified identifier in a grouped
 `row.filter` must resolve to a column derived by that same row template. The
 filter itself is not a derivation and adds no graph edge between columns
-because it runs only after all of them have completed.
+because it runs only after all columns have completed.
 
 **R001-28.** After row construction, build the column dependency graph. Every
 dependency must refer to a column declared earlier. Evaluate columns in
 declaration order. When a specification declares `parents`, R017 composes,
-prunes, and orders the resolved columns before this rule applies; declaration
-order here is that resolved order.
+prunes, and orders the resolved columns before this rule applies;
+declaration order is the resolved order.
 
 **R001-29.** The graph is over columns, not over rows. A column that reads
 another row of its own partition therefore depends on the whole column it
-names, so a column that reaches its own value that way is a cycle rather
-than an iteration. `previous_non_missing` crosses any number of missing rows
-by searching a separate completed source column; conventional carry-forward
-coalesces the current source with that result. Searching the column being
-derived remains a cycle rather than an instruction to iterate.
+names, so a column that reaches its own value through another row is
+a cycle rather than an iteration. `previous_non_missing` crosses any
+number of missing rows by searching a separate completed source column;
+conventional carry-forward coalesces the current source with that result.
+Searching the column being derived remains a cycle rather than an
+instruction to iterate.
 
 **R001-30.** In both phases, a completed derivation runs the R005 lifecycle
 before anything depends on it, so a dependent always reads a value of the
@@ -188,11 +185,11 @@ R005 owns both.
 
 ## Rationale
 
-Row count changes only during row construction, so a reviewer can tell row
-grain from enrichment: the row templates and their input datasets fix how many
-rows exist before any column is derived. Dependency inference keeps
+Row count changes only during row construction, so a reviewer can separate
+row grain from enrichment: the row templates and their input datasets fix how
+many rows exist before any column is derived. Dependency inference keeps
 declaration order checkable and makes cycles visible instead of leaving
-evaluation order to mapping order or to repeated reads of one partition.
+evaluation order to mapping order or repeated reads of one partition.
 
 ## Errors
 
