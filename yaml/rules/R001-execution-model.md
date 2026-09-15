@@ -9,6 +9,10 @@ applies_to: [root.base, root.rows, row.dataset, row.group_by, row.filter,
 
 # Execution model
 
+![lifecycle: develop](https://img.shields.io/badge/lifecycle-develop-blue)
+![R: not implemented](https://img.shields.io/badge/R-not_implemented-red)
+![Python: partial](https://img.shields.io/badge/Python-partial-yellow)
+
 ## Intent
 
 Define the explicit dependency order for evaluating output rows, columns, and
