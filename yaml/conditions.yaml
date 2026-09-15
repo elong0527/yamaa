@@ -50,12 +50,13 @@ conditions:
   multiple_values_per_key: {rules: [R001], phases: [derivation]}
   not_missing_failed: {rules: [R009], phases: [verification]}
   predicate_failed: {rules: [R009], phases: [verification]}
+  producer_contract_mismatch: {rules: [R014], phases: [validation]}
   prohibited_construct: {rules: [R010, R013], phases: [validation]}
   prohibited_function: {rules: [R010, R013], phases: [validation]}
   publication_failed: {rules: [R020], phases: [output]}
   qualified_identifier: {rules: [R010], phases: [validation]}
   range_failed: {rules: [R009], phases: [verification]}
-  redundant_field_type: {rules: [R017], phases: [validation]}
+  redundant_field_type: {rules: [R014, R017], phases: [validation]}
   regex_group_out_of_range: {rules: [R022], phases: [validation]}
   resource_path_missing: {rules: [R021], phases: [validation]}
   resource_path_not_regular_file: {rules: [R021], phases: [validation]}
@@ -65,9 +66,12 @@ conditions:
   resource_path_uri_scheme: {rules: [R021], phases: [validation]}
   row_count_failed: {rules: [R009], phases: [verification]}
   schema_version_mismatch: {rules: [R017], phases: [validation]}
-  source_field_name_duplicate: {rules: [R023], phases: [ingest]}
-  source_field_name_empty: {rules: [R023], phases: [ingest]}
+  source_field_name_duplicate: {rules: [R023, R027], phases: [ingest]}
+  source_field_name_empty: {rules: [R023, R027], phases: [ingest]}
+  source_field_type_unsupported: {rules: [R027], phases: [ingest]}
+  source_field_value_invalid: {rules: [R027], phases: [ingest]}
   source_key_length_mismatch: {rules: [R007], phases: [validation]}
+  source_parquet_invalid: {rules: [R027], phases: [ingest]}
   source_profile_unknown: {rules: [R023], phases: [validation]}
   source_quote_unterminated: {rules: [R023], phases: [ingest]}
   source_record_width: {rules: [R023], phases: [ingest]}

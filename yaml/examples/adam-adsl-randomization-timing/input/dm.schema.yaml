@@ -5,7 +5,7 @@ datasets:
 keys: [STUDYID, USUBJID]
 
 output:
-  path: dm.csv
+  path: dm.parquet
   columns: [STUDYID, USUBJID, RFSTDTC, RANDDT, RANDDTTM]
 
 columns:

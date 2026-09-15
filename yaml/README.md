@@ -87,14 +87,17 @@ specification is read and come from the entry study alone, so composition never
 widens them, and a runner can cap or decline what a study declares -- which is
 where a packaging run enforces the portability a submission needs.
 
-R023 gives every delimited source one syntax: UTF-8 without a byte-order mark,
-a comma between fields, `U+000A` or `U+000D U+000A` between records, and
-double-quote quoting whose doubled quote is one literal quote. It admits the
-second spelling of a terminator and a final record without one, because
-neither changes the records a file holds, and rejects every other difference
-rather than repairing it. A field reaches R014 as its text or as missing: one
-with no characters is missing whether it was bare or quoted, so quoting is
-transport and never meaning.
+R023 selects a source profile from the path extension and gives every `csv`
+source one syntax: UTF-8 without a byte-order mark, a comma between fields,
+`U+000A` or `U+000D U+000A` between records, and double-quote quoting whose
+doubled quote is one literal quote. It admits the second spelling of a
+terminator and a final record without one, because neither changes the records
+a file holds, and rejects every other difference rather than repairing it. A
+field reaches R014 as its text or as missing: one with no characters is
+missing whether it was bare or quoted, so quoting is transport and never
+meaning. R027 is the `parquet` counterpart. It reads the embedded schema
+through the inverse of R020's type mapping and preserves field order, record
+order, nulls, collected empty strings, and typed values.
 
 ## Version 1.0 design boundary
 

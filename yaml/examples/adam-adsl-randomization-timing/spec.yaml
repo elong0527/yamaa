@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADSL
 datasets:
   DM:
-    path: input/dm.csv
+    path: input/dm.parquet
     schema: input/dm.schema.yaml
 keys: [STUDYID, USUBJID]
 

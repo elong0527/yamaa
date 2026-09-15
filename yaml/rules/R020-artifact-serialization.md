@@ -31,7 +31,9 @@ specification reads it, and `csv` below is the writing counterpart of the
 delimited form it reads: they agree on missing, they part on the empty
 string, and neither restates the other. R020-17 states where they part.
 R023 owns the syntax a specification reads a delimited *source* under, and
-admits the spellings a reader receives that this rule never writes.
+admits the spellings a reader receives that this rule never writes. R027 is
+the reading counterpart of the `parquet` profile and applies the inverse of
+this rule's type mapping.
 
 This rule owns which file a specification declares it produces, the bytes that
 file receives, and the replacement of it. It does not own how that path is

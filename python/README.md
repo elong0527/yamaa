@@ -558,6 +558,11 @@ type mapping. Publication replaces one target the caller explicitly
 permits, through a temporary file beside it, so a failure leaves the
 previous artifact in place.
 
+Source paths select the same `.csv` or `.parquet` profile. A Parquet source
+supplies its field types from the embedded schema, preserves nulls apart from
+collected empty strings, and can consume a preceding specification's Parquet
+output directly without an intermediate CSV file.
+
 See the [input and output documentation](src/yamaa/io/README.md) for what
 each step owns.
 

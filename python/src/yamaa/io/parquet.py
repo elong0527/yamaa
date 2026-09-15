@@ -8,12 +8,16 @@ a writer's default.
 
 from __future__ import annotations
 
+import datetime as dt
 import io
-from typing import TYPE_CHECKING
+import json
+from typing import TYPE_CHECKING, Any
 
+import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from yamaa.models import TypedColumn, TypedTable
 from yamaa.specification.models import ColumnType
 
 if TYPE_CHECKING:  # `artifact` renders through this module, so the
@@ -30,6 +34,30 @@ _ARROW: dict[ColumnType, pa.DataType] = {
     "date": pa.date32(),
     "datetime": pa.timestamp("us"),
 }
+
+_EPOCH = dt.date(1970, 1, 1).toordinal()
+_MIN_DAY = dt.date(dt.MINYEAR, 1, 1).toordinal() - _EPOCH
+_MAX_DAY = dt.date(dt.MAXYEAR, 12, 31).toordinal() - _EPOCH
+_MIN_MICROSECOND = _MIN_DAY * 86_400 * 1_000_000
+_MAX_MICROSECOND = (_MAX_DAY * 86_400 + 86_399) * 1_000_000
+
+_PARQUET_REQUIREMENTS = {
+    "source_parquet_invalid": "R027-11",
+    "source_field_name_empty": "R027-12",
+    "source_field_name_duplicate": "R027-12",
+    "source_field_type_unsupported": "R027-13",
+    "source_field_value_invalid": "R027-14",
+}
+
+
+class ParquetProfileFailure(ValueError):
+    """One stable R027 failure while decoding a Parquet source."""
+
+    def __init__(self, condition: str, context: dict[str, object]) -> None:
+        self.condition = condition
+        self.context = context
+        self.requirement = _PARQUET_REQUIREMENTS[condition]
+        super().__init__(f"{condition}: {context}")
 
 
 def parquet_schema(artifact: Artifact) -> pa.Schema:
@@ -60,6 +88,120 @@ def render_parquet(artifact: Artifact) -> bytes:
     return buffer.getvalue()
 
 
+def _read_source(content: bytes) -> tuple[pa.Table, Any]:
+    try:
+        source = pq.ParquetFile(
+            io.BytesIO(content),
+            # R027-10: Arrow extension metadata cannot override the closed
+            # physical/logical type mapping below.
+            arrow_extensions_enabled=False,
+        )
+        return source.read(use_threads=False), source.schema
+    except (pa.ArrowException, OSError) as error:
+        raise ParquetProfileFailure("source_parquet_invalid", {}) from error
+
+
+def _column_type(stored: Any, arrow_type: pa.DataType) -> ColumnType | None:
+    logical = json.loads(stored.logical_type.to_json())
+    key = (stored.physical_type, logical.get("Type"))
+    column_type: ColumnType | None = {
+        ("BYTE_ARRAY", "String"): "str",
+        ("INT64", "None"): "int",
+        ("DOUBLE", "None"): "float",
+        ("INT32", "Date"): "date",
+    }.get(key)
+    if key == ("INT64", "Timestamp") and logical == {
+        "Type": "Timestamp",
+        "isAdjustedToUTC": False,
+        "timeUnit": "microseconds",
+        "is_from_converted_type": False,
+        "force_set_converted_type": False,
+    }:
+        column_type = "datetime"
+    if column_type is None or arrow_type != _ARROW[column_type]:
+        return None
+    return column_type
+
+
+def _source_columns(table: pa.Table, stored_schema: Any) -> tuple[TypedColumn, ...]:
+    if len(table.schema) == 0:
+        raise ParquetProfileFailure("source_parquet_invalid", {})
+    if len(stored_schema) != len(table.schema):
+        field = table.schema[0]
+        raise ParquetProfileFailure(
+            "source_field_type_unsupported",
+            {"field": field.name, "stored_type": str(field.type)},
+        )
+    columns: list[TypedColumn] = []
+    seen: set[str] = set()
+    for position, field in enumerate(table.schema, 1):
+        if not field.name:
+            raise ParquetProfileFailure("source_field_name_empty", {"field": position})
+        if field.name in seen:
+            raise ParquetProfileFailure(
+                "source_field_name_duplicate", {"field": field.name}
+            )
+        seen.add(field.name)
+        stored = stored_schema.column(position - 1)
+        column_type = (
+            _column_type(stored, field.type)
+            if stored.max_repetition_level == 0 and stored.path == field.name
+            else None
+        )
+        if column_type is None:
+            raise ParquetProfileFailure(
+                "source_field_type_unsupported",
+                {"field": field.name, "stored_type": str(field.type)},
+            )
+        columns.append(TypedColumn(name=field.name, type=column_type))
+    return tuple(columns)
+
+
+def _validate_temporal_values(
+    table: pa.Table, columns: tuple[TypedColumn, ...]
+) -> None:
+    for index, column in enumerate(columns):
+        if column.type not in {"date", "datetime"}:
+            continue
+        storage_type = pa.int32() if column.type == "date" else pa.int64()
+        stored = table.column(index).cast(storage_type).to_pylist()
+        for row, value in enumerate(stored, 1):
+            if value is None:
+                continue
+            valid = (
+                _MIN_DAY <= value <= _MAX_DAY
+                if column.type == "date"
+                else (
+                    _MIN_MICROSECOND <= value <= _MAX_MICROSECOND
+                    and value % 1_000_000 == 0
+                )
+            )
+            if not valid:
+                raise ParquetProfileFailure(
+                    "source_field_value_invalid",
+                    {"field": column.name, "row": row, "value": value},
+                )
+
+
+def parse_parquet(content: bytes) -> TypedTable:
+    """Parse one immutable snapshot under the closed R027 source profile."""
+    table, stored_schema = _read_source(content)
+    columns = _source_columns(table, stored_schema)
+    _validate_temporal_values(table, columns)
+    try:
+        frame = pl.from_arrow(table, rechunk=True)
+        if not isinstance(frame, pl.DataFrame):
+            raise TypeError("a Parquet table must produce a Polars DataFrame")
+        return TypedTable(columns=columns, frame=frame)
+    except (
+        pa.ArrowException,
+        pl.exceptions.PolarsError,
+        TypeError,
+        ValueError,
+    ) as error:
+        raise ParquetProfileFailure("source_parquet_invalid", {}) from error
+
+
 def read_parquet(content: bytes) -> pa.Table:
     """Read artifact bytes back, for the comparison R020-26 requires."""
-    return pq.read_table(io.BytesIO(content))
+    return _read_source(content)[0]
