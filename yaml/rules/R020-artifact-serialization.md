@@ -11,8 +11,8 @@ applies_to: [root.output, output.path, output.decimals, output.violation_log]
 ## Intent
 
 Define how a completed, ordered primary artifact and any R009 violation log
-become bytes. This rule defines each container, value text, missing and empty
-strings, float display precision, and how an artifact replaces its target.
+become bytes. This rule defines containers, value text, missing and empty
+strings, float display precision, and target replacement.
 
 ## Boundaries
 

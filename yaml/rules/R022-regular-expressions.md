@@ -12,8 +12,8 @@ applies_to: [descriptor.pattern, regex, expression.str_extract,
 ## Intent
 
 Pin one executable regular-expression contract. Repository validation, R, and
-Python must accept and reject the same patterns. They must produce the same
-match for the same subject.
+Python must accept and reject the same patterns and produce the same match for
+each subject.
 
 ## Boundaries
 
