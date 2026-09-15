@@ -12,6 +12,12 @@ record_lookups:
     key: [SubjectKey, StudyEventRepeatKey]
     filter: "ODM.ItemOID = 'IT.FA.DIAMETER.U'"
     unmatched: missing
+  - id: FALNKID_LOOKUP
+    dataset: ODM
+    source: [USUBJID, FA_EVENT_NUM]
+    key: [SubjectKey, StudyEventRepeatKey]
+    filter: "ODM.ItemOID = 'IT.FA.LINKID'"
+    unmatched: missing
 
 output:
   path: fa.csv
@@ -29,11 +35,15 @@ columns:
     type: str
     label: Unique Subject Identifier
 
+  - name: FA_EVENT_NUM
+    type: str
+    label: FA Event Number
+
   - name: FALNKID
     type: str
     label: Link ID
     derivation:
-      source: ODM.IT.FA.LINKID
+      source: FALNKID_LOOKUP.Value
 
   - name: FAOBJ
     type: str
@@ -57,10 +67,6 @@ columns:
     label: Subcategory
     derivation:
       literal: RASH SUPPLEMENT
-
-  - name: FA_EVENT_NUM
-    type: str
-    label: FA Event Number
 
   - name: FATESTCD
     type: str

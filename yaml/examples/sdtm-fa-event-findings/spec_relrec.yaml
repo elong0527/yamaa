@@ -1,7 +1,8 @@
 schema_version: "1.0"
 domain: RELREC
 datasets:
-  ODM: input/odm.csv
+  AE: expected/ae.csv
+  FA: expected/fa.csv
 keys: [STUDYID, RDOMAIN, IDVAR, RELID]
 
 output:
@@ -12,14 +13,10 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ODM.StudyOID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      literal: null
 
   - name: RDOMAIN
     type: str
@@ -32,8 +29,6 @@ columns:
   - name: IDVARVAL
     type: str
     label: Identifying Variable Value
-    derivation:
-      literal: null
 
   - name: RELTYPE
     type: str
@@ -43,28 +38,53 @@ columns:
     type: int
     label: Relationship Identifier
     derivation:
-      row_number:
-        group_by: [RDOMAIN]
-        order_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventRepeatKey]
+      rank:
+        method: dense
+        order_by: [USUBJID, IDVARVAL]
+
+  - name: AE_MATCH_COUNT
+    type: int
+    label: AE Match Count per RELID
+    derivation:
+      aggregate:
+        expr: COUNT(RELID)
+        group_by: [RELID]
+        filter: "RDOMAIN = 'AE'"
 
 rows:
   - id: fa_relrec
-    filter: "ODM.ItemOID = 'IT.FA.LINKID' AND ODM.Value IS NOT NULL"
+    dataset: FA
+    group_by: [FA.STUDYID, FA.USUBJID, FA.FALNKID]
+    filter: "IDVARVAL IS NOT NULL"
     derivations:
+      STUDYID:
+        source: FA.STUDYID
+      USUBJID:
+        source: FA.USUBJID
       RDOMAIN:
         literal: FA
       IDVAR:
         literal: FALNKID
+      IDVARVAL:
+        source: FA.FALNKID
       RELTYPE:
         literal: MANY
 
   - id: ae_relrec
-    filter: "ODM.ItemOID = 'IT.AE.AETERM' AND ODM.Value = 'RASH'"
+    dataset: AE
+    group_by: [AE.STUDYID, AE.USUBJID, AE.AELNKID]
+    filter: "IDVARVAL IS NOT NULL"
     derivations:
+      STUDYID:
+        source: AE.STUDYID
+      USUBJID:
+        source: AE.USUBJID
       RDOMAIN:
         literal: AE
       IDVAR:
         literal: AELNKID
+      IDVARVAL:
+        source: AE.AELNKID
       RELTYPE:
         literal: ONE
 
@@ -74,3 +94,7 @@ verifications:
   - row_count:
       min: 6
       max: 6
+  - implies:
+      id: fa-relid-has-ae-match
+      when: "RDOMAIN = 'FA'"
+      then: "AE_MATCH_COUNT = 1"

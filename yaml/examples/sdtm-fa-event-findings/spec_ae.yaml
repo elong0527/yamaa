@@ -4,6 +4,20 @@ datasets:
   ODM: input/odm.csv
 keys: [STUDYID, USUBJID, AESEQ]
 
+record_lookups:
+  - id: AEAESTDTC
+    dataset: ODM
+    source: [USUBJID, AE_EVENT_NUM]
+    key: [SubjectKey, StudyEventRepeatKey]
+    filter: "ODM.ItemOID = 'IT.AE.AESTDTC'"
+    unmatched: missing
+  - id: AEAELNKID
+    dataset: ODM
+    source: [USUBJID, AE_EVENT_NUM]
+    key: [SubjectKey, StudyEventRepeatKey]
+    filter: "ODM.ItemOID = 'IT.AE.AELNKID'"
+    unmatched: missing
+
 output:
   path: ae.csv
   columns: [STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AELNKID]
@@ -18,8 +32,10 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ODM.SubjectKey
+
+  - name: AE_EVENT_NUM
+    type: str
+    label: AE Event Number
 
   - name: AETERM
     type: str
@@ -29,13 +45,13 @@ columns:
     type: date
     label: Start Date/Time of Adverse Event
     derivation:
-      source: ODM.IT.AE.AESTDTC
+      source: AEAESTDTC.Value
 
   - name: AELNKID
     type: str
     label: Link ID
     derivation:
-      source: ODM.IT.AE.AELNKID
+      source: AEAELNKID.Value
 
   - name: AESEQ
     type: int
@@ -49,6 +65,10 @@ rows:
   - id: ae_event
     filter: "ODM.ItemOID = 'IT.AE.AETERM' AND ODM.Value IS NOT NULL"
     derivations:
+      USUBJID:
+        source: ODM.SubjectKey
+      AE_EVENT_NUM:
+        source: ODM.StudyEventRepeatKey
       AETERM:
         source: ODM.Value
 

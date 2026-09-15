@@ -4,6 +4,14 @@ datasets:
   ODM: input/odm.csv
 keys: [STUDYID, USUBJID, CMSEQ]
 
+record_lookups:
+  - id: CMCMSTDTC
+    dataset: ODM
+    source: [USUBJID, CM_EVENT_NUM]
+    key: [SubjectKey, StudyEventRepeatKey]
+    filter: "ODM.ItemOID = 'IT.CM.CMSTDTC'"
+    unmatched: missing
+
 output:
   path: cm.csv
   columns: [STUDYID, USUBJID, CMSEQ, CMTRT, CMSTDTC]
@@ -18,8 +26,10 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ODM.SubjectKey
+
+  - name: CM_EVENT_NUM
+    type: str
+    label: CM Event Number
 
   - name: CMTRT
     type: str
@@ -29,7 +39,7 @@ columns:
     type: date
     label: Start Date/Time of Medication
     derivation:
-      source: ODM.IT.CM.CMSTDTC
+      source: CMCMSTDTC.Value
 
   - name: CMSEQ
     type: int
@@ -43,6 +53,10 @@ rows:
   - id: cm_record
     filter: "ODM.ItemOID = 'IT.CM.CMTRT' AND ODM.Value IS NOT NULL"
     derivations:
+      USUBJID:
+        source: ODM.SubjectKey
+      CM_EVENT_NUM:
+        source: ODM.StudyEventRepeatKey
       CMTRT:
         source: ODM.Value
 
