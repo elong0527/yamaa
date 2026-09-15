@@ -16,9 +16,10 @@ records, fields, and the spellings two runtimes must read alike or reject.
 ## Boundaries
 
 This rule owns source-profile selection and the syntax of the `csv` profile.
-It ends at the field: it delivers a header and a sequence of records whose
-fields carry their text and whether they were quoted, and R014 owns what those
-fields mean, which of them is missing, and what type each one takes. R027 owns
+This rule ends at the field. This rule delivers a header and a sequence of
+records. Each delivered field carries its text and whether the field was
+quoted. R014 owns what those fields mean, which of them is missing, and
+what type each one takes. R027 owns
 the `parquet` source profile. Nothing here decides a value.
 
 R020 owns the other direction, and its `csv` profile is the writing
@@ -47,27 +48,26 @@ a study that stores `DM.CSV` names the same container as one that stores
 | `.csv` | `csv` | delimited text | this rule |
 | `.parquet` | `parquet` | Apache Parquet | R027 |
 
-**R023-2.** A source is selected like an artifact. A file R020 writes and this
-rule reads back has one profile name in both directions. A second field could
-disagree with the path. A source declared as `csv` but named otherwise has a
-name that lies about its contents where the reader cannot check.
+**R023-2.** A source is selected like an artifact: a file R020 writes and
+this rule reads back has one profile name in both directions. A second field
+could disagree with the path, so a source declared as `csv` but named
+otherwise misnames its contents, and the reader cannot check the claim.
 
-**R023-3.** Sniffing is not permitted: a reader that inspected a file's
-contents to choose a delimiter or a quote character could read a conforming
-source wrongly without failing, and a reader that accepted an unknown extension
-under a default could read a container this profile does not describe at all.
+**R023-3.** Sniffing is not permitted. A reader that inspected a file's
+contents to choose a delimiter or a quote character could misread a
+conforming source without failing. A reader that accepted an unknown
+extension under a default could read a container this profile does not
+describe at all.
 
 ## CSV spellings are admitted only when they carry the same records
 
-**R023-4.** For the `csv` profile, a writer controls its bytes and emits one
-spelling. A reader receives a study file as stored. Every refused spelling is
-a file a sponsor must repair before a run. This rule admits a second spelling
-only when both spellings deliver the same records. This rule refuses every
-other difference rather than silently repairing it.
+**R023-4.** For the `csv` profile, a writer controls its bytes and emits
+one spelling, while a reader receives a study file as stored. This rule
+admits a second spelling only when both spellings deliver the same records,
+and refuses every other difference rather than silently repairing it.
 
 **R023-5.** Admitted: a record terminated by `U+000D U+000A` rather than
-`U+000A`, and a final record with no terminator at all. Every reader agrees
-on the records these files hold.
+`U+000A`, and a final record with no terminator at all.
 
 **R023-6.** Refused: a byte-order mark, a `U+000D` anywhere else, and every
 reader option in *Nothing here is configuration*. Each changes which records
@@ -79,11 +79,11 @@ runtimes disagree about the same bytes.
 **R023-7.** A delimited source is UTF-8. Ill-formed encoded bytes fail under
 R019 rather than being replaced, skipped, or decoded under a machine default.
 
-**R023-8.** A byte-order mark is rejected rather than skipped. A reader that
-skips one and a reader that keeps one disagree about the first field's name,
-so a file that carries one has a header whose first name depends on who reads
-it. Rejecting it names the defect where a producer can fix it, and skipping
-it would accept a file whose header this design cannot state.
+**R023-8.** A byte-order mark is rejected rather than skipped. Readers that
+skip the mark and readers that keep it disagree about the first field's
+name, so a marked file has a header whose first name depends on the reader.
+Rejecting the mark names the defect for the producer to fix. Skipping the
+mark would accept a file whose header this design cannot state.
 
 ## Records and fields
 
@@ -104,10 +104,11 @@ property of the stored field rather than of its value:
   a terminator.
 
 **R023-14.** `U+000D` occurs only as the first character of a record
-terminator. Inside a quoted field it fails rather than joining the value,
-because a file whose terminators are `U+000D U+000A` would otherwise deliver a
-different value than the same file written with `U+000A`, and admitting both
-terminators is meant to remove exactly that disagreement.
+terminator. Inside a quoted field the character fails rather than joining
+the value. Without this refusal, a file with `U+000D U+000A` terminators
+would deliver a different value than the same file with `U+000A` terminators.
+Admitting both terminators is meant to remove exactly that
+disagreement.
 
 **R023-15.** Nothing is trimmed. A space beside a delimiter is a character of
 the field, and a reader that removes it changes a collected value.
@@ -115,18 +116,17 @@ the field, and a reader that removes it changes a collected value.
 ## The header
 
 **R023-16.** The first record is the **header**, and it names the source's
-fields in order. Each name is non-empty, and no two are the same name under
-R019's equality. A quoted name carries the text inside its quotes, so a
+fields in order. Each name is non-empty, and no two names are the same
+under R019's equality. A quoted name carries the text inside its quotes, so a
 quoted empty name is an empty name and fails.
 
 **R023-17.** Every later record carries exactly as many fields as the header
-names. A record with more or fewer fails; neither padding a short record nor
-discarding a long one's surplus is an implementation option, because both
+names. A record with more or fewer fails. Padding a short record and
+discarding a long record's surplus are not implementation options. Both
 accept a file whose shape the study did not intend.
 
-**R023-18.** A file with no bytes has no header and fails. A file whose only
-record is the header is a source with no records, not a failure: a
-dataset a study collected nothing into still has its fields.
+**R023-18.** A file with no bytes has no header and fails. A header-only
+file holds no records, which is valid: an empty dataset still has its fields.
 
 ## Nothing here is configuration
 
@@ -138,28 +138,28 @@ sentinel.
 
 **R023-20.** The sentinel case is the absence easiest to mistake
 for an oversight. R014 fixes what a stored field means, including that no
-text spells absence, and a reader option that spelled it here would decide
-that question before any rule in this design could see the value.
+text spells absence. A reader option that spelled absence here would decide
+the meaning of absence before any rule in this design could see the value.
 
 ## Quoting is transport, not meaning
 
 **R023-21.** Every field reaches R014 as its text or as missing, and an
-implementation must preserve both. A field with no characters is missing
+implementation must preserve the text and the missing state. A field with
+no characters is missing
 whether it was bare or quoted, so quoting is a transport detail the reader
 does not report: R014 gives an empty field one meaning and never sees an
 empty string. Common dataframe readers discard text-versus-missing
-distinctions by default; conformance is a property of what
-the reader delivers, not of which library produced it.
+distinctions by default; conformance is a property of what the reader
+delivers, not of which library produced it.
 
 ## Rationale
 
-A writer controls its own bytes and emits one spelling; a reader receives
-a study file as stored. Every refused spelling is a file the sponsor repairs
-before a run, so a second spelling is admitted exactly where both spellings
-deliver the same records. A reader that skipped a byte-order mark and one
-that kept it would disagree about the first field's name; trimming spaces
-would change a collected value. Fixing quoting, width, and names here lets
-R014 decide what fields mean on text both runtimes deliver identically.
+A second spelling is admitted exactly where both spellings deliver the same
+records; every other refused spelling is a file the sponsor repairs before
+a run. A reader that skipped a byte-order mark and one that kept it would
+disagree about the first field's name, and trimming spaces would change a
+collected value. Fixing quoting, width, and names here lets R014 decide
+what fields mean on text both runtimes deliver identically.
 
 ## Errors
 
