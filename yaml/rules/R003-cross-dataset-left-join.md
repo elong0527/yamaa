@@ -67,9 +67,9 @@ adding one column; they differ only in where the keys come from.
 
 **R003-15.** This rule's join derives keys from output `keys` that also
 exist on the right side. `mapping_from` declares its pairs of source
-variable and right-side column without consulting output `keys`, so
-`mapping_from` reaches a right side keyed on something else, or one not
-unique on the applicable keys. R007 defines the `mapping_from` semantics.
+variable and right-side column without consulting output `keys`, and so
+reaches a right side keyed on something else or not unique on the
+applicable keys. R007 defines the `mapping_from` semantics.
 
 ## Right-side reduction
 
@@ -78,8 +78,8 @@ identifiers are qualified to a declared dataset reads the dataset as
 the aggregate's right side.
 
 **R003-17.** For each current row, applicable keys select a right-side
-partition. R013 reduces eligible records in that partition to one value. The
-value joins back without changing row count.
+partition. R013 reduces eligible records in that partition to one value.
+The reduced value joins back without changing row count.
 
 **R003-18.** The qualifier may equal the current row template's
 input dataset: a scalar source then reads the current input
@@ -96,8 +96,8 @@ aggregate:
 ```
 
 **R003-20.** A reduction may declare a `group_by` coarser than the
-applicable keys. The join then matches on those columns instead; R013
-requires them to be output keys.
+applicable keys. The join then matches on `group_by` instead; R013
+requires the columns to be output keys.
 
 **R003-21.** A structured `source` declaring `multiple_matches` may also
 declare `filter`. The `filter` selects which right-side records are
@@ -192,6 +192,6 @@ fail under R013.
 ## Review
 
 **R003-38.** Validation reports the inferred applicable keys for every
-qualified source, so a reviewer sees which same-named columns the join
+qualified source. A reviewer sees which same-named columns the join
 matches on, the type each side declares for the columns, and the coarser
 grain a reduction declared in place of the keys.

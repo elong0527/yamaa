@@ -33,21 +33,21 @@ that order, and its rows are the rows R001 constructs. A specification may
 also produce R009's governed warning-violation sidecar; that log reports the
 run, not a second derivation target or source within this specification.
 
-**R005-2.** Its rows leave in the order `output.order_by` declares, and in
-R001's construction order when it is omitted.
+**R005-2.** Rows leave in the order `output.order_by` declares. Without
+`output.order_by`, rows keep R001's construction order.
 
 **R005-3.** Serialization is defined by R020. `output.path` names the primary
 file and `output.violation_log`, when present, names R009's sidecar. Each
 extension selects `parquet` or `csv`. R020 owns their containers, bytes, and
 publication. Everything below concerns the primary values and their order,
-which those profiles carry rather than decide.
+their order, which the profiles carry rather than decide.
 
 ## The column list is declared
 
 **R005-4.** The artifact's columns come from the specification and from
 nothing else. A source carrying more than the specification declares
-does not extend the artifact, and one carrying fewer does not
-shorten it. Each member of a numbered family (`SMQ01NAM`, `SMQ01CD`,
+does not extend the artifact, and a source carrying fewer does not
+shorten the artifact. Each member of a numbered family (`SMQ01NAM`, `SMQ01CD`,
 `SMQ02NAM`, and onwards, or `CRIT1` beside `CRIT1FL`) is a declared column
 like any other, so the count is fixed when the specification is written. A
 study whose reference data outgrows that count is re-read against the data
@@ -81,13 +81,13 @@ an implied missing value.
 
 **R005-9.** A specification with no `rows` entry must derive every column at
 column level. Requirement R005-8 is vacuous when there are no entries, so
-this states the base-driven case directly.
+this states the base-driven case.
 
 **R005-10.** A `rows` derivation must target a declared column. A key in
 `derivations` that names no declared column is an error.
 
-**R005-11.** Mixing the two placements across columns is normal
-and expected: a specification with `rows` typically derives the columns that
+**R005-11.** Mixing the two placements across columns is normal:
+a specification with `rows` typically derives the columns that
 distinguish its row templates at row level and the rest at column level.
 
 **R005-12.** A column whose value is intentionally absent is still derived.
@@ -151,7 +151,7 @@ column's final value.
 during row construction, and a column derivation that depends on it reads a
 converted value of the declared type. This matters because R007 permits no
 implicit conversion between operation inputs: an operation consuming a
-row-derived column must be able to rely on its declared type.
+row-derived column must rely on its declared type.
 
 **R005-28.** For a grouped row template, R001 evaluates its `filter` after
 stages 1 to 4 complete for every value on the candidate row. A discarded
@@ -215,7 +215,7 @@ first one did not.
 order, the tie-break R007 applies to window ordering. The order is therefore
 total for every input: no tie is an error, no comparison is undefined, and
 no specification declares a term merely to make the result deterministic;
-one that wants a particular tie broken declares the term that breaks it.
+a specification wanting a tie broken declares the term that breaks it.
 
 **R005-38.** Ordering is presentation. It runs once, after the lifecycle
 above, key validation, and every R009 verification, so it cannot
@@ -291,7 +291,7 @@ fail.
 **R005-52.** A missing or duplicate combined key value: fail and report the
 offending rows. A specification without `rows` emits one row per key
 combination under R001-12, so a duplicate key can come only from row
-templates R001-12a governs emitting one combination more than once.
+templates emitting one combination more than once, under R001-12a.
 
 **R005-53.** A failed error-level verification: fail under R009. A
 warning-level violation leaves the primary artifact intact and enters R009's
