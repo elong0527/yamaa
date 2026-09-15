@@ -1,7 +1,7 @@
 ---
 id: R018
 title: Project Function Environment
-status: normative
+status: production
 applies_to: [environment, function, function_contract, function_binding]
 
 ---

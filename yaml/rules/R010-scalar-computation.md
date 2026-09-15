@@ -1,7 +1,7 @@
 ---
 id: R010
 title: Scalar Numeric Computation
-status: normative
+status: production
 applies_to: [expression.compute, numeric_expression]
 ---
 

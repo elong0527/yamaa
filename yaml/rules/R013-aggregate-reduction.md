@@ -1,7 +1,7 @@
 ---
 id: R013
 title: Aggregate Reduction
-status: normative
+status: production
 applies_to: [expression.aggregate, aggregate_class.between,
   aggregate_expression]
 

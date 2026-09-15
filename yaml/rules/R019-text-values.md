@@ -1,7 +1,7 @@
 ---
 id: R019
 title: Text Values
-status: normative
+status: production
 applies_to: [str, expression.str_upper, expression.str_lower,
   expression.mapping, order_by_term]
 ---

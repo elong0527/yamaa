@@ -8494,10 +8494,11 @@ def validate_rule_metadata(root: Path):
                 f"ERROR: {label}: id must be {expected_id!r}, got "
                 f"{metadata.get('id')!r}"
             )
-        if metadata.get('status') != 'normative':
+        rule_status = metadata.get('status')
+        if rule_status not in ('draft', 'production'):
             errors.append(
-                f"ERROR: {label}: maintained rule status must be "
-                "'normative'"
+                f"ERROR: {label}: maintained rule status must be 'draft' "
+                f"or 'production', got {rule_status!r}"
             )
 
         index_row = re.search(
@@ -8505,12 +8506,19 @@ def validate_rule_metadata(root: Path):
             index,
             re.MULTILINE,
         )
-        if index_row is None:
-            errors.append(f"ERROR: {label}: rule is absent from rules/README.md")
-        elif index_row.group(1).strip() != 'normative':
+        if rule_status == 'production':
+            if index_row is None:
+                errors.append(
+                    f"ERROR: {label}: rule is absent from rules/README.md"
+                )
+            elif index_row.group(1).strip() != 'production':
+                errors.append(
+                    f"ERROR: yaml/rules/README.md: {expected_id} status must "
+                    "be 'production'"
+                )
+        elif index_row is not None:
             errors.append(
-                f"ERROR: yaml/rules/README.md: {expected_id} status must be "
-                "'normative'"
+                f"ERROR: {label}: draft rules stay outside rules/README.md"
             )
 
     return errors

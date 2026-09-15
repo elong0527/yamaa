@@ -1,7 +1,7 @@
 ---
 id: R023
 title: Delimited Source Profile
-status: normative
+status: production
 applies_to: [dataset_source, dataset_class.path]
 
 ---

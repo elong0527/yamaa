@@ -17,7 +17,7 @@ Before reviewing, implementing, or modifying this design:
 
 Schema comments and descriptions are authoritative for operation-local
 behavior; indexed rule files are normative for shared behavior. Example
-READMEs explain examples but do not override either. Proposed rules remain
+READMEs explain examples but do not override either. Draft rules remain
 outside the rule index until their contracts and example coverage are complete.
 
 ## Terminology

@@ -1,7 +1,7 @@
 ---
 id: R008
 title: Local Error Handlers
-status: normative
+status: production
 applies_to: [source.missing, source.multiple_matches, expression, derivation]
 
 ---

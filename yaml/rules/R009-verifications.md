@@ -1,7 +1,7 @@
 ---
 id: R009
 title: Verifications
-status: normative
+status: production
 applies_to: [root.verifications, column.verifications, output.violation_log,
   column_verifications, dataset_verifications]
 

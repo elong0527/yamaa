@@ -1,7 +1,7 @@
 ---
 id: R017
 title: Specification Inheritance
-status: normative
+status: production
 applies_to: [root.parents, root.schema_version, root]
 
 ---

@@ -15,8 +15,10 @@ The validation ensures:
    stay inside `yaml/` and resolve without cycles. Custom types (`list[T]`,
    `dict[K,V]`, unions, classes, aliases, and registries) must resolve. The
    validator also enforces `values`, `pattern`, `min_length`, and `size`
-   constraints. Every maintained rule must declare `status: normative`, match
-   its stable file ID, and carry the same status in the rule index.
+   constraints. Every maintained rule must declare `status: draft` or
+   `status: production`, match
+   its stable file ID, and (for production rules) carry the same status in
+   the rule index. Draft rules stay outside the index.
 4. **Example specs**: Every `spec.yaml` or `spec_<variant>.yaml` validates
    against the schemas, checking required fields, unknown fields, and registry
    payload shapes. An entry with `parents` first resolves its ordered local

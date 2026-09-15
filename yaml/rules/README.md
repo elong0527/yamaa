@@ -3,43 +3,44 @@
 Each file defines one behavior of the derivation language. Rule IDs are stable
 and do not change when files are renamed.
 
-Every indexed rule is normative and authoritative for implementations. A
-proposed rule stays outside this index until its schema surface, portable
+Every indexed rule has production status and is authoritative for implementations. A
+draft rule stays outside this index until its schema surface, portable
 semantics, error behavior, and representative examples are complete.
 
 | ID | Rule | Status | Owns |
 | --- | --- | --- | --- |
-| R001 | [Execution model](R001-execution-model.md) | normative | Phases, grouped row construction, dependency inference, evaluation order |
-| R002 | [Source binding](R002-source-binding.md) | normative | Dataset declaration, name resolution |
-| R003 | [Cross-dataset left join](R003-cross-dataset-left-join.md) | normative | The implicit join and its right-side reduction |
-| R004 | [Predicate language](R004-predicate-language.md) | normative | The Boolean `sql` primitive |
-| R005 | [Output contract](R005-output-contract.md) | normative | Column coverage, output membership, the value lifecycle, output identity, artifact row order |
-| R006 | [Compact schema language](R006-schema-language.md) | normative | Schema notation and structural validation |
-| R007 | [Expression registry](R007-expression-registry.md) | normative | Registration, nesting, evaluation kinds, ordering, input types |
-| R008 | [Local error handlers](R008-local-handlers.md) | normative | The handler lifecycle |
-| R009 | [Verifications](R009-verifications.md) | normative | What each assertion means, including group cardinality, and when it runs |
-| R010 | [Scalar numeric computation](R010-scalar-computation.md) | normative | The `numeric_expression` primitive |
-| R011 | [Column types](R011-column-types.md) | normative | The `column_type` vocabulary, non-finite normalization, and conversion |
-| R012 | [String templates](R012-string-templates.md) | normative | Interpolation grammar, escaping, and evaluation |
-| R013 | [Aggregate reduction](R013-aggregate-reduction.md) | normative | The `aggregate_expression` primitive: reducers, row-relative narrowing, grain, and empty-group results |
-| R014 | [Source-format ingestion](R014-source-ingestion.md) | normative | Missing recognition and field typing at the source |
-| R015 | [Record lookup](R015-record-lookup.md) | normative | Looking up one record of another dataset and reading it by name |
-| R016 | [Temporal values](R016-temporal-values.md) | normative | The `date` and `datetime` values: lexical form, zone and precision model, comparison, canonical text, and the operations over them |
-| R017 | [Specification inheritance](R017-specification-inheritance.md) | normative | Parent resolution, shallow composition, pruning, and resolved order |
-| R018 | [Project function environment](R018-project-function-environment.md) | normative | Project resolution, logical function contracts, singular runtime binding, activation conformance |
-| R019 | [Text values](R019-text-values.md) | normative | ASCII source, Unicode data, casing, equality, normalization, total order |
-| R020 | [Artifact serialization](R020-artifact-serialization.md) | normative | The `parquet` and `csv` profiles, display precision, and publication |
-| R021 | [Project resource resolution](R021-project-resource-resolution.md) | normative | The approved project root, written path form, readable file kinds, content identity |
-| R022 | [Regular expressions](R022-regular-expressions.md) | normative | The pinned engine and flag set, full-match and search behavior per consumer, capture-group numbering |
-| R023 | [Delimited source profile](R023-delimited-source.md) | normative | The `csv` source syntax: encoding, records and fields, header shape, and delivered quoting |
-| R024 | [Submission metadata](R024-submission-metadata.md) | normative | Governed dataset and column metadata: standard families, data type, length, core and mandatory, origin and what the graph refutes, methods, comments |
-| R025 | [Controlled terminology](R025-controlled-terminology.md) | normative | The codelist object: identity, values, extensibility, external form, what a binding enforces, and agreement with `allowed_values` |
-| R026 | [Define-XML 2.1 composition and serialization](R026-define-xml.md) | normative | The study document, composition, generated identifiers, element mapping and order, bytes, publication, and the deferred constructs |
+| R001 | [Execution model](R001-execution-model.md) | production | Phases, grouped row construction, dependency inference, evaluation order |
+| R002 | [Source binding](R002-source-binding.md) | production | Dataset declaration, name resolution |
+| R003 | [Cross-dataset left join](R003-cross-dataset-left-join.md) | production | The implicit join and its right-side reduction |
+| R004 | [Predicate language](R004-predicate-language.md) | production | The Boolean `sql` primitive |
+| R005 | [Output contract](R005-output-contract.md) | production | Column coverage, output membership, the value lifecycle, output identity, artifact row order |
+| R006 | [Compact schema language](R006-schema-language.md) | production | Schema notation and structural validation |
+| R007 | [Expression registry](R007-expression-registry.md) | production | Registration, nesting, evaluation kinds, ordering, input types |
+| R008 | [Local error handlers](R008-local-handlers.md) | production | The handler lifecycle |
+| R009 | [Verifications](R009-verifications.md) | production | What each assertion means, including group cardinality, and when it runs |
+| R010 | [Scalar numeric computation](R010-scalar-computation.md) | production | The `numeric_expression` primitive |
+| R011 | [Column types](R011-column-types.md) | production | The `column_type` vocabulary, non-finite normalization, and conversion |
+| R012 | [String templates](R012-string-templates.md) | production | Interpolation grammar, escaping, and evaluation |
+| R013 | [Aggregate reduction](R013-aggregate-reduction.md) | production | The `aggregate_expression` primitive: reducers, row-relative narrowing, grain, and empty-group results |
+| R014 | [Source-format ingestion](R014-source-ingestion.md) | production | Missing recognition and field typing at the source |
+| R015 | [Record lookup](R015-record-lookup.md) | production | Looking up one record of another dataset and reading it by name |
+| R016 | [Temporal values](R016-temporal-values.md) | production | The `date` and `datetime` values: lexical form, zone and precision model, comparison, canonical text, and the operations over them |
+| R017 | [Specification inheritance](R017-specification-inheritance.md) | production | Parent resolution, shallow composition, pruning, and resolved order |
+| R018 | [Project function environment](R018-project-function-environment.md) | production | Project resolution, logical function contracts, singular runtime binding, activation conformance |
+| R019 | [Text values](R019-text-values.md) | production | ASCII source, Unicode data, casing, equality, normalization, total order |
+| R020 | [Artifact serialization](R020-artifact-serialization.md) | production | The `parquet` and `csv` profiles, display precision, and publication |
+| R021 | [Project resource resolution](R021-project-resource-resolution.md) | production | The approved project root, written path form, readable file kinds, content identity |
+| R022 | [Regular expressions](R022-regular-expressions.md) | production | The pinned engine and flag set, full-match and search behavior per consumer, capture-group numbering |
+| R023 | [Delimited source profile](R023-delimited-source.md) | production | The `csv` source syntax: encoding, records and fields, header shape, and delivered quoting |
+| R024 | [Submission metadata](R024-submission-metadata.md) | production | Governed dataset and column metadata: standard families, data type, length, core and mandatory, origin and what the graph refutes, methods, comments |
+| R025 | [Controlled terminology](R025-controlled-terminology.md) | production | The codelist object: identity, values, extensibility, external form, what a binding enforces, and agreement with `allowed_values` |
+| R026 | [Define-XML 2.1 composition and serialization](R026-define-xml.md) | production | The study document, composition, generated identifiers, element mapping and order, bytes, publication, and the deferred constructs |
 
 ## Rule admission
 
-The maintained rule set has one status: normative. Design proposals may be
-developed in issues or branches, but they become rules only when the repository
+The maintained rule set has two statuses: draft and production. Design
+proposals may be developed in issues or branches, but they become production
+only when the repository
 can validate their schema shape, their behavior is closed enough for
 independent R and Python implementations, and examples exercise both success
 and failure.

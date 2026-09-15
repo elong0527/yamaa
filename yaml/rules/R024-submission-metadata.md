@@ -1,7 +1,7 @@
 ---
 id: R024
 title: Submission Metadata
-status: normative
+status: production
 applies_to: [root.submission, column.submission, submission_dataset_class,
   submission_column_class, submission_origin_class, submission_method_class,
   submission_comment_class, document_reference_class]

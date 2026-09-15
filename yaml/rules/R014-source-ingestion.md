@@ -1,7 +1,7 @@
 ---
 id: R014
 title: Source-Format Ingestion
-status: normative
+status: production
 applies_to: [root.datasets, dataset_source, dataset_class, expression.source]
 
 ---

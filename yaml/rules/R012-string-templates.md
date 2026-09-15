@@ -1,7 +1,7 @@
 ---
 id: R012
 title: String Templates
-status: normative
+status: production
 applies_to: [expression.str_template, string_template]
 
 ---

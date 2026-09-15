@@ -1,7 +1,7 @@
 ---
 id: R002
 title: Source Binding
-status: normative
+status: production
 applies_to: [root.datasets, root.base, row.dataset, row.group_by,
   expression.source, string_template]
 

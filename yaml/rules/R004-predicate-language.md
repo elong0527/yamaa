@@ -1,7 +1,7 @@
 ---
 id: R004
 title: Predicate Language
-status: normative
+status: production
 applies_to: [sql]
 
 ---
