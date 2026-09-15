@@ -47,9 +47,9 @@ had before configuration existed. A runner may name the root outright.
 **R021-2.** A **project configuration** is one `yamaa-project.yaml` file. A run
 finds it by walking up from the entry file to the first directory that holds
 one, and reads it once, before any specification. It is the study's own
-statement of where the study keeps things, written by the people who write the
-study, which is why the file marks the project root by sitting at it rather
-than naming it. A runner that names the root outright takes the configuration
+statement of where the study keeps things, written by the study authors, so
+the file marks the project root by sitting at the root rather than naming
+the root. A runner that names the root outright takes the configuration
 sitting at that root and no other, so naming a narrower root never inherits a
 wider project's declarations.
 
@@ -101,9 +101,9 @@ written in, and whether that form is well formed, is decided before the
 filesystem is consulted, so a malformed path fails identically on every
 platform and reveals nothing about the host.
 
-- **R021-8.** A rooted path names a host location outright, and that is
-  allowed. Code and data are commonly stored apart, and an absolute path is
-  how a study connects them. It is not allowed unconditionally: R021-15 still
+- **R021-8.** A rooted path can name a host location outright. Code and
+  data are commonly stored apart, and an absolute path is how a study
+  connects them. It is not allowed unconditionally: R021-15 still
   requires it to name an approved root, so the run reads no more than the
   runner approved. Portability is a property a submission package must have
   and a packaging step enforces; it is not a property every intermediate study
@@ -157,9 +157,9 @@ component is a regular file.
 
 **R021-17.** **No component below the anchor is a symbolic link**, including
 one whose target is inside an approved root. A link is a second name for a
-file, so a boundary that admits one must re-derive containment every time the
-link changes, and the link a validator followed is not necessarily the link a
-reader follows. The anchor itself is exempt because it is not a name the
+file, so a boundary that admits a link must re-derive containment every time
+the link changes, and the link a validator followed is not necessarily the
+link a reader follows. The anchor itself is exempt because it is not a name the
 specification chose: the runner selected it, the run canonicalized and opened
 it before reading any specification, and every walk begins at that open
 directory, so no name above the anchor can be swapped between validation and
@@ -211,10 +211,10 @@ the host. A rooted path is admitted because study code and study data are
 commonly stored apart, but it is admitted as a selection among roots already
 approved rather than as permission to read the host.
 
-The roots come from the study's own configuration as well as from the runner,
-because the people who write a study are the people who know where its data
-is kept, and requiring them to pass that location through a runner protects
-nothing when they control the runner too. What the configuration must not do
+The roots come from the study's own configuration as well as from the runner.
+The study authors know where the study data is kept, and requiring them to
+pass that location through a runner protects nothing when they control the
+runner too. What the configuration must not do
 is travel: it is read once, from the entry project, so a layer R017 reaches
 cannot redirect where a study reads from, and a study that runs someone else's
 specification is not handed that specification's idea of what it may open. A

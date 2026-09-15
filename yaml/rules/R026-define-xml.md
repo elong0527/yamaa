@@ -72,8 +72,8 @@ for that dataset is built from.
 
 **R026-7.** An entry's `standard` binds that dataset to a declared standard
 of type `IG`. It defaults to the document's `default_standard`, so a document
-whose datasets all follow one implementation guide names it once and every
-entry stays two lines. A document mixing standards -- two releases of an
+whose datasets all follow one implementation guide names it once. Each entry
+has two lines. A document mixing standards -- two releases of an
 implementation guide, or tabulation and analysis datasets together -- names the
 exception on the entry that is the exception. A dataset with neither fails:
 R024-5 reads this binding to decide the dataset's family, and every
@@ -174,9 +174,9 @@ and it is fixed so that two implementations agree.
 **R026-18.** Comment definitions are emitted per dataset in entry order: the
 dataset's own comment first, its columns' comments in `output.columns` order.
 
-**R026-19.** A dataset's `def:leaf` is a child of its `ItemGroupDef`, and a
-supporting document's `def:leaf` is a child of `MetaDataVersion`. That is
-where the schema places each.
+**R026-19.** A dataset's `def:leaf` is a child of its `ItemGroupDef`.
+A supporting document's `def:leaf` is a child of `MetaDataVersion`, as the
+schema requires.
 
 **R026-20.** The namespaces declared on `ODM` are the ODM 1.3 namespace as the
 default, `def` for `http://www.cdisc.org/ns/def/v2.1`, and `xlink` for

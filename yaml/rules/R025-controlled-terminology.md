@@ -26,10 +26,9 @@ value must match.
 
 ## One object, many bindings
 
-**R025-1.** A codelist is declared once, in the study document, and carries an
-`id`. A column names that `id` through `submission.codelist`. Columns
-therefore share one statement of the terminology, and a single statement lets
-a study upgrade a published version in one place.
+**R025-1.** A codelist is declared once in the study document and carries an
+`id`. A column names that `id` through `submission.codelist`. Columns share
+one codelist statement, so a study upgrades a published version in one place.
 
 **R025-2.** `name` is the codelist's human-readable name and is unique across
 the document's codelists. `id` and `name` are separate because `id` is what a

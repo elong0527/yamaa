@@ -16,11 +16,11 @@ records, fields, and the spellings two runtimes must read alike or reject.
 ## Boundaries
 
 This rule owns source-profile selection and the syntax of the `csv` profile.
-This rule ends at the field. This rule delivers a header and a sequence of
-records. Each delivered field carries its text and whether the field was
-quoted. R014 owns what those fields mean, which of them is missing, and
-what type each one takes. R027 owns
-the `parquet` source profile. Nothing here decides a value.
+The profile ends at the field with a header and a sequence of records. Each
+delivered field carries its text and whether the field was quoted. R014
+owns what those fields mean, which of them is missing, and what type each
+one takes. R027 owns the `parquet` source profile. Nothing here decides a
+value.
 
 R020 owns the other direction, and its `csv` profile is the writing
 counterpart of the form this rule reads. The two agree on the bytes, and
@@ -163,7 +163,7 @@ what fields mean on text both runtimes deliver identically.
 
 ## Errors
 
-**R023-22.** A failure names the dataset, the path exactly as the
+**R023-22.** A failure names the input dataset, the path exactly as the
 specification wrote it, and the record and field where it was decided.
 Records and fields are counted from one, and the header is record one. A
 message carries no host path, for the reason R021 gives.
