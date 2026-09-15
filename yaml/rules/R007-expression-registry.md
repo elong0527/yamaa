@@ -208,9 +208,9 @@ gives `function` the return type declared by its logical contract.
 
 **R007-35.** Each operation is documented where it is registered in
 `schema_expression_*.yaml` or `schema_function.yaml`. An inline comment
-states the operation's result, and descriptor `description` fields explain
-its parameters; these adjacent definitions are authoritative for
-operation-local behavior and do not affect schema validation.
+states the operation result. Descriptor `description` fields explain
+parameters. These definitions are authoritative for operation-local behavior
+and do not affect schema validation.
 
 ## Rationale
 

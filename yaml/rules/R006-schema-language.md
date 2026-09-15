@@ -15,11 +15,11 @@ Python implementations validate specifications consistently.
 
 ## Boundaries
 
-This rule owns schema notation and structural validation: what a declaration,
-descriptor, type expression, and registry are. It says nothing about what any
-declared field means at run time. The `expressions` registry it defines is
-populated and given semantics by R007, and the `column_type` vocabulary a
-specification may declare is R011.
+This rule defines schema notation and structural validation: declarations,
+descriptors, type expressions, and registries. R006 does not define a
+declared field's run-time meaning. R007 populates the `expressions` registry
+and gives it semantics. R011 defines the `column_type` vocabulary a
+specification may declare.
 
 ## Schema bundle
 
