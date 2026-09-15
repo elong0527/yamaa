@@ -1,0 +1,68 @@
+schema_version: "1.0"
+domain: CM
+datasets:
+  ODM: input/odm.csv
+keys: [STUDYID, USUBJID, CMSEQ]
+
+record_lookups:
+  - id: CMCMSTDTC
+    dataset: ODM
+    source: [USUBJID, CM_EVENT_NUM]
+    key: [SubjectKey, StudyEventRepeatKey]
+    filter: "ODM.ItemOID = 'IT.CM.CMSTDTC'"
+    unmatched: missing
+
+output:
+  path: cm.csv
+  columns: [STUDYID, USUBJID, CMSEQ, CMTRT, CMSTDTC]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: CM_EVENT_NUM
+    type: str
+    label: CM Event Number
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Med, or Therapy
+
+  - name: CMSTDTC
+    type: date
+    label: Start Date/Time of Medication
+    derivation:
+      source: CMCMSTDTC.Value
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [CMSTDTC, CMTRT]
+
+rows:
+  - id: cm_record
+    filter: "ODM.ItemOID = 'IT.CM.CMTRT' AND ODM.Value IS NOT NULL"
+    derivations:
+      USUBJID:
+        source: ODM.SubjectKey
+      CM_EVENT_NUM:
+        source: ODM.StudyEventRepeatKey
+      CMTRT:
+        source: ODM.Value
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, CMSEQ]
+  - row_count:
+      min: 2
+      max: 2
