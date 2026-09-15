@@ -101,7 +101,7 @@ written in, and whether that form is well formed, is decided before the
 filesystem is consulted, so a malformed path fails identically on every
 platform and reveals nothing about the host.
 
-- **R021-8.** A rooted path may name a host location outright. Code and
+- **R021-8.** A rooted path can name a host location outright. Code and
   data are commonly stored apart, and an absolute path is how a study
   connects them. It is not allowed unconditionally: R021-15 still
   requires it to name an approved root, so the run reads no more than the
