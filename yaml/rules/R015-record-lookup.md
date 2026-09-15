@@ -11,8 +11,8 @@ applies_to: [root.record_lookups, record_lookup_class, expression.source,
 
 ## Intent
 
-Select one record from another input dataset and read several columns. Each
-reading column then reads the same selected record.
+Select one record from another input dataset and read several columns.
+Each reading column then reads the selected record.
 
 ## Boundaries
 
@@ -43,8 +43,8 @@ output `domain`.
 ## Matching
 
 **R015-3.** A record lookup matches records from its `dataset` where a
-derivation reads the lookup: against a constructed current row during column
-derivation, or against the current candidate during grouped row construction:
+derivation reads that lookup: against a current row during column derivation,
+or against the current candidate during grouped row construction:
 
 1. **R015-4.** `filter` selects eligible records. It is a predicate over
    records of the record lookup's dataset only, evaluated exactly as R003
