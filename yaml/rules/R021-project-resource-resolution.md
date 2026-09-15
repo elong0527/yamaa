@@ -17,9 +17,8 @@ that ingestion receives.
 ## Boundaries
 
 This rule owns the approved roots, the project configuration that declares
-them, the written form of a `project_path`, the file kinds a run may read, the
-content identity that carries from validation to ingestion, and the errors
-these produce.
+them, the written form of a `project_path`, the file kinds a run may read,
+content identity from validation to ingestion, and the resulting errors.
 
 R002 owns dataset declaration and how a name resolves to a value. R014 owns
 what a stored field becomes once its bytes are available, including the
