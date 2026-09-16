@@ -1,6 +1,8 @@
 # Reject a treatment and dose taken from an unchosen record
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-record-lookup-unordered-choice.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-record-lookup-unordered-choice.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)
+
+**Lifecycle:** reviewed - has discussion comments or GitHub issues.
 
 **Goal:** carry the treatment a subject received and the dose they
 received of it onto `TRT01A` and `TRT01DOSE`.

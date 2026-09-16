@@ -1,6 +1,8 @@
 # Sum floating-point values in source record order
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adlb-order-sensitive-sum.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adlb-order-sensitive-sum.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)
+
+**Lifecycle:** draft - first commit, no review yet.
 
 **Goal:** add up one subject's laboratory values in the order the
 source records were stored.

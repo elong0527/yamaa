@@ -47,211 +47,211 @@ CSV records the intended artifact once that capability exists.
 Every expected-failure README ends with a `How to fix` section that recommends
 the safest correction and shows the smallest useful YAML change.
 
-| Example | Derives |
-|---|---|
-| [`adam-adae-death-outcome`](adam-adae-death-outcome/) | carry each subject's death onto every event |
-| [`adam-adae-event-severity`](adam-adae-event-severity/) | carry each event's severity from its supplemental record |
-| [`adam-adae-occurrence-flags`](adam-adae-occurrence-flags/) | flag the first occurrence at three levels |
-| [`adam-adae-partial-dates`](adam-adae-partial-dates/) | impute partial dates |
-| [`adam-adae-post-dose-onset`](adam-adae-post-dose-onset/) | classify an event by the moment it started |
-| [`adam-adae-post-reference-event`](adam-adae-post-reference-event/) | flag an event after a specific reference event |
-| [`adam-adae-protocol-review-window`](adam-adae-protocol-review-window/) | flag adverse events for protocol review |
-| [`adam-adae-query-flags`](adam-adae-query-flags/) | record which queries a coded event belongs to |
-| [`adam-adae-review-order`](adam-adae-review-order/) | present a subject's events in medical-review order |
-| [`adam-adae-serious-event-listing`](adam-adae-serious-event-listing/) | list the serious adverse events |
-| [`adam-adae-serious-event-sequence`](adam-adae-serious-event-sequence/) | number a subject's serious events in onset order |
-| [`adam-adae-severity-override`](adam-adae-severity-override/) | apply an approved severity correction |
-| [`adam-adae-severity-rank`](adam-adae-severity-rank/) | rank a subject's events by severity |
-| [`adam-adae-string-handlers`](adam-adae-string-handlers/) | clean text and handle invalid IDs |
-| [`adam-adae-treatment-emergent`](adam-adae-treatment-emergent/) | classify an event as treatment-emergent |
-| [`adam-adae-worst-severity`](adam-adae-worst-severity/) | flag the worst-severity event per preferred term |
-| [`adam-adce-worst-toxicity-grade`](adam-adce-worst-toxicity-grade/) | flag the subject's worst-grade event |
-| [`adam-adcm-on-treatment-flag`](adam-adcm-on-treatment-flag/) | flag a medication during treatment |
-| [`adam-adeg-bazett-qtc`](adam-adeg-bazett-qtc/) | derive a Bazett-corrected QT parameter |
-| [`adam-adeg-fridericia-qtc`](adam-adeg-fridericia-qtc/) | derive a Fridericia-corrected QT parameter |
-| [`adam-adeg-rr-interval`](adam-adeg-rr-interval/) | derive an RR interval |
-| [`adam-adex-cumulative-dose`](adam-adex-cumulative-dose/) | summarize cumulative exposure |
-| [`adam-adex-dose-reduction-flag`](adam-adex-dose-reduction-flag/) | derive a dose reduction flag |
-| [`adam-adex-uncollected-exposure`](adam-adex-uncollected-exposure/) | tell an uncollected dose from an absent administration |
-| [`adam-adlb-absolute-wbc-differential`](adam-adlb-absolute-wbc-differential/) | derive absolute WBC differentials |
-| [`adam-adlb-bds`](adam-adlb-bds/) | build a BDS dataset with baseline and change |
-| [`adam-adlb-closest-visit`](adam-adlb-closest-visit/) | select the record closest to a window's target day |
-| [`adam-adlb-mean`](adam-adlb-mean/) | calculate each subject's mean result |
-| [`adam-adlb-order-sensitive-sum`](adam-adlb-order-sensitive-sum/) | sum floating-point values in source record order |
-| [`adam-adlb-reported-precision`](adam-adlb-reported-precision/) | report a result against the lower limit of normal |
-| [`adam-adlb-shift-and-criteria`](adam-adlb-shift-and-criteria/) | classify a result, its shift from baseline, and one criterion |
-| [`adam-adoe-study-eye`](adam-adoe-study-eye/) | tell the study eye from the fellow eye |
-| [`adam-adqs-subscale-score`](adam-adqs-subscale-score/) | score a questionnaire subscale from its item records |
-| [`adam-adrs-best-overall-response`](adam-adrs-best-overall-response/) | select the best overall response |
-| [`adam-adrs-best-response-selection`](adam-adrs-best-response-selection/) | prepare assessments for best overall response |
-| [`adam-adrs-composite-response`](adam-adrs-composite-response/) | combine efficacy, safety, and discontinuation into one response |
-| [`adam-adrs-confirmed-response`](adam-adrs-confirmed-response/) | confirm an objective response |
-| [`adam-adrs-measurable-disease`](adam-adrs-measurable-disease/) | derive measurable disease at baseline |
-| [`adam-adrs-overall-response-records`](adam-adrs-overall-response-records/) | prepare the overall response records an endpoint reads |
-| [`adam-adsl-age-group`](adam-adsl-age-group/) | derive age group |
-| [`adam-adsl-age-quality-review`](adam-adsl-age-quality-review/) | retain an implausible age for data review |
-| [`adam-adsl-analysis-age`](adam-adsl-analysis-age/) | analysis age |
-| [`adam-adsl-bmi-compute`](adam-adsl-bmi-compute/) | compute BMI from height and weight |
-| [`adam-adsl-bmi-function`](adam-adsl-bmi-function/) | compute BMI by calling a routine the project supplies |
-| [`adam-adsl-completion-flag`](adam-adsl-completion-flag/) | flag the subjects who completed the study |
-| [`adam-adsl-crossover-periods`](adam-adsl-crossover-periods/) | derive period-scoped treatments and dates across a washout |
-| [`adam-adsl-dependency-order`](adam-adsl-dependency-order/) | derive a chain of population flags |
-| [`adam-adsl-disposition`](adam-adsl-disposition/) | select the final subject disposition from DS |
-| [`adam-adsl-dose-adjustment-flag`](adam-adsl-dose-adjustment-flag/) | derive a dose adjustment flag from multiple sources |
-| [`adam-adsl-duration-weeks-months`](adam-adsl-duration-weeks-months/) | exposure duration in weeks and months |
-| [`adam-adsl-geography-normalization`](adam-adsl-geography-normalization/) | normalize collected country and group it into a region |
-| [`adam-adsl-identifier-parsing`](adam-adsl-identifier-parsing/) | parse the site from USUBJID with a collected fallback |
-| [`adam-adsl-investigator-comment`](adam-adsl-investigator-comment/) | keep an investigator comment exactly as collected |
-| [`adam-adsl-last-alive-date`](adam-adsl-last-alive-date/) | derive the last known alive date from multiple sources |
-| [`adam-adsl-mapping`](adam-adsl-mapping/) | translate collected values into a standard vocabulary |
-| [`adam-adsl-new-anticancer-therapy-date`](adam-adsl-new-anticancer-therapy-date/) | date the subject started new anti-cancer therapy |
-| [`adam-adsl-non-finite-values`](adam-adsl-non-finite-values/) | normalize non-finite numeric values to missing |
-| [`adam-adsl-population-flags`](adam-adsl-population-flags/) | derive the safety and intent-to-treat flags |
-| [`adam-adsl-portable-text`](adam-adsl-portable-text/) | preserve and compare international text predictably |
-| [`adam-adsl-randomization-timing`](adam-adsl-randomization-timing/) | record randomization timing |
-| [`adam-adsl-rescue-medication`](adam-adsl-rescue-medication/) | select the first rescue medication |
-| [`adam-adsl-treatment-selection`](adam-adsl-treatment-selection/) | select actual treatment and its duration from EX |
-| [`adam-adtr-current-nadir`](adam-adtr-current-nadir/) | derive the current nadir |
-| [`adam-adtr-sum-of-target-diameters`](adam-adtr-sum-of-target-diameters/) | sum the target lesion diameters at each assessment |
-| [`adam-adtte-duration-of-response`](adam-adtte-duration-of-response/) | derive the duration of a response |
-| [`adam-adtte-first-adverse-event`](adam-adtte-first-adverse-event/) | derive the time to first adverse event |
-| [`adam-adtte-overall-survival`](adam-adtte-overall-survival/) | derive overall survival |
-| [`adam-adtte-progression-free-survival`](adam-adtte-progression-free-survival/) | derive progression-free survival |
-| [`adam-advs-analysis-visit`](adam-advs-analysis-visit/) | assign records to analysis windows |
-| [`adam-advs-analysis-window-table`](adam-advs-analysis-window-table/) | assign analysis windows from the study's window table |
-| [`adam-advs-body-mass-index`](adam-advs-body-mass-index/) | derive body mass index |
-| [`adam-advs-body-surface-area`](adam-advs-body-surface-area/) | derive a body surface area parameter |
-| [`adam-advs-growth-percentile`](adam-advs-growth-percentile/) | express a measurement as a growth percentile |
-| [`adam-advs-mean-arterial-pressure`](adam-advs-mean-arterial-pressure/) | derive mean arterial pressure |
-| [`adam-advs-once-measured-carry-forward`](adam-advs-once-measured-carry-forward/) | carry forward a once-measured characteristic |
-| [`adam-advs-prior-character-result`](adam-advs-prior-character-result/) | retain the latest earlier character result |
-| [`negative-adae-review-condition-arithmetic`](negative-adae-review-condition-arithmetic/) | reject a review flag whose condition performs arithmetic |
-| [`negative-adae-review-text-date`](negative-adae-review-text-date/) | reject a review flag that compares a date with text |
-| [`negative-adae-review-unknown-date`](negative-adae-review-unknown-date/) | reject a review flag that names an unavailable date |
-| [`negative-adam-adeg-pre-existing-rrr`](negative-adam-adeg-pre-existing-rrr/) | reject a collected RR interval |
-| [`negative-adam-adsl-stratification-reconciliation`](negative-adam-adsl-stratification-reconciliation/) | reconcile randomization strata |
-| [`negative-adex-relative-dose-intensity`](negative-adex-relative-dose-intensity/) | reject a dose intensity measured against a per-record plan |
-| [`negative-adex-single-dose-expansion`](negative-adex-single-dose-expansion/) | reject one record per administration built from an aggregate dose |
-| [`negative-adlb-absolute-wbc-duplicate`](negative-adlb-absolute-wbc-duplicate/) | reject duplicate WBC inputs for an absolute differential |
-| [`negative-adlb-computed-parameter`](negative-adlb-computed-parameter/) | reject a parameter computed from the dataset being built |
-| [`negative-adlb-multiple-baseline-records`](negative-adlb-multiple-baseline-records/) | reject a subject with two baseline records for one parameter |
-| [`negative-adrs-partial-response-after-complete-response`](negative-adrs-partial-response-after-complete-response/) | reject a partial response recorded after a complete response |
-| [`negative-adsl-cyclic-parent`](negative-adsl-cyclic-parent/) | reject a circular chain of shared definitions |
-| [`negative-adsl-inherited-output`](negative-adsl-inherited-output/) | reject an inherited artifact layout |
-| [`negative-adsl-invalid-parent-clear`](negative-adsl-invalid-parent-clear/) | reject removal of a required variable property |
-| [`negative-adsl-parent-version-mismatch`](negative-adsl-parent-version-mismatch/) | reject shared definitions from another language version |
-| [`negative-adsl-randomization-date-retyped`](negative-adsl-randomization-date-retyped/) | reject a randomization date described twice |
-| [`negative-adsl-remote-parent`](negative-adsl-remote-parent/) | reject shared definitions from a remote location |
-| [`negative-adsl-subject-reference`](negative-adsl-subject-reference/) | reject a malformed subject reference |
-| [`negative-advs-overlapping-analysis-windows`](negative-advs-overlapping-analysis-windows/) | reject overlapping analysis windows |
-| [`negative-all-or-none-partial-row`](negative-all-or-none-partial-row/) | reject a row with only some paired dates present |
-| [`negative-allowed-values-mismatch`](negative-allowed-values-mismatch/) | reject a recorded sex the study does not recognize |
-| [`negative-baseline-flag-tied-date`](negative-baseline-flag-tied-date/) | reject a baseline chosen between two same-day results |
-| [`negative-baseline-value-multiple-flags`](negative-baseline-value-multiple-flags/) | reject a baseline carried from two flagged visits |
-| [`negative-coalesce-self-reference`](negative-coalesce-self-reference/) | reject a severity carried from its own column |
-| [`negative-column-forward-reference`](negative-column-forward-reference/) | reject a doubled value built from a later column |
-| [`negative-column-type-unknown`](negative-column-type-unknown/) | reject an analysis value with an ambiguous numeric type |
-| [`negative-compute-aggregate-function`](negative-compute-aggregate-function/) | reject a total written as a formula |
-| [`negative-compute-comparison-operator`](negative-compute-comparison-operator/) | reject an above-range flag written as a formula |
-| [`negative-compute-division-by-zero`](negative-compute-division-by-zero/) | reject a percent change from a zero baseline |
-| [`negative-compute-integer-overflow`](negative-compute-integer-overflow/) | reject a cell total larger than the counter can hold |
-| [`negative-compute-ln-of-zero`](negative-compute-ln-of-zero/) | reject a log result from an undetectable value |
-| [`negative-compute-qualified-identifier`](negative-compute-qualified-identifier/) | reject a doubled dose read straight from exposure |
-| [`negative-compute-sqrt-of-negative`](negative-compute-sqrt-of-negative/) | reject a body surface area from a negative weight |
-| [`negative-conversion-incomplete-date`](negative-conversion-incomplete-date/) | reject an event start date that names no day |
-| [`negative-conversion-non-integral`](negative-conversion-non-integral/) | reject a pulse rate recorded between whole beats |
-| [`negative-conversion-unparseable-number`](negative-conversion-unparseable-number/) | reject a viral load reported below the assay limit |
-| [`negative-cut-non-numeric-source`](negative-cut-non-numeric-source/) | reject age bands grouped from a coded value |
-| [`negative-dataset-path-absolute`](negative-dataset-path-absolute/) | reject reference limits named by an unapproved location |
-| [`negative-dataset-path-directory`](negative-dataset-path-directory/) | reject reference limits that name a folder |
-| [`negative-dataset-path-missing`](negative-dataset-path-missing/) | reject reference limits the study does not hold |
-| [`negative-dataset-path-parent-escape`](negative-dataset-path-parent-escape/) | reject reference limits stored above the study |
-| [`negative-dataset-path-symlink`](negative-dataset-path-symlink/) | reject reference limits reached through a stand-in name |
-| [`negative-dataset-path-url`](negative-dataset-path-url/) | reject reference limits named by a web address |
-| [`negative-date-diff-bounds-unit`](negative-date-diff-bounds-unit/) | reject endpoint counting beside a month count |
-| [`negative-date-diff-datetime-endpoints`](negative-date-diff-datetime-endpoints/) | reject counting days between two moments |
-| [`negative-date-impute-invalid-source`](negative-date-impute-invalid-source/) | reject a start date completed from text that is not a date |
-| [`negative-date-impute-month-out-of-range`](negative-date-impute-month-out-of-range/) | reject a start date completed with no month of the year |
-| [`negative-date-impute-nonexistent-day`](negative-date-impute-nonexistent-day/) | reject an end date completed past the end of its month |
-| [`negative-date-impute-unknown-day-rule`](negative-date-impute-unknown-day-rule/) | reject a start date completed with an unrecognised day |
-| [`negative-date-precision-invalid-source`](negative-date-precision-invalid-source/) | reject a completeness flag read from text that is not a date |
-| [`negative-datetime-zone-offset`](negative-datetime-zone-offset/) | reject an event start recorded against another clock |
-| [`negative-function-contract-mismatch`](negative-function-contract-mismatch/) | reject an unavailable project-routine contract |
-| [`negative-greatest-incomparable-sources`](negative-greatest-incomparable-sources/) | reject a last-known-alive date taken from a day number |
-| [`negative-group-count-without-id`](negative-group-count-without-id/) | reject an unnamed baseline-count rule |
-| [`negative-ingest-unparseable-field`](negative-ingest-unparseable-field/) | reject a dose recorded with its unit |
-| [`negative-keys-conflicting-values`](negative-keys-conflicting-values/) | reject two ages collected for one subject |
-| [`negative-keys-internal-column`](negative-keys-internal-column/) | reject a site-scoped subject identity |
-| [`negative-keys-missing-value`](negative-keys-missing-value/) | reject a record that no analysis visit identifies |
-| [`negative-least-incomparable-sources`](negative-least-incomparable-sources/) | reject an earliest-alive date taken from a day number |
-| [`negative-literal-non-scalar`](negative-literal-non-scalar/) | reject a fixed value written as a structure |
-| [`negative-mapping-case-fold-collision`](negative-mapping-case-fold-collision/) | reject a smoking flag whose dictionary answers twice |
-| [`negative-mapping-from-duplicate-key`](negative-mapping-from-duplicate-key/) | reject a reference range stated twice |
-| [`negative-mapping-from-key-length-mismatch`](negative-mapping-from-key-length-mismatch/) | reject a reference range chosen by an unpaired key |
-| [`negative-mapping-from-partial-key`](negative-mapping-from-partial-key/) | reject a reference range chosen without a sex |
-| [`negative-mapping-from-unmapped-key`](negative-mapping-from-unmapped-key/) | reject a result with no reference range |
-| [`negative-mapping-unmapped-value`](negative-mapping-unmapped-value/) | reject an unmapped response |
-| [`negative-matches-unreadable-pattern`](negative-matches-unreadable-pattern/) | reject a sex code checked against an unreadable match rule |
-| [`negative-not-missing-absent-age`](negative-not-missing-absent-age/) | reject a missing age |
-| [`negative-output-duplicate-subject`](negative-output-duplicate-subject/) | reject a repeated demographics record |
-| [`negative-output-order-repeated-term`](negative-output-order-repeated-term/) | reject an order that places one value twice |
-| [`negative-output-order-unknown-column`](negative-output-order-unknown-column/) | reject a submission order over a value the dataset does not carry |
-| [`negative-previous-non-missing-non-variable-source`](negative-previous-non-missing-non-variable-source/) | reject carrying forward a fixed value |
-| [`negative-query-slot-overflow`](negative-query-slot-overflow/) | reject an event belonging to more queries than it has places |
-| [`negative-rank-invalid-method`](negative-rank-invalid-method/) | reject an unlisted tie-numbering method |
-| [`negative-record-lookup-id-collision`](negative-record-lookup-id-collision/) | reject a first treatment named after its own source |
-| [`negative-record-lookup-incomparable-range`](negative-record-lookup-incomparable-range/) | reject an epoch range with incomparable endpoints |
-| [`negative-record-lookup-incomplete-key`](negative-record-lookup-incomplete-key/) | reject a reference limit chosen without a sex |
-| [`negative-record-lookup-unmatched-key`](negative-record-lookup-unmatched-key/) | reject a result with no reference range |
-| [`negative-record-lookup-unordered-choice`](negative-record-lookup-unordered-choice/) | reject a treatment and dose taken from an unchosen record |
-| [`negative-record-lookup-unordered-keep`](negative-record-lookup-unordered-keep/) | reject a treatment ordered but not chosen |
-| [`negative-record-lookup-unpaired-key`](negative-record-lookup-unpaired-key/) | reject a reference limit matched against nothing |
-| [`negative-row-number-numeric-filter`](negative-row-number-numeric-filter/) | reject a sequence filtered by a number |
-| [`negative-row-value-self-reference`](negative-row-value-self-reference/) | reject a weight carried forward from a carried-forward weight |
-| [`negative-row-value-zero-offset`](negative-row-value-zero-offset/) | reject a previous weight that names no earlier visit |
-| [`negative-sex-code-pattern-mismatch`](negative-sex-code-pattern-mismatch/) | reject a recorded sex outside the accepted codes |
-| [`negative-sex-collected-twice`](negative-sex-collected-twice/) | reject a subject whose sex was collected twice |
-| [`negative-source-duplicate-field-name`](negative-source-duplicate-field-name/) | reject a subject listing that names one field twice |
-| [`negative-source-duplicate-right-key`](negative-source-duplicate-right-key/) | reject duplicate subject enrichment |
-| [`negative-source-empty-field-name`](negative-source-empty-field-name/) | reject a subject listing with an unnamed field |
-| [`negative-source-filter-unreachable-field`](negative-source-filter-unreachable-field/) | reject a selection made on a value the records do not carry |
-| [`negative-source-filter-without-records`](negative-source-filter-without-records/) | reject a selection over a value that is already one value |
-| [`negative-source-invalid-text`](negative-source-invalid-text/) | reject a site name stored in another encoding |
-| [`negative-source-missing-sentinel`](negative-source-missing-sentinel/) | reject an age recorded as NA |
-| [`negative-source-output-self-reference`](negative-source-output-self-reference/) | reject a parameter that reads the dataset it is part of |
-| [`negative-source-record-width`](negative-source-record-width/) | reject a subject listing record with an extra field |
-| [`negative-source-undeclared-field`](negative-source-undeclared-field/) | reject a copy from an undeclared field |
-| [`negative-source-unknown-profile`](negative-source-unknown-profile/) | reject a subject listing stored under an unnamed format |
-| [`negative-source-unterminated-quote`](negative-source-unterminated-quote/) | reject a comment whose quoted text never closes |
-| [`negative-str-extract-undeclared-group`](negative-str-extract-undeclared-group/) | reject a site identifier taken from an uncaptured part |
-| [`negative-str-lower-non-string-source`](negative-str-lower-non-string-source/) | reject a site name folded from a number |
-| [`negative-study-day-datetime-input`](negative-study-day-datetime-input/) | reject a study day measured from a moment |
-| [`negative-sum-non-numeric-source`](negative-sum-non-numeric-source/) | reject a severity burden totalled from severity words |
-| [`negative-to-date-date-source`](negative-to-date-date-source/) | reject extracting a date from a date |
-| [`negative-types-unknown-field`](negative-types-unknown-field/) | reject a total over a field the source does not have |
-| [`negative-unique-duplicate-values`](negative-unique-duplicate-values/) | reject a site shared by two subjects |
-| [`negative-usubjid-exceeds-length`](negative-usubjid-exceeds-length/) | reject a subject identifier longer than the study permits |
-| [`negative-variable-nested-expression`](negative-variable-nested-expression/) | reject an uppercased country chosen inside the same step |
-| [`negative-verification-implausible-age`](negative-verification-implausible-age/) | reject an implausible age |
-| [`odm-form-scoped-item-resolution`](odm-form-scoped-item-resolution/) | resolve items within their collection form |
-| [`sdtm-ae-dictionary-coding`](sdtm-ae-dictionary-coding/) | code reported terms against a medical dictionary |
-| [`sdtm-ae-seriousness-criteria`](sdtm-ae-seriousness-criteria/) | mark serious events from collected seriousness criteria |
-| [`sdtm-dm-arm-assignment`](sdtm-dm-arm-assignment/) | assign planned and actual arms |
-| [`sdtm-dm-basic`](sdtm-dm-basic/) | build one subject record from collected data |
-| [`sdtm-dm-death`](sdtm-dm-death/) | derive death date and flag from disposition and adverse events |
-| [`sdtm-dm-metadata-contract`](sdtm-dm-metadata-contract/) | declare the metadata a submission needs |
-| [`sdtm-dm-reference-dates`](sdtm-dm-reference-dates/) | derive the reference dates from EX, DS, and AE |
-| [`sdtm-ds-disposition-sequence`](sdtm-ds-disposition-sequence/) | number each subject's disposition records in date order |
-| [`sdtm-ex-combination-regimen`](sdtm-ex-combination-regimen/) | represent a combination regimen |
-| [`sdtm-fa-fever-occurrence`](sdtm-fa-fever-occurrence/) | fever occurrence |
-| [`sdtm-lb-conditional-compartments`](sdtm-lb-conditional-compartments/) | tell an inapplicable compartment from an uncollected sample |
-| [`sdtm-lb-ctcae-grading`](sdtm-lb-ctcae-grading/) | assign toxicity grades |
-| [`sdtm-lb-findings`](sdtm-lb-findings/) | build one record per collected lab result |
-| [`sdtm-lb-multiform`](sdtm-lb-multiform/) | consolidate four collection forms into one dataset |
-| [`sdtm-lb-reference-range-indicator`](sdtm-lb-reference-range-indicator/) | apply external reference ranges |
-| [`sdtm-relrec-many-to-many`](sdtm-relrec-many-to-many/) | record relationships between events and medications |
-| [`sdtm-suppmh-parent-linkage`](sdtm-suppmh-parent-linkage/) | link qualifiers collected on their own form to a parent record |
-| [`sdtm-suppmh-qualifiers`](sdtm-suppmh-qualifiers/) | reshape extra qualifiers into supplemental records |
-| [`sdtm-vs-unit-standardization`](sdtm-vs-unit-standardization/) | standardize collected results into the study's units |
-| [`sdtm-vs-visit-study-day`](sdtm-vs-visit-study-day/) | attach visit metadata and study day to a result |
-| [`spec-inheritance`](spec-inheritance/) | spec inheritance |
+| Example | Derives | Lifecycle |
+|---|---|---|
+| [`adam-adae-death-outcome`](adam-adae-death-outcome/) | carry each subject's death onto every event | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-event-severity`](adam-adae-event-severity/) | carry each event's severity from its supplemental record | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-occurrence-flags`](adam-adae-occurrence-flags/) | flag the first occurrence at three levels | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-partial-dates`](adam-adae-partial-dates/) | impute partial dates | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-post-dose-onset`](adam-adae-post-dose-onset/) | classify an event by the moment it started | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-post-reference-event`](adam-adae-post-reference-event/) | flag an event after a specific reference event | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-protocol-review-window`](adam-adae-protocol-review-window/) | flag adverse events for protocol review | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-query-flags`](adam-adae-query-flags/) | record which queries a coded event belongs to | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-review-order`](adam-adae-review-order/) | present a subject's events in medical-review order | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-serious-event-listing`](adam-adae-serious-event-listing/) | list the serious adverse events | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-serious-event-sequence`](adam-adae-serious-event-sequence/) | number a subject's serious events in onset order | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-severity-override`](adam-adae-severity-override/) | apply an approved severity correction | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-severity-rank`](adam-adae-severity-rank/) | rank a subject's events by severity | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-string-handlers`](adam-adae-string-handlers/) | clean text and handle invalid IDs | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-treatment-emergent`](adam-adae-treatment-emergent/) | classify an event as treatment-emergent | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adae-worst-severity`](adam-adae-worst-severity/) | flag the worst-severity event per preferred term | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adce-worst-toxicity-grade`](adam-adce-worst-toxicity-grade/) | flag the subject's worst-grade event | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adcm-on-treatment-flag`](adam-adcm-on-treatment-flag/) | flag a medication during treatment | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adeg-bazett-qtc`](adam-adeg-bazett-qtc/) | derive a Bazett-corrected QT parameter | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adeg-fridericia-qtc`](adam-adeg-fridericia-qtc/) | derive a Fridericia-corrected QT parameter | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adeg-rr-interval`](adam-adeg-rr-interval/) | derive an RR interval | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adex-cumulative-dose`](adam-adex-cumulative-dose/) | summarize cumulative exposure | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adex-dose-reduction-flag`](adam-adex-dose-reduction-flag/) | derive a dose reduction flag | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adex-uncollected-exposure`](adam-adex-uncollected-exposure/) | tell an uncollected dose from an absent administration | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adlb-absolute-wbc-differential`](adam-adlb-absolute-wbc-differential/) | derive absolute WBC differentials | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adlb-bds`](adam-adlb-bds/) | build a BDS dataset with baseline and change | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adlb-closest-visit`](adam-adlb-closest-visit/) | select the record closest to a window's target day | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adlb-mean`](adam-adlb-mean/) | calculate each subject's mean result | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adlb-order-sensitive-sum`](adam-adlb-order-sensitive-sum/) | sum floating-point values in source record order | [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adlb-reported-precision`](adam-adlb-reported-precision/) | report a result against the lower limit of normal | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adlb-shift-and-criteria`](adam-adlb-shift-and-criteria/) | classify a result, its shift from baseline, and one criterion | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adoe-study-eye`](adam-adoe-study-eye/) | tell the study eye from the fellow eye | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adqs-subscale-score`](adam-adqs-subscale-score/) | score a questionnaire subscale from its item records | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adrs-best-overall-response`](adam-adrs-best-overall-response/) | select the best overall response | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adrs-best-response-selection`](adam-adrs-best-response-selection/) | prepare assessments for best overall response | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adrs-composite-response`](adam-adrs-composite-response/) | combine efficacy, safety, and discontinuation into one response | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adrs-confirmed-response`](adam-adrs-confirmed-response/) | confirm an objective response | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adrs-measurable-disease`](adam-adrs-measurable-disease/) | derive measurable disease at baseline | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adrs-overall-response-records`](adam-adrs-overall-response-records/) | prepare the overall response records an endpoint reads | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-age-group`](adam-adsl-age-group/) | derive age group | [![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-age-quality-review`](adam-adsl-age-quality-review/) | retain an implausible age for data review | [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-analysis-age`](adam-adsl-analysis-age/) | analysis age | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-bmi-compute`](adam-adsl-bmi-compute/) | compute BMI from height and weight | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-bmi-function`](adam-adsl-bmi-function/) | compute BMI by calling a routine the project supplies | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-completion-flag`](adam-adsl-completion-flag/) | flag the subjects who completed the study | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-crossover-periods`](adam-adsl-crossover-periods/) | derive period-scoped treatments and dates across a washout | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-dependency-order`](adam-adsl-dependency-order/) | derive a chain of population flags | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-disposition`](adam-adsl-disposition/) | select the final subject disposition from DS | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-dose-adjustment-flag`](adam-adsl-dose-adjustment-flag/) | derive a dose adjustment flag from multiple sources | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-duration-weeks-months`](adam-adsl-duration-weeks-months/) | exposure duration in weeks and months | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-geography-normalization`](adam-adsl-geography-normalization/) | normalize collected country and group it into a region | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-identifier-parsing`](adam-adsl-identifier-parsing/) | parse the site from USUBJID with a collected fallback | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-investigator-comment`](adam-adsl-investigator-comment/) | keep an investigator comment exactly as collected | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-last-alive-date`](adam-adsl-last-alive-date/) | derive the last known alive date from multiple sources | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-mapping`](adam-adsl-mapping/) | translate collected values into a standard vocabulary | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-new-anticancer-therapy-date`](adam-adsl-new-anticancer-therapy-date/) | date the subject started new anti-cancer therapy | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-non-finite-values`](adam-adsl-non-finite-values/) | normalize non-finite numeric values to missing | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-population-flags`](adam-adsl-population-flags/) | derive the safety and intent-to-treat flags | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-portable-text`](adam-adsl-portable-text/) | preserve and compare international text predictably | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-randomization-timing`](adam-adsl-randomization-timing/) | record randomization timing | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-rescue-medication`](adam-adsl-rescue-medication/) | select the first rescue medication | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adsl-treatment-selection`](adam-adsl-treatment-selection/) | select actual treatment and its duration from EX | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adtr-current-nadir`](adam-adtr-current-nadir/) | derive the current nadir | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adtr-sum-of-target-diameters`](adam-adtr-sum-of-target-diameters/) | sum the target lesion diameters at each assessment | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adtte-duration-of-response`](adam-adtte-duration-of-response/) | derive the duration of a response | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adtte-first-adverse-event`](adam-adtte-first-adverse-event/) | derive the time to first adverse event | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adtte-overall-survival`](adam-adtte-overall-survival/) | derive overall survival | [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-adtte-progression-free-survival`](adam-adtte-progression-free-survival/) | derive progression-free survival | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-advs-analysis-visit`](adam-advs-analysis-visit/) | assign records to analysis windows | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-advs-analysis-window-table`](adam-advs-analysis-window-table/) | assign analysis windows from the study's window table | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-advs-body-mass-index`](adam-advs-body-mass-index/) | derive body mass index | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-advs-body-surface-area`](adam-advs-body-surface-area/) | derive a body surface area parameter | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-advs-growth-percentile`](adam-advs-growth-percentile/) | express a measurement as a growth percentile | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-advs-mean-arterial-pressure`](adam-advs-mean-arterial-pressure/) | derive mean arterial pressure | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-advs-once-measured-carry-forward`](adam-advs-once-measured-carry-forward/) | carry forward a once-measured characteristic | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`adam-advs-prior-character-result`](adam-advs-prior-character-result/) | retain the latest earlier character result | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adae-review-condition-arithmetic`](negative-adae-review-condition-arithmetic/) | reject a review flag whose condition performs arithmetic | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adae-review-text-date`](negative-adae-review-text-date/) | reject a review flag that compares a date with text | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adae-review-unknown-date`](negative-adae-review-unknown-date/) | reject a review flag that names an unavailable date | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adam-adeg-pre-existing-rrr`](negative-adam-adeg-pre-existing-rrr/) | reject a collected RR interval | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adam-adsl-stratification-reconciliation`](negative-adam-adsl-stratification-reconciliation/) | reconcile randomization strata | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adex-relative-dose-intensity`](negative-adex-relative-dose-intensity/) | reject a dose intensity measured against a per-record plan | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adex-single-dose-expansion`](negative-adex-single-dose-expansion/) | reject one record per administration built from an aggregate dose | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adlb-absolute-wbc-duplicate`](negative-adlb-absolute-wbc-duplicate/) | reject duplicate WBC inputs for an absolute differential | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adlb-computed-parameter`](negative-adlb-computed-parameter/) | reject a parameter computed from the dataset being built | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adlb-multiple-baseline-records`](negative-adlb-multiple-baseline-records/) | reject a subject with two baseline records for one parameter | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adrs-partial-response-after-complete-response`](negative-adrs-partial-response-after-complete-response/) | reject a partial response recorded after a complete response | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adsl-cyclic-parent`](negative-adsl-cyclic-parent/) | reject a circular chain of shared definitions | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adsl-inherited-output`](negative-adsl-inherited-output/) | reject an inherited artifact layout | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adsl-invalid-parent-clear`](negative-adsl-invalid-parent-clear/) | reject removal of a required variable property | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adsl-parent-version-mismatch`](negative-adsl-parent-version-mismatch/) | reject shared definitions from another language version | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adsl-randomization-date-retyped`](negative-adsl-randomization-date-retyped/) | reject a randomization date described twice | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adsl-remote-parent`](negative-adsl-remote-parent/) | reject shared definitions from a remote location | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-adsl-subject-reference`](negative-adsl-subject-reference/) | reject a malformed subject reference | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-advs-overlapping-analysis-windows`](negative-advs-overlapping-analysis-windows/) | reject overlapping analysis windows | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-all-or-none-partial-row`](negative-all-or-none-partial-row/) | reject a row with only some paired dates present | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-allowed-values-mismatch`](negative-allowed-values-mismatch/) | reject a recorded sex the study does not recognize | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-baseline-flag-tied-date`](negative-baseline-flag-tied-date/) | reject a baseline chosen between two same-day results | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-baseline-value-multiple-flags`](negative-baseline-value-multiple-flags/) | reject a baseline carried from two flagged visits | [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-coalesce-self-reference`](negative-coalesce-self-reference/) | reject a severity carried from its own column | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-column-forward-reference`](negative-column-forward-reference/) | reject a doubled value built from a later column | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-column-type-unknown`](negative-column-type-unknown/) | reject an analysis value with an ambiguous numeric type | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-compute-aggregate-function`](negative-compute-aggregate-function/) | reject a total written as a formula | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-compute-comparison-operator`](negative-compute-comparison-operator/) | reject an above-range flag written as a formula | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-compute-division-by-zero`](negative-compute-division-by-zero/) | reject a percent change from a zero baseline | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-compute-integer-overflow`](negative-compute-integer-overflow/) | reject a cell total larger than the counter can hold | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-compute-ln-of-zero`](negative-compute-ln-of-zero/) | reject a log result from an undetectable value | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-compute-qualified-identifier`](negative-compute-qualified-identifier/) | reject a doubled dose read straight from exposure | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-compute-sqrt-of-negative`](negative-compute-sqrt-of-negative/) | reject a body surface area from a negative weight | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-conversion-incomplete-date`](negative-conversion-incomplete-date/) | reject an event start date that names no day | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-conversion-non-integral`](negative-conversion-non-integral/) | reject a pulse rate recorded between whole beats | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-conversion-unparseable-number`](negative-conversion-unparseable-number/) | reject a viral load reported below the assay limit | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-cut-non-numeric-source`](negative-cut-non-numeric-source/) | reject age bands grouped from a coded value | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-dataset-path-absolute`](negative-dataset-path-absolute/) | reject reference limits named by an unapproved location | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-dataset-path-directory`](negative-dataset-path-directory/) | reject reference limits that name a folder | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-dataset-path-missing`](negative-dataset-path-missing/) | reject reference limits the study does not hold | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-dataset-path-parent-escape`](negative-dataset-path-parent-escape/) | reject reference limits stored above the study | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-dataset-path-symlink`](negative-dataset-path-symlink/) | reject reference limits reached through a stand-in name | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-dataset-path-url`](negative-dataset-path-url/) | reject reference limits named by a web address | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-date-diff-bounds-unit`](negative-date-diff-bounds-unit/) | reject endpoint counting beside a month count | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-date-diff-datetime-endpoints`](negative-date-diff-datetime-endpoints/) | reject counting days between two moments | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-date-impute-invalid-source`](negative-date-impute-invalid-source/) | reject a start date completed from text that is not a date | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-date-impute-month-out-of-range`](negative-date-impute-month-out-of-range/) | reject a start date completed with no month of the year | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-date-impute-nonexistent-day`](negative-date-impute-nonexistent-day/) | reject an end date completed past the end of its month | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-date-impute-unknown-day-rule`](negative-date-impute-unknown-day-rule/) | reject a start date completed with an unrecognised day | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-date-precision-invalid-source`](negative-date-precision-invalid-source/) | reject a completeness flag read from text that is not a date | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-datetime-zone-offset`](negative-datetime-zone-offset/) | reject an event start recorded against another clock | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-function-contract-mismatch`](negative-function-contract-mismatch/) | reject an unavailable project-routine contract | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-greatest-incomparable-sources`](negative-greatest-incomparable-sources/) | reject a last-known-alive date taken from a day number | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-group-count-without-id`](negative-group-count-without-id/) | reject an unnamed baseline-count rule | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-ingest-unparseable-field`](negative-ingest-unparseable-field/) | reject a dose recorded with its unit | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-keys-conflicting-values`](negative-keys-conflicting-values/) | reject two ages collected for one subject | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-keys-internal-column`](negative-keys-internal-column/) | reject a site-scoped subject identity | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-keys-missing-value`](negative-keys-missing-value/) | reject a record that no analysis visit identifies | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-least-incomparable-sources`](negative-least-incomparable-sources/) | reject an earliest-alive date taken from a day number | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-literal-non-scalar`](negative-literal-non-scalar/) | reject a fixed value written as a structure | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-mapping-case-fold-collision`](negative-mapping-case-fold-collision/) | reject a smoking flag whose dictionary answers twice | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-mapping-from-duplicate-key`](negative-mapping-from-duplicate-key/) | reject a reference range stated twice | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-mapping-from-key-length-mismatch`](negative-mapping-from-key-length-mismatch/) | reject a reference range chosen by an unpaired key | [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-mapping-from-partial-key`](negative-mapping-from-partial-key/) | reject a reference range chosen without a sex | [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-mapping-from-unmapped-key`](negative-mapping-from-unmapped-key/) | reject a result with no reference range | [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-mapping-unmapped-value`](negative-mapping-unmapped-value/) | reject an unmapped response | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-matches-unreadable-pattern`](negative-matches-unreadable-pattern/) | reject a sex code checked against an unreadable match rule | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-not-missing-absent-age`](negative-not-missing-absent-age/) | reject a missing age | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-output-duplicate-subject`](negative-output-duplicate-subject/) | reject a repeated demographics record | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-output-order-repeated-term`](negative-output-order-repeated-term/) | reject an order that places one value twice | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-output-order-unknown-column`](negative-output-order-unknown-column/) | reject a submission order over a value the dataset does not carry | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-previous-non-missing-non-variable-source`](negative-previous-non-missing-non-variable-source/) | reject carrying forward a fixed value | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-query-slot-overflow`](negative-query-slot-overflow/) | reject an event belonging to more queries than it has places | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-rank-invalid-method`](negative-rank-invalid-method/) | reject an unlisted tie-numbering method | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-record-lookup-id-collision`](negative-record-lookup-id-collision/) | reject a first treatment named after its own source | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-record-lookup-incomparable-range`](negative-record-lookup-incomparable-range/) | reject an epoch range with incomparable endpoints | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-record-lookup-incomplete-key`](negative-record-lookup-incomplete-key/) | reject a reference limit chosen without a sex | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-record-lookup-unmatched-key`](negative-record-lookup-unmatched-key/) | reject a result with no reference range | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-record-lookup-unordered-choice`](negative-record-lookup-unordered-choice/) | reject a treatment and dose taken from an unchosen record | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-record-lookup-unordered-keep`](negative-record-lookup-unordered-keep/) | reject a treatment ordered but not chosen | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-record-lookup-unpaired-key`](negative-record-lookup-unpaired-key/) | reject a reference limit matched against nothing | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-row-number-numeric-filter`](negative-row-number-numeric-filter/) | reject a sequence filtered by a number | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-row-value-self-reference`](negative-row-value-self-reference/) | reject a weight carried forward from a carried-forward weight | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-row-value-zero-offset`](negative-row-value-zero-offset/) | reject a previous weight that names no earlier visit | [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-sex-code-pattern-mismatch`](negative-sex-code-pattern-mismatch/) | reject a recorded sex outside the accepted codes | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-sex-collected-twice`](negative-sex-collected-twice/) | reject a subject whose sex was collected twice | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-source-duplicate-field-name`](negative-source-duplicate-field-name/) | reject a subject listing that names one field twice | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-source-duplicate-right-key`](negative-source-duplicate-right-key/) | reject duplicate subject enrichment | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-source-empty-field-name`](negative-source-empty-field-name/) | reject a subject listing with an unnamed field | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-source-filter-unreachable-field`](negative-source-filter-unreachable-field/) | reject a selection made on a value the records do not carry | [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-source-filter-without-records`](negative-source-filter-without-records/) | reject a selection over a value that is already one value | [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-source-invalid-text`](negative-source-invalid-text/) | reject a site name stored in another encoding | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-source-missing-sentinel`](negative-source-missing-sentinel/) | reject an age recorded as NA | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-source-output-self-reference`](negative-source-output-self-reference/) | reject a parameter that reads the dataset it is part of | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-source-record-width`](negative-source-record-width/) | reject a subject listing record with an extra field | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-source-undeclared-field`](negative-source-undeclared-field/) | reject a copy from an undeclared field | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-source-unknown-profile`](negative-source-unknown-profile/) | reject a subject listing stored under an unnamed format | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-source-unterminated-quote`](negative-source-unterminated-quote/) | reject a comment whose quoted text never closes | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-str-extract-undeclared-group`](negative-str-extract-undeclared-group/) | reject a site identifier taken from an uncaptured part | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-str-lower-non-string-source`](negative-str-lower-non-string-source/) | reject a site name folded from a number | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-study-day-datetime-input`](negative-study-day-datetime-input/) | reject a study day measured from a moment | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-sum-non-numeric-source`](negative-sum-non-numeric-source/) | reject a severity burden totalled from severity words | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-to-date-date-source`](negative-to-date-date-source/) | reject extracting a date from a date | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-types-unknown-field`](negative-types-unknown-field/) | reject a total over a field the source does not have | [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-unique-duplicate-values`](negative-unique-duplicate-values/) | reject a site shared by two subjects | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-usubjid-exceeds-length`](negative-usubjid-exceeds-length/) | reject a subject identifier longer than the study permits | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-variable-nested-expression`](negative-variable-nested-expression/) | reject an uppercased country chosen inside the same step | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`negative-verification-implausible-age`](negative-verification-implausible-age/) | reject an implausible age | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`odm-form-scoped-item-resolution`](odm-form-scoped-item-resolution/) | resolve items within their collection form | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-ae-dictionary-coding`](sdtm-ae-dictionary-coding/) | code reported terms against a medical dictionary | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-ae-seriousness-criteria`](sdtm-ae-seriousness-criteria/) | mark serious events from collected seriousness criteria | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-dm-arm-assignment`](sdtm-dm-arm-assignment/) | assign planned and actual arms | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-dm-basic`](sdtm-dm-basic/) | build one subject record from collected data | [![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-dm-death`](sdtm-dm-death/) | derive death date and flag from disposition and adverse events | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-dm-metadata-contract`](sdtm-dm-metadata-contract/) | declare the metadata a submission needs | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-dm-reference-dates`](sdtm-dm-reference-dates/) | derive the reference dates from EX, DS, and AE | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-ds-disposition-sequence`](sdtm-ds-disposition-sequence/) | number each subject's disposition records in date order | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-ex-combination-regimen`](sdtm-ex-combination-regimen/) | represent a combination regimen | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-fa-fever-occurrence`](sdtm-fa-fever-occurrence/) | fever occurrence | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-lb-conditional-compartments`](sdtm-lb-conditional-compartments/) | tell an inapplicable compartment from an uncollected sample | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-lb-ctcae-grading`](sdtm-lb-ctcae-grading/) | assign toxicity grades | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-lb-findings`](sdtm-lb-findings/) | build one record per collected lab result | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-lb-multiform`](sdtm-lb-multiform/) | consolidate four collection forms into one dataset | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-lb-reference-range-indicator`](sdtm-lb-reference-range-indicator/) | apply external reference ranges | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-relrec-many-to-many`](sdtm-relrec-many-to-many/) | record relationships between events and medications | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-suppmh-parent-linkage`](sdtm-suppmh-parent-linkage/) | link qualifiers collected on their own form to a parent record | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-suppmh-qualifiers`](sdtm-suppmh-qualifiers/) | reshape extra qualifiers into supplemental records | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-vs-unit-standardization`](sdtm-vs-unit-standardization/) | standardize collected results into the study's units | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`sdtm-vs-visit-study-day`](sdtm-vs-visit-study-day/) | attach visit metadata and study day to a result | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |
+| [`spec-inheritance`](spec-inheritance/) | spec inheritance | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle) |

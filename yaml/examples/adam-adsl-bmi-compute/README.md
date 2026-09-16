@@ -1,6 +1,8 @@
 # Compute body mass index from height and weight
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-bmi-compute.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-bmi-compute.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)
+
+**Lifecycle:** reviewed - has discussion comments or GitHub issues.
 
 **Goal:** compute body mass index (`BMI`) from collected height
 and weight.

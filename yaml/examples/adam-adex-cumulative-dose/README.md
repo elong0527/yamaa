@@ -1,6 +1,8 @@
 # Summarize cumulative exposure
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adex-cumulative-dose.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adex-cumulative-dose.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)
+
+**Lifecycle:** reviewed - has discussion comments or GitHub issues.
 
 **Goal:** summarize exposure for each planned subject-treatment,
 carrying `EXTRT` (treatment name) and `EXDOSU` (dose units) through

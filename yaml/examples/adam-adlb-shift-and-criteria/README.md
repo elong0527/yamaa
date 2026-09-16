@@ -1,6 +1,8 @@
 # Classify each result, its shift from baseline, and one criterion
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adlb-shift-and-criteria.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adlb-shift-and-criteria.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)
+
+**Lifecycle:** reviewed - has discussion comments or GitHub issues.
 
 **Goal:** derive `ANRIND`, `BASE`, `BNRIND`, `SHIFT1`, `R2BASE`,
 `CRIT1`, and `CRIT1FL`: mark where each analysis value sits

@@ -1,6 +1,8 @@
 # Carry each event's severity into ADAE
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-event-severity.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adae-event-severity.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)
+
+**Lifecycle:** reviewed - has discussion comments or GitHub issues.
 
 **Goal:** one Analysis Dataset for Adverse Events (ADAE) row per
 collected adverse event (AE), carrying `AEDECOD` and `AESEV`.

@@ -344,7 +344,7 @@ class DashboardTests(unittest.TestCase):
             '<a class="lifecycle-badge" href="https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle">',
             finalized,
         )
-        draft = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
+        draft = generate.render_example(generate.EXAMPLES / "adam-adlb-order-sensitive-sum").decode("ascii")
         self.assertIn('<img src="https://img.shields.io/badge/Lifecycle-draft-lightgrey"', draft)
         self.assertIn('alt="Lifecycle: draft"', draft)
         self.assertIn(

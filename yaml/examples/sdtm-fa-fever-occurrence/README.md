@@ -1,6 +1,8 @@
 # Derive fever occurrence from temperature results
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-fa-fever-occurrence.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-fa-fever-occurrence.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)
+
+**Lifecycle:** reviewed - has discussion comments or GitHub issues.
 
 **Goal:** derive `FASEQ`, `FATESTCD`, `FATEST`, `FACAT`, `FASCAT`,
 `FAOBJ`, `FAORRES`, `FASTRESC`, and `VSSTRESN` for each qualifying

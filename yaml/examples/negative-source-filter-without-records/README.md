@@ -1,6 +1,8 @@
 # Reject a selection over a value that is already one value
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-filter-without-records.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-source-filter-without-records.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)
+
+**Lifecycle:** draft - first commit, no review yet.
 
 **Goal:** carry the planned arm (ARM) and the actual arm (ACTARM) for each
 subject.

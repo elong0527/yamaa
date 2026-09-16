@@ -1,6 +1,8 @@
 # Reject a reference range chosen without a sex
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-mapping-from-partial-key.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-mapping-from-partial-key.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)
+
+**Lifecycle:** draft - first commit, no review yet.
 
 **Goal:** carry sex and the collected result into the output and
 attach the upper limit of normal (`ANRHI`) chosen by test and sex.
