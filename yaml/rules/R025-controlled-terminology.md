@@ -31,16 +31,15 @@ value must match.
 one codelist statement, so a study upgrades a published version in one place.
 
 **R025-2.** `name` is the codelist's human-readable name and is unique across
-the document's codelists. `id` and `name` are separate because `id` is what a
-specification writes and `name` is what a reader sees, and forcing the two to
+the document's codelists. `id` and `name` are separate. `id` is what a
+specification writes, and `name` is what a reader sees. Forcing the two to
 match would make renaming a codelist a change to every specification that
 binds the codelist.
 
 **R025-3.** `standard` names a declared standard of type `CT` and states which
 published terminology this codelist is drawn from. A codelist that omits
-`standard` is sponsor-defined. Exactly one of published or sponsor-defined
-holds for any codelist, and omitting `standard` declares sponsor-defined
-rather than unknown.
+`standard` is sponsor-defined rather than unknown. Exactly one of published
+or sponsor-defined holds for any codelist.
 
 **R025-4.** `data_type` is `text`, `integer`, or `float` and defaults to
 `text`. Every coded value must be of the declared `data_type`.
@@ -135,8 +134,8 @@ terminology.
 **R025-21.** Every codelist the study document declares must be named by at
 least one binding among the datasets the study document represents. An
 unreferenced codelist is rejected rather than emitted, because the codelist
-would put terminology into a submission that no column carries, and because
-the usual cause is a binding that misspells its identifier.
+would put terminology into a submission that no column carries. The
+usual cause is a binding that misspells its identifier.
 
 ## Rationale
 
@@ -147,10 +146,10 @@ terminology. Enforcing an extensible or external list would reject values the
 standard admits. Agreement
 with `allowed_values` is exact equality because any other relation leaves the
 generated document and the executed run making different claims about the same
-column, and a submission document whose claims the run does not support is the
+column. A submission document whose claims the run does not support is the
 failure this design exists to prevent. Decode and rank are all-or-nothing
-within a codelist: a partially decoded list mixes two kinds of list, and a
-reader cannot tell an omitted decode from an absent decode.
+within a codelist. A partially decoded list mixes two kinds of list.
+A reader cannot tell an omitted decode from an absent decode.
 
 ## Errors
 
