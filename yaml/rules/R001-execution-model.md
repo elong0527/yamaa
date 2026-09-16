@@ -49,7 +49,7 @@ more than one, every entry must state `dataset`.
    Missing values equal missing values. Every group produces one candidate row.
 
 **R001-8.** Groups are ordered by the position of their first input record.
-Within a group, records retain input order. For each group, evaluate every
+Within a group, input order is kept. For each group, evaluate every
 row derivation once and complete stages 1 through 4 of the R005 lifecycle.
 Then evaluate the row template's `filter`, when present, over the candidate's
 completed unqualified columns. Append the candidate only when the `filter`
@@ -78,9 +78,9 @@ upstream. The expanded records enter the specification as ordinary input.
 declared. When `rows` is absent or empty, row construction derives the
 distinct combination of `keys` over the input records, in first-appearance
 order, and that key table is the output row set. The key table is standalone:
-one row per unique key combination, with no link back to the input records,
-so the input records a key combination was derived from decide its column
-values and never how many rows the artifact carries. `base` is required
+The key table is standalone: one row per unique key combination, with no link
+back to the input records. The input records a key combination was derived
+from decide its column values, never how many rows the artifact carries.
 in that case, unless `input` declares exactly one dataset, which
 supplies the input records.
 
@@ -98,8 +98,8 @@ grain. The specification omits `rows` instead.
 **R001-12b.** A column derivation must yield exactly one value per row, and
 the derivation counts values rather than the records carrying them:
 repeated readings of one value are that one value, and two input records
-of one key combination carrying different present values are two values,
-which fails under R001-44. A source `filter` decides which of those
+of one key combination carrying different present values are two values; that
+outcome fails under R001-44. A source `filter` decides which of those
 records the derivation reads before that count, which R003-21 defines. A
 missing result is still the row's one value but never creates a second
 value for the R001-44 count. In a specification without `rows`, a key
@@ -118,10 +118,10 @@ a leaf. YAML mapping order has no execution meaning.
 own `group_by`. Aggregate expressions evaluate in the contexts R007 permits.
 All other expressions return one value per current row.
 
-**R001-15.** During group-driven row construction, a source variable of the
+**R001-15.** During group-driven row construction, a source variable of the row
 template's input dataset is a scalar only when that exact qualified variable
 occurs in the row template's `group_by`. An aggregate expression may instead
-reduce the records of the current group under R007 and R013. Other row
+reduce the input records of the current group under R007 and R013. Other row
 expressions consume group keys, literals, earlier row-derived columns, or a
 record lookup with already-complete matching values. That consumption
 follows dependency order.
@@ -160,8 +160,8 @@ those four as dependency-free.
 dependency graph. Row derivations cannot depend on values produced only
 during the column phase. Every unqualified identifier in a grouped
 `row.filter` must resolve to a column derived by that same row template. That
-grouped `filter` is not a derivation and adds no graph edge between columns.
-That grouped `filter` runs only after all columns have completed.
+That grouped `filter` is not a derivation, adds no graph edge between columns,
+and runs only after all columns have completed.
 
 **R001-28.** After row construction, build the column dependency graph. Every
 dependency must refer to a column declared earlier. Evaluate columns in

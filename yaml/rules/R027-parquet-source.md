@@ -9,7 +9,7 @@ applies_to: [dataset_source, dataset_class.path]
 
 ## Intent
 
-Fix what a Parquet source delivers so an artifact written by one conforming
+State what a Parquet source delivers so an artifact written by one conforming
 runtime can be read by another without losing its types, field order, record
 order, missing values, or collected empty strings.
 
@@ -49,7 +49,7 @@ this closed mapping, which is the inverse of R020-20:
 | `INT64` with no logical type | `int` |
 | `DOUBLE` with no logical type | `float` |
 | `INT32` annotated `Date` | `date` |
-| `INT64` annotated `Timestamp`, microseconds, not adjusted to UTC | `datetime` |
+| `INT64` annotated `Timestamp`, microseconds, UTC-unadjusted | `datetime` |
 
 **R027-6.** The mapping is exact. A different physical type, logical type,
 timestamp unit, or timezone is not converted or inferred. Both nullable and

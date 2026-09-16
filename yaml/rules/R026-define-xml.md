@@ -56,8 +56,8 @@ form.
 
 **R026-4.** `creation_datetime` is declared rather than read from a clock.
 Two runs of the same inputs must produce the same bytes, and a timestamp taken
-at run time would make every run differ from every other. `file_oid` is
-declared for the same reason: an identity minted per run is not reproducible.
+at run time would make all runs differ. `file_oid` is declared for
+byte-identical runs: an identity minted per run is not reproducible.
 
 **R026-5.** `context` states whether the document is used in a submission.
 `Submission` adds the requirements R026-46 lists. Nothing below is relaxed by
@@ -507,9 +507,9 @@ silently requires two specifications to agree forever. Declared timestamps and
 file identity make generation reproducible. A document generated from a clock
 differs on every run, defeating the golden fixture and review. Bytes, not
 information, are fixed because a diff compares bytes. R020 applies the same
-rule to the `csv` profile. Deferrals are refusals, not silences. Deferrals
-reject specifications that carry metadata the generator would quietly drop. A
-submission document must never carry metadata the generator would quietly drop.
+rule to the `csv` profile. Deferrals reject specifications that carry metadata
+the generator would quietly drop. A submission document must never carry such
+metadata.
 
 ## Errors
 
