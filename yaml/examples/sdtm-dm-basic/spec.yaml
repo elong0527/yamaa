@@ -7,7 +7,7 @@ input:
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, SEX, AGE, ARM, ACTARM]
+  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, SEX, AGE, ARM, ACTARM, ARMNRS]
 
 columns:
   - name: DOMAIN
@@ -60,14 +60,22 @@ columns:
     type: str
     label: Description of Planned Arm
     derivation:
-      coalesce:
-        sources:
-          - filter: ODM.ItemOID = 'IT.DM.ARM'
-            variable: ODM.Value
-        default: Unassigned
+      source:
+        filter: ODM.ItemOID = 'IT.DM.ARM'
+        variable: ODM.Value
 
   - name: ACTARM
     type: str
     label: Description of Actual Arm
     derivation:
       source: ARM
+
+  - name: ARMNRS
+    type: str
+    label: Reason Subject Not Assigned to Treatment
+    derivation:
+      case:
+        branches:
+          - when: "ARM IS NULL"
+            then:
+              literal: Not assigned to treatment arm
