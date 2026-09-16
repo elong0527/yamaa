@@ -498,18 +498,18 @@ avoids.
 ## Rationale
 
 A Define-XML document is study-level. A specification is dataset-level. The
-composition needs its own document. Deriving it from a directory makes
-submission contents a property of the file system. Every identifier comes from
-declared names. A reviewer reads a regenerated document as a diff. A counter
-or hash makes an unrelated edit renumber the file. Definitions are not shared
-between datasets because sharing silently requires two specifications to agree
-forever. Declared timestamps and file identity make generation reproducible. A
-document generated from a clock differs on every run, defeating the golden
-fixture and review. Bytes are fixed because an artifact reviewed as a diff is
-compared as bytes. R020 applies the same rule to the `csv` profile. Deferrals
-are refusals, not silences. They prevent a specification from carrying metadata
-that the generator quietly drops. A submission document must never have that
-failure.
+composition needs its own document. Deriving a submission document from a
+directory makes submission contents a property of the filesystem. Every
+identifier comes from declared names. A reviewer reads a regenerated document
+as a diff of the previous document. A counter or hash makes an unrelated edit
+renumber the file. Definitions are not shared between datasets because sharing
+silently requires two specifications to agree forever. Declared timestamps and
+file identity make generation reproducible. A document generated from a clock
+differs on every run, defeating the golden fixture and review. Bytes, not
+information, are fixed because a diff compares bytes. R020 applies the same
+rule to the `csv` profile. Deferrals are refusals, not silences. Deferrals
+reject specifications that carry metadata the generator would quietly drop. A
+submission document must never carry metadata the generator would quietly drop.
 
 ## Errors
 
