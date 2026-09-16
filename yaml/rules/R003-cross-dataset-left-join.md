@@ -18,8 +18,8 @@ This rule owns the implicit join from a qualified cross-dataset source and
 the source's right-side reduction. R007 owns `mapping_from`, whose keys are
 declared, not derived from output `keys`, and window or row-construction
 `filter` uses. R015 owns a named record lookup that reaches one record for
-several columns. The named record lookup performs the join and has no other
-way to reach a right side.
+several columns. A named record lookup performs its own join and has no
+other way to reach a right side.
 
 ## Terminology
 
@@ -50,15 +50,15 @@ order.
 **R003-13.** Right records missing an applicable key cannot match. Key names
 must match exactly. R019 defines string key equality.
 
-**R003-13a.** The two sides of an applicable key must also carry mutually
-comparable types under R007-31, and the match converts no operand. R014-4
-gives an undeclared field of a typeless container the type `str`, so an
-output key of another type matches such a field nowhere: every row would
-receive missing and a complete right side would be reported as an absent
-record. A key typed on one side and left to R014's default on the other is
-a declaration to repair, not a comparison to widen. R007-19 states
-the same between an operation's inputs, and R015-11 between a range's
-operands; the join is no exception.
+**R003-13a.** The two sides of an applicable key must have mutually
+comparable types under R007-31. The match converts no operand. R014-4 gives
+an undeclared field of a typeless container the type `str`. An output key of
+another type matches no such field. Without mutually comparable types, every
+row would receive missing. A complete right side would be reported as an
+absent record. A key typed on one side and given R014's default on the other
+needs repair, not a wider comparison. R007-19 sets the same requirement for
+operation inputs. R015-11 sets the same requirement for range operands. The
+join also requires comparable types.
 
 ## Declared-key lookup
 
@@ -67,9 +67,9 @@ adding one column; they differ only in where the keys come from.
 
 **R003-15.** This rule's join derives keys from output `keys` that also
 exist on the right side. `mapping_from` declares its pairs of source
-variable and right-side column without consulting output `keys`, and so
-reaches a right side keyed on something else or not unique on the
-applicable keys. R007 defines the `mapping_from` semantics.
+variable and right-side column without consulting output `keys`, so
+`mapping_from` reaches a right side keyed on something else or not unique
+on the applicable keys. R007 defines the `mapping_from` semantics.
 
 ## Right-side reduction
 
@@ -81,10 +81,10 @@ the aggregate's right side.
 partition. R013 reduces eligible records in that partition to one value.
 The reduced value joins back without changing row count.
 
-**R003-18.** The qualifier may equal the current row template's
-input dataset: a scalar source then reads the current input
-record, while an aggregate reads that dataset. R007 registers
-the expression and R013 defines the computation.
+**R003-18.** The qualifier may equal the input dataset of the current row
+template. A scalar source then reads the current input record. An
+aggregate then reads that dataset. R007 registers the expression. R013
+defines the computation.
 
 **R003-18a.** A specification without `rows` reads that dataset the same
 way, over the records its key combination was derived from, which R001-12
@@ -102,8 +102,8 @@ aggregate:
 ```
 
 **R003-20.** A reduction may declare a `group_by` coarser than the
-applicable keys. The join then matches on `group_by` instead; R013
-requires the columns to be output keys.
+applicable keys. The join then matches on `group_by` instead. R013
+requires the `group_by` columns to be output keys.
 
 **R003-21.** A structured `source` may declare `filter`. It selects which
 right-side records the source may read, before the source reaches one,
@@ -145,12 +145,12 @@ left row.
 **R003-25.** The aggregate's `between` declaration names one `value` the
 current row reads and at least one `lower` or `upper` column on the right.
 
-**R003-26.** A record is eligible when every declared comparison holds:
-`lower <= value` and `value <= upper`. Every stated endpoint is
-inclusive.
+**R003-26.** A record is eligible when every declared comparison holds.
+The comparisons are `lower <= value` and `value <= upper`. Every stated
+endpoint is inclusive.
 
 **R003-27.** A missing current-row value empties the aggregate's right
-side for that row, and the result is missing; the missing value never
+side for that row. The result is missing. The missing value never
 silently removes the narrowing.
 
 **R003-28.** A right-side record missing a declared bound is ineligible.
@@ -158,8 +158,8 @@ R013 defines the aggregate contract.
 
 **R003-29.** A reduction `filter` is not `row.filter`. R001 makes an
 ungrouped row filter select input records before row derivation and a
-grouped row filter select completed candidate groups; neither is a
-right-side reduction filter.
+grouped row filter select completed candidate groups. Neither row filter
+is a right-side reduction filter.
 
 ## Multiple matches
 
@@ -167,27 +167,24 @@ right-side reduction filter.
 
 **R003-31.** A structured source may declare `multiple_matches` as the
 local, explicit relaxation defined by R008. The `order_by` uses the
-order terms defined by R007, so a right-side selection declares
+order terms defined by R007. A right-side selection therefore declares
 direction and null placement as a window does.
 
 **R003-32.** An aggregate does not declare `multiple_matches`.
 
 ## Rationale
 
-Join keys come from output `keys` so specifications do not repeat keys
-for each cross-dataset reference, while `mapping_from` declares separate
-pairs for right sides keyed on something else. Reduction yields at most
-one record per grouping key, so an aggregate never meets multiple
-matches. A reduction `group_by` coarser than the applicable keys changes
-what the join matches on, which is why R013 requires those columns to be
-output keys.
+Join keys come from output `keys`. Specifications do not repeat keys for each
+cross-dataset reference. `mapping_from` declares separate pairs for right
+sides keyed on something else. A reduction yields at most one record per
+grouping key, so an aggregate never meets multiple matches. A reduction
+`group_by` coarser than applicable keys changes the join keys. R013 requires
+`group_by` columns to be output keys.
 
-Requiring the two sides of an applicable key to be comparable answers the
-same hazard as the key inference: a join that is well formed and unique but
-still matches nothing reports a complete right side as an absent record.
-Refusing the match makes the missing `types` declaration visible, where
-converting an operand would hide it and leave every runtime free to convert
-differently.
+Comparable key types prevent an empty but otherwise valid join from reporting
+a complete right side as absent. Refusing a comparison makes a missing `types`
+declaration visible. Converting an operand would hide the missing declaration
+and let each runtime choose a conversion.
 
 ## Errors
 
@@ -219,5 +216,6 @@ output column, a grouped row template's source reads one group key
 
 **R003-39.** Validation reports the inferred applicable keys for every
 qualified source. A reviewer sees which same-named columns the join
-matches on, the type each side declares for the columns, and the coarser
-grain a reduction declared in place of the keys.
+matches on. A reviewer sees the type each side declares for those columns.
+A reviewer sees the coarser grain a reduction declared in place of the
+keys.

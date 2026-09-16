@@ -11,18 +11,17 @@ applies_to: [root.output, output.path, output.decimals, output.violation_log]
 ## Intent
 
 Define how a completed, ordered primary artifact and any R009 violation log
-become bytes. This rule defines containers, value text, missing and empty
+become bytes. This rule specifies containers, value text, missing and empty
 strings, float display precision, and target replacement.
 
 ## Boundaries
 
-This rule begins where R005 ends. R005 owns which columns the artifact has,
-their order, which rows it holds, and the order those rows leave in; nothing
-here can change any of them. R011 owns what value a column holds and the text a
-value carries when it is converted to `str`, and defers to this rule the one
-display rounding that happens after every calculation. R016 owns the canonical
-text of a `date` and a `datetime`. R019 owns the contents of a string, the
-failure of ill-formed encoded text, and the order of two strings.
+This rule starts where R005 ends. R005 owns the artifact's columns, their
+order, its rows, and row order. R020 cannot change them. R011 owns column
+values and the text conversion to `str` produces. R020 owns the one display
+rounding after every calculation. R016 owns the canonical text of a `date` and
+`datetime`. R019 owns string contents, ill-formed-text failure, and string
+order.
 
 R014 owns the other direction. It states what a stored field means when a
 specification reads it, and `csv` below is the writing counterpart of the
@@ -228,11 +227,11 @@ under `csv`, whose byte guarantee is exactly that.
 
 ### Floats are stored, not rendered
 
-**R020-29.** A `float` reaches this profile as its derivation's binary64 value
-produced. `output.decimals` does not apply, and no rounding happens on the way
-out: a consumer that reads the artifact back receives the value the calculation
-used. Storing a container's native double is not a display, and this design
-rounds once, at a display.
+**R020-29.** A `float` enters this profile as the binary64 value its derivation
+produced. `output.decimals` does not apply. No rounding happens on output, so a
+consumer that reads the artifact receives the value the calculation used.
+Storing a container's native double is not display. This design rounds once,
+at display.
 
 ## Display precision
 
@@ -254,10 +253,10 @@ verification, key, or order term ever sees a rounded value, and changing
 
 ### The rounding is exact and host-independent
 
-**R020-33.** Every binary64 value is exactly some decimal fraction. Round that
-exact value: multiply it by ten raised to `n`, round the product to an integer
-with a tie going away from zero, and divide by ten raised to `n` again. A value
-that rounds to zero is written without a sign.
+**R020-33.** Each binary64 value is an exact decimal fraction. To round it,
+multiply by ten raised to `n`, round the product to an integer with a tie away
+from zero, then divide by ten raised to `n`. Write a value that rounds to zero
+without a sign.
 
 **R020-34.** The tie is decided on the exact value, never on a shortened
 representation of it, and the difference is observable:

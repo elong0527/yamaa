@@ -64,10 +64,10 @@ temporal    := "DATE" string | "DATETIME" string
 ```
 
 **R004-3.** `grammar/predicate.yaml` is the single grammar source. The block
-above renders the file. Its `reserved` list closes the keywords below. Its
-cases state the text every implementation must accept or reject, the bound
+renders the file. Its `reserved` list closes the keywords below. Its cases
+state the text that each implementation must accept or reject, the bound
 identifiers in accepted text, and each accepted parse. Repository validation
-and the R implementation read the file. A copied grammar that drifts from the
+and the R implementation read the file. A copied grammar that differs from the
 file fails validation.
 
 **R004-4.** Whitespace may separate tokens but cannot occur inside a number,
@@ -204,7 +204,7 @@ A closed predicate grammar keeps row selection, overrides, and verifications
 reviewable and identical in R and Python. Names and literals require each
 computed value to be bound first to a named column. The named column fixes type
 and missing-value behavior. Three-valued logic without implicit conversion
-prevents dependence on host SQL coercion, collation, and escape defaults.
+avoids dependence on host SQL coercion, collation, or escape defaults.
 
 ## Errors
 

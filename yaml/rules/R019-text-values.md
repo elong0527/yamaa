@@ -10,7 +10,7 @@ applies_to: [str, expression.str_upper, expression.str_lower,
 
 ## Intent
 
-Define a portable text model for source notation, runtime strings, casing,
+Define portable text behavior for source notation, runtime strings, casing,
 equality, and total order without a host locale or Unicode library.
 
 ## Boundaries
@@ -38,11 +38,11 @@ of Unicode scalar values: code points `U+0000` through `U+D7FF` and `U+E000`
 through `U+10FFFF`. Surrogate code points are not scalar values and cannot
 occur. Unassigned scalar values are valid and have no special behavior.
 
-**R019-3.** An external encoding is decoded before its values enter the
-language. An ill-formed encoded value fails rather than being replaced,
-skipped, or decoded under a machine default. A container contract may fix an
-encoding; the CSV fixtures in this repository are UTF-8. Missing is not a
-string and continues to follow the missing-value rules of each consumer.
+**R019-3.** Decode external text before values enter the language. An
+ill-formed encoded value fails instead of being replaced, skipped, or decoded
+by a machine default. A container contract may fix an encoding; repository CSV
+fixtures use UTF-8. Missing is not a string. Each consumer's missing-value
+rules continue to apply.
 
 ## No implicit normalization
 
@@ -63,11 +63,10 @@ normalization operation.
 values in the same positions. Equality performs no casing, folding,
 normalization, locale tailoring, or compatibility mapping.
 
-**R019-7.** This equality is used everywhere the language compares
-identities: predicate equality, case-sensitive inline mapping, dataset
-joins and record lookups, group and window partitions, key and uniqueness
-checks, allowed values, and any other operation that asks whether two `str`
-values are equal.
+**R019-7.** Exact scalar equality applies whenever the language compares
+identities: predicate equality, case-sensitive inline mapping, dataset joins
+and record lookups, group and window partitions, key and uniqueness checks,
+allowed values, and any other operation that compares two `str` values.
 
 ## Total order
 
@@ -81,10 +80,10 @@ every `order_by` term, `greatest`, `least`, and aggregate `MIN` and `MAX`.
 Missing placement is not part of string order. The operation that admits
 missing values owns that placement or empty-result behavior.
 
-**R019-10.** The order performs no normalization or case folding. It uses no
-locale, collator, character name, script property, encoded byte order, or
-UTF-16 code unit order. An implementation must compare a supplementary-plane
-scalar as one value, not as a surrogate pair.
+**R019-10.** String order performs no normalization or case folding. It uses
+no locale, collator, character name, script property, encoded byte order, or
+UTF-16 code unit order. An implementation must compare each supplementary-
+plane scalar as one value, not as a surrogate pair.
 
 ## ASCII casing
 

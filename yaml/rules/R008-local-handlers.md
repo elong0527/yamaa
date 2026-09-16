@@ -11,10 +11,10 @@ applies_to: [source.missing, source.filter, source.multiple_matches,
 
 ## Intent
 
-Attach expected defect handling to the expression or result stage that
-encounters the defect. Handlers are not conditional mapping; use `case`.
-There is no standalone handler registry. Closed expression and derivation
-schemas determine which handlers are legal.
+Handle expected defects at the expression or result stage that encounters each
+defect. Handlers are not conditional mapping. Use `case`. There is no
+standalone handler registry. Closed expression and derivation schemas determine
+which handlers are legal.
 
 ## Boundaries
 
@@ -30,7 +30,7 @@ literal unless its behavior says otherwise:
 | Stage | Local declaration | Behavior |
 |---|---|---|
 | bind | `source.missing` | Absent source variable or ODM item |
-| join | `source.multiple_matches` | Select one of the records `source.filter` left |
+| join | `source.multiple_matches` | Choose one `source.filter` result |
 | mapping | `missing` | Missing mapping input |
 | mapping | `unmapped` | Non-missing value with no mapping |
 | cut | `missing` | Missing numeric input |
@@ -104,9 +104,8 @@ right-side records first. Sort those survivors by the `order_by` terms and
 retain `first` or `last`. Remaining ties are resolved by right-side record
 order.
 
-**R008-14.** Filtering to no surviving record is not a handled
-condition. It is an ordinary absent match under R003 and yields
-missing.
+**R008-14.** An empty filtered result is not a handled condition. The
+result is an ordinary absent match under R003 and yields missing.
 
 **R008-15.** The handler count reports only the records where more than
 one match survived the filter.
@@ -140,9 +139,8 @@ predicate is `TRUE`, retain the original value.
 under R001 even when their path is not taken. Literal handlers add no
 dependencies.
 
-**R008-21.** Implementations must report, for each handler path, how
-many records used it. A handler firing zero times is reportable and is
-not an error.
+**R008-21.** Implementations must report each handler path's record count.
+A handler firing zero times is reportable and is not an error.
 
 ## Rationale
 
