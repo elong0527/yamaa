@@ -43,15 +43,36 @@ DM_COLUMNS: list[tuple[str, ColumnType]] = [
     ("AGE", "int"),
     ("ARM", "str"),
     ("ACTARM", "str"),
+    ("ARMNRS", "str"),
 ]
 
 
 def test_a_constructed_dm_table_serializes_to_the_committed_expected_bytes() -> None:
     rows: list[list[object]] = [
-        ["DM", "STUDY01", "001", "001", "M", 34, "Placebo", "Placebo"],
-        ["DM", "STUDY01", "002", "002", "F", 28, "Vitamin D3", "Vitamin D3"],
-        ["DM", "STUDY01", "003", "003", "U", None, "Unassigned", "Unassigned"],
-        ["DM", "STUDY01", "004", "004", "U", None, "Unassigned", "Unassigned"],
+        ["DM", "STUDY01", "001", "001", "M", 34, "Placebo", "Placebo", None],
+        ["DM", "STUDY01", "002", "002", "F", 28, "Vitamin D3", "Vitamin D3", None],
+        [
+            "DM",
+            "STUDY01",
+            "003",
+            "003",
+            "U",
+            None,
+            None,
+            None,
+            "Not assigned to treatment arm",
+        ],
+        [
+            "DM",
+            "STUDY01",
+            "004",
+            "004",
+            "U",
+            None,
+            None,
+            None,
+            "Not assigned to treatment arm",
+        ],
     ]
 
     content = rendered(DM_COLUMNS, rows, keys=["STUDYID", "USUBJID"])

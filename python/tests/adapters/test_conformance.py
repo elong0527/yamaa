@@ -98,6 +98,7 @@ class TestSupportedPair:
             "AGE",
             "ARM",
             "ACTARM",
+            "ARMNRS",
         )
         assert artifact.types == (
             "str",
@@ -108,10 +109,13 @@ class TestSupportedPair:
             "int",
             "str",
             "str",
+            "str",
         )
         assert artifact.row_count == 4
         # A missing AGE renders as no characters at all (R020-17).
-        assert artifact.records[3] == "DM,STUDY01,003,003,U,,Unassigned,Unassigned"
+        assert artifact.records[3] == (
+            "DM,STUDY01,003,003,U,,,,Not assigned to treatment arm"
+        )
 
     def test_positive_run_reports_every_declared_handler_path(
         self, tmp_path: Path

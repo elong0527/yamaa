@@ -72,6 +72,7 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
             "AGE": 34,
             "ARM": "Placebo",
             "ACTARM": "Placebo",
+            "ARMNRS": None,
         },
         {
             "STUDYID": "STUDY01",
@@ -82,6 +83,7 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
             "AGE": 28,
             "ARM": "Vitamin D3",
             "ACTARM": "Vitamin D3",
+            "ARMNRS": None,
         },
         {
             "STUDYID": "STUDY01",
@@ -90,8 +92,9 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
             "SUBJID": "003",
             "SEX": "U",
             "AGE": None,
-            "ARM": "Unassigned",
-            "ACTARM": "Unassigned",
+            "ARM": None,
+            "ACTARM": None,
+            "ARMNRS": "Not assigned to treatment arm",
         },
         {
             "STUDYID": "STUDY01",
@@ -100,8 +103,9 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
             "SUBJID": "004",
             "SEX": "U",
             "AGE": None,
-            "ARM": "Unassigned",
-            "ACTARM": "Unassigned",
+            "ARM": None,
+            "ACTARM": None,
+            "ARMNRS": "Not assigned to treatment arm",
         },
     ]
     assert result.artifact.frame.schema["AGE"] == pl.Int64
@@ -239,6 +243,7 @@ def test_column_enrichment_keeps_the_constructed_row_count() -> None:
         "AGE",
         "ARM",
         "ACTARM",
+        "ARMNRS",
     ]
     assert {height for _, height in observed} == {4}
 
@@ -284,6 +289,7 @@ def test_verification_and_output_hooks_run_in_normative_order() -> None:
         "column:AGE",
         "column:ARM",
         "column:ACTARM",
+        "column:ARMNRS",
         "keys",
         "dataset",
         "output",
