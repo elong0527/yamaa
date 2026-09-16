@@ -11,9 +11,9 @@ applies_to: [root.verifications, column.verifications, output.violation_log,
 
 ## Intent
 
-Define closed, portable assertions over completed output values, distinguish
-fatal errors from reviewable warnings, and preserve every warning violation in
-a governed sidecar dataset.
+Define closed, portable assertions over completed output values. Distinguish
+fatal errors from reviewable warnings. Preserve every warning violation in a
+governed sidecar dataset.
 
 ## Boundaries
 
@@ -33,10 +33,10 @@ completed output row. No verification compares rows by order.
 
 ## An ordered frame is not a shape this rule has
 
-**R009-1.** An assertion over an ordered series is stated as a derivation
-followed by a row-wise assertion here, in one of exactly three forms:
-the adjacent row, a partition or its history up to the current row, or a
-derived property at a coarser or earlier grain.
+**R009-1.** State an ordered-series assertion as a derivation followed by
+a row-wise assertion in this rule. Use exactly one of three forms: the
+adjacent row, a partition or its history up to the current row, or a derived
+property at a coarser or earlier grain.
 
 - **The adjacent row.** `row_value` under R007 places another row's value on
   the row and `predicate` compares the two.

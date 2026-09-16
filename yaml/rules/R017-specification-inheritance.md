@@ -8,11 +8,11 @@ applies_to: [root.parents, root.schema_version, root]
 
 # Specification inheritance
 ## Intent
-Resolve reusable YAML layers into one complete, deterministic specification
-before any data is read.
+R017 resolves reusable YAML layers into one complete, deterministic
+specification before data is read.
 
 ## Boundaries
-This rule owns parent loading, graph traversal, composition, path provenance,
+R017 owns parent loading, graph traversal, composition, path provenance,
 pruning, and the resolved specification. R006 owns YAML and schema validation.
 R001 owns dependency inference and evaluation after this rule has ordered the
 resolved columns. R002 and R015 own dataset and record-lookup references. R005

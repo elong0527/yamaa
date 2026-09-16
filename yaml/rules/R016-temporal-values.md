@@ -18,11 +18,11 @@ applies_to:
 
 ## Intent
 
-Define the two temporal values this design admits, `date` and `datetime`: what
-each denotes, how much of it a study collected, the text it is read from and
-written back to, how two of them order, which operations read them, and what
-fails. R and Python must produce the same value, the same collected precision,
-the same order, output text, and failures for the same input.
+Define the temporal values this design admits: `date` and `datetime`. R016
+defines each value, its collected precision, source and output text,
+ordering, operations that read each value, and failures. R and Python must
+produce the same value, collected precision, ordering, output text, and
+failures for the same input.
 
 ## Boundaries
 

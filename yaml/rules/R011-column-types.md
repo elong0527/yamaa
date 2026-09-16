@@ -82,10 +82,10 @@ implementation choice.
 
 ## Non-finite floats are missing
 
-**R011-9.** A non-finite float is positive infinity, negative infinity, or
-any NaN binary64 value. Every non-finite float is the missing value,
-normalized immediately at every boundary where a float enters the language
-or a numeric operation produces one:
+**R011-9.** A non-finite float is positive or negative infinity, or any NaN
+binary64 value. Normalize every non-finite float to missing immediately at
+every boundary where a float enters the language or a numeric operation
+produces one:
 
 **R011-10.** After YAML 1.2 core-schema scalar resolution in a
 specification, schema, project environment, or conformance document, before

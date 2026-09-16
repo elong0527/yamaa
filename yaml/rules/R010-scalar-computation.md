@@ -9,8 +9,8 @@ applies_to: [expression.compute, numeric_expression]
 
 ## Intent
 
-Express arithmetic that combines several columns in one readable formula,
-without a registry entry per operator or host-language code.
+Combine columns with arithmetic in one readable formula, without a registry
+entry per operator or host-language code.
 
 ## Boundaries
 

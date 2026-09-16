@@ -10,10 +10,10 @@ applies_to: [environment, function, function_contract, function_binding]
 
 ## Intent
 Make a project-supplied scalar function reproducible and reviewable. A
-specification contains no host-language code or runtime selection. One logical
+specification contains no host-language code or runtime selection. A logical
 contract may have an R implementation in one project and a Python
-implementation in another, while each project remains a single-language
-execution environment.
+implementation in another. Each project remains a single-language execution
+environment.
 
 ## Boundaries
 

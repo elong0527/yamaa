@@ -11,8 +11,8 @@ applies_to: [root.input, root.base, row.dataset, row.group_by,
 
 ## Intent
 
-Bind source files, row templates' input datasets, and input variables
-without inferring same-named variables.
+Bind source files, row templates' input datasets, and input variables.
+Never infer same-named variables.
 
 ## Boundaries
 
@@ -30,7 +30,7 @@ declarations. Identifiers are used by `base`, `rows.dataset`, qualified
 source variables, and `mapping_from`.
 
 **R002-2.** A declaration is a path, or a path with the types the fields
-carry; R014 owns that reading and the shorthand between the two forms.
+carry. R014 owns that reading and the shorthand between the two forms.
 
 **R002-3.** A declared path is a `project_path`. R021 fixes its written form,
 approved root, and readable bytes. R017 preserves the path origin when a
@@ -41,13 +41,13 @@ resolved specification.
 
 **R002-5.** A dataset identifier must not equal the output `domain`.
 
-**R002-6.** A finished dataset an earlier run produced is an ordinary
-source and is declared under a name of its own.
+**R002-6.** A finished dataset from an earlier run is an ordinary source.
+Declare that source under a name of its own.
 
-**R002-7.** No keyed construct reaches a sibling record of the dataset
-the run is building; R001 owns what happens when a column reaches its
-own value through that column's partition rows. Addressing a sibling
-record by key is open work.
+**R002-7.** No keyed construct reaches a sibling record of the output
+dataset. R001 owns what happens when a column reaches its own value
+through the partition rows of that column. Addressing a sibling record by
+key is open work.
 
 ## Source expressions
 
@@ -65,17 +65,17 @@ variable in the output dataset.
 both share one namespace; R015 owns what a record lookup resolves to.
 
 **R002-10.** A qualified reference to the current row template's input
-dataset reads the current source record. A qualified reference to
+dataset reads the current input record. A qualified reference to
 another dataset follows R003.
 
 **R002-11.** During grouped row construction there is no single current
-source record. A qualified reference to the row template's input
-dataset is scalar only when the exact variable appears in the enclosing
-`row.group_by`; the reference then returns that group's key value.
+input record. A qualified reference to the input dataset of the row
+template is scalar only when the exact variable appears in the enclosing
+`row.group_by`. That reference then returns the key value of that group.
 
-**R002-12.** Reading any other source field with a scalar `source` is
-an error. An aggregate expression is how a grouped row reduces
-non-key fields, as R007 and R013 define.
+**R002-12.** Reading any other source variable with a scalar `source` is
+an error. A grouped row reduces non-key variables with an aggregate
+expression, as R007 and R013 define.
 
 **R002-13.** Operation operand fields typed as `variable` accept a
 concise source or current output variable. Compose operations through
@@ -99,10 +99,9 @@ a named derived column:
 **R002-14.** An operation cannot place an arbitrary nested expression in
 a variable field.
 
-**R002-15.** A placeholder in a `string_template` is also a variable
-reference. R012 owns the braces and escaping; the placeholder's
-complete name binds here exactly as if it appeared in a field typed as
-`variable`. Text outside placeholders is literal.
+**R002-15.** A `string_template` placeholder is a variable reference. R012
+owns braces and escaping. The placeholder's complete name binds as a
+`variable` field name. Text outside placeholders is literal.
 
 **R002-16.** Plain strings outside fields typed as `variable` are
 literal under R019.
@@ -148,13 +147,13 @@ declared ODM projection:
 8. `ItemGroupOID`;
 9. `ItemGroupRepeatKey`.
 
-**R002-22.** Resolution first matches every available context column and
+**R002-22.** ODM resolution first matches every available context column,
 then matches the complete `ItemOID`. A projection may omit a context
 column only when the projection's source does not carry that level.
 
-**R002-23.** A projection that carries `FormOID` must use it: identical
-item identifiers in two forms are different contextual values and must
-not be collapsed.
+**R002-23.** A projection that carries `FormOID` must use that column.
+Identical item identifiers in two forms are different contextual values.
+Those values must not be collapsed.
 
 **R002-24.** No contextual match is an absent item. The reference fails
 unless a structured source declares `missing`, under R008.
@@ -163,15 +162,15 @@ unless a structured source declares `missing`, under R008.
 column is a multiple right-side match. The reference fails unless a
 structured source declares `multiple_matches`, also under R008.
 
-**R002-26.** A present matched row whose `Value` is missing returns
-missing and does not invoke the absent-item handler.
+**R002-26.** A present matched row with a missing `Value` returns missing.
+That row does not invoke the absent-item handler.
 
 ## Rationale
 
-Unqualified names address the output dataset, so reusing the output
+Unqualified names address the output dataset. Reusing the output
 domain as a dataset identifier would be ambiguous. Forbidding arbitrary
-nested expressions in variable fields keeps each operation self-contained
-and makes dependencies visible.
+nested expressions in variable fields keeps each operation self-contained.
+That ban makes dependencies visible.
 
 ## Errors
 
@@ -184,7 +183,7 @@ condition.
 
 **R002-30.** An unresolved unqualified reference: fail.
 
-**R002-31.** A scalar source in a grouped row naming a source field
+**R002-31.** A scalar source in a grouped row naming a source variable
 absent from that row's `group_by`: fail.
 
 **R002-32.** An ODM contextual reference with no available context
