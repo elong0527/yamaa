@@ -756,6 +756,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  sdtm-dm-race-ethnicity:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   sdtm-dm-reference-dates:
     status: blocked
     blocked_by: "#101"
@@ -793,6 +797,10 @@ examples:
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
   sdtm-relrec-many-to-many:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
+  sdtm-supdm-race-selections:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
