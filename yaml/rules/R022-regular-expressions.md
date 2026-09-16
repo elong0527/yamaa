@@ -53,9 +53,9 @@ Python `re`, POSIX ERE, PCRE, or TRE.
 formed exactly when the pinned engine compiles it under the flag set below,
 and a match is exactly the match that engine reports. Where ECMA-262 admits
 more than one reading, or where a construct is newer than the pinned
-version, the engine decides and its rejection is the contract rather than a
-defect to work around. Changing the pin is a versioned change to this rule
-that re-runs the fixtures in every consumer.
+version, the engine decides. The engine's rejection is the contract
+rather than a defect to work around. Changing the pin is a versioned
+change to this rule that re-runs the fixtures in every consumer.
 
 ## Flags
 
@@ -67,23 +67,23 @@ syntax. `(?i)` is a syntax error. A consumer must not expose `i`, `m`, `s`,
 **R022-7.** The `u` flag makes a pattern operate on the Unicode scalar values
 R019 defines. One supplementary-plane scalar is one character to a pattern
 and one unit to R006's `min_length` and R009's `max_length`. Without `u`, the
-same scalar is two UTF-16 code units and `.` matches half. The flag also
-admits `\\u{...}` code point escapes and makes a malformed escape such as
-`\\a` a syntax error rather than a silent literal.
+same scalar is two UTF-16 code units and `.` matches half of the scalar.
+The flag also admits `\\u{...}` code point escapes and makes a malformed
+escape such as `\\a` a syntax error rather than a silent literal.
 
-**R022-8.** Without `i`, matching is case-sensitive, and no Unicode case
-table enters a language whose casing R019 confines to ASCII.
+**R022-8.** Without `i`, matching is case-sensitive. No Unicode case
+table applies, because R019 confines casing to ASCII.
 
 **R022-9.** Without `m`, `^` matches only at the start of the subject and `$`
-only at its end, so `$` does not also match before a trailing `U+000A`.
+only at its end. `$` does not also match before a trailing `U+000A`.
 
 **R022-10.** Without `s`, `.` matches every scalar except the line
 terminators `U+000A`, `U+000D`, `U+2028`, and `U+2029`.
 
 **R022-11.** Without `g` and `y`, a pattern carries no cursor between
-evaluations, and each consumer below states its own iteration.
+evaluations. Each consumer below states its own iteration.
 
-**R022-12.** Without `d` and `v`, no consumer observes match offsets and no
+**R022-12.** Without `d` and `v`, no consumer observes match offsets. No
 class uses set notation.
 
 **R022-13.** Because `u` is set, `\\d` is exactly `U+0030` through `U+0039`
@@ -160,7 +160,7 @@ outcome for the same pattern and subject.
 **R022-26.** `conformance/regex.yaml` holds shared fixtures. Each case names
 the pattern, subject, and outcome for all three consumers, or records a
 rejected pattern. Repository validation replays the fixtures against the
-pinned engine. This replay proves that the Python consumer and fixtures
+pinned engine. The replay proves that the Python consumer and fixtures
 agree. The shared conformance workflow proves executable parity with R when
 that workflow exists. A fixture file alone is not runtime evidence for an R
 runtime that has not run the workflow.
@@ -169,7 +169,7 @@ runtime that has not run the workflow.
 
 Host regular-expression libraries differ in syntax, flags, and match choice,
 so any behavior that depends on one host library cannot satisfy the parity
-requirement; pinning one engine version makes its verdict the contract even
+requirement. Pinning one engine version makes its verdict the contract even
 where the standard admits more than one reading. The `u` flag is set so a
 pattern operates on the same scalar values every other text rule counts,
 and the remaining flags stay clear so anchoring, dot, case, and iteration
