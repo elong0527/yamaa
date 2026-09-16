@@ -18,8 +18,6 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ODM.SubjectKey
 
   - name: RFSTDTC
     type: date
@@ -42,4 +40,5 @@ columns:
 rows:
   - id: subject
     filter: "ODM.ItemOID = 'IT.DM.RANDDT'"
-    derivations: {}
+    derivations:
+      USUBJID: {source: ODM.SubjectKey}

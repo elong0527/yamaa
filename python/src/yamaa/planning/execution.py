@@ -6,7 +6,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
 from yamaa.expressions import (
     WINDOW_OPERATIONS,
@@ -30,6 +30,7 @@ from yamaa.io.source import LoadedDataset
 from yamaa.models import ColumnType, ConditionPhase, TypedTable
 from yamaa.odm import BindingFailure, BindingPlan, BoundReference, build_binding_plan
 from yamaa.specification.models import (
+    Column,
     Expression,
     HandledExpression,
     OrderTerm,
@@ -139,6 +140,8 @@ class ResolvedJoin(_FrozenModel):
     # R003-20 lets a reduction declare a grain coarser than the applicable
     # keys, and the join then matches on that instead.
     declared_grain: bool = False
+    # R003-60: whether the qualified source declared a right-side filter.
+    filter: str | None = None
 
 
 class PlannedRow(_FrozenModel):
@@ -179,6 +182,8 @@ class ExecutionPlan(_FrozenModel):
     row_derived_columns: tuple[str, ...]
     record_lookups: tuple[PlannedRecordLookup, ...] = ()
     resolved_joins: tuple[ResolvedJoin, ...] = ()
+    key_dataset: str | None = None
+    key_derivations: tuple[PlannedDerivation, ...] = ()
 
 
 class ExecutionPlanningError(ValueError):
@@ -225,6 +230,8 @@ class _Reference:
     # The other name this reference's runtime type must be comparable with,
     # which is how R007-21 pairs a `mapping_from` source with its key column.
     same_type_as: str | None = None
+    # For structured sources with a right-side filter (R003-46).
+    filter: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,6 +283,306 @@ def expression_path(path: str, derivation: HandledExpression) -> str:
     return f"{path}.value" if handled else path
 
 
+_ALLOWED_KEY_SCALAR_OPERATIONS = frozenset(
+    {
+        "source",
+        "literal",
+        "compute",
+        "str_concat",
+        "cut",
+        "case",
+        "mapping",
+        "coalesce",
+    }
+)
+
+
+def _collect_key_identifiers(expression: Expression) -> tuple[str, ...]:
+    """Return every variable identifier read by one key derivation."""
+    operation = expression.operation
+    payload = expression.root[operation]
+    names: list[str] = []
+
+    def collect(value: object) -> None:
+        if isinstance(value, Mapping) and len(value) == 1:
+            nested_operation, _nested_payload = next(iter(value.items()))
+            if isinstance(nested_operation, str):
+                try:
+                    nested_expression = Expression.model_validate(dict(value))
+                except ValidationError:
+                    return
+                names.extend(_collect_key_identifiers(nested_expression))
+        elif isinstance(value, str):
+            names.append(value)
+
+    if operation == "source":
+        if isinstance(payload, str):
+            names.append(payload)
+        elif isinstance(payload, Mapping):
+            variable = payload.get("variable")
+            if isinstance(variable, str):
+                names.append(variable)
+    elif operation == "compute" and isinstance(payload, Mapping):
+        expr = payload.get("expr")
+        if isinstance(expr, str):
+            try:
+                ast = parse_numeric_cached(expr)
+                names.extend(numeric_identifiers(ast))
+            except NumericError:
+                pass
+    elif operation == "str_concat" and isinstance(payload, Mapping):
+        sources = payload.get("sources")
+        if isinstance(sources, Sequence) and not isinstance(sources, str):
+            for source in sources:
+                collect(source)
+    elif operation == "cut" and isinstance(payload, Mapping):
+        source = payload.get("source")
+        if isinstance(source, str):
+            names.append(source)
+        elif isinstance(source, Mapping):
+            variable = source.get("variable")
+            if isinstance(variable, str):
+                names.append(variable)
+    elif operation == "case" and isinstance(payload, Mapping):
+        branches = payload.get("branches")
+        if isinstance(branches, Sequence) and not isinstance(branches, str):
+            for branch in branches:
+                if isinstance(branch, Mapping):
+                    when = branch.get("when")
+                    if isinstance(when, str):
+                        try:
+                            ast = parse_predicate(when)
+                            names.extend(_predicate_identifiers(ast))
+                        except PredicateError:
+                            pass
+                    collect(branch.get("then"))
+        if "otherwise" in payload:
+            collect(payload["otherwise"])
+    elif operation == "mapping" and isinstance(payload, Mapping):
+        source = payload.get("source")
+        if isinstance(source, str):
+            names.append(source)
+        elif isinstance(source, Mapping):
+            variable = source.get("variable")
+            if isinstance(variable, str):
+                names.append(variable)
+    elif operation == "coalesce" and isinstance(payload, Mapping):
+        sources = payload.get("sources")
+        if isinstance(sources, Sequence) and not isinstance(sources, str):
+            for source in sources:
+                collect(source)
+    elif operation == "mapping_from" and isinstance(payload, Mapping):
+        names.extend(_as_names(payload.get("source")) or ())
+        names.extend(_as_names(payload.get("key")) or ())
+        value = payload.get("value")
+        if isinstance(value, str):
+            names.append(value)
+    elif operation in WINDOW_OPERATIONS and isinstance(payload, Mapping):
+        for field in _WINDOW_VARIABLES.get(operation, ()):
+            name = payload.get(field)
+            if isinstance(name, str):
+                names.append(name)
+        names.extend(_as_names(payload.get("group_by")) or ())
+        for term in payload.get("order_by") or ():
+            if isinstance(term, str):
+                names.append(term)
+            elif isinstance(term, Mapping):
+                variable = term.get("variable")
+                if isinstance(variable, str):
+                    names.append(variable)
+        filter_text = payload.get("filter")
+        if isinstance(filter_text, str):
+            try:
+                ast = parse_predicate(filter_text)
+                names.extend(_predicate_identifiers(ast))
+            except PredicateError:
+                pass
+    elif operation == "function" and isinstance(payload, Mapping):
+        arguments = payload.get("args")
+        if isinstance(arguments, Mapping):
+            for value in arguments.values():
+                if isinstance(value, str):
+                    names.append(value)
+    elif operation in _TEMPORAL_VARIABLES and isinstance(payload, Mapping):
+        for field, _, _ in _TEMPORAL_VARIABLES[operation]:
+            name = payload.get(field)
+            if isinstance(name, str):
+                names.append(name)
+    elif operation == "str_template":
+        template = payload if isinstance(payload, str) else None
+        if isinstance(payload, Mapping):
+            template = payload.get("template")
+        if isinstance(template, str):
+            try:
+                parts = parse_template_cached(template)
+                names.extend(template_identifiers(parts))
+            except TemplateError:
+                pass
+    return tuple(dict.fromkeys(names))
+
+
+def _analyze_key_dataset(
+    specification: Specification,
+    bindings: BindingPlan,
+    diagnostics: list[ExecutionDiagnostic],
+) -> tuple[str | None, tuple[str, ...]]:
+    """Validate new-style key derivations and return the key dataset.
+
+    New-style specs derive every key from a single dataset.  This analysis
+    returns the dataset name and the ordered key column names; it appends
+    diagnostics for every violation of R003-42 through R003-57.
+    """
+    if not specification.is_new_style:
+        return None, ()
+    if specification.rows:
+        diagnostics.append(
+            _diagnostic(
+                "invalid_key_derivation",
+                "rows",
+                {"reason": "rows are not permitted in new-style specs"},
+                requirement="R003-55",
+            )
+        )
+        return None, ()
+
+    key_columns = {column.name: column for column in specification.columns}
+    key_set = set(specification.keys)
+    output_names = {column.name for column in specification.columns}
+    datasets: set[str] = set()
+    key_dependencies: dict[str, set[str]] = {key: set() for key in specification.keys}
+    invalid = False
+
+    for key in specification.keys:
+        column = key_columns.get(key)
+        if column is None or column.derivation is None:
+            diagnostics.append(
+                _diagnostic(
+                    "missing_key_derivation",
+                    f"columns.{key}.derivation",
+                    {"key": key},
+                    requirement="R003-57",
+                )
+            )
+            invalid = True
+            continue
+        path = f"columns.{key}.derivation"
+        expression = column.derivation.value
+        operation = expression.operation
+        payload = expression.root[operation]
+
+        if operation in WINDOW_OPERATIONS:
+            pass
+        elif operation not in _ALLOWED_KEY_SCALAR_OPERATIONS:
+            diagnostics.append(
+                _diagnostic(
+                    "invalid_key_derivation",
+                    expression_path(path, column.derivation),
+                    {
+                        "key": key,
+                        "operation": operation,
+                        "reason": "key derivation must be a scalar expression or window operation",
+                    },
+                    requirement="R003-57",
+                )
+            )
+            invalid = True
+            continue
+
+        if (
+            operation == "source"
+            and isinstance(payload, Mapping)
+            and (
+                payload.get("filter") is not None
+                or payload.get("multiple_matches") is not None
+            )
+        ):
+            diagnostics.append(
+                _diagnostic(
+                    "invalid_key_derivation",
+                    expression_path(path, column.derivation),
+                    {
+                        "key": key,
+                        "reason": "key source may not declare a filter or multiple_matches",
+                    },
+                    requirement="R003-57",
+                )
+            )
+            invalid = True
+            continue
+
+        try:
+            identifiers = _collect_key_identifiers(expression)
+        except ValidationError:
+            identifiers = ()
+
+        for name in identifiers:
+            if "." in name:
+                dataset = name.split(".", 1)[0]
+                if dataset not in bindings.datasets:
+                    diagnostics.append(
+                        _diagnostic(
+                            "unknown_field",
+                            expression_path(path, column.derivation),
+                            {"identifier": name},
+                            requirement="R002-27",
+                        )
+                    )
+                    invalid = True
+                else:
+                    datasets.add(dataset)
+            else:
+                if name in key_set:
+                    key_dependencies[key].add(name)
+                elif name in output_names:
+                    # Non-key output-column references are reported via the
+                    # legacy R001-43 key-dependency contract, not here.
+                    pass
+                else:
+                    diagnostics.append(
+                        _diagnostic(
+                            "unqualified_key_derivation",
+                            expression_path(path, column.derivation),
+                            {"key": key, "identifier": name},
+                            requirement="R003-56",
+                        )
+                    )
+                    invalid = True
+
+    if len(datasets) > 1:
+        diagnostics.append(
+            _diagnostic(
+                "mixed_key_datasets",
+                "columns",
+                {
+                    "keys": specification.keys,
+                    "datasets": sorted(datasets),
+                    "reason": "key columns must all derive from a single dataset",
+                },
+                requirement="R003-57",
+            )
+        )
+        return None, ()
+
+    cycle = _find_cycle(
+        specification.keys, {k: tuple(v) for k, v in key_dependencies.items()}
+    )
+    if cycle is not None:
+        paths = tuple(f"columns.{name}.derivation" for name in cycle[:-1])
+        diagnostics.append(
+            _diagnostic(
+                "dependency_cycle",
+                paths,
+                {"cycle": list(cycle)},
+                requirement="R001-41",
+            )
+        )
+        invalid = True
+
+    if invalid or not datasets:
+        return None, ()
+    return next(iter(datasets)), tuple(specification.keys)
+
+
 def _deduplicate_references(references: Sequence[_Reference]) -> tuple[_Reference, ...]:
     seen: set[tuple[object, ...]] = set()
     ordered: list[_Reference] = []
@@ -290,6 +597,7 @@ def _deduplicate_references(references: Sequence[_Reference]) -> tuple[_Referenc
             reference.join_group_by,
             reference.reach,
             reference.same_type_as,
+            reference.filter,
         )
         if identity not in seen:
             ordered.append(reference)
@@ -326,6 +634,10 @@ def _expression_info(
     supported_operations: Collection[str],
     *,
     scope: _Scope = _COLUMN_SCOPE,
+    key_dataset: str | None = None,
+    keys: Sequence[str] = (),
+    specification: Specification | None = None,
+    bindings: BindingPlan | None = None,
 ) -> _ExpressionInfo:
     operation = expression.operation
     operation_path = f"{path}.{operation}"
@@ -342,6 +654,24 @@ def _expression_info(
     unsupported: list[UnsupportedFeature] = []
     diagnostics: list[ExecutionDiagnostic] = []
 
+    def _source_reference(
+        variable: object,
+        ref_path: str,
+        expected_type: ColumnType | None = None,
+        requirement: str | None = None,
+        filter_text: str | None = None,
+    ) -> None:
+        if isinstance(variable, str):
+            references.append(
+                _Reference(
+                    variable,
+                    ref_path,
+                    expected_type,
+                    requirement=requirement,
+                    filter=filter_text,
+                )
+            )
+
     def nest(nested: object, nested_path: str) -> None:
         """Collect one expression R007-3 permits this operation to nest."""
         if not isinstance(nested, Mapping) or len(nested) != 1:
@@ -351,26 +681,40 @@ def _expression_info(
             nested_path,
             supported_operations,
             scope=scope,
+            key_dataset=key_dataset,
+            keys=keys,
+            specification=specification,
+            bindings=bindings,
         )
         references.extend(info.references)
         unsupported.extend(info.unsupported)
         diagnostics.extend(info.diagnostics)
 
     if operation == "source":
-        variable = payload if isinstance(payload, str) else payload.get("variable")
-        if isinstance(variable, str):
-            references.append(_Reference(variable, operation_path))
+        if isinstance(payload, str):
+            _source_reference(payload, operation_path)
+        elif isinstance(payload, Mapping):
+            _source_reference(
+                payload.get("variable"),
+                operation_path,
+                filter_text=payload.get("filter")
+                if isinstance(payload.get("filter"), str)
+                else None,
+            )
     elif operation in _TYPED_SOURCES and isinstance(payload, Mapping):
-        variable = payload.get("source")
+        source = payload.get("source")
         expected, requirement = _TYPED_SOURCES[operation]
-        if isinstance(variable, str):
-            references.append(
-                _Reference(
-                    variable,
-                    f"{operation_path}.source",
-                    expected,
-                    requirement=requirement,
-                )
+        if isinstance(source, str):
+            _source_reference(source, f"{operation_path}.source", expected, requirement)
+        elif isinstance(source, Mapping):
+            _source_reference(
+                source.get("variable"),
+                f"{operation_path}.source",
+                expected,
+                requirement,
+                filter_text=source.get("filter")
+                if isinstance(source.get("filter"), str)
+                else None,
             )
     elif operation in WINDOW_OPERATIONS and isinstance(payload, Mapping):
         diagnostics.extend(
@@ -402,18 +746,33 @@ def _expression_info(
     ):
         sources = payload.get("sources")
         if isinstance(sources, Sequence) and not isinstance(sources, str):
-            references.extend(
-                _Reference(name, f"{operation_path}.sources[{index}]")
-                for index, name in enumerate(sources)
-                if isinstance(name, str)
-            )
+            for index, source in enumerate(sources):
+                if isinstance(source, str):
+                    _source_reference(source, f"{operation_path}.sources[{index}]")
+                elif isinstance(source, Mapping):
+                    _source_reference(
+                        source.get("variable"),
+                        f"{operation_path}.sources[{index}]",
+                        filter_text=source.get("filter")
+                        if isinstance(source.get("filter"), str)
+                        else None,
+                    )
     elif operation == "compute" and isinstance(payload, Mapping):
         diagnostics.extend(
             _compute_references(payload, operation_path, references, scope)
         )
     elif operation == "aggregate":
         diagnostics.extend(
-            _aggregate_references(payload, operation_path, references, scope)
+            _aggregate_references(
+                payload,
+                operation_path,
+                references,
+                scope,
+                key_dataset,
+                keys,
+                specification=specification,
+                bindings=bindings,
+            )
         )
     elif operation == "mapping_from" and isinstance(payload, Mapping):
         diagnostics.extend(
@@ -653,11 +1012,113 @@ def _window_references(
     return diagnostics
 
 
+def _is_projectable_onto_relation(
+    column_name: str,
+    relation: str,
+    keys: Sequence[str],
+    columns: Mapping[str, Column],
+    bindings: BindingPlan,
+    path: str,
+    diagnostics: list[ExecutionDiagnostic],
+    visiting: set[str] | None = None,
+) -> bool:
+    """Check that an output column can be recomputed from one relation row.
+
+    A column is projectable onto a relation when every identifier its
+    derivation reads is either a spec key, a native column of that relation,
+    or another projectable output column.
+    """
+    if visiting is None:
+        visiting = set()
+    if column_name in visiting:
+        diagnostics.append(
+            _diagnostic(
+                "dependency_cycle",
+                path,
+                {"cycle": sorted(visiting | {column_name})},
+                requirement="R001-41",
+            )
+        )
+        return False
+    column = columns.get(column_name)
+    if column is None or column.derivation is None:
+        diagnostics.append(
+            _diagnostic(
+                "unknown_field",
+                path,
+                {"identifier": column_name},
+                requirement="R002-27",
+            )
+        )
+        return False
+    expression = column.derivation.value
+    operation = expression.operation
+    if operation in WINDOW_OPERATIONS or operation in {"aggregate", "mapping_from"}:
+        diagnostics.append(
+            _diagnostic(
+                "invalid_aggregate_context",
+                expression_path(path, column.derivation),
+                {
+                    "column": column_name,
+                    "reason": (f"{operation} cannot be projected onto a relation row"),
+                },
+                requirement="R003-52",
+            )
+        )
+        return False
+    try:
+        identifiers = _collect_key_identifiers(expression)
+    except ValidationError:
+        identifiers = ()
+    visiting = visiting | {column_name}
+    ok = True
+    dataset = bindings.datasets.get(relation)
+    for name in identifiers:
+        if name in keys:
+            continue
+        if "." in name:
+            qualifier, field = name.split(".", 1)
+            if qualifier == relation and (
+                dataset is None or field in dataset.field_names
+            ):
+                continue
+            diagnostics.append(
+                _diagnostic(
+                    "unknown_field",
+                    path,
+                    {"identifier": name},
+                    requirement="R002-27",
+                )
+            )
+            ok = False
+            continue
+        if name in columns:
+            if not _is_projectable_onto_relation(
+                name, relation, keys, columns, bindings, path, diagnostics, visiting
+            ):
+                ok = False
+            continue
+        diagnostics.append(
+            _diagnostic(
+                "unknown_field",
+                path,
+                {"identifier": name},
+                requirement="R002-27",
+            )
+        )
+        ok = False
+    return ok
+
+
 def _aggregate_references(
     payload: object,
     operation_path: str,
     references: list[_Reference],
     scope: _Scope,
+    key_dataset: str | None = None,
+    keys: Sequence[str] = (),
+    specification: Specification | None = None,
+    bindings: BindingPlan | None = None,
 ) -> list[ExecutionDiagnostic]:
     """Read one R013 reduction and report the context R007 does not permit."""
     if isinstance(payload, str):
@@ -717,8 +1178,130 @@ def _aggregate_references(
     relation = next(iter(sorted(relations)), None)
     group_by = _as_names(payload.get("group_by")) or ()
     between = payload.get("between")
-    diagnostics = _aggregate_context(
-        relation, group_by, between, expr, operation_path, scope
+    predicate = payload.get("filter")
+    diagnostics: list[ExecutionDiagnostic] = []
+
+    new_style = key_dataset is not None and scope.grouped_driver is None
+    filter_ast: PredicateAst | None = None
+    if isinstance(predicate, str):
+        filter_path = f"{operation_path}.filter"
+        filter_ast = _parse_predicate_at(predicate, filter_path, diagnostics)
+
+    if new_style and relation is not None:
+        if specification is None or bindings is None:
+            return [
+                _diagnostic(
+                    "invalid_aggregate_context",
+                    operation_path,
+                    {
+                        "expr": expr,
+                        "reason": "new-style aggregate planning missing spec",
+                    },
+                    requirement="R003-52",
+                )
+            ]
+        if relation not in bindings.datasets:
+            return [
+                _diagnostic(
+                    "unknown_field",
+                    operation_path,
+                    {"identifier": relation},
+                    requirement="R002-27",
+                )
+            ]
+        columns_by_name = {column.name: column for column in specification.columns}
+        output_names = set(columns_by_name)
+        dataset = bindings.datasets[relation]
+
+        for index, name in enumerate(group_by):
+            gb_path = f"{operation_path}.group_by[{index}]"
+            if "." in name:
+                qualifier, field = name.split(".", 1)
+                if qualifier != relation:
+                    diagnostics.append(
+                        _diagnostic(
+                            "invalid_aggregate_context",
+                            gb_path,
+                            {
+                                "expr": expr,
+                                "group_by": name,
+                                "reason": (
+                                    f"group_by must name columns of the "
+                                    f"aggregate relation {relation!r}"
+                                ),
+                            },
+                            requirement="R007-44",
+                        )
+                    )
+                elif field not in dataset.field_names:
+                    diagnostics.append(
+                        _diagnostic(
+                            "unknown_field",
+                            gb_path,
+                            {"identifier": name},
+                            requirement="R002-27",
+                        )
+                    )
+            elif name in keys:
+                pass
+            elif name in output_names:
+                _is_projectable_onto_relation(
+                    name,
+                    relation,
+                    keys,
+                    columns_by_name,
+                    bindings,
+                    gb_path,
+                    diagnostics,
+                )
+            else:
+                diagnostics.append(
+                    _diagnostic(
+                        "unknown_field",
+                        gb_path,
+                        {"identifier": name},
+                        requirement="R002-27",
+                    )
+                )
+
+        unqualified_identifiers = {name for name in identifiers if "." not in name}
+        if filter_ast is not None:
+            unqualified_identifiers.update(
+                name for name in _predicate_identifiers(filter_ast) if "." not in name
+            )
+        for name in unqualified_identifiers:
+            if name in keys:
+                continue
+            if name in output_names:
+                _is_projectable_onto_relation(
+                    name,
+                    relation,
+                    keys,
+                    columns_by_name,
+                    bindings,
+                    expr_path,
+                    diagnostics,
+                )
+            else:
+                diagnostics.append(
+                    _diagnostic(
+                        "unknown_field",
+                        expr_path,
+                        {"identifier": name},
+                        requirement="R002-27",
+                    )
+                )
+
+    diagnostics.extend(
+        _aggregate_context(
+            relation,
+            group_by,
+            between,
+            expr,
+            operation_path,
+            scope,
+            new_style=new_style,
+        )
     )
     if diagnostics:
         return diagnostics
@@ -739,14 +1322,33 @@ def _aggregate_references(
     # the coarser grain R003-20 lets it declare. A grouped-row reduction
     # reads its own driver group and joins nothing.
     joined = relation if scope.grouped_driver is None and relation else None
-    grain = (
-        tuple(name.split(".", 1)[-1] for name in group_by)
-        if group_by and joined
-        else None
-    )
+    if new_style and joined is not None:
+        # New-style reductions use key-derivation recomputation; they do not
+        # model a legacy applicable-key join.
+        joined = None
 
-    def relational(name: str, path: str) -> _Reference:
+    def relational(name: str, path: str, *, is_group_by: bool = False) -> _Reference:
         qualified = "." in name
+        if new_style:
+            # New-style aggregate identifiers reach relation columns directly;
+            # unqualified identifiers are either current-row group keys or
+            # output-column projections.
+            return _Reference(
+                name,
+                path,
+                join_relation=None,
+                join_group_by=None,
+                reach="declared" if qualified else "scalar",
+                current_value_available=not is_group_by,
+            )
+        if joined is not None and group_by:
+            grain = (
+                group_by
+                if key_dataset is not None
+                else tuple(name.split(".", 1)[-1] for name in group_by)
+            )
+        else:
+            grain = None
         return _Reference(
             name,
             path,
@@ -757,18 +1359,14 @@ def _aggregate_references(
 
     references.extend(relational(name, expr_path) for name in identifiers)
     references.extend(
-        relational(name, f"{operation_path}.group_by[{index}]")
+        relational(name, f"{operation_path}.group_by[{index}]", is_group_by=True)
         for index, name in enumerate(group_by)
     )
-    predicate = payload.get("filter")
-    if isinstance(predicate, str):
+    if filter_ast is not None:
         filter_path = f"{operation_path}.filter"
-        ast_filter = _parse_predicate_at(predicate, filter_path, diagnostics)
-        if ast_filter is not None:
-            references.extend(
-                relational(name, filter_path)
-                for name in _predicate_identifiers(ast_filter)
-            )
+        references.extend(
+            relational(name, filter_path) for name in _predicate_identifiers(filter_ast)
+        )
     if isinstance(between, Mapping):
         value = between.get("value")
         if isinstance(value, str):
@@ -787,6 +1385,8 @@ def _aggregate_context(
     expr: str,
     operation_path: str,
     scope: _Scope,
+    *,
+    new_style: bool = False,
 ) -> list[ExecutionDiagnostic]:
     """Reject every aggregate context outside the three R007-8 permits."""
 
@@ -852,7 +1452,7 @@ def _aggregate_context(
         return []
 
     # Context 1: a declared dataset relation reduced before the R003 join.
-    if any(not name.startswith(f"{relation}.") for name in group_by):
+    if not new_style and any(not name.startswith(f"{relation}.") for name in group_by):
         return reject(
             f"a qualified reduction groups on columns of {relation!r}",
             f"{operation_path}.group_by",
@@ -948,6 +1548,10 @@ def _plan_derivation(
     unsupported: list[UnsupportedFeature],
     *,
     scope: _Scope = _COLUMN_SCOPE,
+    key_dataset: str | None = None,
+    keys: Sequence[str] = (),
+    specification: Specification | None = None,
+    bindings: BindingPlan | None = None,
 ) -> tuple[PlannedDerivation, tuple[_Reference, ...]]:
     value_path = expression_path(path, declaration)
     info = _expression_info(
@@ -955,6 +1559,10 @@ def _plan_derivation(
         value_path,
         supported_operations,
         scope=scope,
+        key_dataset=key_dataset,
+        keys=keys,
+        specification=specification,
+        bindings=bindings,
     )
     references = list(info.references)
     unsupported.extend(info.unsupported)
@@ -979,6 +1587,10 @@ def _plan_derivation(
             f"{override_path}.value",
             supported_operations,
             scope=scope,
+            key_dataset=key_dataset,
+            keys=keys,
+            specification=specification,
+            bindings=bindings,
         )
         diagnostics.extend(override_info.diagnostics)
         references.extend(
@@ -987,6 +1599,7 @@ def _plan_derivation(
                 reference.path,
                 reference.expected_type,
                 current_value_available=True,
+                filter=reference.filter,
             )
             for reference in override_info.references
         )
@@ -1209,6 +1822,7 @@ def _with_relation_dependencies(
     diagnostics: list[ExecutionDiagnostic],
     column_types: Mapping[str, ColumnType],
     resolved: list[ResolvedJoin],
+    key_dataset: str | None = None,
 ) -> PlannedDerivation:
     """Add the current-row values a derivation needs to reach another relation.
 
@@ -1234,15 +1848,65 @@ def _with_relation_dependencies(
             # consults output keys, so it depends on no applicable key.
             continue
         if reference.join_relation is not None:
-            keys = (
-                reference.join_group_by
-                if reference.join_group_by is not None
-                else _applicable_keys(specification, bindings, reference.join_relation)
-            )
+            if key_dataset is not None:
+                if reference.join_relation != key_dataset:
+                    diagnostics.append(
+                        _diagnostic(
+                            "cross_dataset_filtered_source",
+                            reference.path,
+                            {
+                                "dataset": reference.join_relation,
+                                "key_dataset": key_dataset,
+                                "reason": (
+                                    f"filtered source references dataset "
+                                    f"'{reference.join_relation}' but spec keys are "
+                                    f"derived from '{key_dataset}': cross-dataset "
+                                    f"filtered sources are not supported"
+                                ),
+                            },
+                            requirement="R003-58",
+                        )
+                    )
+                    continue
+                keys = (
+                    reference.join_group_by
+                    if reference.join_group_by is not None
+                    else tuple(specification.keys)
+                )
+            else:
+                keys = (
+                    reference.join_group_by
+                    if reference.join_group_by is not None
+                    else _applicable_keys(
+                        specification, bindings, reference.join_relation
+                    )
+                )
         elif qualifier in bindings.datasets and qualifier not in drivers:
             # R003-18: a scalar source qualified to the current row driver
             # reads the driver record, so it joins nothing and needs no key.
-            keys = _applicable_keys(specification, bindings, qualifier)
+            if key_dataset is not None:
+                if qualifier != key_dataset:
+                    diagnostics.append(
+                        _diagnostic(
+                            "cross_dataset_filtered_source",
+                            reference.path,
+                            {
+                                "dataset": qualifier,
+                                "key_dataset": key_dataset,
+                                "reason": (
+                                    f"filtered source references dataset "
+                                    f"'{qualifier}' but spec keys are derived from "
+                                    f"'{key_dataset}': cross-dataset filtered sources "
+                                    f"are not supported"
+                                ),
+                            },
+                            requirement="R003-58",
+                        )
+                    )
+                    continue
+                keys = tuple(specification.keys)
+            else:
+                keys = _applicable_keys(specification, bindings, qualifier)
         else:
             continue
         extra.extend(keys)
@@ -1255,11 +1919,13 @@ def _with_relation_dependencies(
                 dataset=qualifier,
                 keys=tuple(keys),
                 declared_grain=reference.join_group_by is not None,
+                filter=reference.filter,
             )
         )
-        _validate_join_key_types(
-            reference.path, qualifier, keys, bindings, column_types, diagnostics
-        )
+        if key_dataset is None or qualifier != key_dataset:
+            _validate_join_key_types(
+                reference.path, qualifier, keys, bindings, column_types, diagnostics
+            )
     if not extra:
         return planned
     dependencies = tuple(
@@ -2005,6 +2671,25 @@ def plan_execution(
         )
         raise ExecutionPlanningError(diagnostics) from error
 
+    key_dataset, _ = _analyze_key_dataset(specification, bindings, diagnostics)
+    if (
+        key_dataset is not None
+        and specification.base is not None
+        and specification.base != key_dataset
+    ):
+        diagnostics.append(
+            _diagnostic(
+                "invalid_key_derivation",
+                "base",
+                {
+                    "base": specification.base,
+                    "key_dataset": key_dataset,
+                    "reason": "base dataset must equal the key dataset in new-style specs",
+                },
+                requirement="R003-57",
+            )
+        )
+
     column_order = [column.name for column in specification.columns]
     column_positions = {name: index for index, name in enumerate(column_order)}
     column_types = {column.name: column.type for column in specification.columns}
@@ -2014,15 +2699,11 @@ def plan_execution(
     row_references: dict[tuple[int, str], tuple[_Reference, ...]] = {}
 
     if not rows:
-        if (
-            specification.default_driver is not None
-            and specification.default_driver in specification.datasets
-        ):
-            row_plans.append(
-                PlannedRow(
-                    index=None, declaration=None, driver=specification.default_driver
-                )
-            )
+        driver = specification.default_driver
+        if key_dataset is not None:
+            driver = key_dataset
+        if driver is not None and driver in specification.datasets:
+            row_plans.append(PlannedRow(index=None, declaration=None, driver=driver))
     else:
         for index, row in enumerate(rows):
             driver = row.dataset
@@ -2095,6 +2776,10 @@ def plan_execution(
                     diagnostics,
                     unsupported,
                     scope=row_scope,
+                    key_dataset=key_dataset,
+                    keys=specification.keys,
+                    specification=specification,
+                    bindings=bindings,
                 )
                 derivations[name] = _with_relation_dependencies(
                     planned,
@@ -2106,6 +2791,7 @@ def plan_execution(
                     diagnostics,
                     column_types,
                     resolved_joins,
+                    key_dataset=key_dataset,
                 )
                 row_references[(index, name)] = references
 
@@ -2249,6 +2935,10 @@ def plan_execution(
             diagnostics,
             unsupported,
             scope=_Scope(record_lookups=frozenset(lookups)),
+            key_dataset=key_dataset,
+            keys=specification.keys,
+            specification=specification,
+            bindings=bindings,
         )
         column_plans.append(
             _with_relation_dependencies(
@@ -2261,6 +2951,7 @@ def plan_execution(
                 diagnostics,
                 column_types,
                 resolved_joins,
+                key_dataset=key_dataset,
             )
         )
         for reference in references:
@@ -2345,19 +3036,20 @@ def plan_execution(
     key_set = set(specification.keys)
     planned_by_column = {planned.column: planned for planned in column_plans}
     has_templates = bool(specification.rows)
+    # A key column that reads a non-key output column is still the R001-43
+    # contract in both legacy and new-style specs.
     for key in specification.keys:
         planned = planned_by_column.get(key)
         if planned is None:
-            if has_templates:
-                continue
-            diagnostics.append(
-                _diagnostic(
-                    "key_dependency",
-                    f"columns.{key}.derivation",
-                    {"column": key},
-                    requirement="R001-43",
+            if key_dataset is None and not has_templates:
+                diagnostics.append(
+                    _diagnostic(
+                        "key_dependency",
+                        f"columns.{key}.derivation",
+                        {"column": key},
+                        requirement="R001-43",
+                    )
                 )
-            )
             continue
         for dependency in planned.dependencies:
             if dependency in column_types and dependency not in key_set:
@@ -2381,6 +3073,10 @@ def plan_execution(
     row_derived = tuple(
         column.name for column in specification.columns if column.derivation is None
     )
+    planned_by_column = {planned.column: planned for planned in column_plans}
+    key_derivations = tuple(
+        planned_by_column[key] for key in specification.keys if key in planned_by_column
+    )
     return ExecutionPlan(
         specification=specification,
         bindings=bindings,
@@ -2389,4 +3085,6 @@ def plan_execution(
         row_derived_columns=row_derived,
         record_lookups=tuple(lookups.values()),
         resolved_joins=tuple(resolved_joins),
+        key_dataset=key_dataset,
+        key_derivations=key_derivations,
     )

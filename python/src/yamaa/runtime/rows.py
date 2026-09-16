@@ -9,11 +9,11 @@ knowing nothing about rows.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import JsonValue
+from pydantic import JsonValue, ValidationError
 
 from yamaa.expressions import (
     AggregateError,
@@ -45,8 +45,11 @@ from yamaa.odm import BindingIndex
 from yamaa.planning import ExecutionDiagnostic, PlannedRow
 from yamaa.runtime.joins import (
     IndexedRecord,
+    KeyCorrelation,
+    MultipleMatchSelection,
     OrderError,
     RelationIndex,
+    _parsed,
     applicable_keys,
     compare_values,
     eligible_records,
@@ -56,6 +59,8 @@ from yamaa.runtime.joins import (
     order_records,
     partition_records,
     resolution_result,
+    resolve_order_terms,
+    select_record,
 )
 from yamaa.runtime.lifecycle import LifecycleCondition
 from yamaa.runtime.lookups import LookupOutcome, RecordLookupSelector
@@ -101,6 +106,54 @@ class RelationalContext:
     _partitions: dict[tuple[str, ...], dict[tuple[object, ...], list[CandidateRow]]] = (
         field(default_factory=dict)
     )
+    key_correlation: KeyCorrelation | None = None
+    project_record: (
+        Callable[
+            [str, Mapping[str, object], frozenset[str], Mapping[str, object] | None],
+            dict[str, object],
+        ]
+        | None
+    ) = field(default=None)
+
+    def partition_by_key(
+        self,
+        relation: RelationIndex,
+        predicate: PredicateAst | None = None,
+        columns: Sequence[str] | None = None,
+    ) -> dict[tuple[object, ...], tuple[IndexedRecord, ...]] | ConditionResult:
+        """Group relation records by their recomputed key tuple.
+
+        Used by new-style filtered sources.  The projection callback is not
+        needed here because filtered sources always group on keys.
+        """
+        assert self.key_correlation is not None
+        eligible = eligible_records(relation.records, predicate, relation)
+        if isinstance(eligible, ConditionResult):
+            return eligible
+        probes: list[CandidateRow] = []
+        for record in eligible:
+            values = self.key_correlation.evaluate_scalar_keys(record.values)
+            probes.append(
+                CandidateRow(
+                    source_rows={self.key_correlation.dataset: dict(record.values)},
+                    values=values,
+                )
+            )
+        if self.key_correlation.window_evaluator is not None:
+            window_values = self.key_correlation.window_evaluator(probes, relation)
+            for probe, window_value in zip(probes, window_values):
+                probe.values.update(window_value)
+        grouped: dict[tuple[object, ...], list[IndexedRecord]] = {}
+        for record, probe in zip(eligible, probes):
+            if columns is None:
+                key = tuple(
+                    probe.values.get(name, MISSING)
+                    for name in self.key_correlation.key_names
+                )
+            else:
+                key = tuple(probe.values.get(name, MISSING) for name in columns)
+            grouped.setdefault(key, []).append(record)
+        return {key: tuple(members) for key, members in grouped.items()}
 
     def partition(
         self, fields: tuple[str, ...]
@@ -166,6 +219,43 @@ def _invalid(operation: str, reason: str) -> ConditionResult:
     )
 
 
+class _AggregateRecordResolver:
+    """Expose one relation record plus its output-column projection.
+
+    New-style aggregates reduce over output-column values projected onto a
+    relation's native rows.  Qualified names read the relation record;
+    unqualified names read the projection.
+    """
+
+    def __init__(
+        self,
+        projection: Mapping[str, object],
+        record: IndexedRecord,
+        dataset: str,
+    ) -> None:
+        self._projection = projection
+        self._record = record
+        self._dataset = dataset
+
+    def resolve(self, variable: str) -> Resolution:
+        if "." in variable:
+            qualifier, field = variable.split(".", 1)
+            if qualifier == self._dataset and field in self._record.values:
+                return ResolvedValue(value=self._record.values[field])
+            return FailedResolution(
+                condition=_condition(
+                    "validation", "unknown_field", {"identifier": variable}
+                )
+            )
+        if variable in self._projection:
+            return ResolvedValue(value=self._projection[variable])
+        return FailedResolution(
+            condition=_condition(
+                "validation", "unknown_field", {"identifier": variable}
+            )
+        )
+
+
 class RowResolver:
     """Resolve every name one derivation of one constructed row can read."""
 
@@ -216,6 +306,156 @@ class RowResolver:
             return self._record_lookup(qualifier, variable.split(".", 1)[1])
         return self._base.resolve_with_multiple_matches(variable, multiple_matches)
 
+    def resolve_keyed_source(
+        self,
+        variable: str,
+        filter_text: str | None,
+        multiple_matches: Mapping[str, object] | None,
+    ) -> Resolution:
+        """Resolve a structured source with an optional right-side filter.
+
+        R003-46 filters the right side first.  In new-style specs the
+        partition is the recomputed key tuple; in legacy specs it is the
+        applicable-key join after filtering.
+        """
+        if "." not in variable:
+            return _failed(
+                _condition(
+                    "validation",
+                    "unknown_field",
+                    {"identifier": variable},
+                    requirement="R002-27",
+                )
+            )
+        dataset, field_name = variable.split(".", 1)
+        relation = self._context.relations.get(dataset)
+        if relation is None:
+            return _failed(
+                _condition(
+                    "validation",
+                    "unknown_field",
+                    {"identifier": variable},
+                    requirement="R002-27",
+                )
+            )
+        if not relation.has(field_name):
+            return _failed(
+                _condition(
+                    "validation",
+                    "unknown_field",
+                    {"identifier": variable},
+                    requirement="R002-27",
+                )
+            )
+
+        predicate = self._predicate(filter_text)
+        if isinstance(predicate, ConditionResult):
+            return FailedResolution(condition=predicate.condition)
+
+        key_correlation = self._context.key_correlation
+        if key_correlation is not None:
+            groups = self._context.partition_by_key(relation, predicate)
+            if isinstance(groups, ConditionResult):
+                return FailedResolution(condition=groups.condition)
+            current_key = tuple(
+                self._values.get(name, MISSING) for name in key_correlation.key_names
+            )
+            matches = groups.get(current_key, ())
+        else:
+            eligible = eligible_records(relation.records, predicate, relation)
+            if isinstance(eligible, ConditionResult):
+                return FailedResolution(condition=eligible.condition)
+            keys = applicable_keys(self._context.output_keys, relation)
+            if not keys:
+                return _failed(
+                    _condition(
+                        "no_applicable_keys",
+                        {
+                            "dataset": dataset,
+                            "keys": list(self._context.output_keys),
+                        },
+                        requirement="R003-33",
+                    )
+                )
+            unavailable = [key for key in keys if key not in self._values]
+            if unavailable:
+                return _failed(
+                    _condition(
+                        "key_unavailable",
+                        {"dataset": dataset, "keys": unavailable},
+                        requirement="R003-34",
+                    )
+                )
+            groups = partition_records(eligible, keys)
+            current_key = tuple(self._values[key] for key in keys)
+            matches = groups.get(current_key, ())
+
+        return self._select_one(
+            relation, dataset, field_name, matches, multiple_matches
+        )
+
+    def _select_one(
+        self,
+        relation: RelationIndex,
+        dataset: str,
+        field_name: str,
+        matches: Sequence[IndexedRecord],
+        multiple_matches: Mapping[str, object] | None,
+    ) -> Resolution:
+        """Choose one right-side record or report why the choice cannot be made."""
+        if not matches:
+            # R003-11 and R003-36: an absent right-side record is missing.
+            return ResolvedValue(value=MISSING)
+        if len(matches) == 1:
+            return ResolvedValue(value=matches[0].values[field_name])
+        if multiple_matches is None:
+            return FailedResolution(
+                condition=RuntimeCondition(
+                    phase="join",
+                    condition="multiple_matches",
+                    context={
+                        "dataset": dataset,
+                        "match_count": len(matches),
+                    },
+                    requirement="R003-35",
+                    applicable_handler="multiple_matches",
+                )
+            )
+        try:
+            selection = MultipleMatchSelection.model_validate(
+                dict(multiple_matches), strict=True
+            )
+        except ValidationError:
+            return _failed(
+                _condition(
+                    "validation",
+                    "invalid_field_type",
+                    {"field": "multiple_matches"},
+                )
+            )
+        terms = resolve_order_terms(selection.order_by, relation)
+        if isinstance(terms, ConditionResult):
+            return FailedResolution(condition=terms.condition)
+        predicate = _parsed(selection.filter)
+        if isinstance(predicate, ConditionResult):
+            return FailedResolution(condition=predicate.condition)
+        eligible = eligible_records(matches, predicate, relation)
+        if isinstance(eligible, ConditionResult):
+            return FailedResolution(condition=eligible.condition)
+        if not eligible:
+            # R008-14: filtering to no surviving record is an ordinary absent
+            # match under R003 rather than a handled condition.
+            return ResolvedValue(value=MISSING)
+        if len(eligible) == 1:
+            # R008-15: the handler counts only the rows where it had to choose.
+            return ResolvedValue(value=eligible[0].values[field_name])
+        chosen = select_record(eligible, terms, selection.keep)
+        if isinstance(chosen, ConditionResult):
+            return FailedResolution(condition=chosen.condition)
+        return ResolvedValue(
+            value=chosen.values[field_name], handled_by="multiple_matches"
+        )
+
     def _joins(self, qualifier: str) -> bool:
         """Return whether reaching this relation needs the R003 join.
 
@@ -235,6 +475,13 @@ class RowResolver:
         multiple_matches: Mapping[str, object] | None,
     ) -> Resolution:
         relation = self._context.relations[dataset]
+        key_correlation = self._context.key_correlation
+        if key_correlation is not None and dataset == key_correlation.dataset:
+            # R003-50: unfiltered qualified sources take the filtered-source
+            # path with a no-op filter.
+            return self.resolve_keyed_source(
+                f"{dataset}.{field_name}", None, multiple_matches
+            )
         keys = applicable_keys(self._context.output_keys, relation)
         if not keys:
             # R003-7 and R003-33: without an applicable key the join has no
@@ -517,6 +764,11 @@ class RowResolver:
     ) -> tuple[list[dict[str, object]], dict[str, object]] | ConditionResult:
         """Reduce the partition R003-17 selects for the current row."""
         relation = self._context.relations[dataset]
+        key_correlation = self._context.key_correlation
+        if key_correlation is not None:
+            return self._new_style_right_side(
+                dataset, relation, identifiers, group_by, predicate, between
+            )
         if group_by:
             # R003-20: a coarser declared grain is what the join matches on.
             fields = tuple(name.split(".", 1)[-1] for name in group_by)
@@ -551,6 +803,124 @@ class RowResolver:
         if isinstance(narrowed, ConditionResult):
             return narrowed
         return [_record_values(record, identifiers) for record in narrowed], grouped
+
+    def _new_style_right_side(
+        self,
+        dataset: str,
+        relation: RelationIndex,
+        identifiers: Sequence[str],
+        group_by: Sequence[str],
+        predicate: PredicateAst | None,
+        between: object,
+    ) -> tuple[list[dict[str, object]], dict[str, object]] | ConditionResult:
+        """Reduce a relation using key-derivation recomputation (R003-52)."""
+        assert self._context.key_correlation is not None
+        assert self._context.project_record is not None
+        key_correlation = self._context.key_correlation
+        project_record = self._context.project_record
+
+        needed = set(group_by) | {name for name in identifiers if "." not in name}
+        if predicate is not None:
+            needed |= {
+                name for name in _predicate_identifiers(predicate) if "." not in name
+            }
+
+        # Precompute every record's key tuple by applying the compiled key
+        # derivations to the relation's native rows.
+        scalar_keys = [
+            key_correlation.evaluate_scalar_keys(record.values)
+            for record in relation.records
+        ]
+        key_values: list[dict[str, object]]
+        if key_correlation.window_evaluator is not None:
+            probes: list[CandidateRow] = []
+            for record, scalar in zip(relation.records, scalar_keys):
+                probes.append(
+                    CandidateRow(
+                        source_rows={key_correlation.dataset: dict(record.values)},
+                        values=dict(scalar),
+                    )
+                )
+            window_values = key_correlation.window_evaluator(probes, relation)
+            key_values = [
+                {**scalar, **window}
+                for scalar, window in zip(scalar_keys, window_values)
+            ]
+        else:
+            key_values = [dict(scalar) for scalar in scalar_keys]
+
+        projected: list[dict[str, object]] = []
+        for record, keys in zip(relation.records, key_values):
+            projection = project_record(
+                dataset, record.values, frozenset(needed), seed=keys
+            )
+            projected.append(projection)
+
+        eligible: list[tuple[IndexedRecord, dict[str, object]]] = []
+        for record, projection in zip(relation.records, projected):
+            if predicate is not None:
+                result = evaluate_predicate(
+                    predicate, _AggregateRecordResolver(projection, record, dataset)
+                )
+                if isinstance(result, ConditionResult):
+                    return result
+                assert isinstance(result, PredicateValue)
+                if result.value is not TruthValue.TRUE:
+                    continue
+            eligible.append((record, projection))
+
+        if between is not None:
+            kept = self._between([record for record, _ in eligible], relation, between)
+            if isinstance(kept, ConditionResult):
+                return kept
+            kept_ids = {id(record) for record in kept}
+            eligible = [
+                (record, projection)
+                for record, projection in eligible
+                if id(record) in kept_ids
+            ]
+
+        group_names = tuple(group_by) if group_by else key_correlation.key_names
+
+        def group_value(
+            name: str, record: IndexedRecord, projection: Mapping[str, object]
+        ) -> object:
+            if "." in name:
+                return record.values.get(name.split(".", 1)[-1], MISSING)
+            return projection.get(name, MISSING)
+
+        def current_group_value(name: str) -> object:
+            if "." in name:
+                return self._values.get(name.split(".", 1)[-1], MISSING)
+            return self._values.get(name, MISSING)
+
+        groups: dict[
+            tuple[object, ...], list[tuple[IndexedRecord, dict[str, object]]]
+        ] = {}
+        for record, projection in eligible:
+            key = tuple(group_value(name, record, projection) for name in group_names)
+            groups.setdefault(key, []).append((record, projection))
+
+        current_key = tuple(current_group_value(name) for name in group_names)
+        if any(value is MISSING for value in current_key):
+            matches: list[tuple[IndexedRecord, dict[str, object]]] = []
+        else:
+            matches = groups.get(current_key, [])
+
+        result_records: list[dict[str, object]] = []
+        for record, projection in matches:
+            result_records.append(
+                {
+                    name: (
+                        projection[name]
+                        if "." not in name
+                        else record.values.get(name.split(".", 1)[-1], MISSING)
+                    )
+                    for name in identifiers
+                }
+            )
+        grouped = {name: current_group_value(name) for name in group_names}
+        return result_records, grouped
 
     def _between(
         self,
@@ -669,6 +1039,23 @@ def _record_values(
     return {
         name: record.values.get(name.split(".", 1)[-1], MISSING) for name in identifiers
     }
+
+
+def _predicate_identifiers(ast: PredicateAst) -> tuple[str, ...]:
+    names: list[str] = []
+
+    def visit(value: object) -> None:
+        if isinstance(value, Mapping):
+            if value.get("kind") == "identifier" and isinstance(value.get("name"), str):
+                names.append(value["name"])
+            for nested in value.values():
+                visit(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                visit(nested)
+
+    visit(ast)
+    return tuple(dict.fromkeys(names))
 
 
 def _readable(row: CandidateRow) -> dict[str, object]:

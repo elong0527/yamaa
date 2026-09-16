@@ -27,12 +27,12 @@ way to reach a right side.
 
 **R003-2.** The dataset named by a qualified source is the right side.
 
-**R003-3.** Applicable keys are output `keys` whose names also exist on the
+**R003-3.** Applicable keys (legacy mode) are output `keys` whose names also exist on the
 right side.
 
 ## Rule
 
-**R003-4.** A qualified source referring to a dataset other than the
+**R003-4.** In legacy mode, a qualified source referring to a dataset other than the
 current row template's input dataset performs an automatic left
 join during column derivation. The implementation must take these steps:
 
@@ -65,7 +65,7 @@ operands; the join is no exception.
 **R003-14.** `mapping_from` is not this join. Both are equality left joins
 adding one column; they differ only in where the keys come from.
 
-**R003-15.** This rule's join derives keys from output `keys` that also
+**R003-15.** In legacy mode, this rule's join derives keys from output `keys` that also
 exist on the right side. `mapping_from` declares its pairs of source
 variable and right-side column without consulting output `keys`, and so
 reaches a right side keyed on something else or not unique on the
@@ -168,6 +168,8 @@ Refusing the match makes the missing `types` declaration visible, where
 converting an operand would hide it and leave every runtime free to convert
 differently.
 
+In new-style specs, key columns are ordinary derived columns whose derivations pin the key dataset and define the key relation directly. The same key-derivation recomputation drives filtered sources and aggregates, so cross-dataset correlation has one mechanism instead of two.
+
 ## Errors
 
 **R003-33.** No applicable keys: fail.
@@ -191,7 +193,65 @@ fail under R013.
 
 ## Review
 
-**R003-38.** Validation reports the inferred applicable keys for every
+**R003-38.** In legacy mode, validation reports the inferred applicable keys for every
 qualified source. A reviewer sees which same-named columns the join
 matches on, the type each side declares for the columns, and the coarser
 grain a reduction declared in place of the keys.
+
+## Dataset declaration
+
+**R003-39.** Top-level `input:` and `datasets:` are aliases for the dataset-declaration block; `input:` is canonical. Implementations accept both; exactly one must be present. Both present -> validation error; neither present -> validation error. `schema_version` stays `1.0`.
+
+## Shape gating
+
+**R003-40.** A spec is NEW-STYLE when every column named in top-level `keys:` carries a derivation. New-style specs use the key-dataset semantics below, and a `rows:` block is a validation error.
+
+**R003-41.** LEGACY: any key column lacks a derivation -> legacy mode; `rows:` blocks and shared-name cross-dataset matching behave exactly as before.
+
+## Key dataset and key relation
+
+**R003-42.** Key columns are ordinary columns. A key derivation may be a `source`, a scalar expression (`literal`, `compute`, `case`, `mapping`, `coalesce`, `str_concat`, `cut`), or a window operation. All qualified identifiers appearing anywhere in the key derivations must name exactly one dataset S. Unqualified identifiers are permitted only when they name another key column (transitive same-row key->key references).
+
+**R003-43.** Static enforcement: collect every qualified identifier from every key derivation. Identifiers qualified to different datasets within or across key derivations -> validation error (`key columns must all derive from a single dataset`). S is the single dataset named by those qualified identifiers. An unqualified identifier that does not name another key column is not a valid key-derivation reference; if it names a non-key output column, the legacy `key_dependency` contract (R001-43) applies instead.
+
+**R003-44.** The key relation is the distinct tuples of the evaluated key derivations over S's rows. Each key derivation compiles once into a per-row function over S's columns; applied to all S rows, then deduped.
+
+**R003-45.** Qualified source in a KEY column is constructive, not a join: project per row of S, then distinct.
+
+## Structured source filter
+
+**R003-46.** Structured `source` gains an optional `filter`: a string predicate over right-side records, evaluated exactly like the existing `multiple_matches.filter`. The structured source form (with or without `filter`) is accepted everywhere a source is accepted: `derivation.source`, `mapping.source`, `coalesce.sources[]` list items, plus the existing `multiple_matches.filter`.
+
+**R003-47.** Evaluating `source: {filter: F, variable: D.C}`: D must equal the key dataset S, else a clear validation error, e.g. `filtered source references dataset 'D' but spec keys are derived from 'S': cross-dataset filtered sources are not supported`.
+
+**R003-48.** The implementation filters D's rows by F, recomputes each surviving row's key tuple by applying the compiled key derivations, groups by key tuple, and left-joins to the key relation on tuple equality. Zero rows -> missing; one row -> the value; more than one -> error unless `multiple_matches` is declared.
+
+**R003-49.** When `multiple_matches` is declared, the existing R003-30/31 `order_by`/`keep` behavior applies; its partition is now the recomputed key tuple.
+
+**R003-50.** Unfiltered qualified source in a NON-key column (e.g. `source: ODM.SomeCol`) takes the same path with a no-op filter: more than one row per key tuple is an error. Ambiguity must be explicit.
+
+**R003-51.** Unqualified `source: NAME` (same-row), `literal:`, `mapping:`, `coalesce:`, and scalar expressions keep existing semantics.
+
+## Right-side reduction in new-style specs
+
+**R003-52.** Aggregates (R003-16/17): in NEW-STYLE specs the applicable-keys partition is replaced by key-derivation recomputation -- one correlation mechanism shared with the filtered-source path. In LEGACY specs existing behavior is preserved exactly.
+
+## Errors (new-style)
+
+**R003-53.** Both `input:` and `datasets:` present: validation error.
+
+**R003-54.** Neither `input:` nor `datasets:` present: validation error.
+
+**R003-55.** `rows:` block in a new-style spec: validation error.
+
+**R003-56.** Unqualified identifier in a key derivation that names neither another key column nor a non-key output column: validation error. Unqualified references to non-key output columns are governed by R001-43, not by this rule.
+
+**R003-57.** Key derivations qualified to different datasets: validation error (`key columns must all derive from a single dataset`).
+
+**R003-58.** Filtered source references dataset D but spec keys are derived from S: validation error (cross-dataset filtered sources are not supported).
+
+**R003-59.** Unfiltered qualified non-key source with more than one row per key tuple: error unless locally handled.
+
+## Review (new-style)
+
+**R003-60.** In new-style specs, validation reports the key dataset, the compiled key derivations, and whether each qualified source declares a filter.

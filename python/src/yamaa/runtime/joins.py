@@ -11,7 +11,7 @@ puts first.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cmp_to_key
 from typing import Literal, TypeAlias
@@ -54,6 +54,36 @@ from yamaa.specification.models import OrderTerm
 
 PartitionKey: TypeAlias = tuple[RuntimeValue, ...]
 SourceTable: TypeAlias = LoadedDataset | TypedTable
+
+
+@dataclass(frozen=True, slots=True)
+class KeyCorrelation:
+    """The compiled key relation shared by new-style filtered sources.
+
+    One correlation object records the key dataset, the ordered output key
+    names, and one callable per key that derives that key from a single
+    record of the key dataset.  This lets every filtered-source join and
+    every new-style aggregate recompute the same key tuple.
+    """
+
+    dataset: str
+    key_names: tuple[str, ...]
+    scalar_evaluator: Callable[[Mapping[str, object]], dict[str, object]] | None
+    window_evaluator: (
+        Callable[[Sequence[object], RelationIndex], Sequence[dict[str, object]]] | None
+    )
+
+    def evaluate_scalar_keys(self, record: Mapping[str, object]) -> dict[str, object]:
+        """Return the scalar key values for one record.
+
+        The record is treated as a row of the key dataset, so qualified
+        sources like ``DM_RAW.STUDYID`` resolve to the record's
+        ``STUDYID`` column.  This makes the same correlation applicable to
+        any relation that carries the required columns.
+        """
+        if self.scalar_evaluator is None:
+            return {}
+        return self.scalar_evaluator(record)
 
 
 @dataclass(frozen=True, slots=True)

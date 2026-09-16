@@ -10,18 +10,21 @@ output:
   path: adsl.csv
   columns: [STUDYID, USUBJID, TRT01A]
 
+rows:
+  - id: record
+    dataset: DM
+    derivations:
+      STUDYID: {source: DM.STUDYID}
+      USUBJID: {source: DM.USUBJID}
+
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
 
   - name: TRT01A
     type: str

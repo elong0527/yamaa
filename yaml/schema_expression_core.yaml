@@ -9,7 +9,7 @@ expressions:
         description: Returns the declared scalar value unchanged.
     coalesce: # Returns the first non-missing source, else default or missing.
         - sources:
-            type: "list[variable]"
+            type: "list[filtered_source]"
             required: true
             description: Variables to test in order.
         - default:
@@ -39,12 +39,30 @@ source_binding_class:
         type: variable
         required: true
         description: Variable to copy.
+    - filter:
+        type: sql
+        required: false
+        description: Predicate selecting right-side records before matching.
     - missing:
         type: literal_value
         description: Value used when the source variable or item is absent.
     - multiple_matches:
         type: multiple_matches_class
         description: Rule for selecting one of several right-side matches.
+
+filtered_source_class:
+    - variable:
+        type: variable
+        required: true
+        description: Variable to copy.
+    - filter:
+        type: sql
+        required: false
+        description: Predicate selecting right-side records before matching.
+
+filtered_source:
+    type: [variable, filtered_source_class]
+    description: A bare variable or a filtered source variable.
 
 multiple_matches_class:
     - order_by:

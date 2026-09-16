@@ -150,6 +150,10 @@ no surviving record is an ordinary absent match rather than a handled
 condition, so a narrow filter silently produces missing instead of
 firing the handler.
 
+A source-level filter narrows the right side before the join stage, so it
+shares the same absent-match semantics and feeds the same `multiple_matches`
+handler as the existing reduction filter.
+
 ## Errors
 
 **R008-22.** A handler field on an expression that does not register it:
@@ -168,3 +172,11 @@ failure.
 
 **R008-27.** More than one successful override is not evaluated; first
 match wins.
+
+## Structured source filter
+
+**R008-28.** A structured source may declare an optional `filter` alongside its `variable`. The filter fires at the join stage, before `multiple_matches` selection.
+
+**R008-29.** Filtering to no surviving record is not a handled condition. It is an ordinary absent match under R003 and yields missing, per R008-14.
+
+**R008-30.** The structured source form (with or without `filter`) is accepted everywhere a source is accepted: `derivation.source`, `mapping.source`, `coalesce.sources[]` list items, plus the existing `multiple_matches.filter`.

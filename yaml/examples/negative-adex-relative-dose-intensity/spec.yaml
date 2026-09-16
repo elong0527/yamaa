@@ -10,24 +10,26 @@ output:
   path: adex.csv
   columns: [STUDYID, USUBJID, EXTRT, EXDOSU, DOSECUM, RDI]
 
+rows:
+  - id: record
+    dataset: TRT
+    derivations:
+      STUDYID: {source: TRT.STUDYID}
+      USUBJID: {source: TRT.USUBJID}
+      EXTRT: {source: TRT.EXTRT}
+
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: TRT.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: TRT.USUBJID
 
   - name: EXTRT
     type: str
     label: Name of Treatment
-    derivation:
-      source: TRT.EXTRT
 
   - name: EXDOSU
     type: str

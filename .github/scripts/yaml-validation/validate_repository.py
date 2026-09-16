@@ -4476,7 +4476,8 @@ def validate_spec_contracts(
     spec, spec_label, spec_path=None, project_root=None, snapshots=None,
 ):
     """Validate static cross-field contracts from normative rules."""
-    errors = []
+    spec, alias_errors = _normalize_input_alias(spec)
+    errors = list(alias_errors)
     output = spec.get('output')
 
     rows = spec.get('rows')
@@ -5333,7 +5334,7 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
                         column_resolver,
                         datasets,
                     )
-                )
+            )
 
     rows = spec.get('rows')
     if isinstance(rows, list):
@@ -6234,20 +6235,30 @@ def incompatible_variable_diagnostic(path, source, expected, actual):
     )
 
 
+def _source_variable(source):
+    """Return the variable name a source declares, whether concise or structured."""
+    if isinstance(source, str):
+        return source
+    if isinstance(source, dict):
+        return source.get('variable')
+    return None
+
+
 def validate_named_input_type(
     payload, field, accepted, expected, path, resolver
 ):
     if not isinstance(payload, dict):
         return []
     source = payload.get(field)
-    if not isinstance(source, str):
+    variable = _source_variable(source)
+    if not isinstance(variable, str):
         return []
-    actual = resolver(source)
+    actual = resolver(variable)
     if actual is None or actual in accepted:
         return []
     return [
         incompatible_variable_diagnostic(
-            f"{path}.{field}", source, expected, actual
+            f"{path}.{field}", variable, expected, actual
         )
     ]
 
@@ -6838,6 +6849,66 @@ def default_driver_dataset(spec):
     return None
 
 
+def _normalize_input_alias(spec):
+    """Rename top-level 'input' to 'datasets' and validate exactly-one."""
+    if not isinstance(spec, dict):
+        return spec, []
+    has_datasets = 'datasets' in spec
+    has_input = 'input' in spec
+    looks_like_entry = 'schema_version' in spec
+    if has_datasets and has_input:
+        return spec, [
+            validation_diagnostic(
+                'datasets',
+                'invalid_field_type',
+                "exactly one of 'datasets' or 'input' must be present; "
+                "both are declared",
+                context={'datasets': True, 'input': True},
+            )
+        ]
+    if looks_like_entry and not has_datasets and not has_input:
+        return spec, [
+            validation_diagnostic(
+                'datasets',
+                'invalid_field_type',
+                "exactly one of 'datasets' or 'input' must be present; "
+                "neither is declared",
+                context={'datasets': False, 'input': False},
+            )
+        ]
+    if has_input:
+        normalized = dict(spec)
+        normalized['datasets'] = normalized.pop('input')
+        return normalized, []
+    return spec, []
+
+
+def _is_new_style_spec(spec):
+    """Return True when every top-level key column carries a derivation."""
+    keys = spec.get('keys') if isinstance(spec.get('keys'), list) else []
+    columns = spec.get('columns') if isinstance(spec.get('columns'), list) else []
+    derivations = {
+        column.get('name'): column.get('derivation')
+        for column in columns
+        if isinstance(column, dict) and column.get('derivation') is not None
+    }
+    return all(
+        derivations.get(key) is not None
+        for key in keys
+        if isinstance(key, str)
+    )
+
+
+def _qualified_datasets_in_expression(expression, env):
+    """Collect datasets named by qualified identifiers in one expression."""
+    refs = collect_type_references(expression, 'expression', env)
+    return {
+        name.split('.', 1)[0]
+        for kind, name in refs
+        if kind == 'variable' and '.' in name
+    }
+
+
 def column_dependency_graph(spec, env):
     columns = spec.get('columns')
     if not isinstance(columns, list):
@@ -6997,7 +7068,10 @@ def derivation_primary_path(spec, spec_label, name):
 
 def validate_spec_static_semantics(spec, spec_label, spec_path, env):
     """Validate static operation, aggregate, template, and graph contracts."""
-    errors = []
+    # New-style gates apply only to specs that use the canonical 'input' alias.
+    uses_input = isinstance(spec, dict) and 'input' in spec
+    spec, alias_errors = _normalize_input_alias(spec)
+    errors = list(alias_errors)
     datasets = dataset_type_catalog(spec, spec_path, env)
     output_types = specification_column_types(spec)
     lookups = {}
@@ -7012,6 +7086,48 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
                 lookups[lookup_id] = datasets.get(dataset_id, {})
 
     keys = spec.get('keys') if isinstance(spec.get('keys'), list) else []
+    rows = spec.get('rows')
+    columns = spec.get('columns')
+    if uses_input and _is_new_style_spec(spec):
+        if isinstance(rows, list) and rows:
+            errors.append(
+                validation_diagnostic(
+                    f"{spec_label}.rows",
+                    'invalid_key_derivation',
+                    'rows are not permitted in new-style specs',
+                    context={
+                        'reason': 'rows are not permitted in new-style specs'
+                    },
+                )
+            )
+        key_datasets = set()
+        columns_by_name = {
+            column.get('name'): column
+            for column in columns
+            if isinstance(column, dict) and isinstance(column.get('name'), str)
+        }
+        for key in keys:
+            column = columns_by_name.get(key)
+            if column is None:
+                continue
+            derivation = column.get('derivation')
+            if isinstance(derivation, dict) and 'value' in derivation:
+                derivation = derivation['value']
+            key_datasets |= _qualified_datasets_in_expression(derivation, env)
+        if len(key_datasets) > 1:
+            errors.append(
+                validation_diagnostic(
+                    f"{spec_label}.columns",
+                    'mixed_key_datasets',
+                    'key columns must all derive from a single dataset',
+                    context={
+                        'keys': keys,
+                        'datasets': sorted(key_datasets),
+                        'reason': 'key columns must all derive from a single dataset',
+                    },
+                )
+            )
+
     column_context = {
         'resolver': predicate_resolver(
             unqualified=output_types, qualified={**datasets, **lookups}
@@ -7028,7 +7144,6 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
             ),
         },
     }
-    columns = spec.get('columns')
     if isinstance(columns, list):
         for index, column in enumerate(columns):
             if not isinstance(column, dict) or 'derivation' not in column:
@@ -7217,6 +7332,9 @@ def validate_spec_document(
     )
     if errors or not isinstance(spec, dict):
         return errors
+
+    spec, alias_errors = _normalize_input_alias(spec)
+    errors.extend(alias_errors)
 
     if 'schema_version' in spec:
         spec_version = str(spec['schema_version'])

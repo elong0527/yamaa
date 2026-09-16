@@ -18,8 +18,6 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
 
   - name: AGE
     type: int
@@ -35,4 +33,5 @@ columns:
 
 rows:
   - id: record
-    derivations: {}
+    derivations:
+      USUBJID: {source: DM.USUBJID}

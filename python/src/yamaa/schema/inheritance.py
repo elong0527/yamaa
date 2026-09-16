@@ -35,7 +35,7 @@ from yamaa.expressions.strings import (
 )
 from yamaa.specification._yaml import read_yaml_document
 from yamaa.specification.diagnostics import SpecificationError, ValidationDiagnostic
-from yamaa.specification.models import Specification
+from yamaa.specification.models import Specification, _normalize_input_alias_in_dict
 from yamaa.specification.schema import (
     SchemaBundle,
     class_fields,
@@ -982,6 +982,37 @@ def resolve_specification(
     active: list[Path] = []
     entry_version: object | None = None
 
+    def _normalize_alias(value: object) -> dict[str, object]:
+        if not isinstance(value, dict):
+            raise SpecificationError(
+                [
+                    _diagnostic(
+                        "invalid_field_type",
+                        "$",
+                        "R017-40",
+                        {"expected": "mapping", "actual": type(value).__name__},
+                    )
+                ]
+            )
+        try:
+            normalized = _normalize_input_alias_in_dict(value)
+        except ValueError as error:
+            raise SpecificationError(
+                [
+                    _diagnostic(
+                        "invalid_field_type",
+                        "$",
+                        "R006-46",
+                        {"reason": str(error)},
+                    )
+                ]
+            ) from error
+        assert isinstance(normalized, dict)
+        return normalized
+
+    if entry_document is not None:
+        entry_document = _normalize_alias(entry_document)
+
     def visit(path: Path, supplied: object | None = None) -> None:
         nonlocal entry_version
         canonical = path.resolve()
@@ -1000,6 +1031,7 @@ def resolve_specification(
             return
         try:
             raw = supplied if supplied is not None else read_yaml_document(canonical)
+            raw = _normalize_alias(raw)
         except (OSError, SpecificationError) as error:
             if isinstance(error, SpecificationError):
                 raise

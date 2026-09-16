@@ -10,6 +10,12 @@ output:
   path: adae.csv
   columns: [STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, ASTDT, ASTDTC, ASTDTF, TRTSDT, TRTEMFL]
 
+rows:
+  - id: record
+    dataset: AE
+    derivations:
+      AESEQ: {source: AE.AESEQ}
+
 columns:
   - name: STUDYID
     type: str
@@ -26,8 +32,6 @@ columns:
   - name: AESEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: AE.AESEQ
 
   - name: AETERM
     type: str

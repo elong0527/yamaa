@@ -5,23 +5,20 @@
 **Goal:** build one Demographics (DM) record per subject: sex (SEX), age
 (AGE), planned arm (ARM) and actual arm (ACTARM).
 
-**Input:** EDC output in long form, one row per
-collected item; e.g. subject 001 has **SEX**, **AGE** and **ARM** rows.
+**Input:** EDC output in long form, one record per collected item; e.g. subject
+001 has **SEX**, **AGE** and **ARM** information.
+
+**Grain:** `STUDYID` and `USUBJID` identify each subject. The study and
+subject identifiers accompany every collected item.
 
 **Variables:**
+- **SEX** holds `M` or `F` for a reported male or female value and `U` when
+  sex is absent or not reported.
+- **AGE** holds the collected integer age or is empty when age is absent.
+- **ARM** holds the collected planned arm or `Unassigned` when it is absent.
+- **ACTARM** copies **ARM**.
 
-- **SEX**: recorded sex coded `M` (Male), `F` (Female), `U` when missing,
-  blank, not collected at all, or any other value. The collected item is
-  read into a working column, **SEXRAW**, that the result does not carry.
-- **AGE**: age in whole years as collected; blank when missing.
-- **ARM**: planned arm as collected; `Unassigned` when none was collected.
-- **ACTARM**: actual arm; in this simple example it always equals the
-  planned arm (no mid-study crossover).
-
-**Note:** one record for each subject the extract carries, whichever items
-that subject has. The keys **STUDYID** and **USUBJID** set that grain, so
-no filter decides how many records come out, and a subject collected twice
-does not become two records. Defaults fill **SEX**, **AGE**, **ARM** and
-**ACTARM** when the item was not collected.
+Each output value is matched to the subject's collected item using the study
+and subject identifiers.
 
 **Standard:** SDTM | **Domain:** DM

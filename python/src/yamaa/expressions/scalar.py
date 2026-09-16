@@ -63,16 +63,32 @@ def _resolve(
     operation: str,
     field: str = "source",
 ) -> ValueResult | ConditionResult:
-    if not isinstance(variable, str):
+    if isinstance(variable, str):
+        source_name = variable
+        filter_text: str | None = None
+    elif isinstance(variable, Mapping):
+        source_name = variable.get("variable")
+        filter_text = (
+            variable.get("filter") if isinstance(variable.get("filter"), str) else None
+        )
+        if not isinstance(source_name, str):
+            return _invalid_payload(operation, "a variable name")
+    else:
         return _invalid_payload(operation, "a variable name")
-    resolved = resolver.resolve(variable)
+    if filter_text is not None:
+        resolve_keyed = getattr(resolver, "resolve_keyed_source", None)
+        if not callable(resolve_keyed):
+            return _invalid_payload(operation, "a resolver that supports filters")
+        resolved = resolve_keyed(source_name, filter_text, None)
+    else:
+        resolved = resolver.resolve(source_name)
     if isinstance(resolved, FailedResolution):
         return ConditionResult(condition=resolved.condition)
     if isinstance(resolved, AbsentValue):
         return expression_condition(
             "validation",
             "unknown_field",
-            {"identifier": variable},
+            {"identifier": source_name},
             requirement="R002-27",
             field=field,
         )

@@ -60,8 +60,9 @@ def test_a_key_column_must_not_depend_on_a_non_key_column_without_rows() -> None
     with pytest.raises(ExecutionPlanningError) as raised:
         plan_execution(spec, {"SRC": source_table()})
 
-    (diagnostic,) = raised.value.diagnostics
-    assert diagnostic.condition == "key_dependency"
+    diagnostic = next(
+        item for item in raised.value.diagnostics if item.condition == "key_dependency"
+    )
     assert diagnostic.requirement == "R001-43"
     assert diagnostic.context == {"column": "K", "dependency": "B"}
 
@@ -72,7 +73,7 @@ def test_a_later_column_reference_is_not_silently_sorted() -> None:
             Column(name="A", type="str", derivation=derivation({"source": "B"})),
             Column(name="B", type="str", derivation=derivation({"source": "SRC.X"})),
         ]
-    )
+    ).model_copy(update={"keys": ["B"]})
 
     with pytest.raises(ExecutionPlanningError) as raised:
         plan_execution(spec, {"SRC": source_table()})
@@ -94,8 +95,11 @@ def test_a_column_cycle_is_reported_as_a_cycle_not_an_ordering_repair() -> None:
     with pytest.raises(ExecutionPlanningError) as raised:
         plan_execution(spec, {"SRC": source_table()})
 
-    diagnostic = raised.value.diagnostics[0]
-    assert diagnostic.condition == "dependency_cycle"
+    diagnostic = next(
+        item
+        for item in raised.value.diagnostics
+        if item.condition == "dependency_cycle"
+    )
     assert diagnostic.spec_paths == (
         "columns.A.derivation.source",
         "columns.B.derivation.source",
@@ -293,11 +297,12 @@ def test_a_record_lookup_matching_on_output_keys_defaults_to_missing() -> None:
 def test_an_unimplemented_expression_is_not_a_semantic_failure() -> None:
     spec = specification(
         [
+            Column(name="B", type="str", derivation=derivation({"source": "SRC.X"})),
             Column(
                 name="A",
                 type="str",
                 derivation=derivation({"str_upper": {"source": "SRC.X"}}),
-            )
+            ),
         ]
     )
 
@@ -331,7 +336,21 @@ def test_an_override_can_read_the_converted_value_being_derived() -> None:
     assert plan.columns[0].dependencies == ()
 
 
-def two_dataset_specification(columns: list[Column]) -> Specification:
+def two_dataset_specification(
+    columns: list[Column], keys: list[str] | None = None
+) -> Specification:
+    if keys is None:
+        keys = [columns[0].name]
+    row_derivations = {
+        column.name: derivation({"source": f"SRC.{column.name}"})
+        for column in columns
+        if column.derivation is None
+    }
+    rows = (
+        [Row(id="subject", dataset="SRC", derivations=row_derivations)]
+        if row_derivations
+        else None
+    )
     return Specification(
         schema_version="1.0",
         domain="OUT",
@@ -340,9 +359,10 @@ def two_dataset_specification(columns: list[Column]) -> Specification:
             "RIGHT": DatasetSource(path="input/right.csv"),
         },
         base="SRC",
-        keys=[columns[0].name],
+        keys=keys,
         output=Output(path="out.csv", columns=[column.name for column in columns]),
         columns=columns,
+        rows=rows,
     )
 
 
@@ -356,24 +376,26 @@ def right_table(column_type: str = "str") -> object:
     )
 
 
-def plan_two(columns: list[Column], right: str = "str"):
+def plan_two(columns: list[Column], right: str = "str", keys: list[str] | None = None):
     return plan_execution(
-        two_dataset_specification(columns),
+        two_dataset_specification(columns, keys=keys),
         {"SRC": source_table(), "RIGHT": right_table(right)},
         supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
     )
 
 
-def first_diagnostic(columns: list[Column], right: str = "str"):
+def first_diagnostic(
+    columns: list[Column], right: str = "str", keys: list[str] | None = None
+):
     with pytest.raises(ExecutionPlanningError) as raised:
-        plan_two(columns, right)
+        plan_two(columns, right, keys=keys)
     return raised.value.diagnostics[0]
 
 
 def test_a_qualified_source_joins_on_the_applicable_keys_it_depends_on() -> None:
     plan = plan_two(
         [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="X", type="str"),
             Column(
                 name="V", type="float", derivation=derivation({"source": "RIGHT.V"})
             ),
@@ -381,7 +403,7 @@ def test_a_qualified_source_joins_on_the_applicable_keys_it_depends_on() -> None
     )
 
     # R003-34: the applicable left key must be complete before the join runs.
-    assert plan.columns[1].dependencies == ("X",)
+    assert plan.columns[0].dependencies == ("X",)
 
 
 def test_a_join_key_typed_differently_on_each_side_is_reported() -> None:
@@ -389,7 +411,7 @@ def test_a_join_key_typed_differently_on_each_side_is_reported() -> None:
     # is reported rather than presented as an absent record.
     diagnostic = first_diagnostic(
         [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="X", type="str"),
             Column(
                 name="V", type="float", derivation=derivation({"source": "RIGHT.V"})
             ),
@@ -439,9 +461,10 @@ def aggregate_column(payload: dict[str, object]) -> Column:
 def aggregate_diagnostic(payload: dict[str, object]):
     return first_diagnostic(
         [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="X", type="str"),
             aggregate_column(payload),
-        ]
+        ],
+        keys=["X"],
     )
 
 
@@ -472,13 +495,13 @@ def test_an_identifier_outside_a_reduction_must_be_grouped_on() -> None:
 def test_a_grouped_identifier_beside_a_reduction_is_admitted() -> None:
     plan = plan_two(
         [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="X", type="str"),
             aggregate_column({"group_by": ["RIGHT.X"], "expr": "SUM(RIGHT.V)"}),
         ]
     )
 
     # R003-20: the join matches on the declared grain instead of the keys.
-    assert plan.columns[1].dependencies == ("X",)
+    assert plan.columns[0].dependencies == ("X",)
 
 
 def test_an_output_row_reduction_must_declare_its_partition() -> None:
@@ -647,7 +670,7 @@ def test_the_plan_reports_the_keys_every_qualified_source_matches_on() -> None:
     # rather than inferring them from two schemas.
     plan = plan_two(
         [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="X", type="str"),
             Column(
                 name="V", type="float", derivation=derivation({"source": "RIGHT.V"})
             ),
@@ -663,7 +686,7 @@ def test_the_plan_reports_the_keys_every_qualified_source_matches_on() -> None:
 def test_a_reduction_reports_the_coarser_grain_it_matches_on_instead() -> None:
     plan = plan_two(
         [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="X", type="str"),
             aggregate_column({"group_by": ["RIGHT.X"], "expr": "SUM(RIGHT.V)"}),
         ]
     )
@@ -678,7 +701,7 @@ def test_one_relation_is_reported_once_however_often_it_is_named() -> None:
     # join it performs is still one join.
     plan = plan_two(
         [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="X", type="str"),
             aggregate_column({"filter": "RIGHT.V > 0", "expr": "SUM(RIGHT.V)"}),
         ]
     )
