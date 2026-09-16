@@ -10,8 +10,8 @@ applies_to: [column.type, column_type, literal_value, derivation,
 
 ## Intent
 
-Close the column vocabulary, normalize non-finite floats, and define
-conversion into a declared type.
+Close the column vocabulary. Normalize non-finite floats. Define conversion
+to a declared type.
 
 ## Boundaries
 
@@ -33,9 +33,8 @@ normalization policy of `str`.
 
 ## Three type namespaces
 
-**R011-1.** The word `type` appears in three roles, distinguished by position
-rather than by name. The vocabularies share no value except coincidental
-spelling:
+**R011-1.** The word `type` has three roles. Position, not name, distinguishes
+the roles. The vocabularies share no value except coincidental spelling:
 
 - Schema descriptor keyword: `type` inside a descriptor, in a class field or
   a value type. Vocabulary: R006 type expressions over `str`, `int`,
@@ -106,14 +105,13 @@ checks its declared result contract.
 **R011-15.** Normalization precedes expression dispatch, missing handling,
 conversion, comparison, equality, grouping, ordering, range selection, key
 validation, verification, contract fingerprinting, and artifact rendering.
-None of those operations can observe a non-finite float or fall back to
-host-runtime semantics for a non-finite float. Those operations observe
-the missing value and apply their missing-value behavior. In particular, a
-normalized output key fails R005's non-missing key requirement,
-`not_missing` fails while verifications that skip missing values skip it
-under R009, and an artifact carries it as the missing value its profile
-writes under R020. No artifact or canonical value has an infinity or NaN
-spelling.
+No listed operation can observe a non-finite float or fall back to host-runtime
+semantics for a non-finite float. Each listed operation observes the missing
+value and uses its missing-value behavior. A normalized output key fails R005's
+non-missing key requirement, `not_missing` fails while verifications that skip
+missing values skip it under R009, and an artifact carries it as the missing
+value its profile writes under R020. No artifact or canonical value has an
+infinity or NaN spelling.
 
 **R011-16.** The policy is value-based, not a universal text sentinel. An
 unquoted YAML scalar matching a core-schema non-finite form first resolves to a
@@ -207,16 +205,16 @@ specification.
 
 ## Rationale
 
-Normalizing every non-finite float to missing at the boundary where the
-float enters keeps host floating-point semantics out of the language: no
-downstream operation can observe an infinity or NaN, so no operation needs
-a fallback for an infinity or NaN. The policy is value-based rather than a
-text sentinel, so quoting still preserves text and only numeric parsing
-gives such text a numeric meaning. Failing an undefined conversion instead
-of choosing a representation keeps the type system conservative -- a later
-rule can define a mapping without invalidating a specification written
-under this one -- and shortest-round-trip float text gives one value one
-spelling so that two runtimes can agree on the bytes an artifact carries.
+Normalizing a non-finite float to missing at its boundary keeps host
+floating-point semantics out of the language. No downstream operation can
+observe infinity or NaN, so no operation needs a fallback for either value.
+The policy is value-based rather than a text sentinel, so quoting still
+preserves text and only numeric parsing gives such text a numeric meaning.
+Failing an undefined conversion instead of choosing a representation keeps the
+type system conservative -- a later rule can define a mapping without
+invalidating a specification written under this one -- and shortest-round-trip
+float text gives one value one spelling so that two runtimes can agree on the
+bytes an artifact carries.
 
 ## Errors
 
