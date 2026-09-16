@@ -7,6 +7,7 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
+from yamaa import yamaa_domain
 from yamaa.io import ProjectResources, load_source_tables
 from yamaa.planning import ExecutionDiagnostic
 from yamaa.runtime import (
@@ -135,8 +136,26 @@ def test_positive_example_outputs_match_expected_csvs(
         if not name.startswith("_") and isinstance(value, pl.DataFrame)
     }
 
-    assert set(outputs) == set(expected)
+    specification = load_specification(example / "spec.yaml", SCHEMA_ROOT).specification
+    declared_log = specification.output.violation_log
+    if declared_log is not None:
+        # A violation sidecar is a second artifact the run.py convention
+        # does not name: its stem is rarely a valid variable name, and the
+        # facade below is what exposes it. The primary output still comes
+        # from run.py so the file stays the standard four lines.
+        log_stem = Path(declared_log).stem
+        assert set(outputs) == set(expected) - {log_stem}
+        actual_log = yamaa_domain(
+            example / "spec.yaml", schema_root=SCHEMA_ROOT
+        ).violation_log
+        assert actual_log is not None
+        committed_log = pl.read_csv(expected[log_stem], schema=actual_log.schema)
+        assert_frame_equal(actual_log, committed_log, check_exact=True)
+    else:
+        assert set(outputs) == set(expected)
     for name, expected_path in expected.items():
+        if declared_log is not None and name == Path(declared_log).stem:
+            continue
         actual = outputs[name]
         committed = pl.read_csv(expected_path, schema=actual.schema)
         assert_frame_equal(actual, committed, check_exact=True)
