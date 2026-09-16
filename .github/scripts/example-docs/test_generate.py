@@ -67,8 +67,10 @@ class DashboardTests(unittest.TestCase):
                 rows = list(csv.reader(stream))
             expected_cells.extend(value for row in rows[1:] for value in row)
         self.assertEqual(content.cells, expected_cells)
-        self.assertEqual(content.code, (EXAMPLE / "spec.yaml").read_text().splitlines())
-        self.assertEqual(content.sections, ["readme", "specification", "inputs", "outputs", "comments"])
+        spec_lines = (EXAMPLE / "spec.yaml").read_text().splitlines()
+        run_lines = (EXAMPLE / "run.py").read_text().splitlines()
+        self.assertEqual(content.code, spec_lines + run_lines)
+        self.assertEqual(content.sections, ["readme", "specification", "inputs", "outputs", "code", "comments"])
         self.assertEqual(content.downloads, [])
         self.assertEqual(content.tabs, [])
         self.assertEqual([pane["aria-label"] for pane in content.file_panes], ["input/ae.csv", "input/dm.csv", "expected/adae.csv"])
@@ -246,7 +248,8 @@ class DashboardTests(unittest.TestCase):
             page,
         )
         self.assertNotIn('id="code-select"', page)
-        plain = generate.render_example(EXAMPLE).decode("ascii")
+        codeless = generate.EXAMPLES / "negative-column-type-unknown"
+        plain = generate.render_example(codeless).decode("ascii")
         self.assertNotIn('id="code"', plain)
 
     def test_code_panel_switches_between_files(self):
