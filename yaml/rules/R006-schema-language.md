@@ -175,9 +175,9 @@ where YAML does require it is a parse error.
 ## Shorthand unions
 
 **R006-23.** Two union shapes are shorthand for a canonical form. An
-implementation expands shorthand while validating, so a validated document
-contains only the canonical form, so both implementations agree on what
-they validated.
+implementation expands shorthand while validating. A validated document
+contains only the canonical form, so both implementations agree on what they
+validated.
 
 **R006-24.** A union of `T` and `list[T]` accepts either. A bare `T`
 expands to a one-element list, and the list is canonical.
@@ -248,17 +248,16 @@ document that mixes the forms differently is still valid.
 
 ## Rationale
 
-A document written for one bundle version must never be silently
-reinterpreted under another, so a version mismatch is rejected before any
-validation rather than coerced. The closed class and keyword sets keep two
-implementations validating the same documents: anything undeclared fails
-instead of being ignored by one side and honored by the other. Shorthand
-unions expand to a canonical form so both implementations agree on what was
-validated, and the expansion is checked after the written form so a
-constraint on what the author wrote still applies. Quoting bracketed type
-expressions uniformly lets a type read the same way in flow and block form,
-and writing descriptors in flow form without a description keeps classes
-readable as tables.
+A document for one bundle version must not be silently reinterpreted under
+another. A version mismatch is rejected before validation, not coerced. Closed
+classes and keyword sets keep both implementations validating the same
+documents. Undeclared content fails instead of being ignored by one
+implementation and honored by the other. Shorthand unions expand to a
+canonical form. Both implementations then agree on what they validated. The
+written form is checked before expansion, so its constraints still apply.
+Uniform quoting of bracketed type expressions makes types read the same in flow
+and block form. Flow descriptors without descriptions keep classes readable as
+tables.
 
 ## Errors
 

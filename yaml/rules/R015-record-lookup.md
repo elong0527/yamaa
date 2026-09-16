@@ -128,10 +128,10 @@ record lookup whose match depends directly or indirectly on that column.
 
 ## When no record is selected
 
-**R015-16.** Two conditions leave a left row with no record, and they stay
-disjoint the way R008 keeps them disjoint for `mapping_from`: an incomplete
-match value is answered before any record is looked for, and an unmatched key
-is answered after.
+**R015-16.** Two conditions leave an output row with no record. The
+conditions stay disjoint, as R008's `mapping_from` conditions do. An incomplete
+match value is answered before a record is sought. An unmatched key is answered
+afterward.
 
 **R015-17.** `incomplete` answers the first. A declared `source` or
 `between.value` whose value is missing cannot be matched with anything, and

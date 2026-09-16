@@ -9,10 +9,9 @@ applies_to: [expression, expressions, schema_expression]
 
 ## Intent
 
-Give every derivation keyword a closed, self-contained schema and defined
-dispatch semantics without a generic operation argument bag. Built-in
-expressions are portable; `function` is the explicit project-environment
-extension point.
+Give every derivation keyword a closed schema and defined dispatch semantics.
+Do not use a generic operation argument bag. Built-in expressions are
+portable. `function` is the explicit project-environment extension point.
 
 ## Boundaries
 

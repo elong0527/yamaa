@@ -40,7 +40,7 @@ run, not a second derivation target or source within this specification.
 file and `output.violation_log`, when present, names R009's sidecar. Each
 extension selects `parquet` or `csv`. R020 owns their containers, bytes, and
 publication. Everything below concerns the primary values and their order,
-their order, which the profiles carry rather than decide.
+which the profiles carry rather than decide.
 
 ## The column list is declared
 
@@ -238,21 +238,18 @@ specification contains one declaration for each identifier.
 
 ## Rationale
 
-A fixed, specification-declared column list keeps a dictionary that
-outgrows its declared places as a loud specification-data mismatch instead
-of a silent, data-dependent artifact schema. A key over such a list would
-not be an identity a reviewer can state in advance, and family grouping by
-name position stays a property of the study's design rather than of the
-derivation because no portable construct can state it. Allowing an internal
-column in an order term trades a small, stated cost -- a reader cannot
-always reproduce the artifact order from the artifact alone -- for not
-having to publish a column that exists only to withhold. Presentation
-ordering comes last so it settles only the sequence a consumer
-receives; R001 orders row construction in base-record order, and R014's
-producing-specification link makes a stored artifact the source another
-specification reads that way, so a declared order is what lets a
-two-specification workflow reproduce one result instead of leaving the
-sequence to whichever runtime wrote the file.
+A fixed, specification-declared column list makes a dictionary that outgrows
+its declared places a visible specification-data mismatch. It does not silently
+change the artifact schema. Such a list makes a key an identity a reviewer can
+state in advance. Family grouping by name position remains a study design
+property because no portable construct can state it. An internal order term
+lets a specification withhold a working column. The stated cost is that a
+reader cannot always reproduce artifact order from the artifact alone.
+Presentation ordering runs last. It changes only the sequence a consumer
+receives. R001 orders construction in base-record order. R014 makes a stored
+artifact a source for another specification. A declared order lets a
+two-specification workflow reproduce one result rather than rely on the
+runtime's file order.
 
 ## Errors
 
