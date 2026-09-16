@@ -1,5 +1,6 @@
 schema_version: "1.0"
 domain: ADSL
+keys: [USUBJID]
 input:
   DM:
     path: input/dm.csv
@@ -7,7 +8,6 @@ input:
       POSITIVE_INFINITY: float
       NEGATIVE_INFINITY: float
       NOT_A_NUMBER: float
-keys: [USUBJID]
 
 output:
   path: adsl.csv

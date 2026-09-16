@@ -1,11 +1,11 @@
 schema_version: "1.0"
 domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD]
 input:
   LB: input/lb.csv
   LBREF:
     path: input/lbref.csv
 base: LB
-keys: [STUDYID, USUBJID, PARAMCD]
 
 output:
   path: adlb.csv

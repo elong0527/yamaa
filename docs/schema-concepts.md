@@ -27,7 +27,7 @@ is exactly the one you already know -- **a header row and the rows filled in
 under it.**
 
 **`root_class` is the header for the file.** It declares `schema_version`,
-`domain`, `input`, `base`, `parents`, `record_lookups`, `keys`, `output`,
+`domain`, `keys`, `input`, `base`, `parents`, `record_lookups`, `output`,
 `columns`, `rows`, `verifications` and `metadata`, of which six are required.
 The specification in
 [Excel to YAMAA](excel-to-yamaa.md)

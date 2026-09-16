@@ -1,5 +1,6 @@
 schema_version: "1.0"
 domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE:
     path: input/ae.csv
@@ -8,7 +9,6 @@ input:
       AESTDTC: date
       AESTDTM: datetime
       SCORE: float
-keys: [STUDYID, USUBJID, AESEQ]
 
 output:
   path: adae.csv

@@ -1,5 +1,6 @@
 schema_version: "1.0"
 domain: ADTTE
+keys: [STUDYID, USUBJID, PARAMCD]
 input:
   ADSL: input/adsl.csv
   ADAE:
@@ -7,7 +8,6 @@ input:
     types:
       AESEQ: int
 base: ADSL
-keys: [STUDYID, USUBJID, PARAMCD]
 
 record_lookups:
   - id: AE_REC

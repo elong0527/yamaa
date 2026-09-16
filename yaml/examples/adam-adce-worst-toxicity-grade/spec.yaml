@@ -1,8 +1,8 @@
 schema_version: "1.0"
 domain: ADCE
+keys: [STUDYID, USUBJID, CESEQ]
 input:
   CE: input/ce.csv
-keys: [STUDYID, USUBJID, CESEQ]
 
 output:
   path: adce.csv

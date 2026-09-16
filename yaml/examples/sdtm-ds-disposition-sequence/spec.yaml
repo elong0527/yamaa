@@ -1,8 +1,8 @@
 schema_version: "1.0"
 domain: DS
+keys: [STUDYID, USUBJID, DSSEQ]
 input:
   DS_RAW: input/ds_raw.csv
-keys: [STUDYID, USUBJID, DSSEQ]
 
 output:
   path: ds.csv

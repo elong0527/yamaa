@@ -40,10 +40,10 @@ cells:
 ```yaml
 schema_version: "1.0"          # which schema version this spec targets (exact match)
 domain: ADSL                   # Dataset sheet -> Dataset
+keys: [STUDYID, USUBJID]       # Dataset sheet -> Key Variables, and actually checked
 input:                      # <- no cell for this; usually a Comment or a separate sheet
   SOURCE: input/adsl.csv
 base: SOURCE                   # Dataset sheet -> Structure, but as the driver of the row count
-keys: [STUDYID, USUBJID]       # Dataset sheet -> Key Variables, and actually checked
 
 output:
   path: adsl.csv             # <- no cell for this; the file, and its format
@@ -479,11 +479,11 @@ Excel:
 YAMAA:
 
 ```yaml
+keys: [STUDYID, USUBJID, EXTRT]
 input:
   TRT: input/subject_treatment.csv
   EX: {path: input/ex.csv, types: {EXDOSE: float}}
 base: TRT
-keys: [STUDYID, USUBJID, EXTRT]
 
   - name: DOSECUM
     type: float
@@ -820,11 +820,11 @@ through project functions.**
 schema_version: "1.0"
 parents: spec_study.yaml                           # optional: inherit shared levels
 domain: ADXX
+keys: [STUDYID, USUBJID, PARAMCD]
 input:
   SRC:  input/src.csv                              # typeless container: fields default to str
   ADSL: {path: input/adsl.csv, types: {AVAL: float}}
 base: SRC
-keys: [STUDYID, USUBJID, PARAMCD]
 
 metadata:                       # for define.xml; not validated
   dataset_label: Example Analysis Dataset

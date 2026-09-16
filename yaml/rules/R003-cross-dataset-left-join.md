@@ -89,7 +89,8 @@ the expression and R013 defines the computation.
 **R003-18a.** A specification without `rows` reads that dataset the same
 way, over the records its key combination was derived from, which R001-12
 builds. The row has no single input record there, so the source reads one
-value across those records and R001-44 fails a column that finds two.
+value across those records: R001-44 fails a column that finds two, and
+`multiple_matches` is what keeps one of them instead.
 
 **R003-19.** The aggregate's optional `filter` selects which right-side
 records enter that reduction:

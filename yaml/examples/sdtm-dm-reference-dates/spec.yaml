@@ -1,12 +1,12 @@
 schema_version: "1.0"
 domain: DM
+keys: [STUDYID, USUBJID]
 input:
   DM_RAW: input/dm_raw.csv
   EX: {path: input/ex.csv, types: {EXSEQ: int}}
   DS: input/ds.csv
   AE: input/ae.csv
 base: DM_RAW
-keys: [STUDYID, USUBJID]
 
 record_lookups:
   - id: LASTEX

@@ -70,9 +70,10 @@ pair an Excel spec never separates.
 ```yaml
 schema_version: "1.0"
 domain: DM
+keys: [STUDYID, USUBJID]
+
 input:
   ODM: input/odm.csv
-keys: [STUDYID, USUBJID]
 
 output:
   path: dm.csv

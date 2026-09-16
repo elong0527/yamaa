@@ -1,5 +1,8 @@
 schema_version: "1.0"
 domain: ADLB
+keys:
+  - USUBJID
+  - PARAMCD
 input:
   LB:
     path: input/lb.csv
@@ -9,9 +12,6 @@ input:
       LBSTRESN: float
       LBSTRESU: str
 base: LB
-keys:
-  - USUBJID
-  - PARAMCD
 output:
   path: adlb.csv
   columns:

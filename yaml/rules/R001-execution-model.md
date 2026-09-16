@@ -220,4 +220,6 @@ evaluation order to mapping order or repeated reads of one partition.
   logic runs.
 - **R001-44.** A column derivation yielding more than one value for one key
   combination: fail and report the column, how many values it yielded, and
-  the keys. Missing results are excluded from the count.
+  the keys. Missing results are excluded from the count. A source declaring
+  `multiple_matches` keeps one of the records carrying those values instead
+  of failing, which R008-12 defines.

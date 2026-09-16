@@ -1,11 +1,11 @@
 schema_version: "1.0"
 domain: ADSL
+keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
   MH: input/mh.csv
   RE: input/re.csv
 base: DM
-keys: [STUDYID, USUBJID]
 
 output:
   path: adsl.csv

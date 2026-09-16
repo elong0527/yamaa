@@ -1,12 +1,12 @@
 schema_version: "1.0"
 domain: FA
+keys: [STUDYID, USUBJID, FASEQ]
 input:
   VS:
     path: input/vs.csv
     types:
       VSSEQ: int
       VSSTRESN: float
-keys: [STUDYID, USUBJID, FASEQ]
 
 output:
   path: fa.csv

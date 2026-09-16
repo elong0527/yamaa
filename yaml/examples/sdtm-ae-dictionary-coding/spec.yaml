@@ -1,10 +1,10 @@
 schema_version: "1.0"
 domain: AE
+keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE_RAW: input/ae_raw.csv
   MEDDRA: input/meddra_26_1.csv
 base: AE_RAW
-keys: [STUDYID, USUBJID, AESEQ]
 metadata:
   dictionary: MedDRA
   dictionary_version: "26.1"

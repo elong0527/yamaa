@@ -1,8 +1,8 @@
 schema_version: "1.0"
 domain: ADLB
+keys: [STUDYID, USUBJID, VISIT]
 input:
   LB: input/lb.csv
-keys: [STUDYID, USUBJID, VISIT]
 
 output:
   path: adlb.csv

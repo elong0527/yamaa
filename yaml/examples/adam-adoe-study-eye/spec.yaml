@@ -1,10 +1,10 @@
 schema_version: "1.0"
 domain: ADOE
+keys: [STUDYID, USUBJID, OESEQ]
 input:
   OE: input/oe.csv
   ADSL: input/adsl.csv
 base: OE
-keys: [STUDYID, USUBJID, OESEQ]
 
 output:
   path: adoe.csv

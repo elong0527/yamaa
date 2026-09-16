@@ -1,8 +1,8 @@
 schema_version: "1.0"
 domain: ADAE
+keys: [STUDYID, USUBJID, ASEQ]
 input:
   AE: input/ae.csv
-keys: [STUDYID, USUBJID, ASEQ]
 
 output:
   path: adae.csv

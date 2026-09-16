@@ -1,5 +1,6 @@
 schema_version: "1.0"
 domain: ADVS
+keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
 input:
   ADVSPRE:
     path: input/advs_pre.csv
@@ -8,7 +9,6 @@ input:
     path: input/awindow.csv
     types: {AWLO: int, AWHI: int}
 base: ADVSPRE
-keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
 
 record_lookups:
   - id: AWIN

@@ -1,10 +1,10 @@
 schema_version: "1.0"
 domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE:
     path: input/ae.csv
     types: {AESEQ: int, AESTDTC: date}
-keys: [STUDYID, USUBJID, AESEQ]
 
 output:
   path: adae.csv

@@ -1,11 +1,11 @@
 schema_version: "1.0"
 domain: ADRS
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
   ADRSPRE: input/adrs_pre.csv
   ADSL: input/adsl.csv
 
 base: ADRSPRE
-keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 
 output:
   path: adrs.csv

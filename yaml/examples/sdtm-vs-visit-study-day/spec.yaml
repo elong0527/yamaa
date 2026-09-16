@@ -1,5 +1,6 @@
 schema_version: "1.0"
 domain: VS
+keys: [STUDYID, USUBJID, VSSEQ]
 input:
   VS_RAW: input/vs_raw.csv
   DM: input/dm.csv
@@ -8,7 +9,6 @@ input:
     path: input/tepoch.csv
     types: {DYLO: int, DYHI: int}
 base: VS_RAW
-keys: [STUDYID, USUBJID, VSSEQ]
 
 record_lookups:
   - id: PLANNEDVISIT

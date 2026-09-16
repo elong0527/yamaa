@@ -1,10 +1,10 @@
 schema_version: "1.0"
 domain: ADTTE
+keys: [STUDYID, USUBJID, PARAMCD]
 input:
   ADSL: input/adsl.csv
   ADRSPRE: input/adrs_pre.csv
   DS: input/ds.csv
-keys: [STUDYID, USUBJID, PARAMCD]
 
 output:
   path: adtte.csv

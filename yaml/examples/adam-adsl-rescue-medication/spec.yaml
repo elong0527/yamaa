@@ -1,10 +1,10 @@
 schema_version: "1.0"
 domain: ADSL
+keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
   CM: {path: input/cm.csv, types: {CMSEQ: int}}
 base: DM
-keys: [STUDYID, USUBJID]
 
 output:
   path: adsl.csv

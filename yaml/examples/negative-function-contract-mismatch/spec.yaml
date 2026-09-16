@@ -1,10 +1,10 @@
 schema_version: "1.0"
 domain: TEST
+keys: [ID]
 input:
   SOURCE:
     path: input/source.csv
     types: {VALUE: float}
-keys: [ID]
 
 output:
   path: test.csv

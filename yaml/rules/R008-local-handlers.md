@@ -94,7 +94,10 @@ it. The binding handlers are not theirs to declare: a source they name
 reaches its records through R003 and answers to their own handlers once
 it holds a value.
 
-**R008-12.** `multiple_matches` relaxes R003 right-side uniqueness.
+**R008-12.** `multiple_matches` relaxes right-side uniqueness wherever one
+source reaches several records: R003's matched records, an ODM item's
+contextual matches, and the records a key combination was derived from,
+whose disagreement R001-44 otherwise makes fatal.
 
 **R008-13.** The source's optional `filter` selects the eligible
 right-side records first. Sort those survivors by the `order_by` terms and

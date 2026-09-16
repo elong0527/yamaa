@@ -1,8 +1,8 @@
 schema_version: "1.0"
 domain: ADVS
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
   ADVSPRE: input/advs_pre.csv
-keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 
 output:
   path: advs.csv

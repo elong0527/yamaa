@@ -1,12 +1,12 @@
 schema_version: "1.0"
 domain: ADRS
+keys: [STUDYID, USUBJID, PARAMCD]
 input:
   ADSL: input/adsl.csv
   ADRSSEL:
     path: input/adrs_selection.csv
     types: {BORSEQ: int}
 base: ADSL
-keys: [STUDYID, USUBJID, PARAMCD]
 
 record_lookups:
   - id: RESPONSE
