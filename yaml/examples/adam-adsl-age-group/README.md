@@ -1,6 +1,6 @@
 # Group subjects by pooled age group
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-age-group.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-age-group.html) [![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)
 
 **Goal:** carry each subject's collected age and derive `AGEGR1`
 and `AGEGR1N` to pool subjects into age groups.
@@ -16,7 +16,7 @@ units (`AGEU`).
 - `AGEGR1N` is the numeric rank of `AGEGR1`: `1` for `<18`, `2` for
   `18-64`, and `3` for `>64`; empty when `AGE` is missing.
 
-**Note:** both flags share the same bands, so the number always
+**Note:** both variables share the same bands, so the number always
 matches the text for each subject.
 
 **Standard:** ADaM | **Domain:** ADSL
