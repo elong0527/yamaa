@@ -57,8 +57,8 @@ study that stores `ADSL.CSV` names the same container as one that stores
 | `.csv` | `csv` | delimited text | the bytes |
 | `.parquet` | `parquet` | Parquet | schema, column/row order, values |
 
-**R020-3.** One field carries both facts because a specification that produces
-an artifact needs a path regardless, and a separate profile beside it could
+**R020-3.** One field carries both facts: a specification that produces
+an artifact needs a path regardless. A separate profile beside it could
 disagree with the name it writes -- an `adsl.csv` declared `parquet` is a file
 whose name lies about its contents. The cost is stated rather than hidden:
 renaming the artifact changes the container, so a rename is a change to the
@@ -129,8 +129,8 @@ for absence. Reading does not restore the pair: R014-16 reads an empty field as
 missing whether it was bare or quoted, so a collected empty string written here
 returns as missing if this artifact is later read as a delimited source. The
 asymmetry is deliberate. A source is authored by a producer this language does
-not control, and a distinction no such producer reliably spells is not one a
-reader may invent, while an artifact this rule writes has one writer and can
+not control. A distinction no such producer reliably spells is not one a
+reader may invent. An artifact this rule writes has one writer and can
 afford the finer form. The `parquet` profile carries the pair in its container
 and keeps it in both directions.
 
@@ -195,8 +195,8 @@ count of microseconds from 1970-01-01T00:00:00 on the same wall clock the value
 names.
 
 **R020-24.** R016's `datetime` is a reading on a wall clock and carries no zone
-and no offset, so its Timestamp is not adjusted to UTC and an implementation
-must not attach a zone on the way out or on the way back in. A runtime whose
+and no offset. Its Timestamp is not adjusted to UTC. An implementation must
+not attach a zone when writing or reading. A runtime whose
 native timestamp always carries one -- R016 names R's `POSIXct` as such a type
 -- must still write and read this column so that the same wall clock survives;
 shifting a value into or out of a machine timezone changes it, and two runtimes
@@ -285,9 +285,9 @@ implementation performs the exact scaling above rather than delegating.
 produced learns how those bytes are encoded from the producer, through the
 producing specification link R014 defines: the producer's `output.path` states
 the profile by its extension, just as `output.columns` states the fields.
-The consumer reads that from the producing specification rather than from the
-name it happens to know the file by, so a copy stored under another name is
-still read under the profile its producer wrote it with.
+The consumer reads the profile from the producing specification, not from
+the name the consumer happens to know the file by. A copy stored under
+another name is still read under the profile its producer wrote it with.
 
 ## Publication
 

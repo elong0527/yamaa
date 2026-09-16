@@ -37,7 +37,7 @@ govern `parents` or schema `includes`.
 ## The approved roots
 
 **R021-1.** A run receives exactly one **approved project root**: an existing
-local directory fixed for the whole run. It is the directory holding the
+local directory fixed for the whole run. The root is the directory holding the
 **project configuration** of R021-2. A run whose entry file sits under no
 project configuration, and whose runner names no root, uses the directory
 holding the entry file, so a study that declares nothing keeps the behavior it
@@ -64,7 +64,7 @@ run reads.
 
 **R021-4.** The approved roots are fixed before any specification is read. **No
 specification field, no layer R017 reaches, and no value a specification reads
-contributes to them.** Only the entry project's own configuration and the
+contributes to the roots.** Only the entry project's own configuration and the
 runner do. A study says where its own data is kept; composition never enlarges
 what a run may read, so an inherited layer a study does not control cannot
 redirect where that study reads from, and a producing specification reached
@@ -118,12 +118,12 @@ identically on every platform and reveals nothing about the host.
   misspelling with no legitimate layout behind it, and an empty path is one
   empty segment.
 - **R021-12.** A `..` segment climbs to the parent directory and a `.` segment
-  stays put. A relative path may write both, and both resolve textually
-  before the filesystem is consulted: a traversal that stays inside the
+  stays put. A relative path may write both. Both resolve textually
+  before the filesystem is consulted. A traversal that stays inside the
   approved project root names one file by one spelling, because the canonical
-  resolved path below is the snapshot identity, and a traversal that climbs
+  resolved path below is the snapshot identity. A traversal that climbs
   above the entry directory's depth within that root fails as
-  `resource_path_outside_project`, so an escape fails identically on every
+  `resource_path_outside_project`. An escape fails identically on every
   platform whether or not anything exists where it points. A rooted path
   writes neither, because it already names its location and a dot segment
   there would only obscure which approved root it names.
@@ -155,8 +155,8 @@ component is a regular file.
 
 **R021-17.** **No component below the anchor is a symbolic link**, including
 one whose target is inside an approved root. A link is a second name for a
-file, so a boundary that admits a link must re-derive containment every time
-the link changes, and the link a validator followed is not necessarily the
+file. A boundary that admits a link must re-derive containment every time
+the link changes. The link a validator followed is not necessarily the
 link a reader follows. The anchor itself is exempt because it is not a name the
 specification chose: the runner selected it, the run canonicalized and opened
 it before reading any specification, and every walk begins at that open
@@ -212,8 +212,8 @@ approved rather than as permission to read the host.
 The roots come from the study's own configuration as well as from the runner.
 The study authors know where the study data is kept, and requiring them to
 pass that location through a runner protects nothing when they control the
-runner too. What the configuration must not do
-is travel: it is read once, from the entry project, so a layer R017 reaches
+runner too. The configuration must not travel: it is read once, from the
+entry project, so a layer R017 reaches
 cannot redirect where a study reads from, and a study that runs someone else's
 specification is not handed that specification's idea of what it may open. A
 runner that did not write the study keeps the last word, because it can cap or
