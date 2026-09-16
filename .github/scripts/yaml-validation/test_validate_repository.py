@@ -5303,6 +5303,58 @@ bad_field: "what"
             VALIDATOR.validate_examples_layout(self.root_dir), []
         )
 
+    def test_readme_dashboard_badge_accepts_lifecycle_badge(self):
+        ex_dir = self.root_dir / 'yaml' / 'examples' / 'link-check'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'spec.yaml').write_text('value: valid\n')
+        (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
+        badge = (
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]'
+            '(https://elong0527.github.io/yamaa/examples/link-check.html)'
+        )
+        lifecycle = (
+            '[![Lifecycle: finalized]'
+            '(https://img.shields.io/badge/Lifecycle-finalized-brightgreen)]'
+            '(https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)'
+        )
+        (ex_dir / 'README.md').write_text(
+            f'# Right badge\n\n{badge} {lifecycle}\n'
+        )
+        self.assertEqual(
+            VALIDATOR.validate_examples_layout(self.root_dir), []
+        )
+        (ex_dir / 'README.md').write_text(
+            f'# Bad lifecycle\n\n{badge} [![Lifecycle: bogus]'
+            f'(https://img.shields.io/badge/Lifecycle-bogus-red)](https://example.com)\n'
+        )
+        errors = VALIDATOR.validate_examples_layout(self.root_dir)
+        self.assertIn('right after the title', '\n'.join(errors))
+
+    def test_readme_combined_badge_line_is_exempt_from_line_width(self):
+        ex_dir = self.root_dir / 'yaml' / 'examples' / 'badge-width'
+        (ex_dir / 'expected').mkdir(parents=True)
+        badge = (
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]'
+            '(https://elong0527.github.io/yamaa/examples/badge-width.html)'
+        )
+        lifecycle = (
+            '[![Lifecycle: finalized]'
+            '(https://img.shields.io/badge/Lifecycle-finalized-brightgreen)]'
+            '(https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)'
+        )
+        combined = f'{badge} {lifecycle}'
+        self.assertGreater(len(combined), 79)
+        (ex_dir / 'README.md').write_text(f'# Badge width\n\n{combined}\n')
+        self.assertEqual(
+            VALIDATOR.validate_example_readmes(self.root_dir), []
+        )
+        (ex_dir / 'README.md').write_text(
+            f'# Badge width\n\n{combined}\n\n{"x" * 80}\n'
+        )
+        errors = VALIDATOR.validate_example_readmes(self.root_dir)
+        self.assertIn('maximum is 79', '\n'.join(errors))
+
     def test_empty_spec_is_rejected(self):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'empty-spec'
         ex_dir.mkdir(parents=True)

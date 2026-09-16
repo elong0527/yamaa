@@ -8428,6 +8428,25 @@ README_FOOTER_PATTERN = re.compile(
     r'\(https://elong0527\.github\.io/yamaa/examples/'
     r'[a-z0-9]+(?:-[a-z0-9]+)*\.html\)',
 )
+LIFECYCLE_BADGE_PATTERN = re.compile(
+    r'\[!\[Lifecycle: (draft|reviewed|finalized)\]'
+    r'\(https://img\.shields\.io/badge/Lifecycle-[^)]+\)\]'
+    r'\([^)]*\)'
+)
+
+
+def is_readme_badge_line(text: str) -> bool:
+    """Accept a Dashboard badge alone or followed by one lifecycle badge."""
+    stripped = text.strip()
+    if README_FOOTER_PATTERN.fullmatch(stripped):
+        return True
+    match = README_FOOTER_PATTERN.match(stripped)
+    if not match:
+        return False
+    rest = stripped[match.end():]
+    if not rest.startswith(' '):
+        return False
+    return bool(LIFECYCLE_BADGE_PATTERN.fullmatch(rest[1:]))
 
 
 def validate_example_readmes(root: Path):
@@ -8444,7 +8463,7 @@ def validate_example_readmes(root: Path):
         label = readme_path.relative_to(root)
         text = readme_path.read_text(encoding='utf-8')
         for line_number, line in enumerate(text.splitlines(), 1):
-            if len(line) > 79 and not README_FOOTER_PATTERN.fullmatch(line.strip()):
+            if len(line) > 79 and not is_readme_badge_line(line):
                 errors.append(
                     f"ERROR: {label}:{line_number}: line has {len(line)} "
                     "characters; maximum is 79"
@@ -9919,7 +9938,17 @@ def validate_examples_layout(root: Path):
                 "[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]"
                 f"(https://elong0527.github.io/yamaa/examples/{ex_dir.name}.html)"
             )
-            if len(lines) < 3 or lines[2].strip() != expected_badge:
+            badge_ok = False
+            if len(lines) >= 3:
+                stripped = lines[2].strip()
+                if stripped == expected_badge:
+                    badge_ok = True
+                elif stripped.startswith(expected_badge + ' '):
+                    rest = stripped[len(expected_badge) + 1:]
+                    badge_ok = bool(
+                        LIFECYCLE_BADGE_PATTERN.fullmatch(rest)
+                    )
+            if not badge_ok:
                 errors.append(
                     f"ERROR: {rel}/README.md must place '{expected_badge}' "
                     "right after the title"

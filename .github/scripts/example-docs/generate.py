@@ -54,6 +54,9 @@ CODE_SUFFIXES = ('.py', '.R', '.qmd', '.Rmd')
 README_TAXONOMY = re.compile(
     r"^\*\*Standard:\*\*\s*([^|]+?)\s*\|\s*\*\*Domain:\*\*\s*(\S+)\s*$"
 )
+LIFECYCLE_BADGE = re.compile(r"\[!\[Lifecycle:\s*([A-Za-z]+)\]\(([^)]+)\)\]")
+LIFECYCLE_STATES = ("draft", "reviewed", "finalized")
+LIFECYCLE_DEFAULT = ("draft", "https://img.shields.io/badge/Lifecycle-draft-lightgrey")
 
 
 def escape(value):
@@ -126,8 +129,19 @@ def readme_lines(text):
         line
         for line in text.splitlines()
         if "img.shields.io/badge/Dashboard" not in line
+        and "img.shields.io/badge/Lifecycle" not in line
         and not README_TAXONOMY.fullmatch(line)
     ]
+
+
+def readme_lifecycle(text):
+    """Extract the lifecycle state and badge URL from raw README text."""
+    match = LIFECYCLE_BADGE.search(text)
+    if match:
+        state, badge_url = match.group(1), match.group(2)
+        if state in LIFECYCLE_STATES:
+            return state, badge_url
+    return LIFECYCLE_DEFAULT
 
 
 def readme_taxonomy(text):
@@ -491,6 +505,12 @@ def render_example(example, previous=None, next=None):
         raise ValueError(f"example has no spec file: {example.name}")
     spec_edit_url = edit_base + "/" + quote(spec_path.name)
     readme_text = readme_path.read_text(encoding="utf-8")
+    lifecycle_state, lifecycle_url = readme_lifecycle(readme_text)
+    lifecycle_href = REPOSITORY + "/blob/main/yaml/examples/README.md#lifecycle"
+    lifecycle_badge = (
+        f'<a class="lifecycle-badge" href="{escape(lifecycle_href)}">'
+        f'<img src="{escape(lifecycle_url)}" alt="Lifecycle: {escape(lifecycle_state)}"></a>'
+    )
     title, readme = render_readme(readme_text, source_url)
     spec_text = spec_path.read_text(encoding="utf-8")
     # Parse metadata for labels and visual emphasis only; this does not execute the spec.
@@ -609,6 +629,7 @@ def render_example(example, previous=None, next=None):
     result = template.substitute(
         example_name=escape(example.name), page_title=escape(title), heading=escape(heading),
         category=escape(category), description=description,
+        lifecycle_badge=lifecycle_badge,
         failure_section=failure_section,
         datasets_heading=datasets_heading,
         readme_edit_url=readme_edit_url,
