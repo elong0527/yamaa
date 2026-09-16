@@ -35,7 +35,7 @@ Fetch the governed limits once, record which version was received, and store
 that copy with the study:
 
 ```yaml
-datasets:
+input:
   LBREF:
     path: input/lbref.csv
 ```

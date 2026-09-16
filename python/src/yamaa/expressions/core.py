@@ -63,13 +63,21 @@ class Resolver(Protocol):
     def resolve(self, variable: str) -> Resolution: ...
 
 
-class MultipleMatchResolver(Protocol):
-    """Optional resolver extension for structured R008 source selection."""
+class SelectedSourceResolver(Protocol):
+    """Optional resolver extension for a source that states how it selects.
 
-    def resolve_with_multiple_matches(
+    R003-21 lets a structured source narrow the right-side records it may
+    read, and R008-12 lets it choose among the survivors. Both reach the
+    records through the same call, because the filter decides what the
+    selection is applied to.
+    """
+
+    def resolve_selected(
         self,
         variable: str,
-        multiple_matches: Mapping[str, object],
+        *,
+        selector: str | None,
+        multiple_matches: Mapping[str, object] | None,
     ) -> Resolution: ...
 
 
@@ -84,12 +92,14 @@ class MappingResolver:
             return AbsentValue(variable=variable)
         return ResolvedValue(value=self._values[variable])
 
-    def resolve_with_multiple_matches(
+    def resolve_selected(
         self,
         variable: str,
-        multiple_matches: Mapping[str, object],
+        *,
+        selector: str | None,
+        multiple_matches: Mapping[str, object] | None,
     ) -> Resolution:
-        del multiple_matches
+        del selector, multiple_matches
         return self.resolve(variable)
 
 
@@ -129,6 +139,43 @@ def handler_value(
     return normalized
 
 
+def source_operand(value: object) -> tuple[str, str | None] | None:
+    """Split an operand naming a source into its variable and its filter.
+
+    R003-21b types the operand of every operation that names a source as a
+    variable or a variable with the `filter` selecting the records it reads.
+    The binding handlers stay on the `source` expression, so nothing else is
+    accepted here.
+    """
+    if isinstance(value, str):
+        return value, None
+    if not isinstance(value, Mapping) or set(value) != {"variable", "filter"}:
+        return None
+    variable = value.get("variable")
+    selector = value.get("filter")
+    if not isinstance(variable, str) or not isinstance(selector, str):
+        return None
+    return variable, selector
+
+
+def resolve_operand(
+    resolver: Resolver,
+    variable: str,
+    selector: str | None,
+) -> Resolution | ConditionResult:
+    """Resolve one named source, applying the records filter it declares."""
+    if selector is None:
+        return resolver.resolve(variable)
+    resolve_selected = getattr(resolver, "resolve_selected", None)
+    if not callable(resolve_selected):
+        return expression_condition(
+            "validation",
+            "invalid_field_type",
+            {"field": "filter", "reason": "resolver unsupported"},
+        )
+    return resolve_selected(variable, selector=selector, multiple_matches=None)
+
+
 def _source(payload: object, resolver: Resolver) -> EvaluationResult:
     if isinstance(payload, str):
         variable = payload
@@ -156,17 +203,26 @@ def _source(payload: object, resolver: Resolver) -> EvaluationResult:
             "invalid_field_type",
             {"field": "multiple_matches", "expected": "mapping"},
         )
-    if multiple is None:
+    selector = options.get("filter")
+    if selector is not None and not isinstance(selector, str):
+        return expression_condition(
+            "validation",
+            "invalid_field_type",
+            {"field": "filter", "expected": "str"},
+        )
+    if selector is None and multiple is None:
         resolved = resolver.resolve(variable)
     else:
-        resolve_multiple = getattr(resolver, "resolve_with_multiple_matches", None)
-        if not callable(resolve_multiple):
+        resolve_selected = getattr(resolver, "resolve_selected", None)
+        if not callable(resolve_selected):
             return expression_condition(
                 "validation",
                 "invalid_field_type",
-                {"field": "multiple_matches", "reason": "resolver unsupported"},
+                {"field": "filter", "reason": "resolver unsupported"},
             )
-        resolved = resolve_multiple(variable, multiple)
+        resolved = resolve_selected(
+            variable, selector=selector, multiple_matches=multiple
+        )
     if isinstance(resolved, ResolvedValue):
         normalized = normalize_runtime_value(resolved.value)
         if isinstance(normalized, ValueResult) and resolved.handled_by is not None:
@@ -200,11 +256,11 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
             "invalid_field_type",
             {"operation": "mapping", "expected": "mapping"},
         )
-    variable = payload.get("source")
+    operand = source_operand(payload.get("source"))
     dictionary = payload.get("dict")
     case_sensitive = payload.get("case_sensitive", True)
     if (
-        not isinstance(variable, str)
+        operand is None
         or not isinstance(dictionary, Mapping)
         or type(case_sensitive) is not bool
     ):
@@ -213,6 +269,7 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
             "invalid_field_type",
             {"operation": "mapping", "expected": "source and dict"},
         )
+    variable, selector = operand
 
     keys = list(dictionary)
     if not all(isinstance(key, str) for key in keys):
@@ -243,7 +300,9 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
                 field="dict",
             )
 
-    resolved = resolver.resolve(variable)
+    resolved = resolve_operand(resolver, variable, selector)
+    if isinstance(resolved, ConditionResult):
+        return resolved
     if isinstance(resolved, FailedResolution):
         return ConditionResult(condition=resolved.condition)
     if isinstance(resolved, AbsentValue):

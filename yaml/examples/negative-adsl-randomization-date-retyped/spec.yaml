@@ -1,12 +1,12 @@
 schema_version: "1.0"
 domain: ADSL
-datasets:
+keys: [STUDYID, USUBJID]
+input:
   DM:
     path: input/dm.csv
     schema: input/dm.schema.yaml
     # Intentionally invalid: the producing DM specification types RANDDT.
     types: {RANDDT: date}
-keys: [STUDYID, USUBJID]
 
 output:
   path: adsl.csv

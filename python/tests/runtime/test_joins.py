@@ -172,6 +172,42 @@ def test_several_matches_fail_unless_the_specification_answers_for_them() -> Non
     assert result.condition.context == {"dataset": "EX", "match_count": 2}
 
 
+def test_a_source_filter_narrows_the_join_without_a_declared_selection() -> None:
+    # R003-21: a filter that leaves one match answers with it, and one that
+    # leaves none is the absent match of R003-36, not a multiple match.
+    index = ex_relation()
+
+    one = join_scalar(
+        index,
+        ("STUDYID", "USUBJID"),
+        ("CATH", "S1"),
+        "EXTRT",
+        selector="EX.EXSEQ = 1",
+    )
+    none = join_scalar(
+        index,
+        ("STUDYID", "USUBJID"),
+        ("CATH", "S1"),
+        "EXTRT",
+        selector="EX.EXSEQ = 9",
+    )
+    several = join_scalar(
+        index,
+        ("STUDYID", "USUBJID"),
+        ("CATH", "S1"),
+        "EXTRT",
+        selector="EX.EXSEQ > 0",
+    )
+
+    assert isinstance(one, ResolvedValue)
+    assert one.value == "VITAMIN D3"
+    assert one.handled_by is None
+    assert isinstance(none, ResolvedValue)
+    assert none.value is MISSING
+    assert isinstance(several, FailedResolution)
+    assert several.condition.condition == "multiple_matches"
+
+
 def test_a_declared_selection_chooses_one_match_and_reports_the_handler() -> None:
     index = ex_relation()
 
@@ -197,11 +233,8 @@ def test_a_selection_filtered_to_one_record_fires_no_handler() -> None:
         ("STUDYID", "USUBJID"),
         ("CATH", "S1"),
         "EXTRT",
-        multiple_matches={
-            "order_by": [ORDER_BY],
-            "keep": "last",
-            "filter": "EX.EXSEQ = 1",
-        },
+        selector="EX.EXSEQ = 1",
+        multiple_matches={"order_by": [ORDER_BY], "keep": "last"},
     )
 
     assert isinstance(result, ResolvedValue)
@@ -218,11 +251,8 @@ def test_a_selection_filtered_to_nothing_is_an_ordinary_absent_match() -> None:
         ("STUDYID", "USUBJID"),
         ("CATH", "S1"),
         "EXTRT",
-        multiple_matches={
-            "order_by": [ORDER_BY],
-            "keep": "last",
-            "filter": "EX.EXSEQ = 9",
-        },
+        selector="EX.EXSEQ = 9",
+        multiple_matches={"order_by": [ORDER_BY], "keep": "last"},
     )
 
     assert isinstance(result, ResolvedValue)

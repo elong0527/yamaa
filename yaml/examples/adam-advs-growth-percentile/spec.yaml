@@ -1,6 +1,7 @@
 schema_version: "1.0"
 domain: ADVS
-datasets:
+keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
+input:
   ADVSPRE:
     path: input/advs_pre.csv
     types: {AGE: int}
@@ -8,7 +9,6 @@ datasets:
     path: input/lms_ref.csv
     types: {L: float, M: float, S: float, AGE: int}
 base: ADVSPRE
-keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
 
 record_lookups:
   - id: GROWTH

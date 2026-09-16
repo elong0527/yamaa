@@ -1,6 +1,7 @@
 schema_version: "1.0"
 domain: ADSL
-datasets:
+keys: [STUDYID, USUBJID]
+input:
   ADSL_IN:
     path: input/adsl.csv
     types:
@@ -14,7 +15,6 @@ datasets:
     types:
       ADATE: date
 base: ADSL_IN
-keys: [STUDYID, USUBJID]
 
 output:
   path: adsl.csv

@@ -86,7 +86,7 @@ def test_preflight_issues_prevent_input_loading() -> None:
     assert pilot.output is None
     issue = pilot.issues.row(0, named=True)
     assert issue["condition"] == "duplicate_identifier"
-    assert issue["spec_paths"] == ["datasets.ADLB", "domain"]
+    assert issue["spec_paths"] == ["input.ADLB", "domain"]
     assert json.loads(issue["context"]) == {"identifier": "ADLB"}
 
 

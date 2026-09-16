@@ -1,9 +1,9 @@
 schema_version: "1.0"
 domain: SUPPMH
-datasets:
+keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
+input:
   MH_SUPP_RAW: input/mh_supp_raw.csv
   MH: input/mh.csv
-keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 
 output:
   path: suppmh.csv

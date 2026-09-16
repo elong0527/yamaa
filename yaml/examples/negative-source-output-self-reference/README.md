@@ -37,7 +37,7 @@ give that source a name of its own and keep the name of the dataset being
 built for the dataset being built:
 
 ```yaml
-datasets:
+input:
   LB: input/lb.csv
   ADLBIN: {path: input/adlb.csv, types: {AVAL: float, ADT: date}}
 ```

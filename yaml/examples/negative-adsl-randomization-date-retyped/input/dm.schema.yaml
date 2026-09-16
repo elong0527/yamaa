@@ -1,8 +1,8 @@
 schema_version: "1.0"
 domain: DM
-datasets:
-  ODM: odm.csv
 keys: [STUDYID, USUBJID]
+input:
+  ODM: odm.csv
 
 output:
   path: dm.csv

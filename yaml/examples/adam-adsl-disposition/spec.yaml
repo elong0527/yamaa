@@ -1,10 +1,10 @@
 schema_version: "1.0"
 domain: ADSL
-datasets:
+keys: [STUDYID, USUBJID]
+input:
   DM: input/dm.csv
   DS: {path: input/ds.csv, types: {DSSEQ: int}}
 base: DM
-keys: [STUDYID, USUBJID]
 
 output:
   path: adsl.csv
@@ -37,10 +37,10 @@ columns:
     derivation:
       source:
         variable: DS.DSDECOD
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
         multiple_matches:
           order_by: [DS.DSSTDTC, DS.DSSEQ]
           keep: last
-          filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
 
   - name: EOSREAS
     type: str
@@ -48,10 +48,10 @@ columns:
     derivation:
       source:
         variable: DS.DSTERM
+        filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
         multiple_matches:
           order_by: [DS.DSSTDTC, DS.DSSEQ]
           keep: last
-          filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
 
   - name: EOSSTT
     type: str

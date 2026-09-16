@@ -1,7 +1,7 @@
 phase: validation
 condition: duplicate_identifier
 spec_paths:
-  - datasets.ADLB
+  - input.ADLB
   - domain
 requirement: R002-28
 context:

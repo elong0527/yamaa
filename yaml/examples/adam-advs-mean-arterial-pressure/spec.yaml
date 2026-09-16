@@ -1,8 +1,8 @@
 schema_version: "1.0"
 domain: ADVS
-datasets:
-  ADVSIN: {path: input/advs.csv, types: {AVAL: float}}
 keys: [STUDYID, USUBJID, VISIT, PARAMCD]
+input:
+  ADVSIN: {path: input/advs.csv, types: {AVAL: float}}
 
 output:
   path: advs.csv

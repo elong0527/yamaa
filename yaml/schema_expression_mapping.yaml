@@ -5,7 +5,7 @@ expressions:
         # Case-insensitive lookup folds ASCII a-z to A-Z under R019; folded keys
         # must be unique.
         - source:
-            type: variable
+            type: filtered_source
             required: true
             description: String variable used as the dictionary key.
         - dict:

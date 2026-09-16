@@ -35,7 +35,7 @@ One term per concept across all rules, schema comments, and messages:
   (an output record under construction or built).
 - **column** - dataset level. **field** - file and schema level (R014, R023).
   **variable** - an expression-level name (R006).
-- **path notation** - `row.dataset`, `root.datasets`, `expression.source`
+- **path notation** - `row.dataset`, `root.input`, `expression.source`
   (R002 style). Never `row_class.` or `root_class.`.
 - **driver** - banned from normative text, schema descriptions, and
   user-facing messages. Use input dataset or `row.dataset`.

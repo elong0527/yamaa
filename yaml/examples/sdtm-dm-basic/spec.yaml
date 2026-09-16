@@ -1,8 +1,9 @@
 schema_version: "1.0"
 domain: DM
-datasets:
-  ODM: input/odm.csv
 keys: [STUDYID, USUBJID]
+
+input:
+  ODM: input/odm.csv
 
 output:
   path: dm.csv
@@ -31,22 +32,16 @@ columns:
     type: str
     label: Subject Identifier for the Study
     derivation:
-      source: ODM.SubjectKey
-
-  - name: SEXRAW
-    type: str
-    label: Sex as Collected
-    derivation:
-      source:
-        variable: ODM.IT.DM.SEX
-        missing: null
+      source: USUBJID
 
   - name: SEX
     type: str
     label: Sex
     derivation:
       mapping:
-        source: SEXRAW
+        source:
+          filter: ODM.ItemOID = 'IT.DM.SEX'
+          variable: ODM.Value
         dict:
           Male: M
           Female: F
@@ -58,16 +53,18 @@ columns:
     label: Age
     derivation:
       source:
-        variable: ODM.IT.DM.AGE
-        missing: null
+        filter: ODM.ItemOID = 'IT.DM.AGE'
+        variable: ODM.Value
 
   - name: ARM
     type: str
     label: Description of Planned Arm
     derivation:
-      source:
-        variable: ODM.IT.DM.ARM
-        missing: Unassigned
+      coalesce:
+        sources:
+          - filter: ODM.ItemOID = 'IT.DM.ARM'
+            variable: ODM.Value
+        default: Unassigned
 
   - name: ACTARM
     type: str

@@ -32,7 +32,7 @@ def test_committed_inheritance_example_matches_resolved_artifact() -> None:
         "AVALU",
     ]
     assert (
-        resolved.provenance["datasets.LB.path"].file
+        resolved.provenance["input.LB.path"].file
         == (EXAMPLES / "spec-inheritance/spec_organization.yaml").resolve()
     )
 
@@ -44,7 +44,7 @@ def test_public_loader_resolves_parented_entry() -> None:
 
     assert loaded.specification.domain == "ADLB"
     assert loaded.specification.parents is None
-    assert "UNUSED" not in loaded.specification.datasets
+    assert "UNUSED" not in loaded.specification.input
 
 
 def test_inherited_source_literal_and_mapping_execute(tmp_path: Path) -> None:
@@ -52,7 +52,7 @@ def test_inherited_source_literal_and_mapping_execute(tmp_path: Path) -> None:
     (tmp_path / "input.csv").write_text("ID,CODE\n01,A\n02,B\n", encoding="ascii")
     (tmp_path / "layers/parent.yaml").write_text(
         """schema_version: "1.0"
-datasets:
+input:
   SRC: ../input.csv
 base: SRC
 columns:
@@ -112,7 +112,7 @@ def test_parent_relative_path_is_rebased_without_changing_its_file(
     (first / "data.csv").write_text("ID\nfirst\n", encoding="ascii")
     (second / "data.csv").write_text("ID\nsecond\n", encoding="ascii")
     parent_text = """schema_version: "1.0"
-datasets: {SRC: data.csv}
+input: {SRC: data.csv}
 base: SRC
 columns:
   - name: ID
@@ -136,14 +136,14 @@ output: {path: out.csv, columns: [ID]}
     entry.write_text(entry_text.replace("first", "second"), encoding="ascii")
     from_second = resolve_specification(entry, bundle)
 
-    assert from_first.specification.datasets["SRC"].path == "../first/data.csv"
-    assert from_second.specification.datasets["SRC"].path == "../second/data.csv"
+    assert from_first.specification.input["SRC"].path == "../first/data.csv"
+    assert from_second.specification.input["SRC"].path == "../second/data.csv"
     assert (
-        from_first.provenance["datasets.SRC.path"].file
+        from_first.provenance["input.SRC.path"].file
         == (first / "parent.yaml").resolve()
     )
     assert (
-        from_second.provenance["datasets.SRC.path"].file
+        from_second.provenance["input.SRC.path"].file
         == (second / "parent.yaml").resolve()
     )
 
@@ -156,7 +156,7 @@ def test_inherited_source_does_not_widen_entry_project_root(tmp_path: Path) -> N
     (organization / "data.csv").write_text("ID\n01\n", encoding="ascii")
     (organization / "parent.yaml").write_text(
         """schema_version: "1.0"
-datasets: {SRC: data.csv}
+input: {SRC: data.csv}
 base: SRC
 columns:
   - name: ID

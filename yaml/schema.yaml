@@ -19,7 +19,11 @@ root_class:
         type: domain_name
         required: true
         description: Name of the output dataset this specification derives.
-    - datasets:
+    - keys:
+        type: "list[column_name]"
+        required: true
+        description: Output columns identifying a row; R005 defines the identity they assert.
+    - input:
         type: "dict[dataset_id, dataset_source]"
         required: true
         description: Source datasets readable by this specification, each under the name it is read through.
@@ -35,10 +39,6 @@ root_class:
         type: "list[record_lookup_class]"
         required: false
         description: Records of other datasets named so that several columns can read them; R015 defines them.
-    - keys:
-        type: "list[column_name]"
-        required: true
-        description: Output columns identifying a row; R005 defines the identity they assert.
     - output:
         type: output_class
         required: true
@@ -233,7 +233,7 @@ dataset_class:
 dataset_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Identifier of a dataset declared in datasets.
+    description: Identifier of a dataset declared in input.
 
 record_lookup_id:
     type: str

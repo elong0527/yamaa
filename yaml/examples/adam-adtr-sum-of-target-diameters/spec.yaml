@@ -1,11 +1,11 @@
 schema_version: "1.0"
 domain: ADTR
-datasets:
+keys: [STUDYID, USUBJID, AVISIT]
+input:
   TRVISIT: input/trvisit.csv
   TR: {path: input/tr.csv, types: {TRSTRESN: float}}
   TU: input/tu.csv
 base: TRVISIT
-keys: [STUDYID, USUBJID, AVISIT]
 
 output:
   path: adtr.csv

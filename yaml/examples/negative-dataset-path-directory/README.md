@@ -35,7 +35,7 @@ as several files, combine them into one reviewed table first, then name that
 table instead of the folder that holds it:
 
 ```yaml
-datasets:
+input:
   LBREF:
     path: input/lbref/limits.csv
 ```

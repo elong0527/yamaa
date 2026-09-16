@@ -1,10 +1,10 @@
 schema_version: "1.0"
 domain: ADSL
-datasets:
+keys: [STUDYID, USUBJID]
+input:
   DM: input/dm.csv
   EX: {path: input/ex.csv, types: {EXSEQ: int}}
 base: DM
-keys: [STUDYID, USUBJID]
 
 output:
   path: adsl.csv
@@ -29,10 +29,10 @@ columns:
     derivation:
       source:
         variable: EX.EXTRT
+        filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXSTDTC IS NOT NULL"
         multiple_matches:
           order_by: [EX.EXSTDTC, EX.EXSEQ]
           keep: first
-          filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXSTDTC IS NOT NULL"
 
   - name: TRT01SRC
     type: str

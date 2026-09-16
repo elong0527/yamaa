@@ -1,6 +1,7 @@
 schema_version: "1.0"
 domain: ADVS
-datasets:
+keys: [STUDYID, USUBJID, ASEQ]
+input:
   PLAN:
     path: input/plan.csv
     types: {ASEQ: int}
@@ -10,7 +11,6 @@ datasets:
   ADSL: input/adsl.csv
 
 base: PLAN
-keys: [STUDYID, USUBJID, ASEQ]
 
 record_lookups:
   - id: SUBJECT

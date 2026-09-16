@@ -32,7 +32,7 @@ rejected before any data is read and no artifact is accepted.
 Read the limits under the name that holds them:
 
 ```yaml
-datasets:
+input:
   LBREF:
     path: input/reference/lbref.csv
 ```

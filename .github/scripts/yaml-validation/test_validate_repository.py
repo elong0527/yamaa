@@ -275,7 +275,7 @@ class TestPredicateLanguage(unittest.TestCase):
             spec_path = example_dir / 'spec.yaml'
             spec = {
                 'domain': 'ADSL',
-                'datasets': {
+                'input': {
                     'DM': {
                         'path': 'dm.csv',
                         'types': {'AGE': 'int'},
@@ -323,10 +323,85 @@ class TestPredicateLanguage(unittest.TestCase):
         self.assertIn('verifications[0].predicate.assert', errors[0])
         self.assertIn("unknown identifier 'MISSING'", errors[0])
 
+    def test_validates_the_predicate_a_source_filter_declares(self):
+        # R003-22: the filter selects right-side records, so it resolves
+        # against the dataset the source reads and not against the output.
+        spec = {
+            'domain': 'DM',
+            'input': {'ODM': 'odm.csv'},
+            'base': 'ODM',
+            'keys': ['USUBJID'],
+            'output': {'path': 'out.csv', 'columns': ['USUBJID', 'SEX', 'AGE', 'ARM']},
+            'columns': [
+                {
+                    'name': 'USUBJID',
+                    'type': 'str',
+                    'derivation': {'source': 'ODM.SubjectKey'},
+                },
+                {
+                    'name': 'SEX',
+                    'type': 'str',
+                    'derivation': {
+                        'mapping': {
+                            'source': {
+                                'variable': 'ODM.Value',
+                                'filter': 'ODM.Unknown = 1',
+                            },
+                            'dict': {'Male': 'M'},
+                        }
+                    },
+                },
+                {
+                    'name': 'AGE',
+                    'type': 'int',
+                    'derivation': {
+                        'source': {
+                            'variable': 'ODM.Value',
+                            'filter': "USUBJID = '01'",
+                        }
+                    },
+                },
+                {
+                    'name': 'ARM',
+                    'type': 'str',
+                    'derivation': {
+                        'coalesce': {
+                            'sources': [
+                                {
+                                    'variable': 'ODM.Value',
+                                    'filter': 'ODM.Missing IS NULL',
+                                }
+                            ],
+                            'default': 'Unassigned',
+                        }
+                    },
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            example_dir = Path(temp_dir)
+            (example_dir / 'odm.csv').write_text(
+                'SubjectKey,ItemOID,Value\n01,IT.DM.SEX,Male\n'
+            )
+            spec_path = example_dir / 'spec.yaml'
+            errors = VALIDATOR.validate_spec_predicates(
+                spec, 'example/spec.yaml', spec_path
+            )
+        message = '\n'.join(errors)
+
+        self.assertEqual(len(errors), 3)
+        self.assertIn('columns.SEX.derivation.mapping.source.filter', message)
+        self.assertIn('columns.AGE.derivation.source.filter', message)
+        self.assertIn('columns.ARM.derivation.coalesce.sources[0].filter', message)
+        self.assertIn("unknown identifier 'ODM.Unknown'", message)
+        self.assertIn("unknown identifier 'USUBJID'", message)
+        self.assertIn("unknown identifier 'ODM.Missing'", message)
+
     def test_validates_a_grouped_row_count_filter(self):
         spec = {
             'domain': 'ADLB',
-            'datasets': {'LB': 'lb.csv'},
+            'input': {'LB': 'lb.csv'},
             'base': 'LB',
             'keys': ['USUBJID'],
             'output': {'path': 'out.csv', 'columns': ['USUBJID']},
@@ -499,7 +574,7 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
     def context(self, **changes):
         context = {
             'kind': 'column',
-            'datasets': {
+            'input': {
                 'EX': {
                     'DOSE': 'float',
                     'PLANDOSE': 'float',
@@ -516,7 +591,7 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
         expression = 'SUM(EX.DOSE) / NULLIF(EX.PLANDOSE, 0)'
         ast = VALIDATOR.parse_aggregate_expression(expression)
         resolver = VALIDATOR.numeric_identifier_resolver(
-            qualified=self.context()['datasets']
+            qualified=self.context()['input']
         )
 
         result_type, errors = VALIDATOR.validate_aggregate_expression_ast(
@@ -709,10 +784,10 @@ class TestStaticSemanticContracts(unittest.TestCase):
             'resolver': VALIDATOR.predicate_resolver(
                 unqualified=output_types
             ),
-            'datasets': datasets,
+            'input': datasets,
             'aggregate': {
                 'kind': 'column',
-                'datasets': datasets,
+                'input': datasets,
                 'output_types': output_types,
                 'keys': ['KEY1'],
             },
@@ -1121,12 +1196,12 @@ class TestValidationManifest(unittest.TestCase):
     def test_implemented_fixture_requires_every_declared_path(self):
         entry = {
             'condition': 'duplicate_identifier',
-            'spec_paths': ['datasets.ADLB', 'domain'],
+            'spec_paths': ['input.ADLB', 'domain'],
             'validator': 'name_contract',
         }
         diagnostics = [
             VALIDATOR.validation_diagnostic(
-                'example/spec.yaml.datasets.ADLB',
+                'example/spec.yaml.input.ADLB',
                 'duplicate_identifier',
                 'duplicate',
             )
@@ -1858,7 +1933,7 @@ class TestJoinKeyInference(unittest.TestCase):
             self.write_example(
                 root, 'ex',
                 'schema_version: "1.0"\n'
-                'datasets:\n'
+                'input:\n'
                 '  AE: input/ae.csv\n'
                 '  SUPP: input/supp.csv\n'
                 'base: AE\n'
@@ -1884,7 +1959,7 @@ class TestJoinKeyInference(unittest.TestCase):
             self.write_example(
                 root, 'ex',
                 'schema_version: "1.0"\n'
-                'datasets:\n'
+                'input:\n'
                 '  AE: input/ae.csv\n'
                 'base: AE\n'
                 'keys: [STUDYID]\n'
@@ -1923,7 +1998,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             (inputs / 'dm.csv').write_text('USUBJID,AGE\n01,40\n')
             (layers / 'common.yaml').write_text(
                 'schema_version: "1.0"\n'
-                'datasets:\n'
+                'input:\n'
                 '  DM: ../input/dm.csv\n'
                 '  UNUSED: ../input/missing.csv\n'
                 'base: DM\n'
@@ -1963,7 +2038,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'schema_version: "1.0"\n'
                 'parents: common.yaml\n'
                 'metadata: {owner: b}\n'
-                'datasets:\n'
+                'input:\n'
                 '  DM:\n'
                 '    types: {AGE: int}\n'
                 'columns:\n'
@@ -1990,7 +2065,7 @@ class TestSpecificationInheritance(unittest.TestCase):
         self.assertNotIn('parents', resolved)
         self.assertEqual(resolved['metadata'], {'owner': 'b'})
         self.assertEqual(
-            resolved['datasets'],
+            resolved['input'],
             {'DM': {'path': 'input/dm.csv', 'types': {'AGE': 'int'}}},
         )
         self.assertNotIn('record_lookups', resolved)
@@ -2011,7 +2086,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             parent = root / 'parent.yaml'
             parent.write_text(
                 'schema_version: "1.0"\n'
-                'datasets:\n'
+                'input:\n'
                 '  DM: input/dm.csv\n'
                 '  REF: input/ref.csv\n'
                 'base: DM\n'
@@ -2078,7 +2153,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             parent = root / 'parent.yaml'
             parent.write_text(
                 'schema_version: "1.0"\n'
-                'datasets: {DM: input/dm.csv}\n'
+                'input: {DM: input/dm.csv}\n'
                 'base: DM\n'
                 'columns:\n'
                 '  - name: A\n'
@@ -2114,7 +2189,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             (inputs / 'dm.csv').write_text('USUBJID,SITEORD\n01,2\n')
             (layers / 'common.yaml').write_text(
                 'schema_version: "1.0"\n'
-                'datasets:\n'
+                'input:\n'
                 '  DM: ../input/dm.csv\n'
                 'base: DM\n'
                 'columns:\n'
@@ -2158,7 +2233,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             parent = root / 'parent.yaml'
             parent.write_text(
                 'schema_version: "1.0"\n'
-                'datasets: {DM: input/dm.csv}\n'
+                'input: {DM: input/dm.csv}\n'
                 'base: DM\n'
                 'columns:\n'
                 '  - name: A\n'
@@ -2734,7 +2809,7 @@ class TestSpecNames(unittest.TestCase):
     def test_accepts_resolved_unique_names(self):
         spec = {
             "domain": "ADSL",
-            "datasets": {"DM": "dm.csv", "EX": "ex.csv"},
+            "input": {"DM": "dm.csv", "EX": "ex.csv"},
             "base": "DM",
             "record_lookups": [{"id": "dose", "dataset": "EX"}],
             "keys": ["USUBJID"],
@@ -2750,7 +2825,7 @@ class TestSpecNames(unittest.TestCase):
     def test_rejects_a_colliding_or_unknown_violation_log_path(self):
         base = {
             "domain": "ADSL",
-            "datasets": {"DM": "dm.csv"},
+            "input": {"DM": "dm.csv"},
             "base": "DM",
             "keys": ["USUBJID"],
             "columns": [{"name": "USUBJID"}],
@@ -2784,7 +2859,7 @@ class TestSpecNames(unittest.TestCase):
     def test_rejects_duplicate_and_unresolved_columns(self):
         spec = {
             "domain": "ADSL",
-            "datasets": {"DM": "dm.csv"},
+            "input": {"DM": "dm.csv"},
             "keys": ["MISSING", "MISSING"],
             "output": {"columns": ["USUBJID", "USUBJID"]},
             "columns": [{"name": "USUBJID"}, {"name": "USUBJID"}],
@@ -2801,7 +2876,7 @@ class TestSpecNames(unittest.TestCase):
     def test_rejects_empty_keys(self):
         spec = {
             "domain": "ADSL",
-            "datasets": {"DM": "dm.csv"},
+            "input": {"DM": "dm.csv"},
             "keys": [],
             "output": {"columns": ["USUBJID"]},
             "columns": [{"name": "USUBJID"}],
@@ -2814,7 +2889,7 @@ class TestSpecNames(unittest.TestCase):
     def test_an_internal_key_names_only_its_key_entry(self):
         spec = {
             'domain': 'ADSL',
-            'datasets': {'DM': 'dm.csv'},
+            'input': {'DM': 'dm.csv'},
             'keys': ['USUBJID', 'SITEID'],
             'output': {'columns': ['USUBJID']},
             'columns': [{'name': 'USUBJID'}, {'name': 'SITEID'}],
@@ -2837,7 +2912,7 @@ class TestSpecNames(unittest.TestCase):
             with self.subTest(value=expected_type):
                 spec = {
                     'domain': 'ADSL',
-                    'datasets': {'DM': 'dm.csv'},
+                    'input': {'DM': 'dm.csv'},
                     'keys': ['USUBJID'],
                     'output': {'columns': [value]},
                     'columns': [{'name': 'USUBJID'}],
@@ -2864,7 +2939,7 @@ class TestSpecNames(unittest.TestCase):
     def test_accepts_output_order_by_over_declared_columns(self):
         spec = {
             "domain": "ADSL",
-            "datasets": {"DM": "dm.csv"},
+            "input": {"DM": "dm.csv"},
             "base": "DM",
             "keys": ["USUBJID"],
             "output": {
@@ -2884,7 +2959,7 @@ class TestSpecNames(unittest.TestCase):
     def test_rejects_unknown_and_repeated_output_order_terms(self):
         spec = {
             "domain": "ADSL",
-            "datasets": {"DM": "dm.csv"},
+            "input": {"DM": "dm.csv"},
             "base": "DM",
             "keys": ["USUBJID"],
             "output": {
@@ -2915,7 +2990,7 @@ class TestSpecNames(unittest.TestCase):
     def test_rejects_dataset_and_lookup_namespace_errors(self):
         spec = {
             "domain": "ADSL",
-            "datasets": {"ADSL": "input.csv"},
+            "input": {"ADSL": "input.csv"},
             "base": "MISSING",
             "record_lookups": [
                 {"id": "ADSL", "dataset": "MISSING"},
@@ -2941,7 +3016,7 @@ class TestSpecContracts(unittest.TestCase):
     def test_rejects_missing_base_and_incomplete_column_coverage(self):
         spec = {
             "domain": "ADSL",
-            "datasets": {"DM": "dm.csv", "VS": "vs.csv"},
+            "input": {"DM": "dm.csv", "VS": "vs.csv"},
             "keys": ["USUBJID"],
             "output": {"columns": ["USUBJID", "AGE"]},
             "columns": [
@@ -2960,7 +3035,7 @@ class TestSpecContracts(unittest.TestCase):
     def test_accepts_missing_base_with_one_dataset(self):
         spec = {
             "domain": "ADSL",
-            "datasets": {"DM": "dm.csv"},
+            "input": {"DM": "dm.csv"},
             "keys": ["USUBJID"],
             "output": {"columns": ["USUBJID"]},
             "columns": [
@@ -2975,7 +3050,7 @@ class TestSpecContracts(unittest.TestCase):
     def test_warning_verification_requires_a_violation_log(self):
         spec = {
             "domain": "ADSL",
-            "datasets": {"DM": "dm.csv"},
+            "input": {"DM": "dm.csv"},
             "base": "DM",
             "keys": ["USUBJID"],
             "output": {"path": "adsl.csv", "columns": ["USUBJID", "AGE"]},
@@ -3010,24 +3085,24 @@ class TestSpecContracts(unittest.TestCase):
     def test_default_driver_dataset_prefers_base(self):
         self.assertEqual(
             VALIDATOR.default_driver_dataset(
-                {"base": "DM", "datasets": {"DM": "dm.csv", "VS": "vs.csv"}}
+                {"base": "DM", "input": {"DM": "dm.csv", "VS": "vs.csv"}}
             ),
             "DM",
         )
         self.assertEqual(
-            VALIDATOR.default_driver_dataset({"datasets": {"DM": "dm.csv"}}),
+            VALIDATOR.default_driver_dataset({"input": {"DM": "dm.csv"}}),
             "DM",
         )
         self.assertIsNone(
             VALIDATOR.default_driver_dataset(
-                {"datasets": {"DM": "dm.csv", "VS": "vs.csv"}}
+                {"input": {"DM": "dm.csv", "VS": "vs.csv"}}
             )
         )
 
     def test_rejects_lookup_pairing_and_verification_constraints(self):
         spec = {
             "domain": "ADSL",
-            "datasets": {"DM": "dm.csv"},
+            "input": {"DM": "dm.csv"},
             "base": "DM",
             "record_lookups": [
                 {"id": "LAST", "dataset": "DM", "source": "USUBJID"},
@@ -3062,7 +3137,7 @@ class TestSpecContracts(unittest.TestCase):
     def test_accepts_grouped_row_count(self):
         spec = {
             "domain": "ADLB",
-            "datasets": {"LB": "lb.csv"},
+            "input": {"LB": "lb.csv"},
             "base": "LB",
             "keys": ["USUBJID"],
             "output": {"columns": ["USUBJID"]},
@@ -3089,7 +3164,7 @@ class TestSpecContracts(unittest.TestCase):
     def test_rejects_grouped_row_count_without_id_or_known_columns(self):
         spec = {
             "domain": "ADLB",
-            "datasets": {"LB": "lb.csv"},
+            "input": {"LB": "lb.csv"},
             "base": "LB",
             "keys": ["USUBJID"],
             "output": {"columns": ["USUBJID"]},
@@ -3118,7 +3193,7 @@ class TestSpecContracts(unittest.TestCase):
     def test_rejects_duplicate_row_count_verification_id(self):
         spec = {
             "domain": "ADLB",
-            "datasets": {"LB": "lb.csv"},
+            "input": {"LB": "lb.csv"},
             "base": "LB",
             "keys": ["USUBJID"],
             "output": {"columns": ["USUBJID"]},
@@ -3158,7 +3233,7 @@ class TestSpecContracts(unittest.TestCase):
             spec_path = example_dir / "spec.yaml"
             spec = {
                 "domain": "ADSL",
-                "datasets": {"DM": "input/dm.txt"},
+                "input": {"DM": "input/dm.txt"},
                 "base": "DM",
                 "keys": ["USUBJID"],
                 "output": {"columns": ["USUBJID"]},
@@ -3184,7 +3259,7 @@ class TestSpecContracts(unittest.TestCase):
             error for error in errors
             if getattr(error, 'condition', None) == 'source_profile_unknown'
         )
-        self.assertEqual(diagnostic.path, "example/spec.yaml.datasets.DM.path")
+        self.assertEqual(diagnostic.path, "example/spec.yaml.input.DM.path")
         self.assertEqual(diagnostic.context, {'path': 'input/dm.txt'})
 
     def test_accepts_parquet_as_a_source_profile(self):
@@ -3199,7 +3274,7 @@ class TestSpecContracts(unittest.TestCase):
             spec_path = example_dir / "spec.yaml"
             spec = {
                 "domain": "ADSL",
-                "datasets": {"DM": "input/dm.parquet"},
+                "input": {"DM": "input/dm.parquet"},
                 "base": "DM",
                 "keys": ["USUBJID"],
                 "output": {"columns": ["USUBJID"]},
@@ -3222,7 +3297,7 @@ class TestSpecContracts(unittest.TestCase):
             spec_path = example_dir / "spec.yaml"
             spec = {
                 "domain": "ADSL",
-                "datasets": {
+                "input": {
                     "DM": {
                         "path": "input/dm.parquet",
                         "types": {"USUBJID": "str"},
@@ -3244,7 +3319,7 @@ class TestSpecContracts(unittest.TestCase):
             if getattr(error, 'condition', None) == 'redundant_field_type'
         )
         self.assertEqual(
-            diagnostic.path, "example/spec.yaml.datasets.DM.types.USUBJID"
+            diagnostic.path, "example/spec.yaml.input.DM.types.USUBJID"
         )
         self.assertEqual(
             diagnostic.context,
@@ -3260,7 +3335,7 @@ class TestSpecContracts(unittest.TestCase):
             spec_path = example_dir / "spec.yaml"
             spec = {
                 "domain": "ADSL",
-                "datasets": {
+                "input": {
                     "DM": {
                         "path": "input/dm.csv",
                         "types": {"AGE": "int"},
@@ -3285,7 +3360,7 @@ class TestSpecContracts(unittest.TestCase):
         message = "\n".join(errors)
         self.assertIn("types.AGE", message)
         self.assertIn(
-            "datasets.EX.path: resource_path_missing: 'input/missing.csv' "
+            "input.EX.path: resource_path_missing: 'input/missing.csv' "
             "does not exist",
             message,
         )
@@ -3294,7 +3369,7 @@ class TestSpecContracts(unittest.TestCase):
 class TestProducingSpecs(unittest.TestCase):
     VALID_PRODUCER_SPEC = '''schema_version: "1.0"
 domain: DM
-datasets:
+input:
   RAW: raw.csv
 base: RAW
 keys: [STUDYID]
@@ -3346,7 +3421,7 @@ columns:
                 "schema": "input/dm.schema.yaml",
             }
         return VALIDATOR.validate_producing_specs(
-            {"datasets": {"DM": source}},
+            {"input": {"DM": source}},
             "example/spec.yaml",
             self.spec_path,
             self.env,
@@ -3370,7 +3445,7 @@ columns:
         )
 
         self.assertIn(
-            "example/spec.yaml.datasets.DM.types.AGE", "\n".join(errors)
+            "example/spec.yaml.input.DM.types.AGE", "\n".join(errors)
         )
 
         empty_types_errors = self.validate(
@@ -3381,7 +3456,7 @@ columns:
             }
         )
         self.assertIn(
-            "example/spec.yaml.datasets.DM.types: inline types cannot be "
+            "example/spec.yaml.input.DM.types: inline types cannot be "
             "combined with a producing specification",
             "\n".join(empty_types_errors),
         )
@@ -3401,7 +3476,7 @@ columns:
         self.write_producer_spec(
             '''schema_version: "1.0"
 domain: DM
-datasets: {RAW: raw.csv}
+input: {RAW: raw.csv}
 base: RAW
 keys: [STUDYID]
 output:
@@ -3450,7 +3525,7 @@ fields: {STUDYID: string, AGE: integer}
         self.write_producer_spec(
             '''schema_version: "1.0"
 domain: DM
-datasets: {}
+input: {}
 keys: [STUDYID]
 output: {path: out.csv, columns: [STUDYID, AGE]}
 columns:
@@ -3492,7 +3567,7 @@ columns:
     def test_rejects_producer_dependency_cycle(self):
         looping_producer = '''schema_version: "1.0"
 domain: {domain}
-datasets:
+input:
   LOOP:
     path: dm.csv
     schema: {link}
@@ -3524,8 +3599,8 @@ columns:
     def test_rejects_escaping_producer_link(self):
         self.write_producer_spec(
             self.VALID_PRODUCER_SPEC.replace(
-                "datasets:\n  RAW: raw.csv",
-                "datasets:\n  RAW: ../../escape.csv",
+                "input:\n  RAW: raw.csv",
+                "input:\n  RAW: ../../escape.csv",
             )
         )
 
@@ -3541,7 +3616,7 @@ columns:
         message = "\n".join(self.validate())
 
         self.assertIn(
-            "datasets.DM.schema: resource_path_missing: "
+            "input.DM.schema: resource_path_missing: "
             "'input/dm.schema.yaml' does not exist",
             message,
         )
@@ -3756,7 +3831,7 @@ class TestProjectResourceBoundary(unittest.TestCase):
 
     def test_error_names_the_written_path_and_no_host_path(self):
         message = VALIDATOR.resource_path_error(
-            "spec.yaml.datasets.DM.path",
+            "spec.yaml.input.DM.path",
             "input/absent.csv",
             "resource_path_missing",
         )
@@ -3902,7 +3977,7 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
     def spec(self, source):
         return {
             "domain": "ADSL",
-            "datasets": {"DM": "input/dm.csv", "REF": source},
+            "input": {"DM": "input/dm.csv", "REF": source},
             "base": "DM",
             "keys": ["USUBJID"],
             "output": {"columns": ["USUBJID"]},
@@ -3931,7 +4006,7 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
             with self.subTest(written=written):
                 message = "\n".join(self.contracts(written))
                 self.assertIn(
-                    f"example/spec.yaml.datasets.REF.path: {condition}: "
+                    f"example/spec.yaml.input.REF.path: {condition}: "
                     f"{written!r}",
                     message,
                 )
@@ -3943,7 +4018,7 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
         message = "\n".join(self.contracts("input/ref.csv"))
 
         self.assertIn(
-            "datasets.REF.path: resource_path_symlink: 'input/ref.csv'",
+            "input.REF.path: resource_path_symlink: 'input/ref.csv'",
             message,
         )
 
@@ -4574,7 +4649,7 @@ class TestDeclaredValidationErrors(unittest.TestCase):
 
     def check(self, condition, reported):
         return VALIDATOR.check_declared_validation_error(
-            {"condition": condition, "spec_paths": ["datasets.REF.path"]},
+            {"condition": condition, "spec_paths": ["input.REF.path"]},
             reported,
             "example/spec.yaml",
             "yaml/examples/example/expected/error.yaml",
@@ -4643,7 +4718,7 @@ class TestDatasetPathExamples(unittest.TestCase):
                 self.assertEqual(declared["phase"], "validation")
                 self.assertEqual(len(reported), 1)
                 self.assertIn(
-                    f"datasets.LBREF.path: {declared['condition']}: ",
+                    f"input.LBREF.path: {declared['condition']}: ",
                     reported[0],
                 )
                 self.assertIn(repr(declared["context"]["path"]), reported[0])
@@ -4980,6 +5055,33 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('How to fix', result.stdout)
 
+    def test_define_documents_are_validated_against_their_own_class(self):
+        # R026 gives the study document its own entry point, so the
+        # specification schema never reads it: nothing else would report a
+        # field the document does not declare.
+        root = TOOL_PATH.parents[3]
+
+        self.assertEqual(VALIDATOR.validate_examples_define_documents(root), [])
+
+    def test_a_define_document_field_outside_its_class_is_reported(self):
+        root = TOOL_PATH.parents[3]
+        source = root / 'yaml' / 'examples' / 'sdtm-dm-metadata-contract'
+        with tempfile.TemporaryDirectory() as temp_dir:
+            copy = Path(temp_dir)
+            shutil.copytree(root / 'yaml', copy / 'yaml', dirs_exist_ok=True)
+            document = (
+                copy / 'yaml' / 'examples' / source.name / 'define.yaml'
+            )
+            document.write_text(
+                document.read_text().replace('\ndatasets:\n', '\ninput:\n', 1)
+            )
+
+            errors = VALIDATOR.validate_examples_define_documents(copy)
+
+        message = '\n'.join(errors)
+        self.assertIn("unknown field 'input' for class define_class", message)
+        self.assertIn("missing required field 'datasets'", message)
+
     def test_example_layout_positive_has_error(self):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'positive-bad'
         ex_dir.mkdir(parents=True, exist_ok=True)
@@ -5074,15 +5176,15 @@ class TestValidatorCLI(unittest.TestCase):
 root_class:
   - schema_version: {type: str, required: true}
   - domain: {type: str, required: true}
-  - datasets: {type: str, required: true}
+  - input: {type: str, required: true}
   - keys: {type: str, required: true}
   - columns: {type: str, required: true}
 ''')
         (ex_dir / 'README.md').write_text('# Bad: field')
-        # Missing domain and datasets which are required, and has an unknown field 'bad_field'
+        # Missing domain and input which are required, and has an unknown field 'bad_field'
         (ex_dir / 'spec.yaml').write_text('''schema_version: "1.0"
 domain: "test"
-datasets: {}
+input: {}
 keys: []
 columns: []
 bad_field: "what"
@@ -5545,7 +5647,7 @@ class TestCsvProfile(unittest.TestCase):
         base = {
             'schema_version': '1.0',
             'domain': 'ADSL',
-            'datasets': {'SRC': 'input/adsl.csv'},
+            'input': {'SRC': 'input/adsl.csv'},
             'base': 'SRC',
             'keys': ['USUBJID'],
             'columns': [

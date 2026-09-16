@@ -1,8 +1,8 @@
 schema_version: "1.0"
 domain: ADSL
-datasets:
-  DM: {path: input/dm.txt}
 keys: [STUDYID, USUBJID]
+input:
+  DM: {path: input/dm.txt}
 
 output:
   path: adsl.csv

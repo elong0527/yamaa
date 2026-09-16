@@ -1,8 +1,8 @@
 schema_version: "1.0"
 domain: VS
-datasets:
-  VS_RAW: {path: input/vs_raw.csv, types: {VSORRES: float}}
 keys: [STUDYID, USUBJID, VSSEQ]
+input:
+  VS_RAW: {path: input/vs_raw.csv, types: {VSORRES: float}}
 
 output:
   path: vs.csv

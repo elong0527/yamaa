@@ -260,6 +260,8 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R001', 'key_dependency'): {'column', 'dependency'},
     ('R002', 'duplicate_identifier'): {'identifier'},
     ('R002', 'unknown_field'): {'identifier'},
+    ('R003', 'prohibited_construct'): {'identifier'},
+    ('R003', 'unknown_field'): {'identifier'},
     ('R004', 'invalid_predicate'): {'predicate'},
     ('R004', 'incompatible_input_type'): {'left_type', 'right_type'},
     ('R004', 'unknown_field'): {'identifier'},
@@ -1967,7 +1969,7 @@ def _check_single_type(data, t, env, path):
 
 
 INHERITANCE_KEYED_COLLECTIONS = {
-    'datasets': ('mapping', None, 'dataset_class'),
+    'input': ('mapping', None, 'dataset_class'),
     'record_lookups': ('list', 'id', 'record_lookup_class'),
     'columns': ('list', 'name', 'column_class'),
     'rows': ('list', 'id', 'row_class'),
@@ -2337,7 +2339,7 @@ def _rebase_local_path(value, layer_path, entry_path):
 def rebase_layer_paths(layer, layer_path, entry_path):
     """Rebase current path-valued dataset fields to the entry file."""
     rebased = copy.deepcopy(layer)
-    datasets = rebased.get('datasets')
+    datasets = rebased.get('input')
     if not isinstance(datasets, dict):
         return rebased
     for source in datasets.values():
@@ -2882,7 +2884,7 @@ def order_term_variable(term):
 def prune_inheritance_collections(spec, env):
     """Remove keyed declarations unreachable from R017 semantic roots."""
     pruned = copy.deepcopy(spec)
-    datasets = pruned.get('datasets')
+    datasets = pruned.get('input')
     datasets = datasets if isinstance(datasets, dict) else {}
     columns = pruned.get('columns')
     column_entries = columns if isinstance(columns, list) else []
@@ -2925,7 +2927,7 @@ def prune_inheritance_collections(spec, env):
     base = pruned.get('base')
     if isinstance(base, str):
         live_datasets.add(base)
-    pruned_datasets = pruned.get('datasets')
+    pruned_datasets = pruned.get('input')
     if isinstance(pruned_datasets, dict):
         sole = [name for name in pruned_datasets if isinstance(name, str)]
         if len(sole) == 1:
@@ -3032,9 +3034,9 @@ def prune_inheritance_collections(spec, env):
             column for column in pruned['columns']
             if isinstance(column, dict) and column.get('name') in live_columns
         ]
-    if isinstance(pruned.get('datasets'), dict):
-        pruned['datasets'] = {
-            name: source for name, source in pruned['datasets'].items()
+    if isinstance(pruned.get('input'), dict):
+        pruned['input'] = {
+            name: source for name, source in pruned['input'].items()
             if name in live_datasets
         }
     if isinstance(pruned.get('record_lookups'), list):
@@ -3167,7 +3169,7 @@ def order_resolved_spec_fields(spec, env):
     root_fields = schema_class_fields(env, 'root_class')
     ordered = {}
     member_classes = {
-        'datasets': 'dataset_class',
+        'input': 'dataset_class',
         'record_lookups': 'record_lookup_class',
         'columns': 'column_class',
         'rows': 'row_class',
@@ -3181,7 +3183,7 @@ def order_resolved_spec_fields(spec, env):
             ordered[name] = value
             continue
         fields = schema_class_fields(env, class_name)
-        if name == 'datasets' and isinstance(value, dict):
+        if name == 'input' and isinstance(value, dict):
             ordered[name] = {
                 member_id: {
                     field: member[field]
@@ -3936,11 +3938,11 @@ def validate_spec_names(spec, spec_label):
                     f"ERROR: {spec_label}.{path}: duplicate {noun} {value!r}"
                 )
 
-    datasets = spec.get('datasets')
+    datasets = spec.get('input')
     dataset_names = set(datasets) if isinstance(datasets, dict) else set()
     domain = spec.get('domain')
     if isinstance(domain, str) and domain in dataset_names:
-        for path in (f"datasets.{domain}", 'domain'):
+        for path in (f"input.{domain}", 'domain'):
             errors.append(
                 validation_diagnostic(
                     f"{spec_label}.{path}",
@@ -4118,7 +4120,7 @@ def validate_spec_names(spec, spec_label):
             lookup_id = lookup.get('id')
             if isinstance(lookup_id, str) and lookup_id in reserved_names:
                 conflict_path = (
-                    f"datasets.{lookup_id}"
+                    f"input.{lookup_id}"
                     if lookup_id in dataset_names
                     else 'domain'
                 )
@@ -4482,7 +4484,7 @@ def validate_spec_contracts(
     rows = spec.get('rows')
     row_entries = rows if isinstance(rows, list) else []
     default_driver = default_driver_dataset(spec)
-    datasets = spec.get('datasets')
+    datasets = spec.get('input')
     dataset_names = (
         [name for name in datasets if isinstance(name, str)]
         if isinstance(datasets, dict)
@@ -4490,7 +4492,7 @@ def validate_spec_contracts(
     )
     full_spec = all(
         field in spec
-        for field in ('domain', 'datasets', 'keys', 'output', 'columns')
+        for field in ('domain', 'input', 'keys', 'output', 'columns')
     )
     if full_spec and not row_entries and not isinstance(default_driver, str):
         errors.append(
@@ -4771,7 +4773,7 @@ def validate_spec_contracts(
             )
         )
 
-    datasets = spec.get('datasets')
+    datasets = spec.get('input')
     if spec_path is not None and isinstance(datasets, dict):
         if project_root is None:
             project_root = spec_path.parent
@@ -4785,7 +4787,7 @@ def validate_spec_contracts(
                 types = source.get('types')
             if not isinstance(source_path, str):
                 continue
-            path = f"{spec_label}.datasets.{dataset_id}"
+            path = f"{spec_label}.input.{dataset_id}"
             resolved, condition = resolve_project_path(
                 source_path, spec_path.parent, project_root,
                 project_data_roots(project_root),
@@ -4866,7 +4868,7 @@ def specification_column_types(spec):
 def dataset_type_catalog(spec, spec_path, env=None):
     """Return statically discoverable field types for each dataset."""
     catalog = {}
-    datasets = spec.get('datasets')
+    datasets = spec.get('input')
     if not isinstance(datasets, dict):
         return catalog
 
@@ -5152,6 +5154,36 @@ def aggregate_filter_resolver(payload, default_resolver, datasets):
     return predicate_resolver(qualified={qualifier: datasets.get(qualifier, {})})
 
 
+def source_filter_errors(payload, path, datasets):
+    """Check a source `filter` against the right-side records it selects.
+
+    R003-22 keeps the predicate inside the dataset the source reads, so it
+    resolves against that dataset's fields alone and never against the
+    output columns the reading derivation may name.
+    """
+    if not isinstance(payload, dict) or not isinstance(payload.get('filter'), str):
+        return []
+    variable = payload.get('variable')
+    qualifier = (
+        variable.split('.', 1)[0]
+        if isinstance(variable, str) and '.' in variable
+        else None
+    )
+    if qualifier is None:
+        # R003-39: an unqualified source reads one completed output column,
+        # so the predicate has no records to select among.
+        return [
+            validation_diagnostic(
+                f"{path}.filter",
+                'prohibited_construct',
+                'a source reading one completed value selects among no records',
+                context={'identifier': variable},
+            )
+        ]
+    right_resolver = predicate_resolver(qualified={qualifier: datasets.get(qualifier, {})})
+    return validate_predicate_at(payload['filter'], f"{path}.filter", right_resolver)
+
+
 def validate_expression_predicates(
     expression, path, resolver, datasets
 ):
@@ -5192,29 +5224,26 @@ def validate_expression_predicates(
             )
 
     elif keyword == 'source' and isinstance(payload, dict):
-        multiple = payload.get('multiple_matches')
-        variable = payload.get('variable')
-        if (
-            isinstance(multiple, dict)
-            and isinstance(multiple.get('filter'), str)
-        ):
-            qualifier = (
-                variable.split('.', 1)[0]
-                if isinstance(variable, str) and '.' in variable
-                else None
+        errors.extend(
+            source_filter_errors(payload, f"{path}.source", datasets)
+        )
+
+    elif keyword == 'mapping' and isinstance(payload, dict):
+        errors.extend(
+            source_filter_errors(
+                payload.get('source'), f"{path}.mapping.source", datasets
             )
-            right_resolver = predicate_resolver(
-                qualified={qualifier: datasets.get(qualifier, {})}
-                if qualifier is not None
-                else {}
-            )
-            errors.extend(
-                validate_predicate_at(
-                    multiple['filter'],
-                    f"{path}.source.multiple_matches.filter",
-                    right_resolver,
+        )
+
+    elif keyword == 'coalesce' and isinstance(payload, dict):
+        sources = payload.get('sources')
+        if isinstance(sources, list):
+            for index, source in enumerate(sources):
+                errors.extend(
+                    source_filter_errors(
+                        source, f"{path}.coalesce.sources[{index}]", datasets
+                    )
                 )
-            )
 
     elif keyword == 'aggregate' and isinstance(payload, dict):
         if isinstance(payload.get('filter'), str):
@@ -6006,7 +6035,7 @@ def validate_aggregate_at(payload, path, context):
 
     kind = context['kind']
     relation = relations[0] if relations else None
-    datasets = context['datasets']
+    datasets = context['input']
     output_types = context['output_types']
     if kind == 'ungrouped_row':
         return [
@@ -6411,7 +6440,7 @@ def validate_expression_static_semantics(expression, path, context):
                 )
             ]
         dataset = payload.get('dataset')
-        fields = context['datasets'].get(dataset, {})
+        fields = context['input'].get(dataset, {})
         if not fields:
             return errors
         for source, key in zip(sources, keys):
@@ -6830,7 +6859,7 @@ def default_driver_dataset(spec):
     base = spec.get('base')
     if isinstance(base, str):
         return base
-    datasets = spec.get('datasets')
+    datasets = spec.get('input')
     if isinstance(datasets, dict):
         names = [name for name in datasets if isinstance(name, str)]
         if len(names) == 1:
@@ -7016,11 +7045,11 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
         'resolver': predicate_resolver(
             unqualified=output_types, qualified={**datasets, **lookups}
         ),
-        'datasets': datasets,
+        'input': datasets,
         'env': env,
         'aggregate': {
             'kind': 'column',
-            'datasets': datasets,
+            'input': datasets,
             'output_types': output_types,
             'keys': keys,
             'resolver': predicate_resolver(
@@ -7070,11 +7099,11 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
                         ),
                     },
                 ),
-                'datasets': datasets,
+                'input': datasets,
                 'env': env,
                 'aggregate': {
                     'kind': 'grouped_row' if grouped else 'ungrouped_row',
-                    'datasets': datasets,
+                    'input': datasets,
                     'output_types': row_output,
                     'keys': keys,
                     'driver': driver,
@@ -7292,7 +7321,7 @@ def validate_producing_specs(
 ):
     """Validate producer workflow edges and referenced artifact headers."""
     errors = []
-    datasets = spec.get('datasets')
+    datasets = spec.get('input')
     if not isinstance(datasets, dict):
         return errors
     if project_root is None:
@@ -7304,7 +7333,7 @@ def validate_producing_specs(
         if not isinstance(source, dict) or 'schema' not in source:
             continue
 
-        path = f"{spec_label}.datasets.{dataset_id}"
+        path = f"{spec_label}.input.{dataset_id}"
         if 'types' in source:
             types = source['types']
             if isinstance(types, dict) and types:
@@ -9573,6 +9602,7 @@ def check_yaml_files(root: Path):
         )
     )
     errors.extend(validate_examples_layout(root))
+    errors.extend(validate_examples_define_documents(root))
     warnings.extend(validate_join_key_inference(root))
     errors.extend(validate_expected_error_contracts(root))
     errors.extend(validate_csv_shapes(root))
@@ -9810,7 +9840,7 @@ def validate_join_key_inference(root: Path):
             if not isinstance(spec, dict):
                 continue
             keys = spec.get('keys') or []
-            datasets = spec.get('datasets') or {}
+            datasets = spec.get('input') or {}
             base = default_driver_dataset(spec)
             if not isinstance(keys, list) or not isinstance(datasets, dict):
                 continue
@@ -9830,6 +9860,39 @@ def validate_join_key_inference(root: Path):
                     f"matches on keys [{', '.join(applicable)}]"
                 )
     return warnings
+
+
+def validate_examples_define_documents(root: Path):
+    """Validate each study document against the entry point R026 defines.
+
+    A define document is a separate entry point with its own class, so the
+    specification schema never sees it. Nothing else reads these files, and
+    a field renamed in the specification language would otherwise reach one
+    unnoticed.
+    """
+    errors = []
+    documents = sorted((root / 'yaml' / 'examples').glob('*/define.yaml'))
+    if not documents:
+        return errors
+
+    env, env_errors = build_schema_env(root, entrypoint='schema_define.yaml')
+    if env is None:
+        return env_errors
+    errors.extend(env_errors)
+
+    for path in documents:
+        label = str(path.relative_to(root))
+        try:
+            with open(path, 'r', encoding='utf-8') as handle:
+                document = yaml.load(handle, Loader=UniqueKeyLoader)
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
+            errors.append(f"ERROR: {label}: {exc}")
+            continue
+        if not isinstance(document, dict):
+            errors.append(f"ERROR: {label}: document must be a mapping")
+            continue
+        errors.extend(validate_type(document, ['define_class'], env, label))
+    return errors
 
 
 def validate_examples_layout(root: Path):

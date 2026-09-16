@@ -1,8 +1,8 @@
 schema_version: "1.0"
 domain: ADLB
-datasets:
-  LB: input/lb.csv
 keys: [STUDYID, USUBJID]
+input:
+  LB: input/lb.csv
 
 output:
   path: adlb.csv

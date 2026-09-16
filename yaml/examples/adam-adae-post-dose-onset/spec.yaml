@@ -1,10 +1,10 @@
 schema_version: "1.0"
 domain: ADAE
-datasets:
+keys: [STUDYID, USUBJID, AESEQ]
+input:
   AE: input/ae.csv
   ADSL: input/adsl.csv
 base: AE
-keys: [STUDYID, USUBJID, AESEQ]
 
 output:
   path: adae.csv

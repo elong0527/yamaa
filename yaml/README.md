@@ -175,8 +175,9 @@ The version 1.0 input-shape audit covers every registered expression:
 
 | Expressions | Input policy |
 |---|---|
-| `source`, `literal` | Leaf expressions; unchanged |
-| `mapping`, `cut`, `str_extract`, `str_upper`, `str_lower` | One named source; exceptional results are literals |
+| `source`, `literal` | Leaf expressions; a source may state which records it reads |
+| `mapping` | One named source, which may state which records it reads; exceptional results are literals |
+| `cut`, `str_extract`, `str_upper`, `str_lower` | One named source; exceptional results are literals |
 | `str_concat` | An ordered list of expressions, because concatenating requires literals beside sources |
 | `str_template` | One closed string template over named variables (R012) |
 | `mapping_from` | One or more named sources paired by position with declared right-side key columns; exceptional results are literals |
@@ -185,7 +186,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `date_impute` | One named source, an integer literal or a month-relative token for each imputed component, an optional minimum collected precision, and an optional named lower bound on the completed date; exceptional results are literals |
 | `date_precision` | One named source, either collected text or a temporal value; exceptional results are literals |
 | `to_date` | One named `datetime` source; no literals or nesting |
-| `coalesce` | Ordered named variables plus an optional literal default |
+| `coalesce` | Ordered named variables, each of which may state which records it reads, plus an optional literal default |
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
 | `row_number`, `rank`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
 | `row_value` | One named source with named grouping and ordering variables, plus a signed integer literal offset along the declared order |

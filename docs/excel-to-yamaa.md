@@ -40,10 +40,10 @@ cells:
 ```yaml
 schema_version: "1.0"          # which schema version this spec targets (exact match)
 domain: ADSL                   # Dataset sheet -> Dataset
-datasets:                      # <- no cell for this; usually a Comment or a separate sheet
+keys: [STUDYID, USUBJID]       # Dataset sheet -> Key Variables, and actually checked
+input:                      # <- no cell for this; usually a Comment or a separate sheet
   SOURCE: input/adsl.csv
 base: SOURCE                   # Dataset sheet -> Structure, but as the driver of the row count
-keys: [STUDYID, USUBJID]       # Dataset sheet -> Key Variables, and actually checked
 
 output:
   path: adsl.csv             # <- no cell for this; the file, and its format
@@ -120,7 +120,7 @@ Going the other way, two of the eleven columns have no YAMAA field at all:
 | Standard / IG Version | `metadata.standard` | Same |
 | Key Variables | `keys` | Non-missing and unique are enforced |
 | Sort Order (submission sort) | `output.order_by` | R005: a presentation order applied after every check, with ties falling back to construction order. A term may name a working column the artifact does not ship |
-| Input datasets (usually only in a Comment) | `datasets:` | Every input is declared and named |
+| Input datasets (usually only in a Comment) | `input:` | Every input is declared and named |
 | Structure: "one record per subject per visit" | `base` plus `rows` templates | Row count comes from these, not from a sentence |
 | Copy the corporate template and edit | `parents:` | Real layering; a change to the parent flows down (R017) |
 | Dataset-level review checks | `verifications:` | `unique`, `row_count`, `all_or_none`, `implies`, `predicate`. A `row_count` may take a `group_by` and a `filter`, which is how "exactly one baseline per subject and parameter" is stated |
@@ -140,7 +140,7 @@ wording, but the eleven jobs are the same.
 | Significant digits / display format | *project setting* | R011: decimal places belong to the project, not the spec |
 | `Controlled Terms or Format` | `mapping.dict` / `mapping_from` / `allowed_values`, plus `column.metadata.codelist` | See 3.3 -- translation and enforcement separate here too |
 | `Origin` = Assigned | `literal: DM` | |
-| `Origin` = Collected (CRF / eDT) | `source: ODM.IT.DM.AGE` | |
+| `Origin` = Collected (CRF / eDT) | `source: {variable: ODM.Value, filter: "ODM.ItemOID = 'IT.DM.AGE'"}` | The `filter` says which collected records the value comes from; R002's `ODM.IT.DM.AGE` addresses one contextually instead |
 | `Origin` = Predecessor | `source: ADSL.TRTSDT` | A qualified cross-dataset name performs an **automatic left join** (R003) |
 | `Origin` = Derived | a specific expression | See [the verb table](schema-concepts.md) |
 | `Core` (Req / Exp / Perm) | `column.metadata` | A conformance classification against an IG; it says nothing about derivation |
@@ -479,11 +479,11 @@ Excel:
 YAMAA:
 
 ```yaml
-datasets:
+keys: [STUDYID, USUBJID, EXTRT]
+input:
   TRT: input/subject_treatment.csv
   EX: {path: input/ex.csv, types: {EXDOSE: float}}
 base: TRT
-keys: [STUDYID, USUBJID, EXTRT]
 
   - name: DOSECUM
     type: float
@@ -641,7 +641,7 @@ The point that gets challenged most often:
 *Source: [`sdtm-ae-dictionary-coding`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-ae-dictionary-coding)*
 
 ```yaml
-datasets:
+input:
   AE_RAW: input/ae_raw.csv
   MEDDRA: input/meddra_26_1.csv
 metadata:
@@ -717,7 +717,7 @@ turns this into real layers.
 ```yaml
 # spec_organization.yaml -- corporate layer: data contract and common columns
 schema_version: "1.0"
-datasets:
+input:
   LB: input/lb.csv
   UNUSED: input/not-used.csv
 base: LB
@@ -751,7 +751,7 @@ metadata: {scope: organization}
 # spec_compound.yaml -- compound layer: add types, retitle one column
 schema_version: "1.0"
 parents: spec_organization.yaml
-datasets:
+input:
   LB:
     types: {USUBJID: str, LBTESTCD: str, LBSTRESN: float, LBSTRESU: str}
 columns:
@@ -783,7 +783,7 @@ What to point out:
   `Analysis Value`. A difference between two parents is settled by their order;
   it is **not** a conflict error.
 - **Composition is shallow -- the most commonly misread rule.** Only the four
-  keyed collections (`datasets`, `record_lookups`, `columns`, `rows`) merge
+  keyed collections (`input`, `record_lookups`, `columns`, `rows`) merge
   member fields by identifier. Every other root field is **replaced whole**. So
   a child writing `AVAL.label` changes only the label, but a child writing
   `AVAL.derivation` replaces the **entire** derivation, even if both use the
@@ -820,11 +820,11 @@ through project functions.**
 schema_version: "1.0"
 parents: spec_study.yaml                           # optional: inherit shared levels
 domain: ADXX
-datasets:
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
   SRC:  input/src.csv                              # typeless container: fields default to str
   ADSL: {path: input/adsl.csv, types: {AVAL: float}}
 base: SRC
-keys: [STUDYID, USUBJID, PARAMCD]
 
 metadata:                       # for define.xml; not validated
   dataset_label: Example Analysis Dataset

@@ -1,0 +1,11 @@
+phase: derivation
+condition: multiple_values_per_key
+spec_paths:
+  - columns.SEX.derivation.mapping
+requirement: R001-44
+context:
+  identifier: ODM.Value
+  value_count: 2
+  keys:
+    - STUDYID: STUDY01
+      USUBJID: "002"

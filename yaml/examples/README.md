@@ -202,9 +202,12 @@ the safest correction and shows the smallest useful YAML change.
 | [`negative-row-value-self-reference`](negative-row-value-self-reference/) | reject a weight carried forward from a carried-forward weight |
 | [`negative-row-value-zero-offset`](negative-row-value-zero-offset/) | reject a previous weight that names no earlier visit |
 | [`negative-sex-code-pattern-mismatch`](negative-sex-code-pattern-mismatch/) | reject a recorded sex outside the accepted codes |
+| [`negative-sex-collected-twice`](negative-sex-collected-twice/) | reject a subject whose sex was collected twice |
 | [`negative-source-duplicate-field-name`](negative-source-duplicate-field-name/) | reject a subject listing that names one field twice |
 | [`negative-source-duplicate-right-key`](negative-source-duplicate-right-key/) | reject duplicate subject enrichment |
 | [`negative-source-empty-field-name`](negative-source-empty-field-name/) | reject a subject listing with an unnamed field |
+| [`negative-source-filter-unreachable-field`](negative-source-filter-unreachable-field/) | reject a selection made on a value the records do not carry |
+| [`negative-source-filter-without-records`](negative-source-filter-without-records/) | reject a selection over a value that is already one value |
 | [`negative-source-invalid-text`](negative-source-invalid-text/) | reject a site name stored in another encoding |
 | [`negative-source-missing-sentinel`](negative-source-missing-sentinel/) | reject an age recorded as NA |
 | [`negative-source-output-self-reference`](negative-source-output-self-reference/) | reject a parameter that reads the dataset it is part of |

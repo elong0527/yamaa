@@ -1,6 +1,7 @@
 schema_version: "1.0"
 domain: VS
-datasets:
+keys: [STUDYID, USUBJID, VSSEQ]
+input:
   VS_RAW:
     path: input/vs.csv
     types: {VSSEQ: int, VSDTC: date}
@@ -8,7 +9,6 @@ datasets:
     path: input/epoch.csv
     types: {DYLO: int, DYHI: int}
 base: VS_RAW
-keys: [STUDYID, USUBJID, VSSEQ]
 
 record_lookups:
   - id: EPOCHDEF

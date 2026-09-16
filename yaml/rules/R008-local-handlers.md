@@ -2,7 +2,8 @@
 id: R008
 title: Local Error Handlers
 status: normative
-applies_to: [source.missing, source.multiple_matches, expression, derivation]
+applies_to: [source.missing, source.filter, source.multiple_matches,
+  expression, derivation]
 
 ---
 
@@ -29,7 +30,7 @@ literal unless its behavior says otherwise:
 | Stage | Local declaration | Behavior |
 |---|---|---|
 | bind | `source.missing` | Absent source variable or ODM item |
-| join | `source.multiple_matches` | Filter first; select one match |
+| join | `source.multiple_matches` | Select one of the records `source.filter` left |
 | mapping | `missing` | Missing mapping input |
 | mapping | `unmapped` | Non-missing value with no mapping |
 | cut | `missing` | Missing numeric input |
@@ -87,16 +88,21 @@ source:
   missing: null
 ```
 
-**R008-11.** Other expressions type their `source` as a plain `variable`
-and declare their own handler fields alongside it. They take the
-concise form only.
+**R008-11.** Other expressions type their `source` as a variable or a
+variable with a `filter`, and declare their own handler fields alongside
+it. The binding handlers are not theirs to declare: a source they name
+reaches its records through R003 and answers to their own handlers once
+it holds a value.
 
-**R008-12.** `multiple_matches` relaxes R003 right-side uniqueness.
+**R008-12.** `multiple_matches` relaxes right-side uniqueness wherever one
+source reaches several records: R003's matched records, an ODM item's
+contextual matches, and the records a key combination was derived from,
+whose disagreement R001-44 otherwise makes fatal.
 
-**R008-13.** Apply its optional `filter` to the matching right-side
-records first, then sort the survivors by its `order_by` terms and
-retain `first` or `last`. Remaining ties are resolved by right-side
-record order.
+**R008-13.** The source's optional `filter` selects the eligible
+right-side records first. Sort those survivors by the `order_by` terms and
+retain `first` or `last`. Remaining ties are resolved by right-side record
+order.
 
 **R008-14.** Filtering to no surviving record is not a handled
 condition. It is an ordinary absent match under R003 and yields

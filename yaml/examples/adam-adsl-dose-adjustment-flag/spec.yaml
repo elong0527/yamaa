@@ -1,12 +1,12 @@
 schema_version: "1.0"
 domain: ADSL
-datasets:
+keys: [STUDYID, USUBJID]
+input:
   ADSL_PRE: input/adsl.csv
   EX: input/ex.csv
   EC: input/ec.csv
   FA: input/fa.csv
 base: ADSL_PRE
-keys: [STUDYID, USUBJID]
 
 output:
   path: adsl.csv

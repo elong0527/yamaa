@@ -119,7 +119,7 @@ def _producer_contract(
         diagnostics.append(
             _diagnostic(
                 "invalid_producer_contract",
-                f"datasets.{consumer_dataset}.schema.output.columns",
+                f"input.{consumer_dataset}.schema.output.columns",
                 "R014-21",
                 {"dataset": consumer_dataset, "reason": "empty"},
             )
@@ -129,7 +129,7 @@ def _producer_contract(
             diagnostics.append(
                 _diagnostic(
                     "invalid_producer_contract",
-                    f"datasets.{consumer_dataset}.schema.output.columns[{position}]",
+                    f"input.{consumer_dataset}.schema.output.columns[{position}]",
                     "R014-21",
                     {
                         "dataset": consumer_dataset,
@@ -145,7 +145,7 @@ def _producer_contract(
             diagnostics.append(
                 _diagnostic(
                     "invalid_producer_contract",
-                    f"datasets.{consumer_dataset}.schema.output.columns[{position}]",
+                    f"input.{consumer_dataset}.schema.output.columns[{position}]",
                     "R014-21",
                     {
                         "dataset": consumer_dataset,
@@ -161,7 +161,7 @@ def _producer_contract(
             diagnostics.append(
                 _diagnostic(
                     "invalid_producer_contract",
-                    f"datasets.{consumer_dataset}.schema.columns.{name}.label",
+                    f"input.{consumer_dataset}.schema.columns.{name}.label",
                     "R014-21",
                     {"dataset": consumer_dataset, "field": name, "reason": "label"},
                 )
@@ -188,7 +188,7 @@ def _schema_snapshot(
             [
                 _diagnostic(
                     error.condition,
-                    f"datasets.{dataset}.schema",
+                    f"input.{dataset}.schema",
                     "R014-21",
                     {"dataset": dataset, "path": source.schema_path},
                 )
@@ -218,7 +218,7 @@ def plan_workflow(
                 [
                     _diagnostic(
                         "producer_workflow_cycle",
-                        "datasets.schema",
+                        "input.schema",
                         "R014-21",
                         {"cycle": [str(item) for item in cycle]},
                     )
@@ -236,7 +236,7 @@ def plan_workflow(
         active.append(canonical)
         producer_paths: list[Path] = []
         node_resources = resources.with_base_directory(canonical.parent)
-        for dataset, source in resolved.specification.datasets.items():
+        for dataset, source in resolved.specification.input.items():
             if source.schema_path is None:
                 continue
             if "types" in source.model_fields_set:
@@ -244,7 +244,7 @@ def plan_workflow(
                 diagnostics = [
                     _diagnostic(
                         "redundant_field_type",
-                        f"datasets.{dataset}.types.{field}",
+                        f"input.{dataset}.types.{field}",
                         "R014-10",
                         {"dataset": dataset, "field": field, "type": value},
                     )
@@ -254,7 +254,7 @@ def plan_workflow(
                     diagnostics.append(
                         _diagnostic(
                             "redundant_field_type",
-                            f"datasets.{dataset}.types",
+                            f"input.{dataset}.types",
                             "R014-10",
                             {"dataset": dataset, "field": "", "type": ""},
                         )
@@ -276,7 +276,7 @@ def plan_workflow(
                     [
                         _diagnostic(
                             "producer_output_path_mismatch",
-                            (f"datasets.{dataset}.path", f"datasets.{dataset}.schema"),
+                            (f"input.{dataset}.path", f"input.{dataset}.schema"),
                             "R014-21",
                             {
                                 "dataset": dataset,
@@ -406,7 +406,7 @@ def _source_failure(entry: Path, datasets: Sequence[str]) -> ExecutionResult:
             SourceDiagnostic(
                 phase="validation",
                 condition="producer_not_completed",
-                spec_paths=(f"datasets.{dataset}.schema",),
+                spec_paths=(f"input.{dataset}.schema",),
                 requirement="R014-21",
                 context={"dataset": dataset, "consumer": str(entry)},
             )

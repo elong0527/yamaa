@@ -1,10 +1,10 @@
 schema_version: "1.0"
 domain: ADVS
-datasets:
+keys: [STUDYID, USUBJID, VSSEQ]
+input:
   VS:
     path: input/vs.csv
     types: {VSSEQ: int, AVISITN: int}
-keys: [STUDYID, USUBJID, VSSEQ]
 
 output:
   path: advs.csv

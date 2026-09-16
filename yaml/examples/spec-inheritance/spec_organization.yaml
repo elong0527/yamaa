@@ -1,5 +1,5 @@
 schema_version: "1.0"
-datasets:
+input:
   LB: input/lb.csv
   UNUSED: input/not-used.csv
 base: LB

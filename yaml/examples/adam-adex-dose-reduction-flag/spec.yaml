@@ -1,8 +1,8 @@
 schema_version: "1.0"
 domain: ADEX
-datasets:
-  EX: input/ex.csv
 keys: [STUDYID, USUBJID, EXSEQ]
+input:
+  EX: input/ex.csv
 
 output:
   path: adex.csv

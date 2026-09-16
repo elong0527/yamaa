@@ -1,10 +1,10 @@
 schema_version: "1.0"
 domain: ADCM
-datasets:
+keys: [STUDYID, USUBJID, CMSEQ]
+input:
   CM: input/cm.csv
   ADSL: input/adsl.csv
 base: CM
-keys: [STUDYID, USUBJID, CMSEQ]
 
 output:
   path: adcm.csv
