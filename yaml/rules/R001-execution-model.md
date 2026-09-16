@@ -97,10 +97,12 @@ that specification omits `rows` instead.
 the derivation counts values rather than the records carrying them:
 repeated readings of one value are that one value, and two input records
 of one key combination carrying different present values are two values,
-which fails under R001-44. A missing result is still the row's one value
-but never creates a second value for the R001-44 count. In a specification
-without `rows`, a key column derivation must not depend on a non-key
-output column (R001-43); keys are derived before any row logic runs.
+which fails under R001-44. A source `filter` decides which of those
+records the derivation reads before that count, which R003-21 defines. A
+missing result is still the row's one value but never creates a second
+value for the R001-44 count. In a specification without `rows`, a key
+column derivation must not depend on a non-key output column (R001-43);
+keys are derived before any row logic runs.
 
 ## Expression evaluation
 

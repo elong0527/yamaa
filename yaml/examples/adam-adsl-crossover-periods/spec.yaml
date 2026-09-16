@@ -61,10 +61,10 @@ columns:
     derivation:
       source:
         variable: EX.EXTRT
+        filter: "EX.APERIOD = 1"
         multiple_matches:
           order_by: [EX.EXSTDTC, EX.EXSEQ]
           keep: first
-          filter: "EX.APERIOD = 1"
     verifications:
       allowed_values:
         values: [VITAMIN D3, PLACEBO]
@@ -75,10 +75,10 @@ columns:
     derivation:
       source:
         variable: EX.EXTRT
+        filter: "EX.APERIOD = 2"
         multiple_matches:
           order_by: [EX.EXSTDTC, EX.EXSEQ]
           keep: first
-          filter: "EX.APERIOD = 2"
     verifications:
       allowed_values:
         values: [VITAMIN D3, PLACEBO]

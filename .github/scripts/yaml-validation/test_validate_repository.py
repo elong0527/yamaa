@@ -323,6 +323,81 @@ class TestPredicateLanguage(unittest.TestCase):
         self.assertIn('verifications[0].predicate.assert', errors[0])
         self.assertIn("unknown identifier 'MISSING'", errors[0])
 
+    def test_validates_the_predicate_a_source_filter_declares(self):
+        # R003-22: the filter selects right-side records, so it resolves
+        # against the dataset the source reads and not against the output.
+        spec = {
+            'domain': 'DM',
+            'input': {'ODM': 'odm.csv'},
+            'base': 'ODM',
+            'keys': ['USUBJID'],
+            'output': {'path': 'out.csv', 'columns': ['USUBJID', 'SEX', 'AGE', 'ARM']},
+            'columns': [
+                {
+                    'name': 'USUBJID',
+                    'type': 'str',
+                    'derivation': {'source': 'ODM.SubjectKey'},
+                },
+                {
+                    'name': 'SEX',
+                    'type': 'str',
+                    'derivation': {
+                        'mapping': {
+                            'source': {
+                                'variable': 'ODM.Value',
+                                'filter': 'ODM.Unknown = 1',
+                            },
+                            'dict': {'Male': 'M'},
+                        }
+                    },
+                },
+                {
+                    'name': 'AGE',
+                    'type': 'int',
+                    'derivation': {
+                        'source': {
+                            'variable': 'ODM.Value',
+                            'filter': "USUBJID = '01'",
+                        }
+                    },
+                },
+                {
+                    'name': 'ARM',
+                    'type': 'str',
+                    'derivation': {
+                        'coalesce': {
+                            'sources': [
+                                {
+                                    'variable': 'ODM.Value',
+                                    'filter': 'ODM.Missing IS NULL',
+                                }
+                            ],
+                            'default': 'Unassigned',
+                        }
+                    },
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            example_dir = Path(temp_dir)
+            (example_dir / 'odm.csv').write_text(
+                'SubjectKey,ItemOID,Value\n01,IT.DM.SEX,Male\n'
+            )
+            spec_path = example_dir / 'spec.yaml'
+            errors = VALIDATOR.validate_spec_predicates(
+                spec, 'example/spec.yaml', spec_path
+            )
+        message = '\n'.join(errors)
+
+        self.assertEqual(len(errors), 3)
+        self.assertIn('columns.SEX.derivation.mapping.source.filter', message)
+        self.assertIn('columns.AGE.derivation.source.filter', message)
+        self.assertIn('columns.ARM.derivation.coalesce.sources[0].filter', message)
+        self.assertIn("unknown identifier 'ODM.Unknown'", message)
+        self.assertIn("unknown identifier 'USUBJID'", message)
+        self.assertIn("unknown identifier 'ODM.Missing'", message)
+
     def test_validates_a_grouped_row_count_filter(self):
         spec = {
             'domain': 'ADLB',

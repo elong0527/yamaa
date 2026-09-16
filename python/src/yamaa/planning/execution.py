@@ -22,6 +22,7 @@ from yamaa.expressions import (
     parse_numeric_cached,
     parse_predicate,
     parse_template_cached,
+    source_operand,
     template_identifiers,
     ungrouped_identifiers,
 )
@@ -218,10 +219,11 @@ class _Reference:
     # lets a reduction declare a grain coarser than they are.
     join_group_by: tuple[str, ...] | None = None
     # How the reference reaches its relation: as one scalar of the current
-    # row driver or of an R003 join, as the records R013 reduces, or as a
+    # row driver or of an R003 join, as the records R013 reduces, as a
     # right-side column R007 pairs with a declared key rather than a key of
-    # its own. R001-15 and R003-15 each turn on the difference.
-    reach: Literal["scalar", "relation", "declared"] = "scalar"
+    # its own, or as a stored field of the records a predicate reads.
+    # R001-15 and R003-15 each turn on the difference.
+    reach: Literal["scalar", "relation", "declared", "record"] = "scalar"
     # The other name this reference's runtime type must be comparable with,
     # which is how R007-21 pairs a `mapping_from` source with its key column.
     same_type_as: str | None = None
@@ -360,16 +362,36 @@ def _expression_info(
         variable = payload if isinstance(payload, str) else payload.get("variable")
         if isinstance(variable, str):
             references.append(_Reference(variable, operation_path))
+        if isinstance(payload, Mapping) and payload.get("filter") is not None:
+            diagnostics.extend(
+                _filtered_source_references(
+                    variable,
+                    payload.get("filter"),
+                    f"{operation_path}.filter",
+                    references,
+                    scope,
+                )
+            )
     elif operation in _TYPED_SOURCES and isinstance(payload, Mapping):
-        variable = payload.get("source")
+        operand = source_operand(payload.get("source"))
         expected, requirement = _TYPED_SOURCES[operation]
-        if isinstance(variable, str):
+        if operand is not None:
+            variable, selector = operand
             references.append(
                 _Reference(
                     variable,
                     f"{operation_path}.source",
                     expected,
                     requirement=requirement,
+                )
+            )
+            diagnostics.extend(
+                _filtered_source_references(
+                    variable,
+                    selector,
+                    f"{operation_path}.source.filter",
+                    references,
+                    scope,
                 )
             )
     elif operation in WINDOW_OPERATIONS and isinstance(payload, Mapping):
@@ -402,11 +424,28 @@ def _expression_info(
     ):
         sources = payload.get("sources")
         if isinstance(sources, Sequence) and not isinstance(sources, str):
-            references.extend(
-                _Reference(name, f"{operation_path}.sources[{index}]")
-                for index, name in enumerate(sources)
-                if isinstance(name, str)
-            )
+            for index, entry in enumerate(sources):
+                operand = (
+                    source_operand(entry)
+                    if operation == "coalesce"
+                    else (entry, None)
+                    if isinstance(entry, str)
+                    else None
+                )
+                if operand is None:
+                    continue
+                name, selector = operand
+                source_path = f"{operation_path}.sources[{index}]"
+                references.append(_Reference(name, source_path))
+                diagnostics.extend(
+                    _filtered_source_references(
+                        name,
+                        selector,
+                        f"{source_path}.filter",
+                        references,
+                        scope,
+                    )
+                )
     elif operation == "compute" and isinstance(payload, Mapping):
         diagnostics.extend(
             _compute_references(payload, operation_path, references, scope)
@@ -507,6 +546,61 @@ def _compute_references(
             )
             continue
         references.append(_Reference(name, expr_path))
+    return diagnostics
+
+
+def _filtered_source_references(
+    variable: object,
+    selector: object,
+    filter_path: str,
+    references: list[_Reference],
+    scope: _Scope,
+) -> list[ExecutionDiagnostic]:
+    """Collect what a source `filter` reads, which is its own right side.
+
+    R003-21 lets a source state which records it may read, and R003-22 keeps
+    that predicate over those records alone, so every identifier names a
+    field of the dataset the source reads and none of them makes the reading
+    column depend on an output value.
+    """
+    if not isinstance(selector, str):
+        return []
+    diagnostics: list[ExecutionDiagnostic] = []
+    dataset = (
+        variable.split(".", 1)[0]
+        if isinstance(variable, str) and "." in variable
+        else None
+    )
+    if (
+        dataset is None
+        or dataset in scope.record_lookups
+        or (dataset == scope.grouped_driver)
+    ):
+        # R003-35a: an output column, a chosen lookup record, and a group key
+        # are each one value, so a filter has no records to select among.
+        return [
+            _diagnostic(
+                "prohibited_construct",
+                filter_path,
+                {"identifier": variable if isinstance(variable, str) else None},
+                requirement="R003-39",
+            )
+        ]
+    ast = _parse_predicate_at(selector, filter_path, diagnostics)
+    if ast is None:
+        return diagnostics
+    for name in _predicate_identifiers(ast):
+        if name.split(".", 1)[0] != dataset or "." not in name:
+            diagnostics.append(
+                _diagnostic(
+                    "unknown_field",
+                    filter_path,
+                    {"identifier": name, "dataset": dataset},
+                    requirement="R003-22",
+                )
+            )
+            continue
+        references.append(_Reference(name, filter_path, reach="record"))
     return diagnostics
 
 
@@ -1065,6 +1159,19 @@ def _validate_qualified_reference(
         return
     if bound.kind == "output":
         raise AssertionError("a qualified name cannot bind as an output column")
+    if reference.reach == "record" and bound.kind != "dataset":
+        # R003-22: a predicate reads stored fields of the records it selects
+        # among, and an ODM item is resolved from a record rather than
+        # carried by one.
+        diagnostics.append(
+            _diagnostic(
+                "unknown_field",
+                reference.path,
+                {"identifier": reference.name},
+                requirement="R003-22",
+            )
+        )
+        return
     assert bound.dataset is not None
     if row is not None:
         _validate_row_phase_reference(
@@ -1229,9 +1336,10 @@ def _with_relation_dependencies(
         if qualifier in lookups:
             extra.extend(lookups[qualifier].dependencies)
             continue
-        if reference.reach == "declared":
+        if reference.reach in {"declared", "record"}:
             # R003-15: `mapping_from` declares its own pairs and never
-            # consults output keys, so it depends on no applicable key.
+            # consults output keys, so it depends on no applicable key, and
+            # R003-22 keeps a source filter inside the right side it reads.
             continue
         if reference.join_relation is not None:
             keys = (

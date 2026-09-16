@@ -685,3 +685,150 @@ def test_one_relation_is_reported_once_however_often_it_is_named() -> None:
 
     assert len(plan.resolved_joins) == 1
     assert plan.resolved_joins[0].keys == ("X",)
+
+
+def filter_diagnostics(spec: Specification) -> list[object]:
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+    return list(raised.value.diagnostics)
+
+
+def test_a_source_filter_reads_the_stored_fields_of_its_own_right_side() -> None:
+    # R003-22: the predicate selects among right-side records, so it names
+    # their fields and nothing the output carries.
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="A",
+                type="str",
+                derivation=derivation(
+                    {"source": {"variable": "SRC.X", "filter": "K = 'one'"}}
+                ),
+            ),
+        ]
+    )
+
+    diagnostic = filter_diagnostics(spec)[0]
+
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.spec_paths == ("columns.A.derivation.source.filter",)
+    assert diagnostic.requirement == "R003-22"
+
+
+def test_a_source_filter_names_a_field_the_dataset_carries() -> None:
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="A",
+                type="str",
+                derivation=derivation(
+                    {"source": {"variable": "SRC.X", "filter": "SRC.Y = 'one'"}}
+                ),
+            ),
+        ]
+    )
+
+    diagnostic = filter_diagnostics(spec)[0]
+
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.spec_paths == ("columns.A.derivation.source.filter",)
+
+
+def test_an_output_column_source_has_no_records_to_filter() -> None:
+    # R003-39: the source reads one completed value, not a right side.
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="A",
+                type="str",
+                derivation=derivation(
+                    {"source": {"variable": "K", "filter": "SRC.X = 'one'"}}
+                ),
+            ),
+        ]
+    )
+
+    diagnostic = filter_diagnostics(spec)[0]
+
+    assert diagnostic.condition == "prohibited_construct"
+    assert diagnostic.spec_paths == ("columns.A.derivation.source.filter",)
+    assert diagnostic.requirement == "R003-39"
+
+
+def test_a_grouped_row_template_source_has_no_records_to_filter() -> None:
+    spec = specification(
+        [Column(name="K", type="str")],
+        [
+            Row(
+                id="row",
+                group_by=["SRC.X"],
+                derivations={
+                    "K": derivation(
+                        {"source": {"variable": "SRC.X", "filter": "SRC.X = 'one'"}}
+                    )
+                },
+            )
+        ],
+    )
+
+    diagnostic = filter_diagnostics(spec)[0]
+
+    assert diagnostic.condition == "prohibited_construct"
+    assert diagnostic.requirement == "R003-39"
+
+
+def test_a_record_lookup_source_has_already_chosen_its_record() -> None:
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="A",
+                type="str",
+                derivation=derivation(
+                    {"source": {"variable": "REF.X", "filter": "REF.X = 'one'"}}
+                ),
+            ),
+        ]
+    ).model_copy(
+        update={
+            "record_lookups": [
+                RecordLookup(id="REF", dataset="SRC", source=["K"], key=["X"])
+            ]
+        }
+    )
+
+    diagnostic = filter_diagnostics(spec)[0]
+
+    assert diagnostic.condition == "prohibited_construct"
+    assert diagnostic.requirement == "R003-39"
+
+
+def test_a_filtered_source_reads_records_without_depending_on_their_keys() -> None:
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="A",
+                type="str",
+                derivation=derivation(
+                    {"source": {"variable": "SRC.X", "filter": "SRC.X = 'one'"}}
+                ),
+            ),
+        ]
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    derived = next(column for column in plan.columns if column.column == "A")
+    assert derived.dependencies == ()

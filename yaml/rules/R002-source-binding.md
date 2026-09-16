@@ -124,6 +124,10 @@ source:
 **R002-19.** `missing` and `multiple_matches` are handlers; R008 defines
 them and R003 defines the join uniqueness `multiple_matches` relaxes.
 
+**R002-19a.** `filter` is not a handler. It states which records the
+source may read, and R003 defines that selection. Reading no record is an
+absent match rather than a handled condition.
+
 ## ODM contextual references
 
 **R002-20.** ODM item identifiers may contain periods.

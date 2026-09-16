@@ -86,6 +86,11 @@ input dataset: a scalar source then reads the current input
 record, while an aggregate reads that dataset. R007 registers
 the expression and R013 defines the computation.
 
+**R003-18a.** A specification without `rows` reads that dataset the same
+way, over the records its key combination was derived from, which R001-12
+builds. The row has no single input record there, so the source reads one
+value across those records and R001-44 fails a column that finds two.
+
 **R003-19.** The aggregate's optional `filter` selects which right-side
 records enter that reduction:
 
@@ -99,20 +104,35 @@ aggregate:
 applicable keys. The join then matches on `group_by` instead; R013
 requires the columns to be output keys.
 
-**R003-21.** A structured `source` declaring `multiple_matches` may also
-declare `filter`. The `filter` selects which right-side records are
-eligible before ordering, using the same evaluation as the aggregate form:
+**R003-21.** A structured `source` may declare `filter`. It selects which
+right-side records the source may read, before the source reaches one,
+using the same evaluation as the aggregate form:
+
+```yaml
+source:
+  variable: ODM.Value
+  filter: "ODM.ItemOID = 'IT.DM.SEX'"
+```
+
+**R003-21a.** A source declaring `multiple_matches` declares `filter`
+beside it, not inside it. The filter states which records are eligible and
+`multiple_matches` then orders those and keeps one:
 
 ```yaml
 source:
   variable: EX.EXTRT
+  filter: "EX.APERIOD = 1"
   multiple_matches:
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: first
-    filter: "EX.APERIOD = 1"
 ```
 
-**R003-22.** In both places `filter` is a predicate over right-side
+**R003-21b.** Every operation naming a source accepts the filtered form.
+Outside the `source` expression it carries `variable` and `filter` alone:
+the binding handlers stay on `source`, and an operation that needs one
+composes through a named column under R002-13.
+
+**R003-22.** In every place `filter` is a predicate over right-side
 records only.
 
 **R003-23.** A left row whose right side is empty after filtering has no
@@ -188,6 +208,11 @@ handled.
 **R003-37.** An aggregate `between` with neither bound, a bound outside
 the right-side relation, or operands whose types are not comparable:
 fail under R013.
+
+**R003-39.** A `filter` on a source with no records to select among: fail
+as a prohibited construct. An unqualified source reads one completed
+output column, a grouped row template's source reads one group key
+(R001-7), and a record lookup has already chosen its record (R015).
 
 ## Review
 

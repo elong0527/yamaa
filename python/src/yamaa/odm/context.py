@@ -45,7 +45,6 @@ class MultipleMatchSelection(_FrozenModel):
 
     order_by: list[OrderTerm] = Field(min_length=1)
     keep: Literal["first", "last"]
-    filter: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,6 +202,7 @@ class OdmItemIndex:
         selection: MultipleMatchSelection,
         variable: str,
     ) -> Resolution:
+        """Order the eligible contextual matches and keep one (R008-13)."""
         terms: list[tuple[OrderTerm, str]] = []
         for term in selection.order_by:
             if "." not in term.variable:
@@ -220,15 +220,9 @@ class OdmItemIndex:
                 )
             terms.append((term, field))
 
-        eligible = self._filter(matches, selection.filter)
-        if isinstance(eligible, FailedResolution):
-            return eligible
-        if not eligible:
-            # R008-14: an empty filtered right side yields missing and does not
-            # invoke either source handler.
-            return ResolvedValue(value=MISSING)
-        if len(eligible) == 1:
-            return ResolvedValue(value=eligible[0].values["Value"])
+        if len(matches) == 1:
+            return ResolvedValue(value=matches[0].values["Value"])
+        eligible = matches
 
         def compare(left: _IndexedRow, right: _IndexedRow) -> int:
             for term, field in terms:
@@ -271,6 +265,7 @@ class OdmItemIndex:
         item_oid: str,
         context_row: Mapping[str, object],
         *,
+        selector: str | None = None,
         multiple_matches: Mapping[str, object] | None = None,
     ) -> Resolution:
         variable = f"{self.dataset}.{item_oid}"
@@ -284,7 +279,19 @@ class OdmItemIndex:
         ) + (item_oid,)
         matches = list(self._records.get(key, ()))
         if not matches:
+            # R002-24: no contextual match is an absent item, which the
+            # `missing` handler answers.
             return AbsentValue(variable=variable)
+        if selector is not None:
+            eligible = self._filter(matches, selector)
+            if isinstance(eligible, FailedResolution):
+                return eligible
+            if not eligible:
+                # R008-14: the item exists and the filter selected none of
+                # its records, which is an absent match rather than an
+                # absent item.
+                return ResolvedValue(value=MISSING)
+            matches = eligible
         if multiple_matches is None:
             if len(matches) == 1:
                 return ResolvedValue(value=matches[0].values["Value"])
@@ -380,19 +387,24 @@ class RuntimeContext:
         }
 
     def resolve(self, variable: str) -> Resolution:
-        return self._resolve(variable, multiple_matches=None)
+        return self._resolve(variable, selector=None, multiple_matches=None)
 
-    def resolve_with_multiple_matches(
+    def resolve_selected(
         self,
         variable: str,
-        multiple_matches: Mapping[str, object],
+        *,
+        selector: str | None,
+        multiple_matches: Mapping[str, object] | None,
     ) -> Resolution:
-        return self._resolve(variable, multiple_matches=multiple_matches)
+        return self._resolve(
+            variable, selector=selector, multiple_matches=multiple_matches
+        )
 
     def _resolve(
         self,
         variable: str,
         *,
+        selector: str | None,
         multiple_matches: Mapping[str, object] | None,
     ) -> Resolution:
         bound = self._index.plan.bind(variable)
@@ -416,6 +428,13 @@ class RuntimeContext:
             if bound.field not in row:
                 return _failure("validation", "unknown_field", {"identifier": variable})
             feeding = self._feeding_rows.get(bound.dataset, [row])
+            if selector is not None:
+                # R003-21: the filter states which of the records this row
+                # reaches the source may read, before R001-12b counts values.
+                eligible = self._eligible(bound.dataset, selector, feeding)
+                if isinstance(eligible, FailedResolution):
+                    return eligible
+                feeding = eligible
             if not feeding:
                 return ResolvedValue(value=MISSING)
             present = _distinct_values(
@@ -443,5 +462,42 @@ class RuntimeContext:
         return self._index._odm[bound.dataset].resolve(
             bound.item_oid,
             row,
+            selector=selector,
             multiple_matches=multiple_matches,
         )
+
+    def _eligible(
+        self,
+        dataset: str,
+        selector: str,
+        records: Sequence[Mapping[str, object]],
+    ) -> list[dict[str, object]] | FailedResolution:
+        """Keep the records a source filter selects, in their own order."""
+        try:
+            ast = parse_predicate(selector)
+        except PredicateError as error:
+            return _failure(
+                "validation",
+                "invalid_predicate",
+                {"predicate": selector, "position": error.position},
+            )
+        fields = tuple(
+            column.name for column in self._index.plan.datasets[dataset].columns
+        )
+        kept: list[dict[str, object]] = []
+        for position, record in enumerate(records):
+            values = dict(record)
+            result = evaluate_predicate(
+                ast,
+                _CandidateResolver(
+                    dataset,
+                    fields,
+                    _IndexedRow(source_position=position, values=values),
+                ),
+            )
+            if isinstance(result, ConditionResult):
+                return FailedResolution(condition=result.condition)
+            assert isinstance(result, PredicateValue)
+            if result.value is TruthValue.TRUE:
+                kept.append(values)
+        return kept

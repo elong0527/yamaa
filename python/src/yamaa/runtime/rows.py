@@ -200,21 +200,27 @@ class RowResolver:
         if self._context.lookups.declares(qualifier):
             return self._record_lookup(qualifier, variable.split(".", 1)[1])
         if self._joins(qualifier):
-            return self._join(qualifier, variable.split(".", 1)[1], None)
+            return self._join(qualifier, variable.split(".", 1)[1], None, None)
         return self._base.resolve(variable)
 
-    def resolve_with_multiple_matches(
+    def resolve_selected(
         self,
         variable: str,
-        multiple_matches: Mapping[str, object],
+        *,
+        selector: str | None,
+        multiple_matches: Mapping[str, object] | None,
     ) -> Resolution:
         qualifier = variable.split(".", 1)[0] if "." in variable else None
         if qualifier is not None and self._joins(qualifier):
-            return self._join(qualifier, variable.split(".", 1)[1], multiple_matches)
+            return self._join(
+                qualifier, variable.split(".", 1)[1], selector, multiple_matches
+            )
         if qualifier is not None and self._context.lookups.declares(qualifier):
             # R015 already chose the record; the source reads a column of it.
             return self._record_lookup(qualifier, variable.split(".", 1)[1])
-        return self._base.resolve_with_multiple_matches(variable, multiple_matches)
+        return self._base.resolve_selected(
+            variable, selector=selector, multiple_matches=multiple_matches
+        )
 
     def _joins(self, qualifier: str) -> bool:
         """Return whether reaching this relation needs the R003 join.
@@ -232,6 +238,7 @@ class RowResolver:
         self,
         dataset: str,
         field_name: str,
+        selector: str | None,
         multiple_matches: Mapping[str, object] | None,
     ) -> Resolution:
         relation = self._context.relations[dataset]
@@ -265,6 +272,7 @@ class RowResolver:
             keys,
             [self._values[key] for key in keys],
             field_name,
+            selector=selector,
             multiple_matches=multiple_matches,
         )
 

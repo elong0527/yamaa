@@ -22,6 +22,8 @@ from yamaa.expressions.core import (
     evaluate_nested,
     expression_condition,
     handler_value,
+    resolve_operand,
+    source_operand,
 )
 from yamaa.expressions.predicates import (
     PredicateError,
@@ -62,10 +64,19 @@ def _resolve(
     resolver: Resolver,
     operation: str,
     field: str = "source",
+    *,
+    filtered: bool = False,
 ) -> ValueResult | ConditionResult:
-    if not isinstance(variable, str):
-        return _invalid_payload(operation, "a variable name")
-    resolved = resolver.resolve(variable)
+    """Read one operand, which R003-21b lets `coalesce` narrow to records."""
+    operand = source_operand(variable) if filtered else None
+    if operand is None:
+        if not isinstance(variable, str):
+            return _invalid_payload(operation, "a variable name")
+        operand = (variable, None)
+    variable, selector = operand
+    resolved = resolve_operand(resolver, variable, selector)
+    if isinstance(resolved, ConditionResult):
+        return resolved
     if isinstance(resolved, FailedResolution):
         return ConditionResult(condition=resolved.condition)
     if isinstance(resolved, AbsentValue):
@@ -99,7 +110,7 @@ def _coalesce(payload: object, resolver: Resolver) -> EvaluationResult:
         return sources
     assert isinstance(payload, Mapping)
     for variable in sources:
-        resolved = _resolve(variable, resolver, "coalesce", "sources")
+        resolved = _resolve(variable, resolver, "coalesce", "sources", filtered=True)
         if not isinstance(resolved, ValueResult):
             return resolved
         if resolved.value is not MISSING:

@@ -5152,6 +5152,29 @@ def aggregate_filter_resolver(payload, default_resolver, datasets):
     return predicate_resolver(qualified={qualifier: datasets.get(qualifier, {})})
 
 
+def source_filter_errors(payload, path, datasets):
+    """Check a source `filter` against the right-side records it selects.
+
+    R003-22 keeps the predicate inside the dataset the source reads, so it
+    resolves against that dataset's fields alone and never against the
+    output columns the reading derivation may name.
+    """
+    if not isinstance(payload, dict) or not isinstance(payload.get('filter'), str):
+        return []
+    variable = payload.get('variable')
+    qualifier = (
+        variable.split('.', 1)[0]
+        if isinstance(variable, str) and '.' in variable
+        else None
+    )
+    right_resolver = predicate_resolver(
+        qualified={qualifier: datasets.get(qualifier, {})}
+        if qualifier is not None
+        else {}
+    )
+    return validate_predicate_at(payload['filter'], f"{path}.filter", right_resolver)
+
+
 def validate_expression_predicates(
     expression, path, resolver, datasets
 ):
@@ -5192,29 +5215,26 @@ def validate_expression_predicates(
             )
 
     elif keyword == 'source' and isinstance(payload, dict):
-        multiple = payload.get('multiple_matches')
-        variable = payload.get('variable')
-        if (
-            isinstance(multiple, dict)
-            and isinstance(multiple.get('filter'), str)
-        ):
-            qualifier = (
-                variable.split('.', 1)[0]
-                if isinstance(variable, str) and '.' in variable
-                else None
+        errors.extend(
+            source_filter_errors(payload, f"{path}.source", datasets)
+        )
+
+    elif keyword == 'mapping' and isinstance(payload, dict):
+        errors.extend(
+            source_filter_errors(
+                payload.get('source'), f"{path}.mapping.source", datasets
             )
-            right_resolver = predicate_resolver(
-                qualified={qualifier: datasets.get(qualifier, {})}
-                if qualifier is not None
-                else {}
-            )
-            errors.extend(
-                validate_predicate_at(
-                    multiple['filter'],
-                    f"{path}.source.multiple_matches.filter",
-                    right_resolver,
+        )
+
+    elif keyword == 'coalesce' and isinstance(payload, dict):
+        sources = payload.get('sources')
+        if isinstance(sources, list):
+            for index, source in enumerate(sources):
+                errors.extend(
+                    source_filter_errors(
+                        source, f"{path}.coalesce.sources[{index}]", datasets
+                    )
                 )
-            )
 
     elif keyword == 'aggregate' and isinstance(payload, dict):
         if isinstance(payload.get('filter'), str):

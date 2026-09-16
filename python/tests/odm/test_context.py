@@ -275,8 +275,8 @@ def test_duplicate_context_requires_or_reports_multiple_match_selection() -> Non
         {
             "source": {
                 "variable": "ODM.IT.TEST.VALUE",
+                "filter": "ODM.Include = 'Y'",
                 "multiple_matches": {
-                    "filter": "ODM.Include = 'Y'",
                     "order_by": [
                         {
                             "variable": "ODM.Rank",
@@ -294,8 +294,8 @@ def test_duplicate_context_requires_or_reports_multiple_match_selection() -> Non
         {
             "source": {
                 "variable": "ODM.IT.TEST.VALUE",
+                "filter": "ODM.Include = 'Y'",
                 "multiple_matches": {
-                    "filter": "ODM.Include = 'Y'",
                     "order_by": [
                         {
                             "variable": "ODM.Rank",
@@ -334,7 +334,8 @@ def test_multiple_match_count_requires_more_than_one_filtered_survivor() -> None
         {
             "source": {
                 "variable": "ODM.IT.TEST.VALUE",
-                "multiple_matches": {**policy, "filter": "ODM.Rank = 2"},
+                "filter": "ODM.Rank = 2",
+                "multiple_matches": policy,
             }
         },
         context,
@@ -344,7 +345,8 @@ def test_multiple_match_count_requires_more_than_one_filtered_survivor() -> None
             "source": {
                 "variable": "ODM.IT.TEST.VALUE",
                 "missing": "fallback",
-                "multiple_matches": {**policy, "filter": "ODM.Rank > 9"},
+                "filter": "ODM.Rank > 9",
+                "multiple_matches": policy,
             }
         },
         context,
@@ -369,8 +371,8 @@ def test_order_terms_are_validated_when_filter_leaves_one_survivor() -> None:
         {
             "source": {
                 "variable": "ODM.IT.TEST.VALUE",
+                "filter": "ODM.Include = 'Y'",
                 "multiple_matches": {
-                    "filter": "ODM.Include = 'Y'",
                     "order_by": [
                         {
                             "variable": "ODM.Unknown",
@@ -391,7 +393,9 @@ def test_order_terms_are_validated_when_filter_leaves_one_survivor() -> None:
     assert result.condition.context == {"identifier": "ODM.Unknown"}
 
 
-def test_multiple_match_filter_also_applies_to_one_contextual_match() -> None:
+def test_a_filter_selecting_no_contextual_match_is_not_an_absent_item() -> None:
+    # R002-24 answers an item the context does not carry, and R008-14 keeps a
+    # filtered-away record out of that handler: the item was collected.
     table = _table(
         ["StudyOID", "ItemOID", "Value", "Include"],
         [
@@ -405,17 +409,7 @@ def test_multiple_match_filter_also_applies_to_one_contextual_match() -> None:
             "source": {
                 "variable": "ODM.IT.TEST.VALUE",
                 "missing": "fallback",
-                "multiple_matches": {
-                    "filter": "ODM.Include = 'Y'",
-                    "order_by": [
-                        {
-                            "variable": "ODM.Include",
-                            "direction": "asc",
-                            "nulls": "last",
-                        }
-                    ],
-                    "keep": "first",
-                },
+                "filter": "ODM.Include = 'Y'",
             }
         },
         context,
@@ -545,3 +539,150 @@ def test_two_values_on_the_records_of_a_key_fail_and_count_the_values() -> None:
         "identifier": "ODM.VISITDT",
         "value_count": 2,
     }
+
+
+def _collected_items() -> TypedTable:
+    return _table(
+        ["StudyOID", "SubjectKey", "ItemOID", "Value"],
+        [
+            ["S1", "001", "IT.DM.SEX", "Male"],
+            ["S1", "001", "IT.DM.AGE", "34"],
+            ["S1", "001", "IT.DM.ARM", "Placebo"],
+        ],
+    )
+
+
+def test_a_filter_selects_which_records_of_the_key_a_source_reads() -> None:
+    # R003-21: the records of one key carry three collected values, and the
+    # filter is what leaves the derivation the one it asks for.
+    table = _collected_items()
+    feeding = runtime_rows(table)
+    context = _index(table).context({"ODM": feeding[0]}, feeding_rows={"ODM": feeding})
+
+    result = evaluate_expression(
+        {"source": {"variable": "ODM.Value", "filter": "ODM.ItemOID = 'IT.DM.AGE'"}},
+        context,
+    )
+
+    assert result == ValueResult(value="34")
+
+
+def test_an_unfiltered_read_of_those_records_still_counts_every_value() -> None:
+    table = _collected_items()
+    feeding = runtime_rows(table)
+    context = _index(table).context({"ODM": feeding[0]}, feeding_rows={"ODM": feeding})
+
+    result = evaluate_expression({"source": "ODM.Value"}, context)
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "multiple_values_per_key"
+
+
+def test_a_filter_leaving_two_values_fails_as_that_count() -> None:
+    table = _table(
+        ["StudyOID", "SubjectKey", "ItemOID", "Value"],
+        [
+            ["S1", "001", "IT.DM.SEX", "Male"],
+            ["S1", "001", "IT.DM.SEX", "Female"],
+        ],
+    )
+    feeding = runtime_rows(table)
+    context = _index(table).context({"ODM": feeding[0]}, feeding_rows={"ODM": feeding})
+
+    result = evaluate_expression(
+        {"source": {"variable": "ODM.Value", "filter": "ODM.ItemOID = 'IT.DM.SEX'"}},
+        context,
+    )
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "multiple_values_per_key"
+    assert result.condition.context == {"identifier": "ODM.Value", "value_count": 2}
+
+
+def test_a_filter_selecting_no_record_is_missing_and_fires_no_handler() -> None:
+    # R008-14: the subject was not asked this item, which is an absent match.
+    table = _collected_items()
+    feeding = runtime_rows(table)
+    context = _index(table).context({"ODM": feeding[0]}, feeding_rows={"ODM": feeding})
+
+    result = evaluate_expression(
+        {
+            "source": {
+                "variable": "ODM.Value",
+                "filter": "ODM.ItemOID = 'IT.DM.RACE'",
+                "missing": "fallback",
+            }
+        },
+        context,
+    )
+
+    assert result == ValueResult(value=MISSING)
+
+
+def test_a_mapping_reads_the_records_its_own_filter_selects() -> None:
+    table = _collected_items()
+    feeding = runtime_rows(table)
+    context = _index(table).context({"ODM": feeding[0]}, feeding_rows={"ODM": feeding})
+
+    result = evaluate_expression(
+        {
+            "mapping": {
+                "source": {
+                    "variable": "ODM.Value",
+                    "filter": "ODM.ItemOID = 'IT.DM.SEX'",
+                },
+                "dict": {"Male": "M", "Female": "F"},
+                "missing": "U",
+                "unmapped": "U",
+            }
+        },
+        context,
+    )
+
+    assert result == ValueResult(value="M")
+
+
+def test_a_coalesce_source_states_the_records_it_reads() -> None:
+    table = _collected_items()
+    feeding = runtime_rows(table)
+    context = _index(table).context({"ODM": feeding[0]}, feeding_rows={"ODM": feeding})
+
+    present = evaluate_expression(
+        {
+            "coalesce": {
+                "sources": [
+                    {"variable": "ODM.Value", "filter": "ODM.ItemOID = 'IT.DM.ARM'"}
+                ],
+                "default": "Unassigned",
+            }
+        },
+        context,
+    )
+    absent = evaluate_expression(
+        {
+            "coalesce": {
+                "sources": [
+                    {"variable": "ODM.Value", "filter": "ODM.ItemOID = 'IT.DM.RACE'"}
+                ],
+                "default": "Unassigned",
+            }
+        },
+        context,
+    )
+
+    assert present == ValueResult(value="Placebo")
+    assert absent == ValueResult(value="Unassigned")
+
+
+def test_a_filter_naming_another_relation_reads_no_record() -> None:
+    table = _collected_items()
+    feeding = runtime_rows(table)
+    context = _index(table).context({"ODM": feeding[0]}, feeding_rows={"ODM": feeding})
+
+    result = evaluate_expression(
+        {"source": {"variable": "ODM.Value", "filter": "OTHER.ItemOID = 'IT.DM.AGE'"}},
+        context,
+    )
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "unknown_field"
