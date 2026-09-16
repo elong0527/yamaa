@@ -1,6 +1,7 @@
 schema_version: "1.0"
 domain: DM
 keys: [STUDYID, USUBJID]
+
 input:
   ODM: input/odm.csv
 
@@ -32,8 +33,8 @@ columns:
     label: Date/Time of Informed Consent
     derivation:
       source:
-        variable: ODM.IT.DM.RFICDTC
-        missing: null
+        filter: ODM.ItemOID = 'IT.DM.RFICDTC'
+        variable: ODM.Value
     verifications:
       not_missing: {}
 
@@ -42,10 +43,10 @@ columns:
     label: Date/Time of Birth
     derivation:
       source:
-        variable: ODM.IT.DM.BRTHDT
-        missing: null
+        filter: ODM.ItemOID = 'IT.DM.BRTHDT'
+        variable: ODM.Value
 
-  - name: BRTH_PREC
+  - name: BRTHDTPR
     type: str
     label: Collected Precision of the Birth Date
     derivation:
@@ -59,24 +60,18 @@ columns:
     derivation:
       case:
         branches:
-          - when: "BRTH_PREC = 'D'"
+          - when: "BRTHDTPR = 'D'"
             then:
               source: BRTHDTC
-        otherwise: {literal: null}
 
   - name: AGE
     type: int
-    label: Age in AGEU at RFICDTC
+    label: Age
     derivation:
-      case:
-        branches:
-          - when: "BRTH_PREC = 'D'"
-            then:
-              date_diff:
-                start: BRTHDT
-                end: RFICDTC
-                unit: year
-        otherwise: {literal: null}
+      date_diff:
+        start: BRTHDT
+        end: RFICDTC
+        unit: year
 
   - name: AGEU
     type: str
@@ -87,7 +82,6 @@ columns:
           - when: "AGE IS NOT NULL"
             then:
               literal: YEARS
-        otherwise: {literal: null}
 
 verifications:
   - unique:
@@ -100,11 +94,11 @@ verifications:
       columns: [AGE, AGEU]
   - implies:
       id: complete-birth-date-gives-age
-      when: "BRTH_PREC = 'D'"
+      when: "BRTHDTPR = 'D'"
       then: "AGE IS NOT NULL"
   - implies:
       id: partial-birth-date-gives-no-age
-      when: "BRTH_PREC IN ('M', 'Y') OR BRTHDTC IS NULL"
+      when: "BRTHDTPR IN ('M', 'Y') OR BRTHDTC IS NULL"
       then: "AGE IS NULL"
   - implies:
       id: age-is-not-negative

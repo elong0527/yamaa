@@ -6,8 +6,9 @@
 (informed consent, **RFICDTC**) from the collected birth date, keeping
 **BRTHDTC** at its collected precision.
 
-**Input:** EDC output in long form, one row per collected item; subjects
-carry **BRTHDT** (birth date as collected) and **RFICDTC** rows.
+**Input:** EDC output in long form, one row per collected item; each subject
+carries an `IT.DM.BRTHDT` row (birth date as collected) and an
+`IT.DM.RFICDTC` row.
 
 **Variables:**
 
