@@ -43,8 +43,7 @@ literal unless its behavior says otherwise:
 | final | `override` | Apply the first matching final expression |
 
 **R008-2.** Literal handlers are substituted only when their condition
-occurs. Final override values are the only handler values that remain
-nested expressions.
+occurs. Only final override values remain nested expressions.
 
 **R008-3.** Omitting an applicable handler field makes its condition
 fatal.

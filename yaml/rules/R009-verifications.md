@@ -77,8 +77,8 @@ specification that must assert the claim derives at the parent's grain.
 
 **R009-6.** Column verifications infer the column on which they are declared.
 They run after that column's derivation, conversion, and final override.
-Dataset verifications run after every column, output-key validation, and
-column verification is complete.
+Dataset verifications run after all column work, output-key validation, and
+column verifications finish.
 
 **R009-7.** A failed `error` verification fails execution. Implementations
 must report its stable specification path, failure count, and representative
