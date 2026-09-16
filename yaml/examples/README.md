@@ -229,6 +229,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`sdtm-dm-basic`](sdtm-dm-basic/) | build one subject record from collected data |
 | [`sdtm-dm-death`](sdtm-dm-death/) | derive death date and flag from disposition and adverse events |
 | [`sdtm-dm-metadata-contract`](sdtm-dm-metadata-contract/) | declare the metadata a submission needs |
+| [`sdtm-dm-race-ethnicity`](sdtm-dm-race-ethnicity/) | record race and ethnicity in demographics |
 | [`sdtm-dm-reference-dates`](sdtm-dm-reference-dates/) | derive the reference dates from EX, DS, and AE |
 | [`sdtm-ds-disposition-sequence`](sdtm-ds-disposition-sequence/) | number each subject's disposition records in date order |
 | [`sdtm-ex-combination-regimen`](sdtm-ex-combination-regimen/) | represent a combination regimen |
@@ -239,6 +240,7 @@ the safest correction and shows the smallest useful YAML change.
 | [`sdtm-lb-multiform`](sdtm-lb-multiform/) | consolidate four collection forms into one dataset |
 | [`sdtm-lb-reference-range-indicator`](sdtm-lb-reference-range-indicator/) | apply external reference ranges |
 | [`sdtm-relrec-many-to-many`](sdtm-relrec-many-to-many/) | record relationships between events and medications |
+| [`sdtm-supdm-race-selections`](sdtm-supdm-race-selections/) | record supplemental race selections |
 | [`sdtm-suppmh-parent-linkage`](sdtm-suppmh-parent-linkage/) | link qualifiers collected on their own form to a parent record |
 | [`sdtm-suppmh-qualifiers`](sdtm-suppmh-qualifiers/) | reshape extra qualifiers into supplemental records |
 | [`sdtm-vs-unit-standardization`](sdtm-vs-unit-standardization/) | standardize collected results into the study's units |
