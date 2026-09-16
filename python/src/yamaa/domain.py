@@ -168,6 +168,15 @@ class DomainRun:
         return self._result.artifact.frame.clone()
 
     @property
+    def violation_log(self) -> pl.DataFrame | None:
+        """Return the R009 violation sidecar frame, or ``None`` when absent."""
+        if not isinstance(self._result, ExecutionSuccess):
+            return None
+        if self._result.violation_log is None:
+            return None
+        return self._result.violation_log.frame.clone()
+
+    @property
     def issues(self) -> pl.DataFrame:
         """Return all structured run issues in a stable Polars schema."""
         return self._issues.clone()
