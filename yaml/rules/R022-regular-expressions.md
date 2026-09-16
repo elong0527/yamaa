@@ -34,8 +34,9 @@ own matching.
 - `str_extract.pattern`;
 - the `pattern` of R009's `matches` column verification.
 
-**R022-2.** The named schema type `regex` is the type of the last two. Every
-requirement below applies to all three unless a section names one.
+**R022-2.** `regex` is the named schema type for `str_extract.pattern` and
+R009's `matches` pattern. All requirements below apply to all three except
+where a section names one.
 
 ## Pinned engine
 
@@ -63,13 +64,12 @@ clear. A pattern cannot select flags because ECMA-262 has no inline flag
 syntax. `(?i)` is a syntax error. A consumer must not expose `i`, `m`, `s`,
 `g`, `y`, `d`, or `v` through a field, environment, or host default.
 
-**R022-7.** `u` is set because it makes a pattern operate on the Unicode
-scalar values R019 defines. One supplementary-plane scalar is one character
-to a pattern, just as it is one unit to R006's `min_length` and R009's
-`max_length`; without `u` the same scalar would be two UTF-16 code units and
-`.` would match half of it. `u` also admits the `\\u{...}` code point escape
-and makes a malformed escape such as `\\a` a syntax error rather than a
-silent literal.
+**R022-7.** The `u` flag makes a pattern operate on the Unicode scalar values
+R019 defines. One supplementary-plane scalar is one character to a pattern
+and one unit to R006's `min_length` and R009's `max_length`. Without `u`, the
+same scalar is two UTF-16 code units and `.` matches half. The flag also
+admits `\\u{...}` code point escapes and makes a malformed escape such as
+`\\a` a syntax error rather than a silent literal.
 
 **R022-8.** Without `i`, matching is case-sensitive, and no Unicode case
 table enters a language whose casing R019 confines to ASCII.

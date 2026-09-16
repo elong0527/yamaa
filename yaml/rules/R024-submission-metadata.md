@@ -55,12 +55,11 @@ metadata. The map and submission metadata are not merged. The map is never a
 fallback.
 
 **R024-4.** The map must not carry a key this rule governs. Root `metadata`
-rejects every field name of the dataset object above, and a column's
-`metadata` rejects every field name of the column object below. This is what
-makes R024-3 checkable rather than asserted: without it a study could write
-`metadata` with an `origin` key beside a governed `origin`, leaving two
-provenance claims in one specification and nothing to say which claim the
-document reports.
+rejects all dataset metadata field names above. A column's `metadata` rejects
+all column metadata field names below. This makes R024-3 checkable: without
+it, a study could write `metadata` with an `origin` key beside a governed
+`origin`, leaving two provenance claims in one specification and no rule for
+which claim the document reports.
 
 ## Standard families
 
@@ -169,10 +168,10 @@ values must contain at most `length` R019 scalar values, as R009's
 `max_length` requires, so the declared length binds rather than describes.
 
 **R024-21.** On a `str` column with a `max_length` verification, `length` is
-derived from the verification's `max` and need not be declared. The two state
-a single bound, and stating the bound twice only creates disagreement.
-Declaring both is accepted when they are equal and rejected
-when they differ, and the bound is checked once either way.
+derived from the verification's `max` and need not be declared. `length` and
+`max_length` state one bound, so stating both creates disagreement. Declaring
+both is accepted when equal and rejected when different. The bound is checked
+once either way.
 
 **R024-22.** A `length` declared on any other column type is not enforced.
 R009 states why: rendered text is a property of R011's and R020's rendering
@@ -317,10 +316,10 @@ stored value was collected, assigned, fixed by the protocol, or copied from
 a predecessor dataset is a fact about the source and not about this
 specification.
 
-**R024-46.** A row-derived column is refuted by the derivation each `rows`
-entry declares, applying R024-43 through R024-45 to every entry. Entries that
-disagree leave the column the types they all admit, and no shared type is an
-error rather than a silently admitted origin.
+**R024-46.** For a row-derived column, apply R024-43 through R024-45 to the
+derivation each `rows` entry declares. If entries disagree, the column keeps
+only the types all entries admit. No shared type is an error, not a silently
+admitted origin.
 
 ## Method
 
