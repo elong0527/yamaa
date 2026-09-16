@@ -10,23 +10,22 @@ applies_to: [environment, function, function_contract, function_binding]
 
 ## Intent
 Make a project-supplied scalar function reproducible and reviewable. A
-specification contains no host-language code or runtime selection. A logical
-contract may have an R implementation in one project and a Python
-implementation in another. Each project remains a single-language execution
-environment.
+specification contains no host-language code or runtime selection. One
+logical contract may run in R in one project and in Python in another, while
+each project stays a single-language execution environment.
 
 ## Boundaries
 
 This rule owns project-root resolution, logical function contracts, singular
 runtime bindings, invocation, and activation conformance. R006 owns the
 schema notation and structural validation. R001 owns evaluation order and the
-scalar row-count invariant. R005 owns what happens to the completed result, and
-R011 owns column types and conversion. R016 owns temporal values.
+scalar row-count invariant. R005 owns the completed result, and R011 owns
+column types and conversion. R016 owns temporal values.
 
 Across-row reduction remains an `aggregate` operation. A project function is
-never a reducer and cannot inspect a relation or other rows. Final artifact
-formatting is also outside this rule. In particular, comparison precision used
-for conformance does not round a derivation value.
+never a reducer. The function cannot inspect a relation or other rows. Final
+artifact formatting is also outside this rule, and comparison precision
+used for conformance does not round a derivation value.
 
 An authorized user runs bindings as trusted organization code in an
 organization-controlled secure environment. This rule sets correctness,
@@ -264,15 +263,16 @@ differences.
 
 ## Rationale
 
-A specification stays portable by naming a logical contract instead of runnable
-code: the same derivation can run in an R project or a Python project because
-neither the language choice nor the callable ever appears in it. One immutable
-runtime per project, pinned by digest and verified before activation, makes
-execution reproducible and reviewable. Exact types with no implicit conversion,
-closed signatures, and activation vectors run before any specification executes
-exist for the same reason: a project function must return the same scalar in
-both languages, and any change in meaning arrives as a new contract version
-rather than a silent difference.
+A specification stays portable by naming a logical contract instead of
+runnable code. The same derivation can run in an R project or a Python
+project, and neither the language choice nor the callable appears in the
+specification. One immutable runtime per project makes execution
+reproducible and reviewable: the digest pins the runtime, and verification
+runs before activation. Exact types allow no implicit conversion,
+signatures are closed, and activation vectors run before any specification
+executes. These rules exist so a project function returns the same scalar
+in both languages. Any change in meaning arrives as a new contract version,
+never as a silent difference.
 
 ## Errors
 

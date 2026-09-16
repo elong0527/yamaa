@@ -20,8 +20,8 @@ owns column coverage, output membership, and final identifier constraints. R009
 owns verification behavior.
 
 This rule does not execute a derivation, read an input dataset, or define an
-inherited field's meaning. It composes declarations. The rule that owns each
-declaration applies to the resolved result.
+inherited field's meaning. This rule composes declarations. The rule that
+owns each declaration applies to the resolved result.
 
 ## Terms
 **R017-1.** The file requested for validation or execution is the **entry
@@ -244,19 +244,17 @@ value came.
 
 ## Rationale
 
-Inheritance composes declarations before any data is read, so every
-specification resolves to one deterministic document: later contributions win
-by
-position rather than by conflict, and `parents` order rather than a separate
-merge rule decides every difference. Shallow composition with complete-field
-replacement keeps each layer reviewable on its own, while null clearing handles
-the one exception an optional field needs. Pruning keeps reuse cheap: a shared
-layer can carry extra declarations without forcing them into every artifact,
-and
-reference checks run after pruning so a dead declaration cannot fail a live
-one.
-Path rebasing preserves what an inherited relative path denotes instead of
-silently reinterpreting it from the entry directory.
+Inheritance composes declarations before any data is read. Every
+specification resolves to one deterministic document. Later contributions
+win by position, not by conflict. The `parents` order decides every
+difference. No separate merge rule exists. Shallow composition replaces
+each field whole, so each layer stays reviewable on its own. Null clearing
+handles the one exception: clearing an optional field. Pruning keeps reuse
+cheap. A shared layer can carry extra declarations without forcing them
+into every artifact. Reference checks run after pruning, so a dead
+declaration cannot fail a live declaration. Path rebasing preserves what an
+inherited relative path denotes. The path is never silently reinterpreted
+from the entry directory.
 
 ## Errors
 
