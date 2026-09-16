@@ -17,7 +17,7 @@ Each reading column then reads the selected record.
 ## Boundaries
 
 This rule owns the `record_lookups` declaration: how a record is matched and
-chosen, what its name means, and what an unmatched left row receives. R003
+chosen, what its name means, and what an unmatched output row receives. R003
 owns the implicit join a qualified source performs on its own, and R007 owns
 `mapping_from` and the per-column `multiple_matches` relaxation. Neither
 changes here: a record lookup reaches the same records by the same means and
@@ -190,7 +190,7 @@ the columns that read it are plainly reading one record.
 - **R015-32.** A missing declared `source` or `between.value` where
   `incomplete` resolves to `fail`: fail, reporting the record lookup and
   value that is missing.
-- **R015-33.** An unmatched left row where `unmatched` resolves to `fail`:
+- **R015-33.** An unmatched output row where `unmatched` resolves to `fail`:
   fail, reporting the record lookup and the offending keys.
 - **R015-34.** R015-28 and R015-33 report their facts under one vocabulary:
   `key` and `lookup_key` name the fields the lookup matched on and the values

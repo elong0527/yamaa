@@ -10,9 +10,8 @@ applies_to: [project_path, dataset_source, dataset_class]
 
 ## Intent
 
-Limit every stored file a run reads to a location the study declares or the
-runner approves. Bind the bytes of a validated declaration to the bytes
-that ingestion receives.
+Limit each stored file a run reads to a declared or runner-approved location.
+Bind validated bytes to the bytes ingestion receives.
 
 ## Boundaries
 
@@ -96,10 +95,9 @@ like any other.
 
 **R021-7.** A `project_path` is either **relative** -- one or more segments
 separated by `/` -- or **rooted** -- a leading `/`, or one ASCII letter
-followed by `:/`, and then one or more such segments. Which form a path is
-written in, and whether that form is well formed, is decided before the
-filesystem is consulted, so a malformed path fails identically on every
-platform and reveals nothing about the host.
+followed by `:/`, and then one or more such segments. Path form and syntax are
+decided before the filesystem is consulted. A malformed path therefore fails
+identically on every platform and reveals nothing about the host.
 
 - **R021-8.** A rooted path can name a host location outright. Code and
   data are commonly stored apart, and an absolute path is how a study
@@ -181,23 +179,23 @@ consume a stream that cannot be read twice.
 
 ## One snapshot per physical file
 
-**R021-20.** A run reads one **immutable byte snapshot** of each physical file
-it accepts, and every declaration that reaches that file binds that snapshot.
-The key is the file the walk reached -- its canonical resolved path, the
-canonical anchor followed by the components the walk accepted -- and never the
-spelling a declaration used. A relative and a rooted spelling of one file
-therefore produce one key and bind one snapshot.
+**R021-20.** A run reads one **immutable byte snapshot** of each accepted
+physical file. Every declaration that reaches the file binds that snapshot. The
+key is the file the walk reached: its canonical resolved path, the canonical
+anchor, and the components the walk accepted. The key is never the spelling a
+declaration used. A relative and a rooted spelling of one file therefore
+produce one key and bind one snapshot.
 
 **R021-21.** Several dataset identifiers may resolve to one physical file. The
 declarations remain distinct -- each carries its own identifier and its own
 R014 field types -- but they share the one snapshot, so no two of them
 observe different bytes.
 
-**R021-22.** An implementation reads the snapshot through the handle it opened
-while validating, or records the SHA-256 of the bytes it validated and
-verifies that digest before ingestion. It does not re-resolve the written path
-and read whatever that path then names. Content that changed between
-validation and ingestion fails the run; the replacement is not read.
+**R021-22.** An implementation reads the snapshot through the handle opened
+while validating, or records the SHA-256 of the validated bytes and verifies
+that digest before ingestion. The implementation does not re-resolve the
+written path and read its later target. Content that changes between validation
+and ingestion fails the run; the replacement is not read.
 
 **R021-23.** Content identity is over bytes. A modification time, inode
 number, or size is not the identity, because none of them changes reliably

@@ -30,7 +30,7 @@ literal unless its behavior says otherwise:
 | Stage | Local declaration | Behavior |
 |---|---|---|
 | bind | `source.missing` | Absent source variable or ODM item |
-| join | `source.multiple_matches` | Select one of the records `source.filter` left |
+| join | `source.multiple_matches` | Choose one `source.filter` result |
 | mapping | `missing` | Missing mapping input |
 | mapping | `unmapped` | Non-missing value with no mapping |
 | cut | `missing` | Missing numeric input |
