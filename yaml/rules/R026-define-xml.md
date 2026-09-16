@@ -497,20 +497,19 @@ avoids.
 
 ## Rationale
 
-A Define-XML document is study-level and a specification is dataset-level, so
-the composition needs a document of its own; deriving it from a directory
-would make the contents of a submission a property of a filesystem. Every
-identifier is built from declared names because a reviewer reads a regenerated
-document as a diff of the previous one, and a counter or a hash makes an
-unrelated edit renumber the file. Definitions are not shared between datasets
-because sharing silently requires two specifications to agree forever.
-Timestamps and file identity are declared because a document generated from a
-clock is different on every run, which defeats both the golden fixture and the
-review. The bytes are fixed rather than the information for the same reason
-R020 fixes the `csv` profile's bytes: an artifact that is read as a diff is
-compared as bytes. The deferrals are refusals rather than silences so that a
-specification cannot carry metadata the generator quietly drops, which is the
-one failure a submission document must never have.
+A Define-XML document is study-level. A specification is dataset-level. The
+composition needs its own document. Deriving it from a directory makes
+submission contents a property of the file system. Every identifier comes from
+declared names. A reviewer reads a regenerated document as a diff. A counter
+or hash makes an unrelated edit renumber the file. Definitions are not shared
+between datasets because sharing silently requires two specifications to agree
+forever. Declared timestamps and file identity make generation reproducible. A
+document generated from a clock differs on every run, defeating the golden
+fixture and review. Bytes are fixed because an artifact reviewed as a diff is
+compared as bytes. R020 applies the same rule to the `csv` profile. Deferrals
+are refusals, not silences. They prevent a specification from carrying metadata
+that the generator quietly drops. A submission document must never have that
+failure.
 
 ## Errors
 
