@@ -140,11 +140,11 @@ the usual cause is a binding that misspells its identifier.
 
 ## Rationale
 
-One object shared by many bindings makes a controlled-terminology
-version upgradable: a study that restates its terminology per column has as
-many places to change as it has columns, and no way to prove they agree. The
-binding enforces only where the terminology is closed, because enforcing an
-extensible or external list would reject values the standard admits. Agreement
+One shared object lets a study upgrade a controlled-terminology version in
+one place. Restating terminology per column creates many places to change and
+makes agreement impossible to prove. A binding enforces only closed
+terminology. Enforcing an extensible or external list would reject values the
+standard admits. Agreement
 with `allowed_values` is exact equality because any other relation leaves the
 generated document and the executed run making different claims about the same
 column, and a submission document whose claims the run does not support is the

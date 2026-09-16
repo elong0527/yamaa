@@ -248,16 +248,15 @@ document that mixes the forms differently is still valid.
 
 ## Rationale
 
-A document for one bundle version must not be silently reinterpreted under
-another. A version mismatch is rejected before validation, not coerced. Closed
-classes and keyword sets keep both implementations validating the same
-documents. Undeclared content fails instead of being ignored by one
-implementation and honored by the other. Shorthand unions expand to a
-canonical form. Both implementations then agree on what they validated. The
-written form is checked before expansion, so its constraints still apply.
-Uniform quoting of bracketed type expressions makes types read the same in flow
-and block form. Flow descriptors without descriptions keep classes readable as
-tables.
+A document written for one bundle version must not be silently reinterpreted
+under another version. A version mismatch is rejected before validation, not
+coerced. Closed classes and keyword sets make both implementations validate the
+same documents. Undeclared content fails. One implementation cannot ignore
+content that another honors. Shorthand unions expand to a canonical form. Both
+implementations validate the canonical form. Written-form constraints are
+checked before expansion. Uniform quoting of bracketed type expressions makes
+types read the same in flow and block form. Flow descriptors without
+descriptions keep classes readable as tables.
 
 ## Errors
 

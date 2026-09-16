@@ -170,7 +170,7 @@ That row does not invoke the absent-item handler.
 Unqualified names address the output dataset. Reusing the output
 domain as a dataset identifier would be ambiguous. Forbidding arbitrary
 nested expressions in variable fields keeps each operation self-contained.
-That ban makes dependencies visible.
+The ban makes dependencies visible.
 
 ## Errors
 

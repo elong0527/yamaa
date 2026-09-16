@@ -20,9 +20,9 @@ derivation expressions.
 
 ## Boundaries
 
-This rule owns the two phases, dependency inference, and evaluation order. It
-does not define what an expression means (R007), how a name binds to a source
-(R002), or how a finished expression's result is handled (R005).
+This rule owns the two phases, dependency inference, and evaluation order.
+R007 defines expression meaning. R002 defines name binding. R005 handles
+finished expression results.
 
 ## Phases
 
@@ -192,9 +192,8 @@ R005 owns both.
 Row count changes only during row construction. A reviewer can therefore
 separate row grain from enrichment. The row templates and their input
 datasets fix how many rows exist before any column is derived. Dependency
-inference keeps declaration order checkable. Dependency inference makes
-cycles visible. Evaluation order never comes from mapping order or repeated
-reads of one partition.
+inference makes declaration order checkable and cycles visible.
+Evaluation order never follows mapping order or repeated reads of a partition.
 
 ## Errors
 

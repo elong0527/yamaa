@@ -238,13 +238,12 @@ specification contains one declaration for each identifier.
 
 ## Rationale
 
-A fixed, specification-declared column list makes a dictionary that outgrows
-its declared places a visible specification-data mismatch. It does not silently
-change the artifact schema. Such a list makes a key an identity a reviewer can
-state in advance. Family grouping by name position remains a study design
-property because no portable construct can state it. An internal order term
-lets a specification withhold a working column. The stated cost is that a
-reader cannot always reproduce artifact order from the artifact alone.
+A fixed column list exposes excess dictionary entries as a specification-data
+mismatch. The list does not silently change the artifact schema. The fixed list
+lets a reviewer state key identity in advance. Family grouping by name position
+remains a study design property. No portable construct can state the grouping.
+An internal order term lets a specification withhold a working column. A reader
+cannot always reproduce artifact order from the artifact alone.
 Presentation ordering runs last. It changes only the sequence a consumer
 receives. R001 orders construction in base-record order. R014 makes a stored
 artifact a source for another specification. A declared order lets a

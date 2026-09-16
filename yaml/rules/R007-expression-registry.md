@@ -214,17 +214,15 @@ and do not affect schema validation.
 ## Rationale
 
 Keeping each keyword's inputs, options, grouping, handlers, and semantics
-inside its own registry entry keeps the surface checkable: there is no
-generic argument bag whose contents drift between implementations. Nesting
-is allowed only where selecting or composing expressions is the field's
-purpose, so an operation cannot silently become a second expression
-language. The three aggregate contexts mirror the three grains the language
-already has -- a joined relation, a constructed partition, and an input
-group -- and fixing order-term defaults in the rule keeps SQL engine
-disagreement about null placement from leaking into results. Comparability
-on runtime types means an ordering term compares one type by construction,
-with the multi-variable expressions as the one place stating
-comparability as a requirement.
+inside its registry entry keeps the language checkable. No generic argument bag
+can drift between implementations. Nesting is allowed only where selecting or
+composing expressions is the field's purpose. An operation cannot silently
+become a second expression language. The three aggregate contexts match the
+language's three grains: a joined relation, a constructed partition, and an
+input group. The rule fixes order-term defaults. SQL engine disagreement about
+null placement must not change results. Runtime types make an order term
+compare one type by construction. Multi-variable expressions are the only
+constructs that require stated comparability.
 
 ## Errors
 

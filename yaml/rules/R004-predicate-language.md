@@ -201,9 +201,9 @@ override those behaviors to match these rules or evaluate the grammar itself.
 ## Rationale
 
 A closed predicate grammar keeps row selection, overrides, and verifications
-reviewable and identical in R and Python. Names and literals require each
-computed value to be bound first to a named column. The named column fixes type
-and missing-value behavior. Three-valued logic without implicit conversion
+reviewable and identical in R and Python. The grammar requires a named column
+for each value computed before comparison. The named column fixes type and
+missing-value behavior. Three-valued logic without implicit conversion
 avoids dependence on host SQL coercion, collation, or escape defaults.
 
 ## Errors
