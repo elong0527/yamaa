@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADEX
-datasets:
+input:
   EX:
     path: input/ex.csv
     types: {EXSEQ: int, EXDOSE: float, EXDOSCNT: int}

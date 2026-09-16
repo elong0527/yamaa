@@ -1,7 +1,7 @@
 phase: ingest
 condition: invalid_text
 spec_paths:
-  - datasets.DM.path
+  - input.DM.path
 requirement: R019-21
 context:
   dataset: DM

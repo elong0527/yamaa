@@ -27,7 +27,7 @@ is exactly the one you already know -- **a header row and the rows filled in
 under it.**
 
 **`root_class` is the header for the file.** It declares `schema_version`,
-`domain`, `datasets`, `base`, `parents`, `record_lookups`, `keys`, `output`,
+`domain`, `input`, `base`, `parents`, `record_lookups`, `keys`, `output`,
 `columns`, `rows`, `verifications` and `metadata`, of which six are required.
 The specification in
 [Excel to YAMAA](excel-to-yamaa.md)
@@ -76,14 +76,15 @@ a specification:
 | class | Where you write one | Read one in |
 |---|---|---|
 | `output_class` | `output:` | [`adam-adsl-bmi-compute/spec.yaml:8`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adsl-bmi-compute/spec.yaml#L8) |
-| `dataset_class` | each value under `datasets:` | [`adam-adex-cumulative-dose/spec.yaml:5`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adex-cumulative-dose/spec.yaml#L5) |
+| `dataset_class` | each value under `input:` | [`adam-adex-cumulative-dose/spec.yaml:5`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adex-cumulative-dose/spec.yaml#L5) |
 | `row_class` | each item of `rows:` | [`adam-adlb-bds/spec.yaml:100`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adlb-bds/spec.yaml#L100) |
 | `record_lookup_class` | each item of `record_lookups:` | [`adam-adae-death-outcome/spec.yaml:10`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adae-death-outcome/spec.yaml#L10) |
 | `record_lookup_between_class` | `record_lookup.between:` | [`adam-advs-analysis-window-table/spec.yaml:16`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-advs-analysis-window-table/spec.yaml#L16) |
 | `handled_expression_class` | a `derivation:` that handles failure | [`adam-adsl-mapping/spec.yaml:98`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adsl-mapping/spec.yaml#L98) |
 | `override_rule_class` | each item of `override:` | [`adam-adae-severity-override/spec.yaml:37`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adae-severity-override/spec.yaml#L37) |
-| `source_binding_class` | a `source:` that needs a handler | [`sdtm-dm-basic/spec.yaml:60`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/sdtm-dm-basic/spec.yaml#L60) |
-| `multiple_matches_class` | `source.multiple_matches:` | [`adam-adsl-treatment-selection/spec.yaml:31`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adsl-treatment-selection/spec.yaml#L31) |
+| `source_binding_class` | a `source:` that states how it reads | [`sdtm-dm-basic/spec.yaml:55`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/sdtm-dm-basic/spec.yaml#L55) |
+| `filtered_source_class` | another operation's `source:` that states which records it reads | [`sdtm-dm-basic/spec.yaml:42`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/sdtm-dm-basic/spec.yaml#L42) |
+| `multiple_matches_class` | `source.multiple_matches:` | [`adam-adsl-treatment-selection/spec.yaml:33`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adsl-treatment-selection/spec.yaml#L33) |
 | `case_branch_class` | each item of `case.branches:` | [`adam-adae-treatment-emergent/spec.yaml:62`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adae-treatment-emergent/spec.yaml#L62) |
 | `order_term_class` | each item of any `order_by:` | [`adam-adae-severity-rank/spec.yaml:58`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adae-severity-rank/spec.yaml#L58) |
 | `aggregate_class` | a full-form `aggregate:` | [`adam-adlb-mean/spec.yaml:46`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adlb-mean/spec.yaml#L46) |

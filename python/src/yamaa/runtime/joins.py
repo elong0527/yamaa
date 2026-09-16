@@ -318,7 +318,6 @@ class MultipleMatchSelection(BaseModel):
 
     order_by: list[OrderTerm] = Field(min_length=1)
     keep: Literal["first", "last"]
-    filter: str | None = None
 
 
 def resolve_order_terms(
@@ -363,13 +362,15 @@ def join_scalar(
     key_values: Sequence[RuntimeValue],
     field: str,
     *,
+    selector: str | None = None,
     multiple_matches: Mapping[str, object] | None = None,
 ) -> Resolution:
     """Read one right-side field for the current row under R003's join.
 
     The join is many-to-one: it copies a value onto matched rows, answers
     missing where nothing matched, and refuses to choose among several
-    matches unless the specification declared how.
+    matches unless the specification declared how. R003-21 lets the source
+    say which of the matched records it may read at all.
     """
     if not relation.has(field):
         return _failed(
@@ -378,6 +379,14 @@ def join_scalar(
             {"identifier": f"{relation.dataset}.{field}"},
         )
     matches = relation.matching(keys, key_values)
+    if selector is not None:
+        predicate = _parsed(selector)
+        if isinstance(predicate, ConditionResult):
+            return FailedResolution(condition=predicate.condition)
+        selected = eligible_records(matches, predicate, relation)
+        if isinstance(selected, ConditionResult):
+            return FailedResolution(condition=selected.condition)
+        matches = selected
     if multiple_matches is None:
         if not matches:
             # R003-11 and R003-36: an absent right-side record is missing.
@@ -412,20 +421,14 @@ def join_scalar(
     terms = resolve_order_terms(selection.order_by, relation)
     if isinstance(terms, ConditionResult):
         return FailedResolution(condition=terms.condition)
-    predicate = _parsed(selection.filter)
-    if isinstance(predicate, ConditionResult):
-        return FailedResolution(condition=predicate.condition)
-    eligible = eligible_records(matches, predicate, relation)
-    if isinstance(eligible, ConditionResult):
-        return FailedResolution(condition=eligible.condition)
-    if not eligible:
+    if not matches:
         # R008-14: filtering to no surviving record is an ordinary absent
         # match under R003 rather than a handled condition.
         return ResolvedValue(value=MISSING)
-    if len(eligible) == 1:
+    if len(matches) == 1:
         # R008-15: the handler counts only the rows where it had to choose.
-        return ResolvedValue(value=eligible[0].values[field])
-    chosen = select_record(eligible, terms, selection.keep)
+        return ResolvedValue(value=matches[0].values[field])
+    chosen = select_record(matches, terms, selection.keep)
     if isinstance(chosen, ConditionResult):
         return FailedResolution(condition=chosen.condition)
     return ResolvedValue(value=chosen.values[field], handled_by="multiple_matches")

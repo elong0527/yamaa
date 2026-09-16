@@ -45,7 +45,6 @@ class MultipleMatchSelection(_FrozenModel):
 
     order_by: list[OrderTerm] = Field(min_length=1)
     keep: Literal["first", "last"]
-    filter: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +132,77 @@ def _compare_runtime(left: RuntimeValue, right: RuntimeValue) -> int:
     return 0
 
 
+def select_one(
+    dataset: str,
+    fields: tuple[str, ...],
+    matches: list[_IndexedRow],
+    selection: MultipleMatchSelection,
+    variable: str,
+    field_name: str,
+) -> Resolution:
+    """Order the eligible records and keep the one R008-13 declares.
+
+    The records reach one value, so the selection is over records the
+    specification already narrowed: a single one is that value and fires no
+    handler, and ties fall back to the order the source carries them in.
+    """
+    terms: list[tuple[OrderTerm, str]] = []
+    for term in selection.order_by:
+        if "." not in term.variable:
+            return _failure(
+                "validation",
+                "unknown_field",
+                {"identifier": term.variable},
+            )
+        qualifier, field = term.variable.split(".", 1)
+        if qualifier != dataset or field not in fields:
+            return _failure(
+                "validation",
+                "unknown_field",
+                {"identifier": term.variable},
+            )
+        terms.append((term, field))
+
+    if len(matches) == 1:
+        return ResolvedValue(value=matches[0].values[field_name])
+
+    def compare(left: _IndexedRow, right: _IndexedRow) -> int:
+        for term, field in terms:
+            left_value = left.values[field]
+            right_value = right.values[field]
+            left_missing = left_value is MISSING
+            right_missing = right_value is MISSING
+            if left_missing or right_missing:
+                if left_missing and right_missing:
+                    continue
+                missing_first = term.nulls == "first"
+                result = -1 if left_missing == missing_first else 1
+            else:
+                result = _compare_runtime(  # type: ignore[arg-type]
+                    left_value, right_value
+                )
+                if term.direction == "desc":
+                    result = -result
+            if result:
+                return result
+        return left.source_position - right.source_position
+
+    try:
+        ordered = sorted(matches, key=cmp_to_key(compare))
+    except TypeError:
+        first = terms[0][0].variable if terms else variable
+        return _failure(
+            "validation",
+            "incompatible_input_type",
+            {"source": first},
+        )
+    chosen = ordered[0] if selection.keep == "first" else ordered[-1]
+    return ResolvedValue(
+        value=chosen.values[field_name],
+        handled_by="multiple_matches",
+    )
+
+
 class OdmItemIndex:
     """A source-ordered index over complete available ODM context plus ItemOID."""
 
@@ -203,67 +273,9 @@ class OdmItemIndex:
         selection: MultipleMatchSelection,
         variable: str,
     ) -> Resolution:
-        terms: list[tuple[OrderTerm, str]] = []
-        for term in selection.order_by:
-            if "." not in term.variable:
-                return _failure(
-                    "validation",
-                    "unknown_field",
-                    {"identifier": term.variable},
-                )
-            qualifier, field = term.variable.split(".", 1)
-            if qualifier != self.dataset or field not in self.fields:
-                return _failure(
-                    "validation",
-                    "unknown_field",
-                    {"identifier": term.variable},
-                )
-            terms.append((term, field))
-
-        eligible = self._filter(matches, selection.filter)
-        if isinstance(eligible, FailedResolution):
-            return eligible
-        if not eligible:
-            # R008-14: an empty filtered right side yields missing and does not
-            # invoke either source handler.
-            return ResolvedValue(value=MISSING)
-        if len(eligible) == 1:
-            return ResolvedValue(value=eligible[0].values["Value"])
-
-        def compare(left: _IndexedRow, right: _IndexedRow) -> int:
-            for term, field in terms:
-                left_value = left.values[field]
-                right_value = right.values[field]
-                left_missing = left_value is MISSING
-                right_missing = right_value is MISSING
-                if left_missing or right_missing:
-                    if left_missing and right_missing:
-                        continue
-                    missing_first = term.nulls == "first"
-                    result = -1 if left_missing == missing_first else 1
-                else:
-                    result = _compare_runtime(  # type: ignore[arg-type]
-                        left_value, right_value
-                    )
-                    if term.direction == "desc":
-                        result = -result
-                if result:
-                    return result
-            return left.source_position - right.source_position
-
-        try:
-            ordered = sorted(eligible, key=cmp_to_key(compare))
-        except TypeError:
-            first = terms[0][0].variable if terms else variable
-            return _failure(
-                "validation",
-                "incompatible_input_type",
-                {"source": first},
-            )
-        chosen = ordered[0] if selection.keep == "first" else ordered[-1]
-        return ResolvedValue(
-            value=chosen.values["Value"],
-            handled_by="multiple_matches",
+        """Order the eligible contextual matches and keep one (R008-13)."""
+        return select_one(
+            self.dataset, self.fields, matches, selection, variable, "Value"
         )
 
     def resolve(
@@ -271,6 +283,7 @@ class OdmItemIndex:
         item_oid: str,
         context_row: Mapping[str, object],
         *,
+        selector: str | None = None,
         multiple_matches: Mapping[str, object] | None = None,
     ) -> Resolution:
         variable = f"{self.dataset}.{item_oid}"
@@ -284,7 +297,19 @@ class OdmItemIndex:
         ) + (item_oid,)
         matches = list(self._records.get(key, ()))
         if not matches:
+            # R002-24: no contextual match is an absent item, which the
+            # `missing` handler answers.
             return AbsentValue(variable=variable)
+        if selector is not None:
+            eligible = self._filter(matches, selector)
+            if isinstance(eligible, FailedResolution):
+                return eligible
+            if not eligible:
+                # R008-14: the item exists and the filter selected none of
+                # its records, which is an absent match rather than an
+                # absent item.
+                return ResolvedValue(value=MISSING)
+            matches = eligible
         if multiple_matches is None:
             if len(matches) == 1:
                 return ResolvedValue(value=matches[0].values["Value"])
@@ -380,19 +405,24 @@ class RuntimeContext:
         }
 
     def resolve(self, variable: str) -> Resolution:
-        return self._resolve(variable, multiple_matches=None)
+        return self._resolve(variable, selector=None, multiple_matches=None)
 
-    def resolve_with_multiple_matches(
+    def resolve_selected(
         self,
         variable: str,
-        multiple_matches: Mapping[str, object],
+        *,
+        selector: str | None,
+        multiple_matches: Mapping[str, object] | None,
     ) -> Resolution:
-        return self._resolve(variable, multiple_matches=multiple_matches)
+        return self._resolve(
+            variable, selector=selector, multiple_matches=multiple_matches
+        )
 
     def _resolve(
         self,
         variable: str,
         *,
+        selector: str | None,
         multiple_matches: Mapping[str, object] | None,
     ) -> Resolution:
         bound = self._index.plan.bind(variable)
@@ -416,18 +446,34 @@ class RuntimeContext:
             if bound.field not in row:
                 return _failure("validation", "unknown_field", {"identifier": variable})
             feeding = self._feeding_rows.get(bound.dataset, [row])
+            if selector is not None:
+                # R003-21: the filter states which of the records this row
+                # reaches the source may read, before R001-12b counts values.
+                eligible = self._eligible(bound.dataset, selector, feeding)
+                if isinstance(eligible, FailedResolution):
+                    return eligible
+                feeding = eligible
             if not feeding:
                 return ResolvedValue(value=MISSING)
-            present = _distinct_values(
-                feeding_row[bound.field]
+            carrying = [
+                feeding_row
                 for feeding_row in feeding
                 if bound.field in feeding_row
                 and feeding_row[bound.field] is not MISSING
                 and feeding_row[bound.field] is not None
+            ]
+            present = _distinct_values(
+                feeding_row[bound.field] for feeding_row in carrying
             )
             if not present:
                 return ResolvedValue(value=runtime_value(row[bound.field]))
             if len(present) > 1:
+                if multiple_matches is not None:
+                    # R008-12: the specification says which of the records it
+                    # keeps, so the disagreement is answered rather than fatal.
+                    return self._select(
+                        bound.dataset, bound.field, carrying, multiple_matches
+                    )
                 # R001-12b counts values, not the records carrying them: a
                 # field constant over a subject's records is one value, two
                 # records disagreeing are two.
@@ -443,5 +489,75 @@ class RuntimeContext:
         return self._index._odm[bound.dataset].resolve(
             bound.item_oid,
             row,
+            selector=selector,
             multiple_matches=multiple_matches,
         )
+
+    def _select(
+        self,
+        dataset: str,
+        field_name: str,
+        records: Sequence[Mapping[str, object]],
+        multiple_matches: Mapping[str, object],
+    ) -> Resolution:
+        """Keep one of the records this key combination carries (R008-13)."""
+        try:
+            selection = MultipleMatchSelection.model_validate(
+                dict(multiple_matches), strict=True
+            )
+        except ValidationError:
+            return _failure(
+                "validation",
+                "invalid_field_type",
+                {"field": "multiple_matches"},
+            )
+        return select_one(
+            dataset,
+            self._fields(dataset),
+            [
+                _IndexedRow(source_position=position, values=dict(record))
+                for position, record in enumerate(records)
+            ],
+            selection,
+            f"{dataset}.{field_name}",
+            field_name,
+        )
+
+    def _fields(self, dataset: str) -> tuple[str, ...]:
+        return tuple(
+            column.name for column in self._index.plan.datasets[dataset].columns
+        )
+
+    def _eligible(
+        self,
+        dataset: str,
+        selector: str,
+        records: Sequence[Mapping[str, object]],
+    ) -> list[dict[str, object]] | FailedResolution:
+        """Keep the records a source filter selects, in their own order."""
+        try:
+            ast = parse_predicate(selector)
+        except PredicateError as error:
+            return _failure(
+                "validation",
+                "invalid_predicate",
+                {"predicate": selector, "position": error.position},
+            )
+        fields = self._fields(dataset)
+        kept: list[dict[str, object]] = []
+        for position, record in enumerate(records):
+            values = dict(record)
+            result = evaluate_predicate(
+                ast,
+                _CandidateResolver(
+                    dataset,
+                    fields,
+                    _IndexedRow(source_position=position, values=values),
+                ),
+            )
+            if isinstance(result, ConditionResult):
+                return FailedResolution(condition=result.condition)
+            assert isinstance(result, PredicateValue)
+            if result.value is TruthValue.TRUE:
+                kept.append(values)
+        return kept

@@ -2,7 +2,7 @@
 id: R002
 title: Source Binding
 status: normative
-applies_to: [root.datasets, root.base, row.dataset, row.group_by,
+applies_to: [root.input, root.base, row.dataset, row.group_by,
   expression.source, string_template]
 
 ---
@@ -25,7 +25,7 @@ reads from a path.
 
 ## Dataset declarations
 
-**R002-1.** `datasets` maps dataset identifiers to source data
+**R002-1.** `input` maps dataset identifiers to source data
 declarations. Identifiers are used by `base`, `rows.dataset`, qualified
 source variables, and `mapping_from`.
 
@@ -37,7 +37,7 @@ approved root, and readable bytes. R017 preserves the path origin when a
 declaration is inherited. R017 rebases a relative path in a materialized
 resolved specification.
 
-**R002-4.** Every referenced dataset identifier must exist in `datasets`.
+**R002-4.** Every referenced dataset identifier must exist in `input`.
 
 **R002-5.** A dataset identifier must not equal the output `domain`.
 
@@ -123,6 +123,10 @@ source:
 
 **R002-19.** `missing` and `multiple_matches` are handlers; R008 defines
 them and R003 defines the join uniqueness `multiple_matches` relaxes.
+
+**R002-19a.** `filter` is not a handler. It states which records the
+source may read, and R003 defines that selection. Reading no record is an
+absent match rather than a handled condition.
 
 ## ODM contextual references
 

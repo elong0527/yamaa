@@ -22,6 +22,7 @@ from yamaa.expressions import (
     parse_numeric_cached,
     parse_predicate,
     parse_template_cached,
+    source_operand,
     template_identifiers,
     ungrouped_identifiers,
 )
@@ -127,7 +128,7 @@ class PlannedRecordLookup(_FrozenModel):
 class ResolvedJoin(_FrozenModel):
     """The columns one qualified reference resolved to matching on.
 
-    R003-38 makes validation report the inferred applicable keys for every
+    R003-39 makes validation report the inferred applicable keys for every
     qualified source, so a reviewer sees which same-named columns the join
     matches on rather than having to infer them from two schemas. A record
     lookup reports the same thing through `PlannedRecordLookup.match_fields`.
@@ -218,10 +219,11 @@ class _Reference:
     # lets a reduction declare a grain coarser than they are.
     join_group_by: tuple[str, ...] | None = None
     # How the reference reaches its relation: as one scalar of the current
-    # row driver or of an R003 join, as the records R013 reduces, or as a
+    # row driver or of an R003 join, as the records R013 reduces, as a
     # right-side column R007 pairs with a declared key rather than a key of
-    # its own. R001-15 and R003-15 each turn on the difference.
-    reach: Literal["scalar", "relation", "declared"] = "scalar"
+    # its own, or as a stored field of the records a predicate reads.
+    # R001-15 and R003-15 each turn on the difference.
+    reach: Literal["scalar", "relation", "declared", "record"] = "scalar"
     # The other name this reference's runtime type must be comparable with,
     # which is how R007-21 pairs a `mapping_from` source with its key column.
     same_type_as: str | None = None
@@ -360,16 +362,36 @@ def _expression_info(
         variable = payload if isinstance(payload, str) else payload.get("variable")
         if isinstance(variable, str):
             references.append(_Reference(variable, operation_path))
+        if isinstance(payload, Mapping) and payload.get("filter") is not None:
+            diagnostics.extend(
+                _filtered_source_references(
+                    variable,
+                    payload.get("filter"),
+                    f"{operation_path}.filter",
+                    references,
+                    scope,
+                )
+            )
     elif operation in _TYPED_SOURCES and isinstance(payload, Mapping):
-        variable = payload.get("source")
+        operand = source_operand(payload.get("source"))
         expected, requirement = _TYPED_SOURCES[operation]
-        if isinstance(variable, str):
+        if operand is not None:
+            variable, selector = operand
             references.append(
                 _Reference(
                     variable,
                     f"{operation_path}.source",
                     expected,
                     requirement=requirement,
+                )
+            )
+            diagnostics.extend(
+                _filtered_source_references(
+                    variable,
+                    selector,
+                    f"{operation_path}.source.filter",
+                    references,
+                    scope,
                 )
             )
     elif operation in WINDOW_OPERATIONS and isinstance(payload, Mapping):
@@ -402,11 +424,28 @@ def _expression_info(
     ):
         sources = payload.get("sources")
         if isinstance(sources, Sequence) and not isinstance(sources, str):
-            references.extend(
-                _Reference(name, f"{operation_path}.sources[{index}]")
-                for index, name in enumerate(sources)
-                if isinstance(name, str)
-            )
+            for index, entry in enumerate(sources):
+                operand = (
+                    source_operand(entry)
+                    if operation == "coalesce"
+                    else (entry, None)
+                    if isinstance(entry, str)
+                    else None
+                )
+                if operand is None:
+                    continue
+                name, selector = operand
+                source_path = f"{operation_path}.sources[{index}]"
+                references.append(_Reference(name, source_path))
+                diagnostics.extend(
+                    _filtered_source_references(
+                        name,
+                        selector,
+                        f"{source_path}.filter",
+                        references,
+                        scope,
+                    )
+                )
     elif operation == "compute" and isinstance(payload, Mapping):
         diagnostics.extend(
             _compute_references(payload, operation_path, references, scope)
@@ -507,6 +546,61 @@ def _compute_references(
             )
             continue
         references.append(_Reference(name, expr_path))
+    return diagnostics
+
+
+def _filtered_source_references(
+    variable: object,
+    selector: object,
+    filter_path: str,
+    references: list[_Reference],
+    scope: _Scope,
+) -> list[ExecutionDiagnostic]:
+    """Collect what a source `filter` reads, which is its own right side.
+
+    R003-21 lets a source state which records it may read, and R003-22 keeps
+    that predicate over those records alone, so every identifier names a
+    field of the dataset the source reads and none of them makes the reading
+    column depend on an output value.
+    """
+    if not isinstance(selector, str):
+        return []
+    diagnostics: list[ExecutionDiagnostic] = []
+    dataset = (
+        variable.split(".", 1)[0]
+        if isinstance(variable, str) and "." in variable
+        else None
+    )
+    if (
+        dataset is None
+        or dataset in scope.record_lookups
+        or (dataset == scope.grouped_driver)
+    ):
+        # R003-35a: an output column, a chosen lookup record, and a group key
+        # are each one value, so a filter has no records to select among.
+        return [
+            _diagnostic(
+                "prohibited_construct",
+                filter_path,
+                {"identifier": variable if isinstance(variable, str) else None},
+                requirement="R003-38",
+            )
+        ]
+    ast = _parse_predicate_at(selector, filter_path, diagnostics)
+    if ast is None:
+        return diagnostics
+    for name in _predicate_identifiers(ast):
+        if name.split(".", 1)[0] != dataset or "." not in name:
+            diagnostics.append(
+                _diagnostic(
+                    "unknown_field",
+                    filter_path,
+                    {"identifier": name, "dataset": dataset},
+                    requirement="R003-22",
+                )
+            )
+            continue
+        references.append(_Reference(name, filter_path, reach="record"))
     return diagnostics
 
 
@@ -1065,6 +1159,19 @@ def _validate_qualified_reference(
         return
     if bound.kind == "output":
         raise AssertionError("a qualified name cannot bind as an output column")
+    if reference.reach == "record" and bound.kind != "dataset":
+        # R003-22: a predicate reads stored fields of the records it selects
+        # among, and an ODM item is resolved from a record rather than
+        # carried by one.
+        diagnostics.append(
+            _diagnostic(
+                "unknown_field",
+                reference.path,
+                {"identifier": reference.name},
+                requirement="R003-22",
+            )
+        )
+        return
     assert bound.dataset is not None
     if row is not None:
         _validate_row_phase_reference(
@@ -1219,7 +1326,7 @@ def _with_relation_dependencies(
     """
     extra: list[str] = []
     # One reading per relation this derivation reaches: an aggregate names
-    # the same right side from its `expr` and its `filter`, and R003-38 asks
+    # the same right side from its `expr` and its `filter`, and R003-39 asks
     # for the keys the join matches on, not for one line per mention.
     checked: set[str] = set()
     for reference in references:
@@ -1229,9 +1336,10 @@ def _with_relation_dependencies(
         if qualifier in lookups:
             extra.extend(lookups[qualifier].dependencies)
             continue
-        if reference.reach == "declared":
+        if reference.reach in {"declared", "record"}:
             # R003-15: `mapping_from` declares its own pairs and never
-            # consults output keys, so it depends on no applicable key.
+            # consults output keys, so it depends on no applicable key, and
+            # R003-22 keeps a source filter inside the right side it reads.
             continue
         if reference.join_relation is not None:
             keys = (
@@ -1718,8 +1826,8 @@ def _record_lookup_declarations(
     for index, lookup in enumerate(specification.record_lookups or ()):
         path = f"record_lookups[{index}]"
         collision = None
-        if lookup.id in specification.datasets:
-            collision = f"datasets.{lookup.id}"
+        if lookup.id in specification.input:
+            collision = f"input.{lookup.id}"
         elif lookup.id == specification.domain:
             collision = "domain"
         elif lookup.id in seen:
@@ -1736,7 +1844,7 @@ def _record_lookup_declarations(
                 )
             )
         seen.setdefault(lookup.id, f"{path}.id")
-        if lookup.dataset not in specification.datasets:
+        if lookup.dataset not in specification.input:
             diagnostics.append(
                 _diagnostic(
                     "unknown_field",
@@ -1852,11 +1960,11 @@ def _preflight_findings(
     diagnostics = [] if specification.parents else _coverage_diagnostics(specification)
     unsupported: list[UnsupportedFeature] = []
 
-    if specification.domain in specification.datasets:
+    if specification.domain in specification.input:
         diagnostics.append(
             _diagnostic(
                 "duplicate_identifier",
-                (f"datasets.{specification.domain}", "domain"),
+                (f"input.{specification.domain}", "domain"),
                 {"identifier": specification.domain},
                 requirement="R002-28",
             )
@@ -1874,7 +1982,7 @@ def _preflight_findings(
             diagnostics.append(_diagnostic("driver_unavailable", "base", {"row": None}))
         if (
             specification.base is not None
-            and specification.base not in specification.datasets
+            and specification.base not in specification.input
         ):
             diagnostics.append(
                 _diagnostic(
@@ -1887,9 +1995,9 @@ def _preflight_findings(
     for index, row in enumerate(rows):
         if not specification.parents:
             driver = row.dataset
-            if driver is None and len(specification.datasets) == 1:
-                driver = next(iter(specification.datasets))
-            if driver not in specification.datasets:
+            if driver is None and len(specification.input) == 1:
+                driver = next(iter(specification.input))
+            if driver not in specification.input:
                 diagnostics.append(
                     _diagnostic(
                         "driver_unavailable",
@@ -1898,8 +2006,8 @@ def _preflight_findings(
                     )
                 )
         driver = row.dataset
-        if driver is None and len(specification.datasets) == 1:
-            driver = next(iter(specification.datasets))
+        if driver is None and len(specification.input) == 1:
+            driver = next(iter(specification.input))
         diagnostics.extend(_group_by_declaration(row, index, driver))
         scope = _row_scope(specification, row, driver)
         for name, declaration in row.derivations.items():
@@ -1975,13 +2083,13 @@ def plan_execution(
     belongs to a later runtime component.
     """
     diagnostics, unsupported = _preflight_findings(specification, supported_operations)
-    declared_sources = tuple(specification.datasets)
+    declared_sources = tuple(specification.input)
     supplied_sources = tuple(sources)
     if set(declared_sources) != set(supplied_sources):
         diagnostics.append(
             _diagnostic(
                 "source_provider_mismatch",
-                "datasets",
+                "input",
                 {
                     "missing": sorted(set(declared_sources) - set(supplied_sources)),
                     "unexpected": sorted(set(supplied_sources) - set(declared_sources)),
@@ -1999,7 +2107,7 @@ def plan_execution(
         diagnostics.append(
             _diagnostic(
                 "source_provider_mismatch",
-                "datasets",
+                "input",
                 {"reason": str(error)},
             )
         )
@@ -2016,7 +2124,7 @@ def plan_execution(
     if not rows:
         if (
             specification.default_driver is not None
-            and specification.default_driver in specification.datasets
+            and specification.default_driver in specification.input
         ):
             row_plans.append(
                 PlannedRow(
@@ -2026,9 +2134,9 @@ def plan_execution(
     else:
         for index, row in enumerate(rows):
             driver = row.dataset
-            if driver is None and len(specification.datasets) == 1:
-                driver = next(iter(specification.datasets))
-            if driver is None or driver not in specification.datasets:
+            if driver is None and len(specification.input) == 1:
+                driver = next(iter(specification.input))
+            if driver is None or driver not in specification.input:
                 continue
             row_scope = _row_scope(specification, row, driver)
             grouped = row.group_by is not None

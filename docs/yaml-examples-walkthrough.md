@@ -70,7 +70,7 @@ pair an Excel spec never separates.
 ```yaml
 schema_version: "1.0"
 domain: DM
-datasets:
+input:
   ODM: input/odm.csv
 keys: [STUDYID, USUBJID]
 
@@ -101,16 +101,12 @@ column value, and no filter decides how many records come out.
 **Step 4 -- the columns that carry judgement.**
 
 ```yaml
-  - name: SEXRAW
-    derivation:
-      source:
-        variable: ODM.IT.DM.SEX
-        missing: null
-
   - name: SEX
     derivation:
       mapping:
-        source: SEXRAW
+        source:
+          filter: ODM.ItemOID = 'IT.DM.SEX'
+          variable: ODM.Value
         dict: {Male: M, Female: F}
         missing: U
         unmapped: U
@@ -118,17 +114,26 @@ column value, and no filter decides how many records come out.
   - name: AGE
     derivation:
       source:
-        variable: ODM.IT.DM.AGE
-        missing: null
+        filter: ODM.ItemOID = 'IT.DM.AGE'
+        variable: ODM.Value
+
+  - name: ARM
+    derivation:
+      coalesce:
+        sources:
+          - filter: ODM.ItemOID = 'IT.DM.ARM'
+            variable: ODM.Value
+        default: Unassigned
 ```
 
-Now the README's sentences have addresses. "Not collected and not recognised
-both become U" is `missing: U` beside `unmapped: U`. "Empty when age was never
-collected" is the structured `source` form with `missing: null` -- the concise
-`source: ODM.IT.DM.AGE` form has no handler, so an absent item would be fatal.
-`SEXRAW` reads the collected item under that same structured form and is the
-one column `output.columns` does not name, so it works inside the run and
-never reaches the artifact.
+Now the README's sentences have addresses. A subject's row reaches every item
+record collected under it, so each column says which of them it reads: the
+`filter` is the item, and `ODM.Value` is the answer. "Not collected and not
+recognised both become U" is `missing: U` beside `unmapped: U`. "Empty when age
+was never collected" needs no handler at all -- a subject with no age record
+selects nothing, and selecting nothing is an absent match rather than a
+condition to answer. That is also why `Unassigned` is a `coalesce` default
+rather than a `missing` handler: the arm is absent, not unusable.
 
 **Step 5 -- `expected/dm.csv`.** Confirm your reading against the artifact. Every
 sparse subject you predicted appears with the substituted value rather than
@@ -145,7 +150,7 @@ The suite's own README names three examples, in this order:
 
 | # | Example | What it establishes |
 |---|---|---|
-| 1 | [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-dm-basic) | Direct mapping, handlers, and the declared keys as the grain |
+| 1 | [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-dm-basic) | Reading collected items, handlers, and the declared keys as the grain |
 | 2 | [`sdtm-lb-findings`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-lb-findings) | Real row construction: one template per collected test, `row_number` for the sequence |
 | 3 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-bds) | A full Basic Data Structure build: parameters as row templates, then baseline, change and sequence as columns |
 
@@ -265,7 +270,7 @@ Rule coverage across the 52 questions below:
 | Question | Rule | Example |
 |---|---|---|
 | How is an item resolved inside its collection form? | R002 | [`odm-form-scoped-item-resolution`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/odm-form-scoped-item-resolution) -- identical item identifiers in two forms are different values and must not be collapsed |
-| How does a contextual item reference work in practice? | R002 | [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-dm-basic), [`sdtm-lb-findings`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-lb-findings) |
+| How does a contextual item reference work in practice? | R002 | [`odm-form-scoped-item-resolution`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/odm-form-scoped-item-resolution), [`sdtm-lb-findings`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-lb-findings) |
 
 ---
 

@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADVS
-datasets:
+input:
   VS: {path: input/vs.csv, types: {VSSTRESN: float}}
 keys: [STUDYID, USUBJID, VSSEQ]
 

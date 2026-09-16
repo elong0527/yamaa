@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: VS
-datasets:
+input:
   VS_RAW:
     path: input/vs.csv
     types: {VSSEQ: int, VSDTC: date}

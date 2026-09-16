@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: LB
-datasets:
+input:
   LB_RAW: input/lb_raw.csv
   LBRANGE: input/lbrange.csv
 base: LB_RAW

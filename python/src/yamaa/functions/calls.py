@@ -104,7 +104,7 @@ class _TypeCatalog:
         self._columns = {column.name: column.type for column in specification.columns}
         self._datasets = {
             dataset: dict(source.types or {})
-            for dataset, source in specification.datasets.items()
+            for dataset, source in specification.input.items()
         }
         self._lookups = {
             lookup.id: lookup.dataset for lookup in specification.record_lookups or ()

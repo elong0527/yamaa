@@ -194,7 +194,7 @@ def test_a_different_input_batch_size_changes_no_value_and_no_row_order() -> Non
 _SPEC = """\
 schema_version: "1.0"
 domain: ADLB
-datasets:
+input:
   LB: {path: input/lb.csv, types: {AVAL: float}}
   EX: {path: input/ex.csv, types: {EXSEQ: int, EXDOSE: float}}
   REF: {path: input/ref.csv, types: {ANRHI: float}}
@@ -376,7 +376,7 @@ def test_that_study_is_reproduced_exactly_on_a_second_run(
 _RANGE_SPEC = """\
 schema_version: "1.0"
 domain: ADVS
-datasets:
+input:
   VS: {path: input/vs.csv, types: {VSSEQ: int, ADY: int, AVAL: float}}
   EPOCHS: {path: input/epochs.csv, types: {LO: int, HI: int, LIMIT: int}}
   EX: {path: input/ex.csv, types: {EXSEQ: int, EXDOSE: float, STARTDY: int, ENDDY: int}}
@@ -545,7 +545,7 @@ def test_one_stated_bound_narrows_on_that_side_alone(
 _OPEN_RANGE_SPEC = """\
 schema_version: "1.0"
 domain: ADVS
-datasets:
+input:
   VS: {path: input/vs.csv, types: {VSSEQ: int, ADY: int}}
   EX: {path: input/ex.csv, types: {EXDOSE: float, STARTDY: int, ENDDY: int}}
 base: VS
@@ -607,7 +607,7 @@ def test_a_contextual_odm_item_is_not_reachable_through_the_join(
 _ODM_SPEC = """\
 schema_version: "1.0"
 domain: DM
-datasets:
+input:
   DM_RAW: input/dm.csv
   ODM: input/odm.csv
 base: DM_RAW

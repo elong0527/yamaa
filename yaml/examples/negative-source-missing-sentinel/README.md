@@ -22,7 +22,7 @@ Leave the field empty when an age was not collected, and keep reading the
 field as a number:
 
 ```yaml
-datasets:
+input:
   DM:
     path: input/dm.csv
     types:

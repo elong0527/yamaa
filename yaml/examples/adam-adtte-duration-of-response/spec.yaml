@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADTTE
-datasets:
+input:
   ADSL: input/adsl.csv
   ADRSPRE: input/adrs_pre.csv
   DS: input/ds.csv
@@ -63,10 +63,10 @@ columns:
     derivation:
       source:
         variable: ADRSPRE.ASEQ
+        filter: "ADRSPRE.AVALC = 'PD'"
         multiple_matches:
           order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
           keep: first
-          filter: "ADRSPRE.AVALC = 'PD'"
 
   - name: DEATHDT
     type: date
@@ -82,10 +82,10 @@ columns:
     derivation:
       source:
         variable: DS.DSSEQ
+        filter: "DS.DSDECOD = 'DEATH'"
         multiple_matches:
           order_by: [DS.DSSTDTC, DS.DSSEQ]
           keep: first
-          filter: "DS.DSDECOD = 'DEATH'"
 
   - name: LASTVLDT
     type: date
@@ -101,10 +101,10 @@ columns:
     derivation:
       source:
         variable: ADRSPRE.ASEQ
+        filter: "ADRSPRE.AVALC <> 'NE'"
         multiple_matches:
           order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
           keep: last
-          filter: "ADRSPRE.AVALC <> 'NE'"
 
   - name: EVENTALLDT
     type: date

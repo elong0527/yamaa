@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADAE
-datasets:
+input:
   AE:
     path: input/ae.csv
     types:

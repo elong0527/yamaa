@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADOE
-datasets:
+input:
   OE: input/oe.csv
   ADSL: input/adsl.csv
 base: OE

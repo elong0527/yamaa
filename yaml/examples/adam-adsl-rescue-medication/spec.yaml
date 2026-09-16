@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADSL
-datasets:
+input:
   DM: input/dm.csv
   CM: {path: input/cm.csv, types: {CMSEQ: int}}
 base: DM
@@ -29,10 +29,10 @@ columns:
     derivation:
       source:
         variable: CM.CMTRT
+        filter: "CM.CMCAT = 'RESCUE MEDICATION'"
         multiple_matches:
           order_by: [CM.CMSTDTC, CM.CMSEQ]
           keep: first
-          filter: "CM.CMCAT = 'RESCUE MEDICATION'"
 
 verifications:
   - row_count:

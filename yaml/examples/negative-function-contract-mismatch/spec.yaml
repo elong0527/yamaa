@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: TEST
-datasets:
+input:
   SOURCE:
     path: input/source.csv
     types: {VALUE: float}

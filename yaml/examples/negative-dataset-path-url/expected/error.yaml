@@ -1,7 +1,7 @@
 phase: validation
 condition: resource_path_uri_scheme
 spec_paths:
-  - datasets.LBREF.path
+  - input.LBREF.path
 requirement: R021-9
 context:
   dataset: LBREF

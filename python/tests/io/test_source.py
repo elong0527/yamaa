@@ -198,7 +198,7 @@ def test_parquet_rejects_inline_types_before_snapshot_bytes_are_read(
     assert _diagnostic(raised.value) == {
         "phase": "validation",
         "condition": "redundant_field_type",
-        "spec_paths": ("datasets.DM.types.ID",),
+        "spec_paths": ("input.DM.types.ID",),
         "requirement": "R014-20",
         "context": {"dataset": "DM", "field": "ID", "type": "str"},
     }
@@ -217,7 +217,7 @@ def test_parquet_rejects_an_unsupported_embedded_type(tmp_path: Path) -> None:
     assert _diagnostic(raised.value) == {
         "phase": "ingest",
         "condition": "source_field_type_unsupported",
-        "spec_paths": ("datasets.DM.path",),
+        "spec_paths": ("input.DM.path",),
         "requirement": "R027-13",
         "context": {
             "dataset": "DM",
@@ -257,7 +257,7 @@ def test_parquet_rejects_invalid_field_names(
     assert _diagnostic(raised.value) == {
         "phase": "ingest",
         "condition": condition,
-        "spec_paths": ("datasets.DM.path",),
+        "spec_paths": ("input.DM.path",),
         "requirement": "R027-12",
         "context": {
             "dataset": "DM",
@@ -282,7 +282,7 @@ def test_parquet_rejects_a_datetime_below_whole_seconds(tmp_path: Path) -> None:
     assert _diagnostic(raised.value) == {
         "phase": "ingest",
         "condition": "source_field_value_invalid",
-        "spec_paths": ("datasets.DM.path",),
+        "spec_paths": ("input.DM.path",),
         "requirement": "R027-14",
         "context": {
             "dataset": "DM",
@@ -305,7 +305,7 @@ def test_parquet_rejects_invalid_container_bytes(tmp_path: Path) -> None:
     assert _diagnostic(raised.value) == {
         "phase": "ingest",
         "condition": "source_parquet_invalid",
-        "spec_paths": ("datasets.DM.path",),
+        "spec_paths": ("input.DM.path",),
         "requirement": "R027-11",
         "context": {"dataset": "DM", "path": "dm.parquet"},
     }
@@ -323,7 +323,7 @@ def test_parquet_rejects_an_empty_schema(tmp_path: Path) -> None:
     assert _diagnostic(raised.value) == {
         "phase": "ingest",
         "condition": "source_parquet_invalid",
-        "spec_paths": ("datasets.DM.path",),
+        "spec_paths": ("input.DM.path",),
         "requirement": "R027-11",
         "context": {"dataset": "DM", "path": "dm.parquet"},
     }
@@ -456,7 +456,7 @@ def test_path_fixtures_report_exact_diagnostics(
     assert _diagnostic(raised.value) == {
         "phase": "validation",
         "condition": condition,
-        "spec_paths": (f"datasets.{dataset}.path",),
+        "spec_paths": (f"input.{dataset}.path",),
         "requirement": requirement,
         "context": {"dataset": dataset, "path": path},
     }
@@ -516,7 +516,7 @@ def test_csv_fixtures_report_exact_diagnostics(
     assert _diagnostic(raised.value) == {
         "phase": "ingest",
         "condition": condition,
-        "spec_paths": ("datasets.DM.path",),
+        "spec_paths": ("input.DM.path",),
         "requirement": requirement,
         "context": {"dataset": "DM", "path": path, **context},
     }
@@ -532,7 +532,7 @@ def test_unknown_profile_fails_before_snapshot_bytes_are_read() -> None:
     assert _diagnostic(raised.value) == {
         "phase": "validation",
         "condition": "source_profile_unknown",
-        "spec_paths": ("datasets.DM.path",),
+        "spec_paths": ("input.DM.path",),
         "requirement": "R023-23",
         "context": {"dataset": "DM", "path": "input/dm.txt"},
     }
@@ -581,7 +581,7 @@ def test_typed_parse_fixtures_are_ingestion_failures(
     assert _diagnostic(raised.value) == {
         "phase": "ingest",
         "condition": "field_parse_failed",
-        "spec_paths": (f"datasets.{dataset}.types.{field}",),
+        "spec_paths": (f"input.{dataset}.types.{field}",),
         "requirement": "R014-23",
         "context": {
             "dataset": dataset,
@@ -605,7 +605,7 @@ def test_unknown_typed_field_fails_in_validation(tmp_path: Path) -> None:
     assert _diagnostic(raised.value) == {
         "phase": "validation",
         "condition": "unknown_field",
-        "spec_paths": ("datasets.DM.types.AGEYRS",),
+        "spec_paths": ("input.DM.types.AGEYRS",),
         "requirement": "R014-19",
         "context": {"dataset": "DM", "field": "AGEYRS"},
     }
@@ -653,7 +653,7 @@ def test_producer_link_path_failure_precedes_workflow_resolution(
     assert _diagnostic(raised.value) == {
         "phase": "validation",
         "condition": "resource_path_missing",
-        "spec_paths": ("datasets.DM.path",),
+        "spec_paths": ("input.DM.path",),
         "requirement": "R021-19",
         "context": {"dataset": "DM", "path": "missing.csv"},
     }
@@ -678,7 +678,7 @@ def test_producer_link_with_inline_types_reports_redundant_type(
     assert _diagnostic(raised.value) == {
         "phase": "validation",
         "condition": "redundant_field_type",
-        "spec_paths": ("datasets.DM.types.ID",),
+        "spec_paths": ("input.DM.types.ID",),
         "requirement": "R014-10",
         "context": {"dataset": "DM", "field": "ID", "type": "str"},
     }
@@ -704,7 +704,7 @@ def test_changed_content_is_reported_at_ingest_with_written_path(
     assert _diagnostic(raised.value) == {
         "phase": "ingest",
         "condition": "resource_path_content_changed",
-        "spec_paths": ("datasets.DM.path",),
+        "spec_paths": ("input.DM.path",),
         "requirement": None,
         "context": {"dataset": "DM", "path": "dm.csv"},
     }

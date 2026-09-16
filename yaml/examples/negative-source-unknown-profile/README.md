@@ -26,7 +26,7 @@ Store the listing under the name of the format it is in, so that its reader
 is chosen by what the study declares rather than by inspection:
 
 ```yaml
-datasets:
+input:
   DM:
     path: input/dm.csv
 ```

@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADRS
-datasets:
+input:
   ADSL: input/adsl.csv
   TU: input/tu.csv
 base: ADSL

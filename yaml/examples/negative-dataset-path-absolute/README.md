@@ -34,7 +34,7 @@ Copy the governed reference limits into the study and name them where the
 study keeps its data:
 
 ```yaml
-datasets:
+input:
   LBREF:
     path: input/lbref.csv
 ```

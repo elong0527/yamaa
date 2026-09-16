@@ -29,7 +29,7 @@ any data is read and no artifact is accepted.
 Bring the governed limits into the study and read them from there:
 
 ```yaml
-datasets:
+input:
   LBREF:
     path: input/lbref.csv
 ```

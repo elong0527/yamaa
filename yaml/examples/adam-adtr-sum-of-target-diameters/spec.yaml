@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADTR
-datasets:
+input:
   TRVISIT: input/trvisit.csv
   TR: {path: input/tr.csv, types: {TRSTRESN: float}}
   TU: input/tu.csv

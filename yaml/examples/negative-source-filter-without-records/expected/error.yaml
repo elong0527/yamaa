@@ -1,0 +1,7 @@
+phase: validation
+condition: prohibited_construct
+spec_paths:
+  - columns.ACTARM.derivation.source.filter
+requirement: R003-38
+context:
+  identifier: ARM
