@@ -1,6 +1,8 @@
 # Reject a total over an unknown exposure field
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-types-unknown-field.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/negative-types-unknown-field.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)
+
+**Lifecycle:** draft - first commit, no review yet.
 
 **Goal:** attempt `EXTRT` and the total dose (`DOSECUM`) for each
 subject and treatment, totalling the dose across exposure records.

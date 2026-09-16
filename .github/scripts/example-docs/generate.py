@@ -130,6 +130,7 @@ def readme_lines(text):
         for line in text.splitlines()
         if "img.shields.io/badge/Dashboard" not in line
         and "img.shields.io/badge/Lifecycle" not in line
+        and not line.strip().startswith("**Lifecycle:**")
         and not README_TAXONOMY.fullmatch(line)
     ]
 

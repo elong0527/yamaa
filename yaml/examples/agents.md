@@ -87,6 +87,9 @@ compose, and its `Note:` states the behavior rule. It still names every
 non-key golden column somewhere in the contract so the coverage check below
 stays silent.
 
+Every example README also carries a lifecycle badge (`draft`, `reviewed`,
+or `finalized` as defined in `README.md`); new examples start at `draft`.
+
 Keep bullets to the variables a reader must understand. Direct key copies and
 fixed values need no bullet.
 

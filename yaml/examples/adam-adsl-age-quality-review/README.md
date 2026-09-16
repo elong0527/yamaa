@@ -1,6 +1,8 @@
 # Keep an implausible age for review
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-age-quality-review.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-age-quality-review.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)
+
+**Lifecycle:** draft - first commit, no review yet.
 
 **Goal:** carry each subject's `AGE` into ADSL while retaining an
 out-of-range value for later data review.

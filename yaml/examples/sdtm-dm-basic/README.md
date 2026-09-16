@@ -1,6 +1,8 @@
 # Create DM from EDC extract
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-dm-basic.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-dm-basic.html) [![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)
+
+**Lifecycle:** finalized - a human decided to finalize this example.
 
 **Goal:** build one Demographics (DM) record per subject: sex (SEX), age
 (AGE), planned arm (ARM), actual arm (ACTARM) and reason not assigned

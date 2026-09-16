@@ -2,6 +2,8 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/adam-adsl-age-group.html) [![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)](https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)
 
+**Lifecycle:** finalized - a human decided to finalize this example.
+
 **Goal:** carry each subject's collected age and derive `AGEGR1`
 and `AGEGR1N` to pool subjects into age groups.
 

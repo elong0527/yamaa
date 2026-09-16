@@ -8472,7 +8472,7 @@ def validate_example_readmes(root: Path):
         marker = '\n## How to fix\n'
         contract = text.split(marker, 1)[0]
         for line_number, line in enumerate(contract.splitlines(), 1):
-            if README_FOOTER_PATTERN.fullmatch(line.strip()):
+            if is_readme_badge_line(line):
                 continue
             if README_FORBIDDEN_PATTERN.search(line):
                 errors.append(
@@ -9758,9 +9758,9 @@ def validate_examples_index(root: Path):
         return errors
 
     index_content = index_file.read_text(encoding='utf-8')
-    # Find all table rows matching: | [`dir`](dir/) | desc |
+    # Find all table rows matching: | [`dir`](dir/) | desc | (Lifecycle) |
     pattern = re.compile(
-        r'^\|\s*\[`([^`]+)`\]\(([^)]+)\)\s*\|\s*([^|]+)\s*\|$',
+        r'^\|\s*\[`([^`]+)`\]\(([^)]+)\)\s*\|\s*([^|]+?)\s*(?:\|\s*([^|]*?)\s*)?\|$',
         re.MULTILINE,
     )
 
