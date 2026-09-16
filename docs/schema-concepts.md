@@ -82,8 +82,9 @@ a specification:
 | `record_lookup_between_class` | `record_lookup.between:` | [`adam-advs-analysis-window-table/spec.yaml:16`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-advs-analysis-window-table/spec.yaml#L16) |
 | `handled_expression_class` | a `derivation:` that handles failure | [`adam-adsl-mapping/spec.yaml:98`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adsl-mapping/spec.yaml#L98) |
 | `override_rule_class` | each item of `override:` | [`adam-adae-severity-override/spec.yaml:37`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adae-severity-override/spec.yaml#L37) |
-| `source_binding_class` | a `source:` that needs a handler | [`sdtm-dm-basic/spec.yaml:60`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/sdtm-dm-basic/spec.yaml#L60) |
-| `multiple_matches_class` | `source.multiple_matches:` | [`adam-adsl-treatment-selection/spec.yaml:31`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adsl-treatment-selection/spec.yaml#L31) |
+| `source_binding_class` | a `source:` that states how it reads | [`sdtm-dm-basic/spec.yaml:55`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/sdtm-dm-basic/spec.yaml#L55) |
+| `filtered_source_class` | another operation's `source:` that states which records it reads | [`sdtm-dm-basic/spec.yaml:42`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/sdtm-dm-basic/spec.yaml#L42) |
+| `multiple_matches_class` | `source.multiple_matches:` | [`adam-adsl-treatment-selection/spec.yaml:33`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adsl-treatment-selection/spec.yaml#L33) |
 | `case_branch_class` | each item of `case.branches:` | [`adam-adae-treatment-emergent/spec.yaml:62`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adae-treatment-emergent/spec.yaml#L62) |
 | `order_term_class` | each item of any `order_by:` | [`adam-adae-severity-rank/spec.yaml:58`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adae-severity-rank/spec.yaml#L58) |
 | `aggregate_class` | a full-form `aggregate:` | [`adam-adlb-mean/spec.yaml:46`](https://github.com/elong0527/yamaa/blob/main/yaml/examples/adam-adlb-mean/spec.yaml#L46) |
