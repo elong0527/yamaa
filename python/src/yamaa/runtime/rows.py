@@ -9,7 +9,7 @@ knowing nothing about rows.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -147,7 +147,8 @@ class RelationalContext:
         for record, probe in zip(eligible, probes):
             if columns is None:
                 key = tuple(
-                    probe.values.get(name, MISSING) for name in self.key_correlation.key_names
+                    probe.values.get(name, MISSING)
+                    for name in self.key_correlation.key_names
                 )
             else:
                 key = tuple(probe.values.get(name, MISSING) for name in columns)
@@ -893,7 +894,9 @@ class RowResolver:
                 return self._values.get(name.split(".", 1)[-1], MISSING)
             return self._values.get(name, MISSING)
 
-        groups: dict[tuple[object, ...], list[tuple[IndexedRecord, dict[str, object]]]] = {}
+        groups: dict[
+            tuple[object, ...], list[tuple[IndexedRecord, dict[str, object]]]
+        ] = {}
         for record, projection in eligible:
             key = tuple(group_value(name, record, projection) for name in group_names)
             groups.setdefault(key, []).append((record, projection))

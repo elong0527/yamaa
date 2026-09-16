@@ -6,7 +6,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
 from yamaa.expressions import (
     WINDOW_OPERATIONS,
@@ -30,6 +30,7 @@ from yamaa.io.source import LoadedDataset
 from yamaa.models import ColumnType, ConditionPhase, TypedTable
 from yamaa.odm import BindingFailure, BindingPlan, BoundReference, build_binding_plan
 from yamaa.specification.models import (
+    Column,
     Expression,
     HandledExpression,
     OrderTerm,
@@ -304,11 +305,11 @@ def _collect_key_identifiers(expression: Expression) -> tuple[str, ...]:
 
     def collect(value: object) -> None:
         if isinstance(value, Mapping) and len(value) == 1:
-            nested_operation, nested_payload = next(iter(value.items()))
+            nested_operation, _nested_payload = next(iter(value.items()))
             if isinstance(nested_operation, str):
                 try:
                     nested_expression = Expression.model_validate(dict(value))
-                except Exception:
+                except ValidationError:
                     return
                 names.extend(_collect_key_identifiers(nested_expression))
         elif isinstance(value, str):
@@ -371,10 +372,8 @@ def _collect_key_identifiers(expression: Expression) -> tuple[str, ...]:
             for source in sources:
                 collect(source)
     elif operation == "mapping_from" and isinstance(payload, Mapping):
-        for name in _as_names(payload.get("source")) or ():
-            names.append(name)
-        for name in _as_names(payload.get("key")) or ():
-            names.append(name)
+        names.extend(_as_names(payload.get("source")) or ())
+        names.extend(_as_names(payload.get("key")) or ())
         value = payload.get("value")
         if isinstance(value, str):
             names.append(value)
@@ -383,8 +382,7 @@ def _collect_key_identifiers(expression: Expression) -> tuple[str, ...]:
             name = payload.get(field)
             if isinstance(name, str):
                 names.append(name)
-        for name in _as_names(payload.get("group_by")) or ():
-            names.append(name)
+        names.extend(_as_names(payload.get("group_by")) or ())
         for term in payload.get("order_by") or ():
             if isinstance(term, str):
                 names.append(term)
@@ -451,7 +449,6 @@ def _analyze_key_dataset(
     key_set = set(specification.keys)
     output_names = {column.name for column in specification.columns}
     datasets: set[str] = set()
-    ordered_keys: list[str] = []
     key_dependencies: dict[str, set[str]] = {key: set() for key in specification.keys}
     invalid = False
 
@@ -491,25 +488,31 @@ def _analyze_key_dataset(
             invalid = True
             continue
 
-        if operation == "source" and isinstance(payload, Mapping):
-            if payload.get("filter") is not None or payload.get("multiple_matches") is not None:
-                diagnostics.append(
-                    _diagnostic(
-                        "invalid_key_derivation",
-                        expression_path(path, column.derivation),
-                        {
-                            "key": key,
-                            "reason": "key source may not declare a filter or multiple_matches",
-                        },
-                        requirement="R003-57",
-                    )
+        if (
+            operation == "source"
+            and isinstance(payload, Mapping)
+            and (
+                payload.get("filter") is not None
+                or payload.get("multiple_matches") is not None
+            )
+        ):
+            diagnostics.append(
+                _diagnostic(
+                    "invalid_key_derivation",
+                    expression_path(path, column.derivation),
+                    {
+                        "key": key,
+                        "reason": "key source may not declare a filter or multiple_matches",
+                    },
+                    requirement="R003-57",
                 )
-                invalid = True
-                continue
+            )
+            invalid = True
+            continue
 
         try:
             identifiers = _collect_key_identifiers(expression)
-        except Exception:
+        except ValidationError:
             identifiers = ()
 
         for name in identifiers:
@@ -745,9 +748,7 @@ def _expression_info(
         if isinstance(sources, Sequence) and not isinstance(sources, str):
             for index, source in enumerate(sources):
                 if isinstance(source, str):
-                    _source_reference(
-                        source, f"{operation_path}.sources[{index}]"
-                    )
+                    _source_reference(source, f"{operation_path}.sources[{index}]")
                 elif isinstance(source, Mapping):
                     _source_reference(
                         source.get("variable"),
@@ -1059,9 +1060,7 @@ def _is_projectable_onto_relation(
                 expression_path(path, column.derivation),
                 {
                     "column": column_name,
-                    "reason": (
-                        f"{operation} cannot be projected onto a relation row"
-                    ),
+                    "reason": (f"{operation} cannot be projected onto a relation row"),
                 },
                 requirement="R003-52",
             )
@@ -1069,7 +1068,7 @@ def _is_projectable_onto_relation(
         return False
     try:
         identifiers = _collect_key_identifiers(expression)
-    except Exception:
+    except ValidationError:
         identifiers = ()
     visiting = visiting | {column_name}
     ok = True
@@ -1194,7 +1193,10 @@ def _aggregate_references(
                 _diagnostic(
                     "invalid_aggregate_context",
                     operation_path,
-                    {"expr": expr, "reason": "new-style aggregate planning missing spec"},
+                    {
+                        "expr": expr,
+                        "reason": "new-style aggregate planning missing spec",
+                    },
                     requirement="R003-52",
                 )
             ]
@@ -1292,7 +1294,13 @@ def _aggregate_references(
 
     diagnostics.extend(
         _aggregate_context(
-            relation, group_by, between, expr, operation_path, scope, new_style=new_style
+            relation,
+            group_by,
+            between,
+            expr,
+            operation_path,
+            scope,
+            new_style=new_style,
         )
     )
     if diagnostics:
@@ -1349,9 +1357,7 @@ def _aggregate_references(
             reach="relation" if qualified else "scalar",
         )
 
-    references.extend(
-        relational(name, expr_path) for name in identifiers
-    )
+    references.extend(relational(name, expr_path) for name in identifiers)
     references.extend(
         relational(name, f"{operation_path}.group_by[{index}]", is_group_by=True)
         for index, name in enumerate(group_by)
@@ -1368,9 +1374,7 @@ def _aggregate_references(
         for bound in ("lower", "upper"):
             name = between.get(bound)
             if isinstance(name, str):
-                references.append(
-                    relational(name, f"{operation_path}.between.{bound}")
-                )
+                references.append(relational(name, f"{operation_path}.between.{bound}"))
     return diagnostics
 
 
@@ -1448,9 +1452,7 @@ def _aggregate_context(
         return []
 
     # Context 1: a declared dataset relation reduced before the R003 join.
-    if not new_style and any(
-        not name.startswith(f"{relation}.") for name in group_by
-    ):
+    if not new_style and any(not name.startswith(f"{relation}.") for name in group_by):
         return reject(
             f"a qualified reduction groups on columns of {relation!r}",
             f"{operation_path}.group_by",
@@ -1875,7 +1877,9 @@ def _with_relation_dependencies(
                 keys = (
                     reference.join_group_by
                     if reference.join_group_by is not None
-                    else _applicable_keys(specification, bindings, reference.join_relation)
+                    else _applicable_keys(
+                        specification, bindings, reference.join_relation
+                    )
                 )
         elif qualifier in bindings.datasets and qualifier not in drivers:
             # R003-18: a scalar source qualified to the current row driver
@@ -2668,20 +2672,23 @@ def plan_execution(
         raise ExecutionPlanningError(diagnostics) from error
 
     key_dataset, _ = _analyze_key_dataset(specification, bindings, diagnostics)
-    if key_dataset is not None and specification.base is not None:
-        if specification.base != key_dataset:
-            diagnostics.append(
-                _diagnostic(
-                    "invalid_key_derivation",
-                    "base",
-                    {
-                        "base": specification.base,
-                        "key_dataset": key_dataset,
-                        "reason": "base dataset must equal the key dataset in new-style specs",
-                    },
-                    requirement="R003-57",
-                )
+    if (
+        key_dataset is not None
+        and specification.base is not None
+        and specification.base != key_dataset
+    ):
+        diagnostics.append(
+            _diagnostic(
+                "invalid_key_derivation",
+                "base",
+                {
+                    "base": specification.base,
+                    "key_dataset": key_dataset,
+                    "reason": "base dataset must equal the key dataset in new-style specs",
+                },
+                requirement="R003-57",
             )
+        )
 
     column_order = [column.name for column in specification.columns]
     column_positions = {name: index for index, name in enumerate(column_order)}
@@ -2696,9 +2703,7 @@ def plan_execution(
         if key_dataset is not None:
             driver = key_dataset
         if driver is not None and driver in specification.datasets:
-            row_plans.append(
-                PlannedRow(index=None, declaration=None, driver=driver)
-            )
+            row_plans.append(PlannedRow(index=None, declaration=None, driver=driver))
     else:
         for index, row in enumerate(rows):
             driver = row.dataset
@@ -3070,9 +3075,7 @@ def plan_execution(
     )
     planned_by_column = {planned.column: planned for planned in column_plans}
     key_derivations = tuple(
-        planned_by_column[key]
-        for key in specification.keys
-        if key in planned_by_column
+        planned_by_column[key] for key in specification.keys if key in planned_by_column
     )
     return ExecutionPlan(
         specification=specification,

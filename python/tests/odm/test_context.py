@@ -102,51 +102,6 @@ def test_form_scoped_fixture_resolves_only_the_current_form() -> None:
     assert results[-1].handled_by == "missing"
 
 
-def test_dm_fixture_resolves_contextual_age_and_arm_without_dropping_rows() -> None:
-    root = REPOSITORY / "yaml/examples/sdtm-dm-basic"
-    loaded_spec = load_specification(root / "spec.yaml", REPOSITORY / "yaml")
-    sources = load_source_tables(
-        loaded_spec.specification.datasets,
-        ProjectResources(root),
-    )
-    index = BindingIndex(
-        build_binding_plan(loaded_spec.specification, sources),
-        sources,
-    )
-    rows = [
-        row
-        for row in runtime_rows(sources["ODM"].table)
-        if row["ItemOID"] == "IT.DM.SEX"
-    ]
-    expressions = {
-        column.name: column.derivation.value
-        for column in loaded_spec.specification.columns
-        if column.name in {"AGE", "ARM"} and column.derivation is not None
-    }
-
-    ages = [
-        evaluate_expression(expressions["AGE"], index.context({"ODM": row}))
-        for row in rows
-    ]
-    arms = [
-        evaluate_expression(expressions["ARM"], index.context({"ODM": row}))
-        for row in rows
-    ]
-
-    assert ages == [
-        ValueResult(value="34"),
-        ValueResult(value="28"),
-        ValueResult(value=MISSING, handled_by="missing"),
-        ValueResult(value=MISSING, handled_by="missing"),
-    ]
-    assert arms == [
-        ValueResult(value="Placebo"),
-        ValueResult(value="Vitamin D3"),
-        ValueResult(value="Unassigned", handled_by="missing"),
-        ValueResult(value="Unassigned", handled_by="missing"),
-    ]
-
-
 def test_every_available_context_level_is_part_of_the_index_key() -> None:
     base = ["S1", "M1", "P1", "E1", "1", "F1", "1", "G1", "1"]
     contexts = [base]

@@ -119,9 +119,7 @@ class Specification(_StrictModel):
             has_datasets = data.get("datasets") is not None
             has_input = data.get("input") is not None
             if has_datasets == has_input:
-                raise ValueError(
-                    "exactly one of 'datasets' or 'input' must be present"
-                )
+                raise ValueError("exactly one of 'datasets' or 'input' must be present")
         return _normalize_input_alias_in_dict(data)
 
     @property

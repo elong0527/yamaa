@@ -250,7 +250,9 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
         filter_text: str | None = None
     elif isinstance(source, Mapping):
         variable = source.get("variable")
-        filter_text = source.get("filter") if isinstance(source.get("filter"), str) else None
+        filter_text = (
+            source.get("filter") if isinstance(source.get("filter"), str) else None
+        )
         if not isinstance(variable, str):
             return expression_condition(
                 "validation",

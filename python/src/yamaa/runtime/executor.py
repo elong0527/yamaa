@@ -443,7 +443,8 @@ def _build_key_correlation(
     window_derivations = [
         key_derivations_by_name[name]
         for name in key_names
-        if key_derivations_by_name[name].declaration.value.operation in WINDOW_OPERATIONS
+        if key_derivations_by_name[name].declaration.value.operation
+        in WINDOW_OPERATIONS
     ]
     ordered_scalar = _ordered_scalar_keys(key_names, key_derivations_by_name)
     ordered_scalar = [name for name in ordered_scalar if name in scalar_keys]
@@ -521,9 +522,7 @@ def _build_project_record(
         output_keys=tuple(plan.specification.keys),
         key_correlation=key_correlation,
     )
-    column_plans_by_name = {
-        planned.column: planned for planned in plan.columns
-    }
+    column_plans_by_name = {planned.column: planned for planned in plan.columns}
 
     def project(
         dataset: str,
@@ -532,7 +531,9 @@ def _build_project_record(
         seed: Mapping[str, object] | None = None,
     ) -> dict[str, object]:
         values: dict[str, object] = (
-            dict(seed) if seed is not None else dict(key_correlation.evaluate_scalar_keys(record))
+            dict(seed)
+            if seed is not None
+            else dict(key_correlation.evaluate_scalar_keys(record))
         )
         pending = set(needed)
         expanded = True
@@ -554,8 +555,7 @@ def _build_project_record(
                 for name in pending
                 if name in column_plans_by_name
                 and all(
-                    dep in computed
-                    for dep in column_plans_by_name[name].dependencies
+                    dep in computed for dep in column_plans_by_name[name].dependencies
                 )
             }
             if not ready:
@@ -622,7 +622,9 @@ def _key_space(
         if key_correlation.window_evaluator is not None:
             driver_relation = context.relations.get(driver)
             if driver_relation is not None:
-                window_values = key_correlation.window_evaluator(probes, driver_relation)
+                window_values = key_correlation.window_evaluator(
+                    probes, driver_relation
+                )
                 for probe, window_value in zip(probes, window_values):
                     probe.values.update(window_value)
 
@@ -928,15 +930,18 @@ def execute_specification(
     _register_handler_paths(plan, counter)
     try:
         relations = build_relation_indexes(sources)
-        column_types = {
-            column.name: column.type for column in specification.columns
-        }
+        column_types = {column.name: column.type for column in specification.columns}
         key_correlation = _build_key_correlation(
             plan, sources, column_types, selected_dispatcher, counter
         )
         project_record = (
             _build_project_record(
-                plan, sources, key_correlation, column_types, selected_dispatcher, counter
+                plan,
+                sources,
+                key_correlation,
+                column_types,
+                selected_dispatcher,
+                counter,
             )
             if key_correlation is not None
             else None

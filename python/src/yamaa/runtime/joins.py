@@ -69,11 +69,11 @@ class KeyCorrelation:
     dataset: str
     key_names: tuple[str, ...]
     scalar_evaluator: Callable[[Mapping[str, object]], dict[str, object]] | None
-    window_evaluator: Callable[[Sequence[object], RelationIndex], Sequence[dict[str, object]]] | None
+    window_evaluator: (
+        Callable[[Sequence[object], RelationIndex], Sequence[dict[str, object]]] | None
+    )
 
-    def evaluate_scalar_keys(
-        self, record: Mapping[str, object]
-    ) -> dict[str, object]:
+    def evaluate_scalar_keys(self, record: Mapping[str, object]) -> dict[str, object]:
         """Return the scalar key values for one record.
 
         The record is treated as a row of the key dataset, so qualified

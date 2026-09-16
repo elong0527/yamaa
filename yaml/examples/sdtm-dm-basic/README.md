@@ -5,24 +5,20 @@
 **Goal:** build one Demographics (DM) record per subject: sex (SEX), age
 (AGE), planned arm (ARM) and actual arm (ACTARM).
 
-**Input:** EDC output in long form, one row per collected item; e.g.
-subject 001 has **SEX**, **AGE** and **ARM** rows. The `input:` block names
-the single source dataset, **ODM**.
+**Input:** EDC output in long form, one record per collected item; e.g. subject
+001 has **SEX**, **AGE** and **ARM** information.
 
-**Grain:** `keys: [STUDYID, USUBJID]` declares the grain, and each key's
-`source:` derivation builds the key relation from ODM rows: `STUDYID` from
-`ODM.StudyOID`, `USUBJID` from `ODM.SubjectKey`.
+**Grain:** `STUDYID` and `USUBJID` identify each subject. The study and
+subject identifiers accompany every collected item.
 
-**Columns:** each value column carries a filtered `source:` derivation
-that selects the matching item for the key tuple -- e.g. **SEX** maps the
-`ODM.Value` rows where `ODM.ItemOID = 'IT.DM.SEX'` through a `Male/Female`
-dictionary, **AGE** reads the `'IT.DM.AGE'` rows as an integer, and **ARM**
-coalesces the `'IT.DM.ARM'` rows with `Unassigned` as the default.
-**ACTARM** copies **ARM**. Subjects with no matching rows get the column's
-missing handling, so the four subjects appear with **SEX** `U` and empty
-**AGE** where items were not collected.
+**Variables:**
+- **SEX** holds `M` or `F` for a reported male or female value and `U` when
+  sex is absent or not reported.
+- **AGE** holds the collected integer age or is empty when age is absent.
+- **ARM** holds the collected planned arm or `Unassigned` when it is absent.
+- **ACTARM** copies **ARM**.
 
-There is no `rows:` block, no aggregate expression, and no per-column
-ODM item references -- correlation happens by recomputed key tuples.
+Each output value is matched to the subject's collected item using the study
+and subject identifiers.
 
 **Standard:** SDTM | **Domain:** DM

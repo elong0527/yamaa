@@ -61,9 +61,7 @@ def test_a_key_column_must_not_depend_on_a_non_key_column_without_rows() -> None
         plan_execution(spec, {"SRC": source_table()})
 
     diagnostic = next(
-        item
-        for item in raised.value.diagnostics
-        if item.condition == "key_dependency"
+        item for item in raised.value.diagnostics if item.condition == "key_dependency"
     )
     assert diagnostic.requirement == "R001-43"
     assert diagnostic.context == {"column": "K", "dependency": "B"}
@@ -98,7 +96,9 @@ def test_a_column_cycle_is_reported_as_a_cycle_not_an_ordering_repair() -> None:
         plan_execution(spec, {"SRC": source_table()})
 
     diagnostic = next(
-        item for item in raised.value.diagnostics if item.condition == "dependency_cycle"
+        item
+        for item in raised.value.diagnostics
+        if item.condition == "dependency_cycle"
     )
     assert diagnostic.spec_paths == (
         "columns.A.derivation.source",
@@ -376,9 +376,7 @@ def right_table(column_type: str = "str") -> object:
     )
 
 
-def plan_two(
-    columns: list[Column], right: str = "str", keys: list[str] | None = None
-):
+def plan_two(columns: list[Column], right: str = "str", keys: list[str] | None = None):
     return plan_execution(
         two_dataset_specification(columns, keys=keys),
         {"SRC": source_table(), "RIGHT": right_table(right)},
