@@ -47,7 +47,7 @@ def dm_inputs() -> tuple[object, dict[str, object]]:
         DM_EXAMPLE / "spec.yaml", SCHEMA_ROOT
     ).specification
     resources = ProjectResources(DM_EXAMPLE)
-    return specification, load_source_tables(specification.datasets, resources)
+    return specification, load_source_tables(specification.input, resources)
 
 
 def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
@@ -150,9 +150,8 @@ def test_declared_violation_log_is_header_only_when_no_warning_fires() -> None:
     specification = load_specification(
         WARNING_EXAMPLE / "spec.yaml", SCHEMA_ROOT
     ).specification
-    loaded = load_source_tables(
-        specification.datasets, ProjectResources(WARNING_EXAMPLE)
-    )["DM"]
+    resources = ProjectResources(WARNING_EXAMPLE)
+    loaded = load_source_tables(specification.input, resources)["DM"]
     sources = {
         "DM": TypedTable(
             columns=loaded.table.columns,
@@ -303,7 +302,7 @@ def test_row_templates_and_driver_records_keep_their_declared_order() -> None:
     specification = Specification(
         schema_version="1.0",
         domain="OUT",
-        datasets={"SRC": DatasetSource(path="input/source.csv")},
+        input={"SRC": DatasetSource(path="input/source.csv")},
         base="SRC",
         keys=["KIND", "VALUE"],
         output=Output(path="out.csv", columns=["KIND", "VALUE"]),
@@ -347,7 +346,7 @@ def test_key_grain_without_rows_emits_one_row_per_key_combination() -> None:
     specification = Specification(
         schema_version="1.0",
         domain="OUT",
-        datasets={"SRC": DatasetSource(path="input/source.csv")},
+        input={"SRC": DatasetSource(path="input/source.csv")},
         base="SRC",
         keys=["VALUE"],
         output=Output(path="out.csv", columns=["VALUE", "TAG"]),
@@ -376,7 +375,7 @@ def test_key_grain_reads_a_field_constant_over_the_records_of_one_key() -> None:
     specification = Specification(
         schema_version="1.0",
         domain="OUT",
-        datasets={"SRC": DatasetSource(path="input/source.csv")},
+        input={"SRC": DatasetSource(path="input/source.csv")},
         base="SRC",
         keys=["GRP"],
         output=Output(path="out.csv", columns=["GRP", "LABEL"]),
@@ -412,7 +411,7 @@ def test_key_grain_without_rows_rejects_multiple_values_per_key() -> None:
     specification = Specification(
         schema_version="1.0",
         domain="OUT",
-        datasets={"SRC": DatasetSource(path="input/source.csv")},
+        input={"SRC": DatasetSource(path="input/source.csv")},
         base="SRC",
         keys=["GRP"],
         output=Output(path="out.csv", columns=["GRP", "VALUE"]),
@@ -524,7 +523,7 @@ def test_output_dataset_self_reference_fails_before_ingestion() -> None:
 
     assert isinstance(result, ExecutionFailure)
     assert result.diagnostics[0].condition == "duplicate_identifier"
-    assert result.diagnostics[0].spec_paths == ("datasets.ADLB", "domain")
+    assert result.diagnostics[0].spec_paths == ("input.ADLB", "domain")
     assert result.diagnostics[0].context == {"identifier": "ADLB"}
     assert not provider_called
     assert resources.capture_reads == 0
@@ -541,7 +540,7 @@ def test_source_provider_diagnostics_enter_the_execution_result() -> None:
                 SourceDiagnostic(
                     phase="ingest",
                     condition="resource_changed",
-                    spec_paths=("datasets.ODM.path",),
+                    spec_paths=("input.ODM.path",),
                     context={"dataset": "ODM"},
                 )
             ]
@@ -553,7 +552,7 @@ def test_source_provider_diagnostics_enter_the_execution_result() -> None:
     assert result.diagnostics[0].model_dump(mode="json") == {
         "phase": "ingest",
         "condition": "resource_changed",
-        "spec_paths": ["datasets.ODM.path"],
+        "spec_paths": ["input.ODM.path"],
         "requirement": None,
         "context": {"dataset": "ODM"},
     }
@@ -601,7 +600,7 @@ def test_window_key_numbers_partitions_after_scalar_keys() -> None:
     specification = Specification(
         schema_version="1.0",
         domain="OUT",
-        datasets={"SRC": DatasetSource(path="input/source.csv")},
+        input={"SRC": DatasetSource(path="input/source.csv")},
         base="SRC",
         keys=["GRP", "SEQ"],
         output=Output(path="out.csv", columns=["GRP", "SEQ"]),
@@ -642,7 +641,7 @@ def test_key_plan_sees_earlier_key_values() -> None:
     specification = Specification(
         schema_version="1.0",
         domain="OUT",
-        datasets={"SRC": DatasetSource(path="input/source.csv")},
+        input={"SRC": DatasetSource(path="input/source.csv")},
         base="SRC",
         keys=["GRP", "TAG"],
         output=Output(path="out.csv", columns=["GRP", "TAG"]),

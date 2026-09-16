@@ -93,7 +93,7 @@ def test_producer_schema_without_workflow_is_unsupported() -> None:
     assert tuple(feature.model_dump(mode="python") for feature in result.features) == (
         {
             "operation": "workflow_schema_resolution",
-            "spec_path": "datasets.DM.schema",
+            "spec_path": "input.DM.schema",
         },
     )
     assert result.handler_counts == ()

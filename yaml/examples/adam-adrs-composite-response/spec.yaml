@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADRS
-datasets:
+input:
   ADRSPRE: input/adrs_pre.csv
   ADSL: input/adsl.csv
 

@@ -55,7 +55,7 @@ fixtures:
   negative-adsl-randomization-date-retyped:
     rule: R017
     condition: redundant_field_type
-    spec_paths: [datasets.DM.types.RANDDT]
+    spec_paths: [input.DM.types.RANDDT]
     validator: inheritance
   negative-adsl-remote-parent:
     rule: R017
@@ -105,32 +105,32 @@ fixtures:
   negative-dataset-path-absolute:
     rule: R021
     condition: resource_path_not_relative
-    spec_paths: [datasets.LBREF.path]
+    spec_paths: [input.LBREF.path]
     validator: resource_path
   negative-dataset-path-directory:
     rule: R021
     condition: resource_path_not_regular_file
-    spec_paths: [datasets.LBREF.path]
+    spec_paths: [input.LBREF.path]
     validator: resource_path
   negative-dataset-path-missing:
     rule: R021
     condition: resource_path_missing
-    spec_paths: [datasets.LBREF.path]
+    spec_paths: [input.LBREF.path]
     validator: resource_path
   negative-dataset-path-parent-escape:
     rule: R021
     condition: resource_path_outside_project
-    spec_paths: [datasets.LBREF.path]
+    spec_paths: [input.LBREF.path]
     validator: resource_path
   negative-dataset-path-symlink:
     rule: R021
     condition: resource_path_symlink
-    spec_paths: [datasets.LBREF.path]
+    spec_paths: [input.LBREF.path]
     validator: resource_path
   negative-dataset-path-url:
     rule: R021
     condition: resource_path_uri_scheme
-    spec_paths: [datasets.LBREF.path]
+    spec_paths: [input.LBREF.path]
     validator: resource_path
   negative-date-impute-month-out-of-range:
     rule: R016
@@ -216,7 +216,7 @@ fixtures:
   negative-record-lookup-id-collision:
     rule: R015
     condition: duplicate_identifier
-    spec_paths: ["record_lookups[0].id", datasets.EX]
+    spec_paths: ["record_lookups[0].id", input.EX]
     validator: name_contract
   negative-record-lookup-incomparable-range:
     rule: R015
@@ -263,7 +263,7 @@ fixtures:
   negative-source-output-self-reference:
     rule: R002
     condition: duplicate_identifier
-    spec_paths: [datasets.ADLB, domain]
+    spec_paths: [input.ADLB, domain]
     validator: name_contract
   negative-source-undeclared-field:
     rule: R002
@@ -273,7 +273,7 @@ fixtures:
   negative-source-unknown-profile:
     rule: R023
     condition: source_profile_unknown
-    spec_paths: [datasets.DM.path]
+    spec_paths: [input.DM.path]
     validator: dataset_source
   negative-str-extract-undeclared-group:
     rule: R022
@@ -303,7 +303,7 @@ fixtures:
   negative-types-unknown-field:
     rule: R014
     condition: unknown_field
-    spec_paths: [datasets.EX.types.EXDOSEN]
+    spec_paths: [input.EX.types.EXDOSEN]
     validator: source_contract
   negative-variable-nested-expression:
     rule: R006

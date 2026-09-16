@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADSL
-datasets:
+input:
   ADSL_IN:
     path: input/adsl.csv
     types:

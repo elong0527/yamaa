@@ -1,7 +1,7 @@
 phase: ingest
 condition: field_parse_failed
 spec_paths:
-  - datasets.EX.types.EXDOSE
+  - input.EX.types.EXDOSE
 requirement: R014-23
 context:
   dataset: EX

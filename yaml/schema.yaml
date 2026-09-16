@@ -19,7 +19,7 @@ root_class:
         type: domain_name
         required: true
         description: Name of the output dataset this specification derives.
-    - datasets:
+    - input:
         type: "dict[dataset_id, dataset_source]"
         required: true
         description: Source datasets readable by this specification, each under the name it is read through.
@@ -233,7 +233,7 @@ dataset_class:
 dataset_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Identifier of a dataset declared in datasets.
+    description: Identifier of a dataset declared in input.
 
 record_lookup_id:
     type: str

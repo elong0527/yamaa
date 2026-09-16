@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADTTE
-datasets:
+input:
   ADSL: input/adsl.csv
   ADRSPRE: input/adrs_pre.csv
   DS: input/ds.csv

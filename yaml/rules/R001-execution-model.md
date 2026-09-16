@@ -30,8 +30,8 @@ does not define what an expression means (R007), how a name binds to a source
    change row count.
 
 **R001-4.** Each `rows` entry builds output rows from one input dataset, named
-by `row.dataset`. When `root.datasets` declares exactly one dataset, an entry
-omitting `dataset` builds from that dataset. When `root.datasets` declares
+by `row.dataset`. When `root.input` declares exactly one dataset, an entry
+omitting `dataset` builds from that dataset. When `root.input` declares
 more than one, every entry must state `dataset`.
 
 **R001-5.** A row template has one of two modes:
@@ -78,7 +78,7 @@ order, and that key table is the output row set. The key table is standalone:
 one row per unique key combination, with no link back to the input records,
 so the input records a key combination was derived from decide its column
 values and never how many rows the artifact carries. `base` is required
-in that case, unless `datasets` declares exactly one dataset, which
+in that case, unless `input` declares exactly one dataset, which
 supplies the input records.
 
 **R001-12a.** When `rows` is present, the row templates construct the rows
@@ -193,7 +193,7 @@ evaluation order to mapping order or repeated reads of one partition.
 
 ## Errors
 
-- **R001-32.** A `rows` entry omitting `dataset` when `root.datasets`
+- **R001-32.** A `rows` entry omitting `dataset` when `root.input`
   declares more than one: fail.
 - **R001-33.** A specification with no `rows` entry and no default input
   dataset: fail. The default is root `base`, or the single declared dataset

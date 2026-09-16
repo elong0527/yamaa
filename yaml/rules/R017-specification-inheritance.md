@@ -82,7 +82,7 @@ because a later contribution may supply their missing fields. The entry file
 must declare its complete, non-null `output`; an inherited layer cannot choose
 the final artifact membership or order.
 
-**R017-11.** A `datasets` member is identified by its mapping key. Every member
+**R017-11.** An `input` member is identified by its mapping key. Every member
 of `record_lookups`, `columns`, or `rows` must carry its respective `id`,
 `name`, or `id` field. Two members of one layer must not share one identifier.
 
@@ -107,7 +107,7 @@ collections below. There is no recursive merge inside a supplied field value.
 |---|---|
 | `schema_version` | Must be identical in every layer |
 | `parents` | Traversal instruction; never contributed |
-| `datasets` | Keyed by dataset ID |
+| `input` | Keyed by dataset ID |
 | `record_lookups` | Keyed by `id` |
 | `columns` | Keyed by `name` |
 | `rows` | Keyed by `id` |
@@ -186,7 +186,7 @@ dataset or record lookup live. A live record lookup makes its dataset and
 matching inputs live. A live row makes its input dataset, filter inputs,
 grouping inputs, and derivations needed for live columns live.
 
-**R017-27.** Dead entries are removed from `datasets`, `record_lookups`, and
+**R017-27.** Dead entries are removed from `input`, `record_lookups`, and
 `columns`. Row-derivation entries targeting dead columns are removed with those
 columns. Rows participate in reachability, but each final row declaration is
 itself a root because it can add records; a resolver cannot discard one merely

@@ -90,7 +90,7 @@ def _path_diagnostic(
     return SourceDiagnostic(
         phase=failure.phase,
         condition=failure.condition,
-        spec_paths=(f"datasets.{dataset}.path",),
+        spec_paths=(f"input.{dataset}.path",),
         requirement=failure.requirement,
         context={"dataset": dataset, "path": written_path},
     )
@@ -102,7 +102,7 @@ def _csv_diagnostic(
     return SourceDiagnostic(
         phase="ingest",
         condition=failure.condition,
-        spec_paths=(f"datasets.{dataset}.path",),
+        spec_paths=(f"input.{dataset}.path",),
         requirement=failure.requirement,
         context={
             "dataset": dataset,
@@ -117,7 +117,7 @@ def _profile_diagnostic(dataset: str, written_path: str) -> SourceDiagnostic:
     return SourceDiagnostic(
         phase="validation",
         condition="source_profile_unknown",
-        spec_paths=(f"datasets.{dataset}.path",),
+        spec_paths=(f"input.{dataset}.path",),
         requirement="R023-23",
         context={"dataset": dataset, "path": written_path},
     )
@@ -129,7 +129,7 @@ def _parquet_diagnostic(
     return SourceDiagnostic(
         phase="ingest",
         condition=failure.condition,
-        spec_paths=(f"datasets.{dataset}.path",),
+        spec_paths=(f"input.{dataset}.path",),
         requirement=failure.requirement,
         context={"dataset": dataset, "path": written_path, **failure.context},
     )
@@ -151,8 +151,8 @@ def _validate_producer_names(
                 phase="validation",
                 condition="producer_contract_mismatch",
                 spec_paths=(
-                    f"datasets.{dataset}.schema",
-                    f"datasets.{dataset}.path",
+                    f"input.{dataset}.schema",
+                    f"input.{dataset}.path",
                 ),
                 requirement="R014-22",
                 context={
@@ -188,7 +188,7 @@ def _field_types(
                     SourceDiagnostic(
                         phase="validation",
                         condition="unknown_field",
-                        spec_paths=(f"datasets.{dataset}.types.{field}",),
+                        spec_paths=(f"input.{dataset}.types.{field}",),
                         requirement="R014-19",
                         context={"dataset": dataset, "field": field},
                     )
@@ -214,7 +214,7 @@ def _parse_field(
                 SourceDiagnostic(
                     phase="ingest",
                     condition="field_parse_failed",
-                    spec_paths=(f"datasets.{dataset}.types.{name}",),
+                    spec_paths=(f"input.{dataset}.types.{name}",),
                     requirement="R014-23",
                     context={
                         "dataset": dataset,
@@ -260,8 +260,8 @@ def _validate_parquet_contract(
             phase="validation",
             condition="producer_contract_mismatch",
             spec_paths=(
-                f"datasets.{dataset}.schema",
-                f"datasets.{dataset}.path",
+                f"input.{dataset}.schema",
+                f"input.{dataset}.path",
             ),
             requirement="R014-22",
             context={
@@ -297,7 +297,7 @@ def load_source_tables(
                 SourceDiagnostic(
                     phase="validation",
                     condition="redundant_field_type",
-                    spec_paths=(f"datasets.{dataset}.types.{field}",),
+                    spec_paths=(f"input.{dataset}.types.{field}",),
                     requirement="R014-10",
                     context={
                         "dataset": dataset,
@@ -312,7 +312,7 @@ def load_source_tables(
                 SourceDiagnostic(
                     phase="validation",
                     condition="redundant_field_type",
-                    spec_paths=(f"datasets.{dataset}.types.{field}",),
+                    spec_paths=(f"input.{dataset}.types.{field}",),
                     requirement="R014-20",
                     context={
                         "dataset": dataset,

@@ -42,7 +42,7 @@ def _specification(column_names: list[str]) -> Specification:
     return Specification(
         schema_version="1.0",
         domain="OUT",
-        datasets={"ODM": DatasetSource(path="odm.csv")},
+        input={"ODM": DatasetSource(path="odm.csv")},
         keys=[column_names[0]],
         output=Output(path="out.csv", columns=column_names),
         columns=[Column(name=name, type="str", label=name) for name in column_names],
@@ -68,7 +68,7 @@ def test_form_scoped_fixture_resolves_only_the_current_form() -> None:
     root = REPOSITORY / "yaml/examples/odm-form-scoped-item-resolution"
     loaded_spec = load_specification(root / "spec.yaml", REPOSITORY / "yaml")
     sources = load_source_tables(
-        loaded_spec.specification.datasets,
+        loaded_spec.specification.input,
         ProjectResources(root),
     )
     index = BindingIndex(
@@ -106,7 +106,7 @@ def test_dm_fixture_resolves_contextual_age_and_arm_without_dropping_rows() -> N
     root = REPOSITORY / "yaml/examples/sdtm-dm-basic"
     loaded_spec = load_specification(root / "spec.yaml", REPOSITORY / "yaml")
     sources = load_source_tables(
-        loaded_spec.specification.datasets,
+        loaded_spec.specification.input,
         ProjectResources(root),
     )
     index = BindingIndex(

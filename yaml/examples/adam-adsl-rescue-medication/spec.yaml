@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADSL
-datasets:
+input:
   DM: input/dm.csv
   CM: {path: input/cm.csv, types: {CMSEQ: int}}
 base: DM

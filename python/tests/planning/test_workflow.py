@@ -145,7 +145,7 @@ def test_shared_producer_executes_once_and_shares_generated_snapshot(
     (tmp_path / "producer.yaml").write_text(
         """schema_version: "1.0"
 domain: PRODUCED
-datasets: {SEED: seed.csv}
+input: {SEED: seed.csv}
 base: SEED
 keys: [ID]
 output: {path: produced.parquet, columns: [ID]}
@@ -160,7 +160,7 @@ columns:
     (tmp_path / "spec.yaml").write_text(
         """schema_version: "1.0"
 domain: OUT
-datasets:
+input:
   A: {path: produced.parquet, schema: producer.yaml}
   B: {path: produced.parquet, schema: producer.yaml}
 base: A
@@ -205,7 +205,7 @@ def test_producer_cycle_fails_before_execution(tmp_path: Path) -> None:
     (tmp_path / "spec.yaml").write_text(
         """schema_version: "1.0"
 domain: A
-datasets: {B: {path: b.csv, schema: producer.yaml}}
+input: {B: {path: b.csv, schema: producer.yaml}}
 base: B
 keys: [ID]
 output: {path: a.csv, columns: [ID]}
@@ -220,7 +220,7 @@ columns:
     (tmp_path / "producer.yaml").write_text(
         """schema_version: "1.0"
 domain: B
-datasets: {A: {path: a.csv, schema: spec.yaml}}
+input: {A: {path: a.csv, schema: spec.yaml}}
 base: A
 keys: [ID]
 output: {path: b.csv, columns: [ID]}
@@ -255,7 +255,7 @@ def test_inline_types_conflict_with_producer_before_sources_are_read() -> None:
     assert raised.value.diagnostics[0].model_dump(mode="json") == {
         "phase": "validation",
         "condition": "redundant_field_type",
-        "spec_paths": ["datasets.DM.types.RANDDT"],
+        "spec_paths": ["input.DM.types.RANDDT"],
         "requirement": "R014-10",
         "context": {"dataset": "DM", "field": "RANDDT", "type": "date"},
     }

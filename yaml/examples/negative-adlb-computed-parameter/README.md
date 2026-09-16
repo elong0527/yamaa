@@ -43,7 +43,7 @@ transaminase parameters first and take the ratio in a second specification
 that declares the completed dataset as one of its sources:
 
 ```yaml
-datasets:
+input:
   ADLBIN: adlb.csv
 ```
 

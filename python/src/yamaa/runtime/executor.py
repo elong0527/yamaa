@@ -784,13 +784,13 @@ def execute_with_source_provider(
         return ExecutionUnsupported(features=error.features, handler_counts=())
 
     try:
-        sources = source_provider(specification.datasets)
+        sources = source_provider(specification.input)
     except ProducerSchemaUnresolved as error:
         return ExecutionUnsupported(
             features=tuple(
                 UnsupportedFeature(
                     operation="workflow_schema_resolution",
-                    spec_path=f"datasets.{dataset}.schema",
+                    spec_path=f"input.{dataset}.schema",
                 )
                 for dataset in error.datasets
             ),

@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: EX
-datasets:
+input:
   EX_RAW: input/ex_raw.csv
 keys: [STUDYID, USUBJID, EXSEQ]
 

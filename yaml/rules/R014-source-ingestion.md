@@ -2,7 +2,7 @@
 id: R014
 title: Source-Format Ingestion
 status: normative
-applies_to: [root.datasets, dataset_source, dataset_class, expression.source]
+applies_to: [root.input, dataset_source, dataset_class, expression.source]
 
 ---
 
@@ -65,7 +65,7 @@ no types to contradict either of them. A dataset whose types matter to more
 than one specification belongs in a container that carries them.
 
 ```yaml
-datasets:
+input:
   EX: {path: input/ex.csv, types: {EXDOSE: float, EXSEQ: int}}
   DM: input/dm.csv
 ```
@@ -84,7 +84,7 @@ complete specification validated against the same `root_class` in
 language.
 
 ```yaml
-datasets:
+input:
   DM:
     path: input/dm.csv
     schema: input/dm.schema.yaml

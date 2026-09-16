@@ -1718,8 +1718,8 @@ def _record_lookup_declarations(
     for index, lookup in enumerate(specification.record_lookups or ()):
         path = f"record_lookups[{index}]"
         collision = None
-        if lookup.id in specification.datasets:
-            collision = f"datasets.{lookup.id}"
+        if lookup.id in specification.input:
+            collision = f"input.{lookup.id}"
         elif lookup.id == specification.domain:
             collision = "domain"
         elif lookup.id in seen:
@@ -1736,7 +1736,7 @@ def _record_lookup_declarations(
                 )
             )
         seen.setdefault(lookup.id, f"{path}.id")
-        if lookup.dataset not in specification.datasets:
+        if lookup.dataset not in specification.input:
             diagnostics.append(
                 _diagnostic(
                     "unknown_field",
@@ -1852,11 +1852,11 @@ def _preflight_findings(
     diagnostics = [] if specification.parents else _coverage_diagnostics(specification)
     unsupported: list[UnsupportedFeature] = []
 
-    if specification.domain in specification.datasets:
+    if specification.domain in specification.input:
         diagnostics.append(
             _diagnostic(
                 "duplicate_identifier",
-                (f"datasets.{specification.domain}", "domain"),
+                (f"input.{specification.domain}", "domain"),
                 {"identifier": specification.domain},
                 requirement="R002-28",
             )
@@ -1874,7 +1874,7 @@ def _preflight_findings(
             diagnostics.append(_diagnostic("driver_unavailable", "base", {"row": None}))
         if (
             specification.base is not None
-            and specification.base not in specification.datasets
+            and specification.base not in specification.input
         ):
             diagnostics.append(
                 _diagnostic(
@@ -1887,9 +1887,9 @@ def _preflight_findings(
     for index, row in enumerate(rows):
         if not specification.parents:
             driver = row.dataset
-            if driver is None and len(specification.datasets) == 1:
-                driver = next(iter(specification.datasets))
-            if driver not in specification.datasets:
+            if driver is None and len(specification.input) == 1:
+                driver = next(iter(specification.input))
+            if driver not in specification.input:
                 diagnostics.append(
                     _diagnostic(
                         "driver_unavailable",
@@ -1898,8 +1898,8 @@ def _preflight_findings(
                     )
                 )
         driver = row.dataset
-        if driver is None and len(specification.datasets) == 1:
-            driver = next(iter(specification.datasets))
+        if driver is None and len(specification.input) == 1:
+            driver = next(iter(specification.input))
         diagnostics.extend(_group_by_declaration(row, index, driver))
         scope = _row_scope(specification, row, driver)
         for name, declaration in row.derivations.items():
@@ -1975,13 +1975,13 @@ def plan_execution(
     belongs to a later runtime component.
     """
     diagnostics, unsupported = _preflight_findings(specification, supported_operations)
-    declared_sources = tuple(specification.datasets)
+    declared_sources = tuple(specification.input)
     supplied_sources = tuple(sources)
     if set(declared_sources) != set(supplied_sources):
         diagnostics.append(
             _diagnostic(
                 "source_provider_mismatch",
-                "datasets",
+                "input",
                 {
                     "missing": sorted(set(declared_sources) - set(supplied_sources)),
                     "unexpected": sorted(set(supplied_sources) - set(declared_sources)),
@@ -1999,7 +1999,7 @@ def plan_execution(
         diagnostics.append(
             _diagnostic(
                 "source_provider_mismatch",
-                "datasets",
+                "input",
                 {"reason": str(error)},
             )
         )
@@ -2016,7 +2016,7 @@ def plan_execution(
     if not rows:
         if (
             specification.default_driver is not None
-            and specification.default_driver in specification.datasets
+            and specification.default_driver in specification.input
         ):
             row_plans.append(
                 PlannedRow(
@@ -2026,9 +2026,9 @@ def plan_execution(
     else:
         for index, row in enumerate(rows):
             driver = row.dataset
-            if driver is None and len(specification.datasets) == 1:
-                driver = next(iter(specification.datasets))
-            if driver is None or driver not in specification.datasets:
+            if driver is None and len(specification.input) == 1:
+                driver = next(iter(specification.input))
+            if driver is None or driver not in specification.input:
                 continue
             row_scope = _row_scope(specification, row, driver)
             grouped = row.group_by is not None

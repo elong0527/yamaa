@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADCM
-datasets:
+input:
   CM: input/cm.csv
   ADSL: input/adsl.csv
 base: CM

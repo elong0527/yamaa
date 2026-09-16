@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADRS
-datasets:
+input:
   RS: input/rs.csv
   ADSL: input/adsl.csv
 keys: [STUDYID, USUBJID, RSSEQ]

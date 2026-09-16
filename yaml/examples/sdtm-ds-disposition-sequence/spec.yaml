@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: DS
-datasets:
+input:
   DS_RAW: input/ds_raw.csv
 keys: [STUDYID, USUBJID, DSSEQ]
 

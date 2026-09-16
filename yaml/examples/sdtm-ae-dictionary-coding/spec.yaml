@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: AE
-datasets:
+input:
   AE_RAW: input/ae_raw.csv
   MEDDRA: input/meddra_26_1.csv
 base: AE_RAW

@@ -28,7 +28,7 @@ Keep the producing DM specification as the single type authority and remove
 the inline `types` entry:
 
 ```yaml
-datasets:
+input:
   DM:
     path: input/dm.csv
     schema: input/dm.schema.yaml

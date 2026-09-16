@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADLB
-datasets:
+input:
   LB: {path: input/lb.csv, types: {LBSTRESN: float}}
 keys: [STUDYID, USUBJID, ADT, PARAMCD]
 

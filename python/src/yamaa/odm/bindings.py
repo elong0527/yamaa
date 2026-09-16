@@ -151,7 +151,7 @@ def build_binding_plan(
     sources: Mapping[str, LoadedDataset | TypedTable],
 ) -> BindingPlan:
     """Build the static binding catalog for loaded normalized sources."""
-    declared = tuple(specification.datasets)
+    declared = tuple(specification.input)
     supplied = tuple(sources)
     if set(declared) != set(supplied):
         raise ValueError(

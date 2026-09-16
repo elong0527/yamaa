@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: DM
-datasets:
+input:
   DM_RAW: input/dm_raw.csv
 keys: [STUDYID, USUBJID]
 submission:

@@ -40,7 +40,7 @@ def specification(
     return Specification(
         schema_version="1.0",
         domain="OUT",
-        datasets={"SRC": DatasetSource(path="input/source.csv")},
+        input={"SRC": DatasetSource(path="input/source.csv")},
         base="SRC",
         keys=[columns[0].name],
         output=Output(path="out.csv", columns=[column.name for column in columns]),
@@ -335,7 +335,7 @@ def two_dataset_specification(columns: list[Column]) -> Specification:
     return Specification(
         schema_version="1.0",
         domain="OUT",
-        datasets={
+        input={
             "SRC": DatasetSource(path="input/source.csv"),
             "RIGHT": DatasetSource(path="input/right.csv"),
         },

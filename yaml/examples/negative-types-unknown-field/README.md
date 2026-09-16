@@ -27,7 +27,7 @@ Correct the field name in the dataset type declaration so it names the column
 that actually exists:
 
 ```yaml
-datasets:
+input:
   TRT: input/subject_treatment.csv
   EX:
     path: input/ex.csv

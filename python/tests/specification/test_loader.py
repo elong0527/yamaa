@@ -55,7 +55,7 @@ def test_loads_and_normalizes_basic_specification() -> None:
 
     assert specification.schema_version == "1.0"
     assert specification.domain == "DM"
-    assert specification.datasets["ODM"].path == "input/odm.csv"
+    assert specification.input["ODM"].path == "input/odm.csv"
     assert loaded.origin_path == (EXAMPLES / "sdtm-dm-basic/spec.yaml").resolve()
     assert loaded.schema_path == (SCHEMA_ROOT / "schema.yaml").resolve()
 

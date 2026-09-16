@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADTR
-datasets:
+input:
   ADTRPRE:
     path: input/adtr_pre.csv
     types: {AVISITN: int, ADT: date, AVAL: float, NMEAS: int, NTARGET: int}

@@ -100,7 +100,7 @@ class Row(_StrictModel):
 class Specification(_StrictModel):
     schema_version: str
     domain: str
-    datasets: dict[str, DatasetSource]
+    input: dict[str, DatasetSource]
     base: str | None = None
     parents: list[str] | None = None
     record_lookups: list[RecordLookup] | None = None
@@ -115,8 +115,8 @@ class Specification(_StrictModel):
     def default_driver(self):
         if self.base is not None:
             return self.base
-        if len(self.datasets) == 1:
-            return next(iter(self.datasets))
+        if len(self.input) == 1:
+            return next(iter(self.input))
         return None
 
 

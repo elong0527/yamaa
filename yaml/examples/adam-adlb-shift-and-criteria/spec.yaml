@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADLB
-datasets:
+input:
   ADLBPRE:
     path: input/adlb_pre.csv
     types: {ASEQ: int, AVAL: float, ANRLO: float, ANRHI: float}

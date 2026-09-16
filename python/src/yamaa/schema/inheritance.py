@@ -50,7 +50,7 @@ _URI_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _DRIVE_ROOT = re.compile(r"^[A-Za-z]:[\\/]")
 
 _KEYED_COLLECTIONS: dict[str, tuple[Literal["mapping", "list"], str | None, str]] = {
-    "datasets": ("mapping", None, "dataset_class"),
+    "input": ("mapping", None, "dataset_class"),
     "record_lookups": ("list", "id", "record_lookup_class"),
     "columns": ("list", "name", "column_class"),
     "rows": ("list", "id", "row_class"),
@@ -125,7 +125,7 @@ def _rebase_path(value: str, layer: Path, entry: Path) -> str:
 
 
 def _rebase_layer_paths(document: dict[str, object], layer: Path, entry: Path) -> None:
-    datasets = document.get("datasets")
+    datasets = document.get("input")
     if isinstance(datasets, dict):
         for source in datasets.values():
             if not isinstance(source, dict):
@@ -651,9 +651,7 @@ def _order_variable(term: object) -> str | None:
 
 def _prune(document: dict[str, object], bundle: SchemaBundle) -> dict[str, object]:
     result = copy.deepcopy(document)
-    datasets = (
-        result.get("datasets") if isinstance(result.get("datasets"), dict) else {}
-    )
+    datasets = result.get("input") if isinstance(result.get("input"), dict) else {}
     columns = result.get("columns") if isinstance(result.get("columns"), list) else []
     lookups = (
         result.get("record_lookups")
@@ -788,10 +786,10 @@ def _prune(document: dict[str, object], bundle: SchemaBundle) -> dict[str, objec
             for item in result["columns"]
             if isinstance(item, dict) and item.get("name") in live_columns
         ]
-    if isinstance(result.get("datasets"), dict):
-        result["datasets"] = {
+    if isinstance(result.get("input"), dict):
+        result["input"] = {
             name: value
-            for name, value in result["datasets"].items()
+            for name, value in result["input"].items()
             if name in live_datasets
         }
     if isinstance(result.get("record_lookups"), list):
@@ -927,7 +925,7 @@ def _schema_order(
 ) -> dict[str, object]:
     root = class_fields(bundle, "root_class")
     classes = {
-        "datasets": "dataset_class",
+        "input": "dataset_class",
         "record_lookups": "record_lookup_class",
         "columns": "column_class",
         "rows": "row_class",
@@ -942,7 +940,7 @@ def _schema_order(
             ordered[name] = value
             continue
         fields = class_fields(bundle, class_name)
-        if name == "datasets" and isinstance(value, dict):
+        if name == "input" and isinstance(value, dict):
             ordered[name] = {
                 member_id: {
                     field: member[field]

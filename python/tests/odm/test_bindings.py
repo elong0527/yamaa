@@ -16,7 +16,7 @@ def _fixture_plan():
     root = REPOSITORY / "yaml/examples/odm-form-scoped-item-resolution"
     loaded_spec = load_specification(root / "spec.yaml", REPOSITORY / "yaml")
     sources = load_source_tables(
-        loaded_spec.specification.datasets,
+        loaded_spec.specification.input,
         ProjectResources(root),
     )
     return build_binding_plan(loaded_spec.specification, sources), sources
