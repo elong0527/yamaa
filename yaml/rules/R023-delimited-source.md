@@ -48,10 +48,10 @@ a study that stores `DM.CSV` names the same container as one that stores
 | `.csv` | `csv` | delimited text | this rule |
 | `.parquet` | `parquet` | Apache Parquet | R027 |
 
-**R023-2.** A source is selected like an artifact: a file R020 writes and
-this rule reads back has one profile name in both directions. A second field
-could disagree with the path, so a source declared as `csv` but named
-otherwise misnames its contents, and the reader cannot check the claim.
+**R023-2.** A source profile follows the artifact profile: a file R020 writes
+and this rule reads has one profile name both ways. A second field could
+disagree with the source path. A source declared `csv` but named otherwise
+misnames its contents, and the reader cannot check the claim.
 
 **R023-3.** Sniffing is not permitted. A reader that inspected a file's
 contents to choose a delimiter or a quote character could misread a
@@ -70,9 +70,9 @@ and refuses every other difference rather than silently repairing it.
 `U+000A`, and a final record with no terminator at all.
 
 **R023-6.** Refused: a byte-order mark, a `U+000D` anywhere else, and every
-reader option in *Nothing here is configuration*. Each changes which records
-or which values a file delivers, so admitting one would make two conforming
-runtimes disagree about the same bytes.
+reader option in *Nothing here is configuration*. Each refusal prevents a
+change to the records or values the file delivers. Admitting any change would
+make two conforming runtimes disagree about the same bytes.
 
 ## Encoding
 
@@ -136,10 +136,10 @@ prefix or skipped preamble, no alternate delimiter or quote character, no
 whitespace trimming, no header synthesis or renaming, and no missing-value
 sentinel.
 
-**R023-20.** The sentinel case is the absence easiest to mistake
-for an oversight. R014 fixes what a stored field means, including that no
-text spells absence. A reader option that spelled absence here would decide
-the meaning of absence before any rule in this design could see the value.
+**R023-20.** A missing-value sentinel is easy to mistake for an oversight.
+R014 fixes what a stored field means, including that no text spells absence.
+A reader option that spells absence decides the meaning of absence before
+any rule in this design sees the value.
 
 ## Quoting is transport, not meaning
 
