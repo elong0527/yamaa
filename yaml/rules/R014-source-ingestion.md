@@ -17,7 +17,7 @@ Define a stored field's type and missingness before expressions read it.
 
 This rule owns the step from a stored field to a bound value. R002 owns how a
 name binds to a dataset or an ODM item once that value exists. R011 owns
-numeric parsing and non-finite normalization in addition to conversion of a
+numeric parsing and non-finite normalization and conversion of a
 completed derivation result. R007 owns what each expression requires of an
 input it receives. R019 owns valid text and failures while decoding it. R021
 owns which file `path` and `schema` may reach and the byte snapshot this rule
@@ -36,16 +36,16 @@ window ties, and R013 consumes it for ordered floating-point reduction.
 
 **R014-2.** Record order is not a substitute for a business key or a declared
 sort. It is the stable sequence of this artifact. Replacing an
-artifact with the same records in another order changes the input and can
-therefore change an order-sensitive result.
+artifact with the same records in another order changes the input. The
+change can alter an order-sensitive result.
 
 ## A field's type belongs to the dataset
 
 **R014-3.** Every field of a source dataset has exactly one type, drawn from
-`column_type`, and every value bound from that field carries it. A field's
-type is a property of the dataset, not of the values one extract happens to
-hold, so two extracts of the same dataset bind the same field to the same
-type.
+`column_type`, and every value bound from that field carries that type. A
+field's type is a property of the dataset, not of the values one extract
+happens to hold, so two extracts of the same dataset bind the same field
+to the same type.
 
 **R014-4.** Where the type comes from depends on the container:
 
@@ -114,7 +114,7 @@ recognizing missing values, ingestion applies the `str` row of R011's
 conversion table to every non-missing cell. In particular, a producer column
 declared `date` or `datetime` uses R016's lexical grammar and representations,
 exactly as an inline `types` declaration or a column conversion does. A
-A Parquet artifact instead supplies typed values under R027. A workflow link
+Parquet artifact instead supplies typed values under R027. A workflow link
 does not convert those values through text.
 
 ## Values are never inferred
@@ -149,7 +149,7 @@ where a handler exists.
 before typing. Every type admits it. R008's handlers answer for it.
 
 **R014-16.** In a delimited source, a field with no characters is missing,
-whether it was bare or quoted. No type admits an empty string from a
+whether the field was bare or quoted. No type admits an empty string from a
 delimited source. No collected-empty value is distinct from a missing one.
 
 **R014-17.** No text is a missing-value sentinel. `NA`, `NULL`, `.`,

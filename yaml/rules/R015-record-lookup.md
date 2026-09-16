@@ -12,14 +12,14 @@ applies_to: [root.record_lookups, record_lookup_class, expression.source,
 ## Intent
 
 Select one record from another input dataset and read several columns.
-Each reading column then reads the selected record.
+Each such column then reads the selected record.
 
 ## Boundaries
 
 This rule owns the `record_lookups` declaration: how a record is matched and
 chosen, what its name means, and what an unmatched output row receives. R003
 owns the implicit join a qualified source performs on its own, and R007 owns
-`mapping_from` and the per-column `multiple_matches` relaxation. Neither
+`mapping_from` and the per-column `multiple_matches` relaxation. Neither rule
 changes here: a record lookup reaches the same records by the same means and
 differs only in being named once and read many times.
 
@@ -86,7 +86,7 @@ comparison work.
 
 **R015-12.** A missing `between.value` is an incomplete match, answered before
 the right side is searched. A right-side record missing a stated bound is
-ineligible, and a complete value with no eligible record is `unmatched`. This
+ineligible. A complete value with no eligible record is `unmatched`. This
 is the interval join R003 names: the comparison is fixed, the bounds name
 right-side columns, and the value names one current-row variable, so a match
 against a table of irregular intervals is declared rather than re-expressed
@@ -141,7 +141,7 @@ Output keys are never missing, as R005 requires.
 
 **R015-18.** `unmatched` answers the second: a complete match value that no
 record carries. `missing` gives every column that reads the record lookup a
-missing value, and `fail` rejects the run.
+missing value. `fail` rejects the run.
 
 **R015-19.** Omitting `unmatched` keeps the behavior of the match the record
 lookup performs, so replacing an existing derivation with a record lookup
@@ -153,10 +153,10 @@ never changes what an absent record does:
   because R007 makes an unmatched lookup key fatal unless the specification
   answers for it.
 
-**R015-22.** A record lookup that matched a record whose value is missing is a
-different case from one that matched nothing. The first is a collected blank
-and the second is an absent record, and `unmatched` answers only for the
-second.
+**R015-22.** A record lookup that matched a record whose value is missing
+differs from a lookup that matched nothing. The first case is a collected
+blank and the second case is an absent record. `unmatched` answers only for
+an absent record.
 
 ## Rationale
 

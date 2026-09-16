@@ -11,8 +11,8 @@ applies_to: [expression.aggregate, aggregate_class.between,
 
 ## Intent
 
-Reduce many records to one value with one expression, without a registry entry
-per reducer and without host-language code.
+Reduce many records to one value with one expression. Avoid one registry entry
+per reducer and avoid host-language code.
 
 ## Boundaries
 
@@ -42,9 +42,9 @@ owns whether that candidate row is appended.
 
 ## Relations and identifiers
 
-**R013-2.** An identifier is `NAME` or `DATASET.NAME`, resolved under R002 in
-the same phase, so a reducer expression and a predicate never disagree about a
-name.
+**R013-2.** An identifier is `NAME` or `DATASET.NAME`. R002 resolves each
+identifier in the same phase. A reducer expression and predicate therefore
+never disagree about a name.
 
 **R013-3.** Every identifier in one expression must name one relation. Three
 forms exist and must not be mixed:
@@ -65,11 +65,11 @@ forms exist and must not be mixed:
 
 **R013-4.** A single expression naming two datasets, or mixing a qualified
 identifier with an unqualified one, is an error. A reduction is not a join. An
-expression combining values from two dataset relations binds each of them to a
-column first and composes the results with `compute`. R010 admits a qualified
-identifier only for a record selected by an R015 record lookup; it still
-rejects an arbitrary dataset-qualified identifier, so every join remains under
-R003 or R015.
+expression combining two dataset relations first binds each relation to a
+column and then combines the results with `compute`. R010 admits a qualified
+identifier only for a record selected by an R015 record lookup; it
+still rejects an arbitrary dataset-qualified identifier, so every join remains
+under R003 or R015.
 
 **R013-5.** An ODM contextual reference is not available in this grammar,
 because its item identifiers carry further periods. Bind it with a structured
@@ -118,12 +118,12 @@ identifier := name ["." name]
 number     := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
 ```
 
-`grammar/aggregate.yaml` is this grammar's single source. The block renders it,
-its vocabulary closes the reducer table below, and its cases record the text
-every implementation must accept or reject, the identifiers accepted text
-binds, and the parse it produces. Both repository validation and the R
-implementation read that file, so no transcription of this grammar can
-drift from it without failing.
+`grammar/aggregate.yaml` is this grammar's only source. The grammar block
+above renders its content. Its vocabulary closes the reducer table below.
+Its cases record the text each implementation must accept or reject, how
+accepted identifiers bind, and the parse each case produces. Repository
+validation and the R implementation read that file, so the grammar cannot drift
+without failure.
 
 **R013-11.** Precedence, associativity, and the permitted `function` names are
 R010's. Reducer and function names and `NULL` are case-insensitive; identifiers

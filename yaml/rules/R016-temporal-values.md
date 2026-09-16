@@ -72,7 +72,7 @@ and no offset.
 **R016-4.** Like every column type, both additionally admit the missing value.
 
 **R016-5.** Every combination of fields in range names one day or one civil
-moment, and every day or civil moment in range has one combination of fields.
+moment. Every day or civil moment in range has one combination of fields.
 Both value spaces are total and gapless.
 
 **R016-6.** Every value is complete and records how much was collected. A value
@@ -87,7 +87,7 @@ an omitted `ss` names second zero rather than claiming a coarser value, so a
 `datetime` is collected in full or it is not a value.
 
 **R016-8.** Where a value gets its collected precision is fixed by where the
-value came from, and only four origins exist:
+value came from. Only four origins exist:
 
 | Origin | Collected precision |
 |---|---|
@@ -127,8 +127,8 @@ whitespace is accepted, and no other separator or field order is recognised.
 Each runtime's own parser accepts a wider and a different set: a space
 separator, lowercase `t`, bare date read as a moment, and trailing `Z` are
 each read by one of them and not the other, so a rule admitting whatever a
-runtime happened to accept would not be portable. These are the cases that
-decision costs:
+runtime happened to accept would not be portable. These cases are the cost
+of the decision:
 
 | Rejected | Offered as | Why |
 |---|---|---|
@@ -179,11 +179,11 @@ behavior is this design's to choose, because each is a property of that
 runtime's type.
 
 **R016-19.** Prohibiting the zone removes the disagreement rather than
-arbitrating it, and it costs a study nothing it collects: a CDISC `--DTC` value
-is local site time and carries no offset. A study that does record one keeps it
-in its own column, where it is data a specification can read, and an instant-
-typed value can be added later without invalidating any specification written
-under this rule.
+arbitrating, and costs studies nothing they collect: a CDISC `--DTC` value is
+local site time and carries no offset. A study that records an offset keeps
+the offset in its own column, where a specification can read the offset as
+data, and an instant-typed value can be added later without invalidating any
+specification written under this rule.
 
 **R016-20.** Two consequences are worth stating, because both are failure modes
 this type does not have:
@@ -209,7 +209,7 @@ and prints them under its own rounding. Admitting one would mean two
 implementations that store, compare, and render the same collected value
 differently, and the design requires them to agree.
 
-**R016-25.** Whole seconds are exact in both, which is what fixes the
+**R016-25.** Whole seconds are exact in both, which fixes the
 representation:
 
 | Runtime | `date` | `datetime` |
@@ -252,7 +252,7 @@ chronologically under R007.
 
 **R016-31.** Unlike `float`, neither form takes a project setting. This rule
 fixes rendered precision at one day and one second, so a project has nothing
-left to declare.
+to declare.
 
 **R016-32.** Canonical text carries fields alone, so its collected precision is
 not observable outside the derivation. A temporal value converted to `str`
@@ -285,11 +285,11 @@ predicate the day satisfies. Every pair of non-missing values of one type stays
 ordered, which is what keeps an `order_by` term total and R007's comparability
 argument intact.
 
-**R016-36.** This is a decision and not an omission, and it is the one the
-imputed value itself forces. A completed date names a day: that is what
+**R016-36.** This is a decision and not an omission, and the imputed value
+itself forces that decision. A completed date names a day: that is what
 completing it did. An imputed operand that lost a comparison would have to
 denote something else: the interval its collected components still admit, or a
-day carrying a rank against collected ones -- and either is a different value
+day carrying a rank against collected dates -- and either is a different value
 space with its own ordering, its own canonical text, and its own conversions.
 That is a type this design does not have, not a property of the two it does.
 

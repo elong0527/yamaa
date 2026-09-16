@@ -51,17 +51,16 @@ placeholder := "{" variable "}"
 text        := one or more R019 scalar values other than "{" and "}"
 ```
 
-**R012-5.** `grammar/string-template.yaml` is this grammar's single
-source. The block renders the grammar. `grammar/string-template.yaml`
-cases record the literal text and placeholders every implementation must
-produce and the templates every implementation must reject.
+**R012-5.** `grammar/string-template.yaml` is the grammar's only source.
+The grammar block above renders its content. Its cases record the literal
+text and placeholders each implementation must produce. The cases also
+record the templates each implementation must reject.
 
-**R012-6.** Repository validation and the R implementation both read
-that file, so no transcription of this grammar can drift
-without failing.
+**R012-6.** Repository validation and the R implementation read
+`grammar/string-template.yaml`. The grammar cannot drift without a failure.
 
-**R012-7.** The `variable` contents must satisfy the schema type of that
-name exactly. Whitespace is therefore not ignored inside braces.
+**R012-7.** The contents of `variable` must satisfy that variable's schema
+type exactly. Whitespace is therefore not ignored inside braces.
 
 **R012-8.** `{{` emits one literal `{` and `}}` emits one literal `}`.
 The pairs take precedence while scanning, so `{{{SITEID}}}` produces
@@ -74,13 +73,11 @@ function calls, and nested placeholders are invalid. In particular,
 
 ## Binding and evaluation
 
-**R012-10.** Each placeholder is one variable reference under R002.
-Qualified and unqualified names have the same meaning they have in a
-field typed as `variable`.
+**R012-10.** Each placeholder is a variable reference under R002. Qualified
+and unqualified names have the meanings R002 gives a field typed as `variable`.
 
-**R012-11.** R001 collects all placeholders as dependencies before
-evaluation; repeated placeholders contribute one dependency but are
-replaced at every position where they occur.
+**R012-11.** R001 collects all placeholders as dependencies before evaluation.
+Repeated placeholders add one dependency but are replaced wherever they appear.
 
 **R012-12.** When every dependency is complete, replace each placeholder with
 its string value and unescape brace pairs. Placeholder values stay unconverted.
@@ -97,10 +94,9 @@ template itself is empty.
 ## Rationale
 
 The template language admits only variable references and literal text.
-Brace-pair escaping takes precedence while scanning, so literal braces
-stay expressible. The bare shorthand carries no missing handler, so
-specifications opt into a replacement explicitly through the canonical
-form.
+Brace-pair escaping takes precedence while scanning, so literal braces remain
+expressible. The bare shorthand has no missing handler. A specification uses
+the canonical form to select a replacement explicitly.
 
 ## Errors
 
