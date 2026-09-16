@@ -25,6 +25,14 @@ New to the suite? Read [`sdtm-dm-basic`](sdtm-dm-basic/) for direct mapping,
 [`sdtm-lb-findings`](sdtm-lb-findings/) for row construction, and
 [`adam-adlb-bds`](adam-adlb-bds/) for a full BDS derivation, in that order.
 
+## Lifecycle
+
+Each example carries a lifecycle badge showing its review state:
+
+- `draft`: first commit.
+- `reviewed`: has discussion comments or GitHub issues.
+- `finalized`: human decision to finalize.
+
 ## Index
 
 An example that cannot express something records a design finding. The suite

@@ -35,6 +35,9 @@ button:focus-visible, a:focus-visible, select:focus-visible, [tabindex]:focus-vi
 .title-block { max-width: 900px; min-width: 0; }
 .eyebrow { margin: 0 0 6px; color: var(--green); font-size: 12px; font-weight: 750; letter-spacing: .06em; }
 h1 { margin: 0; font-size: clamp(24px, 2.1vw, 32px); line-height: 1.2; font-weight: 650; letter-spacing: -.025em; }
+.title-block h1 { display: inline; }
+.lifecycle-badge { display: inline-block; margin-left: 10px; vertical-align: middle; }
+.lifecycle-badge img { vertical-align: middle; }
 .metrics { display: flex; gap: 24px; margin: 0; padding: 0 4px 1px 20px; flex-shrink: 0; }
 .metrics div { display: flex; flex-direction: column-reverse; gap: 3px; }
 .metrics dt { color: var(--muted); font-size: 13px; white-space: nowrap; }

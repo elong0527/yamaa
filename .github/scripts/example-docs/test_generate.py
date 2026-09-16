@@ -308,8 +308,49 @@ class DashboardTests(unittest.TestCase):
 
     def test_dashboard_badge_is_not_rendered_on_its_own_page(self):
         page = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
-        self.assertNotIn("shields.io", page)
+        self.assertNotIn("badge/Dashboard", page)
         self.assertIn("Create DM from EDC extract", page)
+
+    def test_readme_lifecycle_extracts_state_and_badge_url(self):
+        text = (
+            "# Example\n\n"
+            "[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://example.org/x.html)"
+            " [![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)]"
+            "(https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)\n"
+        )
+        self.assertEqual(
+            generate.readme_lifecycle(text),
+            ("finalized", "https://img.shields.io/badge/Lifecycle-finalized-brightgreen"),
+        )
+
+    def test_readme_lifecycle_defaults_to_draft_without_badge(self):
+        self.assertEqual(
+            generate.readme_lifecycle("# Example\n\nBody.\n"),
+            ("draft", "https://img.shields.io/badge/Lifecycle-draft-lightgrey"),
+        )
+
+    def test_readme_lifecycle_defaults_to_draft_for_unknown_state(self):
+        text = "[![Lifecycle: archived](https://img.shields.io/badge/Lifecycle-archived-red)](https://example.org)\n"
+        self.assertEqual(
+            generate.readme_lifecycle(text),
+            ("draft", "https://img.shields.io/badge/Lifecycle-draft-lightgrey"),
+        )
+
+    def test_dashboard_renders_lifecycle_badge_beside_title(self):
+        finalized = generate.render_example(generate.EXAMPLES / "adam-adsl-age-group").decode("ascii")
+        self.assertIn('<img src="https://img.shields.io/badge/Lifecycle-finalized-brightgreen"', finalized)
+        self.assertIn('alt="Lifecycle: finalized"', finalized)
+        self.assertIn(
+            '<a class="lifecycle-badge" href="https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle">',
+            finalized,
+        )
+        draft = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
+        self.assertIn('<img src="https://img.shields.io/badge/Lifecycle-draft-lightgrey"', draft)
+        self.assertIn('alt="Lifecycle: draft"', draft)
+        self.assertIn(
+            '<a class="lifecycle-badge" href="https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle">',
+            draft,
+        )
 
     def test_unterminated_csv_is_not_silently_repaired(self):
         page = generate.render_example(generate.EXAMPLES / "negative-source-unterminated-quote").decode("ascii")
