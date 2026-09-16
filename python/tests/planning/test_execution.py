@@ -643,7 +643,7 @@ def test_a_row_phase_lookup_cannot_match_on_a_later_phase_value() -> None:
 
 
 def test_the_plan_reports_the_keys_every_qualified_source_matches_on() -> None:
-    # R003-38: a reviewer sees which same-named columns the join matches on
+    # R003-39: a reviewer sees which same-named columns the join matches on
     # rather than inferring them from two schemas.
     plan = plan_two(
         [
@@ -741,7 +741,7 @@ def test_a_source_filter_names_a_field_the_dataset_carries() -> None:
 
 
 def test_an_output_column_source_has_no_records_to_filter() -> None:
-    # R003-39: the source reads one completed value, not a right side.
+    # R003-38: the source reads one completed value, not a right side.
     spec = specification(
         [
             Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
@@ -759,7 +759,7 @@ def test_an_output_column_source_has_no_records_to_filter() -> None:
 
     assert diagnostic.condition == "prohibited_construct"
     assert diagnostic.spec_paths == ("columns.A.derivation.source.filter",)
-    assert diagnostic.requirement == "R003-39"
+    assert diagnostic.requirement == "R003-38"
 
 
 def test_a_grouped_row_template_source_has_no_records_to_filter() -> None:
@@ -781,7 +781,7 @@ def test_a_grouped_row_template_source_has_no_records_to_filter() -> None:
     diagnostic = filter_diagnostics(spec)[0]
 
     assert diagnostic.condition == "prohibited_construct"
-    assert diagnostic.requirement == "R003-39"
+    assert diagnostic.requirement == "R003-38"
 
 
 def test_a_record_lookup_source_has_already_chosen_its_record() -> None:
@@ -807,7 +807,7 @@ def test_a_record_lookup_source_has_already_chosen_its_record() -> None:
     diagnostic = filter_diagnostics(spec)[0]
 
     assert diagnostic.condition == "prohibited_construct"
-    assert diagnostic.requirement == "R003-39"
+    assert diagnostic.requirement == "R003-38"
 
 
 def test_a_filtered_source_reads_records_without_depending_on_their_keys() -> None:

@@ -128,7 +128,7 @@ class PlannedRecordLookup(_FrozenModel):
 class ResolvedJoin(_FrozenModel):
     """The columns one qualified reference resolved to matching on.
 
-    R003-38 makes validation report the inferred applicable keys for every
+    R003-39 makes validation report the inferred applicable keys for every
     qualified source, so a reviewer sees which same-named columns the join
     matches on rather than having to infer them from two schemas. A record
     lookup reports the same thing through `PlannedRecordLookup.match_fields`.
@@ -583,7 +583,7 @@ def _filtered_source_references(
                 "prohibited_construct",
                 filter_path,
                 {"identifier": variable if isinstance(variable, str) else None},
-                requirement="R003-39",
+                requirement="R003-38",
             )
         ]
     ast = _parse_predicate_at(selector, filter_path, diagnostics)
@@ -1326,7 +1326,7 @@ def _with_relation_dependencies(
     """
     extra: list[str] = []
     # One reading per relation this derivation reaches: an aggregate names
-    # the same right side from its `expr` and its `filter`, and R003-38 asks
+    # the same right side from its `expr` and its `filter`, and R003-39 asks
     # for the keys the join matches on, not for one line per mention.
     checked: set[str] = set()
     for reference in references:

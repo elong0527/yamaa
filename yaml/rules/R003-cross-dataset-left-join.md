@@ -209,14 +209,14 @@ handled.
 the right-side relation, or operands whose types are not comparable:
 fail under R013.
 
-**R003-39.** A `filter` on a source with no records to select among: fail
+**R003-38.** A `filter` on a source with no records to select among: fail
 as a prohibited construct. An unqualified source reads one completed
 output column, a grouped row template's source reads one group key
 (R001-7), and a record lookup has already chosen its record (R015).
 
 ## Review
 
-**R003-38.** Validation reports the inferred applicable keys for every
+**R003-39.** Validation reports the inferred applicable keys for every
 qualified source. A reviewer sees which same-named columns the join
 matches on, the type each side declares for the columns, and the coarser
 grain a reduction declared in place of the keys.
