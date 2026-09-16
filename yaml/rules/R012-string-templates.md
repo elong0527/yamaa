@@ -52,10 +52,9 @@ text        := one or more R019 scalar values other than "{" and "}"
 ```
 
 **R012-5.** `grammar/string-template.yaml` is this grammar's single
-source. The block above renders that grammar. The grammar file's cases
-record the literal text and placeholders every implementation must
-produce, and record the templates every implementation
-must reject.
+source. The block renders the grammar. `grammar/string-template.yaml`
+cases record the literal text and placeholders every implementation must
+produce and the templates every implementation must reject.
 
 **R012-6.** Repository validation and the R implementation both read
 that file, so no transcription of this grammar can drift
