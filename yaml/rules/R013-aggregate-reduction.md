@@ -34,11 +34,11 @@ accepts exactly one record and fails when several are present.
 
 ## Scope
 
-**R013-1.** An `aggregate_expression` evaluates over records of one relation
-and returns one value per group. The expression therefore never changes row
-count. R003 joins a right-side reduction to constructed rows. An output-row
-reduction broadcasts under R007. A grouped row template asks the expression
-for one value while R001 owns whether that candidate row is appended.
+**R013-1.** An `aggregate_expression` evaluates records from one relation and
+returns one value per group. The expression never changes row count. R003 joins
+a right-side reduction to constructed rows. An output-row reduction broadcasts
+under R007. A grouped row template asks the expression for one value while R001
+owns whether that candidate row is appended.
 
 ## Relations and identifiers
 

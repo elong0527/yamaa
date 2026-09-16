@@ -27,12 +27,11 @@ and this rule owns what their values mean.
 
 ## Source record order
 
-**R014-1.** The sequence of records in a stored source is part of the input
-contract. A reader must deliver records in stored order and must
-preserve that order after field decoding and typing. Parallel reads, batches,
-partitions, or an engine's scan plan must not reorder them. Filtering
-preserves the relative order of the records that remain. R001 uses this
-sequence as base-record and grouped-input order, R007 uses it to break
+**R014-1.** Stored record order is part of the input contract. A reader must
+return records in stored order after field decoding and typing. Parallel reads,
+batches, partitions, or an engine's scan plan must not reorder records.
+Filtering preserves the relative order of the records that remain. R001 uses
+this sequence as base-record and grouped-input order, R007 uses it to break
 window ties, and R013 consumes it for ordered floating-point reduction.
 
 **R014-2.** Record order is not a substitute for a business key or a declared
