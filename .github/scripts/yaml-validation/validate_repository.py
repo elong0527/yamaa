@@ -9602,6 +9602,7 @@ def check_yaml_files(root: Path):
         )
     )
     errors.extend(validate_examples_layout(root))
+    errors.extend(validate_examples_define_documents(root))
     warnings.extend(validate_join_key_inference(root))
     errors.extend(validate_expected_error_contracts(root))
     errors.extend(validate_csv_shapes(root))
@@ -9859,6 +9860,39 @@ def validate_join_key_inference(root: Path):
                     f"matches on keys [{', '.join(applicable)}]"
                 )
     return warnings
+
+
+def validate_examples_define_documents(root: Path):
+    """Validate each study document against the entry point R026 defines.
+
+    A define document is a separate entry point with its own class, so the
+    specification schema never sees it. Nothing else reads these files, and
+    a field renamed in the specification language would otherwise reach one
+    unnoticed.
+    """
+    errors = []
+    documents = sorted((root / 'yaml' / 'examples').glob('*/define.yaml'))
+    if not documents:
+        return errors
+
+    env, env_errors = build_schema_env(root, entrypoint='schema_define.yaml')
+    if env is None:
+        return env_errors
+    errors.extend(env_errors)
+
+    for path in documents:
+        label = str(path.relative_to(root))
+        try:
+            with open(path, 'r', encoding='utf-8') as handle:
+                document = yaml.load(handle, Loader=UniqueKeyLoader)
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
+            errors.append(f"ERROR: {label}: {exc}")
+            continue
+        if not isinstance(document, dict):
+            errors.append(f"ERROR: {label}: document must be a mapping")
+            continue
+        errors.extend(validate_type(document, ['define_class'], env, label))
+    return errors
 
 
 def validate_examples_layout(root: Path):

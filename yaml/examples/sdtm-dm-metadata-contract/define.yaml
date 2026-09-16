@@ -84,7 +84,7 @@ codelists:
       version: "2020"
       href: https://www.iso.org/iso-3166-country-codes.html
 
-input:
+datasets:
   - id: DM
     spec: spec.yaml
 

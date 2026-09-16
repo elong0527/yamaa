@@ -5055,6 +5055,33 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('How to fix', result.stdout)
 
+    def test_define_documents_are_validated_against_their_own_class(self):
+        # R026 gives the study document its own entry point, so the
+        # specification schema never reads it: nothing else would report a
+        # field the document does not declare.
+        root = TOOL_PATH.parents[3]
+
+        self.assertEqual(VALIDATOR.validate_examples_define_documents(root), [])
+
+    def test_a_define_document_field_outside_its_class_is_reported(self):
+        root = TOOL_PATH.parents[3]
+        source = root / 'yaml' / 'examples' / 'sdtm-dm-metadata-contract'
+        with tempfile.TemporaryDirectory() as temp_dir:
+            copy = Path(temp_dir)
+            shutil.copytree(root / 'yaml', copy / 'yaml', dirs_exist_ok=True)
+            document = (
+                copy / 'yaml' / 'examples' / source.name / 'define.yaml'
+            )
+            document.write_text(
+                document.read_text().replace('\ndatasets:\n', '\ninput:\n', 1)
+            )
+
+            errors = VALIDATOR.validate_examples_define_documents(copy)
+
+        message = '\n'.join(errors)
+        self.assertIn("unknown field 'input' for class define_class", message)
+        self.assertIn("missing required field 'datasets'", message)
+
     def test_example_layout_positive_has_error(self):
         ex_dir = self.root_dir / 'yaml' / 'examples' / 'positive-bad'
         ex_dir.mkdir(parents=True, exist_ok=True)
