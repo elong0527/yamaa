@@ -20,8 +20,8 @@ source binds, R004 owns predicate grammar and `LIKE`, R006 owns schema
 structure, R007 owns expression dispatch and order terms, R008 owns missing
 handlers, R012 owns template grammar, R013 owns aggregate grammar, R014
 owns source-format ingestion, and R022 owns regular expressions. This rule
-does not reinterpret their pattern syntax or matching units, and R022 applies
-them to the scalar values defined here.
+does not reinterpret pattern syntax or matching units. R022 applies its
+matching to the scalar values defined here.
 
 ## Source and data boundary
 
@@ -145,15 +145,15 @@ evidence.
 ## Rationale
 
 Host locales, Unicode versions, and default normalizations differ between R
-and Python installations, so any behavior that depends on them cannot
-satisfy the parity requirement. The ASCII source boundary keeps every
-specification, rule, and implementation file comparable byte for byte,
-while confining real-world text to data fixtures where exact bytes are
-checked in. Casing is ASCII-only because full Unicode case folding would
-pin a Unicode version into the contract and break independent
-implementations on different data. Equality and order are defined on raw
-scalar values for the same reason: they are computable identically
-everywhere without a collator, a normalizer, or a character database.
+and Python installations. Behavior that depends on these host differences
+cannot satisfy the parity requirement. The ASCII source boundary keeps every
+specification, rule, and implementation file comparable byte for byte, while
+real-world text stays in data fixtures with exact bytes checked in.
+Casing is ASCII-only: full Unicode case folding would pin a Unicode version
+into the contract and break independent implementations on different data.
+Equality and order are defined on raw scalar values for the same reason. Raw
+scalar values compute identically everywhere, with no collator,
+normalizer, or character database.
 
 ## Errors
 
