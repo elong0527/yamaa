@@ -146,7 +146,7 @@ rounding: they return an integral part exactly, with no mode to choose, and
 
 **R010-14.** `int` is a 64-bit signed integer. `float` is IEEE 754 binary64.
 
-**R010-15.** `+`, `-`, `*`: `int` with `int` returns `int`; any `float`
+**R010-15.** `+`, `-`, `*` return `int` for `int` operands. A `float`
 operand returns `float`.
 
 **R010-16.** `/` always returns `float`. There is no integer division. Write
