@@ -3,11 +3,14 @@ domain: DM
 keys: [STUDYID, USUBJID]
 
 input:
-  ODM: input/odm.csv
+  ODM:
+    path: input/odm.csv
+    types:
+      StudyEventRepeatKey: int
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, SEX, AGE, ARM, ACTARM]
+  columns: [DOMAIN, STUDYID, USUBJID, SEX, AGE]
 
 columns:
   - name: DOMAIN
@@ -27,12 +30,6 @@ columns:
     label: Unique Subject Identifier
     derivation:
       source: ODM.SubjectKey
-
-  - name: SUBJID
-    type: str
-    label: Subject Identifier for the Study
-    derivation:
-      source: USUBJID
 
   - name: SEX
     type: str
@@ -55,19 +52,3 @@ columns:
       source:
         filter: ODM.ItemOID = 'IT.DM.AGE'
         variable: ODM.Value
-
-  - name: ARM
-    type: str
-    label: Description of Planned Arm
-    derivation:
-      coalesce:
-        sources:
-          - filter: ODM.ItemOID = 'IT.DM.ARM'
-            variable: ODM.Value
-        default: Unassigned
-
-  - name: ACTARM
-    type: str
-    label: Description of Actual Arm
-    derivation:
-      source: ARM

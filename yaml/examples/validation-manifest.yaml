@@ -265,6 +265,16 @@ fixtures:
     condition: duplicate_identifier
     spec_paths: [input.ADLB, domain]
     validator: name_contract
+  negative-source-filter-unreachable-field:
+    rule: R003
+    condition: unknown_field
+    spec_paths: [columns.AGE.derivation.source.filter]
+    validator: predicate
+  negative-source-filter-without-records:
+    rule: R003
+    condition: prohibited_construct
+    spec_paths: [columns.ACTARM.derivation.source.filter]
+    validator: source_contract
   negative-source-undeclared-field:
     rule: R002
     condition: unknown_field

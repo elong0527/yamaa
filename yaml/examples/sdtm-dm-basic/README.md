@@ -11,8 +11,7 @@ collected item; e.g. subject 001 has **SEX**, **AGE** and **ARM** rows.
 **Variables:**
 
 - **SEX**: recorded sex coded `M` (Male), `F` (Female), `U` when missing,
-  blank, not collected at all, or any other value. The collected item is
-  read into a working column, **SEXRAW**, that the result does not carry.
+  blank, not collected at all, or any other value.
 - **AGE**: age in whole years as collected; blank when missing.
 - **ARM**: planned arm as collected; `Unassigned` when none was collected.
 - **ACTARM**: actual arm; in this simple example it always equals the
@@ -21,7 +20,8 @@ collected item; e.g. subject 001 has **SEX**, **AGE** and **ARM** rows.
 **Note:** one record for each subject the extract carries, whichever items
 that subject has. The keys **STUDYID** and **USUBJID** set that grain, so
 no filter decides how many records come out, and a subject collected twice
-does not become two records. Defaults fill **SEX**, **AGE**, **ARM** and
-**ACTARM** when the item was not collected.
+does not become two records. Each variable names the collected item it
+reads, and the default fills **SEX**, **AGE**, **ARM** and **ACTARM** when
+the subject has no row for it.
 
 **Standard:** SDTM | **Domain:** DM

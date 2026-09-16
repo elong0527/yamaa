@@ -110,11 +110,8 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
         == (DM_EXAMPLE / "expected/dm.csv").read_bytes()
     )
     assert [(item.spec_path, item.count) for item in result.handler_counts] == [
-        ("columns.SEXRAW.derivation.source.missing", 0),
         ("columns.SEX.derivation.mapping.missing", 1),
         ("columns.SEX.derivation.mapping.unmapped", 1),
-        ("columns.AGE.derivation.source.missing", 2),
-        ("columns.ARM.derivation.source.missing", 2),
     ]
 
 
@@ -238,7 +235,6 @@ def test_column_enrichment_keeps_the_constructed_row_count() -> None:
         "STUDYID",
         "USUBJID",
         "SUBJID",
-        "SEXRAW",
         "SEX",
         "AGE",
         "ARM",
@@ -284,7 +280,6 @@ def test_verification_and_output_hooks_run_in_normative_order() -> None:
         "column:STUDYID",
         "column:USUBJID",
         "column:SUBJID",
-        "column:SEXRAW",
         "column:SEX",
         "column:AGE",
         "column:ARM",

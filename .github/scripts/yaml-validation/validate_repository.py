@@ -260,6 +260,8 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R001', 'key_dependency'): {'column', 'dependency'},
     ('R002', 'duplicate_identifier'): {'identifier'},
     ('R002', 'unknown_field'): {'identifier'},
+    ('R003', 'prohibited_construct'): {'identifier'},
+    ('R003', 'unknown_field'): {'identifier'},
     ('R004', 'invalid_predicate'): {'predicate'},
     ('R004', 'incompatible_input_type'): {'left_type', 'right_type'},
     ('R004', 'unknown_field'): {'identifier'},
@@ -5167,11 +5169,18 @@ def source_filter_errors(payload, path, datasets):
         if isinstance(variable, str) and '.' in variable
         else None
     )
-    right_resolver = predicate_resolver(
-        qualified={qualifier: datasets.get(qualifier, {})}
-        if qualifier is not None
-        else {}
-    )
+    if qualifier is None:
+        # R003-39: an unqualified source reads one completed output column,
+        # so the predicate has no records to select among.
+        return [
+            validation_diagnostic(
+                f"{path}.filter",
+                'prohibited_construct',
+                'a source reading one completed value selects among no records',
+                context={'identifier': variable},
+            )
+        ]
+    right_resolver = predicate_resolver(qualified={qualifier: datasets.get(qualifier, {})})
     return validate_predicate_at(payload['filter'], f"{path}.filter", right_resolver)
 
 

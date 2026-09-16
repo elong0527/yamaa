@@ -1,0 +1,37 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+
+input:
+  ODM: input/odm.csv
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, AGE]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: DM
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ODM.SubjectKey
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.DM.AGE' AND USUBJID <> '002'
+        variable: ODM.Value

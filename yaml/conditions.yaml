@@ -51,7 +51,7 @@ conditions:
   not_missing_failed: {rules: [R009], phases: [verification]}
   predicate_failed: {rules: [R009], phases: [verification]}
   producer_contract_mismatch: {rules: [R014], phases: [validation]}
-  prohibited_construct: {rules: [R010, R013], phases: [validation]}
+  prohibited_construct: {rules: [R003, R010, R013], phases: [validation]}
   prohibited_function: {rules: [R010, R013], phases: [validation]}
   publication_failed: {rules: [R020], phases: [output]}
   qualified_identifier: {rules: [R010], phases: [validation]}
@@ -79,7 +79,7 @@ conditions:
   undeclared_column: {rules: [R005], phases: [validation]}
   unique_failed: {rules: [R009], phases: [verification]}
   unknown_artifact_profile: {rules: [R020], phases: [validation]}
-  unknown_field: {rules: [R002, R004, R010, R013, R014], phases: [validation]}
+  unknown_field: {rules: [R002, R003, R004, R010, R013, R014], phases: [validation]}
   unmapped_key: {rules: [R008], phases: [mapping]}
   unmapped_value: {rules: [R008], phases: [mapping]}
   unmatched_key: {rules: [R015], phases: [join]}

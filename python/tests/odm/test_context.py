@@ -102,8 +102,8 @@ def test_form_scoped_fixture_resolves_only_the_current_form() -> None:
     assert results[-1].handled_by == "missing"
 
 
-def test_dm_fixture_resolves_contextual_age_and_arm_without_dropping_rows() -> None:
-    root = REPOSITORY / "yaml/examples/sdtm-dm-basic"
+def test_a_committed_fixture_resolves_one_item_per_form_without_dropping_rows() -> None:
+    root = REPOSITORY / "yaml/examples/odm-form-scoped-item-resolution"
     loaded_spec = load_specification(root / "spec.yaml", REPOSITORY / "yaml")
     sources = load_source_tables(
         loaded_spec.specification.input,
@@ -116,34 +116,26 @@ def test_dm_fixture_resolves_contextual_age_and_arm_without_dropping_rows() -> N
     rows = [
         row
         for row in runtime_rows(sources["ODM"].table)
-        if row["ItemOID"] == "IT.DM.SEX"
+        if row["ItemOID"] == "IT.LB.RESULT"
     ]
-    expressions = {
-        column.name: column.derivation.value
+    collected = next(
+        column.derivation.value
         for column in loaded_spec.specification.columns
-        if column.name in {"AGE", "ARM"} and column.derivation is not None
-    }
+        if column.name == "LBDTC" and column.derivation is not None
+    )
 
-    ages = [
-        evaluate_expression(expressions["AGE"], index.context({"ODM": row}))
-        for row in rows
-    ]
-    arms = [
-        evaluate_expression(expressions["ARM"], index.context({"ODM": row}))
-        for row in rows
+    dates = [
+        evaluate_expression(collected, index.context({"ODM": row})) for row in rows
     ]
 
-    assert ages == [
-        ValueResult(value="34"),
-        ValueResult(value="28"),
+    # R002-23: each result reads the collection date of its own form, and the
+    # form that collected no date answers through its declared handler.
+    assert dates == [
+        ValueResult(value="2025-01-02"),
+        ValueResult(value="2025-01-03"),
+        ValueResult(value="2025-01-04"),
+        ValueResult(value="2025-01-05"),
         ValueResult(value=MISSING, handled_by="missing"),
-        ValueResult(value=MISSING, handled_by="missing"),
-    ]
-    assert arms == [
-        ValueResult(value="Placebo"),
-        ValueResult(value="Vitamin D3"),
-        ValueResult(value="Unassigned", handled_by="missing"),
-        ValueResult(value="Unassigned", handled_by="missing"),
     ]
 
 

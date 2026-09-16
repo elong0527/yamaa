@@ -7,7 +7,7 @@ input:
 
 output:
   path: dm.csv
-  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, SEX, AGE, ARM, ACTARM]
+  columns: [DOMAIN, STUDYID, USUBJID, ARM, ACTARM]
 
 columns:
   - name: DOMAIN
@@ -28,34 +28,6 @@ columns:
     derivation:
       source: ODM.SubjectKey
 
-  - name: SUBJID
-    type: str
-    label: Subject Identifier for the Study
-    derivation:
-      source: USUBJID
-
-  - name: SEX
-    type: str
-    label: Sex
-    derivation:
-      mapping:
-        source:
-          filter: ODM.ItemOID = 'IT.DM.SEX'
-          variable: ODM.Value
-        dict:
-          Male: M
-          Female: F
-        missing: U
-        unmapped: U
-
-  - name: AGE
-    type: int
-    label: Age
-    derivation:
-      source:
-        filter: ODM.ItemOID = 'IT.DM.AGE'
-        variable: ODM.Value
-
   - name: ARM
     type: str
     label: Description of Planned Arm
@@ -70,4 +42,6 @@ columns:
     type: str
     label: Description of Actual Arm
     derivation:
-      source: ARM
+      source:
+        filter: ODM.ItemOID = 'IT.DM.ARM'
+        variable: ARM

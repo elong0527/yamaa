@@ -33,13 +33,7 @@ NEGATIVE = "negative-column-type-unknown"
 UNSUPPORTED = "adam-adsl-bmi-function"
 
 # What the engine reports for every handler path sdtm-dm-basic declares.
-# R008-21 makes the path that never fired reportable, so it is listed here.
 POSITIVE_HANDLERS = (
-    HandlerObservation(
-        spec_path="columns.SEXRAW.derivation.source.missing",
-        handler="missing",
-        count=0,
-    ),
     HandlerObservation(
         spec_path="columns.SEX.derivation.mapping.missing",
         handler="missing",
@@ -49,16 +43,6 @@ POSITIVE_HANDLERS = (
         spec_path="columns.SEX.derivation.mapping.unmapped",
         handler="unmapped",
         count=1,
-    ),
-    HandlerObservation(
-        spec_path="columns.AGE.derivation.source.missing",
-        handler="missing",
-        count=2,
-    ),
-    HandlerObservation(
-        spec_path="columns.ARM.derivation.source.missing",
-        handler="missing",
-        count=2,
     ),
 )
 
@@ -280,7 +264,7 @@ class TestHandlerCountMutations:
 
     def test_a_drifted_count_fails(self, tmp_path: Path) -> None:
         required = list(POSITIVE_HANDLERS)
-        required[3] = required[3].model_copy(update={"count": 1})
+        required[0] = required[0].model_copy(update={"count": 2})
 
         verdict = compare_example(
             run(EXAMPLES / POSITIVE, tmp_path),

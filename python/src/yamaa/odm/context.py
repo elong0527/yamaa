@@ -132,6 +132,77 @@ def _compare_runtime(left: RuntimeValue, right: RuntimeValue) -> int:
     return 0
 
 
+def select_one(
+    dataset: str,
+    fields: tuple[str, ...],
+    matches: list[_IndexedRow],
+    selection: MultipleMatchSelection,
+    variable: str,
+    field_name: str,
+) -> Resolution:
+    """Order the eligible records and keep the one R008-13 declares.
+
+    The records reach one value, so the selection is over records the
+    specification already narrowed: a single one is that value and fires no
+    handler, and ties fall back to the order the source carries them in.
+    """
+    terms: list[tuple[OrderTerm, str]] = []
+    for term in selection.order_by:
+        if "." not in term.variable:
+            return _failure(
+                "validation",
+                "unknown_field",
+                {"identifier": term.variable},
+            )
+        qualifier, field = term.variable.split(".", 1)
+        if qualifier != dataset or field not in fields:
+            return _failure(
+                "validation",
+                "unknown_field",
+                {"identifier": term.variable},
+            )
+        terms.append((term, field))
+
+    if len(matches) == 1:
+        return ResolvedValue(value=matches[0].values[field_name])
+
+    def compare(left: _IndexedRow, right: _IndexedRow) -> int:
+        for term, field in terms:
+            left_value = left.values[field]
+            right_value = right.values[field]
+            left_missing = left_value is MISSING
+            right_missing = right_value is MISSING
+            if left_missing or right_missing:
+                if left_missing and right_missing:
+                    continue
+                missing_first = term.nulls == "first"
+                result = -1 if left_missing == missing_first else 1
+            else:
+                result = _compare_runtime(  # type: ignore[arg-type]
+                    left_value, right_value
+                )
+                if term.direction == "desc":
+                    result = -result
+            if result:
+                return result
+        return left.source_position - right.source_position
+
+    try:
+        ordered = sorted(matches, key=cmp_to_key(compare))
+    except TypeError:
+        first = terms[0][0].variable if terms else variable
+        return _failure(
+            "validation",
+            "incompatible_input_type",
+            {"source": first},
+        )
+    chosen = ordered[0] if selection.keep == "first" else ordered[-1]
+    return ResolvedValue(
+        value=chosen.values[field_name],
+        handled_by="multiple_matches",
+    )
+
+
 class OdmItemIndex:
     """A source-ordered index over complete available ODM context plus ItemOID."""
 
@@ -203,61 +274,8 @@ class OdmItemIndex:
         variable: str,
     ) -> Resolution:
         """Order the eligible contextual matches and keep one (R008-13)."""
-        terms: list[tuple[OrderTerm, str]] = []
-        for term in selection.order_by:
-            if "." not in term.variable:
-                return _failure(
-                    "validation",
-                    "unknown_field",
-                    {"identifier": term.variable},
-                )
-            qualifier, field = term.variable.split(".", 1)
-            if qualifier != self.dataset or field not in self.fields:
-                return _failure(
-                    "validation",
-                    "unknown_field",
-                    {"identifier": term.variable},
-                )
-            terms.append((term, field))
-
-        if len(matches) == 1:
-            return ResolvedValue(value=matches[0].values["Value"])
-        eligible = matches
-
-        def compare(left: _IndexedRow, right: _IndexedRow) -> int:
-            for term, field in terms:
-                left_value = left.values[field]
-                right_value = right.values[field]
-                left_missing = left_value is MISSING
-                right_missing = right_value is MISSING
-                if left_missing or right_missing:
-                    if left_missing and right_missing:
-                        continue
-                    missing_first = term.nulls == "first"
-                    result = -1 if left_missing == missing_first else 1
-                else:
-                    result = _compare_runtime(  # type: ignore[arg-type]
-                        left_value, right_value
-                    )
-                    if term.direction == "desc":
-                        result = -result
-                if result:
-                    return result
-            return left.source_position - right.source_position
-
-        try:
-            ordered = sorted(eligible, key=cmp_to_key(compare))
-        except TypeError:
-            first = terms[0][0].variable if terms else variable
-            return _failure(
-                "validation",
-                "incompatible_input_type",
-                {"source": first},
-            )
-        chosen = ordered[0] if selection.keep == "first" else ordered[-1]
-        return ResolvedValue(
-            value=chosen.values["Value"],
-            handled_by="multiple_matches",
+        return select_one(
+            self.dataset, self.fields, matches, selection, variable, "Value"
         )
 
     def resolve(
@@ -437,16 +455,25 @@ class RuntimeContext:
                 feeding = eligible
             if not feeding:
                 return ResolvedValue(value=MISSING)
-            present = _distinct_values(
-                feeding_row[bound.field]
+            carrying = [
+                feeding_row
                 for feeding_row in feeding
                 if bound.field in feeding_row
                 and feeding_row[bound.field] is not MISSING
                 and feeding_row[bound.field] is not None
+            ]
+            present = _distinct_values(
+                feeding_row[bound.field] for feeding_row in carrying
             )
             if not present:
                 return ResolvedValue(value=runtime_value(row[bound.field]))
             if len(present) > 1:
+                if multiple_matches is not None:
+                    # R008-12: the specification says which of the records it
+                    # keeps, so the disagreement is answered rather than fatal.
+                    return self._select(
+                        bound.dataset, bound.field, carrying, multiple_matches
+                    )
                 # R001-12b counts values, not the records carrying them: a
                 # field constant over a subject's records is one value, two
                 # records disagreeing are two.
@@ -466,6 +493,41 @@ class RuntimeContext:
             multiple_matches=multiple_matches,
         )
 
+    def _select(
+        self,
+        dataset: str,
+        field_name: str,
+        records: Sequence[Mapping[str, object]],
+        multiple_matches: Mapping[str, object],
+    ) -> Resolution:
+        """Keep one of the records this key combination carries (R008-13)."""
+        try:
+            selection = MultipleMatchSelection.model_validate(
+                dict(multiple_matches), strict=True
+            )
+        except ValidationError:
+            return _failure(
+                "validation",
+                "invalid_field_type",
+                {"field": "multiple_matches"},
+            )
+        return select_one(
+            dataset,
+            self._fields(dataset),
+            [
+                _IndexedRow(source_position=position, values=dict(record))
+                for position, record in enumerate(records)
+            ],
+            selection,
+            f"{dataset}.{field_name}",
+            field_name,
+        )
+
+    def _fields(self, dataset: str) -> tuple[str, ...]:
+        return tuple(
+            column.name for column in self._index.plan.datasets[dataset].columns
+        )
+
     def _eligible(
         self,
         dataset: str,
@@ -481,9 +543,7 @@ class RuntimeContext:
                 "invalid_predicate",
                 {"predicate": selector, "position": error.position},
             )
-        fields = tuple(
-            column.name for column in self._index.plan.datasets[dataset].columns
-        )
+        fields = self._fields(dataset)
         kept: list[dict[str, object]] = []
         for position, record in enumerate(records):
             values = dict(record)
