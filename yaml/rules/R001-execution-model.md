@@ -192,7 +192,7 @@ R005 owns both.
 Row count changes only during row construction. A reviewer can therefore
 separate row grain from enrichment. The row templates and their input
 datasets fix how many rows exist before any column is derived. Dependency
-Dependency inference makes declaration order checkable and cycles visible.
+inference makes declaration order checkable and cycles visible.
 Evaluation order never follows mapping order or repeated reads of a partition.
 
 ## Errors

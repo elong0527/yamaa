@@ -12,7 +12,7 @@ applies_to: [define.codelists, codelist_class, codelist_item_class,
 
 Make a codelist one named, versioned object that columns share. State what a
 binding enforces. Reconcile a binding with any `allowed_values` verification.
-A study must declare its terminology once.
+A study must state terminology once, in one way.
 
 ## Boundaries
 
