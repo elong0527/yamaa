@@ -67,7 +67,7 @@ which claim the document reports.
 document binds it: R026-7 resolves each dataset to a declared standard of type
 `IG`. A specification does not name the standard. Which implementation-guide
 release changes between submissions, so binding it in the specification
-would version every dataset template against one study. This rule reads
+would version every dataset specification against one study. This rule reads
 the bound standard's published name as one of three closed **families**:
 
 | Family | Standard names |
@@ -260,8 +260,8 @@ closed and neither is extended by a specification.
 could only repeat or contradict the derivation, and declaring one is
 rejected. The standard describes `Collected` and `Protocol` as generally
 unused in that family rather than forbidden, and this design closes them
-out: a value that was neither computed, copied, nor assigned is the case
-`Other` exists for, and the value carries the description that says what
+out. A value that was neither computed, copied, nor assigned is the case
+`Other` exists for. The value carries the description that says what
 happened.
 
 **R024-37.** For `send`, every type is admitted and `source` must be absent.
@@ -336,7 +336,7 @@ method that replaces a missing value with a substitute declares `Imputation`.
 language neither parses nor evaluates the code, and a generated document
 carries the code unchanged. Nothing checks the code against the
 specification's own derivation, and this rule states that limit
-openly: an expression is documentation a sponsor supplies, not a second
+openly. An expression is documentation a sponsor supplies, not a second
 definition of the column.
 
 **R024-50.** No `expression` is generated from a derivation. A derivation has
@@ -371,7 +371,7 @@ a declared `Derived` origin.
 **R024-54.** Every family-dependent requirement is checked when R026 composes
 the specification into a document, because only the study document says which
 standard the identifier names. A specification that is never composed carries
-declarations no family has judged, which is correct: it is not yet part of
+declarations no family has judged. The specification is not yet part of
 a submission.
 
 ## Rationale
