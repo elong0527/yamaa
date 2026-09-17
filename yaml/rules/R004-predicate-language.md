@@ -33,7 +33,7 @@ final overrides; and by the `predicate` and `implies` verifications.
 
 **R004-2.** A predicate evaluates to `TRUE`, `FALSE`, or `UNKNOWN`. A filter
 retains a row or record only for `TRUE`. A verification holds only for
-`TRUE`; R009 defines the consequence when it does not hold.
+`TRUE`; otherwise R009 defines the consequence.
 
 ## Grammar
 
@@ -65,8 +65,8 @@ temporal    := "DATE" string | "DATETIME" string
 
 **R004-3.** `grammar/predicate.yaml` is the single grammar source. The block
 renders the file. Its `reserved` list closes the keywords below. Its cases
-state the text that each implementation must accept or reject, the bound
-identifiers in accepted text, and each accepted parse. Repository validation
+state which text each implementation must accept or reject, which identifiers
+accepted text binds, and each accepted parse. Repository validation
 and the R implementation read the file. A copied grammar that differs from the
 file fails validation.
 
@@ -179,12 +179,12 @@ summary:
 - **R004-27.** a `case` or override sees the values available to its enclosing
   derivation.
 
-**R004-28.** An identifier in a right-side predicate is qualified by that
-dataset's ID. An identifier over a completed or candidate output row is
-unqualified. An enclosing column derivation may also bind a qualified dataset
-or record-lookup field under R002, R003, and R015. A verification may read a
-declared record lookup for its completed row. No predicate can reach an
-undeclared relation.
+**R004-28.** An identifier in a right-side predicate is qualified by the
+right-side dataset's ID. An identifier over a completed or candidate output
+row is unqualified. An enclosing column derivation may also bind a qualified
+dataset or record-lookup field under R002, R003, and R015. A verification
+may read a declared record lookup for its completed row. No predicate can
+reach an undeclared relation.
 
 **R004-29.** R001 collects predicate identifiers for dependency ordering. A
 parser must therefore reject an unresolved name rather than treating a

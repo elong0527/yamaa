@@ -15,11 +15,11 @@ Enrich constructed rows from another dataset without repeating join keys.
 ## Boundaries
 
 This rule owns the implicit join from a qualified cross-dataset source and
-the source's right-side reduction. R007 owns `mapping_from`, whose keys are
-declared, not derived from output `keys`, and window or row-construction
-`filter` uses. R015 owns a named record lookup that reaches one record for
-several columns. A named record lookup performs its own join and has no
-other way to reach a right side.
+the source's right-side reduction. R007 owns `mapping_from` and the window
+and row-construction `filter` uses. `mapping_from` keys are declared, not
+derived from output `keys`. R015 owns a named record lookup that reaches
+one record for several columns. A named record lookup performs its own join
+and has no other way to reach a right side.
 
 ## Terminology
 
@@ -57,8 +57,7 @@ another type matches no such field. Without mutually comparable types, every
 row would receive missing. A complete right side would be reported as an
 absent record. A key typed on one side and given R014's default on the other
 needs repair, not a wider comparison. R007-19 sets the same requirement for
-operation inputs. R015-11 sets the same requirement for range operands. The
-join also requires comparable types.
+operation inputs. R015-11 sets the same requirement for range operands.
 
 ## Declared-key lookup
 
@@ -86,11 +85,11 @@ template. A scalar source then reads the current input record. An
 aggregate then reads that dataset. R007 registers the expression. R013
 defines the computation.
 
-**R003-18a.** A specification without `rows` reads that dataset the same
-way, over the records its key combination was derived from, which R001-12
-builds. The row has no single input record there, so the source reads one
-value across those records: R001-44 fails a column that finds two, and
-`multiple_matches` is what keeps one of them instead.
+**R003-18a.** A specification without `rows` reads the input dataset the
+same way, over the records its key combination was derived from, which
+R001-12 builds. In that case the row has no single input record, so the
+source reads one value across those records: R001-44 fails a column that
+finds two, and `multiple_matches` is what keeps one of them instead.
 
 **R003-19.** The aggregate's optional `filter` selects which right-side
 records enter that reduction:
@@ -130,8 +129,8 @@ source:
 
 **R003-21b.** Every operation naming a source accepts the filtered form.
 Outside the `source` expression it carries `variable` and `filter` alone:
-the binding handlers stay on `source`, and an operation that needs one
-composes through a named column under R002-13.
+the binding handlers stay on `source`, and an operation that needs
+a handler composes through a named column under R002-13.
 
 **R003-22.** In every place `filter` is a predicate over right-side
 records only.
@@ -175,8 +174,7 @@ direction and null placement as a window does.
 ## Rationale
 
 Join keys come from output `keys`. Specifications do not repeat keys for each
-cross-dataset reference. `mapping_from` declares separate pairs for right
-sides keyed on something else. A reduction yields at most one record per
+cross-dataset reference. A reduction yields at most one record per
 grouping key, so an aggregate never meets multiple matches. A reduction
 `group_by` coarser than applicable keys changes the join keys. R013 requires
 `group_by` columns to be output keys.

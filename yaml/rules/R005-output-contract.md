@@ -51,12 +51,12 @@ shorten the artifact. Each member of a numbered family (`SMQ01NAM`, `SMQ01CD`,
 `SMQ02NAM`, and onwards, or `CRIT1` beside `CRIT1FL`) is a declared column
 like any other, so the count is fixed when the specification is written. A
 study whose reference data outgrows that count is re-read against the data
-rather than left to fill the places it already has, and a second value
-competing for one declared place is the ordinary multiple-match failure R003
-defines rather than a new place. The members of one family name their
+rather than left to fill the places it already has. A second value
+competing for one declared place is the ordinary multiple-match failure
+R003 defines, not a new place. The members of one family name their
 grouping by position: `SMQ02NAM`, `SMQ02CD`, and `SMQ02SC` belong together
-because each carries the `02`, and nothing in the schema links them beyond
-it. A study that wants the grouping checkable records it in the columns'
+because each carries the `02`. Nothing in the schema links them beyond the
+`02`. A study that wants the grouping checkable records it in the columns'
 `metadata`; the schema does not.
 
 ## Column coverage
@@ -80,8 +80,7 @@ with no value, so partial row coverage is an error, not
 an implied missing value.
 
 **R005-9.** A specification with no `rows` entry must derive every column at
-column level. Requirement R005-8 is vacuous when there are no entries, so
-this states the base-driven case.
+column level. Requirement R005-8 is vacuous when there are no entries.
 
 **R005-10.** A `rows` derivation must target a declared column. A key in
 `derivations` that names no declared column is an error.
@@ -149,9 +148,9 @@ column's final value.
 
 **R005-27.** A row-level derivation therefore completes stages 1 to 4
 during row construction, and a column derivation that depends on it reads a
-converted value of the declared type. This matters because R007 permits no
-implicit conversion between operation inputs: an operation consuming a
-row-derived column must rely on its declared type.
+converted value of the declared type. The declared type matters because R007
+permits no implicit conversion between operation inputs: an operation
+consuming a row-derived column must rely on its declared type.
 
 **R005-28.** For a grouped row template, R001 evaluates its `filter` after
 stages 1 to 4 complete for every value on the candidate row. A discarded
@@ -187,8 +186,8 @@ twice.
 values of each row must be non-missing and unique across the artifact. Key
 validation happens before dataset verifications, which R009 runs last.
 String key values use R019 equality. Key order is significant to R003,
-which joins on the output keys a right side also carries. That subset
-is used for enrichment and does not change the identity asserted here.
+which joins on the output keys a right side also carries. The applicable
+keys are used for enrichment and do not change the identity asserted here.
 
 ## Artifact row order
 
@@ -217,8 +216,8 @@ total for every input: no tie is an error, no comparison is undefined, and
 no specification declares a term merely to make the result deterministic;
 a specification wanting a tie broken declares the term that breaks it.
 
-**R005-38.** Ordering is presentation. It runs once, after the lifecycle
-above, key validation, and every R009 verification, so it cannot
+**R005-38.** Ordering is presentation. It runs once, after the derivation
+lifecycle, key validation, and every R009 verification, so it cannot
 change whether a run passes or warns. It changes nothing about evaluation
 either: R001's dependency order, a window's partitions, and the neighbours
 `row_value` reads are all fixed before this order is applied, and each keeps
@@ -244,10 +243,10 @@ lets a reviewer state key identity in advance. Family grouping by name position
 remains a study design property. No portable construct can state the grouping.
 An internal order term lets a specification withhold a working column. A reader
 cannot always reproduce artifact order from the artifact alone.
-Presentation ordering runs last. It changes only the sequence a consumer
+Presentation ordering runs last and changes only the sequence a consumer
 receives. R001 orders construction in base-record order. R014 makes a stored
 artifact a source for another specification. A declared order lets a
-two-specification workflow reproduce one result rather than rely on the
+two-specification workflow reproduce the same result rather than rely on the
 runtime's file order.
 
 ## Errors

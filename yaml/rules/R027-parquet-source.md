@@ -9,7 +9,7 @@ applies_to: [dataset_source, dataset_class.path]
 
 ## Intent
 
-Fix what a Parquet source delivers so an artifact written by one conforming
+State what a Parquet source delivers so an artifact written by one conforming
 runtime can be read by another without losing its types, field order, record
 order, missing values, or collected empty strings.
 
@@ -80,7 +80,7 @@ difference between null and empty text without a side declaration. Restricting
 the source mapping to the types R020 writes makes the round trip closed and
 portable: accepting a host-specific cast would let two runtimes give the same
 file different field types or values. Storage choices that do not change the
-delivered dataset remain free because R020 deliberately does not fix Parquet
+delivered dataset remain free; R020 deliberately does not fix Parquet
 bytes.
 
 ## Errors
