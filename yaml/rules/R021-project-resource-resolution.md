@@ -40,15 +40,15 @@ govern `parents` or schema `includes`.
 local directory fixed for the whole run. The root is the directory holding the
 **project configuration** of R021-2. A run whose entry file sits under no
 project configuration, and whose runner names no root, uses the directory
-holding the entry file, so a study that declares nothing keeps the behavior it
-had before configuration existed. A runner may name the root outright.
+holding the entry file, so a study that declares nothing keeps
+its earlier behavior. A runner may name the root.
 
 **R021-2.** A **project configuration** is one `yamaa-project.yaml` file. A run
 finds it by walking up from the entry file to the first directory that holds
-one, and reads it once, before any specification. It is the study's own
-statement of where the study keeps things, written by the study authors, so
+one, and reads it once, before any specification. It is the study authors'
+own statement of where the study keeps things, so
 the file marks the project root by sitting at the root rather than naming
-the root. A runner that names the root outright takes the configuration
+the root. A runner that names the root takes the configuration
 sitting at that root and no other, so naming a narrower root never inherits a
 wider project's declarations.
 
@@ -103,13 +103,12 @@ identically on every platform and reveals nothing about the host.
   data are commonly stored apart, and an absolute path is how a study
   connects them. It is not allowed unconditionally: R021-15 still
   requires it to name an approved root, so the run reads no more than the
-  runner approved. Portability is a property a submission package must have
-  and a packaging step enforces; it is not a property every intermediate study
-  layout has.
+  A submission package must be portable, and a packaging step
+  enforces this. An intermediate study layout need not be.
 - **R021-9.** No URI scheme. A specification declares stored files;
   retrieval, caching, and authentication are not part of a derivation. One
-  ASCII letter followed by `:/` is a drive, not a scheme, because that is how
-  one platform spells a rooted location; every other `scheme:` prefix is a
+  One ASCII letter followed by `:/` is a drive, not a scheme, because one
+  platform spells a rooted location that way; every other `scheme:` prefix is a
   scheme, a drive letter followed by anything else included.
 - **R021-10.** No `\` anywhere. A backslash is an ordinary filename character
   on one platform and a separator on another, so a path containing one
@@ -164,8 +163,8 @@ directory, so no name above the anchor can be swapped between validation and
 ingestion. This is the boundary the approved project root has always drawn --
 its own canonical form is taken once and the no-link rejection begins below
 it -- so a rooted path moves the anchor without moving the boundary. A run
-therefore decides a location a platform spells through a linked system
-directory the same way it decides any other approved root.
+therefore treats a location spelled through a linked system directory
+like any other approved root.
 
 **R021-18.** After the walk, the canonical resolved file is inside the
 canonical anchor. The written-form checks and symbolic-link rejection already
@@ -225,8 +224,8 @@ links are rejected below the anchor because a link there is a second name
 whose target can change between validation and ingestion, and they are
 irrelevant above it because the anchor is canonicalized and opened before any
 specification is read and cannot be swapped afterwards. Error messages name
-only what the specification itself wrote for the same reason the checks run
-before consulting the filesystem: a rejected specification may be probing for
+only what the specification itself wrote. The checks run before consulting the
+filesystem for the same reason: a rejected specification may be probing for
 host layout.
 
 ## Errors

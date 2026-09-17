@@ -54,8 +54,8 @@ formed exactly when the pinned engine compiles it under the flag set below,
 and a match is exactly the match that engine reports. Where ECMA-262 admits
 more than one reading, or where a construct is newer than the pinned
 version, the engine decides. The engine's rejection is the contract
-rather than a defect to work around. Changing the pin is a versioned
-change to this rule that re-runs the fixtures in every consumer.
+rather than a defect to work around. Changing the pin versions this rule and
+requires a fixture re-run in every consumer.
 
 ## Flags
 
@@ -143,7 +143,7 @@ matched nowhere in the subject.
 
 **R022-23.** An empty match is a match. A pattern that can match the empty
 string, such as `a*`, therefore satisfies `matches` for every non-missing
-value, and `str_extract` returns the empty string rather than missing when
+value. `str_extract` returns the empty string rather than missing when
 the match it keeps is empty. R019 keeps the empty string and missing
 distinct, and no consumer converts one into the other.
 
