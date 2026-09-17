@@ -76,8 +76,8 @@ the same result as a neighbouring row whose value is missing.
 grammar, the reducers it permits, and what each returns; this rule fixes
 where it may be used. It is valid in exactly three contexts. Context 1: its
 identifiers are qualified to one declared dataset relation during column
-derivation. It then reduces that right side before the R003 join, which R003
-defines. The qualifier may equal the current row template's input
+derivation. It then reduces that right side before the R003 join. R003
+defines the join. The qualifier may equal the current row template's input
 dataset because an aggregate reads the relation rather than the
 scalar input record.
 
@@ -92,7 +92,7 @@ candidate-row value. The enclosing `row.group_by` owns the grain, so
 the aggregate itself omits `group_by`.
 
 **R007-11.** Any other aggregate context is an error. A `filter` narrows the
-records the owning expression already works in: right-side records for
+records the owning expression works in: right-side records for
 context 1, and constructed output rows for a window or for context 2, and
 current input-group records for context 3. `between` is valid only in
 context 1 and narrows those right-side records separately for each current
@@ -125,13 +125,13 @@ undefined case and a row's neighbours are determined.
 under R010, text order under R019, and chronological order for `date` and
 `datetime` under R016.
 
-**R007-18.** That tie-break settles positions, not equality. `row_number`,
+**R007-18.** The tie-break settles positions, not equality. `row_number`,
 `row_value`, `previous_non_missing`, and right-side selection read the
 positions themselves, so a tie changes which row they reach. `rank` compares
-only the declared terms, so records equal on every one of them receive a
+only the declared terms, so records equal on all declared terms receive a
 single number rather than the distinct numbers their positions would give.
-Its `competition` method leaves the positions occupied by a tie out of the
-subsequent numbers; its `dense` method numbers distinct values
+The `competition` method leaves the positions occupied by a tie out of the
+subsequent numbers. The `dense` method numbers distinct values
 consecutively. A specification that wants a tie broken declares the term
 that breaks it, whichever method it uses.
 
