@@ -72,7 +72,7 @@ source and answer the same two conditions about it, so both use
 `impute` in structured errors.
 
 **R008-9.** Where an operation takes several inputs, as `mapping_from`
-does, `missing` fires when any one input is missing. The
+does, `missing` fires when any input is missing. The
 present-but-unusable handler fires only when all inputs are present.
 
 ## Source handlers
@@ -95,8 +95,8 @@ it holds a value.
 
 **R008-12.** `multiple_matches` relaxes right-side uniqueness wherever one
 source reaches several records: R003's matched records, an ODM item's
-contextual matches, and the records a key combination was derived from,
-whose disagreement R001-44 otherwise makes fatal.
+contextual matches, and the records a key combination was derived from.
+Disagreement among those records is otherwise fatal under R001-44.
 
 **R008-13.** The source's optional `filter` selects the eligible
 right-side records first. Sort those survivors by the `order_by` terms and
@@ -104,9 +104,9 @@ retain `first` or `last`. Remaining ties are resolved by right-side record
 order.
 
 **R008-14.** An empty filtered result is not a handled condition. The
-result is an ordinary absent match under R003 and yields missing.
+result is an absent match under R003 and yields missing.
 
-**R008-15.** The handler count reports only the records where more than
+**R008-15.** The handler count reports only records where more than
 one match survived the filter.
 
 **R008-16.** An aggregate declares no handler at all. A variable it
@@ -130,7 +130,7 @@ all, so `conversion_failure` never fires for one.
 **R008-19.** After successful conversion, evaluate `override` predicates
 in list order against the converted output row. Evaluate the first
 matching `value`, convert it to the column type, and stop. If no
-predicate is `TRUE`, retain the original value.
+predicate is `TRUE`, keep the original value.
 
 ## Dependencies and audit
 

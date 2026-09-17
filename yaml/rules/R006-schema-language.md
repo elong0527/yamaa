@@ -49,8 +49,8 @@ against the bundle.
 merge keys, explicit tags, and unknown schema constructs.
 
 **R006-6.** Schema documents and the documents they validate use R019's
-ASCII source boundary. A decoded string value follows R019 even when ASCII
-escape notation was used to write it.
+ASCII source boundary. A decoded string value follows R019 even when written
+with ASCII escape notation.
 
 ## Scalar resolution
 
@@ -194,10 +194,10 @@ against the union member it matched, so a constraint on the written form is
 checked before the value is expanded.
 
 **R006-27.** No other union is shorthand. A union matching neither shape,
-such as `literal_value`, selects a member and expands nothing; these are
-the only shorthand mechanisms in the language. A rule may say where a
-shorthand applies and what the expanded value means, but must not define a
-different expansion.
+such as `literal_value`, selects a member and expands nothing. The two
+shorthand shapes above are the only shorthand mechanisms. A rule may say
+where a shorthand applies and what the expanded value means, but must not
+define a different expansion.
 
 ## Descriptor keywords
 
@@ -241,10 +241,10 @@ example_class:
         description: Current-row value the record is matched on.
 ```
 
-**R006-38.** The bundle writes a class field descriptor in flow form when it
-carries no `description` and in block form when it carries one. This is a
-convention of how the bundle is written, not a validation requirement. A
-document that mixes the forms differently is still valid.
+**R006-38.** The bundle writes a class field descriptor in flow form without
+a `description`, and in block form with a `description`. This is a convention
+of how the bundle is written, not a validation requirement. A document that
+mixes the forms differently is still valid.
 
 ## Rationale
 
