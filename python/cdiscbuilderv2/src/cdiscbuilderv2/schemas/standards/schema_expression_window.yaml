@@ -1,0 +1,14 @@
+version: "1.0"
+
+expressions:
+    row_number:
+        - group_by: {type: "list[variable]", required: false}
+        - order_by: {type: "list[variable]", required: true}
+    baseline_flag:
+        - group_by: {type: "list[variable]", required: false}
+        - date: {type: variable, required: true}
+        - reference_date: {type: variable, required: true}
+    baseline_value:
+        - group_by: {type: "list[variable]", required: false}
+        - value: {type: variable, required: true}
+        - flag: {type: variable, required: true}
