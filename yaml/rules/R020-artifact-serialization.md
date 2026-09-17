@@ -23,20 +23,20 @@ rounding after every calculation. R016 owns the canonical text of a `date` and
 `datetime`. R019 owns string contents, ill-formed-text failure, and string
 order.
 
-R014 owns the other direction. It states what a stored field means when a
-specification reads it, and `csv` below is the writing counterpart of the
-delimited form it reads: they agree on missing, they part on the empty
-string, and neither restates the other. R020-17 states where they part.
+R014 owns the other direction. R014 states what a stored field means when a
+specification reads the field. `csv` below is the writing counterpart of the
+delimited form R014 reads. The two agree on missing. The two part on the empty
+string. Neither restates the other. R020-17 states where the two part.
 R023 owns the syntax a specification reads a delimited *source* under, and
 admits the spellings a reader receives that this rule never writes. R027 is
 the reading counterpart of the `parquet` profile and applies the inverse of
 this rule's type mapping.
 
-This rule owns which file a specification declares it produces, the bytes that
-file receives, and the replacement of it. It does not own how that path is
-resolved against a project or which locations a run may write to: R002 owns
-resolution and containment for the paths a specification names, and an artifact
-path is written, so a boundary that admits a source does not by
+This rule owns which file a specification declares and produces, the bytes
+the file receives, and the replacement of the file. It does not own how that
+path is resolved against a project or which locations a run may write to: R002
+owns resolution and containment for the paths a specification names, and an
+artifact path is written, so a boundary that admits a source does not by
 itself admit a target.
 
 ## The artifact's path selects its profile
@@ -139,8 +139,8 @@ and keeps it in both directions.
     S1,"has, comma",""
     S1,"say ""hi""",x
 
-The third row's `NOTE` is the ordinary string `x`, the second row's is a
-collected empty string, and the first row's is missing.
+The third row's `NOTE` is the ordinary string `x`. The second row's is a
+collected empty string. The first row's is missing.
 
 ### Value text
 
@@ -155,12 +155,11 @@ collected empty string, and the first row's is missing.
 | `datetime` | R016's canonical `datetime` text |
 
 **R020-19.** An `int` is written without a leading `U+002B`, without digit
-grouping, and without a leading zero; zero is `0`. A `float` that takes no
+grouping, and without a leading zero. Zero is `0`. A `float` that takes no
 display precision is written by R011's conversion to `str`: the shortest round-
 tripping digits in positional notation, with a trailing `.0` omitted. That
-conversion has no exponent, which lets this profile promise bytes --
-a value with two admissible spellings would leave two runtimes both conforming
-and different.
+conversion has no exponent, which lets this profile promise bytes: two
+admissible spellings would leave two conforming runtimes different.
 
 ## The parquet profile
 
@@ -197,10 +196,10 @@ names.
 **R020-24.** R016's `datetime` is a reading on a wall clock and carries no zone
 and no offset. Its Timestamp is not adjusted to UTC. An implementation must
 not attach a zone when writing or reading. A runtime whose
-native timestamp always carries one -- R016 names R's `POSIXct` as such a type
--- must still write and read this column so that the same wall clock survives;
-shifting a value into or out of a machine timezone changes it, and two runtimes
-that each shift by their own offset do not agree.
+native timestamp always carries a zone -- R016 names R's `POSIXct` as such a
+type -- must still write and read this column so that the same wall clock
+survives. Shifting a value into or out of a machine timezone changes the
+value. Two runtimes that each shift by their own offset do not agree.
 
 **R020-25.** A `datetime` has whole-second resolution, so its microsecond part
 is always zero. Microseconds are used because the format offers no second unit
@@ -253,10 +252,10 @@ verification, key, or order term ever sees a rounded value, and changing
 
 ### The rounding is exact and host-independent
 
-**R020-33.** Each binary64 value is an exact decimal fraction. To round it,
-multiply by ten raised to `n`, round the product to an integer with a tie away
-from zero, then divide by ten raised to `n`. Write a value that rounds to zero
-without a sign.
+**R020-33.** Each binary64 value is an exact decimal fraction. To round the
+value, multiply by ten raised to `n`, round the product to an integer with a
+tie away from zero, then divide by ten raised to `n`. Write a value that
+rounds to zero without a sign.
 
 **R020-34.** The tie is decided on the exact value, never on a shortened
 representation of it, and the difference is observable:
@@ -301,7 +300,7 @@ another name is still read under the profile its producer wrote it with.
 
 **R020-39.** The temporary file is regular and is in the target's own
 directory so that the replacement stays within one filesystem and remains
-atomic. Its name is not fixed, but it must not collide with the target or with
+atomic. The name is not fixed and must not collide with the target or with
 another run's temporary file.
 
 **R020-40.** A run that fails at any point leaves the target as it was and
