@@ -145,9 +145,8 @@ any rule in this design sees the value.
 
 **R023-21.** Every field reaches R014 as its text or as missing, and an
 implementation must preserve the text and the missing state. A field with
-no characters is missing
-whether it was bare or quoted, so quoting is a transport detail the reader
-does not report. R014 gives an empty field one meaning and never sees
+no characters is missing, bare or quoted. Quoting is a transport detail the
+reader does not report. R014 gives an empty field one meaning and never sees
 an empty string. Common dataframe readers discard text-versus-missing
 distinctions by default; conformance is a property of what the reader
 delivers, not of which library produced it.
