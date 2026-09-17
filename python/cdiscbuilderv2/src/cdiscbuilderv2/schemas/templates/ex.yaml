@@ -1,0 +1,34 @@
+EX:
+  - formoid: ["FO.NCT00789880.EX"]
+    keys: ["StudyOID", "SubjectKey"]
+    columns:
+      STUDYID:
+        source: "StudyOID"
+      DOMAIN:
+        literal: "EX"
+      USUBJID:
+        source: "SubjectKey"
+      EXSEQ:
+        group: ["USUBJID"]
+      EXTRT:
+        source: "IT.NCT00789880.EX.EXTRT"
+      EXDOSE:
+        source: "IT.NCT00789880.EX.EXDOSE"
+      EXDOSU:
+        source: "IT.NCT00789880.EX.EXDOSU"
+      EXDOSFRQ:
+        source: "IT.NCT00789880.EX.EXDOSFRQ"
+      EXROUTE:
+        source: "IT.NCT00789880.EX.EXROUTE"
+      EPOCH:
+        literal: "TREATMENT"
+      EXSTDTC:
+        source: "IT.NCT00789880.EX.EXSTDTC"
+      EXENDTC:
+        source: "IT.NCT00789880.EX.EXENDTC"
+      EXSTDY:
+        function_: "calculate_study_day"
+        args: ["EXSTDTC", "_DM_REF.RFSTDTC"]
+      EXENDY:
+        function_: "calculate_study_day"
+        args: ["EXENDTC", "_DM_REF.RFSTDTC"]
