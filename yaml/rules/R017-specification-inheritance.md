@@ -25,9 +25,10 @@ owns each declaration applies to the resolved result.
 
 ## Terms
 **R017-1.** The file requested for validation or execution is the **entry
-file**. It and every file reached through `parents` are **layers**. A layer
-contributes the root fields and keyed declarations it writes. The **resolved
-specification** is the complete mapping produced from all contributions.
+file**. The entry file and every file reached through `parents` are
+**layers**. A layer contributes the root fields and keyed declarations it
+writes. The **resolved specification** is the complete mapping produced from
+all contributions.
 
 **R017-2.** A field is **present** when its mapping key is written, including
 when its YAML value is null. Absence inherits; presence replaces or clears as
@@ -58,7 +59,7 @@ once at its first visit. Reaching a layer already on the active traversal path
 is a cycle and fails. Reaching a layer whose contribution is complete skips it.
 
 **R017-8.** For parents `A` then `B`, where both inherit `Common`, the
-contribution order is therefore:
+contribution order is:
 
 ```text
 Common -> A -> B -> entry
@@ -82,8 +83,8 @@ because a later contribution may supply their missing fields. The entry file
 must declare its complete, non-null `output`; an inherited layer cannot choose
 the final artifact membership or order.
 
-**R017-11.** An `input` member is identified by its mapping key. Every member
-of `record_lookups`, `columns`, or `rows` must carry its respective `id`,
+**R017-11.** The mapping key identifies an `input` member. Every member
+of `record_lookups`, `columns`, or `rows` must carry the respective `id`,
 `name`, or `id` field. Two members of one layer must not share one identifier.
 
 **R017-12.** A non-null keyed-member field is complete at that field boundary.
@@ -118,7 +119,7 @@ with
 it. For example, later root `metadata`, `keys`, `output`, and `verifications`
 replace their complete inherited values.
 
-**R017-17.** Members of a keyed collection compose by their identifier. A new
+**R017-17.** Members of a keyed collection compose by identifier. A new
 identifier appends in contribution order. A matching identifier retains its
 first position and merges the immediate fields of the member: an absent member
 field is inherited and a present non-null member field replaces its complete
@@ -130,7 +131,7 @@ values.
 
 **R017-18.** Dataset shorthand is expanded before datasets are matched. A bare
 path becomes the long `dataset_class` form, after which matching dataset
-declarations merge their immediate `path`, `types`, and `schema` fields by the
+declarations merge the immediate `path`, `types`, and `schema` fields by the
 same rule.
 
 ## Clearing an optional field
@@ -142,8 +143,7 @@ accumulated object. Clearing a required field, an identity field,
 **R017-20.** The marker applies only to an immediate root field or keyed-member
 field. A null nested inside a supplied field value keeps its R006 meaning. In
 particular, `derivation: {literal: null}` replaces the derivation with a
-literal
-missing value; it does not clear `derivation`.
+literal missing value; the replacement does not clear `derivation`.
 
 **R017-21.** There is no separate `remove`, `drop`, `output.add`, or
 `output.remove` construct. Root fields are replaced explicitly, and unreachable
@@ -156,11 +156,11 @@ requires. Composition must not silently reinterpret an inherited relative path
 from the entry file's directory.
 
 **R017-23.** When the resolved specification is materialized, an inherited
-relative path is rebased relative to the entry file without changing the local
-file it denotes. If the local platform cannot express that file relative to the
-entry file, the canonical absolute local path is used. An absolute contributed
-path is materialized exactly as it was written, because R021 resolves it
-against the approved root it names and reads that written form.
+relative path is rebased relative to the entry file without changing the
+denoted local file. If the local platform cannot express that file relative
+to the entry file, the canonical absolute local path is used. An absolute
+contributed path is materialized exactly as it was written, because R021
+resolves it against the approved root it names and reads that written form.
 `parents` paths are not materialized.
 
 **R017-24.** Rebasing states where a file is, not whether a run may read it. A
@@ -209,8 +209,8 @@ record-lookup, and row order remains in that stable order.
 
 **R017-30.** After pruning, the resolver builds the column dependency graph
 under R001 and topologically orders the remaining columns. When more than one
-column is ready, the one with the earliest initial collection position comes
-first. This stable tie-break preserves `Common`, earlier-parent, later-parent,
+column is ready, the column with the earliest initial collection position
+comes first. This stable tie-break preserves `Common`, earlier-parent,
 and child order for independent columns. An unknown dependency or dependency
 cycle fails; sorting does not repair either one.
 
@@ -230,8 +230,7 @@ The resolved specification:
   materialized.
 
 **R017-37.** Free-form mappings whose owning field was replaced whole retain
-the
-order of the contribution that supplied them. The resolved YAML's presentation
+the order of the contribution that supplied them. The resolved YAML's
 details such as indentation do not carry semantics; conformance compares its
 YAML data tree.
 
