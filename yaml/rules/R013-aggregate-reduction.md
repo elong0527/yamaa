@@ -43,8 +43,8 @@ owns whether that candidate row is appended.
 ## Relations and identifiers
 
 **R013-2.** An identifier is `NAME` or `DATASET.NAME`. R002 resolves each
-identifier in the same phase. A reducer expression and predicate therefore
-never disagree about a name.
+identifier in the same phase. A reducer expression and predicate never
+disagree about a name.
 
 **R013-3.** Every identifier in one expression must name one relation. Three
 forms exist and must not be mixed:
@@ -149,8 +149,8 @@ whole cost of a new reduction.
 
 **R013-14.** For a group with at least one non-missing value, `MEAN(x)` is
 evaluated as `SUM(x) / COUNT(x)` under this rule's `SUM` semantics and R010's
-`/` semantics. This fixes its result and failure behavior across runtimes
-instead of inheriting a host language's mean implementation.
+`/` semantics. The defined division fixes the result and failure behavior
+across runtimes without a host language mean.
 
 **R013-15.** `SUM(x)` is a left fold of the non-missing argument values in
 relation record order. The accumulator starts with the first such value, and
