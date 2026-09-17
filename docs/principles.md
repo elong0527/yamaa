@@ -16,24 +16,27 @@ title: Principles
 
 Two AI agents read the same prompt to generate SDTM / ADaM datasets. Both are sure they understand it. Each writes the code from scratch. The two output datasets disagree.
 
-This is unlikely to be a misreading. AI agents simply follow different reasoning paths through the gaps the prompt leaves.
+This disagreement is usually not a misreading. The agents simply follow different paths through the gaps in the prompt.
 
 YAMAA moves agreement to the planning stage. People and AI agents build the
 specification together. Questions get answered while they are still
 cheap to answer. A YAMAA specification is built to have exactly one execution
-across different programming languages for clinical data work from
-EDC extraction through SDTM and ADaM to define.xml.
+across different programming languages. It covers clinical data work from
+Electronic Data Capture (EDC) extraction through Study Data Tabulation Model
+(SDTM) and Analysis Data Model (ADaM) to define.xml.
 
 ## The core principle
+
+This is what the rules are designed to guarantee.
 
 > **A YAMAA specification has exactly one execution. Where it would have two,
 > YAMAA fails instead of choosing.**
 
 Think of execution as a function:
 
-*`data_output = foo(data_input, spec)`*
+*`data_output = derive(data_input, spec)`*
 
-Datasets go in and out. *foo* is the derivation engine.
+Datasets go in and out. *derive* is the derivation engine.
 
 The whole design of YAMAA is a contract between people and AI agents. The
 input datasets are given. The contract covers two things:
@@ -41,7 +44,7 @@ input datasets are given. The contract covers two things:
 - **spec**: the closed vocabulary. It says what you can write, and nothing
   more. There is no free text field for derivations. There is no "you know
   what I mean."
-- **foo**: the derivation semantics. It says what each written item means.
+- **derive**: the derivation semantics. It says what each written item means.
   Numbered rules fix the meaning, so the R engine and the Python engine
   cannot read the same spec in two ways.
 
@@ -57,26 +60,26 @@ only the documents in front of it. There is no colleague to ask.
 
 So for people, one execution prevents arguments. For AI, it does a bigger
 job. The YAMAA language forces every question to be answered during planning,
-because the YAMAA specification should be the only place where people align and agree on the clinical standardization workflow.
+because the YAMAA specification should be the one place where people agree what to build.
 
 This is also why the vocabulary is closed. The typical AI failure is confident
 invention: text that reads well but runs wrong, and then needs heavy review.
-Talking with AI can cost as much as talking with another person if not more. A closed
+Talking with AI can cost as much as talking with another person, or more. A closed
 vocabulary limits what the AI can write. Every line is either valid or caught
-by validation. Generation becomes a loop: generate, validate, fix the specification. The
+by validation. Writing a specification becomes a loop: generate, validate, fix the specification. The
 errors are exact and repeatable.
 
 ## Principles
 
 These four principles follow from the core principle of one execution:
 
-- **Inheritance**: Organization, compound, and study layers combine in a fixed
-  order into one final specification. A company standard is versioned and
-  shared, not copied and left to drift. 
+- **Inheritance**: e.g. organization, compound, and study layers combine in a fixed
+  order into one final specification. A company standard is shared,
+  not copied into files that then change separately. (R017)
 - **Language neutral**: The same specification with the same inputs gives the
-  same file, byte for byte, in R and in Python.
+  same file, byte for byte, in R and in Python. (R019, R020)
 - **Explicit**: Nothing reaches the output unless the specification put it
-  there. Each declared column is derived in exactly one place. 
+  there. Each declared column is derived in exactly one place. (R002, R005)
 - **Extension**: A specification holds no code from R or Python. It has one
   extension point: a named contract. A project function is declared by its
   contract where it is used, and written once, in one language for the
@@ -89,7 +92,7 @@ to fix.
 ## Cost and benefit
 
 Using YAMAA means accepting a contract between people and AI agents. The cost
-is real, and it is paid early. Every question above is answered while the
+is real, and it is paid early. Every unclear point above is answered while the
 specification is being written, by the people who can answer it, at the
 planning stage. The goal: no open questions left for the coding stage.
 
