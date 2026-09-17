@@ -155,7 +155,7 @@ operand returns `float`.
 **R010-17.** `SQRT`, `POWER`, `EXP`, and `LN` return `float`.
 
 **R010-18.** `CEIL`, `FLOOR`, and `TRUNC` return `float`. Declare the column
-`type: int` when an integer is wanted; R005 converts the completed result
+`type: int` to get an integer; R005 converts the completed result
 and R011 defines that conversion.
 
 **R010-19.** `ABS`, `GREATEST`, `LEAST`, `MOD`, `NULLIF`, and `COALESCE`
@@ -176,7 +176,7 @@ by binding it to a numeric column first.
 
 **R010-22.** `NULL` propagates. A `NULL` argument to an operator or function
 produces a `NULL` result, except `COALESCE`, `NULLIF`, `GREATEST`, and `LEAST`,
-whose argument-level behavior is defined in the table in R010-9.
+whose argument-level behavior is defined in the R010-9 table.
 
 **R010-23.** A `compute` derivation therefore needs no guarding predicate to
 survive a missing input, and a formula that must yield missing rather than
