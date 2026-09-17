@@ -106,7 +106,7 @@ checks its declared result contract.
 conversion, comparison, equality, grouping, ordering, range selection, key
 validation, verification, contract fingerprinting, and artifact rendering.
 No listed operation can observe a non-finite float or fall back to host-runtime
-semantics for a non-finite float. Each listed operation observes the missing
+semantics. Each listed operation observes the missing
 value and uses its missing-value behavior. A normalized output key fails R005's
 non-missing key requirement, `not_missing` fails while verifications that skip
 missing values skip it under R009, and an artifact carries it as the missing
@@ -120,8 +120,8 @@ stored or quoted string stays text when its declared destination is `str`. Only
 numeric parsing gives such text a numeric meaning, as defined below.
 
 **R011-17.** Normalization does not bypass a constraint that prohibits
-missing. For example, a project binding that returns a non-finite float has
-returned missing after normalization and is valid only when its R018
+missing. For example, a project binding returning a non-finite float yields
+missing after normalization and is valid only when its R018
 contract declares `may_return_missing: true`.
 
 ## Conversion
@@ -185,8 +185,8 @@ without invalidating a specification written under this one.
 
 **R011-26.** Conversion from `float` to `str` uses the shortest sequence of
 significant decimal digits that parses back to the same binary64 value,
-written in positional notation with a trailing `.0` omitted for an integral
-value. Every float reaching this conversion is finite under the
+written in positional notation, and an integral value omits the trailing
+`.0`. Every float reaching this conversion is finite under the
 normalization policy above. This conversion preserves the value; it is not
 display rounding.
 
@@ -212,8 +212,8 @@ The policy is value-based rather than a text sentinel, so quoting still
 preserves text and only numeric parsing gives such text a numeric meaning.
 Failing an undefined conversion instead of choosing a representation keeps the
 type system conservative -- a later rule can define a mapping without
-invalidating a specification written under this one -- and shortest-round-trip
-float text gives one value one spelling so that two runtimes can agree on the
+invalidating a specification written under this one. Shortest-round-trip
+float text gives one value one spelling, so two runtimes agree on the
 bytes an artifact carries.
 
 ## Errors

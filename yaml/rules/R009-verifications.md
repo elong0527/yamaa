@@ -53,7 +53,7 @@ property at a coarser or earlier grain.
   the same split every other change of grain already uses.
 
 **R009-2.** A frame assertion enters this vocabulary only when an example
-needs exactly that and it cannot be written as a producer and a consumer.
+needs that shape and the shape cannot be written as a producer and a consumer.
 
 ## Referential integrity is proven where the value is produced
 
@@ -114,7 +114,7 @@ addition to the stable specification path.
 unit R006 uses for `min_length`, so a supplementary-plane scalar counts once
 in both R and Python. A length is therefore a separate check rather than
 an anchored `matches` pattern: `max_length` counts scalar values directly,
-independently of regular-expression matching behavior.
+not by regular-expression matching.
 
 ## Dataset verifications
 
@@ -138,15 +138,15 @@ independently of regular-expression matching behavior.
 ## Counting a group
 
 **R009-20.** `row_count` counts completed output rows. `group_by` names
-declared columns and partitions **the artifact's rows** by the equality each
-value's type owns, including R019 for strings. Missing values group with
+declared columns and partitions **the artifact's rows** by each value type's
+equality, including R019 for strings. Missing values group with
 other missing values as R001 partitions an input dataset. Both bounds then
 apply to every group.
 
 **R009-21.** `filter` is an R004 predicate over one completed output row, and
 a group's count is how many of its rows the predicate admits. A row counts
-only when the predicate is `TRUE`, so `FALSE` and `UNKNOWN` do not count,
-which is what `filter` means everywhere else in the language.
+only when the predicate is `TRUE`, so `FALSE` and `UNKNOWN` do not
+count, as `filter` means everywhere else.
 
 Grouping the artifact rather than the counted rows is what makes an exact
 cardinality statable. Exactly one baseline record for each subject and
@@ -159,8 +159,8 @@ failure reports the offending groups and their counts.
 
 **R009-22.** Bounds still apply only to the groups the artifact contains. A
 subject, visit, or parameter absent from the artifact entirely forms no
-group, so no `min` here can discover it. That assertion belongs to the
-derivation, where the relation defining the expected groups is readable: a
+group, so no `min` here can discover it. The absent-group assertion belongs to
+the derivation, where the relation defining the expected groups is readable: a
 record lookup declaring `unmatched: fail` under R015 rejects an expected
 group the data cannot supply, and a planning relation at the required grain
 gives every expected group an input record under R001.
@@ -173,11 +173,11 @@ nothing weaker than all four would be portable. The rule admits no frame
 shape until an example needs one that a producer and a consumer cannot
 express. Restating a cross-dataset match as a verification would duplicate
 R015's matching, filtering, and multiple-match semantics inside an assertion
-that runs long after the value it doubts was consumed, so the link is
-asserted where it is produced instead. A `max_length` on a rendered number
-or temporal value would assert a property of R011's rendering rather than of
-the value, so it is declared only on `str` columns. A column that admits no
-value at all is a column the specification should not declare, so
+that runs long after the value the assertion doubts was consumed, so the
+link is asserted where it is produced instead. A `max_length` on a rendered
+number or temporal value would assert a property of R011's rendering rather
+than of the value, so it is declared only on `str` columns. A column that
+admits no value at all is a column the specification should not declare, so
 `max_length` requires a `max` of at least one.
 
 ## Errors
@@ -209,7 +209,7 @@ row, or make the primary artifact ineligible for publication. The executor
 continues through later column checks, key validation, and dataset checks and
 collects warning violations in that order. An `error` still stops at the same
 R005 stage as before. Warning findings collected before a later error do not
-turn the failed run into a successful one. They produce no accepted artifact.
+turn the failed run into a successful one. No accepted artifact is produced.
 
 **R009-35.** A specification declaring any warning must declare
 `output.violation_log`. Its path must differ from `output.path` and selects an
