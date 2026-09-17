@@ -54,7 +54,7 @@ ASCII substitutions below.
 
 **R019-5.** Canonically equivalent sequences therefore remain distinct
 values. A specification that needs normalized source data must receive it
-from an explicitly governed upstream process; version 1.0 has no
+from an explicitly governed upstream process. Version 1.0 has no
 normalization operation.
 
 ## Equality
@@ -139,7 +139,7 @@ checking them into version control.
 **R019-19.** Repository validation proves the ASCII source boundary and
 structural validity of Unicode data fixtures. The shared R and Python
 conformance workflow proves executable value and ordering parity when the
-workflow supports these expressions; static validation alone is not runtime
+workflow supports these expressions. Static validation alone is not runtime
 evidence.
 
 ## Rationale
@@ -149,7 +149,7 @@ and Python installations. Behavior that depends on these host differences
 cannot satisfy the parity requirement. The ASCII source boundary keeps every
 specification, rule, and implementation file comparable byte for byte, while
 real-world text stays in data fixtures with exact bytes checked in.
-Casing is ASCII-only: full Unicode case folding would pin a Unicode version
+Casing is ASCII-only. Full Unicode case folding would pin a Unicode version
 into the contract and break independent implementations on different data.
 Equality and order are defined on raw scalar values for the same reason. Raw
 scalar values compute identically everywhere, with no collator,

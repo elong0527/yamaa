@@ -11,8 +11,8 @@ applies_to: [environment, function, function_contract, function_binding]
 ## Intent
 Make a project-supplied scalar function reproducible and reviewable. A
 specification contains no host-language code or runtime selection. One
-logical contract may run in R in one project and in Python in another, while
-each project stays a single-language execution environment.
+logical contract may run in R in one project and in Python in another. Each
+project stays a single-language execution environment.
 
 ## Boundaries
 
@@ -24,8 +24,8 @@ column types and conversion. R016 owns temporal values.
 
 Across-row reduction remains an `aggregate` operation. A project function is
 never a reducer. The function cannot inspect a relation or other rows. Final
-artifact formatting is also outside this rule, and comparison precision
-used for conformance does not round a derivation value.
+artifact formatting is also outside this rule. Comparison precision used for
+conformance does not round a derivation value.
 
 An authorized user runs bindings as trusted organization code in an
 organization-controlled secure environment. This rule sets correctness,
@@ -50,7 +50,7 @@ specification cannot name, replace, extend, or override that environment.
 
 **R018-3.** An environment is validated independently against
 `schema_environment.yaml`. Its `schema_version` selects that schema bundle and
-its separate `version` identifies the complete environment content. Once an
+the separate `version` identifies the complete environment content. Once an
 implementation stage is requested for a specification containing a `function`
 expression, missing, unreadable, structurally invalid, or ambiguous environment
 resolution fails before code activation or execution.
@@ -76,7 +76,7 @@ before specification data is read.
 
 **R018-7.** `functions` is a non-empty mapping from logical function names to
 contracts. Each name has one contract and one binding in an environment.
-A call contains that logical `name` and an exact `contract_version`; it never
+A call contains that logical `name` and an exact `contract_version`. No call
 contains a runtime-specific callable name.
 
 **R018-8.** A contract declares:
@@ -125,7 +125,7 @@ value is 16 lowercase hexadecimal big-endian bits.
 **R018-13.** `comparison_decimals` is its non-negative base-10 string. The
 object is UTF-8 JSON under the JSON Canonicalization Scheme in RFC
 8785, then hashed with SHA-256 and prefixed with `sha256:`. Strings use their
-R019 value. Parameters retain their declared order; object member order
+R019 value. Parameters retain their declared order. Object member order
 comes only from canonical JSON.
 
 **R018-14.** The runtime language, artifact, binding, description, and
@@ -139,7 +139,7 @@ these fingerprints are identical.
 **R018-15.** Signatures are closed and named. Each parameter name is unique and
 a binding has no positional, variadic, or arbitrary keyword parameter bag.
 `required` defaults to `true`. Every optional parameter declares an environment
-`default`; a required parameter cannot declare one.
+`default`. A required parameter declares no `default`.
 
 **R018-16.** Parameter types are the R011 column vocabulary plus function-only
 `bool`. Return types are the R011 column vocabulary and do not include `bool`,
@@ -150,7 +150,7 @@ results.
 is no implicit conversion, including no `int`-to-`float` widening. R011
 conversion can run only after the function has returned under the R005
 lifecycle. Argument names, requiredness, and exact types are contract-dependent
-checks at the implementation stage; structural validation before then checks
+checks at the implementation stage. Structural validation before then checks
 only the closed argument-leaf forms below.
 
 **R018-18.** A call argument is one of:
@@ -165,7 +165,7 @@ only the closed argument-leaf forms below.
 another expression. A calculation needed by a function is first declared as an
 internal column and then passed by name, preserving its visible dependency.
 
-**R018-20.** Omitting an optional argument selects its environment default.
+**R018-20.** Omitting an optional argument selects the environment default.
 Passing missing explicitly never selects the default. `accepts_missing` is
 `false` by default for each parameter:
 
@@ -234,7 +234,7 @@ behavior, and both values of every Boolean parameter are covered. A nullable
 contract covers `nullable-output`, and a float-returning contract covers
 `numeric-comparison`. Static validation checks each tagged case for inferable
 evidence and rejects missing obligations. The contract author identifies which
-input is its semantic boundary; activation checks the declared result.
+input is the contract semantic boundary. Activation checks the declared result.
 
 **R018-29.** A project claiming the same contract in another language runs the
 same vector content.
@@ -267,8 +267,8 @@ A specification stays portable by naming a logical contract instead of
 runnable code. The same derivation can run in an R project or a Python
 project, and neither the language choice nor the callable appears in the
 specification. One immutable runtime per project makes execution
-reproducible and reviewable: the digest pins the runtime, and verification
-runs before activation. Exact types allow no implicit conversion,
+reproducible and reviewable. The digest pins the runtime. Verification runs
+before activation. Exact types allow no implicit conversion,
 signatures are closed, and activation vectors run before any specification
 executes. These rules exist so a project function returns the same scalar
 in both languages. Any change in meaning arrives as a new contract version,
