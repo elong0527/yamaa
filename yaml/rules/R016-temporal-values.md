@@ -42,15 +42,15 @@ and R010 owns arithmetic, which no temporal value enters.
 
 Each operation's own parameters are documented beside its registration in
 `schema_expression_date.yaml`, which is authoritative for operation-local
-behavior. This rule states what is shared: the types those parameters carry and
-the value they produce.
+behavior. This rule states what is shared: the types those parameters carry
+and the produced value.
 
 R004 owns the predicate grammar. A predicate comparing two temporal values
 orders them as this rule defines; no other predicate behavior is owned here.
 
 ## The two values
 
-**R016-1.** A `date` is a complete proleptic Gregorian calendar date. It names
+**R016-1.** A `date` is a complete proleptic Gregorian calendar date naming
 one day.
 
 **R016-2.** A `datetime` is a complete local civil datetime: a date of the same
@@ -72,7 +72,7 @@ and no offset.
 **R016-4.** Like every column type, both additionally admit the missing value.
 
 **R016-5.** Every combination of fields in range names one day or one civil
-moment. Every day or civil moment in range has one combination of fields.
+moment, and every day or civil moment in range has one such combination.
 Both value spaces are total and gapless.
 
 **R016-6.** Every value is complete and records how much was collected. A value
@@ -96,16 +96,16 @@ value came from. Only four origins exist:
 | `to_date` | `day` |
 | selecting an existing value | unchanged; property follows selected value |
 
-**R016-9.** The first row has no other reachable answer: the grammar below
+**R016-9.** The parsed-text row admits no other answer: the grammar below
 admits only complete text, so nothing a parse produces was collected in part.
 R007 fixes the fourth, for the extreme, conditional, coalescing, and offset
 expressions that return an operand rather than computing one.
 
 **R016-10.** Provenance is read off that one property rather than recorded
 beside it. A component finer than the collected precision was supplied by
-`date_impute`, and a value whose collected precision is `day` was collected in
-full. A second flag would be a second place to keep correct, and the two could
-disagree.
+`date_impute`, and a value whose collected precision is `day` was collected
+in full. A second flag would be a second place to keep correct, and the flag
+and the property could disagree.
 
 ## Lexical form
 
@@ -119,8 +119,8 @@ disagree.
 are two each, zero-padded to that width. One production defines the calendar
 half of both types, so a date parses identically wherever it appears.
 
-**R016-13.** An omitted `ss` names second `00`, and it is the only omission
-either form permits. Nothing else is defaulted, no sign or surrounding
+**R016-13.** An omitted `ss` names second `00`: the only omission either
+form permits. Nothing else is defaulted, no sign or surrounding
 whitespace is accepted, and no other separator or field order is recognised.
 
 **R016-14.** Rejecting everything else is what makes two implementations agree.
@@ -128,7 +128,7 @@ Each runtime's own parser accepts a wider and a different set: a space
 separator, lowercase `t`, bare date read as a moment, and trailing `Z` are
 each read by one of them and not the other, so a rule admitting whatever a
 runtime happened to accept would not be portable. These cases are the cost
-of the decision:
+of that rejection:
 
 | Rejected | Offered as | Why |
 |---|---|---|
@@ -150,8 +150,8 @@ of the decision:
 **R016-15.** `24:00` and `23:59:60` are rejected for the same reason as the
 and not only because they are unusual. `2025-01-12T24:00` names the moment
 `2025-01-13T00:00` already names, and the two spellings disagree about the day,
-so admitting the first would leave the date a value carries depending on which
-spelling arrived. A leap second is not a value either runtime holds.
+so admitting the first would leave the carried date dependent on the
+spelling that arrived. A leap second is not a value either runtime holds.
 Neither R's nor Python's representation has a sixty-first second, so none
 can be stored.
 
@@ -239,13 +239,13 @@ a `str` column until a rule fixes a representation both runtimes share.
 **R016-29.** With every field zero-padded to its width and, for a `datetime`,
 the seconds always present. This is the text a temporal value converts to under
 R011's `str` row and the text the artifact records for a temporal column, so a
-`str` column derived from one and the artifact's own rendering of that same
-value never disagree. R011 fixes the same relationship for `float`.
+`str` column derived from a temporal value and the artifact's rendering of
+that value never disagree. R011 fixes the same relationship for `float`.
 
 **R016-30.** Canonical text is not the collected text. A value parsed from
 `2025-01-12T14:00` renders as `2025-01-12T14:00:00` because the value names
 second zero. Like `float`, a declared type stores a value rather than the
-characters it received. For example, `1.50` renders as `1.5`. A variable
+received characters. For example, `1.50` renders as `1.5`. A variable
 that must retain collected characters unchanged is `str`. It still orders
 chronologically under R007.
 
@@ -347,8 +347,8 @@ and month, and neither is a `date`. Such a value is carried as `str` and
 completed before it becomes one.
 
 **R016-43.** `date_impute` performs that completion as a declared rule rather
-than string surgery. Its result is a `date` like any other. It carries the
-collected precision of its source text, so the value records which components
+than string surgery. The result is a `date` like any other and carries the
+collected precision of the source text, so the value records which components
 were supplied rather than leaving that fact to the specification.
 
 
@@ -401,13 +401,13 @@ than it must. When no day in the interval satisfies the bound, the result is
 missing. Like falling below minimum precision, this is neither missing nor
 invalid text and invokes no handler. A missing bound is no bound.
 **R016-50.** A complete source date is returned unchanged whatever the bound
-says, because it supplied nothing for the bound to move. This is what makes the
-bound a rule rather than a comparison a specification could write itself: it
-constrains an invented component and never a collected one. A specification
-constraining collected dates states a verification under R009, which is where a
-claim about data a study recorded belongs.
+says, because the date supplied nothing for the bound to move. This is what
+makes the bound a rule rather than a comparison a specification could write
+itself: the bound constrains an invented component and never a collected one.
+A specification constraining collected dates states a verification under R009,
+which is where a claim about data a study recorded belongs.
 
-**R016-51.** The parameters therefore apply in a fixed order: a missing or
+**R016-51.** The parameters apply in a fixed order: a missing or
 invalid source answers first, then a source below the minimum precision, then
 completion from `month` and `day`, then the bound.
 
@@ -535,7 +535,7 @@ seven, with any remainder discarded.
 
 **R016-73.** With `unit: month`, `date_diff` counts how many monthly
 anniversaries of `start` fall on or before `end`. The k-th anniversary
-carries the year and month k months after `start`, with its day clamped
+carries the year and month k months after `start`, with the day clamped
 to the length of that month. With `unit: year` it counts yearly
 anniversaries the same way. Three boundary cases pin the rule:
 `2025-01-31` to `2025-02-28` is one month, `2024-02-29` to `2025-02-28`
