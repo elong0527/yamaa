@@ -52,24 +52,24 @@ text        := one or more R019 scalar values other than "{" and "}"
 ```
 
 **R012-5.** `grammar/string-template.yaml` is the grammar's only source.
-The grammar block above renders its content. Its cases record the literal
-text and placeholders each implementation must produce. The cases also
-record the templates each implementation must reject.
+The grammar block above renders that file. The file cases record the
+literal text and placeholders each implementation must produce. The file
+cases also record the templates each implementation must reject.
 
 **R012-6.** Repository validation and the R implementation read
-`grammar/string-template.yaml`. The grammar cannot drift without a failure.
+`grammar/string-template.yaml`. Any drift in the grammar causes a failure.
 
 **R012-7.** The contents of `variable` must satisfy that variable's schema
 type exactly. Whitespace is therefore not ignored inside braces.
 
 **R012-8.** `{{` emits one literal `{` and `}}` emits one literal `}`.
-The pairs take precedence while scanning, so `{{{SITEID}}}` produces
+The brace pairs take precedence while scanning, so `{{{SITEID}}}` produces
 `{UCSD}` when `SITEID` is `UCSD`.
 
 **R012-9.** Every brace must begin or end a valid placeholder.
 Empty placeholders, unmatched braces, format directives, operators,
-function calls, and nested placeholders are invalid. In particular,
-`{A + B}` is invalid rather than an expression to evaluate.
+function calls, and nested placeholders are invalid. `{A + B}` is invalid
+rather than an expression to evaluate.
 
 ## Binding and evaluation
 

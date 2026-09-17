@@ -22,8 +22,8 @@ completed derivation result. R007 owns what each expression requires of an
 input it receives. R019 owns valid text and failures while decoding it. R021
 owns which file `path` and `schema` may reach and the byte snapshot this rule
 reads. R023 owns source-profile selection and the syntax of a delimited source.
-R027 owns the Parquet source profile. Both deliver ordered fields and records,
-and this rule owns what their values mean.
+R027 owns the Parquet source profile. Both profiles deliver ordered fields
+and records, and this rule owns what their values mean.
 
 ## Source record order
 
@@ -35,7 +35,7 @@ this sequence as base-record and grouped-input order, R007 uses it to break
 window ties, and R013 consumes it for ordered floating-point reduction.
 
 **R014-2.** Record order is not a substitute for a business key or a declared
-sort. It is the stable sequence of this artifact. Replacing an
+sort, but the stable sequence of one artifact. Replacing an
 artifact with the same records in another order changes the input. The
 change can alter an order-sensitive result.
 
@@ -44,14 +44,14 @@ change can alter an order-sensitive result.
 **R014-3.** Every field of a source dataset has exactly one type, drawn from
 `column_type`, and every value bound from that field carries that type. A
 field's type is a property of the dataset, not of the values one extract
-happens to hold, so two extracts of the same dataset bind the same field
+holds, so two extracts of the same dataset bind the same field
 to the same type.
 
 **R014-4.** Where the type comes from depends on the container:
 
 - A **self-describing source** supplies it. An ODM `ItemDef` data type, a
   Parquet schema, and an artifact's producing specification are each the
-  field's type authority, and the consuming specification does not restate it.
+  field's type authority. The consuming specification never restates the type.
 - A **typeless container**, such as a delimited text file, supplies none.
   Every one of its fields is `str` unless the specification declares
   otherwise.
@@ -105,13 +105,13 @@ reordered, duplicate, or undeclared fields fail. A Parquet field's embedded
 type must additionally equal the producer's declared type.
 
 **R014-10.** The producing specification remains the only type authority.
-`types` may be present only for a typeless source, so it must be absent
-whenever `schema` is present. This rejects even an inline entry that agrees
-with the producer instead of creating two authorities for one type.
+`types` may be present only for a typeless source, so `types` must be absent
+whenever `schema` is present. The absence rejects even an inline entry that
+agrees with the producer instead of creating two authorities for one type.
 
 **R014-11.** A stored cell in a delimited artifact is still text. After
 recognizing missing values, ingestion applies the `str` row of R011's
-conversion table to every non-missing cell. In particular, a producer column
+conversion table to every non-missing cell. A producer column
 declared `date` or `datetime` uses R016's lexical grammar and representations,
 exactly as an inline `types` declaration or a column conversion does. A
 Parquet artifact instead supplies typed values under R027. A workflow link
