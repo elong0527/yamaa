@@ -78,9 +78,9 @@ upstream. The expanded records enter the specification as ordinary input.
 declared. When `rows` is absent or empty, row construction derives the
 distinct combination of `keys` over the input records, in first-appearance
 order, and that key table is the output row set. The key table is standalone:
-The key table is standalone: one row per unique key combination, with no link
-back to the input records. The input records a key combination was derived
-from decide its column values, never how many rows the artifact carries.
+one row per unique key combination, with no link back to the input records,
+so the input records a key combination was derived from decide its column
+values and never how many rows the artifact carries. `base` is required
 in that case, unless `input` declares exactly one dataset, which
 supplies the input records.
 
@@ -160,7 +160,7 @@ those four as dependency-free.
 dependency graph. Row derivations cannot depend on values produced only
 during the column phase. Every unqualified identifier in a grouped
 `row.filter` must resolve to a column derived by that same row template. That
-That grouped `filter` is not a derivation, adds no graph edge between columns,
+grouped `filter` is not a derivation, adds no graph edge between columns,
 and runs only after all columns have completed.
 
 **R001-28.** After row construction, build the column dependency graph. Every

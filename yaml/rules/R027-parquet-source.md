@@ -49,7 +49,7 @@ this closed mapping, which is the inverse of R020-20:
 | `INT64` with no logical type | `int` |
 | `DOUBLE` with no logical type | `float` |
 | `INT32` annotated `Date` | `date` |
-| `INT64` annotated `Timestamp`, microseconds, UTC-unadjusted | `datetime` |
+| `INT64` annotated `Timestamp`, microseconds, not adjusted to UTC | `datetime` |
 
 **R027-6.** The mapping is exact. A different physical type, logical type,
 timestamp unit, or timezone is not converted or inferred. Both nullable and
@@ -80,7 +80,7 @@ difference between null and empty text without a side declaration. Restricting
 the source mapping to the types R020 writes makes the round trip closed and
 portable: accepting a host-specific cast would let two runtimes give the same
 file different field types or values. Storage choices that do not change the
-delivered dataset remain free because R020 deliberately does not fix Parquet
+delivered dataset remain free; R020 deliberately does not fix Parquet
 bytes.
 
 ## Errors
