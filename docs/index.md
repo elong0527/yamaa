@@ -16,6 +16,10 @@ Read the README, compare the input tables side by side with expected output
 below, and inspect the YAML in a collapsible sidebar. Highlight a subject to
 compare its records.
 
+**[Principles](principles.md)**
+A short answer to one question: what is YAMAA for? Start here if you want the
+core principle of one execution and the four principles that follow from it.
+
 **[Why YAMAA looks the way it does](why-yamaa.md)**
 An Excel specification has three layers and writes down only two. This page is
 about the missing one -- what "semantics" means in practice, why two programmers
