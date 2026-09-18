@@ -64,16 +64,16 @@ literals use their explicit tagged leaf forms.
 **R007-6.** Scalar expressions return one value per row. Window expressions
 partition constructed output rows by local `group_by` and preserve row count.
 Omitting `group_by` creates one partition. Within a declared group, missing
-values equal other missing values. Rows with the same present values and the
-same missing group positions share one partition.
+values equal other missing values. Rows with equal present values and equal
+missing group positions share one partition.
 
 **R007-7.** A window that declares `filter` still preserves row count: an
 excluded row receives missing rather than being dropped. A window that reads
 another row of its partition returns missing when that row does not exist,
-the same result as a neighbouring row whose value is missing.
+the same result as for a neighbouring row with a missing value.
 
 **R007-8.** `aggregate` is the only aggregate expression. R013 defines its
-grammar, the reducers it permits, and what each returns; this rule fixes
+grammar, the reducers it permits, and what each returns. This rule fixes
 where it may be used. It is valid in exactly three contexts. Context 1: its
 identifiers are qualified to one declared dataset relation during column
 derivation. It then reduces that right side before the R003 join. R003
@@ -95,7 +95,7 @@ the aggregate itself omits `group_by`.
 records the owning expression works in: right-side records for
 context 1, and constructed output rows for a window or for context 2, and
 current input-group records for context 3. `between` is valid only in
-context 1 and narrows those right-side records separately for each current
+context 1. It narrows those right-side records separately for each current
 row under R013.
 
 ## Ordering
@@ -118,7 +118,7 @@ engine's.
 
 **R007-16.** Terms apply in order, each with its own direction and
 placement. Records equal on every term preserve row-template order and then
-base-record order, which makes the result total: ordering has no
+base-record order. The result is total: ordering has no
 undefined case and a row's neighbours are determined.
 
 **R007-17.** Non-missing values use the order their type owns: numeric order
@@ -128,7 +128,7 @@ under R010, text order under R019, and chronological order for `date` and
 **R007-18.** The tie-break settles positions, not equality. `row_number`,
 `row_value`, `previous_non_missing`, and right-side selection read the
 positions themselves, so a tie changes which row they reach. `rank` compares
-only the declared terms, so records equal on all declared terms receive a
+only the declared terms. Records equal on all declared terms receive a
 single number rather than the distinct numbers their positions would give.
 The `competition` method leaves the positions occupied by a tie out of the
 subsequent numbers. The `dense` method numbers distinct values
@@ -177,7 +177,7 @@ is where comparability is a requirement rather than a consequence.
 **R007-31.** Comparability is a property of the runtime type. `int` and
 `float` are mutually comparable, because R010 promotes them. Every other
 type is comparable only with itself. Collected precision, which R016
-defines, is not a runtime type and so takes no part in comparability: two
+defines, is not a runtime type and so takes no part in comparability. Two
 temporal values of one type are comparable whatever precision each carries.
 A comparable type therefore satisfies any input requiring mutually
 comparable values -- `greatest` and `least`, `mapping_from` key pairing, an
@@ -186,18 +186,18 @@ ordering term mixing two types is the incompatible-input error below rather
 than a comparison over a coerced operand. Each owning rule defines the order
 its type takes.
 
-**R007-32.** `source` retains its source type, which R014 defines, and
+**R007-32.** `source` retains its source type, which R014 defines.
 `literal` retains its YAML scalar type after R011's non-finite
 normalization. `cut`, `str_extract`, `str_concat`, `str_template`,
 `str_upper`, and `str_lower` return strings. R019 owns the casing and
-text-preservation behavior of those string operations, and R022 owns
+text-preservation behavior of those string operations. R022 owns
 `str_extract`'s pattern and the match it keeps. `compute` returns the
 numeric type its expression promotes to under R010.
 
 **R007-33.** `row_number` and `rank` return integers. The temporal operations
 return the types R016 gives them. `baseline_flag` returns a string. Mapping,
 conditional, coalescing, extreme, baseline value, offset row, and
-previous-non-missing expressions retain the selected value type, and a
+previous-non-missing expressions retain the selected value type. A
 selected temporal value carries its collected precision unchanged.
 
 **R007-34.** `aggregate` returns the type R013 gives its expression. R018

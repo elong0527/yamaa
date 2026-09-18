@@ -19,8 +19,8 @@ governed sidecar dataset.
 
 This rule owns what each verification asserts, when it runs, and how a failure
 is reported. R005 owns key uniqueness, which is checked by the output contract
-rather than declared as a verification, and R005 owns the artifact's row
-order, which no verification here observes. R004 owns the predicates that
+rather than declared as a verification. R005 also owns the artifact's
+row order, which no verification here observes. R004 owns the predicates that
 `implies`, `predicate`, and a grouped `row_count` evaluate. R019 owns string
 equality and scalar counting. R005 owns whether the primary artifact is
 complete and publication-eligible. R020 owns the containers and publication of
@@ -40,7 +40,7 @@ property at a coarser or earlier grain.
 
 - **The adjacent row.** `row_value` under R007 places another row's value on
   the row and `predicate` compares the two.
-  `negative-adrs-partial-response-after-complete-response` does that against
+  `negative-adrs-partial-response-after-complete-response` uses
   the immediately preceding assessment, so it rejects a partial response next
   to a complete one and passes the same fault with an assessment in between.
 - **A partition, or its history up to the current row.** A qualified aggregate
@@ -113,7 +113,7 @@ addition to the stable specification path.
 **R009-14.** R019 scalar count rather than bytes or UTF-16 units is also the
 unit R006 uses for `min_length`, so a supplementary-plane scalar counts once
 in both R and Python. A length is therefore a separate check rather than
-an anchored `matches` pattern: `max_length` counts scalar values directly,
+an anchored `matches` pattern. `max_length` counts scalar values directly,
 not by regular-expression matching.
 
 ## Dataset verifications
@@ -151,7 +151,7 @@ count, as `filter` means everywhere else.
 Grouping the artifact rather than the counted rows is what makes an exact
 cardinality statable. Exactly one baseline record for each subject and
 parameter is a `min` and a `max` of one over the rows whose baseline flag is
-`Y`, grouped by subject and parameter: the group exists because the subject
+`Y`, grouped by subject and parameter. The group exists because the subject
 has records, so a group holding no flagged record fails the `min` instead of
 disappearing. `unique` cannot state this because it admits no filter, and
 `predicate` cannot because one row cannot see how many others exist. A
@@ -162,7 +162,7 @@ subject, visit, or parameter absent from the artifact entirely forms no
 group, so no `min` here can discover it. The absent-group assertion belongs to
 the derivation, where the relation defining the expected groups is readable: a
 record lookup declaring `unmatched: fail` under R015 rejects an expected
-group the data cannot supply, and a planning relation at the required grain
+group the data cannot supply. A planning relation at the required grain
 gives every expected group an input record under R001.
 
 ## Rationale
@@ -280,7 +280,7 @@ columns:
 ```
 
 For subject `P7-732` with age `214`, the primary row survives and the log has
-one row: `CONDITION` is `range_failed`, `REQUIREMENT` is `R009-11`,
+one row. `CONDITION` is `range_failed`, `REQUIREMENT` is `R009-11`,
 `SPEC_PATH` is `columns.AGE.verifications[0].range`, `FAILURE_COUNT` is `1`,
 `OFFENDING_KEYS` is
 `[{"STUDYID":"PILOT7","USUBJID":"P7-732"}]`, and `DETAILS` is

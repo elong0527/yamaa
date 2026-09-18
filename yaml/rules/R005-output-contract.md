@@ -10,28 +10,28 @@ applies_to: [root.keys, root.output, output.violation_log, root.columns,
 
 ## Intent
 
-Ensure every declared column is derived in exactly one place, every value
-passes the same ordered stages before use, and the completed dataset
-is uniquely identified.
+Ensure every declared column is derived in exactly one place. Ensure
+every value passes the same ordered stages before use. Ensure the
+completed dataset is uniquely identified.
 
 ## Boundaries
 
-This rule owns which columns exist, where each one is derived, the order of the
-stages a value passes through, output identity, and the order the artifact's
-rows are presented in. It does not own what any stage does: R011 defines a
-declared type and its conversions, R008 defines the handlers, R009 defines the
-assertions, and R001 owns the two phases and the dependency order within them.
-R007 owns what an order term means. R019 owns string equality and order.
-R020 owns the bytes the artifact becomes once this rule has completed and
-ordered it.
+This rule owns which columns exist, where each column is derived, the
+order of the stages a value passes through, output identity, and the
+artifact's row order. This rule does not own what any stage does. R011
+defines a declared type and its conversions. R008 defines the handlers.
+R009 defines the assertions. R001 owns the two phases and the dependency
+order within them. R007 owns what an order term means. R019 owns string
+equality and order. R020 owns the bytes the artifact becomes once this
+rule has completed and ordered it.
 
 ## The artifact
 
 **R005-1.** The **primary artifact** is the dataset this specification derives.
 Its columns are exactly the declared columns listed by `output.columns`, in
-that order, and its rows are the rows R001 constructs. A specification may
-also produce R009's governed warning-violation sidecar; that log reports the
-run, not a second derivation target or source within this specification.
+that order. Its rows are the rows R001 constructs. A specification may
+also produce R009's governed warning-violation sidecar. That log reports
+the run, not a second derivation target or source within this specification.
 
 **R005-2.** Rows leave in the order `output.order_by` declares. Without
 `output.order_by`, rows keep R001's construction order.
@@ -71,23 +71,23 @@ same-named source variable; R002 forbids that inference.
 
 **R005-7.** A column is derived either at column level or at row level, never
 both. A column declaring `derivation` must not also appear in any `rows`
-entry's `derivations`; the two would produce the same value twice
-with no rule for which one survives.
+entry's `derivations`. The two placements would produce the same value
+twice, with no rule for which value survives.
 
 **R005-8.** A row-derived column must be derived in every `rows` entry.
-Deriving it in some entries only leaves other constructed rows
-with no value, so partial row coverage is an error, not
-an implied missing value.
+Deriving a column in only some entries leaves other constructed rows
+with no value. Partial row coverage is an error, not an implied
+missing value.
 
 **R005-9.** A specification with no `rows` entry must derive every column at
-column level. Requirement R005-8 is vacuous when there are no entries.
+column level. R005-8 is vacuous when there are no entries.
 
 **R005-10.** A `rows` derivation must target a declared column. A key in
 `derivations` that names no declared column is an error.
 
-**R005-11.** Mixing the two placements across columns is normal:
-a specification with `rows` typically derives the columns that
-distinguish its row templates at row level and the rest at column level.
+**R005-11.** Mixing placements across columns is normal: a specification
+with `rows` typically derives the columns that distinguish its row
+templates at row level and all other columns at column level.
 
 **R005-12.** A column whose value is intentionally absent is still derived.
 Write `literal: null` rather than omitting the derivation.
@@ -104,7 +104,7 @@ does not publish. They do not change evaluation. R001 builds one dependency
 graph over all declared columns regardless of `output`, and an output column
 may depend on an internal one.
 
-**R005-15.** Column coverage applies unchanged; an internal column still
+**R005-15.** Column coverage applies unchanged. An internal column still
 needs a derivation in exactly one place.
 
 **R005-16.** `keys` must name output columns only. An internal column in
@@ -122,7 +122,7 @@ column. Its entries select the artifact columns and control their order.
 ## Derivation lifecycle
 
 **R005-20.** Every derived value passes through the same stages in this
-order. Nothing consumes a value before its lifecycle is complete, so a
+order. Nothing consumes a value before its lifecycle is complete. A
 dependent column, an override predicate, a verification, and the artifact
 all see the same converted value.
 
@@ -139,7 +139,7 @@ for one value, under R011.
 the first match's value, then stop, for one value, under R008.
 
 **R005-25.** Stage 5: run the column's verifications over the whole column,
-under R009. An error stops execution; warnings accumulate without changing
+under R009. An error stops execution. Warnings accumulate without changing
 the column.
 
 **R005-26.** Stages 1 to 4 run on each value, in whichever phase its
@@ -148,9 +148,9 @@ column's final value.
 
 **R005-27.** A row-level derivation therefore completes stages 1 to 4
 during row construction, and a column derivation that depends on it reads a
-converted value of the declared type. The declared type matters because R007
-permits no implicit conversion between operation inputs: an operation
-consuming a row-derived column must rely on its declared type.
+converted value of the declared type. The declared type matters. R007
+permits no implicit conversion between operation inputs, so an operation
+consuming a row-derived column must rely on the column's declared type.
 
 **R005-28.** For a grouped row template, R001 evaluates its `filter` after
 stages 1 to 4 complete for every value on the candidate row. A discarded
@@ -192,41 +192,41 @@ keys are used for enrichment and do not change the identity asserted here.
 ## Artifact row order
 
 **R005-33.** `output.order_by` declares the order the artifact's rows are
-presented in. It is optional, and an artifact whose specification omits it
-keeps R001's construction order: row-template order, and input order or
-first-occurrence group order within each row template.
+presented in. It is optional. An artifact whose specification omits the
+order keeps R001's construction order: row-template order, and input order
+or first-occurrence group order within each row template.
 
-**R005-34.** Its terms are R007's order terms, so a bare variable is
-ascending with missing values last, `direction` and `nulls` are declared per
-term, `nulls` does not flip with `direction`, and each non-missing value
-takes the order its type owns.
+**R005-34.** Its terms are R007's order terms. A bare variable is ascending
+with missing values last. `direction` and `nulls` are declared per term.
+`nulls` does not flip with `direction`. Each non-missing value takes the
+order its type owns.
 
 **R005-35.** A term may name any declared column, output or internal,
 because a submission order often rests on a working value the artifact does
 not publish: a numeric ordinal beside the text it labels, or a rank.
 
-**R005-36.** Every term must name a declared column, and no variable may be
+**R005-36.** Every term must name a declared column. No variable may be
 repeated. A qualified source variable is not a declared column and has no
-value on a completed row to order by; a repeated term states nothing the
-first one did not.
+value on a completed row to order by. A repeated term states nothing the
+first term did not.
 
-**R005-37.** Rows equal on every declared term keep their construction
-order, the tie-break R007 applies to window ordering. The order is therefore
-total for every input: no tie is an error, no comparison is undefined, and
-no specification declares a term merely to make the result deterministic;
-a specification wanting a tie broken declares the term that breaks it.
+**R005-37.** Rows equal on every declared term keep their construction order.
+R007 applies the same tie-break to window ordering. The order is therefore
+total for every input. No tie is an error. No comparison is undefined. No
+specification declares a term merely to make the result deterministic. A
+specification wanting a tie broken declares the term that breaks it.
 
 **R005-38.** Ordering is presentation. It runs once, after the derivation
 lifecycle, key validation, and every R009 verification, so it cannot
 change whether a run passes or warns. It changes nothing about evaluation
-either: R001's dependency order, a window's partitions, and the neighbours
-`row_value` reads are all fixed before this order is applied, and each keeps
+either. R001's dependency order, a window's partitions, and the neighbours
+`row_value` reads are all fixed before this order is applied. Each keeps
 construction order for its own tie-break.
 
 ## Specification-wide uniqueness
 
 **R005-39.** Within one specification, implementations must reject duplicate
-YAML mapping keys, and dataset identifiers, column names, and row IDs must
+YAML mapping keys. Dataset identifiers, column names, and row IDs must
 each be unique. R006 owns the corresponding requirements for the schema
 bundle.
 

@@ -10,8 +10,8 @@ applies_to: [schema, root.schema_version, environment.schema_version]
 
 ## Intent
 
-Define the modular notation used by `schema.yaml` and `schema_*.yaml` so R and
-Python implementations validate specifications consistently.
+Define the modular notation in `schema.yaml` and `schema_*.yaml` for
+consistent validation by R and Python implementations.
 
 ## Boundaries
 
@@ -31,8 +31,8 @@ included by both entry points; declaration uniqueness applies within each
 loaded bundle.
 
 **R006-2.** `includes` is an ordered list of filenames resolved relative to
-the including file. Included filenames must match `schema_[a-z0-9_]+.yaml`;
-absolute paths, parent traversal, URLs, missing files, and include cycles
+the including file. Included filenames must match `schema_[a-z0-9_]+.yaml`.
+Absolute paths, parent traversal, URLs, missing files, and include cycles
 are errors. Every document in a bundle must declare the same version.
 Include order has no validation or execution meaning.
 
@@ -62,9 +62,9 @@ timestamp resolver, so an unquoted ISO-looking date or datetime is also a
 string.
 
 **R006-8.** Default parser settings do not satisfy this requirement. Each
-implementation chooses how to meet it, but must not require authors to quote
-values. R011's non-finite normalization applies immediately after
-core-schema scalar resolution.
+implementation chooses how to meet the requirement, but must not require
+authors to quote values. R011's non-finite normalization applies
+immediately after core-schema scalar resolution.
 
 ## Named types
 
@@ -86,10 +86,10 @@ example_class:
 **R006-11.** Class fields are closed. Field order is descriptive and has no
 execution meaning. Duplicate class field names are errors.
 
-**R006-12.** A field name is not a descriptor keyword and may coincide with
-one. In `- type: {type: column_type, required: true}` the outer name is the
-field `type` of `column_class` and the inner `type` is this rule's
-descriptor keyword. The two are unrelated; R011 separates the vocabularies.
+**R006-12.** A field name is not a descriptor keyword and may match one. In
+`- type: {type: column_type, required: true}` the outer name is the field
+`type` of `column_class` and the inner `type` is this rule's descriptor
+keyword. The two uses are unrelated. R011 separates the vocabularies.
 
 **R006-13.** A value type is a descriptor written directly as a mapping:
 
@@ -152,7 +152,7 @@ type_expression := type_name
 
 **R006-21.** Whitespace around nested expressions and the comma is ignored.
 A YAML sequence of type expressions is a union. The quoted string `"null"`
-is a type name; an unquoted YAML null is a value.
+is a type name. An unquoted YAML null is a value.
 
 **R006-22.** `[` and `,` are structural characters inside a YAML flow
 mapping or flow sequence, so a type expression containing either must be
@@ -176,7 +176,7 @@ where YAML does require it is a parse error.
 
 **R006-23.** Two union shapes are shorthand for a canonical form. An
 implementation expands shorthand while validating. A validated document
-contains only the canonical form, so both implementations agree on what they
+contains only the canonical form. Both implementations agree on what they
 validated.
 
 **R006-24.** A union of `T` and `list[T]` accepts either. A bare `T`
@@ -194,10 +194,9 @@ against the union member it matched, so a constraint on the written form is
 checked before the value is expanded.
 
 **R006-27.** No other union is shorthand. A union matching neither shape,
-such as `literal_value`, selects a member and expands nothing. The two
-shorthand shapes above are the only shorthand mechanisms. A rule may say
-where a shorthand applies and what the expanded value means, but must not
-define a different expansion.
+such as `literal_value`, selects a member and expands nothing. A rule may
+say where a shorthand applies and what the expanded value means, but the
+rule must not define a different expansion.
 
 ## Descriptor keywords
 
@@ -229,7 +228,7 @@ belong in the schema, not only in prose.
 ## Descriptor style
 
 **R006-37.** A descriptor may be written as a YAML flow mapping or in block
-form. The two parse to the same mapping, and nothing in this rule
+form. The two parse to the same mapping. Nothing in this rule
 distinguishes them.
 
 ```yaml

@@ -10,20 +10,20 @@ applies_to: [sql]
 
 ## Intent
 
-Define the portable Boolean predicate written in a `sql` field: grammar,
+Define the portable Boolean predicate in a `sql` field: grammar,
 literals, comparisons, missing-value behavior, and failures.
 
 ## Boundaries
 
-This rule owns the `sql` primitive completely. R006 owns schema structure,
-R007 owns the runtime types and comparability of operation inputs, R010 owns
-the numeric-valued `numeric_expression` primitive, R011 owns the column type
-vocabulary, R016 owns temporal values, and R019 owns text values and their
-equality and order. R001 owns the phase in which a predicate runs and the names
-available in that phase.
+This rule owns the `sql` primitive completely. R006 owns schema
+structure. R007 owns runtime types and comparability of operation
+inputs. R010 owns the numeric-valued `numeric_expression` primitive.
+R011 owns the column type vocabulary. R016 owns temporal values. R019
+owns text values and their equality and order. R001 owns the phase in
+which a predicate runs and the names available in that phase.
 
 The predicate and numeric primitives share identifier notation and numeric
-literals, but neither grammar admits the other's operators or functions.
+literals. Neither grammar admits the other's operators or functions.
 
 ## Predicate sites and results
 
@@ -72,7 +72,7 @@ file fails validation.
 
 **R004-4.** Whitespace may separate tokens but cannot occur inside a number,
 identifier, or keyword. Precedence is `NOT`, then `AND`, then `OR`. Repeated
-binary operators associate from the left; parentheses override precedence.
+binary operators associate from the left. Parentheses override precedence.
 Keywords, `NULL`, `TRUE`, and `FALSE` are case-insensitive. Identifiers are
 case-sensitive. `AND`, `BETWEEN`, `DATE`, `DATETIME`, `ESCAPE`, `FALSE`, `IN`,
 `IS`, `LIKE`, `NOT`, `NULL`, `OR`, and `TRUE` are reserved as bare names. A
