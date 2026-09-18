@@ -6026,5 +6026,116 @@ class TestSourceProfileDiagnostics(unittest.TestCase):
             self.assertEqual(VALIDATOR.validate_csv_shapes(root), [])
 
 
+ODM_HEADER = (
+    'StudyOID,MetaDataVersionOID,SubjectKey,StudyEventOID,'
+    'StudyEventRepeatKey,ItemGroupOID,ItemGroupRepeatKey,ItemOID,Value\n'
+)
+
+
+class TestRetiredOdmItemReferences(unittest.TestCase):
+    """#506 retires R002-20: an ODM item is addressed by a source filter."""
+
+    def env(self):
+        env, errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
+        self.assertEqual(errors, [])
+        return env
+
+    def spec(self, dtc_derivation):
+        return {
+            'schema_version': '1.0',
+            'domain': 'DS',
+            'keys': ['USUBJID'],
+            'input': {'ODM': 'input/odm.csv'},
+            'output': {'path': 'ds.csv', 'columns': ['USUBJID', 'DSSTDTC']},
+            'columns': [
+                {
+                    'name': 'USUBJID',
+                    'type': 'str',
+                    'label': 'Unique Subject Identifier',
+                    'derivation': {'source': 'ODM.SubjectKey'},
+                },
+                {
+                    'name': 'DSSTDTC',
+                    'type': 'date',
+                    'label': 'Start Date/Time of Disposition Event',
+                    'derivation': dtc_derivation,
+                },
+            ],
+        }
+
+    def findings(self, dtc_derivation, name='sdtm-ds-probe'):
+        env = self.env()
+        with tempfile.TemporaryDirectory() as raw:
+            example = Path(raw) / 'benchmark' / name
+            (example / 'input').mkdir(parents=True)
+            (example / 'input' / 'odm.csv').write_text(ODM_HEADER)
+            spec_path = example / 'spec.yaml'
+            spec_path.write_text('{}\n')
+            return VALIDATOR.validate_retired_odm_item_references(
+                self.spec(dtc_derivation),
+                f'{name}/spec.yaml',
+                spec_path,
+                env,
+            )
+
+    def test_accepts_a_source_filter_over_item_oid(self):
+        self.assertEqual(
+            self.findings({
+                'source': {
+                    'variable': 'ODM.Value',
+                    'filter': "ODM.ItemOID = 'IT.DS.DTC'",
+                },
+            }),
+            [],
+        )
+
+    def test_rejects_an_item_hidden_in_the_variable_name(self):
+        findings = self.findings({'source': 'ODM.IT.DS.DTC'})
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn('retired_construct', findings[0])
+        self.assertIn("'ODM.IT.DS.DTC'", findings[0])
+        self.assertIn('columns[1].derivation.source', findings[0])
+
+    def test_rejects_an_item_inside_a_case_branch(self):
+        findings = self.findings({
+            'case': {
+                'branches': [
+                    {
+                        'when': "USUBJID = '001'",
+                        'then': {'literal': '2024-01-01'},
+                    }
+                ],
+                'otherwise': {'source': {'variable': 'ODM.IT.DS.DTC'}},
+            },
+        })
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn(
+            'derivation.case.otherwise.source.variable', findings[0]
+        )
+
+    def test_exempts_the_specifications_506_still_owes(self):
+        listed = sorted(VALIDATOR.ODM_CONTEXTUAL_REFERENCE_MIGRATION)
+        examples = TOOL_PATH.parents[3] / 'benchmark'
+
+        self.assertEqual(
+            listed,
+            [
+                'adam-adsl-randomization-timing/input/dm.schema.yaml',
+                'odm-form-scoped-item-resolution/spec.yaml',
+                'sdtm-lb-findings/spec.yaml',
+                'sdtm-lb-multiform/spec.yaml',
+            ],
+        )
+        for entry in listed:
+            # An exemption that names a file nobody keeps is an exemption
+            # nobody notices retiring.
+            self.assertTrue((examples / entry).is_file(), entry)
+            self.assertEqual(
+                VALIDATOR.example_migration_label(examples / entry), entry
+            )
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -140,7 +140,7 @@ wording, but the eleven jobs are the same.
 | Significant digits / display format | *project setting* | R011: decimal places belong to the project, not the spec |
 | `Controlled Terms or Format` | `mapping.dict` / `mapping_from` / `allowed_values`, plus `column.metadata.codelist` | See 3.3 -- translation and enforcement separate here too |
 | `Origin` = Assigned | `literal: DM` | |
-| `Origin` = Collected (CRF / eDT) | `source: {variable: ODM.Value, filter: "ODM.ItemOID = 'IT.DM.AGE'"}` | The `filter` says which collected records the value comes from; R002's `ODM.IT.DM.AGE` addresses one contextually instead |
+| `Origin` = Collected (CRF / eDT) | `source: {variable: ODM.Value, filter: "ODM.ItemOID = 'IT.DM.AGE'"}` | The `filter` says which collected records the value comes from. The retired `ODM.IT.DM.AGE` form is not an alternative |
 | `Origin` = Predecessor | `source: ADSL.TRTSDT` | A qualified cross-dataset name performs an **automatic left join** (R003) |
 | `Origin` = Derived | a specific expression | See [the verb table](schema-concepts.md) |
 | `Core` (Req / Exp / Perm) | `column.metadata` | A conformance classification against an IG; it says nothing about derivation |
