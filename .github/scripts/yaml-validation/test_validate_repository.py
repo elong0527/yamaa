@@ -4055,7 +4055,7 @@ class TestProjectResourceBoundaryInSpecs(unittest.TestCase):
 
 
 class TestRegularExpressionContract(unittest.TestCase):
-    """R022: one pinned ECMA-262 engine reads every pattern."""
+    """R022: the portable contract binding reads every pattern."""
 
     @classmethod
     def setUpClass(cls):
@@ -4063,40 +4063,45 @@ class TestRegularExpressionContract(unittest.TestCase):
         cls.env, schema_errors = VALIDATOR.build_schema_env(cls.root)
         assert not schema_errors, schema_errors
 
-    # -- the pinned engine -------------------------------------------------
+    # -- the portable contract ---------------------------------------------
 
-    def test_requirements_install_the_engine_the_validator_pins(self):
-        from importlib.metadata import version
+    def test_the_validator_names_the_contract_it_replays(self):
+        self.assertEqual(VALIDATOR.REGEX_CONTRACT, 'regex')
+        self.assertEqual(VALIDATOR.REGEX_CONTRACT_VERSION, '2.0.0')
 
-        self.assertEqual(
-            version(VALIDATOR.REGEX_ENGINE_DISTRIBUTION),
-            VALIDATOR.REGEX_ENGINE_DISTRIBUTION_VERSION,
+    def test_the_replay_reads_through_the_shared_package_binding(self):
+        from yamaa import regex as package_binding
+
+        self.assertIs(
+            VALIDATOR._portable_compile, package_binding.compile_pattern
+        )
+        self.assertIs(
+            VALIDATOR._portable_full_match, package_binding.full_match
         )
 
-    def test_missing_engine_fails_rather_than_falling_back(self):
-        saved = VALIDATOR._regex_engine
+    def test_missing_binding_fails_rather_than_falling_back(self):
+        saved = VALIDATOR._portable_binding
         try:
-            VALIDATOR._regex_engine = None
-            with self.assertRaises(VALIDATOR.RegexEngineUnavailable) as caught:
+            VALIDATOR._portable_binding = None
+            with self.assertRaises(VALIDATOR.RegexBindingUnavailable) as caught:
                 VALIDATOR.compile_regex('a')
         finally:
-            VALIDATOR._regex_engine = saved
+            VALIDATOR._portable_binding = saved
         message = str(caught.exception)
         self.assertIn('unsupported_regex_engine', message)
-        self.assertIn(VALIDATOR.REGEX_ENGINE_CRATE_VERSION, message)
+        self.assertIn(VALIDATOR.REGEX_CONTRACT_VERSION, message)
 
-    def test_patterns_are_read_with_the_unicode_flag_only(self):
-        self.assertEqual(VALIDATOR.REGEX_FLAGS, 'u')
+    # -- the contract is not the host default ------------------------------
 
-    # -- the engine is not Python re ---------------------------------------
-
-    def test_accepts_ecmascript_syntax_python_re_rejects(self):
-        for pattern in ('(?<name>a)', '(?<=a+)b', r'\p{L}', r'\u{1D400}'):
+    def test_accepts_contract_syntax_beyond_the_host_library(self):
+        for pattern in ('(?<name>a)', r'\u{1D400}', '(?<=ab)x'):
             with self.subTest(pattern=pattern):
                 VALIDATOR.compile_regex(pattern)
 
-    def test_rejects_syntax_python_re_accepts(self):
-        for pattern in ('(?P<name>a)', '(?i)a', r'\a', 'a{'):
+    def test_rejects_syntax_outside_the_portable_contract(self):
+        for pattern in (
+            '(?P<name>a)', '(?i)a', r'\a', 'a{', '(?<=a+)b', r'\p{L}',
+        ):
             with self.subTest(pattern=pattern):
                 with self.assertRaises(VALIDATOR.InvalidRegex):
                     VALIDATOR.compile_regex(pattern)
@@ -4105,7 +4110,8 @@ class TestRegularExpressionContract(unittest.TestCase):
         self.assertTrue(VALIDATOR.regex_full_match(r'\d', '5'))
         self.assertFalse(VALIDATOR.regex_full_match(r'\d', chr(0x0665)))
         self.assertFalse(VALIDATOR.regex_full_match(r'\w', chr(0x00E9)))
-        self.assertTrue(VALIDATOR.regex_full_match(r'\p{L}', chr(0x00E9)))
+        with self.assertRaises(VALIDATOR.InvalidRegex):
+            VALIDATOR.regex_full_match(r'\p{L}', chr(0x00E9))
 
     def test_dollar_does_not_match_before_a_trailing_line_feed(self):
         self.assertTrue(VALIDATOR.regex_full_match('a', 'a'))
@@ -4196,7 +4202,7 @@ class TestRegularExpressionContract(unittest.TestCase):
     def test_both_conditions_are_registered_to_this_rule(self):
         registry = VALIDATOR.VALIDATION_CONDITION_REGISTRY
         for condition, required in (
-            # The engine's wording is not a portable fact, so a fixture
+            # The binding's wording is not a portable fact, so a fixture
             # states the pattern and the diagnostic adds the reason.
             ('invalid_regex', {'pattern'}),
             ('regex_group_out_of_range', {'group', 'group_count', 'pattern'}),
@@ -4209,7 +4215,7 @@ class TestRegularExpressionContract(unittest.TestCase):
                     registration['allowed_phases'], {'validation'}
                 )
 
-    def test_matches_pattern_the_engine_rejects_fails_validation(self):
+    def test_matches_pattern_the_contract_rejects_fails_validation(self):
         errors = VALIDATOR.validate_type(
             {'matches': {'pattern': '(?P<name>a)'}},
             ['column_verification'],
@@ -4225,7 +4231,7 @@ class TestRegularExpressionContract(unittest.TestCase):
         self.assertEqual(errors[0].context['pattern'], '(?P<name>a)')
         self.assertIn('reason', errors[0].context)
 
-    def test_matches_pattern_the_engine_accepts_validates(self):
+    def test_matches_pattern_the_contract_accepts_validates(self):
         errors = VALIDATOR.validate_type(
             {'matches': {'pattern': '(?<name>a)'}},
             ['column_verification'],
@@ -4278,14 +4284,14 @@ class TestRegularExpressionContract(unittest.TestCase):
         self.assertEqual(errors[0].condition, 'regex_group_out_of_range')
         self.assertEqual(errors[0].context['group_count'], 0)
 
-    def test_descriptor_pattern_the_engine_rejects_fails_validation(self):
+    def test_descriptor_pattern_the_contract_rejects_fails_validation(self):
         errors = VALIDATOR.check_descriptor(
             {'type': 'str', 'pattern': '(?P<name>a)'}, False, 'schema.name'
         )
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0].condition, 'invalid_regex')
 
-    def test_descriptor_pattern_constraint_uses_the_pinned_engine(self):
+    def test_descriptor_pattern_constraint_uses_the_portable_binding(self):
         env = {
             'classes': {},
             'aliases': {'code': {'type': 'str', 'pattern': '^a$'}},
@@ -4301,10 +4307,10 @@ class TestRegularExpressionContract(unittest.TestCase):
 
     # -- the shared fixtures ------------------------------------------------
 
-    def test_shared_fixtures_replay_against_the_pinned_engine(self):
+    def test_shared_fixtures_replay_against_the_portable_binding(self):
         self.assertEqual(VALIDATOR.validate_regex_conformance(self.root), [])
 
-    def test_replay_reports_an_outcome_that_drifted_from_the_engine(self):
+    def test_replay_reports_an_outcome_that_drifted_from_the_binding(self):
         source = self.root / 'yaml' / 'conformance' / 'regex.yaml'
         original = source.read_text()
         drifted = original.replace(
@@ -4324,7 +4330,7 @@ class TestRegularExpressionContract(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn('schema_pattern records False', errors[0])
 
-    def test_replay_reports_a_pattern_the_engine_does_not_reject(self):
+    def test_replay_reports_a_pattern_the_binding_does_not_reject(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             target = root / 'yaml' / 'conformance'
@@ -4332,11 +4338,7 @@ class TestRegularExpressionContract(unittest.TestCase):
             (target / 'regex.yaml').write_text(
                 'schema_version: "1.0"\n'
                 'contract: regex\n'
-                'contract_version: "1.0.0"\n'
-                'engine:\n'
-                f'  crate: {VALIDATOR.REGEX_ENGINE_CRATE}\n'
-                f'  crate_version: "{VALIDATOR.REGEX_ENGINE_CRATE_VERSION}"\n'
-                f'  flags: {VALIDATOR.REGEX_FLAGS}\n'
+                'contract_version: "2.0.0"\n'
                 'cases:\n'
                 '  - id: accepted-pattern-recorded-as-invalid\n'
                 '    covers: [unsupported]\n'
@@ -4345,7 +4347,7 @@ class TestRegularExpressionContract(unittest.TestCase):
             )
             errors = VALIDATOR.validate_regex_conformance(root)
         self.assertTrue(
-            any('the pinned engine accepts pattern' in e for e in errors),
+            any('the portable binding accepts pattern' in e for e in errors),
             errors,
         )
 
@@ -4358,11 +4360,7 @@ class TestRegularExpressionContract(unittest.TestCase):
             (target / 'regex.yaml').write_text(
                 'schema_version: "1.0"\n'
                 'contract: regex\n'
-                'contract_version: "1.0.0"\n'
-                'engine:\n'
-                f'  crate: {VALIDATOR.REGEX_ENGINE_CRATE}\n'
-                f'  crate_version: "{VALIDATOR.REGEX_ENGINE_CRATE_VERSION}"\n'
-                f'  flags: {VALIDATOR.REGEX_FLAGS}\n'
+                'contract_version: "2.0.0"\n'
                 'cases:\n'
                 '  - id: only-an-anchor-case\n'
                 '    covers: [anchors]\n'

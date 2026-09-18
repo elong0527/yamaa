@@ -1,9 +1,10 @@
 """String expressions: R012 templates, R019 casing, and R022 extraction.
 
 `yaml/grammar/string-template.yaml` is the single source for the template
-grammar. Every regular expression is read by the one engine R022 pins, so no
-pattern reaches Python `re`, and casing is the exact ASCII substitution R019
-defines rather than a host or Unicode case table.
+grammar. Every regular expression is read by the one portable-contract
+binding R022 defines, so no pattern reaches another dialect, and casing is
+the exact ASCII substitution R019 defines rather than a host or Unicode
+case table.
 """
 
 from __future__ import annotations

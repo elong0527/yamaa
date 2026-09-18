@@ -414,7 +414,9 @@ def test_header_only_artifact_passes_key_validation_and_column_checks() -> None:
     assert check_column(empty, column("AGE", "int", {"not_missing": {}}), KEYS) == ()
 
 
-def test_matches_searches_with_the_pinned_engine_rather_than_a_host_dialect() -> None:
+def test_matches_searches_with_the_portable_contract_rather_than_a_host_dialect() -> (
+    None
+):
     completed = table(
         [("STUDYID", "str"), ("USUBJID", "str"), ("CODE", "str")],
         [["S", "S-1", "\u0665"], ["S", "S-2", "5"]],
@@ -429,17 +431,21 @@ def test_matches_searches_with_the_pinned_engine_rather_than_a_host_dialect() ->
     assert failures[0].context["keys"] == [{"STUDYID": "S", "USUBJID": "S-1"}]
 
 
-def test_matches_admits_a_unicode_property_pattern_and_searches_anywhere() -> None:
+def test_matches_rejects_a_unicode_property_pattern() -> None:
+    # R022-34: property escapes are outside the portable grammar, so the
+    # pattern fails validation rather than searching.
     completed = table(
         [("STUDYID", "str"), ("USUBJID", "str"), ("TEXT", "str")],
         [["S", "S-1", "12ab"], ["S", "S-2", "1234"]],
     )
 
-    failures = check_column(
-        completed, column("TEXT", "str", {"matches": {"pattern": r"\p{L}+"}}), KEYS
-    )
+    with pytest.raises(DeclarationError) as rejected:
+        check_column(
+            completed, column("TEXT", "str", {"matches": {"pattern": r"\p{L}+"}}), KEYS
+        )
 
-    assert failures[0].context["keys"] == [{"STUDYID": "S", "USUBJID": "S-2"}]
+    assert rejected.value.condition == "invalid_regex"
+    assert rejected.value.context == {"pattern": r"\p{L}+"}
 
 
 def test_max_length_counts_one_supplementary_plane_scalar_once() -> None:

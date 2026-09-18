@@ -25,29 +25,33 @@ from yaml.events import AliasEvent
 
 # R022 regular expressions. Every pattern the language admits -- a schema
 # `pattern` descriptor, `str_extract.pattern`, and a `matches` verification --
-# is read by one pinned ECMA-262 engine with the Unicode flag set, so that
-# repository validation is not a second dialect. Python `re` is deliberately
-# absent from this section: it accepts and rejects patterns this language does
-# not, and it matches Unicode differently. The `re` uses elsewhere in this file
-# scan the validator's own closed grammars and are not language patterns.
-REGEX_ENGINE_CRATE = 'regress'
-REGEX_ENGINE_CRATE_VERSION = '0.10.4'
-REGEX_ENGINE_DISTRIBUTION = 'regress'
-REGEX_ENGINE_DISTRIBUTION_VERSION = '2025.10.1'
-REGEX_FLAGS = 'u'
+# is read through the portable R022 contract: the rule text plus the shared
+# conformance fixtures. This validator replays them through the same Python
+# binding the package ships (`yamaa.regex` over the standard library), so
+# repository validation is not a second dialect. No other regular-expression
+# library reads a pattern of the language.
+REGEX_CONTRACT = 'regex'
+REGEX_CONTRACT_VERSION = '2.0.0'
 
 try:
-    import regress as _regex_engine
+    from yamaa.regex import (
+        RegexError as _PortableRegexError,
+        capture_group_count as _portable_group_count,
+        compile_pattern as _portable_compile,
+        full_match as _portable_full_match,
+    )
 except ImportError:
-    _regex_engine = None
+    _portable_binding = None
+else:
+    _portable_binding = True
 
 
-class RegexEngineUnavailable(Exception):
-    """R022 unsupported_regex_engine: the pinned engine is not installed."""
+class RegexBindingUnavailable(Exception):
+    """R022 unsupported_regex_engine: the portable binding is not installed."""
 
 
 class InvalidRegex(Exception):
-    """R022 invalid_regex: the pinned engine rejected a pattern."""
+    """R022 invalid_regex: the portable contract rejected a pattern."""
 
     def __init__(self, reason):
         super().__init__(reason)
@@ -58,36 +62,35 @@ class RegexGroupOutOfRange(Exception):
     """R022 regex_group_out_of_range: a group the pattern does not declare."""
 
 
-def regex_engine_requirement():
-    """Name the engine and version R022 pins, for a failure to report."""
+def regex_contract_requirement():
+    """Name the contract and binding R022 pins, for a failure to report."""
     return (
-        f"{REGEX_ENGINE_DISTRIBUTION}=={REGEX_ENGINE_DISTRIBUTION_VERSION} "
-        f"(Rust crate {REGEX_ENGINE_CRATE} {REGEX_ENGINE_CRATE_VERSION})"
+        f"portable contract {REGEX_CONTRACT_VERSION} "
+        "(the yamaa.regex binding over the standard library)"
     )
 
 
-def require_regex_engine():
-    """Return the pinned engine, or fail rather than substitute another."""
-    if _regex_engine is None:
-        raise RegexEngineUnavailable(
+def require_regex_binding():
+    """Return the portable binding, or fail rather than substitute another."""
+    if _portable_binding is None:
+        raise RegexBindingUnavailable(
             "unsupported_regex_engine under R022: this validator requires "
-            f"{regex_engine_requirement()} and does not fall back to a host "
-            "regular-expression library"
+            f"{regex_contract_requirement()} and does not fall back to "
+            "another regular-expression library"
         )
-    return _regex_engine
 
 
 def compile_regex(pattern):
-    """Compile one R022 pattern source with the pinned engine and flags."""
-    engine = require_regex_engine()
+    """Compile one R022 pattern source through the portable contract."""
+    require_regex_binding()
     if not isinstance(pattern, str):
         raise InvalidRegex(
             f"pattern must be a string, got {type(pattern).__name__}"
         )
     try:
-        return engine.Regex(pattern, REGEX_FLAGS)
-    except engine.RegressError as exc:
-        raise InvalidRegex(str(exc)) from exc
+        return _portable_compile(pattern)
+    except _PortableRegexError as exc:
+        raise InvalidRegex(exc.reason) from exc
 
 
 def anchored_regex_source(pattern):
@@ -97,15 +100,18 @@ def anchored_regex_source(pattern):
 
 def regex_search(pattern, subject):
     """Return the leftmost match of an R022 pattern, or None."""
-    return compile_regex(pattern).find(subject)
+    return compile_regex(pattern).search(subject)
 
 
 def regex_full_match(pattern, subject):
     """Return whether an R022 pattern matches the whole subject."""
     if not isinstance(subject, str):
         return False
-    anchored = compile_regex(anchored_regex_source(pattern))
-    return anchored.find(subject) is not None
+    require_regex_binding()
+    try:
+        return _portable_full_match(pattern, subject)
+    except _PortableRegexError as exc:
+        raise InvalidRegex(exc.reason) from exc
 
 
 def regex_capture_group_count(pattern):
@@ -113,39 +119,16 @@ def regex_capture_group_count(pattern):
 
     Groups are numbered by the order of their opening parenthesis, counting
     only capturing groups: `(?:`, lookaround, and a parenthesis inside a
-    character class contribute no number, while `(?<name>` does. The engine
-    reports no count of its own, and an out-of-range group index is
-    indistinguishable from one the match did not enter, so the count is read
-    from the pattern source the engine has already accepted.
+    character class contribute no number, while `(?<name>` does. The binding
+    answers an out-of-range group index exactly as it answers a group the
+    match did not enter, so the count is read from the pattern source the
+    contract has already accepted.
     """
-    compile_regex(pattern)
-    count = 0
-    index = 0
-    length = len(pattern)
-    in_class = False
-    while index < length:
-        char = pattern[index]
-        if char == '\\':
-            index += 2
-            continue
-        if in_class:
-            if char == ']':
-                in_class = False
-            index += 1
-            continue
-        if char == '[':
-            in_class = True
-            index += 1
-            continue
-        if char == '(':
-            if not pattern.startswith('(?', index):
-                count += 1
-            else:
-                rest = pattern[index + 2:]
-                if rest.startswith('<') and not rest.startswith(('<=', '<!')):
-                    count += 1
-        index += 1
-    return count
+    require_regex_binding()
+    try:
+        return _portable_group_count(pattern)
+    except _PortableRegexError as exc:
+        raise InvalidRegex(exc.reason) from exc
 
 
 REGEX_NO_MATCH = object()
@@ -166,10 +149,7 @@ def regex_extract(pattern, subject, group=0):
     match = regex_search(pattern, subject)
     if match is None:
         return REGEX_NO_MATCH
-    span = match.group(group)
-    if span is None:
-        return None
-    return subject.encode('utf-8')[span.start:span.stop].decode('utf-8')
+    return match.group(group)
 
 
 def regex_pattern_errors(pattern, path, full_match=False):
@@ -182,7 +162,7 @@ def regex_pattern_errors(pattern, path, full_match=False):
         return [validation_diagnostic(
             path,
             'invalid_regex',
-            f"the R022 engine rejects {pattern!r}: {exc.reason}",
+            f"the R022 contract rejects {pattern!r}: {exc.reason}",
             context={'pattern': pattern, 'reason': exc.reason},
         )]
     return []
@@ -332,7 +312,7 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R021', 'resource_path_outside_project'): {'path'},
     ('R021', 'resource_path_symlink'): {'path'},
     ('R021', 'resource_path_uri_scheme'): {'path'},
-    # The engine's wording is additional context an implementation may
+    # The binding's wording is additional context an implementation may
     # report; the pattern is the portable fact a fixture must state.
     ('R022', 'invalid_regex'): {'pattern'},
     ('R022', 'regex_group_out_of_range'): {
@@ -1765,7 +1745,7 @@ def validate_constraints(data, descriptor, path):
             errors.append(validation_diagnostic(
                 path,
                 'invalid_regex',
-                f"the R022 engine rejects {pattern!r}: {exc.reason}",
+                f"the R022 contract rejects {pattern!r}: {exc.reason}",
                 context={'pattern': pattern, 'reason': exc.reason},
             ))
         else:
@@ -9735,11 +9715,11 @@ REGEX_FIXTURE_CASE_KEYS = {
 
 
 def validate_regex_conformance(root: Path):
-    """Replay R022's shared fixtures against the pinned engine.
+    """Replay R022's shared fixtures against the portable contract binding.
 
     Every case records what all three consumers produce for one pattern and
     subject. Replaying them here keeps the fixtures, this validator, and the
-    pinned engine from drifting apart, and gives the R implementation a file
+    shared binding from drifting apart, and gives the R implementation a file
     whose expected values are already known to be reachable.
     """
     label = str(REGEX_CONFORMANCE_PATH)
@@ -9757,16 +9737,21 @@ def validate_regex_conformance(root: Path):
         return [f"ERROR: {label}: expected a mapping"]
 
     errors = []
-    engine = document.get('engine')
-    expected_engine = {
-        'crate': REGEX_ENGINE_CRATE,
-        'crate_version': REGEX_ENGINE_CRATE_VERSION,
-        'flags': REGEX_FLAGS,
-    }
-    if engine != expected_engine:
+    if document.get('contract') != REGEX_CONTRACT:
         errors.append(
-            f"ERROR: {label}: engine {engine!r} does not name the engine this "
-            f"validator pins, {expected_engine!r}"
+            f"ERROR: {label}: contract {document.get('contract')!r} does not "
+            f"name the portable contract this validator replays, "
+            f"{REGEX_CONTRACT!r}"
+        )
+    if document.get('contract_version') != REGEX_CONTRACT_VERSION:
+        errors.append(
+            f"ERROR: {label}: contract_version "
+            f"{document.get('contract_version')!r} is not the contract "
+            f"version this validator replays, {REGEX_CONTRACT_VERSION!r}"
+        )
+    if 'engine' in document:
+        errors.append(
+            f"ERROR: {label}: the portable contract pins no engine"
         )
 
     cases = document.get('cases')
@@ -9824,7 +9809,7 @@ def validate_regex_conformance(root: Path):
 
 
 def _regex_fixture_case_errors(case, case_label, pattern):
-    """Compare one fixture case with what the pinned engine produces."""
+    """Compare one fixture case with what the portable binding produces."""
     errors = []
     if case.get('invalid') is True:
         for key in ('subject', 'schema_pattern', 'matches', 'str_extract'):
@@ -9837,7 +9822,7 @@ def _regex_fixture_case_errors(case, case_label, pattern):
         except InvalidRegex:
             return errors
         errors.append(
-            f"ERROR: {case_label}: the pinned engine accepts pattern "
+            f"ERROR: {case_label}: the portable binding accepts pattern "
             f"{pattern!r} the fixture records as invalid"
         )
         return errors
@@ -9856,7 +9841,7 @@ def _regex_fixture_case_errors(case, case_label, pattern):
         actual_search = regex_search(pattern, subject) is not None
     except InvalidRegex as exc:
         errors.append(
-            f"ERROR: {case_label}: the pinned engine rejects pattern "
+            f"ERROR: {case_label}: the portable binding rejects pattern "
             f"{pattern!r}: {exc.reason}"
         )
         return errors
@@ -9871,7 +9856,7 @@ def _regex_fixture_case_errors(case, case_label, pattern):
         elif recorded is not actual:
             errors.append(
                 f"ERROR: {case_label}: {key} records {recorded} but the "
-                f"pinned engine produces {actual}"
+                f"portable binding produces {actual}"
             )
 
     errors.extend(
@@ -9913,17 +9898,17 @@ def _regex_fixture_extract_errors(case, case_label, pattern, subject):
     if actual is REGEX_NO_MATCH:
         return [
             f"ERROR: {case_label}: str_extract records a match but the "
-            f"pinned engine finds none"
+            f"portable binding finds none"
         ]
     if expected is REGEX_NO_MATCH:
         return [
             f"ERROR: {case_label}: str_extract records no match but the "
-            f"pinned engine matches"
+            f"portable binding matches"
         ]
     if actual != expected:
         return [
             f"ERROR: {case_label}: str_extract group {group} records "
-            f"{expected!r} but the pinned engine produces {actual!r}"
+            f"{expected!r} but the portable binding produces {actual!r}"
         ]
     return []
 
@@ -10392,8 +10377,8 @@ def main():
     args = parser.parse_args()
 
     try:
-        require_regex_engine()
-    except RegexEngineUnavailable as exc:
+        require_regex_binding()
+    except RegexBindingUnavailable as exc:
         print(f"ERROR: {exc}")
         return 1
 

@@ -16,7 +16,6 @@ dependencies = [
   "pyarrow>=23.0.1,<26",
   "pydantic>=2.12.4,<3",
   "pyyaml>=6.0.3,<7",
-  "regress==2025.10.1",
 ]
 
 [project.optional-dependencies]

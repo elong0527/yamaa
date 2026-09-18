@@ -30,7 +30,7 @@ semantics, error behavior, and representative examples are complete.
 | R019 | [Text values](R019-text-values.md) | normative | ASCII source, Unicode data, casing, equality, normalization, total order |
 | R020 | [Artifact serialization](R020-artifact-serialization.md) | normative | The `parquet` and `csv` profiles, display precision, and publication |
 | R021 | [Project resource resolution](R021-project-resource-resolution.md) | normative | The approved project root, written path form, readable file kinds, content identity |
-| R022 | [Regular expressions](R022-regular-expressions.md) | normative | The pinned engine and flag set, full-match and search behavior per consumer, capture-group numbering |
+| R022 | [Regular expressions](R022-regular-expressions.md) | normative | The portable pattern contract and normalization, full-match and search behavior per consumer, capture-group numbering |
 | R023 | [Source profile selection and delimited source profile](R023-delimited-source.md) | normative | Source-profile selection and the `csv` source syntax: encoding, records and fields, header shape, and delivered quoting |
 | R024 | [Submission metadata](R024-submission-metadata.md) | normative | Governed dataset and column metadata: standard families, data type, length, core and mandatory, origin and what the graph refutes, methods, comments |
 | R025 | [Controlled terminology](R025-controlled-terminology.md) | normative | The codelist object: identity, values, extensibility, external form, what a binding enforces, and agreement with `allowed_values` |
