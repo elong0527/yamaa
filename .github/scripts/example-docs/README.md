@@ -1,10 +1,18 @@
-# Example dashboards
+# Benchmark dashboards
 
 This iteration generates one self-contained HTML page per example plus an
-`index.html` gallery, all under `docs/examples/`. Each page is generated from
+`index.md` gallery, all under `docs/benchmark/`. Each page is generated from
 its `README.md`, `spec.yaml`, and regular files under `input/` and `expected/`.
-Edit source fixtures or the shared template, stylesheet, and script here, then
-regenerate; do not edit generated HTML manually.
+Edit source fixtures or the shared templates, stylesheet, and script here, then
+regenerate; do not edit generated output manually.
+
+The gallery is Markdown, so MkDocs renders it as an ordinary page of the
+documentation site, in the nav under `Benchmark`, with the site header,
+navigation, search, and light and dark palettes. The dashboards stay
+self-contained. Both carry the navy sampled from the hex logo and the font
+stacks the Material pages fall back to, so the two halves read as one site;
+`dashboard.css` and `docs/stylesheets/extra.css` hold the two copies of those
+values.
 
 From the repository root, generate every example and the gallery:
 
@@ -21,7 +29,7 @@ uv run --with-requirements .github/scripts/example-docs/requirements.txt python 
 ```
 
 With no example names, regenerate the dashboards already present in
-`docs/examples/`, plus the gallery when `index.html` is among them.
+`docs/benchmark/`, plus the gallery when `index.md` is among them.
 `--output-dir PATH` changes the output directory for a temporary preview.
 
 Check that existing dashboards match the current fixtures and template:
@@ -40,13 +48,17 @@ The dependencies, including the Markdown parser's transitive dependency, are
 pinned. Files and subjects are sorted, output uses fixed ASCII bytes with HTML
 character references, and pages contain no timestamps, absolute checkout
 paths, network responses, or generated identifiers. Identical fixtures,
-templates, and dependencies produce identical HTML bytes. `--check` compares
+templates, and dependencies produce identical bytes. `--check` compares
 those bytes and never writes files.
 
-The HTML embeds its CSS, JavaScript, and full rendered content. It opens
+A dashboard embeds its CSS, JavaScript, and full rendered content. It opens
 directly from disk, works offline apart from comments, and is copied
-unchanged by GitHub Pages because it has no Jekyll front matter. The README
-renders as the Summary panel spanning the top. Its Standard and Domain metadata
+unchanged by GitHub Pages because it has no Jekyll front matter. The one
+file it loads is `../assets/logo.jpeg`, the logo it shares with the
+documentation site, on a path that resolves both in the repository and on
+the published site. The header bar around it repeats the one Material
+draws, and links back to the documentation root, to the gallery, and to the
+example source. The README renders as the Summary panel spanning the top. Its Standard and Domain metadata
 appear as the dotted context above the page title instead of being repeated in
 the Summary. Summaries with no more than ten non-empty source lines use one
 left-aligned column; longer summaries use two columns, keeping each section
@@ -71,12 +83,14 @@ with a count beside each; the custom giscus theme for that focused presentation
 lives at `docs/assets/giscus-yamaa.css`. Each comment and reaction is stored in this
 repository's GitHub Discussions, so feedback persists across rebuilds and
 deployments and can be moderated there. Each example maps to one discussion
-titled `benchmark/<example-name>`
+titled `COMMENT_TERM_PREFIX` plus the example directory name
 (`data-mapping="specific"`), so the thread follows the example directory rather
 than the page URL; renaming the directory starts a new thread unless the
-discussion is retitled to match. The comment widget is the only part of a page
-that needs the network; without it, or without JavaScript, the rest of the page
-works as before and a link points to Discussions.
+discussion is retitled to match. The prefix is still `yaml/examples/`, the
+directory name from before the move to `benchmark/`, because changing it
+would orphan every comment posted so far. The comment widget is the only
+part of a page that needs the network; without it, or without JavaScript,
+the rest of the page works as before and a link points to Discussions.
 
 Comments need a one-time setup by a repository admin: enable Discussions,
 create a `Comments` category of the Announcement type (so only maintainers and
@@ -87,7 +101,8 @@ on the repository, and copy the category ID shown at https://giscus.app into
 Every dashboard links back to the gallery from its header, beside the source
 link, and again from its footer between the previous and next example. The
 header link is what makes the gallery reachable from a long page without
-scrolling to the end of it.
+scrolling to the end of it, and the brand beside it returns to the
+documentation site.
 
 The gallery lists `Examples` before `Anti-pattern`, each group headed by its
 own count and subdivided by the standard and domain in the example title. A
@@ -95,15 +110,22 @@ own count and subdivided by the standard and domain in the example title. A
 same test the repository validator applies. The two are separate contracts --
 one must produce an artifact, the other must refuse to -- so the gallery does
 not interleave them by domain. Links at the top of the page jump to either
-group.
+group, and every group and domain heading is Markdown, so the page's table of
+contents lists them. The lists themselves are written as HTML, which escapes
+each title exactly once and lets `docs/stylesheets/extra.css` lay them out as
+a grid. The page asks for `hide: actions` in its front matter, because it is
+generated and the Edit and View buttons Material would draw for it would point
+at a file that is not in the repository; `docs/overrides/partials/actions.html`
+is what honors that.
 
 The Example dashboards workflow runs on relevant pushes and pull requests. It
 generates every repository example twice under different time zones and Python
 hash seeds, compares the resulting directories byte for byte, checks that the
 committed pages and gallery are current, and uploads the complete generated
-set as the `yamaa-example-dashboards` workflow artifact. The gallery
-`docs/examples/index.html` is served as the directory index by GitHub Pages,
-so every page is reachable from the site without leaving the examples.
+set as the `yamaa-example-dashboards` workflow artifact. MkDocs builds
+`docs/benchmark/index.md` to `benchmark/index.html`, which GitHub Pages serves
+as the directory index, so `index.html` in a dashboard's own links reaches the
+gallery and every page is reachable from the site.
 
 The generator displays expected artifacts; it does not execute YAMAA or claim
 that expected output was reproduced. YAML is parsed only for display metadata.

@@ -5204,7 +5204,7 @@ bad_field: "what"
         (ex_dir / 'README.md').write_text(
             '# Variant example\n'
             '\n'
-            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/variant-example.html)\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/variant-example.html)\n'
         )
         (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
         (ex_dir / 'spec_r.yaml').write_text('value: valid\n')
@@ -5242,7 +5242,7 @@ bad_field: "what"
         (ex_dir / 'README.md').write_text(
             '# Mixed specs\n'
             '\n'
-            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/mixed-specs.html)\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/mixed-specs.html)\n'
         )
         (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
         (ex_dir / 'spec.yaml').write_text('value: base\n')
@@ -5259,7 +5259,7 @@ bad_field: "what"
         (ex_dir / 'README.md').write_text(
             '# Leveled specs\n'
             '\n'
-            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/leveled-specs.html)\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/leveled-specs.html)\n'
         )
         (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
         (ex_dir / 'spec_organization.yaml').write_text('value: valid\n')
@@ -5284,16 +5284,16 @@ bad_field: "what"
         (ex_dir / 'spec.yaml').write_text('value: valid\n')
         (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
         badge = (
-            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]'
-            '(https://elong0527.github.io/yamaa/examples/link-check.html)'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)]'
+            '(https://elong0527.github.io/yamaa/benchmark/link-check.html)'
         )
         (ex_dir / 'README.md').write_text('# No badge\n')
         errors = VALIDATOR.validate_examples_layout(self.root_dir)
         self.assertIn('right after the title', '\n'.join(errors))
         (ex_dir / 'README.md').write_text(
             '# Wrong badge\n\n'
-            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]'
-            '(https://elong0527.github.io/yamaa/examples/other-dir.html)\n'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)]'
+            '(https://elong0527.github.io/yamaa/benchmark/other-dir.html)\n'
         )
         errors = VALIDATOR.validate_examples_layout(self.root_dir)
         self.assertIn('right after the title', '\n'.join(errors))
@@ -5309,8 +5309,8 @@ bad_field: "what"
         (ex_dir / 'spec.yaml').write_text('value: valid\n')
         (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
         badge = (
-            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]'
-            '(https://elong0527.github.io/yamaa/examples/link-check.html)'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)]'
+            '(https://elong0527.github.io/yamaa/benchmark/link-check.html)'
         )
         lifecycle = (
             '[![Lifecycle: finalized]'
@@ -5334,8 +5334,8 @@ bad_field: "what"
         ex_dir = self.root_dir / 'benchmark' / 'badge-width'
         (ex_dir / 'expected').mkdir(parents=True)
         badge = (
-            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]'
-            '(https://elong0527.github.io/yamaa/examples/badge-width.html)'
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)]'
+            '(https://elong0527.github.io/yamaa/benchmark/badge-width.html)'
         )
         lifecycle = (
             '[![Lifecycle: finalized]'

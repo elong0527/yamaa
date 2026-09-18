@@ -139,8 +139,8 @@ holds:
 | Copying the company template and editing it | `parents:` layer inheritance (R017) |
 | `Working-Instruction-fill-in-spec.docx` | `rules/` -- normative text an implementation cites, not advice |
 | The company macro library | `environment.yaml` (R018), validated separately from any spec |
-| The worked examples in SDTMIG / ADaMIG | `examples/` -- the same illustrative role, except every example runs and its output is fixed byte for byte |
-| "We can't express that one -- let's discuss it" | An `examples/negative-*/` directory that pins the rejection |
+| The worked examples in SDTMIG / ADaMIG | `benchmark/` -- the same illustrative role, except every example runs and its output is fixed byte for byte |
+| "We can't express that one -- let's discuss it" | A `benchmark/negative-*/` directory that pins the rejection |
 
 The `negative-` directories are worth a slide of their own. They are not bad
 examples; they **declare where the design refuses you**, and

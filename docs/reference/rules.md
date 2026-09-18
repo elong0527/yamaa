@@ -1,8 +1,8 @@
 ---
-title: Derivation rules index
+title: Rules
 ---
 
-# Derivation rules (R001-R027)
+# Rules (R001-R027)
 
 The normative derivation rules live in
 [`yaml/rules/`](https://github.com/elong0527/yamaa/tree/main/yaml/rules) --
@@ -48,4 +48,6 @@ from it, and `may` a truly optional behavior.
 
 For worked precedents of each rule in action, see the
 [examples walkthrough](../articles/yaml-examples-walkthrough.md), which maps
-constructs and questions to runnable examples.
+constructs and questions to runnable examples, and the
+[benchmark](../benchmark/index.md), which shows each one's input against its
+output.

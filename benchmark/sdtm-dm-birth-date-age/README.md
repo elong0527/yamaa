@@ -1,6 +1,6 @@
 # Derive AGE from a birth date
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/sdtm-dm-birth-date-age.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-birth-date-age.html)
 
 **Goal:** derive **AGE** in completed years at the sponsor's reference date
 (informed consent, **RFICDTC**) from the collected birth date, keeping

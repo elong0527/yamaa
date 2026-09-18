@@ -4605,7 +4605,7 @@ def validate_project_configurations(root: Path):
     errors = []
     for path in sorted(root.rglob(PROJECT_CONFIGURATION_NAME)):
         if any(
-            part in {'.git', '.claude', '.venv', 'node_modules'}
+            part in {'.git', '.claude', '.venv', '.venv-docs', 'node_modules'}
             for part in path.parts
         ):
             continue
@@ -8771,8 +8771,8 @@ README_KEY_COLUMNS = {
     'IDVAR', 'QNAM',
 }
 README_FOOTER_PATTERN = re.compile(
-    r'\[!\[Dashboard\]\(https://img\.shields\.io/badge/Dashboard-view-0c5e4b\)\]'
-    r'\(https://elong0527\.github\.io/yamaa/examples/'
+    r'\[!\[Dashboard\]\(https://img\.shields\.io/badge/Dashboard-view-1f3a5c\)\]'
+    r'\(https://elong0527\.github\.io/yamaa/benchmark/'
     r'[a-z0-9]+(?:-[a-z0-9]+)*\.html\)',
 )
 LIFECYCLE_BADGE_PATTERN = re.compile(
@@ -8931,7 +8931,7 @@ ASCII_SOURCE_SUFFIXES = {
 }
 ASCII_SOURCE_NAMES = {'DESCRIPTION', 'NAMESPACE'}
 ASCII_SOURCE_IGNORED_PARTS = {
-    '.git', '.pytest_cache', '.venv', '__pycache__', 'venv',
+    '.git', '.pytest_cache', '.venv', '.venv-docs', '__pycache__', 'venv',
 }
 
 
@@ -10286,8 +10286,8 @@ def validate_examples_layout(root: Path):
         if readme.exists():
             lines = readme.read_text(encoding='utf-8').splitlines()
             expected_badge = (
-                "[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]"
-                f"(https://elong0527.github.io/yamaa/examples/{ex_dir.name}.html)"
+                "[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)]"
+                f"(https://elong0527.github.io/yamaa/benchmark/{ex_dir.name}.html)"
             )
             badge_ok = False
             if len(lines) >= 3:
