@@ -1,0 +1,337 @@
+schema_version: "1.0"
+domain: AE
+input:
+  AE_COLLECTED:
+    path: input/ae_collected.csv
+    types:
+      AESEQ: int
+      AESTY: int
+      AESTM: int
+      AESTD: int
+      AEENDY: int
+      AEENDM: int
+      AEENDD: int
+  DM:
+    path: input/dm.csv
+    types:
+      RFSTDTC: date
+base: AE_COLLECTED
+keys: [STUDYID, USUBJID, AESEQ]
+
+output:
+  path: ae.csv
+  columns: [STUDYID, USUBJID, DOMAIN, AESEQ, AETERM, AESTDTC, AEENDTC, AESTDY, AEENDY]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: AE_COLLECTED.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: AE_COLLECTED.USUBJID
+
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: AE
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: AE_COLLECTED.AESEQ
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation:
+      source: AE_COLLECTED.AETERM
+
+  - name: AESTY_STR
+    type: str
+    label: Collected Start Year as Text
+    derivation:
+      source: AE_COLLECTED.AESTY
+
+  - name: AESTM_STR
+    type: str
+    label: Collected Start Month as Text
+    derivation:
+      source: AE_COLLECTED.AESTM
+
+  - name: AESTD_STR
+    type: str
+    label: Collected Start Day as Text
+    derivation:
+      source: AE_COLLECTED.AESTD
+
+  - name: AESTM_PADDED
+    type: str
+    label: Collected Start Month Zero-Padded
+    derivation:
+      case:
+        branches:
+          - when: "AE_COLLECTED.AESTM IS NOT NULL AND AE_COLLECTED.AESTM < 10"
+            then:
+              str_concat:
+                sources:
+                  - literal: "0"
+                  - source: AESTM_STR
+        otherwise:
+          source: AESTM_STR
+
+  - name: AESTD_PADDED
+    type: str
+    label: Collected Start Day Zero-Padded
+    derivation:
+      case:
+        branches:
+          - when: "AE_COLLECTED.AESTD IS NOT NULL AND AE_COLLECTED.AESTD < 10"
+            then:
+              str_concat:
+                sources:
+                  - literal: "0"
+                  - source: AESTD_STR
+        otherwise:
+          source: AESTD_STR
+
+  - name: AESTDTC
+    type: str
+    label: Start Date/Time of Adverse Event
+    derivation:
+      case:
+        branches:
+          - when: "AE_COLLECTED.AESTD IS NOT NULL AND AE_COLLECTED.AESTM IS NOT NULL AND AE_COLLECTED.AESTY IS NOT NULL"
+            then:
+              str_concat:
+                sources:
+                  - source: AESTY_STR
+                  - literal: "-"
+                  - source: AESTM_PADDED
+                  - literal: "-"
+                  - source: AESTD_PADDED
+          - when: "AE_COLLECTED.AESTM IS NOT NULL AND AE_COLLECTED.AESTY IS NOT NULL"
+            then:
+              str_concat:
+                sources:
+                  - source: AESTY_STR
+                  - literal: "-"
+                  - source: AESTM_PADDED
+          - when: "AE_COLLECTED.AESTY IS NOT NULL"
+            then:
+              source: AESTY_STR
+
+  - name: AEENDYR_STR
+    type: str
+    label: Collected End Year as Text
+    derivation:
+      source: AE_COLLECTED.AEENDY
+
+  - name: AEENDM_STR
+    type: str
+    label: Collected End Month as Text
+    derivation:
+      source: AE_COLLECTED.AEENDM
+
+  - name: AEENDD_STR
+    type: str
+    label: Collected End Day as Text
+    derivation:
+      source: AE_COLLECTED.AEENDD
+
+  - name: AEENDM_PADDED
+    type: str
+    label: Collected End Month Zero-Padded
+    derivation:
+      case:
+        branches:
+          - when: "AE_COLLECTED.AEENDM IS NOT NULL AND AE_COLLECTED.AEENDM < 10"
+            then:
+              str_concat:
+                sources:
+                  - literal: "0"
+                  - source: AEENDM_STR
+        otherwise:
+          source: AEENDM_STR
+
+  - name: AEENDD_PADDED
+    type: str
+    label: Collected End Day Zero-Padded
+    derivation:
+      case:
+        branches:
+          - when: "AE_COLLECTED.AEENDD IS NOT NULL AND AE_COLLECTED.AEENDD < 10"
+            then:
+              str_concat:
+                sources:
+                  - literal: "0"
+                  - source: AEENDD_STR
+        otherwise:
+          source: AEENDD_STR
+
+  - name: AEENDTC
+    type: str
+    label: End Date/Time of Adverse Event
+    derivation:
+      case:
+        branches:
+          - when: "AE_COLLECTED.AEENDD IS NOT NULL AND AE_COLLECTED.AEENDM IS NOT NULL AND AE_COLLECTED.AEENDY IS NOT NULL"
+            then:
+              str_concat:
+                sources:
+                  - source: AEENDYR_STR
+                  - literal: "-"
+                  - source: AEENDM_PADDED
+                  - literal: "-"
+                  - source: AEENDD_PADDED
+          - when: "AE_COLLECTED.AEENDM IS NOT NULL AND AE_COLLECTED.AEENDY IS NOT NULL"
+            then:
+              str_concat:
+                sources:
+                  - source: AEENDYR_STR
+                  - literal: "-"
+                  - source: AEENDM_PADDED
+          - when: "AE_COLLECTED.AEENDY IS NOT NULL"
+            then:
+              source: AEENDYR_STR
+
+  - name: RFSTDTC_DATE
+    type: date
+    label: Reference Start Date
+    derivation:
+      source: DM.RFSTDTC
+
+  - name: AESTDT
+    type: date
+    label: Start Date as Temporal Value
+    derivation:
+      value:
+        source: AESTDTC
+      conversion_failure: null
+
+  - name: AEENDT
+    type: date
+    label: End Date as Temporal Value
+    derivation:
+      value:
+        source: AEENDTC
+      conversion_failure: null
+
+  - name: AESTDTC_PREC
+    type: str
+    label: Start Date Collected Precision
+    derivation:
+      date_precision:
+        source: AESTDTC
+        missing: null
+        invalid: null
+
+  - name: AEENDTC_PREC
+    type: str
+    label: End Date Collected Precision
+    derivation:
+      date_precision:
+        source: AEENDTC
+        missing: null
+        invalid: null
+
+  - name: AESTDY
+    type: int
+    label: Study Day of Start Date
+    derivation:
+      case:
+        branches:
+          - when: "AESTDTC_PREC = 'D'"
+            then:
+              study_day:
+                date: AESTDT
+                reference: RFSTDTC_DATE
+
+  - name: AEENDY
+    type: int
+    label: Study Day of End Date
+    derivation:
+      case:
+        branches:
+          - when: "AEENDTC_PREC = 'D'"
+            then:
+              study_day:
+                date: AEENDT
+                reference: RFSTDTC_DATE
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 8
+      max: 8
+  - implies:
+      id: complete-start-implies-study-day
+      when: "AESTDTC_PREC = 'D'"
+      then: "AESTDY IS NOT NULL"
+  - implies:
+      id: study-day-implies-complete-start
+      when: "AESTDY IS NOT NULL"
+      then: "AESTDTC_PREC = 'D'"
+  - implies:
+      id: complete-end-implies-study-day
+      when: "AEENDTC_PREC = 'D'"
+      then: "AEENDY IS NOT NULL"
+  - implies:
+      id: study-day-implies-complete-end
+      when: "AEENDY IS NOT NULL"
+      then: "AEENDTC_PREC = 'D'"
+  - implies:
+      id: start-day-equals-anchor-is-day-one
+      when: "AESTDT = RFSTDTC_DATE"
+      then: "AESTDY = 1"
+  - implies:
+      id: start-day-after-anchor-is-positive
+      when: "AESTDT > RFSTDTC_DATE"
+      then: "AESTDY > 0"
+  - implies:
+      id: start-day-before-anchor-is-negative
+      when: "AESTDT < RFSTDTC_DATE"
+      then: "AESTDY < 0"
+  - implies:
+      id: start-day-one-implies-equals-anchor
+      when: "AESTDY = 1"
+      then: "AESTDT = RFSTDTC_DATE"
+  - implies:
+      id: start-day-positive-implies-on-or-after-anchor
+      when: "AESTDY > 0"
+      then: "AESTDT >= RFSTDTC_DATE"
+  - implies:
+      id: start-day-negative-implies-on-or-before-anchor
+      when: "AESTDY < 0"
+      then: "AESTDT <= RFSTDTC_DATE"
+  - implies:
+      id: end-day-equals-anchor-is-day-one
+      when: "AEENDT = RFSTDTC_DATE"
+      then: "AEENDY = 1"
+  - implies:
+      id: end-day-after-anchor-is-positive
+      when: "AEENDT > RFSTDTC_DATE"
+      then: "AEENDY > 0"
+  - implies:
+      id: end-day-before-anchor-is-negative
+      when: "AEENDT < RFSTDTC_DATE"
+      then: "AEENDY < 0"
+  - implies:
+      id: end-day-one-implies-equals-anchor
+      when: "AEENDY = 1"
+      then: "AEENDT = RFSTDTC_DATE"
+  - implies:
+      id: end-day-positive-implies-on-or-after-anchor
+      when: "AEENDY > 0"
+      then: "AEENDT >= RFSTDTC_DATE"
+  - implies:
+      id: end-day-negative-implies-on-or-before-anchor
+      when: "AEENDY < 0"
+      then: "AEENDT <= RFSTDTC_DATE"
