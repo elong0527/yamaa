@@ -19,6 +19,10 @@ from pathlib import Path
 
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from editorial import rule_identity_errors
+
 REPO = Path(__file__).resolve().parents[3]
 RULES = REPO / "yaml" / "rules"
 EXAMPLES = REPO / "benchmark"
@@ -46,10 +50,7 @@ def check_rule(path, errors, requirements):
     unknown = set(meta) - ALLOWED_KEYS
     if unknown:
         errors.append(f"ERROR: {label}: retired frontmatter keys: {sorted(unknown)}")
-    if meta.get("id") != stem:
-        errors.append(f"ERROR: {label}: id {meta.get('id')!r} does not match filename")
-    if meta.get("status") != "normative":
-        errors.append(f"ERROR: {label}: status must be normative")
+    errors.extend(rule_identity_errors(meta, stem, label))
     if not isinstance(meta.get("applies_to"), list) or not meta.get("applies_to"):
         errors.append(f"ERROR: {label}: applies_to must be a non-empty list")
     headings = re.findall(r"^## (.+)$", body, re.M)
