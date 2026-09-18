@@ -1,0 +1,10 @@
+/* YAMAA site tweaks on top of the Material theme. */
+
+.md-header__title {
+  font-weight: 600;
+}
+
+/* Keep wide derivation tables readable without breaking the layout. */
+.md-typeset table:not([class]) {
+  font-size: 0.85em;
+}

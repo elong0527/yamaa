@@ -3,7 +3,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
-docs/.jekyll-cache/
-docs/_site/
+.venv-docs/
+site/
 /study/
 docs/examples/*.html
