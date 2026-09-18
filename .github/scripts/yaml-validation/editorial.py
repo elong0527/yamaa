@@ -197,6 +197,21 @@ def validate_example_readmes(root: Path):
     return errors
 
 
+def rule_identity_errors(meta: dict, stem: str, label: str) -> list[str]:
+    errors = []
+    if meta.get('id') != stem:
+        errors.append(
+            f"ERROR: {label}: id must be {stem!r}, got "
+            f"{meta.get('id')!r}"
+        )
+    if meta.get('status') != 'normative':
+        errors.append(
+            f"ERROR: {label}: maintained rule status must be "
+            "'normative'"
+        )
+    return errors
+
+
 def validate_rule_metadata(root: Path):
     errors = []
     rules_dir = root / 'yaml' / 'rules'
@@ -222,16 +237,7 @@ def validate_rule_metadata(root: Path):
             continue
 
         expected_id = rule_path.name[:4]
-        if metadata.get('id') != expected_id:
-            errors.append(
-                f"ERROR: {label}: id must be {expected_id!r}, got "
-                f"{metadata.get('id')!r}"
-            )
-        if metadata.get('status') != 'normative':
-            errors.append(
-                f"ERROR: {label}: maintained rule status must be "
-                "'normative'"
-            )
+        errors.extend(rule_identity_errors(metadata, expected_id, label))
 
         index_row = re.search(
             rf'^\| {re.escape(expected_id)} \|.*?\| ([^|]+) \|',
@@ -255,7 +261,7 @@ ASCII_SOURCE_SUFFIXES = {
 }
 ASCII_SOURCE_NAMES = {'DESCRIPTION', 'NAMESPACE'}
 ASCII_SOURCE_IGNORED_PARTS = {
-    '.git', '.pytest_cache', '.venv', '__pycache__', 'venv',
+    '.git', '.pytest_cache', '.venv', '.venv-docs', '__pycache__', 'venv',
 }
 
 
