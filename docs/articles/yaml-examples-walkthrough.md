@@ -49,7 +49,7 @@ The suite serves three audiences at once:
 ## 2. Reading one example in five minutes
 
 For a complete example on one page, see
-**[ADaM ADAE: death outcome](examples/adam-adae-death-outcome.html)**. The README
+**[ADaM ADAE: death outcome](../examples/adam-adae-death-outcome.html)**. The README
 appears above the input tables and expected output, with a collapsible YAML
 sidebar. Everything is generated directly from the example's source files.
 
