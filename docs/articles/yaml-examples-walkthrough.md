@@ -255,7 +255,8 @@ Rule coverage across the 52 questions below:
 
 | Question | Rule | Example |
 |---|---|---|
-| How do corporate, compound and study layers compose? | R017 | [`spec-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmark/spec-inheritance) -- three levels resolve `spec_organization -> spec_compound -> spec_study`, and `expected/spec_resolved.yaml` records the outcome: shorthand expanded to canonical form, member fields merged while root fields are replaced whole, unreachable declarations pruned, and layer-relative paths rebased to the entry file |
+| How do corporate, compound and study layers compose? | R017 | [`spec-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmark/spec-inheritance) -- three levels resolve `spec_organization -> spec_compound -> spec_study`, and `expected/spec_resolved.yaml` records the outcome: shorthand expanded to canonical form, keyed members merged while root fields are replaced whole, unreachable declarations pruned, and layer-relative paths rebased to the entry file |
+| How much of a column can a later layer change? | R017 | [`spec-column-composition`](https://github.com/elong0527/yamaa/tree/main/benchmark/spec-column-composition) -- a column composes by declared kind, so a later layer adds one dictionary entry, one annotation, or one correction without restating the branch around it, while a different expression keyword and every list still replace whole |
 | How does inheritance fail? | R017 | The four `negative-adsl-*parent*` examples plus [`negative-adsl-inherited-output`](https://github.com/elong0527/yamaa/tree/main/benchmark/negative-adsl-inherited-output) -- a cycle, a version mismatch, a remote path, an invalid clear, and an `output` an entry file may not inherit |
 
 ### Project functions

@@ -601,8 +601,11 @@ def _validate_descriptor(
     bundle: SchemaBundle,
     path: str,
     active: ActiveTypes = frozenset(),
+    fragment: bool = False,
 ) -> list[ValidationDiagnostic]:
-    diagnostics = _validate_type(value, descriptor["type"], bundle, path, active)
+    diagnostics = _validate_type(
+        value, descriptor["type"], bundle, path, active, fragment
+    )
     if diagnostics:
         return diagnostics
     return _validate_constraints(value, descriptor, path)
@@ -615,6 +618,7 @@ def _validate_inline_class(
     path: str,
     class_name: str,
     active: ActiveTypes = frozenset(),
+    fragment: bool = False,
 ) -> list[ValidationDiagnostic]:
     if not isinstance(value, dict):
         return [_invalid_type(path, class_name, value)]
@@ -626,7 +630,7 @@ def _validate_inline_class(
     diagnostics: list[ValidationDiagnostic] = []
     for field_name, descriptor in descriptors.items():
         field_path = _join(path, field_name)
-        if descriptor.get("required") and field_name not in value:
+        if descriptor.get("required") and not fragment and field_name not in value:
             diagnostics.append(
                 _diagnostic(
                     field_path,
@@ -642,6 +646,7 @@ def _validate_inline_class(
                     bundle,
                     field_path,
                     active,
+                    fragment,
                 )
             )
     for field_name in value:
@@ -662,6 +667,7 @@ def _validate_single(
     bundle: SchemaBundle,
     path: str,
     active: ActiveTypes = frozenset(),
+    fragment: bool = False,
 ) -> list[ValidationDiagnostic]:
     if type_name == "str":
         return [] if isinstance(value, str) else [_invalid_type(path, "str", value)]
@@ -690,7 +696,9 @@ def _validate_single(
             if isinstance(item, dict):
                 suffix = item.get("name", item.get("id", index))
             diagnostics.extend(
-                _validate_type(item, inner, bundle, _join(path, suffix), active)
+                _validate_type(
+                    item, inner, bundle, _join(path, suffix), active, fragment
+                )
             )
         return diagnostics
 
@@ -707,10 +715,13 @@ def _validate_single(
                     bundle,
                     _join(path, f"key({key})"),
                     active,
+                    fragment,
                 )
             )
             diagnostics.extend(
-                _validate_type(item, value_type, bundle, _join(path, key), active)
+                _validate_type(
+                    item, value_type, bundle, _join(path, key), active, fragment
+                )
             )
         return diagnostics
 
@@ -722,6 +733,7 @@ def _validate_single(
             path,
             type_name,
             active,
+            fragment,
         )
 
     alias = bundle.aliases.get(type_name)
@@ -761,6 +773,7 @@ def _validate_single(
                     operation_path,
                     str(operation),
                     nested_active,
+                    fragment,
                 )
             return _validate_descriptor(
                 payload,
@@ -768,6 +781,7 @@ def _validate_single(
                 bundle,
                 operation_path,
                 nested_active,
+                fragment,
             )
 
         diagnostics = _validate_type(
@@ -776,6 +790,7 @@ def _validate_single(
             bundle,
             path,
             nested_active,
+            fragment,
         )
         has_matching_outer_type = any(
             _outer_matches(value, member, bundle, nested_active)
@@ -805,12 +820,13 @@ def _validate_type(
     bundle: SchemaBundle,
     path: str,
     active: ActiveTypes = frozenset(),
+    fragment: bool = False,
 ) -> list[ValidationDiagnostic]:
     attempted: list[tuple[str, list[ValidationDiagnostic]]] = []
     for type_name in _members(type_value):
         if type_name in bundle.aliases and (id(value), type_name) in active:
             continue
-        diagnostics = _validate_single(value, type_name, bundle, path, active)
+        diagnostics = _validate_single(value, type_name, bundle, path, active, fragment)
         if not diagnostics:
             return []
         attempted.append((type_name, diagnostics))
@@ -861,6 +877,7 @@ def _matches(
     type_name: str,
     bundle: SchemaBundle,
     active: ActiveTypes,
+    fragment: bool = False,
 ) -> bool:
     return not _validate_single(
         value,
@@ -868,6 +885,7 @@ def _matches(
         bundle,
         "<normalization>",
         active,
+        fragment,
     )
 
 
@@ -876,8 +894,9 @@ def _normalize_descriptor(
     descriptor: dict[str, Any],
     bundle: SchemaBundle,
     active: ActiveTypes,
+    fragment: bool = False,
 ) -> object:
-    return _normalize_type(value, descriptor["type"], bundle, active)
+    return _normalize_type(value, descriptor["type"], bundle, active, fragment)
 
 
 def _normalize_inline_class(
@@ -885,6 +904,7 @@ def _normalize_inline_class(
     fields: list[dict[str, dict[str, Any]]],
     bundle: SchemaBundle,
     active: ActiveTypes,
+    fragment: bool = False,
 ) -> object:
     if not isinstance(value, dict):
         return copy.deepcopy(value)
@@ -897,9 +917,9 @@ def _normalize_inline_class(
     for field_name, descriptor in descriptors.items():
         if field_name in value:
             normalized[field_name] = _normalize_descriptor(
-                value[field_name], descriptor, bundle, active
+                value[field_name], descriptor, bundle, active, fragment
             )
-        elif "default" in descriptor:
+        elif "default" in descriptor and not fragment:
             normalized[field_name] = _normalize_descriptor(
                 descriptor["default"],
                 descriptor,
@@ -914,18 +934,19 @@ def _normalize_single(
     type_name: str,
     bundle: SchemaBundle,
     active: ActiveTypes,
+    fragment: bool = False,
 ) -> object:
     if type_name.startswith("list[") and type_name.endswith("]"):
         inner = type_name[5:-1].strip()
         return [
-            _normalize_type(item, inner, bundle, active)
+            _normalize_type(item, inner, bundle, active, fragment)
             for item in value  # type: ignore[union-attr]
         ]
     if type_name.startswith("dict[") and type_name.endswith("]"):
         key_type, value_type = _split_arguments(type_name[5:-1])
         return {
             _normalize_type(key, key_type, bundle, active): _normalize_type(
-                item, value_type, bundle, active
+                item, value_type, bundle, active, fragment
             )
             for key, item in value.items()  # type: ignore[union-attr]
         }
@@ -935,6 +956,7 @@ def _normalize_single(
             bundle.classes[type_name],
             bundle,
             active,
+            fragment,
         )
     alias = bundle.aliases.get(type_name)
     if alias is not None:
@@ -952,6 +974,7 @@ def _normalize_single(
                     definition,
                     bundle,
                     nested_active,
+                    fragment,
                 )
             else:
                 payload = _normalize_descriptor(
@@ -959,9 +982,10 @@ def _normalize_single(
                     definition,
                     bundle,
                     nested_active,
+                    fragment,
                 )
             return {operation: payload}
-        return _normalize_type(value, alias["type"], bundle, nested_active)
+        return _normalize_type(value, alias["type"], bundle, nested_active, fragment)
     return copy.deepcopy(value)
 
 
@@ -970,6 +994,7 @@ def _normalize_type(
     type_value: object,
     bundle: SchemaBundle,
     active: ActiveTypes,
+    fragment: bool = False,
 ) -> object:
     members = _members(type_value)
     for member in members:
@@ -978,10 +1003,10 @@ def _normalize_type(
         inner = member[5:-1].strip()
         if len(members) != 2 or inner not in members:
             continue
-        if _matches(value, member, bundle, active):
-            return _normalize_single(value, member, bundle, active)
-        if _matches(value, inner, bundle, active):
-            return [_normalize_type(value, inner, bundle, active)]
+        if _matches(value, member, bundle, active, fragment):
+            return _normalize_single(value, member, bundle, active, fragment)
+        if _matches(value, inner, bundle, active, fragment):
+            return [_normalize_type(value, inner, bundle, active, fragment)]
 
     for class_name in members:
         if len(members) != 2:
@@ -1003,17 +1028,18 @@ def _normalize_type(
                 or field_types != [member]
             ):
                 continue
-            if _matches(value, member, bundle, active):
+            if _matches(value, member, bundle, active, fragment):
                 expanded = {
                     field_name: _normalize_descriptor(
                         value,
                         descriptor,
                         bundle,
                         active,
+                        fragment,
                     )
                 }
                 for name, other in fields.items():
-                    if name not in expanded and "default" in other:
+                    if name not in expanded and "default" in other and not fragment:
                         expanded[name] = _normalize_descriptor(
                             other["default"],
                             other,
@@ -1023,8 +1049,8 @@ def _normalize_type(
                 return expanded
 
     for member in members:
-        if _matches(value, member, bundle, active):
-            return _normalize_single(value, member, bundle, active)
+        if _matches(value, member, bundle, active, fragment):
+            return _normalize_single(value, member, bundle, active, fragment)
     return copy.deepcopy(value)
 
 
@@ -1057,29 +1083,47 @@ def validate_descriptor_value(
     descriptor: dict[str, Any],
     bundle: SchemaBundle,
     path: str,
+    *,
+    fragment: bool = False,
 ) -> list[ValidationDiagnostic]:
-    """Validate one complete field value against its descriptor."""
-    return _validate_descriptor(value, descriptor, bundle, path)
+    """Validate one field value against its descriptor.
+
+    ``fragment`` defers requiredness at every depth, which is what R017 needs
+    to read a layer's ``columns`` member field as a patch of the value it
+    composes onto.  Every other check still applies to what the layer wrote.
+    """
+    return _validate_descriptor(value, descriptor, bundle, path, frozenset(), fragment)
 
 
 def normalize_descriptor_value(
     value: object,
     descriptor: dict[str, Any],
     bundle: SchemaBundle,
+    *,
+    fragment: bool = False,
 ) -> object:
-    """Normalize one already validated field value."""
-    return _normalize_descriptor(value, descriptor, bundle, frozenset())
+    """Normalize one already validated field value.
+
+    ``fragment`` expands R006 shorthand without materializing a default, so a
+    patch carries only what its layer wrote and cannot silently replace an
+    inherited value with this schema's default.
+    """
+    return _normalize_descriptor(value, descriptor, bundle, frozenset(), fragment)
 
 
 def matching_type(
-    value: object, type_value: object, bundle: SchemaBundle
+    value: object,
+    type_value: object,
+    bundle: SchemaBundle,
+    *,
+    fragment: bool = False,
 ) -> str | None:
     """Return the first schema union member a value satisfies."""
     return next(
         (
             member
             for member in _members(type_value)
-            if _matches(value, member, bundle, frozenset())
+            if _matches(value, member, bundle, frozenset(), fragment)
         ),
         None,
     )

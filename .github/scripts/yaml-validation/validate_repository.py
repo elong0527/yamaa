@@ -1687,7 +1687,7 @@ def build_schema_env(root: Path, entrypoint='schema.yaml'):
 
     return env, errors
 
-def validate_type(data, t_refs, env, path):
+def validate_type(data, t_refs, env, path, fragment=False):
     if not isinstance(t_refs, list):
         t_refs = [t_refs]
 
@@ -1697,7 +1697,7 @@ def validate_type(data, t_refs, env, path):
 
     attempted = []
     for t in t_refs:
-        errors = _check_single_type(data, t, env, path)
+        errors = _check_single_type(data, t, env, path, fragment)
         if not errors:
             return []
         attempted.append((t, errors))
@@ -1799,14 +1799,14 @@ def validate_constraints(data, descriptor, path):
     return errors
 
 
-def validate_descriptor(data, descriptor, env, path):
-    errors = validate_type(data, descriptor['type'], env, path)
+def validate_descriptor(data, descriptor, env, path, fragment=False):
+    errors = validate_type(data, descriptor['type'], env, path, fragment)
     if errors:
         return errors
     return validate_constraints(data, descriptor, path)
 
 
-def _check_single_type(data, t, env, path):
+def _check_single_type(data, t, env, path, fragment=False):
     if t == 'str':
         return [] if isinstance(data, str) else [
             validation_diagnostic(
@@ -1866,7 +1866,9 @@ def _check_single_type(data, t, env, path):
                     suffix = f".{item['name']}"
                 elif 'id' in item:
                     suffix = f".{item['id']}"
-            errors.extend(validate_type(item, [inner], env, f"{path}{suffix}"))
+            errors.extend(
+                validate_type(item, [inner], env, f"{path}{suffix}", fragment)
+            )
         return errors
 
     if t.startswith('dict[') and t.endswith(']'):
@@ -1878,8 +1880,12 @@ def _check_single_type(data, t, env, path):
             return [f"ERROR: {path}: expected dict, got {type(data).__name__}"]
         errors = []
         for k, v in data.items():
-            errors.extend(validate_type(k, [k_type], env, f"{path}.key({k})"))
-            errors.extend(validate_type(v, [v_type], env, f"{path}.{k}"))
+            errors.extend(
+                validate_type(k, [k_type], env, f"{path}.key({k})", fragment)
+            )
+            errors.extend(
+                validate_type(v, [v_type], env, f"{path}.{k}", fragment)
+            )
         return errors
 
     if t in env['classes']:
@@ -1891,12 +1897,17 @@ def _check_single_type(data, t, env, path):
         for field in c_def:
             for fname, fdesc in field.items():
                 allowed_keys.add(fname)
-                if fdesc.get('required') and fname not in data:
+                if (
+                    fdesc.get('required')
+                    and not fragment
+                    and fname not in data
+                ):
                     errors.append(f"ERROR: {path}.{fname}: missing required field '{fname}' for class {t}")
                 if fname in data:
                     errors.extend(
                         validate_descriptor(
-                            data[fname], fdesc, env, f"{path}.{fname}"
+                            data[fname], fdesc, env, f"{path}.{fname}",
+                            fragment,
                         )
                     )
         for k in data:
@@ -1927,7 +1938,9 @@ def _check_single_type(data, t, env, path):
                 reg_def = env['registries'][reg_name][key]
                 if isinstance(reg_def, dict) and 'type' in reg_def:
                     errors.extend(
-                        validate_descriptor(val, reg_def, env, f"{path}.{key}")
+                        validate_descriptor(
+                            val, reg_def, env, f"{path}.{key}", fragment
+                        )
                     )
                 elif isinstance(reg_def, list): # it's a class inline
                     # Validate against an anonymous class
@@ -1938,13 +1951,18 @@ def _check_single_type(data, t, env, path):
                     for field in reg_def:
                         for fname, fdesc in field.items():
                             allowed_keys.add(fname)
-                            if fdesc.get('required') and fname not in val:
+                            if (
+                                fdesc.get('required')
+                                and not fragment
+                                and fname not in val
+                            ):
                                 errors.append(f"ERROR: {path}.{key}.{fname}: missing required field '{fname}'")
                             if fname in val:
                                 errors.extend(
                                     validate_descriptor(
                                         val[fname], fdesc, env,
                                         f"{path}.{key}.{fname}",
+                                        fragment,
                                     )
                                 )
                     for k in val:
@@ -1957,7 +1975,7 @@ def _check_single_type(data, t, env, path):
 
         else:
             # Normal alias
-            errors = validate_type(data, alias['type'], env, path)
+            errors = validate_type(data, alias['type'], env, path, fragment)
             if errors:
                 return errors
             errors = validate_constraints(data, alias, path)
@@ -1975,6 +1993,10 @@ INHERITANCE_KEYED_COLLECTIONS = {
     'rows': ('list', 'id', 'row_class'),
 }
 
+# R017-17 composes a matching column member by each field's declared kind.
+# Every other keyed collection still replaces a present member field whole.
+INHERITANCE_COMPOSING_COLLECTIONS = frozenset({'columns'})
+
 
 def schema_class_fields(env, class_name):
     """Return a class definition as an insertion-ordered mapping."""
@@ -1991,17 +2013,24 @@ def _type_members(type_value):
     return [str(type_value).strip()]
 
 
-def _type_matches(data, type_ref, env):
-    return not _check_single_type(data, type_ref, env, '<normalization>')
+def _type_matches(data, type_ref, env, fragment=False):
+    return not _check_single_type(
+        data, type_ref, env, '<normalization>', fragment
+    )
 
 
-def normalize_descriptor_value(data, descriptor, env):
+def normalize_descriptor_value(data, descriptor, env, fragment=False):
     """Materialize the canonical R006 form of a descriptor value."""
-    return normalize_type_value(data, descriptor['type'], env)
+    return normalize_type_value(data, descriptor['type'], env, fragment)
 
 
-def normalize_type_value(data, type_value, env):
-    """Normalize R006 list and single-required-field class shorthands."""
+def normalize_type_value(data, type_value, env, fragment=False):
+    """Normalize R006 list and single-required-field class shorthands.
+
+    ``fragment`` withholds a schema default, which is what R017 needs while a
+    layer's ``columns`` member composes: a default materialized per layer
+    would replace what a parent wrote.
+    """
     members = _type_members(type_value)
 
     for member in members:
@@ -2009,8 +2038,8 @@ def normalize_type_value(data, type_value, env):
             continue
         inner = member[5:-1].strip()
         if inner in members and not isinstance(data, list):
-            if _type_matches(data, inner, env):
-                return [normalize_type_value(data, inner, env)]
+            if _type_matches(data, inner, env, fragment):
+                return [normalize_type_value(data, inner, env, fragment)]
 
     for class_name in members:
         fields = schema_class_fields(env, class_name)
@@ -2028,25 +2057,26 @@ def normalize_type_value(data, type_value, env):
         for member in members:
             if member == class_name or member not in field_types:
                 continue
-            if not _type_matches(data, member, env):
+            if not _type_matches(data, member, env, fragment):
                 continue
             expanded = {
                 field_name: normalize_descriptor_value(
-                    data, field_descriptor, env
+                    data, field_descriptor, env, fragment
                 )
             }
             for name, descriptor in fields.items():
-                if name not in expanded and 'default' in descriptor:
-                    expanded[name] = copy.deepcopy(descriptor['default'])
+                if name in expanded or 'default' not in descriptor or fragment:
+                    continue
+                expanded[name] = copy.deepcopy(descriptor['default'])
             return expanded
 
     for member in members:
-        if _type_matches(data, member, env):
-            return normalize_single_type_value(data, member, env)
+        if _type_matches(data, member, env, fragment):
+            return normalize_single_type_value(data, member, env, fragment)
     return copy.deepcopy(data)
 
 
-def normalize_inline_class(data, fields, env):
+def normalize_inline_class(data, fields, env, fragment=False):
     if not isinstance(data, dict):
         return copy.deepcopy(data)
     normalized = {}
@@ -2058,9 +2088,9 @@ def normalize_inline_class(data, fields, env):
     for name, descriptor in descriptors.items():
         if name in data:
             normalized[name] = normalize_descriptor_value(
-                data[name], descriptor, env
+                data[name], descriptor, env, fragment
             )
-        elif 'default' in descriptor:
+        elif 'default' in descriptor and not fragment:
             normalized[name] = copy.deepcopy(descriptor['default'])
     for name, value in data.items():
         if name not in normalized and name not in descriptors:
@@ -2068,20 +2098,24 @@ def normalize_inline_class(data, fields, env):
     return normalized
 
 
-def normalize_single_type_value(data, type_ref, env):
+def normalize_single_type_value(data, type_ref, env, fragment=False):
     if type_ref.startswith('list[') and type_ref.endswith(']'):
         inner = type_ref[5:-1].strip()
-        return [normalize_type_value(item, inner, env) for item in data]
+        return [
+            normalize_type_value(item, inner, env, fragment) for item in data
+        ]
     if type_ref.startswith('dict[') and type_ref.endswith(']'):
         key_type, value_type = split_type_arguments(type_ref[5:-1])
         return {
             normalize_type_value(key, key_type, env): normalize_type_value(
-                value, value_type, env
+                value, value_type, env, fragment
             )
             for key, value in data.items()
         }
     if type_ref in env.get('classes', {}):
-        return normalize_inline_class(data, env['classes'][type_ref], env)
+        return normalize_inline_class(
+            data, env['classes'][type_ref], env, fragment
+        )
     if type_ref in env.get('aliases', {}):
         alias = env['aliases'][type_ref]
         registry_name = alias.get('registry')
@@ -2092,16 +2126,20 @@ def normalize_single_type_value(data, type_ref, env):
             registry = env.get('registries', {}).get(registry_name, {})
             definition = registry.get(keyword)
             if isinstance(definition, list):
-                payload = normalize_inline_class(payload, definition, env)
+                payload = normalize_inline_class(
+                    payload, definition, env, fragment
+                )
             elif isinstance(definition, dict) and 'type' in definition:
-                payload = normalize_descriptor_value(payload, definition, env)
+                payload = normalize_descriptor_value(
+                    payload, definition, env, fragment
+                )
             return {keyword: payload}
-        return normalize_type_value(data, alias['type'], env)
+        return normalize_type_value(data, alias['type'], env, fragment)
     return copy.deepcopy(data)
 
 
 def validate_partial_inheritance_member(
-    value, class_name, identity, label, env
+    value, class_name, identity, label, env, fragment=False
 ):
     """Validate and normalize one direct keyed-collection member."""
     if not isinstance(value, dict):
@@ -2142,9 +2180,11 @@ def validate_partial_inheritance_member(
             else:
                 normalized[name] = None
             continue
-        errors.extend(validate_descriptor(field_value, descriptor, env, path))
+        errors.extend(
+            validate_descriptor(field_value, descriptor, env, path, fragment)
+        )
         normalized[name] = normalize_descriptor_value(
-            field_value, descriptor, env
+            field_value, descriptor, env, fragment
         )
 
     return normalized, errors
@@ -2217,6 +2257,7 @@ def validate_inheritance_layer(layer, label, env, require_output=False):
             continue
 
         kind, identity, class_name = collection
+        fragment = name in INHERITANCE_COMPOSING_COLLECTIONS
         if value is None:
             if descriptor.get('required'):
                 errors.append(
@@ -2253,7 +2294,8 @@ def validate_inheritance_layer(layer, label, env, require_output=False):
                 else:
                     normalized_member, member_errors = (
                         validate_partial_inheritance_member(
-                            member, class_name, identity, member_path, env
+                            member, class_name, identity, member_path, env,
+                            fragment,
                         )
                     )
                     errors.extend(member_errors)
@@ -2279,7 +2321,7 @@ def validate_inheritance_layer(layer, label, env, require_output=False):
             )
             normalized_member, member_errors = (
                 validate_partial_inheritance_member(
-                    member, class_name, identity, member_path, env
+                    member, class_name, identity, member_path, env, fragment
                 )
             )
             errors.extend(member_errors)
@@ -2359,12 +2401,170 @@ def _clear_provenance(provenance, prefix):
             del provenance[key]
 
 
+def _record_provenance(value, path, provenance_source, provenance):
+    """Attribute one written value, and every leaf below it, to its layer."""
+    provenance[path] = provenance_source
+    if isinstance(value, dict):
+        for name, nested in value.items():
+            _record_provenance(
+                nested, f"{path}.{name}", provenance_source, provenance
+            )
+
+
+def _replace_value(value, path, provenance_source, provenance):
+    copied = copy.deepcopy(value)
+    _clear_provenance(provenance, path)
+    _record_provenance(copied, path, provenance_source, provenance)
+    return copied
+
+
+def _composing_member(accumulated, incoming, type_value, env):
+    """Return the union member both values compose under, else None."""
+    if not isinstance(accumulated, dict) or not isinstance(incoming, dict):
+        return None
+    member = _matching_member(incoming, type_value, env)
+    if member is None or member != _matching_member(accumulated, type_value, env):
+        return None
+    return member
+
+
+def _matching_member(value, type_value, env):
+    for member in _type_members(type_value):
+        if _type_matches(value, member, env, True):
+            return member
+    return None
+
+
+def _compose_class_value(
+    accumulated, incoming, fields, env, path, provenance_source, provenance,
+):
+    descriptors = {
+        name: descriptor
+        for entry in fields
+        for name, descriptor in entry.items()
+    }
+    composed = dict(accumulated)
+    for name, value in incoming.items():
+        field_path = f"{path}.{name}"
+        descriptor = descriptors.get(name)
+        if descriptor is None or name not in composed:
+            composed[name] = _replace_value(
+                value, field_path, provenance_source, provenance
+            )
+            continue
+        composed[name] = _compose_value(
+            composed[name], value, descriptor['type'], env, field_path,
+            provenance_source, provenance,
+        )
+    return composed
+
+
+def _compose_operation_value(
+    accumulated, incoming, registry_name, env, path, provenance_source,
+    provenance,
+):
+    """Compose two registry values, which R007 admits one keyword each."""
+    if len(accumulated) != 1 or len(incoming) != 1:
+        return _replace_value(incoming, path, provenance_source, provenance)
+    keyword, payload = next(iter(incoming.items()))
+    inherited_keyword, inherited_payload = next(iter(accumulated.items()))
+    definition = env.get('registries', {}).get(registry_name, {}).get(keyword)
+    if keyword != inherited_keyword or definition is None:
+        return _replace_value(incoming, path, provenance_source, provenance)
+    keyword_path = f"{path}.{keyword}"
+    if isinstance(definition, list):
+        if not isinstance(inherited_payload, dict) or not isinstance(
+            payload, dict
+        ):
+            return _replace_value(
+                incoming, path, provenance_source, provenance
+            )
+        composed = _compose_class_value(
+            inherited_payload, payload, definition, env, keyword_path,
+            provenance_source, provenance,
+        )
+    else:
+        composed = _compose_value(
+            inherited_payload, payload, definition['type'], env, keyword_path,
+            provenance_source, provenance,
+        )
+    return {keyword: composed}
+
+
+def _compose_value(
+    accumulated, incoming, type_value, env, path, provenance_source,
+    provenance,
+):
+    """Compose one written value onto the value it inherits, by kind.
+
+    A class composes field by field, a mapping key by key, and a registry
+    value only when both name one keyword.  Every other kind, including every
+    list, replaces.  A null here is an R006 value, never a clearing marker:
+    R017-20 keeps the marker at the two composition boundaries above.
+    """
+    member = _composing_member(accumulated, incoming, type_value, env)
+    if member is None:
+        return _replace_value(incoming, path, provenance_source, provenance)
+    if member in env.get('classes', {}):
+        return _compose_class_value(
+            accumulated, incoming, env['classes'][member], env, path,
+            provenance_source, provenance,
+        )
+    if member.startswith('dict[') and member.endswith(']'):
+        _, inner = split_type_arguments(member[5:-1])
+        composed = dict(accumulated)
+        for key, value in incoming.items():
+            key_path = f"{path}.{key}"
+            if key not in composed:
+                composed[key] = _replace_value(
+                    value, key_path, provenance_source, provenance
+                )
+                continue
+            composed[key] = _compose_value(
+                composed[key], value, inner, env, key_path, provenance_source,
+                provenance,
+            )
+        return composed
+    alias = env.get('aliases', {}).get(member)
+    if alias is None:
+        return _replace_value(incoming, path, provenance_source, provenance)
+    registry_name = alias.get('registry')
+    if registry_name is not None:
+        return _compose_operation_value(
+            accumulated, incoming, registry_name, env, path,
+            provenance_source, provenance,
+        )
+    return _compose_value(
+        accumulated, incoming, alias['type'], env, path, provenance_source,
+        provenance,
+    )
+
+
+def _materialize_inheritance_fragments(resolved, env):
+    """Complete every composed member once composition is finished."""
+    for name in INHERITANCE_COMPOSING_COLLECTIONS:
+        _, _, class_name = INHERITANCE_KEYED_COLLECTIONS[name]
+        members = resolved.get(name)
+        if not isinstance(members, list):
+            continue
+        fields = schema_class_fields(env, class_name)
+        for member in members:
+            if not isinstance(member, dict):
+                continue
+            for field, descriptor in fields.items():
+                if field in member and member[field] is not None:
+                    member[field] = normalize_descriptor_value(
+                        member[field], descriptor, env
+                    )
+
+
 def _merge_keyed_member(
     accumulated, incoming, class_name, logical_path, error_source,
-    provenance_source, env, provenance, errors,
+    provenance_source, env, provenance, errors, compose=False,
 ):
     fields = schema_class_fields(env, class_name)
     for name, value in incoming.items():
+        field_path = f"{logical_path}.{name}"
         if value is None:
             descriptor = fields.get(name, {})
             if descriptor.get('required') or name not in accumulated:
@@ -2375,11 +2575,17 @@ def _merge_keyed_member(
                 )
                 continue
             accumulated.pop(name, None)
-            _clear_provenance(provenance, f"{logical_path}.{name}")
+            _clear_provenance(provenance, field_path)
             continue
-        accumulated[name] = copy.deepcopy(value)
-        _clear_provenance(provenance, f"{logical_path}.{name}")
-        provenance[f"{logical_path}.{name}"] = provenance_source
+        if compose and name in accumulated and name in fields:
+            accumulated[name] = _compose_value(
+                accumulated[name], value, fields[name]['type'], env,
+                field_path, provenance_source, provenance,
+            )
+            continue
+        accumulated[name] = _replace_value(
+            value, field_path, provenance_source, provenance
+        )
 
 
 def merge_inheritance_layers(contributions, env):
@@ -2427,12 +2633,9 @@ def merge_inheritance_layers(contributions, env):
                 for member_id, member in value.items():
                     logical_path = f"{name}.{member_id}"
                     if member_id not in target:
-                        target[member_id] = copy.deepcopy(member)
-                        provenance[logical_path] = provenance_source
-                        for field in member:
-                            provenance[f"{logical_path}.{field}"] = (
-                                provenance_source
-                            )
+                        target[member_id] = _replace_value(
+                            member, logical_path, provenance_source, provenance
+                        )
                     else:
                         _merge_keyed_member(
                             target[member_id], member, class_name,
@@ -2457,19 +2660,20 @@ def merge_inheritance_layers(contributions, env):
                 logical_path = f"{name}.{member_id}"
                 if member_id not in positions:
                     positions[member_id] = len(target)
-                    target.append(copy.deepcopy(member))
-                    provenance[logical_path] = provenance_source
-                    for field in member:
-                        provenance[f"{logical_path}.{field}"] = (
-                            provenance_source
+                    target.append(
+                        _replace_value(
+                            member, logical_path, provenance_source, provenance
                         )
+                    )
                 else:
                     existing = target[positions[member_id]]
                     _merge_keyed_member(
                         existing, member, class_name, logical_path, source,
                         provenance_source, env, provenance, errors,
+                        name in INHERITANCE_COMPOSING_COLLECTIONS,
                     )
 
+    _materialize_inheritance_fragments(resolved, env)
     return resolved, provenance, errors
 
 

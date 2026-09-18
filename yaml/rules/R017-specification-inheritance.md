@@ -35,8 +35,9 @@ when its YAML value is null. Absence inherits; presence replaces or clears as
 defined below.
 
 **R017-3.** The resolver retains source provenance for every contributed value
-while it works. Provenance is diagnostic state and is not a field of the
-resolved specification.
+while it works, down to the leaf a layer wrote, because a composed column
+carries values from more than one layer. Provenance is diagnostic state and is
+not a field of the resolved specification.
 
 ## Parent references
 **R017-4.** `parents` accepts one `path` or an ordered `list[path]`. A single
@@ -78,29 +79,35 @@ before composition. Inheritance never migrates schema versions.
 **R017-10.** A layer is a schema-shaped fragment and need not be a complete
 `root_class`. Unknown root fields and invalid values are errors in the layer
 that writes them. Requiredness is deferred for root fields other than the entry
-file's `output`, and for direct members of the four keyed root collections,
-because a later contribution may supply their missing fields. The entry file
-must declare its complete, non-null `output`; an inherited layer cannot choose
-the final artifact membership or order.
+file's `output`, for direct members of the four keyed root collections, and for
+every depth inside a `columns` member, because a later contribution may supply
+their missing fields. The entry file must declare its complete, non-null
+`output`; an inherited layer cannot choose the final artifact membership or
+order.
 
 **R017-11.** The mapping key identifies an `input` member. Every member
 of `record_lookups`, `columns`, or `rows` must carry the respective `id`,
 `name`, or `id` field. Two members of one layer must not share one identifier.
 
-**R017-12.** A non-null keyed-member field is complete at that field boundary.
-Its nested classes, mappings, lists, registries, and scalar constraints
-validate normally; they are not partial patches. A non-keyed root
-field supplied by a layer likewise validates as one complete field value.
+**R017-12.** A non-null member field of `input`, `record_lookups`, or `rows`
+is complete at that field boundary. Its nested classes, mappings, lists,
+registries, and scalar constraints validate normally; they are not partial
+patches. A non-keyed root field supplied by a layer likewise validates as one
+complete field value. A `columns` member field is instead a patch of the value
+it composes onto. Every leaf it writes validates normally and only requiredness
+is deferred, so a required leaf that no layer supplies fails on the resolved
+specification under the rule that owns it.
 
 **R017-13.** R006 shorthand is expanded in every supplied non-null field before
 composition. Equivalent long and short spellings therefore contribute the same
 value.
 
-## Shallow composition
+## Composition
 **R017-14.** Composition merges the immediate fields of the root. A later field
 that is absent leaves the accumulated field unchanged. A later non-null field
 replaces the complete accumulated value unless the field is one of the keyed
-collections below. There is no recursive merge inside a supplied field value.
+collections below. There is no recursive merge inside a supplied root field
+value.
 
 **R017-15.** The root fields compose as follows:
 
@@ -121,13 +128,38 @@ replace their complete inherited values.
 
 **R017-17.** Members of a keyed collection compose by identifier. A new
 identifier appends in contribution order. A matching identifier retains its
-first position and merges the immediate fields of the member: an absent member
-field is inherited and a present non-null member field replaces its complete
-value. Thus a child may change only `AVAL.label`, while a child
-`AVAL.derivation` replaces the whole derivation even when both derivations use
-the same expression keyword. The same boundary applies to every member field,
-including nested metadata, verification, type, lookup, and row-derivation
-values.
+first position. A matching `input`, `record_lookups`, or `rows` member then
+merges the immediate fields of the member: an absent member field is inherited
+and a present non-null member field replaces its complete value. A matching
+`columns` member instead composes each present non-null field with the value it
+inherits, by that field's declared kind:
+
+| Kind | Composes by |
+|---|---|
+| Class | field by field, recursively |
+| Mapping, `dict[K, V]` | key by key; each value composes by its own kind |
+| Registry value | its one keyword |
+| Every scalar and every list | replacement |
+
+Composition descends only while both values are of the same kind. A written
+value of a different kind replaces what it inherits, and a field the
+accumulated member does not carry is taken whole. A registry value carries
+exactly one keyword under R007, so two of them compose only when they name the
+same keyword, and that keyword's payload then composes by its own declared
+kind. Different keywords replace the value whole: composing across them would
+build the two-keyword value R007 rejects, and naming a different operation is
+how a layer says it derives the value differently. Every list replaces. A
+column's `verifications` entries carry no identifier to compose by, and the
+remaining lists are ordered arguments, such as `str_concat.sources`,
+`order_by`, `coalesce.sources`, and the `cut` breaks and labels, where
+composing element by element would build a third argument list no layer wrote.
+A schema default is materialized on the composed value rather than on each
+contribution, so a later layer that never mentions a field cannot replace what
+an earlier layer wrote there with this bundle's default. Thus a child may
+change only `AVAL.label`, add one key to an inherited `AVAL.metadata`, or add
+`override` to an inherited `AVAL.derivation` without restating the expression,
+while a child derivation naming a different expression keyword replaces the
+whole derivation.
 
 **R017-18.** Dataset shorthand is expanded before datasets are matched. A bare
 path becomes the long `dataset_class` form, after which matching dataset
@@ -141,9 +173,15 @@ accumulated object. Clearing a required field, an identity field,
 `schema_version`, or a field that has no inherited value is an error.
 
 **R017-20.** The marker applies only to an immediate root field or keyed-member
-field. A null nested inside a supplied field value keeps its R006 meaning. In
-particular, `derivation: {literal: null}` replaces the derivation with a
-literal missing value; the replacement does not clear `derivation`.
+field, and composing a `columns` member does not move that boundary. Below it a
+null keeps its R006 meaning at every depth composition reaches. In particular,
+`derivation: {literal: null}` replaces the derivation with a literal missing
+value; the replacement does not clear `derivation`. Likewise
+`source.missing`, `mapping.unmapped`, and `conversion_failure` declare the
+missing value R008 substitutes, which R008-3 distinguishes from omitting the
+field. A layer therefore clears a whole member field and restates what it
+keeps; it does not remove one key of an inherited mapping or one field of an
+inherited nested class.
 
 **R017-21.** There is no separate `remove`, `drop`, `output.add`, or
 `output.remove` construct. Root fields are replaced explicitly, and unreachable
@@ -246,11 +284,23 @@ value came.
 Inheritance composes declarations before any data is read. Every
 specification resolves to one deterministic document. Later contributions
 win by position, not by conflict. The `parents` order decides every
-difference. No separate merge rule exists. Shallow composition replaces
-each field whole, so each layer stays reviewable on its own. Null clearing
-handles the one exception: clearing an optional field. Pruning keeps reuse
-cheap. A shared layer can carry extra declarations without forcing them
-into every artifact. Reference checks run after pruning, so a dead
+difference. No separate merge rule exists.
+
+Root fields replace whole, so a layer that writes one keeps it readable on its
+own. A column composes by declared kind, because the alternative is restating a
+branch to change a leaf: one added annotation cost the whole annotation map,
+and one added handler cost the whole expression. The trade is real and is what
+this rule pays: a composed column can no longer be read in one file, and only
+the resolved specification states what it finally does. Three limits keep that
+reviewable. Every list replaces, so an ordered argument list is always the one
+a single layer wrote. A different expression keyword replaces, so a layer that
+derives a value differently says so whole. The clearing marker does not
+descend, so a null below a member field is a value and never silently drops an
+inherited one.
+
+Null clearing handles the one exception: clearing an optional field. Pruning
+keeps reuse cheap. A shared layer can carry extra declarations without forcing
+them into every artifact. Reference checks run after pruning, so a dead
 declaration cannot fail a live declaration. Path rebasing preserves what an
 inherited relative path denotes. The path is never silently reinterpreted
 from the entry directory.

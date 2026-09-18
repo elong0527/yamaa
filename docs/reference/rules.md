@@ -28,7 +28,7 @@ authoritative text, follow the links.
 | R014 | [Source-format ingestion](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R014-source-ingestion.md) | Missing recognition and field typing at the source |
 | R015 | [Record lookup](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R015-record-lookup.md) | Looking up one record of another dataset and reading it by name |
 | R016 | [Temporal values](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R016-temporal-values.md) | The `date` and `datetime` values: lexical form, zone and precision model, comparison, canonical text, and the operations over them |
-| R017 | [Specification inheritance](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R017-specification-inheritance.md) | Parent resolution, shallow composition, pruning, and resolved order |
+| R017 | [Specification inheritance](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R017-specification-inheritance.md) | Parent resolution, layer composition, pruning, and resolved order |
 | R018 | [Project function environment](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R018-project-function-environment.md) | Project resolution, logical function contracts, singular runtime binding, activation conformance |
 | R019 | [Text values](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R019-text-values.md) | ASCII source, Unicode data, casing, equality, normalization, total order |
 | R020 | [Artifact serialization](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R020-artifact-serialization.md) | The `parquet` and `csv` profiles, display precision, and publication |

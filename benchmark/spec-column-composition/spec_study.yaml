@@ -1,0 +1,27 @@
+schema_version: "1.0"
+parents: [spec_organization.yaml, spec_compound.yaml]
+domain: ADLB
+keys: [USUBJID, PARAMCD]
+output:
+  path: adlb.csv
+  columns: [USUBJID, PARAMCD, AVAL, ANRIND, PARCAT1]
+columns:
+  - name: AVAL
+    derivation:
+      override:
+        - when: "USUBJID = '01' AND PARAMCD = 'AST'"
+          value:
+            literal: 31.0
+    verifications:
+      - not_missing: {}
+    metadata:
+      review_status: adjudicated
+  - name: ANRIND
+    derivation:
+      mapping:
+        unmapped: null
+  - name: PARCAT1
+    derivation:
+      literal: CHEMISTRY
+metadata:
+  scope: study

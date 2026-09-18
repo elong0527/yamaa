@@ -25,7 +25,7 @@ semantics, error behavior, and representative examples are complete.
 | R014 | [Source-format ingestion](R014-source-ingestion.md) | normative | Missing recognition and field typing at the source |
 | R015 | [Record lookup](R015-record-lookup.md) | normative | Looking up one record of another dataset and reading it by name |
 | R016 | [Temporal values](R016-temporal-values.md) | normative | The `date` and `datetime` values: lexical form, zone and precision model, comparison, canonical text, and the operations over them |
-| R017 | [Specification inheritance](R017-specification-inheritance.md) | normative | Parent resolution, shallow composition, pruning, and resolved order |
+| R017 | [Specification inheritance](R017-specification-inheritance.md) | normative | Parent resolution, layer composition, pruning, and resolved order |
 | R018 | [Project function environment](R018-project-function-environment.md) | normative | Project resolution, logical function contracts, singular runtime binding, activation conformance |
 | R019 | [Text values](R019-text-values.md) | normative | ASCII source, Unicode data, casing, equality, normalization, total order |
 | R020 | [Artifact serialization](R020-artifact-serialization.md) | normative | The `parquet` and `csv` profiles, display precision, and publication |

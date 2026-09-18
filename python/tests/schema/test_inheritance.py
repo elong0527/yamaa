@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import polars as pl
 import yaml
+from polars.testing import assert_frame_equal
 
 from yamaa import yamaa_domain
 from yamaa.schema import resolve_specification
@@ -35,6 +37,220 @@ def test_committed_inheritance_example_matches_resolved_artifact() -> None:
         resolved.provenance["input.LB.path"].file
         == (EXAMPLES / "spec-inheritance/spec_organization.yaml").resolve()
     )
+
+
+def test_committed_column_composition_example_matches_resolved_artifact() -> None:
+    example = EXAMPLES / "spec-column-composition"
+    resolved = resolve_specification(
+        example / "spec_study.yaml", load_schema_bundle(SCHEMA_ROOT)
+    )
+    expected = yaml.safe_load(
+        (example / "expected/spec_resolved.yaml").read_text(encoding="ascii")
+    )
+
+    assert resolved.document == expected
+    # R017-3 keeps provenance at the leaf, because the composed ANRIND
+    # dictionary and AVAL annotations come from three different layers.
+    assert (
+        resolved.provenance["columns.ANRIND.derivation.value.mapping.dict.L"].file
+        == (example / "spec_compound.yaml").resolve()
+    )
+    assert (
+        resolved.provenance["columns.ANRIND.derivation.value.mapping.dict.N"].file
+        == (example / "spec_organization.yaml").resolve()
+    )
+    assert (
+        resolved.provenance["columns.AVAL.metadata.review_status"].file
+        == (example / "spec_study.yaml").resolve()
+    )
+
+
+def test_committed_column_composition_example_executes_to_its_artifact() -> None:
+    example = EXAMPLES / "spec-column-composition"
+
+    run = yamaa_domain(example / "spec_study.yaml", schema_root=SCHEMA_ROOT)
+
+    assert run.issues.is_empty()
+    assert run.output is not None
+    committed = pl.read_csv(example / "expected/adlb.csv", schema=run.output.schema)
+    assert_frame_equal(run.output, committed, check_exact=True)
+
+
+def test_column_member_composes_by_declared_kind(tmp_path: Path) -> None:
+    (tmp_path / "input.csv").write_text("ID,CODE\n01,a\n", encoding="ascii")
+    (tmp_path / "parent.yaml").write_text(
+        """schema_version: "1.0"
+input: {SRC: input.csv}
+base: SRC
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: {source: SRC.ID}
+  - name: RESULT
+    type: str
+    label: Result
+    derivation:
+      mapping:
+        source: SRC.CODE
+        dict: {A: Alpha}
+        case_sensitive: false
+    verifications:
+      - max_length: {max: 8}
+    metadata: {analysis_role: result, origin_note: parent}
+""",
+        encoding="ascii",
+    )
+    (tmp_path / "spec.yaml").write_text(
+        """schema_version: "1.0"
+parents: parent.yaml
+domain: OUT
+keys: [ID]
+output: {path: out.csv, columns: [ID, RESULT]}
+columns:
+  - name: RESULT
+    derivation:
+      mapping:
+        dict: {B: Beta}
+        unmapped: null
+    verifications:
+      - not_missing: {}
+    metadata: {origin_note: study, reviewed: "yes"}
+""",
+        encoding="ascii",
+    )
+
+    resolved = resolve_specification(
+        tmp_path / "spec.yaml", load_schema_bundle(SCHEMA_ROOT)
+    )
+    result = resolved.document["columns"][1]
+
+    # A mapping composes key by key, a class field by field, and a schema
+    # default is materialized on the composed value, so the parent's
+    # case_sensitive survives a child that never mentions it.
+    assert result["derivation"] == {
+        "value": {
+            "mapping": {
+                "source": "SRC.CODE",
+                "dict": {"A": "Alpha", "B": "Beta"},
+                "case_sensitive": False,
+                "unmapped": None,
+            }
+        }
+    }
+    assert result["metadata"] == {
+        "analysis_role": "result",
+        "origin_note": "study",
+        "reviewed": "yes",
+    }
+    # Every list replaces, so the child's one check is the whole list.
+    assert result["verifications"] == [{"not_missing": {"severity": "error"}}]
+
+
+def test_child_expression_naming_another_keyword_replaces_the_derivation(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "input.csv").write_text("ID,CODE\n01,A\n", encoding="ascii")
+    (tmp_path / "parent.yaml").write_text(
+        """schema_version: "1.0"
+input: {SRC: input.csv}
+base: SRC
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation: {source: SRC.ID}
+  - name: RESULT
+    type: str
+    label: Result
+    derivation:
+      mapping:
+        source: SRC.CODE
+        dict: {A: Alpha}
+""",
+        encoding="ascii",
+    )
+    (tmp_path / "spec.yaml").write_text(
+        """schema_version: "1.0"
+parents: parent.yaml
+domain: OUT
+keys: [ID]
+output: {path: out.csv, columns: [ID, RESULT]}
+columns:
+  - name: RESULT
+    derivation: {literal: fixed}
+""",
+        encoding="ascii",
+    )
+
+    resolved = resolve_specification(
+        tmp_path / "spec.yaml", load_schema_bundle(SCHEMA_ROOT)
+    )
+
+    assert resolved.document["columns"][1]["derivation"] == {
+        "value": {"literal": "fixed"}
+    }
+
+
+def test_row_member_field_still_replaces_whole(tmp_path: Path) -> None:
+    (tmp_path / "input.csv").write_text("ID,CODE\n01,a\n", encoding="ascii")
+    (tmp_path / "parent.yaml").write_text(
+        """schema_version: "1.0"
+input: {SRC: input.csv}
+rows:
+  - id: only
+    dataset: SRC
+    derivations:
+      ID: {source: SRC.ID}
+      CODE:
+        mapping:
+          source: SRC.CODE
+          dict: {A: Alpha}
+          case_sensitive: false
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+  - name: CODE
+    type: str
+    label: Code
+""",
+        encoding="ascii",
+    )
+    (tmp_path / "spec.yaml").write_text(
+        """schema_version: "1.0"
+parents: parent.yaml
+domain: OUT
+keys: [ID]
+output: {path: out.csv, columns: [ID, CODE]}
+rows:
+  - id: only
+    derivations:
+      ID: {source: SRC.ID}
+      CODE:
+        mapping:
+          source: SRC.CODE
+          dict: {B: Beta}
+""",
+        encoding="ascii",
+    )
+
+    resolved = resolve_specification(
+        tmp_path / "spec.yaml", load_schema_bundle(SCHEMA_ROOT)
+    )
+
+    # R017-17 composes only a columns member. A rows member field is still
+    # replaced whole, so the inherited entry and the inherited
+    # case_sensitive are both gone rather than composed.
+    assert resolved.document["rows"][0]["derivations"]["CODE"] == {
+        "value": {
+            "mapping": {
+                "source": "SRC.CODE",
+                "dict": {"B": "Beta"},
+                "case_sensitive": True,
+            }
+        }
+    }
 
 
 def test_public_loader_resolves_parented_entry() -> None:

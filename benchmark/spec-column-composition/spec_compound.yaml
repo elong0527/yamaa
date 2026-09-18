@@ -1,0 +1,13 @@
+schema_version: "1.0"
+parents: spec_organization.yaml
+columns:
+  - name: AVAL
+    metadata:
+      source_system: central-laboratory
+  - name: ANRIND
+    derivation:
+      mapping:
+        dict:
+          L: LOW
+metadata:
+  scope: compound

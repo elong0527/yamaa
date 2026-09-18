@@ -462,7 +462,8 @@ uv run --project python --isolated --extra test pytest \
 `resolve_specification(entry, bundle)` resolves R017 parents before ordinary
 validation. Its result carries the canonical resolved document, its Pydantic
 `Specification`, the depth-first contribution order, and the source origin of
-each contributed root or keyed-member field.
+each contributed value, down to the leaf a layer wrote, because a `columns`
+member composes by declared kind rather than replacing each field whole.
 
 Producer links form an explicit acyclic plan. Every producer is resolved and
 executed once in producer-first order; its rendered artifact becomes an

@@ -1,0 +1,52 @@
+schema_version: "1.0"
+input:
+  LB:
+    path: input/lb.csv
+    types:
+      USUBJID: str
+      LBTESTCD: str
+      LBSTRESN: float
+      LBNRIND: str
+base: LB
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: LB.USUBJID
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation:
+      source: LB.LBTESTCD
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      source: LB.LBSTRESN
+    verifications:
+      - range:
+          min: 0
+    metadata:
+      analysis_role: analysis-value
+  - name: ANRIND
+    type: str
+    label: Analysis Reference Range Indicator
+    derivation:
+      mapping:
+        source: LB.LBNRIND
+        dict:
+          N: NORMAL
+          H: HIGH
+        case_sensitive: false
+  - name: PARCAT1
+    type: str
+    label: Parameter Category
+    derivation:
+      mapping:
+        source: LB.LBTESTCD
+        dict:
+          ALT: HEPATIC
+          AST: HEPATIC
+metadata:
+  scope: organization
