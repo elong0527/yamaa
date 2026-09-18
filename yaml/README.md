@@ -20,10 +20,10 @@ and SDTM-to-ADaM derivations. The design is under active development.
 - `schema_function.yaml` registers calls to functions resolved by R018's
   project environment.
 - `rules/` contains shared execution semantics, with one rule per file.
-- `examples/` contains source data, derivation specifications, exact expected
-  outputs, and `validation-manifest.yaml`, which assigns every validation-phase
-  negative fixture to its owning rule and validator family or an open blocking
-  issue.
+- `../benchmark/` sits outside this folder and contains source data, derivation
+  specifications, exact expected outputs, and `validation-manifest.yaml`, which
+  assigns every validation-phase negative fixture to its owning rule and
+  validator family or an open blocking issue.
 - `conformance/` contains language-wide fixtures that every implementation
   must reproduce, one file per contract.
 - `grammar/` contains one machine-readable grammar per closed language, with

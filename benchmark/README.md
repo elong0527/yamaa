@@ -12,10 +12,11 @@ synchronization burden. Production artifacts should use R020's `parquet`
 profile unless a human-reviewable CSV deliverable is specifically required.
 
 Execution behavior is defined by the schema's adjacent operation descriptions
-and the shared normative rules in [`../rules/README.md`](../rules/README.md);
-dataset declarations, variable references, and ODM contextual lookups by
-[R002](../rules/R002-source-binding.md). Example READMEs describe data, not the
-specification; [`agents.md`](agents.md) states that contract.
+and the shared normative rules in
+[`../yaml/rules/README.md`](../yaml/rules/README.md); dataset declarations,
+variable references, and ODM contextual lookups by
+[R002](../yaml/rules/R002-source-binding.md). Example READMEs describe data,
+not the specification; [`agents.md`](agents.md) states that contract.
 
 `odm.csv` is a tabular projection of ODM clinical data, not an ODM exchange
 document itself. Its fields map to the official
