@@ -41,7 +41,7 @@ The fastest way to explore YAMAA is with an AI agent. For example, ask an agent 
 - [Why YAMAA](articles/why-yamaa.md) -- the argument before the syntax.
 - [Excel to YAMAA](articles/excel-to-yamaa.md) -- translating specifications you already have.
 - [Schema concepts](articles/schema-concepts.md) -- the language itself.
-- [Example gallery](examples/index.html) -- every example, input against output.
+- [Benchmark](benchmark/index.md) -- every example, input against output.
 
 ## License
 

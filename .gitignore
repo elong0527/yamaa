@@ -6,4 +6,5 @@ __pycache__/
 .venv-docs/
 site/
 /study/
-docs/examples/*.html
+docs/benchmark/*.html
+docs/benchmark/index.md

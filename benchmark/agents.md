@@ -66,7 +66,7 @@ study-data words. Write:
 - a short title of the form `# <what the example does>` (no
   `<STANDARD> <DOMAIN>` prefix in the title), followed by a `Dashboard` badge
   linking to the rendered page:
-  `[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://elong0527.github.io/yamaa/examples/<directory>.html)`.
+  `[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/<directory>.html)`.
   It is navigation, not data description: the validator exempts it from the
   prose rules below, and the dashboard hides it on the page itself;
 - a `Goal:` line naming the variables derived;

@@ -1,4 +1,47 @@
-/* YAMAA site tweaks on top of the Material theme. */
+/* YAMAA site tweaks on top of the Material theme.
+ *
+ * The brand palette is sampled from the hex logo: a deep navy outline over
+ * steel-blue bands. The generated benchmark dashboards carry the same values
+ * in .github/scripts/example-docs/dashboard.css, so the Material pages and
+ * the self-contained pages read as one site. Change a value in one place and
+ * change it in the other.
+ */
+
+:root {
+  --yamaa-navy: #1f3a5c;
+  --yamaa-navy-deep: #16293f;
+  --yamaa-blue: #2d5f8a;
+  --yamaa-blue-bright: #3d7cb8;
+  --yamaa-blue-light: #78a0c8;
+  --yamaa-blue-pale: #eef3f8;
+}
+
+/* The palette is declared as `custom` in mkdocs.yml, which leaves every
+ * primary and accent variable for this file to define. */
+[data-md-color-primary="custom"] {
+  --md-primary-fg-color: var(--yamaa-navy);
+  --md-primary-fg-color--light: var(--yamaa-blue);
+  --md-primary-fg-color--dark: var(--yamaa-navy-deep);
+  --md-primary-bg-color: #fff;
+  --md-primary-bg-color--light: rgba(255, 255, 255, 0.7);
+}
+
+[data-md-color-accent="custom"] {
+  --md-accent-fg-color: var(--yamaa-blue-bright);
+  --md-accent-fg-color--transparent: rgba(61, 124, 184, 0.1);
+  --md-accent-bg-color: #fff;
+  --md-accent-bg-color--light: rgba(255, 255, 255, 0.7);
+}
+
+[data-md-color-scheme="default"] {
+  --md-typeset-a-color: var(--yamaa-blue);
+}
+
+/* Dark mode keeps the same hue: a deeper navy bar over the slate page. */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: var(--yamaa-navy-deep);
+  --md-typeset-a-color: #8ab4de;
+}
 
 .md-header__title {
   font-weight: 600;
@@ -7,4 +50,47 @@
 /* Keep wide derivation tables readable without breaking the layout. */
 .md-typeset table:not([class]) {
   font-size: 0.85em;
+}
+
+/* Benchmark gallery (docs/benchmark/index.md, written by
+ * .github/scripts/example-docs/generate.py). The page is generated, so its
+ * lists arrive as plain HTML and are laid out here. */
+.md-typeset .benchmark-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1.2rem;
+  margin: 0.8rem 0 0;
+}
+
+.md-typeset .benchmark-jump a {
+  font-weight: 700;
+}
+
+.md-typeset .benchmark-note {
+  color: var(--md-default-fg-color--light);
+  max-width: 44rem;
+}
+
+.md-typeset .benchmark-count {
+  margin: 0.2rem 0 0.4rem;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.65rem;
+}
+
+.md-typeset ul.benchmark-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 0.2rem 1.2rem;
+  margin: 0 0 1.2rem;
+  padding: 0;
+  list-style: none;
+}
+
+.md-typeset ul.benchmark-grid li {
+  margin: 0;
+}
+
+.md-typeset .benchmark-grid + h3,
+.md-typeset .benchmark-grid + h2 {
+  margin-top: 1.2rem;
 }

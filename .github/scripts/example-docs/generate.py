@@ -18,7 +18,7 @@ from markdown_it import MarkdownIt
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 EXAMPLES = ROOT / "benchmark"
-DESTINATION = ROOT / "docs/examples"
+DESTINATION = ROOT / "docs/benchmark"
 REPOSITORY = "https://github.com/elong0527/yamaa"
 # Comments are giscus threads in the repository's GitHub Discussions, so they
 # outlive any deployment. Each example maps to one discussion whose title is
@@ -379,6 +379,12 @@ def plural(count, noun):
 def render_index(entries):
     """Render the gallery page linking every generated dashboard.
 
+    The page is Markdown, so MkDocs renders it inside the documentation site
+    with the same header, navigation, search, and palette as every other page;
+    only the dashboards themselves stay self-contained. Headings are Markdown
+    so they reach the table of contents, and the lists are written as HTML so
+    a title is escaped exactly once and the stylesheet can lay them out.
+
     A specification the design must refuse is a different contract from one
     that must produce an artifact, so the two are listed apart rather than
     interleaved by domain. A `negative-` directory name is what marks the
@@ -397,31 +403,29 @@ def render_index(entries):
         jumps.append(
             f'<a href="#{key}">{escape(heading)} ({total})</a>'
         )
-        sections = []
+        sections = [
+            f"## {escape(heading)} {{: #{key} }}\n\n"
+            f'<p class="benchmark-note">{plural(total, "example")}. '
+            f"{escape(note)}</p>"
+        ]
         for category in sorted(groups):
             items = "".join(
-                f'        <li><a href="{escape(name)}.html">{escape(title)}</a></li>\n'
+                f'<li><a href="{escape(name)}.html">{escape(title)}</a></li>\n'
                 for name, title in sorted(groups[category])
             )
             sections.append(
-                f'      <section aria-label="{escape(heading)}: {escape(category)}">\n'
-                f"        <h3>{escape(category)}</h3>\n"
-                f'        <p class="count">{plural(len(groups[category]), "example")}</p>\n'
-                f"        <ul>\n{items}        </ul>\n      </section>"
+                f"### {escape(category)}\n\n"
+                f'<p class="benchmark-count">'
+                f'{plural(len(groups[category]), "example")}</p>\n\n'
+                f'<ul class="benchmark-grid">\n{items}</ul>'
             )
-        blocks.append(
-            f'    <section class="outcome" id="{key}" aria-labelledby="{key}-heading">\n'
-            f'      <h2 id="{key}-heading">{escape(heading)}</h2>\n'
-            f'      <p class="outcome-note">{plural(total, "example")}. {escape(note)}</p>\n'
-            + "\n".join(sections)
-            + "\n    </section>"
-        )
-    template = Template((HERE / "gallery.html").read_text(encoding="utf-8"))
+        blocks.append("\n\n".join(sections))
+    template = Template((HERE / "gallery.md").read_text(encoding="utf-8"))
     result = template.substitute(
-        total=len(entries),
+        total=plural(len(entries), "example"),
         source_url=REPOSITORY + "/tree/main/benchmark",
         summary="".join(jumps),
-        sections="\n".join(blocks) + "\n",
+        sections="\n\n".join(blocks) + "\n",
     )
     return result.encode("ascii", "xmlcharrefreplace")
 
@@ -665,7 +669,7 @@ def main():
     parser.add_argument("--all", action="store_true", help="Generate every example containing README.md and a spec file")
     parser.add_argument("--check", action="store_true", help="Fail if a selected dashboard is missing or differs; write nothing")
     parser.add_argument("--quiet", action="store_true", help="Suppress successful generation messages")
-    parser.add_argument("--output-dir", type=Path, default=DESTINATION, help="Destination directory (default: docs/examples)")
+    parser.add_argument("--output-dir", type=Path, default=DESTINATION, help="Destination directory (default: docs/benchmark)")
     args = parser.parse_args()
     if args.all and args.examples:
         parser.error("choose --all or explicit example names")
@@ -673,13 +677,13 @@ def main():
     if args.all:
         names = [path.name for path in sorted(EXAMPLES.iterdir()) if example_has_spec(path) and (path / "README.md").is_file()]
     elif not names:
-        names = [path.stem for path in sorted(args.output_dir.glob("*.html")) if path.stem != "index"]
+        names = [path.stem for path in sorted(args.output_dir.glob("*.html"))]
     if not names:
         parser.error("specify an example name or --all")
     ordered = sorted(set(names))
     complete = sorted(path.name for path in EXAMPLES.iterdir() if example_has_spec(path) and (path / "README.md").is_file())
     neighbors = {name: (complete[index - 1] if index else None, complete[index + 1] if index + 1 < len(complete) else None) for index, name in enumerate(complete) if name in set(ordered)}
-    write_index = args.all or (not args.examples and (args.output_dir / "index.html").is_file())
+    write_index = args.all or (not args.examples and (args.output_dir / "index.md").is_file())
     failures = []
     entries = []
     for name in ordered:
@@ -710,7 +714,7 @@ def main():
                 print(f"Generated: {destination}")
     if write_index:
         index = render_index(entries)
-        destination = args.output_dir / "index.html"
+        destination = args.output_dir / "index.md"
         if args.check:
             if not destination.is_file() or destination.read_bytes() != index:
                 failures.append("index")

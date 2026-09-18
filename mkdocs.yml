@@ -17,6 +17,9 @@ theme:
   favicon: assets/logo.jpeg
   language: en
   custom_dir: docs/overrides
+  # System fonts, so the Material pages and the self-contained benchmark
+  # dashboards render in the same typeface without a network request.
+  font: false
   features:
     - content.action.edit
     - content.action.view
@@ -31,10 +34,14 @@ theme:
     - toc.follow
   palette:
     - scheme: default
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - scheme: slate
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -63,9 +70,10 @@ nav:
       - Excel to YAMAA: articles/excel-to-yamaa.md
       - Schema concepts: articles/schema-concepts.md
       - Examples walkthrough: articles/yaml-examples-walkthrough.md
+  - Benchmark:
+      - benchmark/index.md
   - Reference:
-      - Derivation rules: reference/rules.md
+      - Rules: reference/rules.md
       - Schema: reference/schema.md
-  - Example gallery: https://elong0527.github.io/yamaa/examples/
   - Changelog: changelog.md
   - Contributing: contributing.md

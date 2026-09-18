@@ -317,7 +317,7 @@ class DashboardTests(unittest.TestCase):
     def test_readme_lifecycle_extracts_state_and_badge_url(self):
         text = (
             "# Example\n\n"
-            "[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)](https://example.org/x.html)"
+            "[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://example.org/x.html)"
             " [![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)]"
             "(https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)\n"
         )
@@ -388,24 +388,42 @@ class DashboardTests(unittest.TestCase):
         for name in ("zzz-one", "aaa-two", "mmm-three"):
             self.assertIn(f'href="{name}.html"', text)
 
+    def test_gallery_is_a_markdown_page_for_the_documentation_site(self):
+        text = generate.render_index(
+            [("adam-adsl-one", "ADaM ADSL: derive a flag", "ADaM ADSL")]
+        ).decode("ascii")
+        # Front matter and Markdown headings: MkDocs renders this page with the
+        # site header, navigation, and palette, so it must not be a whole
+        # document of its own.
+        self.assertTrue(text.startswith("---\ntitle: Benchmark\n"))
+        self.assertIn("\nhide:\n  - actions\n", text)
+        self.assertNotIn("<!doctype html>", text)
+        self.assertNotIn("<body", text)
+        self.assertIn("\n# Benchmark\n", text)
+        self.assertIn("\n## Examples {: #positive }\n", text)
+        self.assertIn("\n### ADaM ADSL\n", text)
+        self.assertIn("1 example, generated from", text)
+
     def test_gallery_lists_rejected_examples_apart_from_positive_ones(self):
         entries = [
             ("adam-adsl-one", "ADaM ADSL: derive a flag", "ADaM ADSL"),
             ("negative-adsl-two", "ADaM ADSL: reject a flag", "ADaM ADSL"),
         ]
         text = generate.render_index(entries).decode("ascii")
-        self.assertLess(text.index('id="positive"'), text.index('id="negative"'))
-        self.assertLess(text.index("adam-adsl-one.html"), text.index('id="negative"'))
-        self.assertLess(text.index('id="negative"'), text.index("negative-adsl-two.html"))
+        positive = text.index("{: #positive }")
+        negative = text.index("{: #negative }")
+        self.assertLess(positive, negative)
+        self.assertLess(text.index("adam-adsl-one.html"), negative)
+        self.assertLess(negative, text.index("negative-adsl-two.html"))
         # One shared domain heading per group, not one shared between them.
-        self.assertEqual(text.count("<h3>ADaM ADSL</h3>"), 2)
+        self.assertEqual(text.count("### ADaM ADSL\n"), 2)
         self.assertIn('<a href="#positive">Examples (1)</a>', text)
         self.assertIn('<a href="#negative">Anti-pattern (1)</a>', text)
 
     def test_gallery_omits_a_group_with_no_examples(self):
         text = generate.render_index([("adam-adsl-one", "ADaM ADSL: derive", "ADaM ADSL")]).decode("ascii")
-        self.assertIn('id="positive"', text)
-        self.assertNotIn('id="negative"', text)
+        self.assertIn("{: #positive }", text)
+        self.assertNotIn("{: #negative }", text)
 
 
 if __name__ == "__main__":

@@ -104,4 +104,5 @@ different ways.
 
 These principles are not rules by themselves. Each one is enforced by the
 [rules](https://github.com/elong0527/yamaa/tree/main/yaml/rules) and
-demonstrated in [minimal visible examples](https://elong0527.github.io/yamaa/examples/index.html).
+demonstrated in the [benchmark](../benchmark/index.md) of minimal
+visible examples.
