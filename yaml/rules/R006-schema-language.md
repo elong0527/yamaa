@@ -62,9 +62,9 @@ timestamp resolver, so an unquoted ISO-looking date or datetime is also a
 string.
 
 **R006-8.** Default parser settings do not satisfy this requirement. Each
-implementation chooses how to meet the requirement, without requiring
+implementation chooses how to meet the requirement, but must not require
 authors to quote values. R011's non-finite normalization applies
-core-schema scalar resolution.
+immediately after core-schema scalar resolution.
 
 ## Named types
 

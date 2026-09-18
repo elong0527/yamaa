@@ -90,7 +90,7 @@ source:
 **R008-11.** Other expressions type their `source` as a variable or a
 variable with a `filter`, and declare their own handler fields alongside
 it. The binding handlers are not theirs to declare: a source they name
-reaches its records through R003 and answers to their own handlers once
+reaches its records through R003 and answers to its own handlers once
 it holds a value.
 
 **R008-12.** `multiple_matches` relaxes right-side uniqueness wherever one
@@ -145,10 +145,10 @@ A handler firing zero times is reportable and is not an error.
 
 A value with no dictionary entry, a string the pattern does not match,
 and a source an operation cannot use are each a different defect from
-an uncollected value, and a specification may answer each defect
+an uncollected value. A specification may answer each defect
 differently, so the present-but-unusable handlers fire only when every
 input is present. With several inputs the two conditions stay disjoint,
-so an incomplete key can never reach the second handler. Filtering to
+so an incomplete key never reaches the second handler. Filtering to
 no surviving record is an ordinary absent match rather than a handled
 condition, so a narrow filter silently produces missing instead of
 firing the handler.
