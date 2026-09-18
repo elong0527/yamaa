@@ -62,9 +62,9 @@ operation inputs. R015-11 sets the same requirement for range operands.
 ## Declared-key lookup
 
 **R003-14.** `mapping_from` is not this join. Both are equality left joins
-adding one column; they differ only in where the keys come from.
+adding one column and differ only in where the keys come from.
 
-**R003-15.** This rule's join derives keys from output `keys` that also
+**R003-15.** The join derives keys from output `keys` that also
 exist on the right side. `mapping_from` declares its pairs of source
 variable and right-side column without consulting output `keys`, so
 `mapping_from` reaches a right side keyed on something else or not unique
@@ -165,8 +165,8 @@ is a right-side reduction filter.
 **R003-30.** By default, multiple right-side matches fail.
 
 **R003-31.** A structured source may declare `multiple_matches` as the
-local, explicit relaxation defined by R008. The `order_by` uses the
-order terms defined by R007. A right-side selection therefore declares
+local, explicit relaxation defined by R008. The declared `order_by` uses
+the order terms defined by R007. A right-side selection therefore declares
 direction and null placement as a window does.
 
 **R003-32.** An aggregate does not declare `multiple_matches`.
@@ -176,13 +176,13 @@ direction and null placement as a window does.
 Join keys come from output `keys`. Specifications do not repeat keys for each
 cross-dataset reference. A reduction yields at most one record per
 grouping key, so an aggregate never meets multiple matches. A reduction
-`group_by` coarser than applicable keys changes the join keys. R013 requires
-`group_by` columns to be output keys.
+`group_by` coarser than applicable keys changes the join keys, and R013
+requires `group_by` columns to be output keys.
 
 Comparable key types prevent an empty but otherwise valid join from reporting
 a complete right side as absent. Refusing a comparison makes a missing `types`
-declaration visible. Converting an operand would hide the missing declaration
-and let each runtime choose a conversion.
+declaration visible; converting an operand would hide that declaration and
+let each runtime choose a conversion.
 
 ## Errors
 

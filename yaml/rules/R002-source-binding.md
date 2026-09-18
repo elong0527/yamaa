@@ -42,7 +42,7 @@ resolved specification.
 **R002-5.** A dataset identifier must not equal the output `domain`.
 
 **R002-6.** A finished dataset from an earlier run is an ordinary source.
-Declare that source under a name of its own.
+Declare that source under its own name.
 
 **R002-7.** No keyed construct reaches a sibling record of the output
 dataset. R001 owns what happens when a column reaches its own value
@@ -167,10 +167,10 @@ That row does not invoke the absent-item handler.
 
 ## Rationale
 
-Unqualified names address the output dataset. Reusing the output
-domain as a dataset identifier would be ambiguous. Forbidding arbitrary
-nested expressions in variable fields keeps each operation self-contained.
-The ban makes dependencies visible.
+Unqualified names address the output dataset. Reusing the output domain
+as a dataset identifier would be ambiguous. Forbidding arbitrary nested
+expressions in variable fields keeps each operation self-contained and
+its dependencies visible.
 
 ## Errors
 
