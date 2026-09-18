@@ -18,7 +18,7 @@ and minimal resolved form are defined by
 
 - [`yaml/`](yaml/) - schemas and execution rules
 - [`benchmark/`](benchmark/) - runnable examples with exact expected output
-- [`cdiscbuildeR/`](cdiscbuildeR/) and [`R/`](R/) - R implementation and workflows
+- [`R/`](R/) - R implementation and workflows
 - [`python/`](python/) - Python implementation
 - [`docs/`](docs/) - diagrams and assets
 
