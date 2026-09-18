@@ -1,0 +1,159 @@
+schema_version: "1.0"
+domain: FA
+keys: [STUDYID, USUBJID, FASEQ]
+input:
+  ODM: input/odm.csv
+  AE: expected/ae.csv
+
+output:
+  path: fa.csv
+  columns: [STUDYID, USUBJID, FASEQ, FAOBJ, FALNKID, FACAT, FASCAT, FATESTCD, FATEST, FAORRES, FAORRESU, FASTRESC, FASTRESU]
+  order_by: [STUDYID, USUBJID, FASEQ]
+
+# The link id and the diameter unit are their own ODM records, so each row
+# reads them by subject and finding-event repeat.
+record_lookups:
+  - id: LINKID
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'FA' AND ODM.ItemOID = 'IT.FA.LINKID'"
+    source: [USUBJID, FAREPEAT]
+    key: [SubjectKey, StudyEventRepeatKey]
+
+  - id: DIAMUNIT
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'FA' AND ODM.ItemOID = 'IT.FA.DIAMETER.U'"
+    source: [USUBJID, FAREPEAT]
+    key: [SubjectKey, StudyEventRepeatKey]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ODM.SubjectKey
+
+  - name: FAREPEAT
+    type: str
+    label: Collected Finding Event Repeat Key
+    derivation:
+      source: ODM.StudyEventRepeatKey
+
+  - name: FALNKID
+    type: str
+    label: Link ID
+    derivation:
+      source: LINKID.Value
+
+  - name: FAOBJ
+    type: str
+    label: Object
+    derivation:
+      mapping_from:
+        source: [USUBJID, FALNKID]
+        dataset: AE
+        key: [USUBJID, AELNKID]
+        value: AETERM
+        unmapped: null
+
+  - name: FACAT
+    type: str
+    label: Category
+    derivation:
+      literal: SKIN FINDINGS
+
+  - name: FASCAT
+    type: str
+    label: Subcategory
+    derivation:
+      literal: RASH SUPPLEMENT
+
+  - name: FATESTCD
+    type: str
+    label: Test Short Name
+
+  - name: FATEST
+    type: str
+    label: Test Name
+
+  - name: FAORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation:
+      source: ODM.Value
+
+  - name: FAORRESU
+    type: str
+    label: Original Units
+    derivation:
+      case:
+        branches:
+          - when: "FATESTCD = 'DIAM'"
+            then:
+              source: DIAMUNIT.Value
+
+  - name: FASTRESC
+    type: str
+    label: Character Result/Finding in Standard Format
+    derivation:
+      source: ODM.Value
+
+  - name: FASTRESU
+    type: str
+    label: Standard Units
+    derivation:
+      source: FAORRESU
+
+  - name: FASEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [FALNKID, FATESTCD]
+
+rows:
+  - id: fa_findings
+    dataset: ODM
+    filter: "ODM.ItemOID IN ('IT.FA.LOCATION', 'IT.FA.DIAMETER', 'IT.FA.BIOPSD') AND ODM.Value IS NOT NULL"
+    derivations:
+      FATESTCD:
+        case:
+          branches:
+            - when: "ODM.ItemOID = 'IT.FA.LOCATION'"
+              then:
+                literal: LOC
+            - when: "ODM.ItemOID = 'IT.FA.DIAMETER'"
+              then:
+                literal: DIAM
+            - when: "ODM.ItemOID = 'IT.FA.BIOPSD'"
+              then:
+                literal: BIOPSY
+      FATEST:
+        case:
+          branches:
+            - when: "ODM.ItemOID = 'IT.FA.LOCATION'"
+              then:
+                literal: Location of Rash
+            - when: "ODM.ItemOID = 'IT.FA.DIAMETER'"
+              then:
+                literal: Lesion Diameter
+            - when: "ODM.ItemOID = 'IT.FA.BIOPSD'"
+              then:
+                literal: Lesion Biopsied
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, FASEQ]
+  - row_count:
+      min: 9
+      max: 9
+  - implies:
+      id: fa-linkid-matches-ae-linkid
+      when: "FALNKID IS NOT NULL"
+      then: "FAOBJ IS NOT NULL"

@@ -1,0 +1,100 @@
+schema_version: "1.0"
+domain: RELREC
+keys: [STUDYID, RDOMAIN, IDVAR, RELID]
+input:
+  AE: expected/ae.csv
+  FA: expected/fa.csv
+
+output:
+  path: relrec.csv
+  columns: [STUDYID, USUBJID, RDOMAIN, IDVAR, IDVARVAL, RELTYPE, RELID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: RDOMAIN
+    type: str
+    label: Related Domain Abbreviation
+
+  - name: IDVAR
+    type: str
+    label: Identifying Variable
+
+  - name: IDVARVAL
+    type: str
+    label: Identifying Variable Value
+
+  - name: RELTYPE
+    type: str
+    label: Relationship Type
+
+  - name: RELID
+    type: int
+    label: Relationship Identifier
+    derivation:
+      rank:
+        method: dense
+        order_by: [USUBJID, IDVARVAL]
+
+  - name: AE_MATCH_COUNT
+    type: int
+    label: AE Match Count per RELID
+    derivation:
+      aggregate:
+        expr: COUNT(RELID)
+        group_by: [RELID]
+        filter: "RDOMAIN = 'AE'"
+
+rows:
+  - id: fa_relrec
+    dataset: FA
+    group_by: [FA.STUDYID, FA.USUBJID, FA.FALNKID]
+    filter: "IDVARVAL IS NOT NULL"
+    derivations:
+      STUDYID:
+        source: FA.STUDYID
+      USUBJID:
+        source: FA.USUBJID
+      RDOMAIN:
+        literal: FA
+      IDVAR:
+        literal: FALNKID
+      IDVARVAL:
+        source: FA.FALNKID
+      RELTYPE:
+        literal: MANY
+
+  - id: ae_relrec
+    dataset: AE
+    group_by: [AE.STUDYID, AE.USUBJID, AE.AELNKID]
+    filter: "IDVARVAL IS NOT NULL"
+    derivations:
+      STUDYID:
+        source: AE.STUDYID
+      USUBJID:
+        source: AE.USUBJID
+      RDOMAIN:
+        literal: AE
+      IDVAR:
+        literal: AELNKID
+      IDVARVAL:
+        source: AE.AELNKID
+      RELTYPE:
+        literal: ONE
+
+verifications:
+  - unique:
+      columns: [STUDYID, RDOMAIN, IDVAR, RELID]
+  - row_count:
+      min: 6
+      max: 6
+  - implies:
+      id: fa-relid-has-ae-match
+      when: "RDOMAIN = 'FA'"
+      then: "AE_MATCH_COUNT = 1"

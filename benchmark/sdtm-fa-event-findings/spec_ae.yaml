@@ -1,0 +1,81 @@
+schema_version: "1.0"
+domain: AE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  ODM: input/odm.csv
+
+output:
+  path: ae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AELNKID]
+
+# One event's term, date and link id are three ODM records, so the row built
+# from the term reads the other two by subject and event repeat.
+record_lookups:
+  - id: STARTDTC
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'AE' AND ODM.ItemOID = 'IT.AE.AESTDTC'"
+    source: [USUBJID, AEREPEAT]
+    key: [SubjectKey, StudyEventRepeatKey]
+
+  - id: LINKID
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'AE' AND ODM.ItemOID = 'IT.AE.AELNKID'"
+    source: [USUBJID, AEREPEAT]
+    key: [SubjectKey, StudyEventRepeatKey]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ODM.SubjectKey
+
+  - name: AEREPEAT
+    type: str
+    label: Collected Event Repeat Key
+    derivation:
+      source: ODM.StudyEventRepeatKey
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation:
+      source: ODM.Value
+
+  - name: AESTDTC
+    type: date
+    label: Start Date/Time of Adverse Event
+    derivation:
+      source: STARTDTC.Value
+
+  - name: AELNKID
+    type: str
+    label: Link ID
+    derivation:
+      source: LINKID.Value
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [AESTDTC, AETERM]
+
+rows:
+  - id: ae_event
+    filter: "ODM.ItemOID = 'IT.AE.AETERM' AND ODM.Value IS NOT NULL"
+    derivations: {}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 4
+      max: 4

@@ -10015,7 +10015,25 @@ def validate_examples_csv(root: Path, env=None):
         if not ex_dir.is_dir() or ex_dir.name.startswith('.'):
             continue
 
-        for spec_path in example_entry_specs(ex_dir):
+        entry_spec_paths = example_entry_specs(ex_dir)
+        declared_artifacts = set()
+        for spec_path in entry_spec_paths:
+            try:
+                with open(spec_path, 'r', encoding='utf-8') as f:
+                    sibling_spec = yaml.load(f, Loader=UniqueKeyLoader)
+            except Exception:
+                continue
+            sibling_output = (
+                sibling_spec.get('output')
+                if isinstance(sibling_spec, dict)
+                else None
+            )
+            if isinstance(sibling_output, dict):
+                sibling_path = sibling_output.get('path')
+                if isinstance(sibling_path, str):
+                    declared_artifacts.add(PurePosixPath(sibling_path).name)
+
+        for spec_path in entry_spec_paths:
             try:
                 with open(spec_path, 'r', encoding='utf-8') as f:
                     spec = yaml.load(f, Loader=UniqueKeyLoader)
@@ -10073,6 +10091,12 @@ def validate_examples_csv(root: Path, env=None):
                         ],
                     }
                 else:
+                    # A multi-artifact example may contain one spec per
+                    # expected CSV; silence the name mismatch when the CSV
+                    # belongs to a sibling spec and complain only about
+                    # truly orphaned artifacts.
+                    if csv_file.name in declared_artifacts:
+                        continue
                     permitted = [
                         name for name in (primary_name, violation_name)
                         if name is not None
