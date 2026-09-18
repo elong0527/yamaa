@@ -65,8 +65,8 @@ which claim the document reports.
 
 **R024-5.** Every dataset follows one foundational standard, and the study
 document binds it: R026-7 resolves each dataset to a declared standard of type
-`IG`. A specification does not name the standard. Which implementation-guide
-release changes between submissions, so binding it in the specification
+`IG`. A specification does not name the standard. The implementation-guide
+release changes between submissions. Binding the release in the specification
 would version every dataset specification against one study. This rule reads
 the bound standard's published name as one of three closed **families**:
 
@@ -157,7 +157,7 @@ data one run produced. The length is a positive integer.
 **R024-18.** `length` is required when `data_type` resolves to `text`,
 `integer`, or `float` unless R024-21 derives it, and must not be declared
 otherwise. The other submission types carry fixed-form values, so a length
-for such a type would restate that form.
+for such a type restates that form.
 
 **R024-19.** `significant_digits` is required when `data_type` resolves to
 `float` and must not be declared otherwise. The field counts digits after
@@ -186,8 +186,8 @@ requirement.
 **R024-23.** `display_format` is presentation text carried for a reader.
 `display_format` never changes a computed value, a rendered artifact value,
 or R020's `output.decimals`. A study that wants different artifact digits
-declares `output.decimals`, which R020 owns; the two settings are
-independent and this rule does not reconcile them, because one is a display
+declares `output.decimals`, which R020 owns. The two settings are
+independent, and this rule does not reconcile them: one is a display
 a document reports and the other is a display an artifact carries.
 
 **R024-24.** `role` states how the column is used within its dataset, in the

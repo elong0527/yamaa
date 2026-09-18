@@ -32,9 +32,9 @@ one codelist statement, so a study upgrades a published version in one place.
 
 **R025-2.** `name` is the codelist's human-readable name and is unique across
 the document's codelists. `id` and `name` are separate. `id` is what a
-specification writes, and `name` is what a reader sees. Forcing the two to
-match would make renaming a codelist a change to every specification that
-binds the codelist.
+specification writes, and `name` is what a reader sees. Forcing `id` and
+`name` to match would make renaming a codelist a change to every
+specification that binds the codelist.
 
 **R025-3.** `standard` names a declared standard of type `CT` and states which
 published terminology this codelist is drawn from. A codelist that omits
@@ -78,7 +78,7 @@ R026 carries the declared order into the generated document.
 **R025-11.** An `external` codelist names the `dictionary` and its `version`,
 with an optional `href`. Large or volatile dictionaries are referenced; the
 version is required because a reference without a version identifies nothing
-checkable.
+to check.
 
 ## What a binding enforces
 
@@ -140,13 +140,13 @@ usual cause is a binding that misspells its identifier.
 ## Rationale
 
 One shared object lets a study upgrade a controlled-terminology version in
-one place. Restating terminology per column creates many places to change and
-makes agreement impossible to prove. A binding enforces only closed
-terminology. Enforcing an extensible or external list would reject values the
-standard admits. Agreement
-with `allowed_values` is exact equality because any other relation leaves the
-generated document and the executed run making different claims about the same
-column. A submission document whose claims the run does not support is the
+one place. Restating terminology per column creates many places to change
+and makes agreement impossible to prove. A binding enforces only closed
+terminology. Enforcing an extensible or external list would reject values
+the standard admits. Agreement with `allowed_values` is exact equality:
+any other relation leaves the generated document and the executed run
+making different claims about the same column. A submission document whose
+claims the run does not support is the
 failure this design exists to prevent. Decode and rank are all-or-nothing
 within a codelist. A partially decoded list mixes two kinds of list.
 A reader cannot tell an omitted decode from an absent decode.
