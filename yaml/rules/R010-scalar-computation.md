@@ -16,21 +16,22 @@ entry per operator or host-language code.
 
 This rule owns the `numeric_expression` primitive: its grammar, function
 vocabulary, numeric types, missing-value behavior, and failure conditions.
-`compute` is the only arithmetic expression and is deliberately numeric.
+`compute` is the only arithmetic expression and is numeric.
 Strings, dates, comparison, conditional selection, and row-wise extremes over
-non-numeric types keep their registered expressions under R007. A general
+non-numeric types stay under R007. A general
 expression string cannot displace the typed registry. The Boolean-valued `sql`
-primitive is R004; the two share notation and identifier resolution but not
-their type or their permitted vocabulary. Reduction over many records uses
-R013's `aggregate_expression`. It reuses this grammar's operators, functions,
-numeric types, and failure conditions. R010 evaluates one row and admits no
-reduction.
+primitive is R004. The two primitives share notation and identifier
+resolution but not type or permitted vocabulary. Reduction over many
+records uses R013's `aggregate_expression`. That primitive reuses this
+grammar's operators, functions, numeric types, and failure conditions.
+R010 evaluates one row. R010 admits no reduction.
 
 ## Scope
 
 **R010-1.** `compute` evaluates a closed numeric grammar over current-output
-columns, fields of a declared record lookup, and numeric literals, and
-returns one numeric value per current row. The grammar is a subset of SQL.
+columns, fields of a declared record lookup, and numeric literals.
+`compute` returns one numeric value per current row. The grammar is a
+subset of SQL.
 
 ## Identifiers
 
@@ -39,20 +40,20 @@ phase. A formula and a predicate never disagree about a name.
 
 **R010-3.** During column derivation an unqualified identifier is a
 current-output column. A qualified identifier is permitted only when its
-qualifier is a declared R015 record lookup `id`; it reads the named field of
-that lookup's selected record. An arbitrary `DATASET.VARIABLE` reference is
-not permitted: bind the source variable to a column first and compute from
-it. Omitting that binding column from `output.columns` keeps it out of the
-final dataset.
+qualifier is a declared R015 record lookup `id`. The qualified identifier
+reads the named field of that lookup's selected record. An arbitrary
+`DATASET.VARIABLE` reference is not permitted: bind the source variable
+to a column first and compute from that column. Omitting that binding
+column from `output.columns` keeps the column out of the final dataset.
 
 **R010-4.** During ungrouped row construction an identifier is either a
 variable of the row template's input dataset, qualified exactly as
-`row.filter` qualifies one, or an unqualified column derived by the same
-`rows` entry.
+`row.filter` qualifies a variable, or an unqualified column derived by
+the same `rows` entry.
 
 **R010-5.** During grouped row construction an identifier qualified to
 the row template's input dataset must be one of the enclosing
-`row.group_by` variables; other values are first reduced to a row-derived
+`row.group_by` variables. Other values are first reduced to a row-derived
 column with `aggregate`. No other dataset may be qualified, because row
 construction precedes the R003 join and sees only the row template's
 input dataset.
@@ -89,13 +90,12 @@ call       := function "(" [expr ("," expr)*] ")"
 number     := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
 ```
 
-`grammar/numeric.yaml` is this grammar's single source. The block above is
-its rendering; the file vocabulary closes the function table below, and the
-file cases record the text every implementation must accept or reject, the
-identifiers an accepted text binds, and the resulting parse. Repository
-validation and
-the R implementation both read that file, so no transcription of this
-grammar can drift from it without failing.
+`grammar/numeric.yaml` is this grammar's single source. The block above
+renders that file. The file vocabulary closes the function table below.
+The file cases record the text every implementation must accept or reject,
+the identifiers an accepted text binds, and the resulting parse.
+Repository validation and the R implementation both read that file, so no
+transcription of this grammar can drift from that file without failing.
 
 **R010-8.** Precedence is unary sign, then `*` and `/`, then binary `+` and
 `-`, all left-associative. Parentheses override precedence. Function names
@@ -139,7 +139,7 @@ has the same rule at conversion, where a non-integral value fails rather than
 being truncated.
 
 **R010-13.** `CEIL`, `FLOOR`, and `TRUNC` remain. They are not presentation
-rounding: they return an integral part exactly, with no mode to choose, and
+rounding. They return an integral part, with no mode to choose.
 `FLOOR(a / b)` is how this grammar expresses integer division.
 
 ## Types
@@ -155,22 +155,22 @@ operand returns `float`.
 **R010-17.** `SQRT`, `POWER`, `EXP`, and `LN` return `float`.
 
 **R010-18.** `CEIL`, `FLOOR`, and `TRUNC` return `float`. Declare the column
-`type: int` to get an integer; R005 converts the completed result
+`type: int` to get an integer. R005 converts the completed result
 and R011 defines that conversion.
 
 **R010-19.** `ABS`, `GREATEST`, `LEAST`, `MOD`, `NULLIF`, and `COALESCE`
 return the promoted type of their arguments: `int` when every argument is
 `int`, otherwise `float`.
 
-**R010-20.** `GREATEST` and `LEAST` stay numeric here like every other
+**R010-20.** `GREATEST` and `LEAST` stay numeric like every other
 function in this grammar. A row-wise extreme over dates, or over any other
 comparable type, is the `greatest` and `least` registry expressions that
-R007 defines; this grammar is not widened to reach them.
+R007 defines. This grammar is not widened to reach them.
 
 **R010-21.** An identifier whose runtime type is neither `int` nor `float`
 is an error. R007 already forbids implicit conversion between operation
-inputs, and this rule does not relax that: a collected string is converted
-by binding it to a numeric column first.
+inputs, and this rule does not relax that rule. A collected string is
+converted by binding it to a numeric column first.
 
 ## Missing values
 
@@ -179,12 +179,12 @@ produces a `NULL` result, except `COALESCE`, `NULLIF`, `GREATEST`, and `LEAST`,
 whose argument-level behavior is defined in the R010-9 table.
 
 **R010-23.** A `compute` derivation therefore needs no guarding predicate to
-survive a missing input, and a formula that must yield missing rather than
+survive a missing input. A formula that must yield missing rather than
 fail uses `NULLIF`. Percentage change against a zero base is
 `100 * (VALUE - BASE) / NULLIF(BASE, 0)`.
 
 **R010-24.** R011's non-finite normalization applies after every numeric
-operator or function and before the result is used by another part of the
+operator or function and before the result is used elsewhere in the
 expression.
 
 ## Failure conditions
@@ -205,9 +205,9 @@ base and a non-integer exponent.
 **R010-30.** Integer overflow of `+`, `-`, or `*` under `int` promotion.
 
 **R010-31.** Floating-point results are not exact decimals. `POWER(x, 2)`
-and `x * x` are permitted to differ in the last place. A specification
-cannot round that away, so a derivation that needs a stable decimal must be
-written as a formula producing a stable decimal.
+and `x * x` may differ in the last place. A specification
+cannot round the difference away. A derivation that needs a stable decimal
+must be written as a formula producing a stable decimal.
 
 ## Determinism
 
@@ -218,25 +218,25 @@ example.
 **R010-33.** `/` never truncates. Language or engine settings that make
 division integral must be overridden.
 
-**R010-34.** Evaluation follows the written association exactly.
+**R010-34.** Evaluation follows the written association.
 Implementations must not reassociate, redistribute, or algebraically
 simplify an expression, and must not enable fast-math or optimizer rewrites
 that do. `a / (b * b)` and `a / b / b` are different formulas and may return
-different doubles; both are correct, and an implementation must return the
-one that was written.
+different doubles. Both are correct. An implementation must return the
+double for the written formula.
 
 ## Rationale
 
-Closing the vocabulary to one table keeps portability checkable: anything
-outside the grammar fails validation instead of inheriting a host dialect.
-There is deliberately no rounding function. R, Python with `numpy`, and
-SAS disagree on exactly the half-way values a reviewer checks. Rounding
+Closing the vocabulary to one table keeps portability checkable.
+Anything outside the grammar fails validation instead of inheriting a host
+dialect. There is no rounding function. R, Python with `numpy`,
+and SAS disagree on exactly the half-way values a reviewer checks. Rounding
 inherited from the host would disagree across runtimes. Carrying
 full precision through the derivation and deciding display places at
-reporting time avoids the disagreement entirely. Fixing association and
-forbidding reassociation serves portability: two formulas that differ only
+reporting time avoids the disagreement. Fixing association and
+forbidding reassociation serves portability. Two formulas that differ only
 in parenthesization may return different doubles, and each implementation
-returns the one that was written.
+returns the double for the written formula.
 
 ## Errors
 
