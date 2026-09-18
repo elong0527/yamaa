@@ -16,7 +16,7 @@ applies_to: [root.base, root.rows, row.dataset, row.group_by, row.filter,
 ## Intent
 
 State the order for building output rows, deriving columns, and running
-derivation expressions.
+expressions.
 
 ## Boundaries
 
@@ -33,39 +33,39 @@ finished expression results.
 2. **R001-3.** Column derivation enriches constructed rows and must not
    change row count.
 
-**R001-4.** Each `rows` entry builds output rows from one input dataset, named
-by `row.dataset`. When `root.input` declares exactly one dataset, an entry
-omitting `dataset` builds from that dataset. When `root.input` declares
-more than one, every entry must state `dataset`.
+**R001-4.** Each row template builds output rows from one input dataset,
+named by `row.dataset`. When `root.input` declares exactly one dataset, a
+row template omitting `dataset` builds from that dataset. When `root.input`
+declares more than one, every row template must state `dataset`.
 
 **R001-5.** A row template has one of two modes:
 
 1. **R001-6.** A row template without `group_by` is record-driven. Its
    `filter`, when present, evaluates against each input record before any
    row derivation. Every retained input record produces one candidate row.
-2. **R001-7.** A row template with `group_by` is group-driven. Its
-   non-empty list names only qualified variables of the row template's input
-   dataset. Each variable's type defines equality; R019 defines strings.
-   Missing values equal missing values. Every group produces one candidate row.
+2. **R001-7.** A row template with `group_by` is group-driven. The
+   `group_by` list is non-empty and names only qualified variables of
+   the row template's input dataset. Each variable's type defines
+   equality; R019 defines strings. Missing values equal missing values.
+   Every group produces one candidate row.
 
 **R001-8.** Groups are ordered by the position of their first input record.
-Within a group, input order is kept. For each group, evaluate every
-row derivation once and complete stages 1 through 4 of the R005 lifecycle.
-Then evaluate the row template's `filter`, when present, over the candidate's
+Within a group, input order is kept. For each group, evaluate every row
+derivation once and complete stages 1 through 4 of the R005 lifecycle. Then
+evaluate the row template's `filter`, when present, over the candidate's
 completed unqualified columns. Append the candidate only when the `filter`
-is `TRUE`; `FALSE` or `UNKNOWN` suppresses the candidate. A grouped
-`filter` filters after a group reduction. An ungrouped `filter` filters
-input records.
+is `TRUE`; `FALSE` or `UNKNOWN` suppresses the candidate. A grouped `filter`
+filters after a group reduction. An ungrouped `filter` filters input records.
 
-**R001-9.** Constructed rows are appended in specification order, using input
-order for record-driven row templates and first-occurrence group order for
-group-driven row templates.
+**R001-9.** Constructed rows are appended in specification order.
+Record-driven row templates keep input order. Group-driven row templates
+keep first-occurrence group order.
 
 **R001-10.** The input datasets and the row templates fix the output row
 grain. No operation repeats a candidate a data-dependent number of times.
-No generated index supports such a repetition. A source value may decide
-whether a written row template retains its one candidate. That value
-cannot create additional instances of that row template.
+No generated index supports that repetition. A source value may decide
+whether a written row template keeps its one candidate. That value cannot
+create more instances of that row template.
 
 **R001-11.** When the required artifact has one row per observation,
 administration, or planned event, an input dataset must contain one input
@@ -190,9 +190,9 @@ R005 owns both.
 ## Rationale
 
 Row count changes only during row construction. A reviewer can therefore
-separate row grain from enrichment. The row templates and their input
-datasets fix how many rows exist before any column is derived. Dependency
-inference makes declaration order checkable and cycles visible.
+separate row grain from enrichment: the row templates and their input
+datasets fix the row count before any column is derived. Dependency
+inference makes declaration order checkable and shows cycles.
 Evaluation order never follows mapping order or repeated reads of a partition.
 
 ## Errors
