@@ -5278,6 +5278,9 @@ bad_field: "what"
         )
 
     def test_readme_dashboard_badge_must_follow_the_title(self):
+        # Issue #184 round 2c: badge-line checks live in
+        # editorial.validate_examples_badges (docs-lint gate), not in the
+        # layout gate -- layout checks skeleton only.
         ex_dir = self.root_dir / 'benchmark' / 'link-check'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
@@ -5288,21 +5291,33 @@ bad_field: "what"
             '(https://elong0527.github.io/yamaa/benchmark/link-check.html)'
         )
         (ex_dir / 'README.md').write_text('# No badge\n')
-        errors = VALIDATOR.validate_examples_layout(self.root_dir)
+        self.assertEqual(
+            VALIDATOR.validate_examples_layout(self.root_dir), []
+        )
+        errors = VALIDATOR.validate_examples_badges(self.root_dir)
         self.assertIn('right after the title', '\n'.join(errors))
         (ex_dir / 'README.md').write_text(
             '# Wrong badge\n\n'
             '[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)]'
             '(https://elong0527.github.io/yamaa/benchmark/other-dir.html)\n'
         )
-        errors = VALIDATOR.validate_examples_layout(self.root_dir)
+        self.assertEqual(
+            VALIDATOR.validate_examples_layout(self.root_dir), []
+        )
+        errors = VALIDATOR.validate_examples_badges(self.root_dir)
         self.assertIn('right after the title', '\n'.join(errors))
         (ex_dir / 'README.md').write_text(f'# Right badge\n\n{badge}\n')
         self.assertEqual(
             VALIDATOR.validate_examples_layout(self.root_dir), []
         )
+        self.assertEqual(
+            VALIDATOR.validate_examples_badges(self.root_dir), []
+        )
 
     def test_readme_dashboard_badge_accepts_lifecycle_badge(self):
+        # Issue #184 round 2c: badge-line checks live in
+        # editorial.validate_examples_badges (docs-lint gate), not in the
+        # layout gate -- layout checks skeleton only.
         ex_dir = self.root_dir / 'benchmark' / 'link-check'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
@@ -5323,12 +5338,51 @@ bad_field: "what"
         self.assertEqual(
             VALIDATOR.validate_examples_layout(self.root_dir), []
         )
+        self.assertEqual(
+            VALIDATOR.validate_examples_badges(self.root_dir), []
+        )
         (ex_dir / 'README.md').write_text(
             f'# Bad lifecycle\n\n{badge} [![Lifecycle: bogus]'
             f'(https://img.shields.io/badge/Lifecycle-bogus-red)](https://example.com)\n'
         )
-        errors = VALIDATOR.validate_examples_layout(self.root_dir)
+        self.assertEqual(
+            VALIDATOR.validate_examples_layout(self.root_dir), []
+        )
+        errors = VALIDATOR.validate_examples_badges(self.root_dir)
         self.assertIn('right after the title', '\n'.join(errors))
+
+    def test_layout_skips_missing_readme_presence_check(self):
+        # Issue #184 round 1: a missing README fails only in the docs-lint
+        # gate (validate_examples_readme_presence), not in the layout gate.
+        ex_dir = self.root_dir / 'benchmark' / 'no-readme'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'spec.yaml').write_text('value: valid\n')
+        (ex_dir / 'expected' / 'out.csv').write_text('value\n1\n')
+        self.assertEqual(
+            VALIDATOR.validate_examples_layout(self.root_dir), []
+        )
+        presence = VALIDATOR.validate_examples_readme_presence(self.root_dir)
+        self.assertIn('missing README.md', '\n'.join(presence))
+
+    def test_layout_skips_missing_how_to_fix_check(self):
+        # Issue #184 round 1: a negative README without '## How to fix'
+        # fails only in the docs-lint gate, not in the layout gate.
+        ex_dir = self.root_dir / 'benchmark' / 'negative-no-fix'
+        (ex_dir / 'input').mkdir(parents=True)
+        (ex_dir / 'expected').mkdir()
+        (ex_dir / 'spec.yaml').write_text('value: valid\n')
+        (ex_dir / 'expected' / 'error.yaml').write_text('{}')
+        badge = (
+            '[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)]'
+            '(https://elong0527.github.io/yamaa/benchmark/negative-no-fix.html)'
+        )
+        (ex_dir / 'README.md').write_text(f'# No fix\n\n{badge}\n')
+        self.assertEqual(
+            VALIDATOR.validate_examples_layout(self.root_dir), []
+        )
+        presence = VALIDATOR.validate_examples_readme_presence(self.root_dir)
+        self.assertIn('How to fix', '\n'.join(presence))
 
     def test_readme_combined_badge_line_is_exempt_from_line_width(self):
         ex_dir = self.root_dir / 'benchmark' / 'badge-width'

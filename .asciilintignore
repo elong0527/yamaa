@@ -1,3 +1,0 @@
-# Example input and expected output CSV data may contain Unicode text
-/benchmark/*/input/**/*.csv
-/benchmark/*/expected/**/*.csv
