@@ -53,8 +53,8 @@ text        := one or more R019 scalar values other than "{" and "}"
 
 **R012-5.** `grammar/string-template.yaml` is the grammar's only source.
 The grammar block above renders that file. The file cases record the
-literal text and placeholders each implementation must produce. The file
-cases also record the templates each implementation must reject.
+literal text and placeholders each implementation must produce, and the
+templates each implementation must reject.
 
 **R012-6.** Repository validation and the R implementation read
 `grammar/string-template.yaml`. Any drift in the grammar causes a failure.
@@ -79,13 +79,13 @@ and unqualified names have the meanings R002 gives a field typed as `variable`.
 **R012-11.** R001 collects all placeholders as dependencies before evaluation.
 Repeated placeholders add one dependency but are replaced wherever they appear.
 
-**R012-12.** When every dependency is complete, replace each placeholder with
-its string value and unescape brace pairs. Placeholder values stay unconverted.
+**R012-12.** When every dependency is complete, placeholders are replaced by
+their string values and brace pairs are unescaped. Values stay unconverted.
 
 **R012-13.** If any value is not a string, evaluation fails under R007.
 
-**R012-14.** If a placeholder value is missing, return declared `missing`;
-without that handler, the missing value is fatal under R008.
+**R012-14.** If a placeholder value is missing, return declared `missing`.
+Without that handler, the missing value is fatal under R008.
 
 **R012-15.** Otherwise the result is R019's exact concatenation of
 literal text and replacement values, including an empty string when the
