@@ -6,7 +6,7 @@ README describing what the example derives.
 
 ## Required reading
 
-Read `../agents.md` first; it governs the schema and rules this directory
+Read `../yaml/agents.md` first; it governs the schema and rules this directory
 exercises. Then read `README.md` here for the example index. The open design
 gaps and the schema work they justify are tracked in this repository's issue
 tracker, one work item per root cause.
@@ -261,8 +261,8 @@ check merely to make the sample pass.
     # every declared example column has a non-empty, human-readable label
     # (validate_column_labels in validate_repository.py; the full prose gate
     # is check_documentation.py)
-    uv run --project ../../python --no-sync \
-        python ../../.github/scripts/yaml-validation/validate_repository.py
+    uv run --project ../python --no-sync \
+        python ../.github/scripts/yaml-validation/validate_repository.py
 
     # no schema vocabulary reached the data-contract portion of a README,
     # and every negative example has exactly one remediation section
@@ -335,6 +335,6 @@ entry when it does not: `study_day` returns an ordinal on a calendar with no
 zero, and folding it into `date_diff` would have allowed `unit: week` with it.
 
 After registering one, update every place that enumerates the vocabulary: the
-input-shape audit in `../README.md`, R007's type behavior, and R008 if it
+input-shape audit in `../yaml/README.md`, R007's type behavior, and R008 if it
 declares handlers. Then delete the gap it closed from its work item in the
 issue tracker, and close the work item when its last gap closes.

@@ -13,7 +13,7 @@ Before reviewing, implementing, or modifying this design:
    the derivation or verification vocabulary in scope.
 4. Read `rules/README.md` and every rule applicable to the fields in scope.
 5. Read the relevant example specification, README, input data, and expected
-   output under `examples/`.
+   output under `../benchmark/`.
 
 Schema comments and descriptions are authoritative for operation-local
 behavior; indexed rule files are normative for shared behavior. Example
