@@ -1,0 +1,64 @@
+schema_version: "1.0"
+domain: AE
+keys: [STUDYID, USUBJID, AESEQ]
+input:
+  ODM: input/odm.csv
+
+output:
+  path: ae.csv
+  columns: [STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AELNKID]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ODM.SubjectKey
+
+  - name: AETERM
+    type: str
+    label: Reported Term for the Adverse Event
+    derivation:
+      source: ODM.Value
+
+  - name: AESTDTC
+    type: date
+    label: Start Date/Time of Adverse Event
+    derivation:
+      source:
+        variable: ODM.IT.AE.AESTDTC
+        missing: null
+
+  - name: AELNKID
+    type: str
+    label: Link ID
+    derivation:
+      source:
+        variable: ODM.IT.AE.AELNKID
+        missing: null
+
+  - name: AESEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [AESTDTC, AETERM]
+
+rows:
+  - id: ae_event
+    filter: "ODM.ItemOID = 'IT.AE.AETERM' AND ODM.Value IS NOT NULL"
+    derivations: {}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, AESEQ]
+  - row_count:
+      min: 4
+      max: 4

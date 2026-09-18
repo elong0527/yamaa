@@ -1,0 +1,157 @@
+schema_version: "1.0"
+domain: FA
+keys: [STUDYID, USUBJID, FASEQ]
+input:
+  ODM: input/odm.csv
+  AE: expected/ae.csv
+
+output:
+  path: fa.csv
+  columns: [STUDYID, USUBJID, FASEQ, FAOBJ, FALNKID, FACAT, FASCAT, FATESTCD, FATEST, FAORRES, FAORRESU, FASTRESC, FASTRESU]
+  order_by: [STUDYID, USUBJID, FASEQ]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ODM.SubjectKey
+
+  - name: FALNKID
+    type: str
+    label: Link ID
+    derivation:
+      source:
+        variable: ODM.IT.FA.LINKID
+        missing: null
+
+  - name: FAOBJ
+    type: str
+    label: Object
+    derivation:
+      mapping_from:
+        source: [USUBJID, FALNKID]
+        dataset: AE
+        key: [USUBJID, AELNKID]
+        value: AETERM
+        unmapped: null
+
+  - name: FACAT
+    type: str
+    label: Category
+    derivation:
+      literal: SKIN FINDINGS
+
+  - name: FASCAT
+    type: str
+    label: Subcategory
+    derivation:
+      literal: RASH SUPPLEMENT
+
+  - name: FATESTCD
+    type: str
+    label: Test Short Name
+
+  - name: FATEST
+    type: str
+    label: Test Name
+
+  - name: FAORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation:
+      source: ODM.Value
+
+  - name: FAORRESU
+    type: str
+    label: Original Units
+
+  - name: FASTRESC
+    type: str
+    label: Character Result/Finding in Standard Format
+    derivation:
+      source: ODM.Value
+
+  - name: FASTRESU
+    type: str
+    label: Standard Units
+
+  - name: FASEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [FALNKID, FATESTCD]
+
+  - name: AELNKID_MATCH
+    type: str
+    label: Matched AE Link ID
+    derivation:
+      mapping_from:
+        source: [USUBJID, FALNKID]
+        dataset: AE
+        key: [USUBJID, AELNKID]
+        value: AELNKID
+        unmapped: null
+
+rows:
+  - id: fa_location
+    dataset: ODM
+    filter: "ODM.ItemOID = 'IT.FA.LOCATION' AND ODM.Value IS NOT NULL"
+    derivations:
+      FATESTCD:
+        literal: LOC
+      FATEST:
+        literal: Location of Rash
+      FAORRESU:
+        literal: null
+      FASTRESU:
+        literal: null
+
+  - id: fa_diameter
+    dataset: ODM
+    filter: "ODM.ItemOID = 'IT.FA.DIAMETER' AND ODM.Value IS NOT NULL"
+    derivations:
+      FATESTCD:
+        literal: DIAM
+      FATEST:
+        literal: Lesion Diameter
+      FAORRESU:
+        source:
+          variable: ODM.IT.FA.DIAMETER.U
+          missing: null
+      FASTRESU:
+        source:
+          variable: ODM.IT.FA.DIAMETER.U
+          missing: null
+
+  - id: fa_biopsied
+    dataset: ODM
+    filter: "ODM.ItemOID = 'IT.FA.BIOPSD' AND ODM.Value IS NOT NULL"
+    derivations:
+      FATESTCD:
+        literal: BIOPSY
+      FATEST:
+        literal: Lesion Biopsied
+      FAORRESU:
+        literal: null
+      FASTRESU:
+        literal: null
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, FASEQ]
+  - row_count:
+      min: 9
+      max: 9
+  - implies:
+      id: fa-linkid-matches-ae-linkid
+      when: "FALNKID IS NOT NULL"
+      then: "AELNKID_MATCH IS NOT NULL"
