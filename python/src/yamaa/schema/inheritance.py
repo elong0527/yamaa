@@ -56,6 +56,10 @@ _KEYED_COLLECTIONS: dict[str, tuple[Literal["mapping", "list"], str | None, str]
     "rows": ("list", "id", "row_class"),
 }
 
+# R017-17 composes a matching column member by each field's declared kind.
+# Every other keyed collection still replaces a present member field whole.
+_COMPOSING_COLLECTIONS = frozenset({"columns"})
+
 
 class _FrozenModel(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
@@ -145,6 +149,7 @@ def _validate_partial_member(
     identity: str | None,
     path: str,
     bundle: SchemaBundle,
+    fragment: bool = False,
 ) -> tuple[dict[str, object] | object, list[ValidationDiagnostic]]:
     if not isinstance(value, dict):
         return value, [
@@ -197,9 +202,13 @@ def _validate_partial_member(
                 normalized[name] = None
             continue
         diagnostics.extend(
-            validate_descriptor_value(supplied, descriptor, bundle, field_path)
+            validate_descriptor_value(
+                supplied, descriptor, bundle, field_path, fragment=fragment
+            )
         )
-        normalized[name] = normalize_descriptor_value(supplied, descriptor, bundle)
+        normalized[name] = normalize_descriptor_value(
+            supplied, descriptor, bundle, fragment=fragment
+        )
     return normalized, diagnostics
 
 
@@ -276,6 +285,7 @@ def _validate_layer(
             continue
 
         kind, identity, class_name = collection
+        fragment = name in _COMPOSING_COLLECTIONS
         if kind == "mapping":
             if not isinstance(supplied, dict):
                 diagnostics.append(
@@ -309,7 +319,7 @@ def _validate_layer(
                         members[str(member_id)] = {"path": member}
                 else:
                     normalized_member, member_diagnostics = _validate_partial_member(
-                        member, class_name, identity, member_path, bundle
+                        member, class_name, identity, member_path, bundle, fragment
                     )
                     diagnostics.extend(member_diagnostics)
                     members[str(member_id)] = normalized_member
@@ -336,7 +346,7 @@ def _validate_layer(
                 else _join(name, index)
             )
             normalized_member, member_diagnostics = _validate_partial_member(
-                member, class_name, identity, member_path, bundle
+                member, class_name, identity, member_path, bundle, fragment
             )
             diagnostics.extend(member_diagnostics)
             if isinstance(member_id, str):
@@ -362,6 +372,179 @@ def _clear_provenance(provenance: dict[str, SourceOrigin], prefix: str) -> None:
             del provenance[key]
 
 
+def _record_provenance(
+    value: object,
+    path: str,
+    origin: Path,
+    provenance: dict[str, SourceOrigin],
+) -> None:
+    """Attribute one written value, and every leaf below it, to its layer."""
+    provenance[path] = SourceOrigin(file=origin, spec_path=path)
+    if isinstance(value, dict):
+        for name, nested in value.items():
+            _record_provenance(nested, _join(path, name), origin, provenance)
+
+
+def _replace(
+    value: object,
+    path: str,
+    origin: Path,
+    provenance: dict[str, SourceOrigin],
+) -> object:
+    copied = copy.deepcopy(value)
+    _clear_provenance(provenance, path)
+    _record_provenance(copied, path, origin, provenance)
+    return copied
+
+
+def _composing_member(
+    accumulated: object,
+    incoming: object,
+    type_value: object,
+    bundle: SchemaBundle,
+) -> str | None:
+    """Return the union member both values compose under, or None to replace."""
+    if not isinstance(accumulated, dict) or not isinstance(incoming, dict):
+        return None
+    member = matching_type(incoming, type_value, bundle, fragment=True)
+    if member is None:
+        return None
+    if member != matching_type(accumulated, type_value, bundle, fragment=True):
+        return None
+    return member
+
+
+def _compose_class(
+    accumulated: dict[str, object],
+    incoming: dict[str, object],
+    fields: list[dict[str, dict[str, object]]],
+    bundle: SchemaBundle,
+    path: str,
+    origin: Path,
+    provenance: dict[str, SourceOrigin],
+) -> dict[str, object]:
+    descriptors = {
+        name: descriptor for entry in fields for name, descriptor in entry.items()
+    }
+    composed = dict(accumulated)
+    for name, value in incoming.items():
+        field_path = _join(path, name)
+        descriptor = descriptors.get(name)
+        if descriptor is None or name not in composed:
+            composed[name] = _replace(value, field_path, origin, provenance)
+            continue
+        composed[name] = _compose_value(
+            composed[name],
+            value,
+            descriptor["type"],
+            bundle,
+            field_path,
+            origin,
+            provenance,
+        )
+    return composed
+
+
+def _compose_operation(
+    accumulated: dict[str, object],
+    incoming: dict[str, object],
+    registry_name: str,
+    bundle: SchemaBundle,
+    path: str,
+    origin: Path,
+    provenance: dict[str, SourceOrigin],
+) -> object:
+    """Compose two registry values, which R007 admits one keyword each."""
+    if len(accumulated) != 1 or len(incoming) != 1:
+        return _replace(incoming, path, origin, provenance)
+    operation, payload = next(iter(incoming.items()))
+    inherited_operation, inherited_payload = next(iter(accumulated.items()))
+    if operation != inherited_operation:
+        return _replace(incoming, path, origin, provenance)
+    definition = bundle.registries.get(registry_name, {}).get(operation)
+    operation_path = _join(path, operation)
+    if definition is None:
+        return _replace(incoming, path, origin, provenance)
+    if isinstance(definition, list):
+        if not isinstance(inherited_payload, dict) or not isinstance(payload, dict):
+            return _replace(incoming, path, origin, provenance)
+        composed = _compose_class(
+            inherited_payload,
+            payload,
+            definition,
+            bundle,
+            operation_path,
+            origin,
+            provenance,
+        )
+    else:
+        composed = _compose_value(
+            inherited_payload,
+            payload,
+            definition["type"],
+            bundle,
+            operation_path,
+            origin,
+            provenance,
+        )
+    return {operation: composed}
+
+
+def _compose_value(
+    accumulated: object,
+    incoming: object,
+    type_value: object,
+    bundle: SchemaBundle,
+    path: str,
+    origin: Path,
+    provenance: dict[str, SourceOrigin],
+) -> object:
+    """Compose one written value onto the value it inherits, by declared kind.
+
+    A class composes field by field, a mapping key by key, and a registry
+    value only when both name one keyword.  Every other kind, including every
+    list, replaces.  A null here is an R006 value, never a clearing marker:
+    R017-20 keeps the marker at the two composition boundaries above.
+    """
+    member = _composing_member(accumulated, incoming, type_value, bundle)
+    if member is None:
+        return _replace(incoming, path, origin, provenance)
+    assert isinstance(accumulated, dict) and isinstance(incoming, dict)
+    if member in bundle.classes:
+        return _compose_class(
+            accumulated,
+            incoming,
+            bundle.classes[member],
+            bundle,
+            path,
+            origin,
+            provenance,
+        )
+    if member.startswith("dict[") and member.endswith("]"):
+        _, inner = split_type_arguments(member[5:-1])
+        composed = dict(accumulated)
+        for key, value in incoming.items():
+            key_path = _join(path, key)
+            if key not in composed:
+                composed[key] = _replace(value, key_path, origin, provenance)
+                continue
+            composed[key] = _compose_value(
+                composed[key], value, inner, bundle, key_path, origin, provenance
+            )
+        return composed
+    alias = bundle.aliases.get(member)
+    if alias is None:
+        return _replace(incoming, path, origin, provenance)
+    registry_name = alias.get("registry")
+    if registry_name is not None:
+        return _compose_operation(
+            accumulated, incoming, registry_name, bundle, path, origin, provenance
+        )
+    return _compose_value(
+        accumulated, incoming, alias["type"], bundle, path, origin, provenance
+    )
+
+
 def _merge_member(
     accumulated: dict[str, object],
     incoming: dict[str, object],
@@ -371,6 +554,7 @@ def _merge_member(
     bundle: SchemaBundle,
     provenance: dict[str, SourceOrigin],
     diagnostics: list[ValidationDiagnostic],
+    compose: bool = False,
 ) -> None:
     fields = class_fields(bundle, class_name)
     for name, value in incoming.items():
@@ -385,9 +569,18 @@ def _merge_member(
             accumulated.pop(name, None)
             _clear_provenance(provenance, field_path)
             continue
-        accumulated[name] = copy.deepcopy(value)
-        _clear_provenance(provenance, field_path)
-        provenance[field_path] = SourceOrigin(file=origin, spec_path=field_path)
+        if compose and name in accumulated and name in fields:
+            accumulated[name] = _compose_value(
+                accumulated[name],
+                value,
+                fields[name]["type"],
+                bundle,
+                field_path,
+                origin,
+                provenance,
+            )
+            continue
+        accumulated[name] = _replace(value, field_path, origin, provenance)
 
 
 def _merge_layers(
@@ -430,15 +623,9 @@ def _merge_layers(
                     assert isinstance(member, dict)
                     logical_path = _join(name, member_id)
                     if member_id not in target:
-                        target[member_id] = copy.deepcopy(member)
-                        provenance[logical_path] = SourceOrigin(
-                            file=origin, spec_path=logical_path
+                        target[member_id] = _replace(
+                            member, logical_path, origin, provenance
                         )
-                        for field in member:
-                            field_path = _join(logical_path, field)
-                            provenance[field_path] = SourceOrigin(
-                                file=origin, spec_path=field_path
-                            )
                     else:
                         _merge_member(
                             target[member_id],
@@ -465,15 +652,7 @@ def _merge_layers(
                 logical_path = _join(name, member_id)
                 if member_id not in positions:
                     positions[member_id] = len(target)
-                    target.append(copy.deepcopy(member))
-                    provenance[logical_path] = SourceOrigin(
-                        file=origin, spec_path=logical_path
-                    )
-                    for field in member:
-                        field_path = _join(logical_path, field)
-                        provenance[field_path] = SourceOrigin(
-                            file=origin, spec_path=field_path
-                        )
+                    target.append(_replace(member, logical_path, origin, provenance))
                 else:
                     _merge_member(
                         target[positions[member_id]],
@@ -484,8 +663,34 @@ def _merge_layers(
                         bundle,
                         provenance,
                         diagnostics,
+                        name in _COMPOSING_COLLECTIONS,
                     )
+    _materialize_fragments(resolved, bundle)
     return resolved, provenance, diagnostics
+
+
+def _materialize_fragments(resolved: dict[str, object], bundle: SchemaBundle) -> None:
+    """Complete every composed member once composition is finished.
+
+    A composing collection reads each layer as a fragment, so a schema default
+    is withheld while the layers compose and cannot overwrite what a parent
+    wrote.  One ordinary normalization of the composed value materializes the
+    defaults and the shorthand a fragment left unexpanded.
+    """
+    for name in _COMPOSING_COLLECTIONS:
+        _, _, class_name = _KEYED_COLLECTIONS[name]
+        members = resolved.get(name)
+        if not isinstance(members, list):
+            continue
+        fields = class_fields(bundle, class_name)
+        for member in members:
+            if not isinstance(member, dict):
+                continue
+            for field, descriptor in fields.items():
+                if field in member and member[field] is not None:
+                    member[field] = normalize_descriptor_value(
+                        member[field], descriptor, bundle
+                    )
 
 
 def _ast_identifiers(value: object) -> set[str]:
