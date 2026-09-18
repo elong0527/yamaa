@@ -93,36 +93,6 @@ and `\\w` is exactly those, `A-Z`, `a-z`, and `U+005F`. Neither widens to a
 Unicode category. `\\p{...}` is not part of the grammar. A pattern that uses
 it is invalid.
 
-## Normalization
-
-Each consumer normalizes its host library to the portable semantics below.
-
-**R022-30.** Every consumer guarantees the ASCII meaning of `\\d` and `\\w`,
-however its host library behaves. `\\d` is exactly `U+0030` through `U+0039`.
-`\\w` is exactly those plus `A` through `Z`, `a` through `z`, and `U+005F`.
-A host default that widens either class to a Unicode category stays off.
-
-**R022-31.** Every consumer guarantees `\\s` is exactly the ECMA-262
-`WhiteSpace` plus `LineTerminator` set, however its host library behaves. The
-set is `U+0009`, `U+000B`, `U+000C`, `U+0020`, `U+00A0`, `U+1680`, `U+2000`
-through `U+200A`, `U+202F`, `U+205F`, `U+3000`, `U+FEFF`, `U+000A`, `U+000D`,
-`U+2028`, and `U+2029`. `U+0085` is not in the set, even where a host library
-includes it.
-
-**R022-32.** Every consumer guarantees `.` matches every scalar except
-`U+000A`, `U+000D`, `U+2028`, and `U+2029`, and `$` matches only at the end of
-the subject and never before a trailing `U+000A`, however its host library
-behaves.
-
-**R022-33.** Every consumer expands each `\\u{...}` escape to the scalar it
-names before compiling the pattern.
-
-**R022-34.** The following are syntax errors and fail with `invalid_regex`:
-`(?P<name>` named group syntax, inline flag groups such as `(?i)`,
-`\\p{...}` property escapes, malformed escapes such as `\\a`, and lookbehind
-whose length can vary. Fixed length lookbehind stays allowed, and
-`(?<name>...)` stays the way to name a group.
-
 ## The pattern value
 
 **R022-14.** A pattern value is the ECMA-262 `Pattern` source text alone. It
@@ -239,3 +209,33 @@ normalization, not a second dialect.
   cannot provide. It must not read patterns with a host default that violates
   the normalization, translate the pattern into another dialect, or skip the
   check.
+
+## Normalization
+
+Each consumer normalizes its host library to the portable semantics below.
+
+**R022-30.** Every consumer guarantees the ASCII meaning of `\\d` and `\\w`,
+however its host library behaves. `\\d` is exactly `U+0030` through `U+0039`.
+`\\w` is exactly those plus `A` through `Z`, `a` through `z`, and `U+005F`.
+A host default that widens either class to a Unicode category stays off.
+
+**R022-31.** Every consumer guarantees `\\s` is exactly the ECMA-262
+`WhiteSpace` plus `LineTerminator` set, however its host library behaves. The
+set is `U+0009`, `U+000B`, `U+000C`, `U+0020`, `U+00A0`, `U+1680`, `U+2000`
+through `U+200A`, `U+202F`, `U+205F`, `U+3000`, `U+FEFF`, `U+000A`, `U+000D`,
+`U+2028`, and `U+2029`. `U+0085` is not in the set, even where a host library
+includes it.
+
+**R022-32.** Every consumer guarantees `.` matches every scalar except
+`U+000A`, `U+000D`, `U+2028`, and `U+2029`, and `$` matches only at the end of
+the subject and never before a trailing `U+000A`, however its host library
+behaves.
+
+**R022-33.** Every consumer expands each `\\u{...}` escape to the scalar it
+names before compiling the pattern.
+
+**R022-34.** The following are syntax errors and fail with `invalid_regex`:
+`(?P<name>` named group syntax, inline flag groups such as `(?i)`,
+`\\p{...}` property escapes, malformed escapes such as `\\a`, and lookbehind
+whose length can vary. Fixed length lookbehind stays allowed, and
+`(?<name>...)` stays the way to name a group.
