@@ -3836,7 +3836,7 @@ def validate_project_environment(
 def validate_repository_function_fingerprints(root, schema_env):
     """Require one logical contract per name/version across project roots."""
     errors = []
-    examples_dir = root / 'yaml' / 'examples'
+    examples_dir = root / 'benchmark'
     if not examples_dir.is_dir() or schema_env is None:
         return errors
     seen = {}
@@ -7494,7 +7494,7 @@ def validate_expected_resolved_fixture(
 
 
 def load_validation_manifest(root: Path):
-    path = root / 'yaml' / 'examples' / 'validation-manifest.yaml'
+    path = root / 'benchmark' / 'validation-manifest.yaml'
     if not path.is_file():
         if not validation_phase_contracts(root):
             return {'version': '1.0', 'fixtures': {}}, []
@@ -7511,7 +7511,7 @@ def load_validation_manifest(root: Path):
 
 def validation_phase_contracts(root: Path):
     contracts = {}
-    examples_dir = root / 'yaml' / 'examples'
+    examples_dir = root / 'benchmark'
     if not examples_dir.is_dir():
         return contracts
     for example_dir in sorted(examples_dir.glob('negative-*')):
@@ -7533,7 +7533,7 @@ def validation_phase_contracts(root: Path):
 
 def validate_validation_manifest(root: Path, manifest):
     errors = []
-    label = 'yaml/examples/validation-manifest.yaml'
+    label = 'benchmark/validation-manifest.yaml'
     if not isinstance(manifest, dict):
         return [f"ERROR: {label}: expected a mapping"]
     if manifest.get('version') != '1.0':
@@ -7676,7 +7676,7 @@ def validate_registered_fixture_diagnostics(
                 matches[expected_path].append(diagnostic)
                 expected_ids.add(id(diagnostic))
 
-    manifest_path = f"yaml/examples/validation-manifest.yaml.fixtures.{name}"
+    manifest_path = f"benchmark/validation-manifest.yaml.fixtures.{name}"
     if 'blocked_by' in entry:
         if all(matches.values()):
             return [
@@ -7716,7 +7716,7 @@ def validate_examples_structure(root: Path, env, warnings=None, manifest=None):
     if env is None:
         return errors
 
-    examples_dir = root / 'yaml' / 'examples'
+    examples_dir = root / 'benchmark'
     if not examples_dir.exists():
         return errors
 
@@ -7856,7 +7856,7 @@ def load_condition_registry(root: Path):
     relative_path = Path('yaml/conditions.yaml')
     path = root / relative_path
     if not path.is_file():
-        examples_dir = root / 'yaml' / 'examples'
+        examples_dir = root / 'benchmark'
         if not examples_dir.is_dir() or not any(
             examples_dir.glob('negative-*/expected/error.yaml')
         ):
@@ -7932,7 +7932,7 @@ def validate_condition_registry(root: Path, registry):
                 f"ERROR: {path}.phases: expected unique sorted phases"
             )
 
-    examples_dir = root / 'yaml' / 'examples'
+    examples_dir = root / 'benchmark'
     if not examples_dir.is_dir():
         return errors
     for error_path in sorted(
@@ -8005,7 +8005,7 @@ def spec_path_exists(spec, path):
 
 def validate_expected_error_contracts(root: Path):
     errors = []
-    examples_dir = root / 'yaml' / 'examples'
+    examples_dir = root / 'benchmark'
     if not examples_dir.exists():
         return errors
     for ex_dir in sorted(examples_dir.glob('negative-*')):
@@ -8377,7 +8377,7 @@ def validate_csv_shapes(root: Path):
     reports means the example has stopped failing the way it claims to.
     """
     errors = []
-    examples_dir = root / 'yaml' / 'examples'
+    examples_dir = root / 'benchmark'
     if not examples_dir.exists():
         return errors
     for example_dir in sorted(
@@ -8451,7 +8451,7 @@ def is_readme_badge_line(text: str) -> bool:
 
 def validate_example_readmes(root: Path):
     errors = []
-    examples_dir = root / 'yaml' / 'examples'
+    examples_dir = root / 'benchmark'
     if not examples_dir.exists():
         return errors
     for ex_dir in sorted(examples_dir.iterdir()):
@@ -8592,10 +8592,9 @@ def is_unicode_fixture_csv(relative: Path):
     parts = relative.parts
     return (
         relative.suffix.lower() == '.csv'
-        and len(parts) >= 5
-        and parts[0] == 'yaml'
-        and parts[1] == 'examples'
-        and parts[3] in {'input', 'expected'}
+        and len(parts) >= 4
+        and parts[0] == 'benchmark'
+        and parts[2] in {'input', 'expected'}
     )
 
 
@@ -9637,7 +9636,7 @@ def check_yaml_files(root: Path):
 def validate_examples_csv(root: Path, env=None):
     errors = []
     warnings = []
-    examples_dir = root / 'yaml' / 'examples'
+    examples_dir = root / 'benchmark'
     if not examples_dir.exists():
         return errors, warnings
     if env is None:
@@ -9752,7 +9751,7 @@ def validate_examples_csv(root: Path, env=None):
 
 def validate_examples_index(root: Path):
     errors = []
-    examples_dir = root / 'yaml' / 'examples'
+    examples_dir = root / 'benchmark'
     index_file = examples_dir / 'README.md'
     if not index_file.exists():
         return errors
@@ -9844,7 +9843,7 @@ def validate_join_key_inference(root: Path):
     inferred keys per dataset lets a reviewer see the join.
     """
     warnings = []
-    examples_dir = root / 'yaml' / 'examples'
+    examples_dir = root / 'benchmark'
     if not examples_dir.exists():
         return warnings
     for ex_dir in sorted(examples_dir.iterdir()):
@@ -9890,7 +9889,7 @@ def validate_examples_define_documents(root: Path):
     unnoticed.
     """
     errors = []
-    documents = sorted((root / 'yaml' / 'examples').glob('*/define.yaml'))
+    documents = sorted((root / 'benchmark').glob('*/define.yaml'))
     if not documents:
         return errors
 
@@ -9916,7 +9915,7 @@ def validate_examples_define_documents(root: Path):
 
 def validate_examples_layout(root: Path):
     errors = []
-    examples_dir = root / 'yaml' / 'examples'
+    examples_dir = root / 'benchmark'
     if not examples_dir.exists():
         return errors
 
@@ -9997,7 +9996,7 @@ def validate_examples_readme_presence(root: Path):
     specification-validity gate, so a prose gap cannot mask a spec verdict.
     """
     errors = []
-    examples_dir = root / 'yaml' / 'examples'
+    examples_dir = root / 'benchmark'
     if not examples_dir.exists():
         return errors
 

@@ -71,7 +71,7 @@ with a count beside each; the custom giscus theme for that focused presentation
 lives at `docs/assets/giscus-yamaa.css`. Each comment and reaction is stored in this
 repository's GitHub Discussions, so feedback persists across rebuilds and
 deployments and can be moderated there. Each example maps to one discussion
-titled `yaml/examples/<example-name>`
+titled `benchmark/<example-name>`
 (`data-mapping="specific"`), so the thread follows the example directory rather
 than the page URL; renaming the directory starts a new thread unless the
 discussion is retitled to match. The comment widget is the only part of a page

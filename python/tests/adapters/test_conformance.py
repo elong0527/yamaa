@@ -26,8 +26,9 @@ from yamaa.adapters.conformance import (
     write_report,
 )
 
-SCHEMA_ROOT = Path(__file__).parents[3] / "yaml"
-EXAMPLES = SCHEMA_ROOT / "examples"
+REPOSITORY_ROOT = Path(__file__).parents[3]
+SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
+EXAMPLES = REPOSITORY_ROOT / "benchmark"
 POSITIVE = "sdtm-dm-basic"
 NEGATIVE = "negative-column-type-unknown"
 UNSUPPORTED = "adam-adsl-bmi-function"

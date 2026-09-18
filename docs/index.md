@@ -78,5 +78,5 @@ If the audience will write specifications, send them through the
   the index there says what each one owns.
 - [`yaml/`](https://github.com/elong0527/yamaa/tree/main/yaml) -- the schema
   bundle
-- [`yaml/examples/`](https://github.com/elong0527/yamaa/tree/main/yaml/examples)
+- [`benchmark/`](https://github.com/elong0527/yamaa/tree/main/benchmark)
   -- 167 runnable examples with exact expected output

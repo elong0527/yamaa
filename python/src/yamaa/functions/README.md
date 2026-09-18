@@ -12,7 +12,7 @@ from yamaa.io import ProjectResources, load_source_tables
 from yamaa.specification import load_specification
 
 specification = load_specification(
-    "yaml/examples/adam-adsl-bmi-function/spec.yaml", "yaml"
+    "benchmark/adam-adsl-bmi-function/spec.yaml", "yaml"
 )
 result = execute_with_project_functions(
     specification.specification,

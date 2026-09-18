@@ -125,7 +125,7 @@ class TestTextSourceBoundary(unittest.TestCase):
             )
             for fixture_type in ('input', 'expected'):
                 data = (
-                    root / 'yaml' / 'examples' / 'example' / fixture_type
+                    root / 'benchmark' / 'example' / fixture_type
                 )
                 data.mkdir(parents=True)
                 (data / 'values.csv').write_text(
@@ -192,7 +192,7 @@ class TestTextSourceBoundary(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             data = (
                 Path(temp_dir)
-                / 'yaml' / 'examples' / 'example' / 'input'
+                / 'benchmark' / 'example' / 'input'
             )
             data.mkdir(parents=True)
             (data / 'values.csv').write_bytes(
@@ -1138,7 +1138,7 @@ class TestConditionRegistry(unittest.TestCase):
         self.assertEqual(
             errors,
             [
-                'ERROR: yaml/examples/negative-adlb-absolute-wbc-duplicate/'
+                'ERROR: benchmark/negative-adlb-absolute-wbc-duplicate/'
                 'expected/error.yaml.condition: unregistered condition '
                 "'aggregate_multiple_records'"
             ],
@@ -1155,7 +1155,7 @@ class TestConditionRegistry(unittest.TestCase):
         self.assertEqual(
             errors,
             [
-                'ERROR: yaml/examples/negative-adlb-absolute-wbc-duplicate/'
+                'ERROR: benchmark/negative-adlb-absolute-wbc-duplicate/'
                 'expected/error.yaml.phase: condition '
                 "'aggregate_multiple_records' is not registered for phase "
                 "'row_construction'"
@@ -1277,7 +1277,7 @@ class TestValidationManifest(unittest.TestCase):
     def test_load_blockers_includes_execution_manifest(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            examples = root / 'yaml' / 'examples'
+            examples = root / 'benchmark'
             examples.mkdir(parents=True)
             (examples / 'validation-manifest.yaml').write_text(
                 'fixtures:\n'
@@ -1685,7 +1685,7 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
     def test_repository_compares_same_name_and_version_fingerprints(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            examples = root / 'yaml' / 'examples'
+            examples = root / 'benchmark'
             self.write_project(examples / 'project-a')
             changed = self.contract()
             changed['comparison_decimals'] = 5
@@ -1921,7 +1921,7 @@ class TestRuleMetadata(unittest.TestCase):
 
 class TestJoinKeyInference(unittest.TestCase):
     def write_example(self, root, name, spec, files):
-        ex_dir = root / 'yaml' / 'examples' / name
+        ex_dir = root / 'benchmark' / name
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'spec.yaml').write_text(spec)
         for filename, content in files.items():
@@ -4652,7 +4652,7 @@ class TestDeclaredValidationErrors(unittest.TestCase):
             {"condition": condition, "spec_paths": ["input.REF.path"]},
             reported,
             "example/spec.yaml",
-            "yaml/examples/example/expected/error.yaml",
+            "benchmark/example/expected/error.yaml",
         )
 
     def test_accepts_a_reported_condition(self):
@@ -4694,7 +4694,7 @@ class TestDatasetPathExamples(unittest.TestCase):
 
     def test_each_example_reports_its_declared_condition(self):
         examples = sorted(
-            (self.root / "yaml" / "examples").glob("negative-dataset-path-*")
+            (self.root / "benchmark").glob("negative-dataset-path-*")
         )
         self.assertEqual(len(examples), 6)
 
@@ -5035,7 +5035,7 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_documentation_missing_readme(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'bad-example'
+        ex_dir = self.root_dir / 'benchmark' / 'bad-example'
         ex_dir.mkdir(parents=True, exist_ok=True)
         # missing everything
         result = subprocess.run([sys.executable, str(self.doc_tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
@@ -5043,7 +5043,7 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertIn('README.md', result.stdout)
 
     def test_documentation_negative_missing_how_to_fix(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'negative-bad'
+        ex_dir = self.root_dir / 'benchmark' / 'negative-bad'
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'README.md').write_text('# bad')
         (ex_dir / 'spec.yaml').write_text('{}')
@@ -5065,12 +5065,13 @@ class TestValidatorCLI(unittest.TestCase):
 
     def test_a_define_document_field_outside_its_class_is_reported(self):
         root = TOOL_PATH.parents[3]
-        source = root / 'yaml' / 'examples' / 'sdtm-dm-metadata-contract'
+        source = root / 'benchmark' / 'sdtm-dm-metadata-contract'
         with tempfile.TemporaryDirectory() as temp_dir:
             copy = Path(temp_dir)
             shutil.copytree(root / 'yaml', copy / 'yaml', dirs_exist_ok=True)
+            shutil.copytree(root / 'benchmark', copy / 'benchmark', dirs_exist_ok=True)
             document = (
-                copy / 'yaml' / 'examples' / source.name / 'define.yaml'
+                copy / 'benchmark' / source.name / 'define.yaml'
             )
             document.write_text(
                 document.read_text().replace('\ndatasets:\n', '\ninput:\n', 1)
@@ -5083,7 +5084,7 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertIn("missing required field 'datasets'", message)
 
     def test_example_layout_positive_has_error(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'positive-bad'
+        ex_dir = self.root_dir / 'benchmark' / 'positive-bad'
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'README.md').write_text('# bad')
         (ex_dir / 'spec.yaml').write_text('{}')
@@ -5096,7 +5097,7 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertIn('error.yaml', result.stdout)
 
     def test_example_index_stale(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples'
+        ex_dir = self.root_dir / 'benchmark'
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'README.md').write_text('# Index\n\n| [`stale`](stale/) | stale desc |\n')
 
@@ -5105,7 +5106,7 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertIn('stale', result.stdout)
 
     def test_example_index_link_must_match_directory(self):
-        examples_dir = self.root_dir / 'yaml' / 'examples'
+        examples_dir = self.root_dir / 'benchmark'
         ex_dir = examples_dir / 'good'
         ex_dir.mkdir(parents=True)
         (ex_dir / 'README.md').write_text('# Good: description')
@@ -5122,7 +5123,7 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertIn('wrong-target', result.stdout)
 
     def test_example_index_missing(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples'
+        ex_dir = self.root_dir / 'benchmark'
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'README.md').write_text('# Index\n')
         good_ex = ex_dir / 'good'
@@ -5138,7 +5139,7 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertIn('not in index', result.stdout)
 
     def test_csv_header_uses_output_columns(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'csv-output'
+        ex_dir = self.root_dir / 'benchmark' / 'csv-output'
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'spec.yaml').write_text(
             'output:\n  path: out.csv\n  columns: [c, a]\n'
@@ -5152,7 +5153,7 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertEqual(errors, [])
 
     def test_csv_header_mismatch(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'csv-bad'
+        ex_dir = self.root_dir / 'benchmark' / 'csv-bad'
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'README.md').write_text('# CSV: bad header')
         (ex_dir / 'spec.yaml').write_text(
@@ -5162,7 +5163,7 @@ class TestValidatorCLI(unittest.TestCase):
         (ex_dir / 'input').mkdir()
         (ex_dir / 'expected').mkdir()
         (ex_dir / 'expected' / 'out.csv').write_text('a,b,c\n1,2,3')
-        (self.root_dir / 'yaml' / 'examples' / 'README.md').write_text('| [`csv-bad`](csv-bad/) | bad header |\n')
+        (self.root_dir / 'benchmark' / 'README.md').write_text('| [`csv-bad`](csv-bad/) | bad header |\n')
 
         result = subprocess.run([sys.executable, str(self.tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
@@ -5170,7 +5171,7 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertIn('header', result.stdout.lower())
 
     def test_spec_structural_unknown_field(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'spec-bad-field'
+        ex_dir = self.root_dir / 'benchmark' / 'spec-bad-field'
         ex_dir.mkdir(parents=True, exist_ok=True)
         (self.root_dir / 'yaml' / 'schema.yaml').write_text('''version: "1.0"
 root_class:
@@ -5192,14 +5193,14 @@ bad_field: "what"
         (ex_dir / 'input').mkdir()
         (ex_dir / 'expected').mkdir()
         (ex_dir / 'expected' / 'out.csv').write_text('a\n1')
-        (self.root_dir / 'yaml' / 'examples' / 'README.md').write_text('| [`spec-bad-field`](spec-bad-field/) | field |\n')
+        (self.root_dir / 'benchmark' / 'README.md').write_text('| [`spec-bad-field`](spec-bad-field/) | field |\n')
 
         result = subprocess.run([sys.executable, str(self.tool_path), '--root', str(self.root_dir)], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('bad_field', result.stdout)
 
     def test_multiple_spec_variants_are_discovered_and_validated(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'variant-example'
+        ex_dir = self.root_dir / 'benchmark' / 'variant-example'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
         (ex_dir / 'README.md').write_text(
@@ -5237,7 +5238,7 @@ bad_field: "what"
         self.assertIn('bad_field', '\n'.join(errors))
 
     def test_layout_rejects_base_spec_mixed_with_variants(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'mixed-specs'
+        ex_dir = self.root_dir / 'benchmark' / 'mixed-specs'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
         (ex_dir / 'README.md').write_text(
@@ -5254,7 +5255,7 @@ bad_field: "what"
         self.assertIn('cannot mix', '\n'.join(errors))
 
     def test_parented_spec_files_are_levels_not_entries(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'leveled-specs'
+        ex_dir = self.root_dir / 'benchmark' / 'leveled-specs'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
         (ex_dir / 'README.md').write_text(
@@ -5279,7 +5280,7 @@ bad_field: "what"
         )
 
     def test_readme_dashboard_badge_must_follow_the_title(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'link-check'
+        ex_dir = self.root_dir / 'benchmark' / 'link-check'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
         (ex_dir / 'spec.yaml').write_text('value: valid\n')
@@ -5304,7 +5305,7 @@ bad_field: "what"
         )
 
     def test_readme_dashboard_badge_accepts_lifecycle_badge(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'link-check'
+        ex_dir = self.root_dir / 'benchmark' / 'link-check'
         (ex_dir / 'input').mkdir(parents=True)
         (ex_dir / 'expected').mkdir()
         (ex_dir / 'spec.yaml').write_text('value: valid\n')
@@ -5316,7 +5317,7 @@ bad_field: "what"
         lifecycle = (
             '[![Lifecycle: finalized]'
             '(https://img.shields.io/badge/Lifecycle-finalized-brightgreen)]'
-            '(https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)'
+            '(https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)'
         )
         (ex_dir / 'README.md').write_text(
             f'# Right badge\n\n{badge} {lifecycle}\n'
@@ -5332,7 +5333,7 @@ bad_field: "what"
         self.assertIn('right after the title', '\n'.join(errors))
 
     def test_readme_combined_badge_line_is_exempt_from_line_width(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'badge-width'
+        ex_dir = self.root_dir / 'benchmark' / 'badge-width'
         (ex_dir / 'expected').mkdir(parents=True)
         badge = (
             '[![Dashboard](https://img.shields.io/badge/Dashboard-view-0c5e4b)]'
@@ -5341,7 +5342,7 @@ bad_field: "what"
         lifecycle = (
             '[![Lifecycle: finalized]'
             '(https://img.shields.io/badge/Lifecycle-finalized-brightgreen)]'
-            '(https://github.com/elong0527/yamaa/blob/main/yaml/examples/README.md#lifecycle)'
+            '(https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)'
         )
         combined = f'{badge} {lifecycle}'
         self.assertGreater(len(combined), 79)
@@ -5356,7 +5357,7 @@ bad_field: "what"
         self.assertIn('maximum is 79', '\n'.join(errors))
 
     def test_empty_spec_is_rejected(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'empty-spec'
+        ex_dir = self.root_dir / 'benchmark' / 'empty-spec'
         ex_dir.mkdir(parents=True)
         (ex_dir / 'spec.yaml').write_text('')
         env = {
@@ -5371,7 +5372,7 @@ bad_field: "what"
         self.assertIn('mapping', '\n'.join(errors))
 
     def test_spec_schema_version_must_match_bundle(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'wrong-version'
+        ex_dir = self.root_dir / 'benchmark' / 'wrong-version'
         ex_dir.mkdir(parents=True)
         (ex_dir / 'spec.yaml').write_text('schema_version: "2.0"\n')
         env = {
@@ -5396,7 +5397,7 @@ bad_field: "what"
         self.assertIn('1.0', '\n'.join(errors))
 
     def test_negative_spec_rejects_unrelated_structural_errors(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'negative-unrelated'
+        ex_dir = self.root_dir / 'benchmark' / 'negative-unrelated'
         (ex_dir / 'expected').mkdir(parents=True)
         (ex_dir / 'spec.yaml').write_text(
             'columns:\n  - name: COUNTRY\n    derivation: valid\n'
@@ -5425,7 +5426,7 @@ bad_field: "what"
         self.assertIn('bad_root_field', '\n'.join(errors))
 
     def test_negative_spec_allows_declared_structural_failure(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'negative-declared'
+        ex_dir = self.root_dir / 'benchmark' / 'negative-declared'
         (ex_dir / 'expected').mkdir(parents=True)
         (ex_dir / 'spec.yaml').write_text(
             'columns:\n  - name: COUNTRY\n    label: Country\n    derivation: {nested: value}\n'
@@ -5453,7 +5454,7 @@ bad_field: "what"
         self.assertEqual(errors, [])
 
     def test_negative_path_matches_list_item(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'negative-list-path'
+        ex_dir = self.root_dir / 'benchmark' / 'negative-list-path'
         (ex_dir / 'expected').mkdir(parents=True)
         (ex_dir / 'spec.yaml').write_text('keys: [wrong]\n')
         (ex_dir / 'expected' / 'error.yaml').write_text(
@@ -5475,7 +5476,7 @@ bad_field: "what"
         self.assertEqual(errors, [])
 
     def test_expected_error_contract_rejects_bad_phase_and_path(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'negative-contract'
+        ex_dir = self.root_dir / 'benchmark' / 'negative-contract'
         (ex_dir / 'expected').mkdir(parents=True)
         (ex_dir / 'spec.yaml').write_text('columns: [{name: A}]\n')
         (ex_dir / 'expected' / 'error.yaml').write_text(
@@ -5492,7 +5493,7 @@ bad_field: "what"
         self.assertIn('context', message)
 
     def test_csv_shape_rejects_duplicate_header_and_short_row(self):
-        csv_dir = self.root_dir / 'yaml' / 'examples' / 'csv-shape' / 'input'
+        csv_dir = self.root_dir / 'benchmark' / 'csv-shape' / 'input'
         csv_dir.mkdir(parents=True)
         (csv_dir / 'input.csv').write_text('A,A\n1\n')
 
@@ -5503,7 +5504,7 @@ bad_field: "what"
         self.assertIn('expected 2 fields, got 1', message)
 
     def test_readme_contract_rejects_schema_vocabulary_and_extra_section(self):
-        ex_dir = self.root_dir / 'yaml' / 'examples' / 'readme-contract'
+        ex_dir = self.root_dir / 'benchmark' / 'readme-contract'
         (ex_dir / 'expected').mkdir(parents=True)
         (ex_dir / 'README.md').write_text(
             '# Test: output\n\nThe schema derivation is shown.\n\n## Notes\n'
@@ -5871,7 +5872,7 @@ class TestDeclaredSourceCondition(unittest.TestCase):
         self.addCleanup(self._temp.cleanup)
 
     def example(self, name, csv_bytes, condition=None):
-        example_dir = self.root / 'yaml' / 'examples' / name
+        example_dir = self.root / 'benchmark' / name
         (example_dir / 'input').mkdir(parents=True)
         (example_dir / 'expected').mkdir(parents=True)
         (example_dir / 'input' / 'dm.csv').write_bytes(csv_bytes)
@@ -5927,7 +5928,7 @@ class TestSuiteSourceCoverage(unittest.TestCase):
 
     def test_a_crlf_source_is_read_as_its_lf_twin(self):
         path = (
-            self.root / 'yaml' / 'examples'
+            self.root / 'benchmark'
             / 'adam-adrs-best-overall-response' / 'input' / 'adsl.csv'
         )
         raw = path.read_bytes()
@@ -5941,7 +5942,7 @@ class TestSuiteSourceCoverage(unittest.TestCase):
 
     def test_a_suite_source_reads_both_blanks_as_missing(self):
         path = (
-            self.root / 'yaml' / 'examples'
+            self.root / 'benchmark'
             / 'adam-adsl-investigator-comment' / 'input' / 'dm.csv'
         )
         records = VALIDATOR.parse_source_profile(
@@ -5988,11 +5989,11 @@ class TestSourceProfileDiagnostics(unittest.TestCase):
     def test_an_uppercase_extension_is_scanned(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
-            (root / 'yaml' / 'examples' / 'upper' / 'input').mkdir(
+            (root / 'benchmark' / 'upper' / 'input').mkdir(
                 parents=True
             )
             (
-                root / 'yaml' / 'examples' / 'upper' / 'input' / 'DM.CSV'
+                root / 'benchmark' / 'upper' / 'input' / 'DM.CSV'
             ).write_bytes(b'A,A\n1\n')
             errors = VALIDATOR.validate_csv_shapes(root)
         message = '\n'.join(errors)
@@ -6002,7 +6003,7 @@ class TestSourceProfileDiagnostics(unittest.TestCase):
     def test_a_unicode_fixture_keeps_its_exemption_when_shouted(self):
         self.assertTrue(
             VALIDATOR.is_unicode_fixture_csv(
-                Path('yaml/examples/ex/input/DM.CSV')
+                Path('benchmark/ex/input/DM.CSV')
             )
         )
 
@@ -6015,7 +6016,7 @@ class TestSourceProfileDiagnostics(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
-            example = root / 'yaml' / 'examples' / 'negative-source-profile'
+            example = root / 'benchmark' / 'negative-source-profile'
             (example / 'input').mkdir(parents=True)
             (example / 'expected').mkdir(parents=True)
             (example / 'input' / 'dm.txt').write_bytes(b'A\n1\n')

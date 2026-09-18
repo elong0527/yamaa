@@ -621,14 +621,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--examples-root",
         type=Path,
-        default=Path("yaml/examples"),
+        default=Path("benchmark"),
         help="directory holding the committed examples",
     )
     parser.add_argument(
         "--schema-root",
         type=Path,
-        default=None,
-        help="directory holding schema.yaml; the examples root's parent by default",
+        default=Path("yaml"),
+        help="directory holding schema.yaml",
     )
     parser.add_argument(
         "--no-compare",
@@ -638,9 +638,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     examples_root = args.examples_root.resolve()
-    schema_root = (
-        args.schema_root.resolve() if args.schema_root else examples_root.parent
-    )
+    schema_root = args.schema_root.resolve()
     report_dir = args.run_dir / "reports"
     failed = False
 

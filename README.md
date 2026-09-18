@@ -23,7 +23,7 @@ and minimal resolved form are defined by
 
 ## Example
 
-The specification is deterministic by design and supports SQL expressions. More realistic examples are available in the [`yaml/examples/`](yaml/examples/) directory.
+The specification is deterministic by design and supports SQL expressions. More realistic examples are available in the [`benchmark/`](benchmark/) directory.
 
 ```yaml
 - name: BMI

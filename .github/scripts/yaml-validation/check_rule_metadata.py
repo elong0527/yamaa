@@ -8,7 +8,7 @@ requirements of the form **RNNN-n.** in document order. The depends_on
 and supersedes fields are retired: the former was a cyclic graph the
 validator never checked, the latter never had a schema.
 
-Every yaml/examples/negative-*/expected/error.yaml must cite the
+Every benchmark/negative-*/expected/error.yaml must cite the
 pinned requirement as `requirement: RNNN-n`, and the cited ID must
 exist in the owning rule.
 """
@@ -21,7 +21,7 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[3]
 RULES = REPO / "yaml" / "rules"
-EXAMPLES = REPO / "yaml" / "examples"
+EXAMPLES = REPO / "benchmark"
 ALLOWED_KEYS = {"id", "title", "status", "applies_to"}
 REQUIRED_SECTIONS = ("Intent", "Boundaries", "Rationale", "Errors")
 REQUIREMENT = re.compile(r"\*\*R([0-9]{3})-([1-9][0-9]*)\.\*\*")

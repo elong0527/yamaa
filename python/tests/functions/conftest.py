@@ -97,7 +97,7 @@ class Repository:
 
     @property
     def examples(self) -> Path:
-        return self.schema / "examples"
+        return self.root / "benchmark"
 
     @property
     def bmi_example(self) -> Path:
