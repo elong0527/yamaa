@@ -1,0 +1,112 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  ODM: input/odm.csv
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, RFICDTC, BRTHDTC, AGE, AGEU]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: DM
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ODM.SubjectKey
+
+  - name: RFICDTC
+    type: date
+    label: Date/Time of Informed Consent
+    derivation:
+      source:
+        variable: ODM.IT.DM.RFICDTC
+        missing: null
+    verifications:
+      not_missing: {}
+
+  - name: BRTHDTC
+    type: str
+    label: Date/Time of Birth
+    derivation:
+      source:
+        variable: ODM.IT.DM.BRTHDT
+        missing: null
+
+  - name: BRTH_PREC
+    type: str
+    label: Collected Precision of the Birth Date
+    derivation:
+      date_precision:
+        source: BRTHDTC
+        missing: null
+
+  - name: BRTHDT
+    type: date
+    label: Birth Date as a Date
+    derivation:
+      case:
+        branches:
+          - when: "BRTH_PREC = 'D'"
+            then:
+              source: BRTHDTC
+        otherwise: {literal: null}
+
+  - name: AGE
+    type: int
+    label: Age in AGEU at RFICDTC
+    derivation:
+      case:
+        branches:
+          - when: "BRTH_PREC = 'D'"
+            then:
+              date_diff:
+                start: BRTHDT
+                end: RFICDTC
+                unit: year
+        otherwise: {literal: null}
+
+  - name: AGEU
+    type: str
+    label: Age Units
+    derivation:
+      case:
+        branches:
+          - when: "AGE IS NOT NULL"
+            then:
+              literal: YEARS
+        otherwise: {literal: null}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 5
+      max: 5
+  - all_or_none:
+      id: age-unit-completeness
+      columns: [AGE, AGEU]
+  - implies:
+      id: complete-birth-date-gives-age
+      when: "BRTH_PREC = 'D'"
+      then: "AGE IS NOT NULL"
+  - implies:
+      id: partial-birth-date-gives-no-age
+      when: "BRTH_PREC IN ('M', 'Y') OR BRTHDTC IS NULL"
+      then: "AGE IS NULL"
+  - implies:
+      id: age-is-not-negative
+      when: "AGE IS NOT NULL"
+      then: "AGE >= 0"
