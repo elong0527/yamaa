@@ -11,26 +11,26 @@
 # mapping of the requested group and its value when the pattern matched, and
 # that value is null when the match did not enter the group.
 #
-# A case carrying `invalid: true` records a pattern the pinned engine rejects.
-# Such a pattern is rejected identically in all three consumers, so it names no
-# subject and no outcome.
+# A case carrying `invalid: true` records a pattern the portable contract
+# rejects. Such a pattern is rejected identically in all three consumers, so
+# it names no subject and no outcome.
 #
 # Subjects are YAML double-quoted scalars so that a non-ASCII scalar value is
 # written as an escape and this file stays ASCII under R019. Patterns are
 # single-quoted so that a backslash is literal, and spell a non-ASCII scalar
 # with the ECMAScript \u{...} escape instead.
 #
-# The `dialect` tag marks a case where Python `re` disagrees with the pinned
-# engine. Those cases are the reason R022 pins one engine rather than reading
-# patterns with whatever the host provides.
+# The `dialect` tag marks a case the normalization layer exists to pin: the
+# host libraries the consumers build on disagree there (on what `\d`, `\w`,
+# `\s`, `.`, and `$` match), so the case proves the normalization rather
+# than an engine choice.
 
 schema_version: "1.0"
 contract: regex
-contract_version: "1.0.0"
-engine:
-  crate: regress
-  crate_version: "0.10.4"
-  flags: u
+contract_version: "2.0.0"
+portable_contract:
+  grammar: "ECMA-262 Pattern with the Unicode flag set, without property escapes and without variable-length lookbehind"
+  normalization: "R022-30 through R022-34 over the host library: ASCII-only \\d and \\w, the ECMA-262 \\s set, scalar dot, end-only $, \\u{...} expansion, and rejection of (?P<...>), inline flags, \\p{...}, malformed escapes, and variable-length lookbehind"
 cases:
   - id: ascii-digit-class-rejects-arabic-indic-digit
     covers: [unicode, escaping, dialect]
@@ -98,17 +98,11 @@ cases:
   - id: property-escape-accepts-unicode-letters
     covers: [unicode, escaping, dialect]
     pattern: '^\p{L}+$'
-    subject: "\u00E9\u0416"
-    schema_pattern: true
-    matches: true
-    str_extract: {group: 0, value: "\u00E9\u0416"}
+    invalid: true
   - id: property-escape-rejects-non-latin-digit-as-letter
     covers: [unicode, escaping, dialect]
     pattern: '^\p{L}$'
-    subject: "\u0665"
-    schema_pattern: false
-    matches: false
-    str_extract: null
+    invalid: true
   - id: canonically-equivalent-subject-does-not-match
     covers: [unicode, dialect]
     pattern: '^\u{00E9}$'
@@ -151,13 +145,10 @@ cases:
     schema_pattern: false
     matches: true
     str_extract: {group: 0, value: "AE"}
-  - id: variable-length-lookbehind-is-accepted
+  - id: variable-length-lookbehind-is-rejected
     covers: [anchors, dialect]
     pattern: '(?<=a+)b'
-    subject: "aaab"
-    schema_pattern: false
-    matches: true
-    str_extract: {group: 0, value: "b"}
+    invalid: true
   - id: group-zero-is-the-whole-match
     covers: [capture-groups]
     pattern: '^CATH-([^-]+)-[0-9]{4}$'

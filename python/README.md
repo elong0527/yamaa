@@ -114,9 +114,10 @@ and rejects several rather than choosing.
 
 Every regular expression in the package -- the R006 `pattern` descriptor, the
 R009 `matches` verification, and `str_extract` -- is read by `yamaa.regex`,
-the single binding of the `regress` distribution R022 pins. Python `re` reads
-no pattern of the language. The shared vectors in `yaml/conformance/regex.yaml`
-are replayed through all three consumers.
+the single binding of the portable R022 contract over the standard library
+`re` module. No other regular-expression library reads a pattern of the
+language. The shared vectors in `yaml/conformance/regex.yaml` are replayed
+through all three consumers.
 
 `yamaa.expressions` also exposes the closed parsers directly -- the R010
 `parse_numeric`, the R012 `parse_template`, and the R013 `parse_aggregate` --

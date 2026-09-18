@@ -402,7 +402,9 @@ def _column_offenders(
         maximum = _max_length(arguments, column, spec_path)
         return [key_maps[index] for index, value in present if len(value) > maximum]
     pattern = _pattern(arguments, column, spec_path)
-    return [key_maps[index] for index, value in present if pattern.find(value) is None]
+    return [
+        key_maps[index] for index, value in present if pattern.search(value) is None
+    ]
 
 
 def _require_type(

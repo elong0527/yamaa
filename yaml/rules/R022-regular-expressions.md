@@ -11,14 +11,15 @@ applies_to: [descriptor.pattern, regex, expression.str_extract,
 
 ## Intent
 
-Pin one executable regular-expression contract. Repository validation, R, and
+Pin one portable regular expression contract. Repository validation, R, and
 Python must accept and reject the same patterns and produce the same match for
 each subject.
 
 ## Boundaries
 
-This rule owns pattern syntax, the engine that decides it, the flag set, and
-the match semantics of every regular expression in the language. R006 owns
+This rule owns pattern syntax, the portable contract that decides it, the
+flag set, and the match semantics of every regular expression in the
+language. R006 owns
 descriptor structure and where a `pattern` keyword may be declared, R007 owns
 expression dispatch, R008 owns the handler lifecycle whose results
 `str_extract` returns, R009 owns when a verification runs and how a failure is
@@ -38,24 +39,25 @@ own matching.
 R009's `matches` pattern. All requirements below apply to all three except
 where a section names one.
 
-## Pinned engine
+## Portable pattern contract
 
 **R022-3.** The normative syntax and semantics are the ECMA-262 `Pattern`
-grammar and its matching semantics, evaluated with the Unicode flag set.
+grammar and its matching semantics, with the Unicode flag set. Property
+escapes of the form `\\p{...}` are not part of the grammar. Lookbehind whose
+length can vary is not part of the grammar. A pattern that uses either is
+invalid.
 
-**R022-4.** The pinned engine is Rust `regress` crate version `0.10.4`.
-A Python consumer uses `regress` distribution `2025.10.1` on PyPI. An R
-consumer uses the same crate version. Repository validation uses the same
-Python binding. No implementation reads a pattern with a host engine such as
-Python `re`, POSIX ERE, PCRE, or TRE.
+**R022-4.** Python uses the standard library `re` module. The R binding stays
+unpinned until the R consumer implements R022. Repository validation uses the
+same Python binding. No consumer reads a pattern with a host default that
+violates the normalization below.
 
-**R022-5.** The pinned engine is the decisive authority. A pattern is well
-formed exactly when the pinned engine compiles it under the flag set below,
-and a match is exactly the match that engine reports. Where ECMA-262 admits
-more than one reading, or where a construct is newer than the pinned
-version, the engine decides. The engine's rejection is the contract
-rather than a defect to work around. Changing the pin versions this rule and
-requires a fixture re-run in every consumer.
+**R022-5.** The rule text plus the conformance fixtures are the decisive
+authority. A pattern is well formed exactly when a conforming consumer accepts
+it under the normalization below, and a match is exactly the match such a
+consumer reports. The fixtures record the decisive cases. Changing the grammar
+or the normalization versions this rule and requires a fixture rerun in every
+consumer.
 
 ## Flags
 
@@ -88,8 +90,38 @@ class uses set notation.
 
 **R022-13.** Because `u` is set, `\\d` is exactly `U+0030` through `U+0039`
 and `\\w` is exactly those, `A-Z`, `a-z`, and `U+005F`. Neither widens to a
-Unicode category. `\\p{...}` selects a Unicode property explicitly and is the
-way to ask for one.
+Unicode category. `\\p{...}` is not part of the grammar. A pattern that uses
+it is invalid.
+
+## Normalization
+
+Each consumer normalizes its host library to the portable semantics below.
+
+**R022-30.** Every consumer guarantees the ASCII meaning of `\\d` and `\\w`,
+however its host library behaves. `\\d` is exactly `U+0030` through `U+0039`.
+`\\w` is exactly those plus `A` through `Z`, `a` through `z`, and `U+005F`.
+A host default that widens either class to a Unicode category stays off.
+
+**R022-31.** Every consumer guarantees `\\s` is exactly the ECMA-262
+`WhiteSpace` plus `LineTerminator` set, however its host library behaves. The
+set is `U+0009`, `U+000B`, `U+000C`, `U+0020`, `U+00A0`, `U+1680`, `U+2000`
+through `U+200A`, `U+202F`, `U+205F`, `U+3000`, `U+FEFF`, `U+000A`, `U+000D`,
+`U+2028`, and `U+2029`. `U+0085` is not in the set, even where a host library
+includes it.
+
+**R022-32.** Every consumer guarantees `.` matches every scalar except
+`U+000A`, `U+000D`, `U+2028`, and `U+2029`, and `$` matches only at the end of
+the subject and never before a trailing `U+000A`, however its host library
+behaves.
+
+**R022-33.** Every consumer expands each `\\u{...}` escape to the scalar it
+names before compiling the pattern.
+
+**R022-34.** The following are syntax errors and fail with `invalid_regex`:
+`(?P<name>` named group syntax, inline flag groups such as `(?i)`,
+`\\p{...}` property escapes, malformed escapes such as `\\a`, and lookbehind
+whose length can vary. Fixed length lookbehind stays allowed, and
+`(?<name>...)` stays the way to name a group.
 
 ## The pattern value
 
@@ -119,8 +151,8 @@ one, and where several matches start at the same position, the one ECMA-262
 backtracking reaches first.
 
 **R022-19.** A subject is compared as R019 scalar values. Matching applies no
-normalization, case folding, locale, or collation, so canonically equivalent
-subjects that differ in scalars match differently.
+subject normalization, case folding, locale, or collation, so canonically
+equivalent subjects that differ in scalars match differently.
 
 ## Capture groups
 
@@ -160,7 +192,7 @@ outcome for the same pattern and subject.
 **R022-26.** `conformance/regex.yaml` holds shared fixtures. Each case names
 the pattern, subject, and outcome for all three consumers, or records a
 rejected pattern. Repository validation replays the fixtures against the
-pinned engine. The replay proves that the Python consumer and fixtures
+Python consumer. The replay proves that the Python consumer and fixtures
 agree. The shared conformance workflow proves executable parity with R when
 that workflow exists. A fixture file alone is not runtime evidence for an R
 runtime that has not run the workflow.
@@ -169,26 +201,41 @@ runtime that has not run the workflow.
 
 Host regular-expression libraries differ in syntax, flags, and match choice,
 so any behavior that depends on one host library cannot satisfy the parity
-requirement. Pinning one engine version makes its verdict the contract even
-where the standard admits more than one reading. The `u` flag is set so a
-pattern operates on the same scalar values every other text rule counts,
-and the remaining flags stay clear so anchoring, dot, case, and iteration
-behavior are fixed rather than selectable. Repository fixtures replayed
-against the pinned engine prove the Python side agrees with them, while
-executable R parity needs the shared conformance workflow rather than the
-fixture file alone.
+requirement. The portable grammar plus the normalization make the verdict the
+contract even where the standard admits more than one reading. The `u` flag
+equivalent keeps a pattern on the same scalar values every other text rule
+counts, and the remaining flags stay clear so anchoring, dot, case, and
+iteration behavior are fixed rather than selectable. Property escapes and
+lookbehind of variable length are excluded because consumers cannot implement
+them the same way. Repository fixtures replayed against the Python consumer
+prove the Python side agrees with them, while executable R parity needs the
+shared conformance workflow rather than the fixture file alone.
+
+## Known limitation
+
+The contract no longer requires linear time matching. The Python consumer
+uses `re`, which backtracks, so a pathological pattern can take long. The
+match it reports is still the match this rule defines.
+
+Outside a character class, the Python consumer normalizes `\S` to the exact
+negation of the ECMA-262 whitespace set. Inside a character class, `[\S]`
+keeps the host `re` behavior under `re.ASCII`: it excludes only ASCII
+whitespace, so it still matches non-ASCII whitespace scalars such as U+00A0
+that the contract counts as whitespace. This is a known consumer edge of the
+normalization, not a second dialect.
 
 ## Errors
 
-- **R022-27.** A pattern the pinned engine rejects, in any of the three
-  consumers: fail validation with `invalid_regex` and report the declaring
-  path and the engine's rejection. A pattern is rejected the same way whether
-  its syntax is malformed or merely outside the pinned version.
+- **R022-27.** A pattern the grammar or the normalization rejects, in any of
+  the three consumers: fail validation with `invalid_regex` and report the
+  declaring path and the rejection. A pattern is rejected the same way
+  whether its syntax is malformed or merely outside the portable grammar.
 - **R022-28.** A `str_extract.group` that is negative or exceeds the
   capturing groups its pattern declares: fail validation with
   `regex_group_out_of_range` and report the path, the requested group, and
   the count the pattern declares.
-- **R022-29.** An implementation that cannot provide the pinned engine: fail
-  before evaluation with `unsupported_regex_engine` and report the engine and
-  version it expected. It must not fall back to a host regular-expression
-  library, translate the pattern into another dialect, or skip the check.
+- **R022-29.** A consumer that cannot implement the normalization contract:
+  fail before evaluation with `unsupported_regex_engine` and report what it
+  cannot provide. It must not read patterns with a host default that violates
+  the normalization, translate the pattern into another dialect, or skip the
+  check.

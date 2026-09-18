@@ -25,9 +25,8 @@ from yamaa.models import (
 )
 from yamaa.regex import (
     NO_MATCH,
-    REGEX_ENGINE_CRATE,
-    REGEX_ENGINE_CRATE_VERSION,
-    REGEX_FLAGS,
+    REGEX_CONTRACT_VERSION,
+    REGEX_HOST_LIBRARY,
     RegexError,
     capture_group_count,
     compile_pattern,
@@ -87,14 +86,13 @@ def test_template_parser_matches_the_shared_r012_contract(
     assert caught.value.condition == case["condition"]
 
 
-def test_the_pinned_engine_is_the_one_the_fixtures_name() -> None:
-    # R022-26: the fixtures and this consumer must name one engine, or a
-    # replay proves nothing about the engine the language pins.
-    assert CONFORMANCE["engine"] == {
-        "crate": REGEX_ENGINE_CRATE,
-        "crate_version": REGEX_ENGINE_CRATE_VERSION,
-        "flags": REGEX_FLAGS,
-    }
+def test_the_portable_contract_is_the_one_the_fixtures_name() -> None:
+    # R022-26: the fixtures and this consumer must name one contract, or a
+    # replay proves nothing about the contract the language pins.
+    assert CONFORMANCE["contract"] == "regex"
+    assert CONFORMANCE["contract_version"] == REGEX_CONTRACT_VERSION == "2.0.0"
+    assert "engine" not in CONFORMANCE
+    assert REGEX_HOST_LIBRARY == "re"
 
 
 def _matches_column(pattern: str, subject: str) -> bool:
@@ -172,7 +170,7 @@ def test_every_shared_regex_vector_replays_in_all_three_consumers(
     assert result.value == (MISSING if expected is None else expected)
 
 
-def test_the_schema_descriptor_reads_patterns_through_the_pinned_engine() -> None:
+def test_the_schema_descriptor_reads_patterns_through_the_portable_contract() -> None:
     from yamaa.specification import schema
 
     # The R006 descriptor consumer is the same binding the vectors replay
