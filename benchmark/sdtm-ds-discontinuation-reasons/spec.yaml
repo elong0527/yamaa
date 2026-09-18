@@ -1,0 +1,137 @@
+schema_version: "1.0"
+domain: DS
+keys: [STUDYID, USUBJID, DSSEQ]
+
+input:
+  ODM: input/odm.csv
+
+output:
+  path: ds.csv
+  columns: [DOMAIN, STUDYID, USUBJID, DSSEQ, DSCAT, DSSCAT, DSTERM, DSDECOD, DSSTDTC]
+  order_by: [USUBJID, DSSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: DS
+    verifications:
+      allowed_values:
+        values: [DS]
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ODM.SubjectKey
+
+  - name: DSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      mapping:
+        source: ODM.StudyEventOID
+        dict:
+          EOT: 1
+          EOS: 2
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [1, 2]
+
+  - name: DSCAT
+    type: str
+    label: Category for Disposition Event
+    derivation:
+      literal: DISPOSITION EVENT
+    verifications:
+      allowed_values:
+        values: [DISPOSITION EVENT]
+
+  - name: DSSCAT
+    type: str
+    label: Subcategory for Disposition Event
+    derivation:
+      mapping:
+        source: ODM.StudyEventOID
+        dict:
+          EOT: STUDY TREATMENT
+          EOS: STUDY
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [STUDY TREATMENT, STUDY]
+
+  - name: COMPSTAT
+    type: str
+    label: Completion Status as Collected
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.DS.COMP'
+        variable: ODM.Value
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [COMPLETED, DISCONTINUED]
+
+  - name: DSTERM
+    type: str
+    label: Reported Term for the Disposition Event
+    derivation:
+      case:
+        branches:
+          - when: "COMPSTAT = 'COMPLETED'"
+            then:
+              literal: COMPLETED
+        otherwise:
+          source:
+            filter: ODM.ItemOID = 'IT.DS.REASON'
+            variable: ODM.Value
+    verifications:
+      - not_missing: {}
+
+  - name: DSDECOD
+    type: str
+    label: Standardized Disposition Term
+    derivation:
+      case:
+        branches:
+          - when: "COMPSTAT = 'COMPLETED'"
+            then:
+              literal: COMPLETED
+        otherwise:
+          source:
+            filter: ODM.ItemOID = 'IT.DS.REASONCD'
+            variable: ODM.Value
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [COMPLETED, ADVERSE EVENT, OTHER]
+
+  - name: DSSTDTC
+    type: date
+    label: Start Date/Time of Disposition Event
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.DS.DTC'
+        variable: ODM.Value
+    verifications:
+      - not_missing: {}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, DSSEQ]
+  - row_count:
+      min: 6
+      max: 6
+  - implies:
+      id: treatment-milestone-is-numbered-first
+      when: "DSSCAT = 'STUDY TREATMENT'"
+      then: "DSSEQ = 1"

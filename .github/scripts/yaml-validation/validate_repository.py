@@ -2872,6 +2872,166 @@ def _apply_reference(
     return changed
 
 
+# R002-20..R002-26 address an ODM item by hiding its ItemOID in the
+# variable name. #517 replaced that with a source `filter` over the records
+# a source reads (R003-21), and #506 removes the contextual form from the
+# language. These specifications are the migration #506 still owes; a
+# specification written from now on must use the filtered form instead.
+ODM_CONTEXTUAL_REFERENCE_MIGRATION = {
+    'adam-adsl-randomization-timing/input/dm.schema.yaml',
+    'odm-form-scoped-item-resolution/spec.yaml',
+    'sdtm-lb-findings/spec.yaml',
+    'sdtm-lb-multiform/spec.yaml',
+}
+
+
+def example_migration_label(spec_path):
+    """Return a spec's path below benchmark, or None outside it."""
+    if spec_path is None:
+        return None
+    parts = Path(spec_path).resolve().parts
+    if 'benchmark' not in parts:
+        return None
+    index = len(parts) - 1 - parts[::-1].index('benchmark')
+    return '/'.join(parts[index + 1:])
+
+
+def iter_type_reference_paths(data, type_value, env, path):
+    """Yield (name, path) for each variable reference under a schema type.
+
+    This mirrors collect_type_references and adds the spec path each
+    reference is written at, so a diagnostic can name where it appears.
+    """
+    for member in _type_members(type_value):
+        if _type_matches(data, member, env):
+            yield from _iter_single_type_reference_paths(
+                data, member, env, path
+            )
+            return
+
+
+EXPRESSION_IDENTIFIER_READERS = {
+    'sql': lambda data: predicate_identifier_names(data),
+    'numeric_expression': lambda data: numeric_expression_identifier_names(
+        data
+    ),
+    'aggregate_expression': (
+        lambda data: aggregate_expression_identifier_names(data)
+    ),
+    'string_template': lambda data: string_template_identifier_names(data),
+}
+
+
+def _iter_single_type_reference_paths(data, type_ref, env, path):
+    if type_ref in {'variable', 'column_name'} and isinstance(data, str):
+        yield data, path
+        return
+
+    reader = EXPRESSION_IDENTIFIER_READERS.get(type_ref)
+    if reader is not None:
+        for name in reader(data):
+            yield name, path
+        return
+
+    if type_ref.startswith('list[') and type_ref.endswith(']'):
+        if isinstance(data, list):
+            inner = type_ref[5:-1].strip()
+            for index, item in enumerate(data):
+                yield from iter_type_reference_paths(
+                    item, inner, env, f"{path}[{index}]"
+                )
+        return
+
+    if type_ref.startswith('dict[') and type_ref.endswith(']'):
+        if isinstance(data, dict):
+            _, value_type = split_type_arguments(type_ref[5:-1])
+            for key, value in data.items():
+                yield from iter_type_reference_paths(
+                    value, value_type, env, f"{path}.{key}"
+                )
+        return
+
+    if type_ref in env.get('classes', {}):
+        yield from _iter_inline_class_reference_paths(
+            data, env['classes'][type_ref], env, path
+        )
+        return
+
+    alias = env.get('aliases', {}).get(type_ref)
+    if alias is None:
+        return
+    registry_name = alias.get('registry')
+    if registry_name is None:
+        yield from iter_type_reference_paths(data, alias['type'], env, path)
+        return
+    if not isinstance(data, dict) or len(data) != 1:
+        return
+    keyword, payload = next(iter(data.items()))
+    definition = env.get('registries', {}).get(registry_name, {}).get(keyword)
+    keyword_path = f"{path}.{keyword}"
+    if isinstance(definition, list):
+        yield from _iter_inline_class_reference_paths(
+            payload, definition, env, keyword_path
+        )
+    elif isinstance(definition, dict) and 'type' in definition:
+        yield from iter_type_reference_paths(
+            payload, definition['type'], env, keyword_path
+        )
+
+
+def _iter_inline_class_reference_paths(data, fields, env, path):
+    if not isinstance(data, dict):
+        return
+    descriptors = {
+        name: descriptor
+        for entry in fields
+        for name, descriptor in entry.items()
+    }
+    for name, value in data.items():
+        descriptor = descriptors.get(name)
+        if descriptor is not None:
+            yield from iter_type_reference_paths(
+                value, descriptor['type'], env, f"{path}.{name}"
+            )
+
+
+def validate_retired_odm_item_references(spec, spec_label, spec_path, env):
+    """Reject an ODM contextual item reference outside the #506 migration.
+
+    A long-form ODM relation carries `ItemOID` and `Value`, and R002-20
+    reads any other suffix on it as a complete ItemOID resolved against the
+    row's ODM context. R003-21 states the replacement: read `Value` under a
+    source `filter` on `ItemOID`, so the record the source reaches is
+    written where a reviewer can see it.
+    """
+    if example_migration_label(spec_path) in ODM_CONTEXTUAL_REFERENCE_MIGRATION:
+        return []
+    long_form = {
+        dataset: fields
+        for dataset, fields in dataset_type_catalog(spec, spec_path, env).items()
+        if 'ItemOID' in fields and 'Value' in fields
+    }
+    if not long_form:
+        return []
+
+    errors = []
+    for name, path in iter_type_reference_paths(
+        spec, 'root_class', env, spec_label
+    ):
+        if not isinstance(name, str) or '.' not in name:
+            continue
+        dataset, field = name.split('.', 1)
+        fields = long_form.get(dataset)
+        if fields is None or field in fields:
+            continue
+        errors.append(
+            f"ERROR: {path}: retired_construct: {name!r} addresses an ODM "
+            f"item through the variable name (R002-20); read {dataset}.Value "
+            f"under a source filter on ItemOID instead (R003-21, #506)"
+        )
+    return sorted(set(errors))
+
+
 def order_term_variable(term):
     """Return the variable an R007 order term names, or None."""
     if isinstance(term, str):
@@ -7259,6 +7419,9 @@ def validate_spec_document(
     errors.extend(validate_type(spec, ['root_class'], env, spec_label))
     errors.extend(validate_grouped_rows(spec, spec_label))
     errors.extend(validate_spec_names(spec, spec_label))
+    errors.extend(
+        validate_retired_odm_item_references(spec, spec_label, spec_path, env)
+    )
     errors.extend(validate_column_labels(spec, spec_label))
     errors.extend(
         validate_spec_contracts(

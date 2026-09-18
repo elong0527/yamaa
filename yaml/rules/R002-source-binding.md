@@ -129,6 +129,13 @@ absent match rather than a handled condition.
 
 ## ODM contextual references
 
+This form is retired. A source states which records it reads through
+`filter`, which R003-21 owns, so an ODM item is addressed by a predicate
+over `ItemOID` rather than by hiding that identifier in the variable name.
+#506 removes the requirements below from the language; they describe only
+the specifications still awaiting that rewrite, and the repository
+validator rejects a new use.
+
 **R002-20.** ODM item identifiers may contain periods.
 `ODM.IT.LB.LBDTC` means the `Value` whose `ItemOID` is `IT.LB.LBDTC`,
 resolved within the current ODM context.
