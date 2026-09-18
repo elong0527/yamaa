@@ -117,44 +117,35 @@ columns:
         group_by: [STUDYID, USUBJID]
         order_by: [FALNKID, FATESTCD]
 
-  - name: AELNKID_MATCH
-    type: str
-    label: Matched AE Link ID
-    derivation:
-      mapping_from:
-        source: [USUBJID, FALNKID]
-        dataset: AE
-        key: [USUBJID, AELNKID]
-        value: AELNKID
-        unmapped: null
-
 rows:
-  - id: fa_location
+  - id: fa_findings
     dataset: ODM
-    filter: "ODM.ItemOID = 'IT.FA.LOCATION' AND ODM.Value IS NOT NULL"
+    filter: "ODM.ItemOID IN ('IT.FA.LOCATION', 'IT.FA.DIAMETER', 'IT.FA.BIOPSD') AND ODM.Value IS NOT NULL"
     derivations:
       FATESTCD:
-        literal: LOC
+        case:
+          branches:
+            - when: "ODM.ItemOID = 'IT.FA.LOCATION'"
+              then:
+                literal: LOC
+            - when: "ODM.ItemOID = 'IT.FA.DIAMETER'"
+              then:
+                literal: DIAM
+            - when: "ODM.ItemOID = 'IT.FA.BIOPSD'"
+              then:
+                literal: BIOPSY
       FATEST:
-        literal: Location of Rash
-
-  - id: fa_diameter
-    dataset: ODM
-    filter: "ODM.ItemOID = 'IT.FA.DIAMETER' AND ODM.Value IS NOT NULL"
-    derivations:
-      FATESTCD:
-        literal: DIAM
-      FATEST:
-        literal: Lesion Diameter
-
-  - id: fa_biopsied
-    dataset: ODM
-    filter: "ODM.ItemOID = 'IT.FA.BIOPSD' AND ODM.Value IS NOT NULL"
-    derivations:
-      FATESTCD:
-        literal: BIOPSY
-      FATEST:
-        literal: Lesion Biopsied
+        case:
+          branches:
+            - when: "ODM.ItemOID = 'IT.FA.LOCATION'"
+              then:
+                literal: Location of Rash
+            - when: "ODM.ItemOID = 'IT.FA.DIAMETER'"
+              then:
+                literal: Lesion Diameter
+            - when: "ODM.ItemOID = 'IT.FA.BIOPSD'"
+              then:
+                literal: Lesion Biopsied
 
 verifications:
   - unique:
@@ -165,4 +156,4 @@ verifications:
   - implies:
       id: fa-linkid-matches-ae-linkid
       when: "FALNKID IS NOT NULL"
-      then: "AELNKID_MATCH IS NOT NULL"
+      then: "FAOBJ IS NOT NULL"
