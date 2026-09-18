@@ -1,13 +1,13 @@
 schema_version: "1.0"
 domain: DS
-keys: [STUDYID, USUBJID, DSSCAT]
+keys: [STUDYID, USUBJID, DSSEQ]
 
 input:
   ODM: input/odm.csv
 
 output:
   path: ds.csv
-  columns: [DOMAIN, STUDYID, USUBJID, DSCAT, DSSCAT, DSTERM, DSDECOD, DSSTDTC, DSSEQ]
+  columns: [DOMAIN, STUDYID, USUBJID, DSSEQ, DSCAT, DSSCAT, DSTERM, DSDECOD, DSSTDTC]
   order_by: [USUBJID, DSSEQ]
 
 columns:
@@ -31,6 +31,20 @@ columns:
     label: Unique Subject Identifier
     derivation:
       source: ODM.SubjectKey
+
+  - name: DSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      mapping:
+        source: ODM.StudyEventOID
+        dict:
+          EOT: 1
+          EOS: 2
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [1, 2]
 
   - name: DSCAT
     type: str
@@ -63,6 +77,7 @@ columns:
         filter: ODM.ItemOID = 'IT.DS.COMP'
         variable: ODM.Value
     verifications:
+      - not_missing: {}
       - allowed_values:
           values: [COMPLETED, DISCONTINUED]
 
@@ -110,19 +125,13 @@ columns:
     verifications:
       - not_missing: {}
 
-  - name: DSSEQ
-    type: int
-    label: Sequence Number
-    derivation:
-      row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [DSSTDTC]
-    verifications:
-      - not_missing: {}
-
 verifications:
   - unique:
-      columns: [STUDYID, USUBJID, DSSCAT]
+      columns: [STUDYID, USUBJID, DSSEQ]
   - row_count:
       min: 6
       max: 6
+  - implies:
+      id: treatment-milestone-is-numbered-first
+      when: "DSSCAT = 'STUDY TREATMENT'"
+      then: "DSSEQ = 1"
