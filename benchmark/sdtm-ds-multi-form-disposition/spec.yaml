@@ -12,6 +12,45 @@ output:
   path: ds.csv
   columns: [DOMAIN, STUDYID, USUBJID, DSCAT, DSSCAT, DSTERM, DSDECOD, DSSTDTC, DSSEQ]
 
+# Each collected item of one milestone is its own ODM record, so a row built
+# from the completion record reads the rest by subject and milestone.
+record_lookups:
+  - id: CONSENTDTC
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'IC' AND ODM.ItemOID = 'IT.DS.ICDTC'"
+    source: [USUBJID]
+    key: [SubjectKey]
+
+  - id: SCRNREAS
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'IC' AND ODM.ItemOID = 'IT.DS.SCRNREAS'"
+    source: [USUBJID]
+    key: [SubjectKey]
+
+  - id: SCRNDTC
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'IC' AND ODM.ItemOID = 'IT.DS.SCRNDTC'"
+    source: [USUBJID]
+    key: [SubjectKey]
+
+  - id: REASON
+    dataset: ODM
+    filter: "ODM.ItemOID = 'IT.DS.REASON'"
+    source: [USUBJID, MILESTONE]
+    key: [SubjectKey, StudyEventOID]
+
+  - id: REASONCD
+    dataset: ODM
+    filter: "ODM.ItemOID = 'IT.DS.REASONCD'"
+    source: [USUBJID, MILESTONE]
+    key: [SubjectKey, StudyEventOID]
+
+  - id: EVENTDTC
+    dataset: ODM
+    filter: "ODM.ItemOID = 'IT.DS.DTC'"
+    source: [USUBJID, MILESTONE]
+    key: [SubjectKey, StudyEventOID]
+
 columns:
   - name: DOMAIN
     type: str
@@ -29,6 +68,10 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+
+  - name: MILESTONE
+    type: str
+    label: Collected Milestone Event
 
   - name: DSCAT
     type: str
@@ -91,8 +134,10 @@ rows:
         literal: INFORMED CONSENT OBTAINED
       DSDECOD:
         literal: INFORMED CONSENT OBTAINED
+      MILESTONE:
+        literal: IC
       DSSTDTC:
-        source: ODM.IT.DS.ICDTC
+        source: CONSENTDTC.Value
 
   - id: randomization
     dataset: RAND
@@ -105,6 +150,8 @@ rows:
       DSCAT:
         literal: PROTOCOL MILESTONE
       DSSCAT:
+        literal: null
+      MILESTONE:
         literal: null
       DSTERM:
         literal: RANDOMIZED
@@ -125,12 +172,14 @@ rows:
         literal: DISPOSITION EVENT
       DSSCAT:
         literal: SCREENING
+      MILESTONE:
+        literal: IC
       DSTERM:
-        source: ODM.IT.DS.SCRNREAS
+        source: SCRNREAS.Value
       DSDECOD:
         literal: SCREEN FAILURE
       DSSTDTC:
-        source: ODM.IT.DS.SCRNDTC
+        source: SCRNDTC.Value
 
   - id: eot
     dataset: ODM
@@ -144,6 +193,8 @@ rows:
         literal: DISPOSITION EVENT
       DSSCAT:
         literal: STUDY TREATMENT
+      MILESTONE:
+        literal: EOT
       DSTERM:
         case:
           branches:
@@ -151,7 +202,7 @@ rows:
               then:
                 literal: COMPLETED
           otherwise:
-            source: ODM.IT.DS.REASON
+            source: REASON.Value
       DSDECOD:
         case:
           branches:
@@ -159,9 +210,9 @@ rows:
               then:
                 literal: COMPLETED
           otherwise:
-            source: ODM.IT.DS.REASONCD
+            source: REASONCD.Value
       DSSTDTC:
-        source: ODM.IT.DS.DTC
+        source: EVENTDTC.Value
 
   - id: eos
     dataset: ODM
@@ -175,6 +226,8 @@ rows:
         literal: DISPOSITION EVENT
       DSSCAT:
         literal: STUDY
+      MILESTONE:
+        literal: EOS
       DSTERM:
         case:
           branches:
@@ -182,7 +235,7 @@ rows:
               then:
                 literal: COMPLETED
           otherwise:
-            source: ODM.IT.DS.REASON
+            source: REASON.Value
       DSDECOD:
         case:
           branches:
@@ -190,9 +243,9 @@ rows:
               then:
                 literal: COMPLETED
           otherwise:
-            source: ODM.IT.DS.REASONCD
+            source: REASONCD.Value
       DSSTDTC:
-        source: ODM.IT.DS.DTC
+        source: EVENTDTC.Value
 
 verifications:
   - unique:
