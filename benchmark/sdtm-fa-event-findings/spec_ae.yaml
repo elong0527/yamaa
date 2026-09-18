@@ -8,6 +8,21 @@ output:
   path: ae.csv
   columns: [STUDYID, USUBJID, AESEQ, AETERM, AESTDTC, AELNKID]
 
+# One event's term, date and link id are three ODM records, so the row built
+# from the term reads the other two by subject and event repeat.
+record_lookups:
+  - id: STARTDTC
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'AE' AND ODM.ItemOID = 'IT.AE.AESTDTC'"
+    source: [USUBJID, AEREPEAT]
+    key: [SubjectKey, StudyEventRepeatKey]
+
+  - id: LINKID
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'AE' AND ODM.ItemOID = 'IT.AE.AELNKID'"
+    source: [USUBJID, AEREPEAT]
+    key: [SubjectKey, StudyEventRepeatKey]
+
 columns:
   - name: STUDYID
     type: str
@@ -21,6 +36,12 @@ columns:
     derivation:
       source: ODM.SubjectKey
 
+  - name: AEREPEAT
+    type: str
+    label: Collected Event Repeat Key
+    derivation:
+      source: ODM.StudyEventRepeatKey
+
   - name: AETERM
     type: str
     label: Reported Term for the Adverse Event
@@ -31,17 +52,13 @@ columns:
     type: date
     label: Start Date/Time of Adverse Event
     derivation:
-      source:
-        variable: ODM.IT.AE.AESTDTC
-        missing: null
+      source: STARTDTC.Value
 
   - name: AELNKID
     type: str
     label: Link ID
     derivation:
-      source:
-        variable: ODM.IT.AE.AELNKID
-        missing: null
+      source: LINKID.Value
 
   - name: AESEQ
     type: int

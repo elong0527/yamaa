@@ -10,6 +10,21 @@ output:
   columns: [STUDYID, USUBJID, FASEQ, FAOBJ, FALNKID, FACAT, FASCAT, FATESTCD, FATEST, FAORRES, FAORRESU, FASTRESC, FASTRESU]
   order_by: [STUDYID, USUBJID, FASEQ]
 
+# The link id and the diameter unit are their own ODM records, so each row
+# reads them by subject and finding-event repeat.
+record_lookups:
+  - id: LINKID
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'FA' AND ODM.ItemOID = 'IT.FA.LINKID'"
+    source: [USUBJID, FAREPEAT]
+    key: [SubjectKey, StudyEventRepeatKey]
+
+  - id: DIAMUNIT
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'FA' AND ODM.ItemOID = 'IT.FA.DIAMETER.U'"
+    source: [USUBJID, FAREPEAT]
+    key: [SubjectKey, StudyEventRepeatKey]
+
 columns:
   - name: STUDYID
     type: str
@@ -23,13 +38,17 @@ columns:
     derivation:
       source: ODM.SubjectKey
 
+  - name: FAREPEAT
+    type: str
+    label: Collected Finding Event Repeat Key
+    derivation:
+      source: ODM.StudyEventRepeatKey
+
   - name: FALNKID
     type: str
     label: Link ID
     derivation:
-      source:
-        variable: ODM.IT.FA.LINKID
-        missing: null
+      source: LINKID.Value
 
   - name: FAOBJ
     type: str
@@ -71,6 +90,12 @@ columns:
   - name: FAORRESU
     type: str
     label: Original Units
+    derivation:
+      case:
+        branches:
+          - when: "FATESTCD = 'DIAM'"
+            then:
+              source: DIAMUNIT.Value
 
   - name: FASTRESC
     type: str
@@ -81,6 +106,8 @@ columns:
   - name: FASTRESU
     type: str
     label: Standard Units
+    derivation:
+      source: FAORRESU
 
   - name: FASEQ
     type: int
@@ -110,10 +137,6 @@ rows:
         literal: LOC
       FATEST:
         literal: Location of Rash
-      FAORRESU:
-        literal: null
-      FASTRESU:
-        literal: null
 
   - id: fa_diameter
     dataset: ODM
@@ -123,14 +146,6 @@ rows:
         literal: DIAM
       FATEST:
         literal: Lesion Diameter
-      FAORRESU:
-        source:
-          variable: ODM.IT.FA.DIAMETER.U
-          missing: null
-      FASTRESU:
-        source:
-          variable: ODM.IT.FA.DIAMETER.U
-          missing: null
 
   - id: fa_biopsied
     dataset: ODM
@@ -140,10 +155,6 @@ rows:
         literal: BIOPSY
       FATEST:
         literal: Lesion Biopsied
-      FAORRESU:
-        literal: null
-      FASTRESU:
-        literal: null
 
 verifications:
   - unique:
