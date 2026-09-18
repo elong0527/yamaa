@@ -32,8 +32,8 @@ columns:
     label: Date/Time of Informed Consent
     derivation:
       source:
-        variable: ODM.IT.DM.RFICDTC
-        missing: null
+        filter: ODM.ItemOID = 'IT.DM.RFICDTC'
+        variable: ODM.Value
     verifications:
       not_missing: {}
 
@@ -42,8 +42,8 @@ columns:
     label: Date/Time of Birth
     derivation:
       source:
-        variable: ODM.IT.DM.BRTHDT
-        missing: null
+        filter: ODM.ItemOID = 'IT.DM.BRTHDT'
+        variable: ODM.Value
 
   - name: BRTH_PREC
     type: str
