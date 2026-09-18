@@ -2,81 +2,47 @@
 title: YAMAA documentation
 ---
 
-YAMAA is a language-neutral YAML specification for reproducible clinical trial
-data pipelines that transform ODM data into SDTM and ADaM datasets following
-CDISC standards.
+# YAMAA <img src="assets/logo.jpeg" align="right" width="120" alt="YAMAA logo" />
 
-These pages are written for statistical programmers who already write SDTM and
-ADaM specifications in Excel. Each one has a different job.
+[![Python tests](https://github.com/elong0527/yamaa/actions/workflows/python.yml/badge.svg)](https://github.com/elong0527/yamaa/actions/workflows/python.yml)
+[![YAML validation](https://github.com/elong0527/yamaa/actions/workflows/yaml-validation.yml/badge.svg)](https://github.com/elong0527/yamaa/actions/workflows/yaml-validation.yml)
+[![Docs](https://github.com/elong0527/yamaa/actions/workflows/deploy-docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/main/LICENSE)
 
-## Start here
+Language-neutral YAML specification for reproducible clinical trial data pipelines.
 
-**[Example gallery: every YAMAA example](examples/index.html)**
-Read the README, compare the input tables side by side with expected output
-below, and inspect the YAML in a collapsible sidebar. Highlight a subject to
-compare its records.
+Designed for AI-agent and human collaboration on clinical data standardization, following our [core principles](principles.md). Engines in Python and R run YAMAA specifications, and minimal visible examples benchmark them in real cases.
 
-**[Principles](principles.md)**
-A short answer to one question: what is YAMAA for? Start here if you want the
-core principle of one execution and the four principles that follow from it.
+## Installation
 
-**[Why YAMAA looks the way it does](why-yamaa.md)**
-An Excel specification has three layers and writes down only two. This page is
-about the missing one -- what "semantics" means in practice, why two programmers
-reading the same spec write different programs, and what YAMAA deliberately
-refuses to do about it. Start here if you want the argument before the syntax.
+Python engine:
 
-**[Translating an Excel specification](excel-to-yamaa.md)**
-The same specification written twice, then every column of a Dataset sheet and
-a Variable sheet mapped to its YAMAA field, then nine specifications worked
-through in full -- direct mapping, computed values, predecessor joins, a BDS
-build, aggregation, partial dates, define.xml metadata, dictionary coding, and
-template inheritance. Start here if you have specifications to convert.
+```
+pip install git+https://github.com/elong0527/yamaa.git#subdirectory=python
+```
 
-**[The schema: class, type, expression, registry](schema-concepts.md)**
-The four words you need to read `yaml/schema*.yaml`, and the complete table of
-derivation verbs with what each one is for. Start here if you are writing or
-reviewing a specification and need the language itself.
+R engine:
 
-**[A walkthrough of the examples](yaml-examples-walkthrough.md)**
-How the 149 example directories are put together, which example answers which
-question, and how the negative examples encode failure behavior. Start here if
-you are implementing YAMAA, or looking for a worked precedent.
+```r
+# install.packages("devtools")
+devtools::install_github("elong0527/yamaa", subdir = "R/cdiscbuilder")
+```
 
-## Teaching from these pages
+## Agentic exploration
 
-With one hour, and an audience of statistical programmers:
+The fastest way to explore YAMAA is with an AI agent. For example, ask an agent to:
 
-1. **The three-layer table in [Why YAMAA](why-yamaa.md), and 1.1 under it** --
-   establish that an Excel spec is missing its semantics layer, and that double
-   programming is what teams currently use to reconstruct it.
-2. **[Example 1](excel-to-yamaa.md#example-1-direct-mapping-a-codelist-and-numeric-banding)**
-   (`mapping` and `cut`) -- closest to Excel, lowest barrier; emphasise
-   splitting `missing` from `unmapped`.
-3. **[Example 3](excel-to-yamaa.md#example-3-predecessor-and-the-automatic-left-join)**
-   (the automatic join) -- how `keys` replaces "merge by".
-4. **[Example 4](excel-to-yamaa.md#example-4-vlm-and-bds-in-one-spec)**
-   (value-level metadata and a BDS build) -- the two-phase model and row
-   templates; the densest segment of the session.
-5. **What is deliberately absent** ([Why YAMAA](why-yamaa.md), section 3)
-   -- leave room for questions, especially about `ROUND`.
+- assess whether one ADaM dataset derivation can be migrated to a YAMAA specification, and run it with a language engine;
+- explain the design of YAMAA from https://github.com/elong0527/yamaa.
 
-If the audience owns corporate standards, swap the emphasis to
-**[example 9](excel-to-yamaa.md#example-9-organization-compound-and-study-layers)**
-(inheritance) and
-**project functions** ([Schema concepts](schema-concepts.md), section 2.8):
-those answer how a standard is versioned, distributed and validated, which is
-where an Excel template plus a macro-library SOP is weakest.
+## Documentation
 
-If the audience will write specifications, send them through the
-[examples walkthrough](yaml-examples-walkthrough.md).
+- [Principles](principles.md) -- the short answer to "what is YAMAA for": one execution.
+- [Why YAMAA](why-yamaa.md) -- the argument before the syntax.
+- [Excel to YAMAA](excel-to-yamaa.md) -- translating specifications you already have.
+- [Schema concepts](schema-concepts.md) -- the language itself.
+- [Example gallery](examples/index.html) -- every example, input against output.
 
-## Source
+## License
 
-- [`yaml/rules/`](https://github.com/elong0527/yamaa/tree/main/yaml/rules) --
-  the 26 normative rules, one topic each. These pages cite them as R001-R026;
-  the index there says what each one owns.
-- [`yaml/`](https://github.com/elong0527/yamaa/tree/main/yaml) -- the schema
-  bundle
-- [`benchmark/`](https://github.com/elong0527/yamaa/tree/main/benchmark)
-  -- 167 runnable examples with exact expected output
+This project is licensed under the terms of the MIT license.
