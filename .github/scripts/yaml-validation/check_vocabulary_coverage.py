@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enforce yaml/examples/vocabulary-coverage.yaml in CI.
+"""Enforce benchmark/vocabulary-coverage.yaml in CI.
 
 Every expression registered in yaml/schema_expression_*.yaml and every
 verification registered in yaml/schema_verification.yaml must name either
@@ -16,7 +16,7 @@ from pathlib import Path
 import yaml
 
 REPO = Path(__file__).resolve().parents[3]
-EXAMPLES = REPO / "yaml" / "examples"
+EXAMPLES = REPO / "benchmark"
 COVERAGE = EXAMPLES / "vocabulary-coverage.yaml"
 GAP = re.compile(r"#[1-9][0-9]*$")
 

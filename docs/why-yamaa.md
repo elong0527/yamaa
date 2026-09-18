@@ -28,7 +28,7 @@ YAMAA writes each layer into a different kind of file:
 | **Structure** | `yaml/schema*.yaml` | The **header row** of the Variable sheet |
 | **Algorithm** | your `spec.yaml` | The **body** of the Variable sheet, derivation column included |
 | **Semantics** | `yaml/rules/R0xx-*.md` | The conventions that were never written down |
-| **Worked examples** | `yaml/examples/` | The worked examples in an implementation guide -- but every one runs |
+| **Worked examples** | `benchmark/` | The worked examples in an implementation guide -- but every one runs |
 
 In one sentence: **an Excel spec is written to be understood; a YAMAA spec is
 written to be executed the same way twice.**

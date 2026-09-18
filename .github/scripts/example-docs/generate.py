@@ -17,7 +17,7 @@ from markdown_it import MarkdownIt
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-EXAMPLES = ROOT / "yaml/examples"
+EXAMPLES = ROOT / "benchmark"
 DESTINATION = ROOT / "docs/examples"
 REPOSITORY = "https://github.com/elong0527/yamaa"
 # Comments are giscus threads in the repository's GitHub Discussions, so they
@@ -281,7 +281,7 @@ def render_files(paths, group, example, derived, labels):
         widths.append(f"minmax(0, {width}fr)")
         count_html = f'<span class="file-count">{count}</span>' if count else ""
         edit_url = (
-            REPOSITORY + "/edit/main/yaml/examples/" + quote(example.name)
+            REPOSITORY + "/edit/main/benchmark/" + quote(example.name)
             + "/" + "/".join(quote(part) for part in filename.split("/"))
         )
         panes.append(
@@ -353,7 +353,7 @@ def example_category(name, title, spec):
 
 def describe_example(example):
     """Return the page title and category without rendering fixtures."""
-    source_url = REPOSITORY + "/blob/main/yaml/examples/" + quote(example.name)
+    source_url = REPOSITORY + "/blob/main/benchmark/" + quote(example.name)
     readme_path = example / "README.md"
     entry_path, _ = example_entry(example)
     if entry_path is None:
@@ -419,7 +419,7 @@ def render_index(entries):
     template = Template((HERE / "gallery.html").read_text(encoding="utf-8"))
     result = template.substitute(
         total=len(entries),
-        source_url=REPOSITORY + "/tree/main/yaml/examples",
+        source_url=REPOSITORY + "/tree/main/benchmark",
         summary="".join(jumps),
         sections="\n".join(blocks) + "\n",
     )
@@ -497,8 +497,8 @@ def render_code_panel(files, edit_base=None):
 
 
 def render_example(example, previous=None, next=None):
-    source_url = REPOSITORY + "/blob/main/yaml/examples/" + quote(example.name)
-    edit_base = REPOSITORY + "/edit/main/yaml/examples/" + quote(example.name)
+    source_url = REPOSITORY + "/blob/main/benchmark/" + quote(example.name)
+    edit_base = REPOSITORY + "/edit/main/benchmark/" + quote(example.name)
     readme_edit_url = edit_base + "/README.md"
     readme_path = example / "README.md"
     spec_path, chain = example_entry(example)
@@ -507,7 +507,7 @@ def render_example(example, previous=None, next=None):
     spec_edit_url = edit_base + "/" + quote(spec_path.name)
     readme_text = readme_path.read_text(encoding="utf-8")
     lifecycle_state, lifecycle_url = readme_lifecycle(readme_text)
-    lifecycle_href = REPOSITORY + "/blob/main/yaml/examples/README.md#lifecycle"
+    lifecycle_href = REPOSITORY + "/blob/main/benchmark/README.md#lifecycle"
     lifecycle_badge = (
         f'<a class="lifecycle-badge" href="{escape(lifecycle_href)}">'
         f'<img src="{escape(lifecycle_url)}" alt="Lifecycle: {escape(lifecycle_state)}"></a>'
@@ -635,7 +635,7 @@ def render_example(example, previous=None, next=None):
         datasets_heading=datasets_heading,
         readme_edit_url=readme_edit_url,
         spec_file_header=spec_file_header,
-        source_url=REPOSITORY + "/tree/main/yaml/examples/" + quote(example.name),
+        source_url=REPOSITORY + "/tree/main/benchmark/" + quote(example.name),
         prev_link=page_link(previous, "Previous example", "prev"),
         next_link=page_link(next, "Next example", "next"),
         metrics=metrics_html,

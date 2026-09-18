@@ -7,7 +7,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'yaml/examples/**'
+      - 'benchmark/**'
       - 'docs/**'
       - '.github/scripts/example-docs/**'
       - '.github/workflows/deploy-docs.yml'

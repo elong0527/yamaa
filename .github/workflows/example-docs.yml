@@ -7,7 +7,7 @@ name: Example dashboards
 on:
   pull_request:
     paths:
-      - 'yaml/examples/**'
+      - 'benchmark/**'
       - '.github/scripts/example-docs/**'
       - '.github/workflows/example-docs.yml'
 

@@ -26,7 +26,7 @@ from yamaa.specification import SpecificationError, load_specification
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
-EXAMPLES = SCHEMA_ROOT / "examples"
+EXAMPLES = REPOSITORY_ROOT / "benchmark"
 
 # Every committed example whose derivations this component now executes.
 ARTIFACT_EXAMPLES = [

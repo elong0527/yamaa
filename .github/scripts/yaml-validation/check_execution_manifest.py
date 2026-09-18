@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the #101 execution manifest against yaml/examples directories.
+"""Check the #101 execution manifest against benchmark directories.
 
 Fails on missing, duplicate, or stale entries, unknown statuses, and
 executable entries without a declared runtime. Run from the repository root:
@@ -18,7 +18,7 @@ from validate_repository import UniqueKeyLoader
 
 
 ROOT = Path(__file__).resolve().parents[3]
-EXAMPLES = ROOT / "yaml" / "examples"
+EXAMPLES = ROOT / "benchmark"
 MANIFEST = EXAMPLES / "execution-manifest.yaml"
 BLOCKED_BY_PATTERN = re.compile(r"#[1-9][0-9]*")
 

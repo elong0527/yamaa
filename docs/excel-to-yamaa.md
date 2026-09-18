@@ -15,7 +15,7 @@ title: Excel to YAMAA
 ## 1. A spec.yaml is one Dataset-sheet row plus a slice of the Variable sheet
 
 Here is the same specification written twice. It is
-[`adam-adsl-bmi-compute`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-bmi-compute), which reads a subject-level source and
+[`adam-adsl-bmi-compute`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-bmi-compute), which reads a subject-level source and
 adds one derived variable.
 
 **As you would write it today.** A Dataset sheet row:
@@ -192,12 +192,12 @@ This is where the two formats line up most directly -- see example 4.
 ## 3. Nine worked equivalences
 
 Each one shows the Excel rows first, then the YAML, then what actually
-differs. All of them are real directories under `yaml/examples/` with fixed
+differs. All of them are real directories under `benchmark/` with fixed
 expected output.
 
 ### Example 1: direct mapping, a codelist, and numeric banding
 
-*Source: [`adam-adsl-mapping`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-mapping)*
+*Source: [`adam-adsl-mapping`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-mapping)*
 
 Excel:
 
@@ -262,7 +262,7 @@ What changed:
 
 ### Example 2: a Comment sentence becomes `compute`
 
-*Source: [`adam-adsl-bmi-compute`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adsl-bmi-compute)*
+*Source: [`adam-adsl-bmi-compute`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-bmi-compute)*
 
 This is the specification from section 1, read again for its formula. The Excel
 row now carries the rounding instruction such a Comment usually carries:
@@ -302,7 +302,7 @@ What changed:
 
 ### Example 3: Predecessor and the automatic left join
 
-*Source: [`adam-adae-treatment-emergent`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adae-treatment-emergent)*
+*Source: [`adam-adae-treatment-emergent`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adae-treatment-emergent)*
 
 Excel:
 
@@ -362,7 +362,7 @@ What changed:
 
 ### Example 4: VLM and BDS in one spec
 
-*Source: [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adlb-bds)*
+*Source: [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-bds)*
 
 This is the closest structural match to an Excel spec and the one worth the
 most time. It builds a Basic Data Structure (BDS) dataset, the ADaM shape where
@@ -466,7 +466,7 @@ Take this one slowly:
 
 ### Example 5: one-to-many summarization with `aggregate`
 
-*Source: [`adam-adex-cumulative-dose`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adex-cumulative-dose)*
+*Source: [`adam-adex-cumulative-dose`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adex-cumulative-dose)*
 
 Excel:
 
@@ -524,7 +524,7 @@ What changed:
 
 ### Example 6: partial dates and the imputation flag
 
-*Source: [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/adam-adae-partial-dates)*
+*Source: [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adae-partial-dates)*
 
 In Excel this is normally a paragraph:
 
@@ -592,7 +592,7 @@ What changed:
 
 ### Example 7: define.xml metadata versus executable checks
 
-*Source: [`sdtm-dm-metadata-contract`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-dm-metadata-contract)*
+*Source: [`sdtm-dm-metadata-contract`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-metadata-contract)*
 
 ```yaml
 keys: [STUDYID, USUBJID]
@@ -638,7 +638,7 @@ The point that gets challenged most often:
 
 ### Example 8: coding against an external dictionary
 
-*Source: [`sdtm-ae-dictionary-coding`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/sdtm-ae-dictionary-coding)*
+*Source: [`sdtm-ae-dictionary-coding`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-ae-dictionary-coding)*
 
 ```yaml
 input:
@@ -676,7 +676,7 @@ metadata:
   (`source` and `key` pair by position) and output `keys` are never consulted,
   which is exactly why it can reach a table keyed on something else.
 - It requires the key combination to be unique in the dictionary; a duplicate
-  fails ([`negative-mapping-from-duplicate-key`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/negative-mapping-from-duplicate-key) pins that error).
+  fails ([`negative-mapping-from-duplicate-key`](https://github.com/elong0527/yamaa/tree/main/benchmark/negative-mapping-from-duplicate-key) pins that error).
 - The dictionary version travels with the spec in `metadata`.
 
 **A related contrast.** `AEDECOD` and `AEBODSYS` above each perform their own
@@ -708,7 +708,7 @@ names the record. Excel has no such concept, but it has the bug.
 
 ### Example 9: organization, compound and study layers
 
-*Source: [`spec-inheritance`](https://github.com/elong0527/yamaa/tree/main/yaml/examples/spec-inheritance)*
+*Source: [`spec-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmark/spec-inheritance)*
 
 The Excel approach is to save a copy of the corporate spec and edit it. Once
 the parent changes, every copy that has already diverged stays diverged. R017

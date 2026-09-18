@@ -22,8 +22,8 @@ from yamaa.specification import (
 )
 from yamaa.specification._yaml import read_yaml_document
 
-EXAMPLES = Path(__file__).parents[2] / "yaml/examples"
-SCHEMA_ROOT = EXAMPLES.parent
+EXAMPLES = Path(__file__).parents[2] / "benchmark"
+SCHEMA_ROOT = EXAMPLES.parent / "yaml"
 
 KNOWN_REQUIREMENT_GAPS = {
     "negative-function-contract-mismatch": ("R018-38", None),
