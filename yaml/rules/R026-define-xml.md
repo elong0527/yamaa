@@ -74,8 +74,8 @@ for that dataset is built from.
 of type `IG`. It defaults to the document's `default_standard`, so a document
 whose datasets all follow one implementation guide names it once. Each entry
 has two lines. A document mixing standards -- two releases of an
-implementation guide, or tabulation and analysis datasets together -- names the
-exception on the entry that is the exception. A dataset with neither fails:
+implementation guide, or tabulation and analysis datasets together -- names
+the exception on the exceptional entry. A dataset with neither fails:
 R024-5 reads this binding to decide the dataset's family, and every
 family-dependent requirement rests on it.
 
@@ -439,9 +439,9 @@ places on a regulatory submission:
 
 **R026-49.** `U+000D` and `U+0009` must not appear in any generated attribute
 value or text, and `U+000A` must not appear in an attribute value. An XML
-parser normalizes each of them on the way back in, so a document carrying one
-does not read back as it was written, and a byte contract over text that does
-not survive parsing is not a contract.
+parser normalizes each forbidden character on the way back in, so a document
+carrying one does not read back as written, and a byte contract over text
+that does not survive parsing is not a contract.
 
 **R026-50.** The bytes are fixed rather than the information. Two conforming
 implementations produce byte-identical files, and a golden document is
