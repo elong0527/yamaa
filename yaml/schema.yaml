@@ -188,7 +188,7 @@ row_class:
     - group_by:
         type: "list[variable]"
         required: false
-        description: Non-empty input-record variable grain producing
+        description: Grouping keys over input records, producing
             one candidate row per group; R001 defines grouped construction.
     - filter:
         type: sql

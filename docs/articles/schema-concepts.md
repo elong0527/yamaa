@@ -439,10 +439,10 @@ R013 closes the reducer table to seven: `SUM`, `COUNT`, `MIN`, `MAX`, `MEAN`,
   than one fails rather than choosing. It is the executable form of the Excel
   sentence "should be unique per subject".
 - **Reductions do not nest.** `MAX(SUM(EX.EXDOSE))` is an error. Two levels of
-  summarization means two specifications, with the intermediate grain stored as
-  a real artifact.
+  summarization means two specifications, with the intermediate aggregation
+  stored as a real artifact.
 
-There is also a grain rule: **every identifier must sit inside a reduction
+There is also a key rule: **every identifier must sit inside a reduction
 unless it is a `group_by` column.** `SUM(a) + b` is an error unless `b` is
 grouped on, because a value that varies within the group has no single answer.
 

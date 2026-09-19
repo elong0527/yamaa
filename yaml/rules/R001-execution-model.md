@@ -61,8 +61,7 @@ filters after a group reduction. An ungrouped `filter` filters input records.
 Record-driven row templates keep input order. Group-driven row templates
 keep first-occurrence group order.
 
-**R001-10.** The input datasets and the row templates fix the output row
-grain. No operation repeats a candidate a data-dependent number of times.
+**R001-10.** The input datasets and the row templates fix the output rows. No operation repeats a candidate a data-dependent number of times.
 No generated index supports that repetition. A source value may decide
 whether a written row template keeps its one candidate. That value cannot
 create more instances of that row template.
@@ -70,11 +69,11 @@ create more instances of that row template.
 **R001-11.** When the required artifact has one row per observation,
 administration, or planned event, an input dataset must contain one input
 record per required row. Expected-but-uncollected rows use an explicit
-planning relation at that grain and may be enriched from collected
+planning relation at those keys and may be enriched from collected
 relations through record lookups. Dynamically counted expansion must happen
 upstream. The expanded records enter the specification as ordinary input.
 
-**R001-12.** The `keys` state the output grain, and `keys` must be
+**R001-12.** The `keys` state the output row identity, and `keys` must be
 declared. When `rows` is absent or empty, row construction derives the
 distinct combination of `keys` over the input records, in first-appearance
 order, and that key table is the output row set. The key table is standalone:
@@ -87,13 +86,13 @@ supplies the input records.
 **R001-12a.** When `rows` is present, row templates construct the rows.
 Each row template is one section. A row template's `filter` keeps input records
 or candidate groups. Each retained input record or group yields one row.
-The sections concatenate in specification order. Row templates build a grain
-finer than input records only as R001-10 permits. The built grain must
-still be the `keys` grain. Repeating a key combination fails at the output
+The sections concatenate in specification order. Row templates build rows
+finer than input records only as R001-10 permits. The built rows must
+still match the `keys`. Repeating a key combination fails at the output
 gate under R005-51. A `filter` states which rows the artifact carries, never
 which input record represents a key combination. A row template that keeps
-one of several input records with one key combination writes the `keys`
-grain. The specification omits `rows` instead.
+one of several input records with one key combination still writes one row
+per key combination. The specification omits `rows` instead.
 
 **R001-12b.** A column derivation must yield exactly one value per row, and
 the derivation counts values rather than the records carrying them:
@@ -190,7 +189,7 @@ R005 owns both.
 ## Rationale
 
 Row count changes only during row construction. A reviewer can therefore
-separate row grain from enrichment: the row templates and their input
+separate row construction from enrichment: the row templates and their input
 datasets fix the row count before any column is derived. Dependency
 inference makes declaration order checkable and shows cycles.
 Evaluation order never follows mapping order or repeated reads of a partition.

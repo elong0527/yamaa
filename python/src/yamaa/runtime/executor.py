@@ -593,7 +593,7 @@ def _derive_columns(
     specification = plan.specification
     column_types = {column.name: column.type for column in specification.columns}
     key_set = set(specification.keys)
-    # Key-grain mode (no `rows` template) seeds key values from the key table;
+    # Key mode (no `rows` template) seeds key values from the key table;
     # template mode derives every column per surviving driver record as before.
     key_grain = all(planned.declaration is None for planned in plan.rows)
     completed = set(plan.row_derived_columns)

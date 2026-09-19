@@ -17,7 +17,7 @@ aggregate_class:
         description: Current-row value matched inclusively against one or two columns of a qualified right-side relation.
     - group_by:
         type: "list[variable]"
-        description: Grain of an ordinary right-side or output-row reduction; omit when the enclosing grouped row owns the grain.
+        description: Grouping keys of an ordinary right-side or output-row reduction; omit when the enclosing grouped row owns the keys.
     - expr:
         type: aggregate_expression
         required: true

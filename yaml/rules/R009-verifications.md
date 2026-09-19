@@ -36,7 +36,7 @@ completed output row. No verification compares rows by order.
 **R009-1.** State an ordered-series assertion as a derivation followed by
 a row-wise assertion in this rule. Use exactly one of three forms: the
 adjacent row, a partition or its history up to the current row, or a derived
-property at a coarser or earlier grain.
+property at coarser keys or from an upstream specification.
 
 - **The adjacent row.** `row_value` under R007 places another row's value on
   the row and `predicate` compares the two.
@@ -47,10 +47,10 @@ property at a coarser or earlier grain.
   under R013 reduces a source relation, and its `between` narrowing keeps only
   the records at or before a current-row value, so a cumulative property of
   collected values reaches the row it must be asserted about.
-- **A derived property at a coarser or earlier grain.** The specification that
+- **A derived property at coarser keys or from an upstream specification.** The specification that
   derives it publishes it, and R014's producing-specification link makes it an
   ordinary source field of the specification that asserts over it, which is
-  the same split every other change of grain already uses.
+  the same split every other change of keys already uses.
 
 **R009-2.** A frame assertion enters this vocabulary only when an example
 needs that shape and the shape cannot be written as a producer and a consumer.
@@ -67,7 +67,7 @@ record that way.
 
 **R009-4.** The claim that every parent record has a supplemental record is
 not an artifact property, so no verification here can state the claim. A
-specification that must assert the claim derives at the parent's grain.
+specification that must assert the claim derives at the parent's keys.
 
 ## Registration and timing
 
@@ -162,7 +162,7 @@ subject, visit, or parameter absent from the artifact entirely forms no
 group, so no `min` here can discover it. The absent-group assertion belongs to
 the derivation, where the relation defining the expected groups is readable: a
 record lookup declaring `unmatched: fail` under R015 rejects an expected
-group the data cannot supply. A planning relation at the required grain
+group the data cannot supply. A planning relation at the required keys
 gives every expected group an input record under R001.
 
 ## Rationale

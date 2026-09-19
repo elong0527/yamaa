@@ -33,7 +33,7 @@ The validation ensures:
    half-open character offsets into the expression leaf.
    R012 string templates are scanned under their brace and placeholder grammar,
    and R013 aggregate expressions are parsed with their closed reducer
-   vocabulary, relation, grain, context, and operand-type rules. Static
+   vocabulary, relation, key, context, and operand-type rules. Static
    operation checks also enforce mapping pairs and folded-key uniqueness,
    comparable extremes and lookup ranges, nonzero row offsets, cut structure,
    temporal input types and literal ranges, and column dependency cycles.

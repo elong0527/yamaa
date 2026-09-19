@@ -25,8 +25,8 @@ collected item; e.g. subject 001 has **SEX**, **AGE** and **ARM** rows.
   with the reason in ARMNRS (`Unassigned` is not a valid arm value).
 
 **Note:** one record for each subject the extract carries, whichever items
-that subject has. The keys **STUDYID** and **USUBJID** set that grain, so
-no filter decides how many records come out, and a subject collected twice
+that subject has. The keys **STUDYID** and **USUBJID** are that row identity,
+so no filter decides how many records come out, and a subject collected twice
 does not become two records. Each variable names the collected item it
 reads; the mapping default fills **SEX** when the subject has no usable
 row for it, while **AGE**, **ARM** and **ACTARM** stay null and the

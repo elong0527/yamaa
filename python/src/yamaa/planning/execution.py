@@ -137,7 +137,7 @@ class ResolvedJoin(_FrozenModel):
     spec_path: str = Field(min_length=1)
     dataset: str = Field(min_length=1)
     keys: tuple[str, ...]
-    # R003-20 lets a reduction declare a grain coarser than the applicable
+    # R003-20 lets a reduction declare keys coarser than the applicable
     # keys, and the join then matches on that instead.
     declared_grain: bool = False
 
@@ -147,7 +147,7 @@ class PlannedRow(_FrozenModel):
 
     R001-5 gives a template one of two modes, and `group_variables` is what
     tells them apart: empty for a record-driven template, and the driver
-    variables the grain partitions on for a group-driven one. A grouped
+    variables the group-by keys partition on for a group-driven one. A grouped
     template's filter selects completed candidates rather than driver
     records, which R001-8 evaluates after the whole derivation graph.
     """
@@ -166,7 +166,7 @@ class PlannedRow(_FrozenModel):
 
     @property
     def group_fields(self) -> tuple[str, ...]:
-        """Return the driver columns the grain partitions on."""
+        """Return the driver columns the group-by keys partition on."""
         return tuple(name.split(".", 1)[1] for name in self.group_variables)
 
 
@@ -216,7 +216,7 @@ class _Reference:
     # applicable keys the reading derivation therefore depends on.
     join_relation: str | None = None
     # The columns that join replaces the applicable keys with, when R003-20
-    # lets a reduction declare a grain coarser than they are.
+    # lets a reduction declare keys coarser than they are.
     join_group_by: tuple[str, ...] | None = None
     # How the reference reaches its relation: as one scalar of the current
     # row driver or of an R003 join, as the records R013 reduces, as a
@@ -872,7 +872,7 @@ def _aggregate_references(
     )
 
     # R003-17 joins a right-side reduction back on the applicable keys, or on
-    # the coarser grain R003-20 lets it declare. A grouped-row reduction
+    # the coarser keys R003-20 lets it declare. A grouped-row reduction
     # reads its own driver group and joins nothing.
     joined = relation if scope.grouped_driver is None and relation else None
     grain = (
@@ -937,7 +937,7 @@ def _aggregate_context(
         ]
 
     if scope.grouped_driver is not None:
-        # Context 3: the enclosing `row.group_by` owns the grain, so the
+        # Context 3: the enclosing `row.group_by` owns the keys, so the
         # aggregate declares none of its own and narrows nothing per row.
         if relation is not None and relation != scope.grouped_driver:
             return reject(
@@ -948,7 +948,7 @@ def _aggregate_context(
             return reject("a grouped row aggregate reads its row driver")
         if group_by:
             return reject(
-                "the enclosing row.group_by owns the grain",
+                "the enclosing row.group_by owns the keys",
                 f"{operation_path}.group_by",
             )
         if between is not None:
@@ -1791,13 +1791,13 @@ def _group_by_declaration(
     index: int,
     driver: str | None,
 ) -> list[ExecutionDiagnostic]:
-    """Check the grain a grouped template declares, before any record is read."""
+    """Check the keys a grouped template declares, before any record is read."""
     if row.group_by is None:
         return []
     path = f"rows[{index}].group_by"
     names = tuple(row.group_by)
     if not names or len(set(names)) != len(names):
-        # R001-34: an empty grain names no partition and a repeated column
+        # R001-34: empty keys name no partition and a repeated column
         # states the same one twice.
         return [
             _diagnostic(

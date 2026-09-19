@@ -360,7 +360,7 @@ output keys, fatal when it declares its own `source` and `key`.
 `group_by` partitions the complete driver relation, orders the groups by the
 position of their first record, and appends one candidate per group only
 where the template's filter is `TRUE` over its completed columns. Inside such
-a template a driver field is a scalar only when the grain declares it; every
+a template a driver field is a scalar only when the keys declare it; every
 other field is read through an aggregate over the group's records.
 
 An output key and the same-named right-side column must already carry one
@@ -373,7 +373,7 @@ nothing.
 Because a join infers its keys, the plan states what it inferred.
 `ExecutionPlan.resolved_joins` names, for each qualified source and each
 reduction, the dataset it reaches and the columns it matches on -- the
-coarser grain when one is declared, the applicable keys otherwise -- and
+coarser keys when declared, the applicable keys otherwise -- and
 `ExecutionPlan.record_lookups` says the same for each named record:
 
 ```python

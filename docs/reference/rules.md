@@ -24,7 +24,7 @@ authoritative text, follow the links.
 | R010 | [Scalar numeric computation](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R010-scalar-computation.md) | The `numeric_expression` primitive |
 | R011 | [Column types](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R011-column-types.md) | The `column_type` vocabulary, non-finite normalization, and conversion |
 | R012 | [String templates](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R012-string-templates.md) | Interpolation grammar, escaping, and evaluation |
-| R013 | [Aggregate reduction](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R013-aggregate-reduction.md) | The `aggregate_expression` primitive: reducers, row-relative narrowing, grain, and empty-group results |
+| R013 | [Aggregate reduction](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R013-aggregate-reduction.md) | The `aggregate_expression` primitive: reducers, row-relative narrowing, the key rule, and empty-group results |
 | R014 | [Source-format ingestion](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R014-source-ingestion.md) | Missing recognition and field typing at the source |
 | R015 | [Record lookup](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R015-record-lookup.md) | Looking up one record of another dataset and reading it by name |
 | R016 | [Temporal values](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R016-temporal-values.md) | The `date` and `datetime` values: lexical form, zone and precision model, comparison, canonical text, and the operations over them |

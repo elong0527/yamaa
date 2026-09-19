@@ -452,7 +452,7 @@ def test_a_grouped_identifier_beside_a_reduction_is_admitted() -> None:
         ]
     )
 
-    # R003-20: the join matches on the declared grain instead of the keys.
+    # R003-20: the join matches on the declared keys instead of the applicable keys.
     assert plan.columns[1].dependencies == ("X",)
 
 
