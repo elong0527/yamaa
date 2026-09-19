@@ -558,9 +558,7 @@ def check_dataset(
             _lookup_bindings(table, lookup_columns, lookup_rows)
         return ()
     _require_columns(table, keys, "keys", "R005-46")
-    lookup_types, lookup_rows = _lookup_bindings(
-        table, lookup_columns, lookup_rows
-    )
+    lookup_types, lookup_rows = _lookup_bindings(table, lookup_columns, lookup_rows)
     identifiers: dict[str, str] = {}
     failures: list[VerificationFailure] = []
     key_maps = _key_maps(table, keys)
