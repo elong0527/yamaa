@@ -36,6 +36,7 @@ semantics, error behavior, and representative examples are complete.
 | R025 | [Controlled terminology](R025-controlled-terminology.md) | normative | The codelist object: identity, values, extensibility, external form, what a binding enforces, and agreement with `allowed_values` |
 | R026 | [Define-XML 2.1 composition and serialization](R026-define-xml.md) | normative | The study document, composition, generated identifiers, element mapping and order, bytes, publication, and the deferred constructs |
 | R027 | [Parquet source profile](R027-parquet-source.md) | normative | The self-describing field mapping, order, values, and errors of a `parquet` source |
+| R028 | [IG domain-model conformance](R028-ig-conformance.md) | normative | The composition-time check of output columns against the bound IG's domain model |
 
 ## Rule admission
 

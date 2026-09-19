@@ -74,6 +74,31 @@ class HandledExpression(_StrictModel):
     conversion_failure: JsonValue = None
 
 
+class ColumnSubmission(_StrictModel):
+    """The slice of R024 column submission metadata R028 reads.
+
+    R024 and R026 own the full submission vocabulary, so this rule's model
+    carries only the declared core designation and ignores every other
+    submission field rather than modeling the vocabulary twice.
+    """
+
+    model_config = ConfigDict(strict=True, extra="ignore", frozen=True)
+
+    core: Literal["Req", "Exp", "Perm"] | None = None
+
+
+class DatasetSubmission(_StrictModel):
+    """Dataset submission metadata carried on the specification.
+
+    R024 and R026 own the full submission vocabulary; the specification
+    model needs none of it, so every field is ignored here rather than
+    modeled twice. Present so that specifications declaring submission
+    metadata (e.g. the study documents R028 checks at composition) load.
+    """
+
+    model_config = ConfigDict(strict=True, extra="ignore", frozen=True)
+
+
 class Column(_StrictModel):
     name: str
     type: ColumnType
@@ -81,6 +106,7 @@ class Column(_StrictModel):
     derivation: HandledExpression | None = None
     verifications: list[Expression] | None = None
     metadata: dict[str, str] | None = None
+    submission: ColumnSubmission | None = None
 
 
 class Row(_StrictModel):
@@ -103,6 +129,7 @@ class Specification(_StrictModel):
     columns: list[Column]
     rows: list[Row] | None = None
     verifications: list[Expression] | None = None
+    submission: DatasetSubmission | None = None
     metadata: dict[str, str] | None = None
 
     @property

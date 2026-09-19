@@ -1,0 +1,97 @@
+# SDTMIG 3.4 AE domain model (R028 template).
+template:
+  family: sdtm
+  standard: SDTMIG
+  version: "3.4"
+  domain: AE
+  generated: 2026-09-19
+  generator: hand-authored from SDTMIG v3.4
+  source: SDTMIG v3.4 section 3.3.2 domain metadata
+variables:
+  - name: STUDYID
+    core: Req
+    label: Study Identifier
+  - name: DOMAIN
+    core: Req
+    label: Domain Abbreviation
+  - name: USUBJID
+    core: Req
+    label: Unique Subject Identifier
+  - name: AESEQ
+    core: Req
+    label: Sequence Number
+  - name: AEGRPID
+    core: Perm
+    label: Group ID
+  - name: AEREFID
+    core: Perm
+    label: Reference ID
+  - name: AESPID
+    core: Perm
+    label: Sponsor-Defined Identifier
+  - name: AETERM
+    core: Req
+    label: Reported Term for the Adverse Event
+  - name: AEMODIFY
+    core: Perm
+    label: Modified Reported Term
+  - name: AEDECOD
+    core: Req
+    label: Dictionary-Derived Term
+  - name: AEBODSYS
+    core: Exp
+    label: Body System or Organ Class
+  - name: AESEV
+    core: Exp
+    label: Severity/Intensity
+  - name: AESER
+    core: Req
+    label: Serious Event
+  - name: AEACN
+    core: Exp
+    label: Action Taken with Study Treatment
+  - name: AEREL
+    core: Exp
+    label: Causality
+  - name: AEOUT
+    core: Exp
+    label: Outcome of Adverse Event
+  - name: AESCAN
+    core: Exp
+    label: Involves Cancer
+  - name: AESCONG
+    core: Exp
+    label: Congenital Anomaly or Birth Defect
+  - name: AESDISAB
+    core: Exp
+    label: Persist or Significant Disability/Incapacity
+  - name: AESDTH
+    core: Exp
+    label: Results in Death
+  - name: AESHOSP
+    core: Exp
+    label: Requires or Prolongs Hospitalization
+  - name: AESLIFE
+    core: Exp
+    label: Is Life Threatening
+  - name: AESOD
+    core: Exp
+    label: Occurred with Overdose
+  - name: AEMIE
+    core: Exp
+    label: Medical Importance Exceeded
+  - name: AECONTRT
+    core: Exp
+    label: Concomitant or Additional Treatment Given
+  - name: AETOXGR
+    core: Perm
+    label: Standard Toxicity Grade
+  - name: AELOC
+    core: Exp
+    label: Location of Event
+  - name: AESTDTC
+    core: Exp
+    label: Start Date/Time of Adverse Event
+  - name: AEENDTC
+    core: Exp
+    label: End Date/Time of Adverse Event
