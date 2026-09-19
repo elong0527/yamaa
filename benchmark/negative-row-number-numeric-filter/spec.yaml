@@ -38,7 +38,8 @@ columns:
     label: Visit Sequence
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by:
-          - {variable: LBSEQ, direction: asc}
-        filter: 7
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by:
+            - {variable: LBSEQ, direction: asc}
+          filter: 7

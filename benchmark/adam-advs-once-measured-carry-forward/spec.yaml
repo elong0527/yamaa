@@ -77,8 +77,9 @@ columns:
     derivation:
       previous_non_missing:
         source: AVALCOL
-        group_by: [STUDYID, USUBJID, PARAMCD]
-        order_by: [ADT, ASEQ]
+        window:
+          group_by: [STUDYID, USUBJID, PARAMCD]
+          order_by: [ADT, ASEQ]
 
   - name: AVAL
     type: float
@@ -106,7 +107,8 @@ columns:
     label: Baseline Height Record Flag
     derivation:
       baseline_flag:
-        group_by: [STUDYID, USUBJID]
+        window:
+          group_by: [STUDYID, USUBJID]
         date: HGTDT
         reference_date: TRTSDT
 
@@ -115,7 +117,8 @@ columns:
     label: Baseline Height
     derivation:
       baseline_value:
-        group_by: [STUDYID, USUBJID]
+        window:
+          group_by: [STUDYID, USUBJID]
         value: AVALCOL
         flag: HGTBLFL
 

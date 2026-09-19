@@ -98,9 +98,10 @@ columns:
     label: Analysis Window Rank
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]
-        order_by: [ADY, VSSEQ]
-        filter: "AVISIT IS NOT NULL"
+        window:
+          group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]
+          order_by: [ADY, VSSEQ]
+          filter: "AVISIT IS NOT NULL"
 
   - name: ANL01FL
     type: str

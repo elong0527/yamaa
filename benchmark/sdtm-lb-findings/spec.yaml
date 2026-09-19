@@ -62,8 +62,9 @@ columns:
     label: Sequence Number
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [LBDTC, LBTESTCD]
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [LBDTC, LBTESTCD]
 
 rows:
   - id: calcium

@@ -32,8 +32,9 @@ columns:
     label: Sequence Number
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [EX_RAW.EXSTDTC, EX_RAW.EXTRT]
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [EX_RAW.EXSTDTC, EX_RAW.EXTRT]
 
   - name: EXTRT
     type: str

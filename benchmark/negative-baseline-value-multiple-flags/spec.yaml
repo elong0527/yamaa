@@ -38,6 +38,7 @@ columns:
     label: Baseline Value
     derivation:
       baseline_value:
-        group_by: [STUDYID, USUBJID]
+        window:
+          group_by: [STUDYID, USUBJID]
         value: LBSTRESN
         flag: LB.LBBLFL

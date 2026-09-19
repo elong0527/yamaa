@@ -55,8 +55,9 @@ columns:
       row_value:
         source: AVALC
         offset: -1
-        group_by: [STUDYID, USUBJID]
-        order_by: [ADT, RSSEQ]
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ADT, RSSEQ]
 
 verifications:
   - unique:

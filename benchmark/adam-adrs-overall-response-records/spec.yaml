@@ -111,9 +111,10 @@ columns:
     label: Worst Response Order
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID, ADT]
-        order_by: [RSSEQ]
-        filter: "AVAL = WORSTAVAL"
+        window:
+          group_by: [STUDYID, USUBJID, ADT]
+          order_by: [RSSEQ]
+          filter: "AVAL = WORSTAVAL"
 
   - name: ANL01FL
     type: str

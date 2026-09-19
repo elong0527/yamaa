@@ -59,27 +59,30 @@ columns:
     label: Subject Occurrence Sequence Number
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [ASTDT, AESEQ]
-        filter: "TRTEMFL = 'Y'"
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ASTDT, AESEQ]
+          filter: "TRTEMFL = 'Y'"
 
   - name: AOCCSSEQ
     type: int
     label: Body System Occurrence Sequence Number
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID, AEBODSYS]
-        order_by: [ASTDT, AESEQ]
-        filter: "TRTEMFL = 'Y'"
+        window:
+          group_by: [STUDYID, USUBJID, AEBODSYS]
+          order_by: [ASTDT, AESEQ]
+          filter: "TRTEMFL = 'Y'"
 
   - name: AOCCPSEQ
     type: int
     label: Preferred Term Occurrence Sequence Number
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID, AEBODSYS, AEDECOD]
-        order_by: [ASTDT, AESEQ]
-        filter: "TRTEMFL = 'Y'"
+        window:
+          group_by: [STUDYID, USUBJID, AEBODSYS, AEDECOD]
+          order_by: [ASTDT, AESEQ]
+          filter: "TRTEMFL = 'Y'"
 
   - name: AOCCFL
     type: str
