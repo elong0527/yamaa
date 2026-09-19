@@ -116,7 +116,7 @@ single formula such as
 registry without end, so `compute` takes one closed numeric expression instead
 and is the only arithmetic expression. It stays inside the boundary's purpose:
 its payload is a leaf field, not a nested argument tree, and R001 extracts its
-identifiers exactly as it already extracts them from `case.branches[].when`, so
+identifiers exactly as it already extracts them from `case[].when`, so
 dependencies remain visible. R010 closes its grammar and function vocabulary
 and confines it to numeric results, so it cannot displace the typed string,
 date, mapping, or conditional expressions.

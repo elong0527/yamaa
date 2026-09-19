@@ -8,17 +8,17 @@ fixtures:
   negative-adae-review-condition-arithmetic:
     rule: R004
     condition: invalid_predicate
-    spec_paths: ["columns.REVIEWFL.derivation.case.branches[0].when"]
+    spec_paths: ["columns.REVIEWFL.derivation.case[0].when"]
     validator: predicate
   negative-adae-review-text-date:
     rule: R004
     condition: incompatible_input_type
-    spec_paths: ["columns.REVIEWFL.derivation.case.branches[0].when"]
+    spec_paths: ["columns.REVIEWFL.derivation.case[0].when"]
     validator: predicate
   negative-adae-review-unknown-date:
     rule: R004
     condition: unknown_field
-    spec_paths: ["columns.REVIEWFL.derivation.case.branches[0].when"]
+    spec_paths: ["columns.REVIEWFL.derivation.case[0].when"]
     validator: predicate
   negative-adex-relative-dose-intensity:
     rule: R013
@@ -176,7 +176,7 @@ fixtures:
   negative-literal-non-scalar:
     rule: R006
     condition: invalid_field_type
-    spec_paths: ["columns.AGEGRP.derivation.case.branches[0].then.literal"]
+    spec_paths: ["columns.AGEGRP.derivation.case[0].then.literal"]
     validator: schema
   negative-keys-internal-column:
     rule: R005

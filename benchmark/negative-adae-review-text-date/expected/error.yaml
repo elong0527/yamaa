@@ -1,7 +1,7 @@
 phase: validation
 condition: incompatible_input_type
 spec_paths:
-  - columns.REVIEWFL.derivation.case.branches[0].when
+  - columns.REVIEWFL.derivation.case[0].when
 requirement: R004-33
 context:
   left_type: date
