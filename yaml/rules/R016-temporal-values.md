@@ -101,11 +101,11 @@ admits only complete text, so nothing a parse produces was collected in part.
 R007 fixes the fourth, for the extreme, conditional, coalescing, and offset
 expressions that return an operand rather than computing one.
 
-**R016-10.** Provenance is read off that one property rather than recorded
-beside it. A component finer than the collected precision was supplied by
-`date_impute`, and a value whose collected precision is `day` was collected
-in full. A second flag would be a second place to keep correct, and the flag
-and the property could disagree.
+**R016-10.** Provenance is read off collected precision
+rather than recorded beside it. A component finer than the collected
+precision was supplied by `date_impute`, and a value whose collected
+precision is `day` was collected in full. A second flag would be a
+second place to keep correct, and the flag and the property could disagree.
 
 ## Lexical form
 
@@ -236,8 +236,8 @@ a `str` column until a rule fixes a representation both runtimes share.
 | `date` | `YYYY-MM-DD` |
 | `datetime` | `YYYY-MM-DDThh:mm:ss` |
 
-**R016-29.** With every field zero-padded to its width and, for a `datetime`,
-the seconds always present. This is the text a temporal value converts to under
+**R016-29.** Every field is zero-padded to its width, and a `datetime`
+always shows seconds. This is the text a temporal value converts to under
 R011's `str` row and the text the artifact records for a temporal column, so a
 `str` column derived from a temporal value and the artifact's rendering of
 that value never disagree. R011 fixes the same relationship for `float`.
@@ -245,14 +245,13 @@ that value never disagree. R011 fixes the same relationship for `float`.
 **R016-30.** Canonical text is not the collected text. A value parsed from
 `2025-01-12T14:00` renders as `2025-01-12T14:00:00` because the value names
 second zero. Like `float`, a declared type stores a value rather than the
-received characters. For example, `1.50` renders as `1.5`. A variable
-that must retain collected characters unchanged is `str`. It still orders
-chronologically under R007.
+received characters. For example, `1.50` renders as `1.5`. A column
+that must keep collected characters unchanged is `str`. A `str` column
+still orders chronologically under R007.
 
 
 **R016-31.** Unlike `float`, neither form takes a project setting. This rule
-fixes rendered precision at one day and one second, so a project has nothing
-to declare.
+fixes rendered precision at one day and one second.
 
 **R016-32.** Canonical text carries fields alone, so its collected precision is
 not observable outside the derivation. A temporal value converted to `str`

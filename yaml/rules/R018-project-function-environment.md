@@ -194,9 +194,9 @@ lookup outside the verified artifact are invalid.
 **R018-24.** After applying environment defaults and missing short-circuiting,
 the runner maps the logical arguments and invokes the callable once for one
 logical row. It supplies no undeclared data or execution context. The binding
-returns one scalar of the declared exact type. Batch or vector execution is an
-implementation optimization only when every observable value and failure is
-equivalent to independent calls in logical row order.
+returns one scalar of the declared exact type. Batch or vector execution is
+allowed only when every observable value and failure matches
+independent calls in logical row order.
 
 **R018-25.** An invoked binding may return missing only when
 `may_return_missing` is true. It may not return a vector, collection, table,
