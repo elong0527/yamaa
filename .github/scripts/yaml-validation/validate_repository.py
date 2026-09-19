@@ -5517,32 +5517,31 @@ def validate_expression_predicates(
         return errors
     keyword, payload = next(iter(expression.items()))
 
-    if keyword == 'case' and isinstance(payload, dict):
-        branches = payload.get('branches')
-        if isinstance(branches, list):
-            for index, branch in enumerate(branches):
-                if not isinstance(branch, dict):
-                    continue
-                branch_path = f"{path}.case.branches[{index}]"
-                if isinstance(branch.get('when'), str):
-                    errors.extend(
-                        validate_predicate_at(
-                            branch['when'], f"{branch_path}.when", resolver
-                        )
-                    )
+    if keyword == 'case' and isinstance(payload, list):
+        for index, item in enumerate(payload):
+            if not isinstance(item, dict):
+                continue
+            item_path = f"{path}.case[{index}]"
+            if 'otherwise' in item:
                 errors.extend(
                     validate_expression_predicates(
-                        branch.get('then'),
-                        f"{branch_path}.then",
+                        item['otherwise'],
+                        f"{item_path}.otherwise",
                         resolver,
                         datasets,
                     )
                 )
-        if 'otherwise' in payload:
+                continue
+            if isinstance(item.get('when'), str):
+                errors.extend(
+                    validate_predicate_at(
+                        item['when'], f"{item_path}.when", resolver
+                    )
+                )
             errors.extend(
                 validate_expression_predicates(
-                    payload['otherwise'],
-                    f"{path}.case.otherwise",
+                    item.get('then'),
+                    f"{item_path}.then",
                     resolver,
                     datasets,
                 )
@@ -5618,26 +5617,6 @@ def validate_derivation_predicates(derivation, path, resolver, datasets):
             derivation.get('value'), f"{path}.value", resolver, datasets
         )
     )
-    overrides = derivation.get('override')
-    if isinstance(overrides, list):
-        for index, override in enumerate(overrides):
-            if not isinstance(override, dict):
-                continue
-            override_path = f"{path}.override[{index}]"
-            if isinstance(override.get('when'), str):
-                errors.extend(
-                    validate_predicate_at(
-                        override['when'], f"{override_path}.when", resolver
-                    )
-                )
-            errors.extend(
-                validate_expression_predicates(
-                    override.get('value'),
-                    f"{override_path}.value",
-                    resolver,
-                    datasets,
-                )
-            )
     return errors
 
 
@@ -5838,27 +5817,27 @@ def validate_expression_numeric(expression, path, resolver):
             )
         return errors
 
-    if keyword == 'case' and isinstance(payload, dict):
-        branches = payload.get('branches')
-        if isinstance(branches, list):
-            for index, branch in enumerate(branches):
-                if not isinstance(branch, dict):
-                    continue
+    if keyword == 'case' and isinstance(payload, list):
+        for index, item in enumerate(payload):
+            if not isinstance(item, dict):
+                continue
+            item_path = f"{path}.case[{index}]"
+            if 'otherwise' in item:
                 errors.extend(
                     validate_expression_numeric(
-                        branch.get('then'),
-                        f"{path}.case.branches[{index}].then",
+                        item['otherwise'],
+                        f"{item_path}.otherwise",
                         resolver,
                     )
                 )
-        if 'otherwise' in payload:
-            errors.extend(
-                validate_expression_numeric(
-                    payload['otherwise'],
-                    f"{path}.case.otherwise",
-                    resolver,
+            else:
+                errors.extend(
+                    validate_expression_numeric(
+                        item.get('then'),
+                        f"{item_path}.then",
+                        resolver,
+                    )
                 )
-            )
     elif keyword == 'str_concat' and isinstance(payload, dict):
         sources = payload.get('sources')
         if isinstance(sources, list):
@@ -5882,18 +5861,6 @@ def validate_derivation_numeric(derivation, path, resolver):
     errors = validate_expression_numeric(
         derivation.get('value'), f"{path}.value", resolver
     )
-    overrides = derivation.get('override')
-    if isinstance(overrides, list):
-        for index, override in enumerate(overrides):
-            if not isinstance(override, dict):
-                continue
-            errors.extend(
-                validate_expression_numeric(
-                    override.get('value'),
-                    f"{path}.override[{index}].value",
-                    resolver,
-                )
-            )
     return errors
 
 
@@ -6631,26 +6598,26 @@ def validate_expression_reference_bindings(expression, path, context):
     keyword, payload = next(iter(expression.items()))
     if keyword in {'aggregate', 'compute', 'str_template'}:
         return []
-    if keyword == 'case' and isinstance(payload, dict):
+    if keyword == 'case' and isinstance(payload, list):
         errors = []
-        branches = payload.get('branches')
-        if isinstance(branches, list):
-            for index, branch in enumerate(branches):
-                if not isinstance(branch, dict):
-                    continue
+        for index, item in enumerate(payload):
+            if not isinstance(item, dict):
+                continue
+            item_path = f"{path}.case[{index}]"
+            if 'otherwise' in item:
                 errors.extend(
                     validate_expression_reference_bindings(
-                        branch.get('then'),
-                        f"{path}.case.branches[{index}].then",
+                        item['otherwise'], f"{item_path}.otherwise", context
+                    )
+                )
+            else:
+                errors.extend(
+                    validate_expression_reference_bindings(
+                        item.get('then'),
+                        f"{item_path}.then",
                         context,
                     )
                 )
-        if 'otherwise' in payload:
-            errors.extend(
-                validate_expression_reference_bindings(
-                    payload['otherwise'], f"{path}.case.otherwise", context
-                )
-            )
         return errors
     if keyword == 'str_concat' and isinstance(payload, dict):
         errors = []
@@ -6997,25 +6964,25 @@ def validate_expression_static_semantics(expression, path, context):
         )
         return errors
 
-    if keyword == 'case' and isinstance(payload, dict):
-        branches = payload.get('branches')
-        if isinstance(branches, list):
-            for index, branch in enumerate(branches):
-                if not isinstance(branch, dict):
-                    continue
+    if keyword == 'case' and isinstance(payload, list):
+        for index, item in enumerate(payload):
+            if not isinstance(item, dict):
+                continue
+            item_path = f"{path}.case[{index}]"
+            if 'otherwise' in item:
                 errors.extend(
                     validate_expression_static_semantics(
-                        branch.get('then'),
-                        f"{path}.case.branches[{index}].then",
+                        item['otherwise'], f"{item_path}.otherwise", context
+                    )
+                )
+            else:
+                errors.extend(
+                    validate_expression_static_semantics(
+                        item.get('then'),
+                        f"{item_path}.then",
                         context,
                     )
                 )
-        if 'otherwise' in payload:
-            errors.extend(
-                validate_expression_static_semantics(
-                    payload['otherwise'], f"{path}.case.otherwise", context
-                )
-            )
     elif keyword == 'str_concat' and isinstance(payload, dict):
         sources = payload.get('sources')
         if isinstance(sources, list):
@@ -7040,18 +7007,6 @@ def validate_derivation_static_semantics(derivation, path, context):
     errors = validate_expression_static_semantics(
         derivation.get('value'), f"{path}.value", context
     )
-    overrides = derivation.get('override')
-    if isinstance(overrides, list):
-        for index, override in enumerate(overrides):
-            if not isinstance(override, dict):
-                continue
-            errors.extend(
-                validate_expression_static_semantics(
-                    override.get('value'),
-                    f"{path}.override[{index}].value",
-                    context,
-                )
-            )
     return errors
 
 
