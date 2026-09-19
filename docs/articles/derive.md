@@ -1,16 +1,4 @@
----
-title: Derive model
----
-
 # KRC: key, row, column - the yamaa derivation model
-
-> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Derive](derive.md) | [Schema concepts](schema-concepts.md) | [Benchmark walkthrough](yaml-benchmark-walkthrough.md)
-
-> **Read this if** you want the engine half of
-> `data_output = derive(data_input, spec)`: what fixes the rows, what appends
-> the columns, and where keys fit.
-
----
 
 The contract from Principles is one execution: `data_output = derive(data_input, spec)`.
 R001 splits that execution into two phases:
