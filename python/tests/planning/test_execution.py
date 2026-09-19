@@ -659,6 +659,18 @@ def test_an_identifier_outside_a_reduction_must_be_grouped_on() -> None:
     assert diagnostic.context["identifier"] == "RIGHT.X"
 
 
+def test_a_grouped_identifier_beside_a_reduction_is_admitted() -> None:
+    plan = plan_two(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            aggregate_column({"group_by": ["RIGHT.X"], "expr": "SUM(RIGHT.V)"}),
+        ]
+    )
+
+    # R003-30: the join matches on the declared keys instead of the applicable keys.
+    assert plan.columns[1].dependencies == ("X",)
+
+
 def test_an_output_row_reduction_must_declare_its_partition() -> None:
     diagnostic = aggregate_diagnostic({"expr": "MAX(X)"})
 

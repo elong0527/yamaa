@@ -25,7 +25,7 @@ specification writes; this rule is its reading counterpart.
 ## Container and order
 
 **R027-1.** A path selected as `parquet` is read as one Apache Parquet file.
-Sniffing and fallback to another profile are not permitted.
+Do not sniff the path or fall back to another profile.
 
 **R027-2.** Fields are delivered in file-schema order. Records are delivered
 in their stored row-group order and their order within each row group.
@@ -49,7 +49,7 @@ this closed mapping, which is the inverse of R020-20:
 | `INT64` with no logical type | `int` |
 | `DOUBLE` with no logical type | `float` |
 | `INT32` annotated `Date` | `date` |
-| `INT64` annotated `Timestamp`, microseconds, not adjusted to UTC | `datetime` |
+| `INT64` annotated `Timestamp`, microseconds, no UTC adjustment | `datetime` |
 
 **R027-6.** The mapping is exact. A different physical type, logical type,
 timestamp unit, or timezone is not converted or inferred. Both nullable and
