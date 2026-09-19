@@ -65,7 +65,8 @@ partition constructed output rows by their `window` specification's
 `group_by` and preserve row count. Omitting `group_by` creates one
 partition. Within a declared group, missing values equal other missing
 values. Rows with equal present values and equal missing group positions
-share one partition.
+share one partition. A window partition is the KRC
+section: a group of rows.
 
 **R007-7.** A window whose `window` declares `filter` still preserves row
 count: an excluded row receives missing rather than being dropped. A window

@@ -460,7 +460,7 @@ Take this one slowly:
   changing the row count.
 - `NULLIF(BASE, 0)` in `PCHG`: a zero baseline yields a change but no percent
   change. Excel specs frequently omit that sentence.
-- `ASEQ` uses `row_number` **after every row exists**, so it is unique by
+- `ASEQ` uses the window expression `row_number` **after every row exists**, so it is unique by
   construction.
 
 ### Case 5: one-to-many summarization with `aggregate`
