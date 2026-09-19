@@ -32,9 +32,8 @@ Name the lookup-table columns paired with the current-row values:
 intermediates:
   - id: REFRANGE
     dataset: LBRANGE
-    source: [LBTESTCD, SEX]
     key: [LBTESTCD, SEX]
 ```
 
-The two lists pair by position; omit `key` only when the output
-keys name columns of the lookup table.
+Omit `key_base` when it names the same columns as `key`; omit `key`
+only when the output keys name columns of the lookup table.
