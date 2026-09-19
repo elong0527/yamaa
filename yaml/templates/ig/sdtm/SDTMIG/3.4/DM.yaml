@@ -1,0 +1,100 @@
+# SDTMIG 3.4 DM domain model (R028 template).
+template:
+  family: sdtm
+  standard: SDTMIG
+  version: "3.4"
+  domain: DM
+  generated: 2026-09-19
+  generator: hand-authored from SDTMIG v3.4
+  source: SDTMIG v3.4 section 2.2.5 domain metadata
+variables:
+  - name: STUDYID
+    core: Req
+    label: Study Identifier
+  - name: DOMAIN
+    core: Req
+    label: Domain Abbreviation
+  - name: USUBJID
+    core: Req
+    label: Unique Subject Identifier
+  - name: SUBJID
+    core: Req
+    label: Subject Identifier for the Study
+  - name: RFSTDTC
+    core: Exp
+    label: Subject Reference Start Date/Time
+  - name: RFENDTC
+    core: Exp
+    label: Subject Reference End Date/Time
+  - name: RFXSTDTC
+    core: Exp
+    label: Date/Time of First Study Treatment
+  - name: RFXENDTC
+    core: Exp
+    label: Date/Time of Last Study Treatment
+  - name: RFICDTC
+    core: Exp
+    label: Date/Time of Informed Consent
+  - name: RFPENDTC
+    core: Exp
+    label: Date/Time of End of Participation
+  - name: DTHDTC
+    core: Exp
+    label: Date/Time of Death
+  - name: DTHFL
+    core: Exp
+    label: Subject Death Flag
+  - name: SITEID
+    core: Req
+    label: Study Site Identifier
+  - name: INVID
+    core: Exp
+    label: Investigator Identifier
+  - name: INVNAM
+    core: Exp
+    label: Investigator Name
+  - name: BRTHDTC
+    core: Perm
+    label: Date/Time of Birth
+  - name: AGE
+    core: Perm
+    label: Age
+  - name: AGEU
+    core: Perm
+    label: Age Units
+  - name: SEX
+    core: Req
+    label: Sex
+  - name: RACE
+    core: Exp
+    label: Race
+  - name: ETHNIC
+    core: Exp
+    label: Ethnicity
+  - name: ARMCD
+    core: Exp
+    label: Planned Arm Code
+  - name: ARM
+    core: Exp
+    label: Description of Planned Arm
+  - name: ACTARMCD
+    core: Exp
+    label: Actual Arm Code
+  - name: ACTARM
+    core: Exp
+    label: Description of Actual Arm
+  - name: ARMNRS
+    core: Exp
+    label: Reason Arm Not Reached Planned
+  - name: ACTARMUD
+    core: Perm
+    label: Unplanned Actual Arm Code
+  - name: COUNTRY
+    core: Exp
+    label: Country
+  - name: DMDTC
+    core: Perm
+    label: Date/Time of Collection
+  - name: DMDY
+    core: Perm
+    label: Study Day of Collection

@@ -1,0 +1,121 @@
+# SDTMIG 3.4 LB domain model (R028 template).
+template:
+  family: sdtm
+  standard: SDTMIG
+  version: "3.4"
+  domain: LB
+  generated: 2026-09-19
+  generator: hand-authored from SDTMIG v3.4
+  source: SDTMIG v3.4 section 3.1.3 domain metadata
+variables:
+  - name: STUDYID
+    core: Req
+    label: Study Identifier
+  - name: DOMAIN
+    core: Req
+    label: Domain Abbreviation
+  - name: USUBJID
+    core: Req
+    label: Unique Subject Identifier
+  - name: LBSEQ
+    core: Req
+    label: Sequence Number
+  - name: LBGRPID
+    core: Perm
+    label: Group ID
+  - name: LBREFID
+    core: Perm
+    label: Reference ID
+  - name: LBSPID
+    core: Perm
+    label: Sponsor-Defined Identifier
+  - name: LBTESTCD
+    core: Req
+    label: Lab Test or Examination Short Name
+  - name: LBTEST
+    core: Req
+    label: Lab Test or Examination Name
+  - name: LBCAT
+    core: Perm
+    label: Category for Lab Test
+  - name: LBSCAT
+    core: Perm
+    label: Subcategory for Lab Test
+  - name: LBORRES
+    core: Req
+    label: Result or Finding in Original Units
+  - name: LBORRESU
+    core: Exp
+    label: Original Units
+  - name: LBORNRLO
+    core: Exp
+    label: Reference Range Lower Limit in Original Unit
+  - name: LBORNRHI
+    core: Exp
+    label: Reference Range Upper Limit in Original Unit
+  - name: LBSTRESC
+    core: Exp
+    label: Character Result/Finding in Std Format
+  - name: LBSTRESN
+    core: Perm
+    label: Numeric Result/Finding in Standard Units
+  - name: LBSTRESU
+    core: Exp
+    label: Standard Units
+  - name: LBNRIND
+    core: Exp
+    label: Reference Range Indicator
+  - name: LBSTAT
+    core: Perm
+    label: Completion Status
+  - name: LBREASND
+    core: Perm
+    label: Reason Not Done
+  - name: LBNAM
+    core: Perm
+    label: Vendor Name
+  - name: LBLOINC
+    core: Perm
+    label: LOINC Code
+  - name: LBSPEC
+    core: Perm
+    label: Specimen Type
+  - name: LBMETHOD
+    core: Perm
+    label: Method of Test or Examination
+  - name: LBBLFL
+    core: Exp
+    label: Baseline Flag
+  - name: LBFAST
+    core: Exp
+    label: Fasting Flag
+  - name: LBDRVFL
+    core: Exp
+    label: Derived Flag
+  - name: LBTOX
+    core: Perm
+    label: Toxicity
+  - name: LBTOXGR
+    core: Perm
+    label: Standard Toxicity Grade
+  - name: LBDTC
+    core: Exp
+    label: Date/Time of Specimen Collection
+  - name: LBDY
+    core: Perm
+    label: Study Day of Specimen Collection
+  - name: LBTPT
+    core: Perm
+    label: Planned Time Point Name
+  - name: LBTPTNUM
+    core: Perm
+    label: Planned Time Point Number
+  - name: LBELTM
+    core: Perm
+    label: Planned Elapsed Time from Time Point Ref
+  - name: LBTPTREF
+    core: Perm
+    label: Time Point Reference
+  - name: LBRFTDTC
+    core: Perm
+    label: Date/Time of Reference Time Point
