@@ -36,8 +36,6 @@ columns:
       aggregate:
 
         expr: "SUM(EX.EXDOSE)"
-        source: [STUDYID, USUBJID, EXTRT]
-        key: [STUDYID, USUBJID, EXTRT]
   - name: NDOSREC
     type: int
     label: Number of Dose Records
@@ -45,8 +43,6 @@ columns:
       aggregate:
 
         expr: "COUNT(EX.EXSEQ)"
-        source: [STUDYID, USUBJID, EXTRT]
-        key: [STUDYID, USUBJID, EXTRT]
   - name: NDOSVAL
     type: int
     label: Number of Nonmissing Doses
@@ -54,8 +50,6 @@ columns:
       aggregate:
 
         expr: "COUNT(EX.EXDOSE)"
-        source: [STUDYID, USUBJID, EXTRT]
-        key: [STUDYID, USUBJID, EXTRT]
 verifications:
   - row_count:
       min: 3

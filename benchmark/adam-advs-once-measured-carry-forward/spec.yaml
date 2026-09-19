@@ -13,8 +13,6 @@ input:
 lookups:
   - id: SUBJECT
     dataset: ADSL
-    source: [STUDYID, USUBJID]
-    key: [STUDYID, USUBJID]
 
   - id: COLLECTED
     dataset: VS

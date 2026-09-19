@@ -47,12 +47,6 @@ columns:
     derivation:
       lookup:
         dataset: ADSL
-        source:
-          - STUDYID
-          - USUBJID
-        key:
-          - STUDYID
-          - USUBJID
         value: TRTSDT
   - name: AVAL
     type: float

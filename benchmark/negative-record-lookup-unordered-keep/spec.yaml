@@ -8,12 +8,6 @@ lookups:
   - id: DOSING
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]
-    source:
-      - STUDYID
-      - USUBJID
-    key:
-      - STUDYID
-      - USUBJID
 
 base: DM
 

@@ -21,11 +21,11 @@ aggregate_class:
     - key:
         type: [identifier, "list[identifier]"]
         required: false
-        description: Dataset columns matched against source; required with source when the expression reads a qualified dataset relation.
+        description: Dataset columns matched against source; omit to match on the applicable output keys (R003-40) when the expression reads a qualified dataset relation.
     - source:
         type: [variable, "list[variable]"]
         required: false
-        description: Current-row variables paired by position with key; required with key when the expression reads a qualified dataset relation.
+        description: Current-row variables paired by position with key; omit when they name the same columns as key.
     - expr:
         type: aggregate_expression
         required: true

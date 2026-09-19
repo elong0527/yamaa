@@ -1,8 +1,15 @@
 phase: validation
-condition: missing_required_field
+condition: source_key_length_mismatch
 spec_paths:
-  - lookups.REFRANGE.key
-requirement:
+  - lookups[0]
+requirement: R003-5
 context:
-  field: key
-  class: lookup_class
+  source:
+    - LBTESTCD
+    - SEX
+  key:
+    - LBTESTCD
+    - SEX
+    - UNIT
+  source_count: 2
+  key_count: 3

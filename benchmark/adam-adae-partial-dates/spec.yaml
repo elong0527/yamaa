@@ -56,8 +56,8 @@ columns:
         day: 15
         minimum_source_precision: month
         not_before: TRTSDT
-        missing:
-        invalid:
+        missing: null
+        invalid: null
 
   - name: ASTDTC
     type: str
@@ -71,7 +71,7 @@ columns:
     derivation:
       date_precision:
         source: ASTDT
-        missing:
+        missing: null
 
   - name: ASTDTF
     type: str

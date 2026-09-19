@@ -229,10 +229,15 @@ fixtures:
     spec_paths: ["lookups[0]"]
     validator: spec_contract
   negative-record-lookup-unpaired-key:
-    rule: R006
-    condition: missing_required_field
-    spec_paths: ["lookups.REFRANGE.key"]
-    validator: schema
+    rule: R003
+    condition: source_key_length_mismatch
+    spec_paths: ["lookups[0]"]
+    validator: spec_contract
+  negative-record-lookup-no-applicable-keys:
+    rule: R003
+    condition: no_applicable_keys
+    spec_paths: ["lookups[0]"]
+    validator: spec_contract
   negative-previous-non-missing-non-variable-source:
     rule: R006
     condition: invalid_field_type

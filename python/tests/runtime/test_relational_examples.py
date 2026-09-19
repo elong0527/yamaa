@@ -52,6 +52,7 @@ ERROR_EXAMPLES = [
     "negative-record-lookup-unordered-keep",
     "negative-record-lookup-unordered-choice",
     "negative-record-lookup-unpaired-key",
+    "negative-record-lookup-no-applicable-keys",
     "negative-record-lookup-incomplete-key",
     "negative-record-lookup-id-collision",
     "negative-record-lookup-incomparable-range",

@@ -42,8 +42,6 @@ columns:
       aggregate:
 
         expr: "SUM(EX.EXDOSE)"
-        source: [STUDYID, USUBJID, EXTRT]
-        key: [STUDYID, USUBJID, EXTRT]
   - name: NCYCLES
     type: int
     label: Number of Treatment Cycles
@@ -51,8 +49,6 @@ columns:
       aggregate:
 
         expr: "COUNT(EX.EXSEQ)"
-        source: [STUDYID, USUBJID, EXTRT]
-        key: [STUDYID, USUBJID, EXTRT]
   - name: PLANDOSE
     type: float
     label: Planned Dose per Cycle

@@ -10,8 +10,6 @@ input:
 lookups:
   - id: AE_REC
     dataset: ADAE
-    source: [STUDYID, USUBJID]
-    key: [STUDYID, USUBJID]
     order_by: [ADAE.ASTDT, ADAE.AESEQ]
     keep: first
 

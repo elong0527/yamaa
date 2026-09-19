@@ -10,12 +10,6 @@ lookups:
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: first
 
-    source:
-      - STUDYID
-      - USUBJID
-    key:
-      - STUDYID
-      - USUBJID
 base: DM
 
 output:

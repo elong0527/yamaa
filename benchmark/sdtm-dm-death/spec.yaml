@@ -8,15 +8,11 @@ input:
 lookups:
   - id: DTHDS
     dataset: DS
-    source: [STUDYID, USUBJID]
-    key: [STUDYID, USUBJID]
     filter: "DS.DSDECOD = 'DEATH'"
     order_by: [DS.DSSTDTC]
     keep: last
   - id: DTHAE
     dataset: AE
-    source: [STUDYID, USUBJID]
-    key: [STUDYID, USUBJID]
     filter: "AE.AEOUT = 'FATAL'"
     order_by: [AE.AEENDTC]
     keep: last

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Literal
 
@@ -91,8 +91,9 @@ class PlannedLookup(_FrozenModel):
 
     `match_variables` and `match_fields` pair by position: the first names
     what the current row reads, the second the right-side column it must
-    equal. Both come from the entry's declared `source` and `key`; keys are
-    never inferred.
+    equal. Both come from the entry's declared `source` and `key`, with
+    R003-43 inferring an omitted key from the applicable output keys and
+    R003-44 defaulting an omitted source to the key names.
     """
 
     identifier: str = Field(min_length=1)
@@ -643,6 +644,11 @@ def _lookup_references(
     keys = _as_names(payload.get("key"))
     dataset = payload.get("dataset")
     value = payload.get("value")
+    if payload.get("source") is None or payload.get("key") is None:
+        # R003-43/R003-44: the planner fills omitted pairs before reference
+        # collection, or records no_applicable_keys when no key applies.
+        # Either way there is nothing left to collect here.
+        return
     if sources is None or keys is None or not isinstance(dataset, str):
         diagnostics.append(
             _diagnostic(
@@ -952,7 +958,12 @@ def _aggregate_references(
     if joined is not None:
         keys = _as_names(payload.get("key"))
         source_vars = _as_names(payload.get("source"))
-        if not keys or not source_vars or len(keys) != len(source_vars):
+        if payload.get("key") is None or payload.get("source") is None:
+            # R003-43/R003-44: the planner fills omitted pairs before
+            # reference collection, or records no_applicable_keys when no
+            # key applies. Either way there is nothing left to check here.
+            pass
+        elif not keys or not source_vars or len(keys) != len(source_vars):
             diagnostics.append(
                 _diagnostic(
                     "missing_aggregate_keys",
@@ -1164,6 +1175,120 @@ def _parse_predicate_at(
         return None
 
 
+def _fill_omitted_lookup_keys(
+    declaration: HandledExpression,
+    value_path: str,
+    scope: _Scope,
+    infer: Callable[[str, str], tuple[str, ...] | None],
+) -> tuple[HandledExpression, frozenset[str]]:
+    """Fill omitted lookup/aggregate key pairs from the applicable keys.
+
+    R003-43 lets a named lookup, an inline `lookup:`, or a dataset-qualified
+    aggregate omit `key`, inferring the applicable output keys; R003-44 lets
+    a lookup omit `source`, defaulting it to the key names. The planner and
+    the runtime downstream only understand complete pairs, so the omission
+    is resolved here, before reference collection. Returns the rewritten
+    declaration and the operation paths where a key was inferred.
+    """
+    inferred: set[str] = set()
+
+    def fill_pairs(
+        payload: Mapping[str, object],
+        dataset: str,
+        operation_path: str,
+    ) -> Mapping[str, object] | None:
+        """Return the payload with omitted pairs filled, or None to skip."""
+        key_present = payload.get("key") is not None
+        source_present = payload.get("source") is not None
+        if key_present and source_present:
+            return None
+        keys = _as_names(payload.get("key")) if key_present else None
+        if not key_present:
+            keys = infer(dataset, operation_path)
+            if keys is None:
+                # The diagnostic is recorded; leave the payload for the
+                # operation's own validation to report.
+                return None
+            inferred.add(operation_path)
+        sources = _as_names(payload.get("source")) if source_present else None
+        if not source_present:
+            sources = keys
+        if keys is None or sources is None:
+            # Present but malformed; downstream validation reports it.
+            return None
+        return {**payload, "source": list(sources), "key": list(keys)}
+
+    def fill_lookup(payload: object, operation_path: str) -> object:
+        if not isinstance(payload, Mapping):
+            return payload
+        dataset = payload.get("dataset")
+        if not isinstance(dataset, str):
+            return payload
+        filled = fill_pairs(payload, dataset, operation_path)
+        return payload if filled is None else filled
+
+    def qualified_relation(payload: Mapping[str, object]) -> str | None:
+        """Mirror _aggregate_references' join detection for the fill."""
+        expr = payload.get("expr")
+        if not isinstance(expr, str):
+            return None
+        try:
+            ast = parse_aggregate_cached(expr)
+        except AggregateError:
+            return None
+        identifiers = aggregate_identifiers(ast)
+        qualifiers = {name.split(".", 1)[0] for name in identifiers if "." in name}
+        unqualified = [name for name in identifiers if "." not in name]
+        relations = qualifiers | set(aggregate_star_datasets(ast))
+        if len(relations) > 1 or (relations and unqualified):
+            return None
+        relation = next(iter(sorted(relations)), None)
+        # A grouped-row reduction reads its own driver group and declares
+        # no key pairs (R003-32).
+        return relation if scope.grouped_driver is None and relation else None
+
+    def fill_aggregate(node: object, operation_path: str) -> object:
+        payload = node if isinstance(node, Mapping) else {"expr": node}
+        if not isinstance(payload, Mapping):
+            return node
+        relation = qualified_relation(payload)
+        if relation is None:
+            return node
+        filled = fill_pairs(payload, relation, operation_path)
+        if filled is None:
+            return node
+        return dict(filled)
+
+    def walk(node: object, operation_path: str) -> object:
+        if isinstance(node, Mapping):
+            if set(node) == {"lookup"}:
+                return {
+                    "lookup": fill_lookup(node["lookup"], f"{operation_path}.lookup")
+                }
+            if set(node) == {"aggregate"}:
+                return {
+                    "aggregate": fill_aggregate(
+                        node["aggregate"], f"{operation_path}.aggregate"
+                    )
+                }
+            return {
+                key: walk(value, f"{operation_path}.{key}")
+                for key, value in node.items()
+            }
+        if isinstance(node, Sequence) and not isinstance(node, str):
+            return [
+                walk(value, f"{operation_path}[{index}]")
+                for index, value in enumerate(node)
+            ]
+        return node
+
+    root = walk(declaration.value.root, value_path)
+    if root == declaration.value.root:
+        return declaration, frozenset()
+    rewritten = declaration.value.model_copy(update={"root": root})
+    return declaration.model_copy(update={"value": rewritten}), frozenset(inferred)
+
+
 def _plan_derivation(
     column: str,
     declaration: HandledExpression,
@@ -1173,8 +1298,20 @@ def _plan_derivation(
     unsupported: list[UnsupportedFeature],
     *,
     scope: _Scope = _COLUMN_SCOPE,
-) -> tuple[PlannedDerivation, tuple[_Reference, ...]]:
+    infer_keys: (
+        Callable[[str, str, list[ExecutionDiagnostic]], tuple[str, ...] | None] | None
+    ) = None,
+) -> tuple[PlannedDerivation, tuple[_Reference, ...], frozenset[str]]:
     value_path = expression_path(path, declaration)
+    inferred_paths: frozenset[str] = frozenset()
+    deferred: list[ExecutionDiagnostic] = []
+    if infer_keys is not None:
+        declaration, inferred_paths = _fill_omitted_lookup_keys(
+            declaration,
+            value_path,
+            scope,
+            lambda dataset, path: infer_keys(dataset, path, deferred),
+        )
     info = _expression_info(
         declaration.value,
         value_path,
@@ -1184,6 +1321,10 @@ def _plan_derivation(
     references = list(info.references)
     unsupported.extend(info.unsupported)
     diagnostics.extend(info.diagnostics)
+    # A failed key inference is reported after the operation's own
+    # validation, so a more fundamental problem (say, an aggregate in a
+    # context R007 forbids) is named first.
+    diagnostics.extend(deferred)
 
     ordered_references = _deduplicate_references(references)
     dependencies = tuple(
@@ -1203,6 +1344,7 @@ def _plan_derivation(
             dependencies=dependencies,
         ),
         ordered_references,
+        inferred_paths,
     )
 
 
@@ -1425,6 +1567,9 @@ def _infer_applicable_keys(
     dataset: str,
     path: str,
     diagnostics: list[ExecutionDiagnostic],
+    *,
+    hint: str = "declare an explicit `lookup:` with `source`/`key` pairs",
+    requirement: str = "R003-42",
 ) -> tuple[str, ...] | None:
     """Infer the applicable keys R003-40 defines for an implicit join.
 
@@ -1435,7 +1580,7 @@ def _infer_applicable_keys(
     keys = tuple(key for key in specification.keys if key in fields)
     if not keys:
         # R003-42: with no applicable key the intended match is unclear,
-        # so the author must declare it with an explicit `lookup:`.
+        # so the author must state it explicitly.
         diagnostics.append(
             _diagnostic(
                 "no_applicable_keys",
@@ -1443,9 +1588,9 @@ def _infer_applicable_keys(
                 {
                     "dataset": dataset,
                     "keys": list(specification.keys),
-                    "hint": "declare an explicit `lookup:` with `source`/`key` pairs",
+                    "hint": hint,
                 },
-                requirement="R003-42",
+                requirement=requirement,
             )
         )
         return None
@@ -1542,6 +1687,8 @@ def _with_relation_dependencies(
     diagnostics: list[ExecutionDiagnostic],
     column_types: Mapping[str, ColumnType],
     resolved: list[ResolvedJoin],
+    *,
+    inferred_paths: frozenset[str] = frozenset(),
 ) -> PlannedDerivation:
     """Add the current-row values a derivation needs to reach another relation.
 
@@ -1605,7 +1752,11 @@ def _with_relation_dependencies(
                     dataset=reference.join_relation,
                     source=reference.join_source,
                     key=reference.join_key,
-                    inferred=reference.reach == "scalar",
+                    inferred=reference.reach == "scalar"
+                    or any(
+                        reference.path == path or reference.path.startswith(f"{path}.")
+                        for path in inferred_paths
+                    ),
                 )
             )
     if not extra and not implicit:
@@ -1701,11 +1852,35 @@ def _plan_lookups(
         if lookup.dataset not in bindings.datasets:
             continue
         fields = _dataset_types(bindings, lookup.dataset)
-        if len(lookup.source) != len(lookup.key) or not lookup.source:
+        key_inferred = False
+        source_defaulted = False
+        if lookup.key is None:
+            # R003-43: an omitted key is inferred from the applicable keys.
+            inferred = _infer_applicable_keys(
+                specification,
+                bindings,
+                column_types,
+                lookup.dataset,
+                path,
+                diagnostics,
+                hint="declare the `key` explicitly",
+                requirement="R003-43",
+            )
+            if inferred is None:
+                continue
+            match_fields = inferred
+            key_inferred = True
+        else:
+            match_fields = tuple(lookup.key)
+        if lookup.source is None:
+            # R003-44: an omitted source defaults to the key names.
+            variables = match_fields
+            source_defaulted = True
+        else:
+            variables = tuple(lookup.source)
+        if len(variables) != len(match_fields) or not variables:
             # Reported by _lookup_declarations; skip planning this entry.
             continue
-        variables = tuple(lookup.source)
-        match_fields = tuple(lookup.key)
 
         failed = False
         for variable, field in zip(variables, match_fields, strict=True):
@@ -1842,6 +2017,7 @@ def _plan_lookups(
                 dataset=lookup.dataset,
                 source=variables,
                 key=match_fields,
+                inferred=key_inferred or source_defaulted,
             )
         )
         planned[lookup.id] = PlannedLookup(
@@ -2186,7 +2362,11 @@ def _lookup_declarations(
                         requirement="R003-9",
                     )
                 )
-        if len(lookup.source) != len(lookup.key) or not lookup.source:
+        if (
+            lookup.source is not None
+            and lookup.key is not None
+            and (len(lookup.source) != len(lookup.key) or not lookup.source)
+        ):
             diagnostics.append(
                 _diagnostic(
                     "source_key_length_mismatch",
@@ -2407,6 +2587,22 @@ def plan_execution(
     column_positions = {name: index for index, name in enumerate(column_order)}
     column_types = {column.name: column.type for column in specification.columns}
     resolved_joins: list[ResolvedJoin] = []
+
+    def infer_lookup_keys(
+        dataset: str, path: str, deferred: list[ExecutionDiagnostic]
+    ) -> tuple[str, ...] | None:
+        """Infer omitted lookup/aggregate keys (R003-43)."""
+        return _infer_applicable_keys(
+            specification,
+            bindings,
+            column_types,
+            dataset,
+            path,
+            deferred,
+            hint="declare the `source`/`key` pairs explicitly",
+            requirement="R003-43",
+        )
+
     lookups = _plan_lookups(
         specification, bindings, column_types, diagnostics, resolved_joins
     )
@@ -2487,7 +2683,7 @@ def plan_execution(
                 declaration = row.derivations.get(name)
                 if declaration is None:
                     continue
-                planned, references = _plan_derivation(
+                planned, references, inferred_paths = _plan_derivation(
                     name,
                     declaration,
                     f"rows[{index}].derivations.{name}",
@@ -2495,6 +2691,7 @@ def plan_execution(
                     diagnostics,
                     unsupported,
                     scope=row_scope,
+                    infer_keys=infer_lookup_keys,
                 )
                 derivations[name] = _with_relation_dependencies(
                     planned,
@@ -2506,6 +2703,7 @@ def plan_execution(
                     diagnostics,
                     column_types,
                     resolved_joins,
+                    inferred_paths=inferred_paths,
                 )
                 row_references[(index, name)] = references
 
@@ -2641,7 +2839,7 @@ def plan_execution(
     for column in specification.columns:
         if column.derivation is None:
             continue
-        planned, references = _plan_derivation(
+        planned, references, inferred_paths = _plan_derivation(
             column.name,
             column.derivation,
             f"columns.{column.name}.derivation",
@@ -2649,6 +2847,7 @@ def plan_execution(
             diagnostics,
             unsupported,
             scope=_Scope(lookups=frozenset(lookups)),
+            infer_keys=infer_lookup_keys,
         )
         annotated = _resolve_implicit_joins(
             references,
@@ -2670,6 +2869,7 @@ def plan_execution(
                 diagnostics,
                 column_types,
                 resolved_joins,
+                inferred_paths=inferred_paths,
             )
         )
         for reference in annotated:

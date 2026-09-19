@@ -12,12 +12,6 @@ lookups:
       AND TU.TUSTRESC = 'TARGET'
     order_by: [TU.TUSEQ]
     keep: first
-    source:
-      - STUDYID
-      - USUBJID
-    key:
-      - STUDYID
-      - USUBJID
 base: ADSL
 
 output:

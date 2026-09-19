@@ -53,8 +53,8 @@ columns:
         source: LSTCNTDC
         month: 12
         day: last
-        missing:
-        invalid:
+        missing: null
+        invalid: null
 
   - name: ADAE_LST
     type: date
@@ -63,8 +63,6 @@ columns:
       aggregate:
         expr: "MAX(ADAE.AENDT)"
 
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
   - name: ADVS_LST
     type: date
     label: Latest Vital Signs Date
@@ -72,8 +70,6 @@ columns:
       aggregate:
         expr: "MAX(ADVS.ADATE)"
 
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
   - name: LSTALVDT
     type: date
     label: Last Known Alive Date

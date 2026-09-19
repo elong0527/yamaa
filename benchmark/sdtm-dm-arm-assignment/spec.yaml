@@ -61,8 +61,8 @@ columns:
         dict:
           PLACEBO: PBO
           VITAMIN D3: TRT
-        missing:
-        unmapped:
+        missing: null
+        unmapped: null
 
   - name: ACTARM
     type: str
@@ -73,8 +73,8 @@ columns:
         dict:
           PLACEBO: Placebo
           VITAMIN D3: Vitamin D3
-        missing:
-        unmapped:
+        missing: null
+        unmapped: null
 
   - name: ACTARMUD
     type: str

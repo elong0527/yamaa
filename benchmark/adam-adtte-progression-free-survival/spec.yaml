@@ -11,35 +11,17 @@ lookups:
     filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y'"
     order_by: [RS.RSDTC, RS.RSSEQ]
     keep: first
-    source:
-      - STUDYID
-      - USUBJID
-    key:
-      - STUDYID
-      - USUBJID
   - id: DEATH
     dataset: DS
     filter: "DS.DSDECOD = 'DEATH'"
     order_by: [DS.DSDTC, DS.DSSEQ]
     keep: first
-    source:
-      - STUDYID
-      - USUBJID
-    key:
-      - STUDYID
-      - USUBJID
   - id: LASTASSESS
     dataset: RS
     filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y'"
     order_by: [RS.RSDTC, RS.RSSEQ]
     keep: last
 
-    source:
-      - STUDYID
-      - USUBJID
-    key:
-      - STUDYID
-      - USUBJID
 base: ADSL
 
 output:

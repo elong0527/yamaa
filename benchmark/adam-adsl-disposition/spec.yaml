@@ -31,8 +31,6 @@ columns:
         filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
         expr: "MAX(DS.DSSTDTC)"
 
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
   - name: EOSDECOD
     type: str
     label: End of Study Decoded Term

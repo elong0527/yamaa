@@ -59,8 +59,6 @@ columns:
         filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXSTDTC IS NOT NULL"
         expr: "MIN(EX.EXSTDTC)"
 
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
   - name: TRTEDT
     type: date
     label: Date of Last Exposure to Treatment
@@ -69,8 +67,6 @@ columns:
         filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXENDTC IS NOT NULL"
         expr: "MAX(EX.EXENDTC)"
 
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
   - name: TRTDURD
     type: int
     label: Total Treatment Duration (Days)

@@ -8,12 +8,6 @@ lookups:
   - id: COMPLT
     dataset: DS
     filter: "DS.DSDECOD = 'COMPLETED'"
-    source:
-      - STUDYID
-      - USUBJID
-    key:
-      - STUDYID
-      - USUBJID
 base: ADSLPRE
 
 output:

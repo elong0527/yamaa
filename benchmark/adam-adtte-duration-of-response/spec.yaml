@@ -57,8 +57,6 @@ columns:
         filter: "ADRSPRE.AVALC = 'PD'"
         expr: "MIN(ADRSPRE.ADT)"
 
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
   - name: PDSEQ
     type: int
     label: Disease Progression Source Sequence Number
@@ -77,8 +75,6 @@ columns:
         filter: "DS.DSDECOD = 'DEATH'"
         expr: "MIN(DS.DSSTDTC)"
 
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
   - name: DEATHSEQ
     type: int
     label: Death Source Sequence Number
@@ -97,8 +93,6 @@ columns:
         filter: "ADRSPRE.AVALC <> 'NE'"
         expr: "MAX(ADRSPRE.ADT)"
 
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
   - name: LASTVLSEQ
     type: int
     label: Last Valid Assessment Sequence Number

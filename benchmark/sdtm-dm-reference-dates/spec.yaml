@@ -13,12 +13,6 @@ lookups:
     order_by: [EX.EXENDTC, EX.EXSEQ]
     keep: last
 
-    source:
-      - STUDYID
-      - USUBJID
-    key:
-      - STUDYID
-      - USUBJID
 base: DM_RAW
 
 output:
@@ -60,8 +54,6 @@ columns:
         filter: "EX.EXSTDTC IS NOT NULL"
         expr: "MIN(EX.EXSTDTC)"
 
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
   - name: RFXENDTC
     type: date
     label: Date/Time of Last Study Treatment
@@ -88,8 +80,6 @@ columns:
         filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
         expr: "MAX(DS.DSSTDTC)"
 
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
   - name: AEDT0
     type: date
     label: Latest Adverse Event End Date
@@ -98,8 +88,6 @@ columns:
         filter: "AE.AEENDTC IS NOT NULL"
         expr: "MAX(AE.AEENDTC)"
 
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
   - name: RFENDTC
     type: date
     label: Subject Reference End Date/Time

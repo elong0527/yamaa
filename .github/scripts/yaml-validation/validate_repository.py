@@ -335,6 +335,10 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R003', 'incomparable_range_types'): {
         'lower_type', 'lookup', 'upper_type', 'value_type',
     },
+    ('R003', 'no_applicable_keys'): {'dataset', 'hint', 'keys'},
+    ('R003', 'source_key_length_mismatch'): {
+        'key', 'key_count', 'source', 'source_count',
+    },
     ('R003', 'unpaired_fields'): {
         'declared', 'lookup', 'missing',
     },
@@ -4959,12 +4963,15 @@ def validate_spec_contracts(
 
     lookups = spec.get('lookups')
     if isinstance(lookups, list):
+        catalog = dataset_type_catalog(spec, spec_path)
+        root_keys = spec.get('keys')
+        root_keys = root_keys if isinstance(root_keys, list) else []
         for index, lookup in enumerate(lookups):
             if not isinstance(lookup, dict):
                 continue
             path = f"{spec_label}.lookups[{index}]"
-            # `source` and `key` are both required by the schema: a missing
-            # one is `missing_required_field`, never `unpaired_fields`.
+            # `order_by` and `keep` pair with each other; `source`/`key`
+            # pairing is checked below now that both are optional (R003-43).
             if ('order_by' in lookup) != ('keep' in lookup):
                 has_order = 'order_by' in lookup
                 errors.append(
@@ -4979,6 +4986,46 @@ def validate_spec_contracts(
                         },
                     )
                 )
+            sources = lookup.get('source')
+            keys = lookup.get('key')
+            if (
+                isinstance(sources, list)
+                and isinstance(keys, list)
+                and len(sources) != len(keys)
+            ):
+                errors.append(
+                    validation_diagnostic(
+                        path,
+                        'source_key_length_mismatch',
+                        f"source has {len(sources)} value(s), key has "
+                        f"{len(keys)}",
+                        context={
+                            'source': sources,
+                            'key': keys,
+                            'source_count': len(sources),
+                            'key_count': len(keys),
+                        },
+                    )
+                )
+            dataset = lookup.get('dataset')
+            if keys is None and isinstance(dataset, str):
+                # R003-43: an omitted key is inferred from the output keys
+                # that name a column of the lookup dataset.
+                fields = catalog.get(dataset, {})
+                applicable = [key for key in root_keys if key in fields]
+                if not applicable:
+                    errors.append(
+                        validation_diagnostic(
+                            path,
+                            'no_applicable_keys',
+                            f"no output key names a column of {dataset!r}",
+                            context={
+                                'dataset': dataset,
+                                'keys': list(root_keys),
+                                'hint': 'declare the `key` explicitly',
+                            },
+                        )
+                    )
 
     verification_ids = []
     warning_paths = []

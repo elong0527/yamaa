@@ -348,6 +348,155 @@ def first_diagnostic(columns: list[Column], right: str = "str"):
     return raised.value.diagnostics[0]
 
 
+def test_a_named_lookup_with_an_omitted_key_infers_the_applicable_keys() -> None:
+    spec = two_dataset_specification(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+        ]
+    ).model_copy(update={"lookups": [Lookup(id="LOOK", dataset="RIGHT")]})
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table(), "RIGHT": right_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    # R003-43: the omitted key is the applicable output keys; R003-44: the
+    # omitted source defaults to the key names.
+    assert plan.lookups[0].match_variables == ("X",)
+    assert plan.lookups[0].match_fields == ("X",)
+
+
+def test_a_named_lookup_with_an_omitted_source_defaults_to_the_key_names() -> None:
+    spec = two_dataset_specification(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+        ]
+    ).model_copy(update={"lookups": [Lookup(id="LOOK", dataset="RIGHT", key=["X"])]})
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table(), "RIGHT": right_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    # R003-44: the omitted source defaults to the declared key names.
+    assert plan.lookups[0].match_variables == ("X",)
+    assert plan.lookups[0].match_fields == ("X",)
+
+
+def test_a_named_lookup_with_an_omitted_key_and_no_applicable_key_fails() -> None:
+    right = frame_from_values((TypedColumn(name="V", type="float"),), [[1.0]])
+    spec = two_dataset_specification(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+        ]
+    ).model_copy(update={"lookups": [Lookup(id="LOOK", dataset="RIGHT")]})
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table(), "RIGHT": right},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    # R003-43: no output key exists on RIGHT, so the omitted key cannot be
+    # inferred and the author must declare it.
+    [diagnostic] = [
+        d for d in raised.value.diagnostics if d.condition == "no_applicable_keys"
+    ]
+    assert diagnostic.requirement == "R003-43"
+    assert diagnostic.spec_paths == ("lookups[0]",)
+
+
+def test_a_named_lookup_with_mismatched_source_and_key_lengths_fails() -> None:
+    spec = two_dataset_specification(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+        ]
+    ).model_copy(
+        update={
+            "lookups": [
+                Lookup(id="LOOK", dataset="RIGHT", source=["X", "X"], key=["X"])
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table(), "RIGHT": right_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    # R003-5: explicit pairs must pair by position after inference.
+    [diagnostic] = [
+        d
+        for d in raised.value.diagnostics
+        if d.condition == "source_key_length_mismatch"
+    ]
+    assert diagnostic.requirement == "R003-5"
+    assert diagnostic.spec_paths == ("lookups[0]",)
+
+
+def test_an_inline_lookup_with_an_omitted_key_infers_the_applicable_keys() -> None:
+    plan = plan_two(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation({"lookup": {"dataset": "RIGHT", "value": "V"}}),
+            ),
+        ]
+    )
+
+    # R003-43/R003-44: the inline lookup omits both lists. The inferred
+    # source becomes a dependency of the column.
+    [derived] = [column for column in plan.columns if column.column == "V"]
+    assert "X" in derived.dependencies
+
+
+def test_a_qualified_aggregate_with_an_omitted_key_infers_the_applicable_keys() -> None:
+    plan = plan_two(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            aggregate_column({"expr": "SUM(RIGHT.V)"}),
+        ]
+    )
+
+    # R003-43/R003-44: the aggregate omits both lists and groups on X.
+    [join] = [
+        join
+        for join in plan.resolved_joins
+        if join.spec_path == "columns.V.derivation.aggregate.expr"
+    ]
+    assert join.source == ("X",)
+    assert join.key == ("X",)
+    assert join.inferred is True
+
+
+def test_an_inferred_lookup_key_typed_differently_on_each_side_is_reported() -> None:
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation({"lookup": {"dataset": "RIGHT", "value": "V"}}),
+            ),
+        ],
+        right="int",
+    )
+
+    # R003-41: an inferred key must compare equal on both sides.
+    assert diagnostic.condition == "incompatible_input_type"
+
+
 def test_a_cross_dataset_source_with_clear_keys_uses_the_implicit_join() -> None:
     plan = plan_two(
         [

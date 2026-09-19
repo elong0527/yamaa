@@ -25,6 +25,9 @@ expressions:
     lookup: # Looks up one value in a declared dataset by explicit key pairs.
         # Source and key lists pair by position, have equal length, and form a
         # unique combined dataset key. Pair order does not change the result.
+        # Either list may be omitted: an omitted key is inferred from the
+        # applicable output keys (R003-40), and an omitted source defaults to
+        # the key names.
         - value:
             type: identifier
             required: true
@@ -35,12 +38,12 @@ expressions:
             description: Declared dataset containing the lookup table.
         - source:
             type: [variable, "list[variable]"]
-            required: true
-            description: One or more current-row lookup values.
+            required: false
+            description: One or more current-row lookup values; omit when they name the same columns as key.
         - key:
             type: [identifier, "list[identifier]"]
-            required: true
-            description: Dataset columns paired by position with source.
+            required: false
+            description: Dataset columns paired by position with source; omit to match on the applicable output keys (R003-40).
         - filter:
             type: sql
             required: false

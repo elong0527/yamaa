@@ -76,11 +76,26 @@ records are the dataset records surviving `filter`.
 other lookup ids, and the output `domain`. A collision fails as
 `duplicate_identifier`.
 
-**R003-4.** A named lookup declares `id`, `dataset`, `source`, and `key`.
-The schema requires all four: omitting `key` (or `source`) fails as
-`missing_required_field` with no requirement attached, because the
-contract is structural -- the old positional-unpaired condition has no
-separate requirement number.
+**R003-4.** A named lookup declares `id` and `dataset`; `source` and
+`key` are optional. The schema requires `id` and `dataset`: omitting
+either fails as `missing_required_field` with no requirement attached,
+because the contract is structural. An omitted `key` is inferred from
+the applicable output keys (R003-43); an omitted `source` defaults to
+the key names (R003-44). State both lists only when the intended match
+differs from what omission would infer.
+
+```yaml
+lookups:
+  - id: DEATHEV
+    dataset: AE
+    filter: "AE.AEOUT = 'FATAL'"
+    order_by: [AE.ASTDT]
+    keep: last
+```
+
+The lookup above matches on the applicable output keys; the form below
+states the same match explicitly for a reviewer who should not have to
+infer it:
 
 ```yaml
 lookups:
@@ -94,7 +109,8 @@ lookups:
 ```
 
 **R003-5.** `source` and `key` pair by position, have equal length, and
-are both non-empty. Otherwise the lookup names no key and fails as
+are both non-empty -- after inference (R003-43) and defaulting (R003-44)
+have run. Otherwise the lookup names no key and fails as
 `source_key_length_mismatch`.
 
 **R003-6.** Every `key` column must exist in the lookup's dataset.
@@ -205,8 +221,9 @@ derivation:
 ```
 
 Its `filter`, `order_by`, `keep`, `between`, `missing`, and `strict`
-behave exactly as the named form's. Its operation-level mechanics stay in
-R007.
+behave exactly as the named form's, and its `source`/`key` follow the
+same omission rules (R003-43, R003-44). Its operation-level mechanics
+stay in R007.
 
 **R003-28.** A named lookup's selected record is read by several columns
 through lookup-qualified variables. Every column reading the same lookup
@@ -220,9 +237,11 @@ surviving records counts one `multiple_matches` handling, and a declared
 ## Aggregates over a qualified relation
 
 **R003-30.** An aggregate whose expression reads a qualified dataset
-relation declares the key pairs it matches on: `source` and `key` are
-both required, pair by position, and are non-empty. Otherwise fail as
-`missing_aggregate_keys`.
+relation matches on key pairs: `source` and `key` pair by position and
+are non-empty after inference (R003-43) and defaulting (R003-44) have
+run. An omitted `key` is inferred from the applicable output keys; an
+omitted `source` defaults to the key names. With no pairs at all the
+aggregate names no match and fails as `missing_aggregate_keys`.
 
 **R003-31.** An aggregate's declared `key` columns must exist in the
 relation and its `source` variables must be known, or fail as
@@ -302,11 +321,35 @@ an explicit `lookup:` naming its `source`/`key` pairs. The same explicit
 form serves whenever the intended keys differ from the applicable
 output keys or the read should be a reusable named lookup.
 
+**R003-43.** A named lookup, an inline `lookup:`, or a qualified
+aggregate may omit `key`: the omitted key is the applicable keys of
+R003-40 -- the output `keys`, in output-key order, that the right-side
+dataset also carries. The inference is the same one the implicit join
+uses, so a lookup that omits `key` matches exactly as the implicit join
+would. With no applicable key the read fails as `no_applicable_keys`.
+
+**R003-44.** A lookup may omit `source`: the omitted source defaults to
+the (possibly inferred) key names, matching each key column against the
+same-named current-row value. `source` is stated only when a key column
+is matched against a differently named current-row value.
+
+```yaml
+lookups:
+  - id: REFRANGE
+    dataset: LBRANGE
+    source: [LBTESTCD, SEX]
+    key: [TESTCD, SEX]
+```
+
+Here the current-row `LBTESTCD` matches the limit table's `TESTCD`
+column; omitting `source` would have matched `TESTCD` against a
+current-row `TESTCD` that does not exist.
+
 
 ## Errors
 
 The failure vocabulary, in the order the requirements introduce it:
-`no_applicable_keys` (R003-42), `duplicate_identifier` (R003-3),
+`no_applicable_keys` (R003-42, R003-43), `duplicate_identifier` (R003-3),
 `missing_required_field` (R003-4, schema phase, no requirement attached),
 `source_key_length_mismatch` (R003-5), `unknown_field` (R003-6, R003-7,
 R003-10, R003-12, R003-15, R003-22, R003-31), `incompatible_input_type`

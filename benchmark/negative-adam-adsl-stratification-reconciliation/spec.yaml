@@ -30,12 +30,6 @@ columns:
     derivation:
       lookup:
         dataset: RE
-        source:
-          - STUDYID
-          - USUBJID
-        key:
-          - STUDYID
-          - USUBJID
         value: METSTAT
   - name: ECOG0R
     type: str
@@ -43,12 +37,6 @@ columns:
     derivation:
       lookup:
         dataset: RE
-        source:
-          - STUDYID
-          - USUBJID
-        key:
-          - STUDYID
-          - USUBJID
         value: ECOG0
   - name: REGIONUSR
     type: str
@@ -56,12 +44,6 @@ columns:
     derivation:
       lookup:
         dataset: RE
-        source:
-          - STUDYID
-          - USUBJID
-        key:
-          - STUDYID
-          - USUBJID
         value: REGIONUS
   - name: METSTAT
     type: str
@@ -69,12 +51,6 @@ columns:
     derivation:
       lookup:
         dataset: MH
-        source:
-          - STUDYID
-          - USUBJID
-        key:
-          - STUDYID
-          - USUBJID
         value: METSTAT
   - name: ECOG0
     type: str

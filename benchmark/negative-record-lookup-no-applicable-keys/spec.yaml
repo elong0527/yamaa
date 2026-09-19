@@ -8,7 +8,6 @@ lookups:
   - id: REFRANGE
     dataset: LBRANGE
     source: [LBTESTCD, SEX]
-    key: [LBTESTCD, SEX, UNIT]
 
 base: LB_RAW
 
