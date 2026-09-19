@@ -169,7 +169,7 @@ prunes, and orders the resolved columns before R001 applies.
 Declaration order is the resolved order.
 
 **R001-29.** The column dependency graph is over columns, not over rows. A
-column that reads another row of its own partition therefore depends on the
+column that reads another row of its own window partition therefore depends on the
 whole named column. A column that reaches its own value through another row
 is a cycle rather than an iteration. `previous_non_missing` crosses any
 number of missing rows by searching a separate completed source column.
