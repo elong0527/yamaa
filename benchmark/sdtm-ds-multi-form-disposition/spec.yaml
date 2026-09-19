@@ -141,7 +141,6 @@ rows:
 
   - id: randomization
     dataset: RAND
-    filter: "RAND.USUBJID IS NOT NULL"
     derivations:
       STUDYID:
         source: RAND.StudyOID
@@ -181,9 +180,9 @@ rows:
       DSSTDTC:
         source: SCRNDTC.Value
 
-  - id: eot
+  - id: form_disposition
     dataset: ODM
-    filter: "ODM.StudyEventOID = 'EOT' AND ODM.ItemOID = 'IT.DS.COMP'"
+    filter: "ODM.StudyEventOID IN ('EOT', 'EOS') AND ODM.ItemOID = 'IT.DS.COMP'"
     derivations:
       STUDYID:
         source: ODM.StudyOID
@@ -192,42 +191,15 @@ rows:
       DSCAT:
         literal: DISPOSITION EVENT
       DSSCAT:
-        literal: STUDY TREATMENT
-      MILESTONE:
-        literal: EOT
-      DSTERM:
         case:
           branches:
-            - when: "ODM.Value = 'COMPLETED'"
+            - when: "ODM.StudyEventOID = 'EOT'"
               then:
-                literal: COMPLETED
+                literal: STUDY TREATMENT
           otherwise:
-            source: REASON.Value
-      DSDECOD:
-        case:
-          branches:
-            - when: "ODM.Value = 'COMPLETED'"
-              then:
-                literal: COMPLETED
-          otherwise:
-            source: REASONCD.Value
-      DSSTDTC:
-        source: EVENTDTC.Value
-
-  - id: eos
-    dataset: ODM
-    filter: "ODM.StudyEventOID = 'EOS' AND ODM.ItemOID = 'IT.DS.COMP'"
-    derivations:
-      STUDYID:
-        source: ODM.StudyOID
-      USUBJID:
-        source: ODM.SubjectKey
-      DSCAT:
-        literal: DISPOSITION EVENT
-      DSSCAT:
-        literal: STUDY
+            literal: STUDY
       MILESTONE:
-        literal: EOS
+        source: ODM.StudyEventOID
       DSTERM:
         case:
           branches:
