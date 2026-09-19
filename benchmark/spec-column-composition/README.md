@@ -4,9 +4,8 @@
 
 **Lifecycle:** draft - first commit.
 
-**Goal:** demonstrate a study level changing one detail inside an
-inherited column - `AVAL`, `ANRIND`, and `PARCAT1` - without restating
-the rest of that column.
+**Goal:** demonstrate a study level changing details inside inherited
+columns - `AVAL`, `ANRIND`, and `PARCAT1`.
 
 **Input:** three spec files, read root-first:
 

@@ -28,7 +28,6 @@ columns:
     label: Protocol Review Flag
     derivation:
       case:
-        branches:
-          - when: "UNKNOWNDT >= DATE '2025-01-01'"
-            then: {literal: Y}
-        otherwise: {literal: N}
+        - when: "UNKNOWNDT >= DATE '2025-01-01'"
+          then: {literal: Y}
+        - otherwise: {literal: N}

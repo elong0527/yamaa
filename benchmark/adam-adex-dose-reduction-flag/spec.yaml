@@ -54,7 +54,6 @@ columns:
     label: Dose Reduction Flag
     derivation:
       case:
-        branches:
-          - when: "EXDOSE > 0 AND PREVDOSE > 0 AND EXDOSE < PREVDOSE"
-            then:
-              literal: "Y"
+        - when: "EXDOSE > 0 AND PREVDOSE > 0 AND EXDOSE < PREVDOSE"
+          then:
+            literal: "Y"

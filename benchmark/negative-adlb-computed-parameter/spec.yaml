@@ -65,13 +65,12 @@ columns:
     label: Analysis Value
     derivation:
       case:
-        branches:
-          - when: "PARAMCD = 'ASTALT'"
-            then:
-              compute:
-                expr: "ASTVAL / NULLIF(ALTVAL, 0)"
-        otherwise:
-          source: LBRESN
+        - when: "PARAMCD = 'ASTALT'"
+          then:
+            compute:
+              expr: "ASTVAL / NULLIF(ALTVAL, 0)"
+        - otherwise:
+            source: LBRESN
 
 rows:
   - id: alt

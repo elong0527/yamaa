@@ -58,36 +58,33 @@ columns:
     label: Birth Date as a Date
     derivation:
       case:
-        branches:
-          - when: "BRTH_PREC = 'D'"
-            then:
-              source: BRTHDTC
-        otherwise: {literal: null}
+        - when: "BRTH_PREC = 'D'"
+          then:
+            source: BRTHDTC
+        - otherwise: {literal: null}
 
   - name: AGE
     type: int
     label: Age in AGEU at RFICDTC
     derivation:
       case:
-        branches:
-          - when: "BRTH_PREC = 'D'"
-            then:
-              date_diff:
-                start: BRTHDT
-                end: RFICDTC
-                unit: year
-        otherwise: {literal: null}
+        - when: "BRTH_PREC = 'D'"
+          then:
+            date_diff:
+              start: BRTHDT
+              end: RFICDTC
+              unit: year
+        - otherwise: {literal: null}
 
   - name: AGEU
     type: str
     label: Age Units
     derivation:
       case:
-        branches:
-          - when: "AGE IS NOT NULL"
-            then:
-              literal: YEARS
-        otherwise: {literal: null}
+        - when: "AGE IS NOT NULL"
+          then:
+            literal: YEARS
+        - otherwise: {literal: null}
 
 verifications:
   - unique:

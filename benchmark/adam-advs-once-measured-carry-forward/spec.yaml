@@ -98,9 +98,8 @@ columns:
     label: Height Assessment Date
     derivation:
       case:
-        branches:
-          - when: "PARAMCD = 'HEIGHT' AND AVALCOL IS NOT NULL"
-            then: {source: ADT}
+        - when: "PARAMCD = 'HEIGHT' AND AVALCOL IS NOT NULL"
+          then: {source: ADT}
 
   - name: HGTBLFL
     type: str

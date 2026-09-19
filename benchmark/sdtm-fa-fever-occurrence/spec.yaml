@@ -75,11 +75,10 @@ columns:
     label: Result or Finding in Original Units
     derivation:
       case:
-        branches:
-          - when: "VS.VSSTRESU = 'C' AND VS.VSSTRESN >= 38"
-            then: {literal: Y}
-          - when: "VS.VSSTRESU = 'C' AND VS.VSSTRESN < 38"
-            then: {literal: N}
+        - when: "VS.VSSTRESU = 'C' AND VS.VSSTRESN >= 38"
+          then: {literal: Y}
+        - when: "VS.VSSTRESU = 'C' AND VS.VSSTRESN < 38"
+          then: {literal: N}
 
   - name: FASTRESC
     type: str

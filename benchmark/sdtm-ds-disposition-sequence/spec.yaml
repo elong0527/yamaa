@@ -55,12 +55,11 @@ columns:
     label: Category for Disposition Event
     derivation:
       case:
-        branches:
-          - when: "DSDECOD = 'RANDOMIZED'"
-            then:
-              literal: PROTOCOL MILESTONE
-        otherwise:
-          literal: DISPOSITION EVENT
+        - when: "DSDECOD = 'RANDOMIZED'"
+          then:
+            literal: PROTOCOL MILESTONE
+        - otherwise:
+            literal: DISPOSITION EVENT
     verifications:
       allowed_values:
         values: [PROTOCOL MILESTONE, DISPOSITION EVENT]

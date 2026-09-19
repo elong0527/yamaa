@@ -60,10 +60,9 @@ columns:
     label: Treatment Emergent Analysis Flag
     derivation:
       case:
-        branches:
-          - when: "ASTDT IS NOT NULL AND TRTSDT IS NOT NULL AND TRTEDT IS NOT NULL AND ASTDT >= TRTSDT AND ASTDT <= TRTEDT"
-            then:
-              literal: Y
+        - when: "ASTDT IS NOT NULL AND TRTSDT IS NOT NULL AND TRTEDT IS NOT NULL AND ASTDT >= TRTSDT AND ASTDT <= TRTEDT"
+          then:
+            literal: Y
     verifications:
       allowed_values:
         values: [Y]

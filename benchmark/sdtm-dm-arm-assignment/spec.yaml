@@ -82,26 +82,24 @@ columns:
     label: Description of Unplanned Actual Arm
     derivation:
       case:
-        branches:
-          - when: "EXTRT1 IS NOT NULL AND ACTARMCD IS NULL"
-            then:
-              source: EXTRT1
+        - when: "EXTRT1 IS NOT NULL AND ACTARMCD IS NULL"
+          then:
+            source: EXTRT1
 
   - name: ARMNRS
     type: str
     label: Reason Arm and/or Actual Arm is Null
     derivation:
       case:
-        branches:
-          - when: "ARMCD IS NULL AND ACTARMCD IS NULL AND SCRNFL = 'Y'"
-            then:
-              literal: SCREEN FAILURE
-          - when: "ARMCD IS NULL AND ACTARMCD IS NULL"
-            then:
-              literal: NOT ASSIGNED
-          - when: "ARMCD IS NOT NULL AND ACTARMCD IS NULL AND ACTARMUD IS NULL"
-            then:
-              literal: NOT TREATED
+        - when: "ARMCD IS NULL AND ACTARMCD IS NULL AND SCRNFL = 'Y'"
+          then:
+            literal: SCREEN FAILURE
+        - when: "ARMCD IS NULL AND ACTARMCD IS NULL"
+          then:
+            literal: NOT ASSIGNED
+        - when: "ARMCD IS NOT NULL AND ACTARMCD IS NULL AND ACTARMUD IS NULL"
+          then:
+            literal: NOT TREATED
 
 verifications:
   - unique:

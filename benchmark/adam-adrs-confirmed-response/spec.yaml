@@ -79,15 +79,14 @@ columns:
     label: Confirmation Flag
     derivation:
       case:
-        branches:
-          - when: "AVALC = 'PD'"
-            then:
-              literal: Y
-          - when: "AVALC IN ('PR', 'CR') AND NEXTRESP IN ('PR', 'CR') AND DAYS_TO_NEXT >= 28"
-            then:
-              literal: Y
-        otherwise:
-          literal: N
+        - when: "AVALC = 'PD'"
+          then:
+            literal: Y
+        - when: "AVALC IN ('PR', 'CR') AND NEXTRESP IN ('PR', 'CR') AND DAYS_TO_NEXT >= 28"
+          then:
+            literal: Y
+        - otherwise:
+            literal: N
 
 verifications:
   - row_count:

@@ -79,10 +79,9 @@ columns:
     label: Analysis Start Date Imputation Flag
     derivation:
       case:
-        branches:
-          - when: "ASTDT IS NOT NULL AND ASTDTPR = 'M'"
-            then:
-              literal: "D"
+        - when: "ASTDT IS NOT NULL AND ASTDTPR = 'M'"
+          then:
+            literal: "D"
     verifications:
       allowed_values:
         values: ["D"]
@@ -92,10 +91,9 @@ columns:
     label: Treatment Emergent Analysis Flag
     derivation:
       case:
-        branches:
-          - when: "ASTDT IS NOT NULL AND TRTSDT IS NOT NULL AND ASTDT >= TRTSDT"
-            then:
-              literal: Y
+        - when: "ASTDT IS NOT NULL AND TRTSDT IS NOT NULL AND ASTDT >= TRTSDT"
+          then:
+            literal: Y
     verifications:
       allowed_values:
         values: [Y]

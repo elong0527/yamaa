@@ -56,10 +56,9 @@ columns:
     label: Analysis Visit
     derivation:
       case:
-        branches:
-          - when: "ADY >= 8 AND ADY <= 22"
-            then:
-              literal: WEEK 2
+        - when: "ADY >= 8 AND ADY <= 22"
+          then:
+            literal: WEEK 2
     verifications:
       allowed_values:
         values: [WEEK 2]
@@ -69,10 +68,9 @@ columns:
     label: Analysis Window Target
     derivation:
       case:
-        branches:
-          - when: "AVISIT IS NOT NULL"
-            then:
-              literal: 15
+        - when: "AVISIT IS NOT NULL"
+          then:
+            literal: 15
 
   - name: ADIST
     type: float
@@ -101,10 +99,9 @@ columns:
     label: Analysis Record Flag 01
     derivation:
       case:
-        branches:
-          - when: "ARNK = 1"
-            then:
-              literal: Y
+        - when: "ARNK = 1"
+          then:
+            literal: Y
 
 verifications:
   - unique:

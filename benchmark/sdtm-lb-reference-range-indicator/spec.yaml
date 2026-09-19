@@ -82,18 +82,17 @@ columns:
     label: Reference Range Indicator
     derivation:
       case:
-        branches:
-          - when: "LBSTRESN IS NULL"
-            then:
-              literal: null
-          - when: "LBSTRESN < LBSTNRLO"
-            then:
-              literal: LOW
-          - when: "LBSTRESN > LBSTNRHI"
-            then:
-              literal: HIGH
-        otherwise:
-          literal: NORMAL
+        - when: "LBSTRESN IS NULL"
+          then:
+            literal: null
+        - when: "LBSTRESN < LBSTNRLO"
+          then:
+            literal: LOW
+        - when: "LBSTRESN > LBSTNRHI"
+          then:
+            literal: HIGH
+        - otherwise:
+            literal: NORMAL
 
 verifications:
   - row_count:

@@ -56,12 +56,11 @@ columns:
     label: After First COVID-19 Flag
     derivation:
       case:
-        branches:
-          - when: >-
-              ASTDT > FIRSTCOV.AESTDTC OR
-              (ASTDT = FIRSTCOV.AESTDTC AND AESEQ > FIRSTCOV.AESEQ)
-            then:
-              literal: Y
+        - when: >-
+            ASTDT > FIRSTCOV.AESTDTC OR
+            (ASTDT = FIRSTCOV.AESTDTC AND AESEQ > FIRSTCOV.AESEQ)
+          then:
+            literal: Y
 
 verifications:
   - unique:

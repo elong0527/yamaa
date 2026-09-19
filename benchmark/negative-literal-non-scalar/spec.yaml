@@ -32,7 +32,6 @@ columns:
     label: Age Group
     derivation:
       case:
-        branches:
-          - when: "AGE >= 65"
-            then: {literal: {group: elderly}}
-        otherwise: {literal: younger}
+        - when: "AGE >= 65"
+          then: {literal: {group: elderly}}
+        - otherwise: {literal: younger}

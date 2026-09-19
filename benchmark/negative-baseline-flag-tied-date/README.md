@@ -57,10 +57,9 @@ the first:
   type: str
   derivation:
     case:
-      branches:
-        - when: "ABLRANK = 1"
-          then:
-            literal: Y
+      - when: "ABLRANK = 1"
+        then:
+          literal: Y
 ```
 
 Keep `ABLRANK` internal by omitting it from `output.columns`.

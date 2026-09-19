@@ -75,7 +75,6 @@ columns:
     label: Reason Subject Not Assigned to Treatment
     derivation:
       case:
-        branches:
-          - when: "ARM IS NULL"
-            then:
-              literal: Not assigned to treatment arm
+        - when: "ARM IS NULL"
+          then:
+            literal: Not assigned to treatment arm

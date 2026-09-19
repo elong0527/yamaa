@@ -46,13 +46,12 @@ columns:
     label: Serious Event
     derivation:
       case:
-        branches:
-          - when: >-
-              AE_RAW.AESDTH = 'Y' OR AE_RAW.AESLIFE = 'Y'
-              OR AE_RAW.AESHOSP = 'Y' OR AE_RAW.AESDISAB = 'Y'
-              OR AE_RAW.AESCONG = 'Y' OR AE_RAW.AESMIE = 'Y'
-            then: {literal: Y}
-        otherwise: {literal: N}
+        - when: >-
+            AE_RAW.AESDTH = 'Y' OR AE_RAW.AESLIFE = 'Y'
+            OR AE_RAW.AESHOSP = 'Y' OR AE_RAW.AESDISAB = 'Y'
+            OR AE_RAW.AESCONG = 'Y' OR AE_RAW.AESMIE = 'Y'
+          then: {literal: Y}
+        - otherwise: {literal: N}
     verifications:
       allowed_values: {values: [Y, N]}
 

@@ -83,18 +83,17 @@ columns:
     label: Analysis Date
     derivation:
       case:
-        branches:
-          - when: "DEATHDT IS NOT NULL AND DEATHDT >= STARTDT"
-            then:
-              source: DEATHDT
-          - when: "DEATHDT IS NOT NULL"
-            then:
-              source: STARTDT
-          - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
-            then:
-              source: CENSORDT1
-        otherwise:
-          source: CENSORDT2
+        - when: "DEATHDT IS NOT NULL AND DEATHDT >= STARTDT"
+          then:
+            source: DEATHDT
+        - when: "DEATHDT IS NOT NULL"
+          then:
+            source: STARTDT
+        - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
+          then:
+            source: CENSORDT1
+        - otherwise:
+            source: CENSORDT2
 
   - name: AVAL
     type: int
@@ -111,74 +110,68 @@ columns:
     label: Censor
     derivation:
       case:
-        branches:
-          - when: "DEATHDT IS NOT NULL"
-            then:
-              literal: 0
-        otherwise:
-          literal: 1
+        - when: "DEATHDT IS NOT NULL"
+          then:
+            literal: 0
+        - otherwise:
+            literal: 1
 
   - name: EVNTDESC
     type: str
     label: Event or Censoring Description
     derivation:
       case:
-        branches:
-          - when: "DEATHDT IS NOT NULL"
-            then:
-              literal: Death
-          - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
-            then:
-              literal: Alive
-        otherwise:
-          literal: Randomization
+        - when: "DEATHDT IS NOT NULL"
+          then:
+            literal: Death
+        - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
+          then:
+            literal: Alive
+        - otherwise:
+            literal: Randomization
 
   - name: CNSDTDSC
     type: str
     label: Censoring Date Description
     derivation:
       case:
-        branches:
-          - when: "DEATHDT IS NULL AND CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
-            then:
-              literal: Alive During Study
-          - when: "DEATHDT IS NULL"
-            then:
-              literal: Randomization
+        - when: "DEATHDT IS NULL AND CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
+          then:
+            literal: Alive During Study
+        - when: "DEATHDT IS NULL"
+          then:
+            literal: Randomization
 
   - name: SRCDOM
     type: str
     label: Source Data
     derivation:
       case:
-        branches:
-          - when: "DEATHDT IS NOT NULL"
-            then:
-              literal: ADRS
-        otherwise:
-          literal: ADSL
+        - when: "DEATHDT IS NOT NULL"
+          then:
+            literal: ADRS
+        - otherwise:
+            literal: ADSL
 
   - name: SRCVAR
     type: str
     label: Source Variable
     derivation:
       case:
-        branches:
-          - when: "DEATHDT IS NOT NULL"
-            then:
-              literal: ADT
-          - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
-            then:
-              literal: LSTALVDT
-        otherwise:
-          literal: RANDDT
+        - when: "DEATHDT IS NOT NULL"
+          then:
+            literal: ADT
+        - when: "CENSORDT1 IS NOT NULL AND CENSORDT1 > CENSORDT2"
+          then:
+            literal: LSTALVDT
+        - otherwise:
+            literal: RANDDT
 
   - name: SRCSEQ
     type: int
     label: Source Sequence Number
     derivation:
       case:
-        branches:
-          - when: "DEATHDT IS NOT NULL"
-            then:
-              source: DEATHSEQ
+        - when: "DEATHDT IS NOT NULL"
+          then:
+            source: DEATHSEQ

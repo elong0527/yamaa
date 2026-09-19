@@ -40,12 +40,13 @@ columns:
     label: Analysis Value
     derivation:
       value:
-        source:
-          variable: LB.LBSTRESN
-      override:
-        - when: USUBJID = '01' AND PARAMCD = 'AST'
-          value:
-            literal: 31.0
+        case:
+          - when: USUBJID = '01' AND PARAMCD = 'AST'
+            then:
+              literal: 31.0
+          - otherwise:
+              source:
+                variable: LB.LBSTRESN
     verifications:
       - not_missing:
           severity: error

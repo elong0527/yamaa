@@ -58,15 +58,14 @@ columns:
     label: End of Study Status
     derivation:
       case:
-        branches:
-          - when: "EOSDECOD = 'COMPLETED'"
-            then:
-              literal: COMPLETED
-          - when: "EOSDECOD IS NOT NULL"
-            then:
-              literal: DISCONTINUED
-        otherwise:
-          literal: ONGOING
+        - when: "EOSDECOD = 'COMPLETED'"
+          then:
+            literal: COMPLETED
+        - when: "EOSDECOD IS NOT NULL"
+          then:
+            literal: DISCONTINUED
+        - otherwise:
+            literal: ONGOING
     verifications:
       allowed_values:
         values: [COMPLETED, DISCONTINUED, ONGOING]
@@ -76,10 +75,9 @@ columns:
     label: Reason for Discontinuation
     derivation:
       case:
-        branches:
-          - when: "EOSSTT = 'DISCONTINUED'"
-            then:
-              source: EOSREAS
+        - when: "EOSSTT = 'DISCONTINUED'"
+          then:
+            source: EOSREAS
 
 verifications:
   - unique:

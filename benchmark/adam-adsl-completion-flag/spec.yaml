@@ -46,12 +46,11 @@ columns:
     label: Completion Flag
     derivation:
       case:
-        branches:
-          - when: "COMPREC IS NOT NULL"
-            then:
-              literal: Y
-        otherwise:
-          literal: N
+        - when: "COMPREC IS NOT NULL"
+          then:
+            literal: Y
+        - otherwise:
+            literal: N
     verifications:
       allowed_values:
         values: [Y, N]

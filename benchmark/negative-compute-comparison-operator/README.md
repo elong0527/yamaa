@@ -39,10 +39,9 @@ Use `case` to ask the comparison and return the intended numeric flag:
   type: int
   derivation:
     case:
-      branches:
-        - when: "AVAL > ANRHI"
-          then: {literal: 1}
-      otherwise: {literal: 0}
+      - when: "AVAL > ANRHI"
+        then: {literal: 1}
+      - otherwise: {literal: 0}
 ```
 
 This makes the conversion from a yes-or-no answer to `1` or `0` explicit.

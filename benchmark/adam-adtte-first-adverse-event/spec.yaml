@@ -70,24 +70,22 @@ columns:
     label: Selected Date Before Clamping
     derivation:
       case:
-        branches:
-          - when: "AEDT IS NOT NULL"
-            then:
-              source: AEDT
-        otherwise:
-          source: ADSL.EOSDT
+        - when: "AEDT IS NOT NULL"
+          then:
+            source: AEDT
+        - otherwise:
+            source: ADSL.EOSDT
 
   - name: ADT
     type: date
     label: Analysis Date
     derivation:
       case:
-        branches:
-          - when: "STARTDT IS NOT NULL AND STARTDT > RAWDT"
-            then:
-              source: STARTDT
-        otherwise:
-          source: RAWDT
+        - when: "STARTDT IS NOT NULL AND STARTDT > RAWDT"
+          then:
+            source: STARTDT
+        - otherwise:
+            source: RAWDT
 
   - name: AVAL
     type: int
@@ -104,55 +102,50 @@ columns:
     label: Censor
     derivation:
       case:
-        branches:
-          - when: "AEDT IS NOT NULL"
-            then:
-              literal: 0
-        otherwise:
-          literal: 1
+        - when: "AEDT IS NOT NULL"
+          then:
+            literal: 0
+        - otherwise:
+            literal: 1
 
   - name: EVNTDESC
     type: str
     label: Event or Censoring Description
     derivation:
       case:
-        branches:
-          - when: "AEDT IS NOT NULL"
-            then:
-              literal: AE
-        otherwise:
-          literal: END OF STUDY
+        - when: "AEDT IS NOT NULL"
+          then:
+            literal: AE
+        - otherwise:
+            literal: END OF STUDY
 
   - name: SRCDOM
     type: str
     label: Source Data
     derivation:
       case:
-        branches:
-          - when: "AEDT IS NOT NULL"
-            then:
-              literal: ADAE
-        otherwise:
-          literal: ADSL
+        - when: "AEDT IS NOT NULL"
+          then:
+            literal: ADAE
+        - otherwise:
+            literal: ADSL
 
   - name: SRCVAR
     type: str
     label: Source Variable
     derivation:
       case:
-        branches:
-          - when: "AEDT IS NOT NULL"
-            then:
-              literal: ASTDT
-        otherwise:
-          literal: EOSDT
+        - when: "AEDT IS NOT NULL"
+          then:
+            literal: ASTDT
+        - otherwise:
+            literal: EOSDT
 
   - name: SRCSEQ
     type: int
     label: Source Sequence Number
     derivation:
       case:
-        branches:
-          - when: "AEDT IS NOT NULL"
-            then:
-              source: AESEQ
+        - when: "AEDT IS NOT NULL"
+          then:
+            source: AESEQ
