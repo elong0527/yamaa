@@ -46,8 +46,9 @@ columns:
       row_value:
         source: EXDOSE
         offset: -1
-        group_by: [STUDYID, USUBJID]
-        order_by: [EXSTDTM, EXSEQ]
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [EXSTDTM, EXSEQ]
 
   - name: DOSREDFL
     type: str

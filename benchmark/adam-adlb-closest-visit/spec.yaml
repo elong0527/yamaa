@@ -87,12 +87,13 @@ columns:
     label: Analysis Rank
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]
-        order_by:
-          - ADIST
-          - {variable: ADY, direction: desc}
-          - LBSEQ
-        filter: "AVISIT IS NOT NULL"
+        window:
+          group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]
+          order_by:
+            - ADIST
+            - {variable: ADY, direction: desc}
+            - LBSEQ
+          filter: "AVISIT IS NOT NULL"
 
   - name: ANL01FL
     type: str

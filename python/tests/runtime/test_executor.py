@@ -611,7 +611,14 @@ def test_window_key_numbers_partitions_after_scalar_keys() -> None:
                 name="SEQ",
                 type="int",
                 derivation=derive(
-                    {"row_number": {"group_by": ["GRP"], "order_by": ["SRC.X"]}}
+                    {
+                        "row_number": {
+                            "window": {
+                                "group_by": ["GRP"],
+                                "order_by": ["SRC.X"],
+                            }
+                        }
+                    }
                 ),
             ),
         ],

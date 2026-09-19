@@ -53,11 +53,12 @@ columns:
     label: Severity Rank
     derivation:
       rank:
-        group_by: [STUDYID, USUBJID]
-        order_by:
-          - variable: ASEVN
-            direction: desc
-            nulls: last
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by:
+            - variable: ASEVN
+              direction: desc
+              nulls: last
 
   - name: SEVLVL
     type: int
@@ -65,11 +66,12 @@ columns:
     derivation:
       rank:
         method: dense
-        group_by: [STUDYID, USUBJID]
-        order_by:
-          - variable: ASEVN
-            direction: desc
-            nulls: last
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by:
+            - variable: ASEVN
+              direction: desc
+              nulls: last
 
 verifications:
   - row_count:

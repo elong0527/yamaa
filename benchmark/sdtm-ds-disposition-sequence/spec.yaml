@@ -35,8 +35,9 @@ columns:
     label: Sequence Number
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [DS_RAW.DSDTCOL]
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [DS_RAW.DSDTCOL]
     verifications:
       not_missing: {}
 

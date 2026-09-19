@@ -143,8 +143,9 @@ columns:
     label: Sequence Number
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [LBDTC, LBTESTCD, LBSPEC]
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [LBDTC, LBTESTCD, LBSPEC]
 
 rows:
   - id: serum_vitamin_d

@@ -39,6 +39,7 @@ columns:
     derivation:
       previous_non_missing:
         source: {literal: 120}
-        group_by: [STUDYID, USUBJID]
-        order_by:
-          - {variable: VSSEQ, direction: asc}
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by:
+            - {variable: VSSEQ, direction: asc}

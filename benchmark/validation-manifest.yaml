@@ -246,7 +246,7 @@ fixtures:
   negative-row-number-numeric-filter:
     rule: R006
     condition: invalid_field_type
-    spec_paths: [columns.VISITSEQ.derivation.row_number.filter]
+    spec_paths: [columns.VISITSEQ.derivation.row_number.window.filter]
     validator: schema
   negative-row-value-self-reference:
     rule: R001

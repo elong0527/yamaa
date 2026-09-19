@@ -52,8 +52,9 @@ columns:
       row_value:
         source: ADT
         offset: 1
-        group_by: [STUDYID, USUBJID]
-        order_by: [ADT, RSSEQ]
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ADT, RSSEQ]
 
   - name: NEXTRESP
     type: str
@@ -62,8 +63,9 @@ columns:
       row_value:
         source: AVALC
         offset: 1
-        group_by: [STUDYID, USUBJID]
-        order_by: [ADT, RSSEQ]
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ADT, RSSEQ]
 
   - name: DAYS_TO_NEXT
     type: int

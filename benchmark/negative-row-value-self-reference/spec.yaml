@@ -59,5 +59,6 @@ columns:
       row_value:
         source: AVALF
         offset: -1
-        group_by: [STUDYID, USUBJID, PARAMCD]
-        order_by: [ADT, VSSEQ]
+        window:
+          group_by: [STUDYID, USUBJID, PARAMCD]
+          order_by: [ADT, VSSEQ]

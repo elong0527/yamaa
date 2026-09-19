@@ -39,6 +39,7 @@ columns:
     derivation:
       rank:
         method: {competition: true}
-        group_by: [STUDYID, USUBJID]
-        order_by:
-          - {variable: AESEV, direction: desc}
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by:
+            - {variable: AESEV, direction: desc}

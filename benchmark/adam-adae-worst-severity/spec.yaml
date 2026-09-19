@@ -84,12 +84,13 @@ columns:
     label: Worst Severity Rank
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID, AEDECOD]
-        order_by:
-          - {variable: AESEVN, direction: desc}
-          - ASTDT
-          - AESEQ
-        filter: "TRTEMFL = 'Y' AND AESEVN IS NOT NULL"
+        window:
+          group_by: [STUDYID, USUBJID, AEDECOD]
+          order_by:
+            - {variable: AESEVN, direction: desc}
+            - ASTDT
+            - AESEQ
+          filter: "TRTEMFL = 'Y' AND AESEVN IS NOT NULL"
 
   - name: AWSEVFL
     type: str
