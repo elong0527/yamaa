@@ -96,10 +96,9 @@ columns:
     label: Worst Severity Flag
     derivation:
       case:
-        branches:
-          - when: "AWSRNK = 1"
-            then:
-              literal: Y
+        - when: "AWSRNK = 1"
+          then:
+            literal: Y
 
 verifications:
   - unique:

@@ -86,14 +86,13 @@ columns:
     label: Reported Term for the Disposition Event
     derivation:
       case:
-        branches:
-          - when: "COMPSTAT = 'COMPLETED'"
-            then:
-              literal: COMPLETED
-        otherwise:
-          source:
-            filter: ODM.ItemOID = 'IT.DS.REASON'
-            variable: ODM.Value
+        - when: "COMPSTAT = 'COMPLETED'"
+          then:
+            literal: COMPLETED
+        - otherwise:
+            source:
+              filter: ODM.ItemOID = 'IT.DS.REASON'
+              variable: ODM.Value
     verifications:
       - not_missing: {}
 
@@ -102,14 +101,13 @@ columns:
     label: Standardized Disposition Term
     derivation:
       case:
-        branches:
-          - when: "COMPSTAT = 'COMPLETED'"
-            then:
-              literal: COMPLETED
-        otherwise:
-          source:
-            filter: ODM.ItemOID = 'IT.DS.REASONCD'
-            variable: ODM.Value
+        - when: "COMPSTAT = 'COMPLETED'"
+          then:
+            literal: COMPLETED
+        - otherwise:
+            source:
+              filter: ODM.ItemOID = 'IT.DS.REASONCD'
+              variable: ODM.Value
     verifications:
       - not_missing: {}
       - allowed_values:

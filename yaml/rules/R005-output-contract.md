@@ -123,7 +123,7 @@ column. Its entries select the artifact columns and control their order.
 
 **R005-20.** Every derived value passes through the same stages in this
 order. Nothing consumes a value before its lifecycle is complete. A
-dependent column, an override predicate, a verification, and the artifact
+dependent column, a verification, and the artifact
 all see the same converted value.
 
 **R005-21.** Stage 1: evaluate the derivation's expression for one value,
@@ -135,35 +135,32 @@ for one value, under R011.
 **R005-23.** Stage 3: on conversion failure, substitute
 `conversion_failure` and convert that, for one value, under R008.
 
-**R005-24.** Stage 4: evaluate `override` predicates in order and convert
-the first match's value, then stop, for one value, under R008.
-
-**R005-25.** Stage 5: run the column's verifications over the whole column,
+**R005-24.** Stage 4: run the column's verifications over the whole column,
 under R009. An error stops execution. Warnings accumulate without changing
 the column.
 
-**R005-26.** Stages 1 to 4 run on each value, in whichever phase its
-derivation belongs to. Stage 5 runs once, after every row holds that
+**R005-25.** Stages 1 to 3 run on each value, in whichever phase its
+derivation belongs to. Stage 4 runs once, after every row holds that
 column's final value.
 
-**R005-27.** A row-level derivation therefore completes stages 1 to 4
+**R005-26.** A row-level derivation therefore completes stages 1 to 3
 during row construction, and a column derivation that depends on it reads a
 converted value of the declared type. The declared type matters. R007
 permits no implicit conversion between operation inputs, so an operation
 consuming a row-derived column must rely on the column's declared type.
 
-**R005-28.** For a grouped row template, R001 evaluates its `filter` after
-stages 1 to 4 complete for every value on the candidate row. A discarded
-candidate never enters the completed dataset, so stage 5 column
+**R005-27.** For a grouped row template, R001 evaluates its `filter` after
+stages 1 to 3 complete for every value on the candidate row. A discarded
+candidate never enters the completed dataset, so stage 4 column
 verifications do not include it. An error reached while deriving the
 candidate still fails the run; the filter does not retroactively hide a
 failed derivation.
 
-**R005-29.** Conversion must be deterministic and must not silently replace
+**R005-28.** Conversion must be deterministic and must not silently replace
 an error with a missing value. A conversion failure with no
 `conversion_failure` handler fails the run.
 
-**R005-30.** A derivation that needs stage 3 or stage 4 wraps its expression
+**R005-29.** A derivation that needs stage 3 wraps its expression
 in `value`:
 
 ```yaml
@@ -171,18 +168,15 @@ derivation:
   value:
     source: RAW.AGE
   conversion_failure: null
-  override:
-    - when: "USUBJID = 'SPECIAL-01'"
-      value: {literal: 99}
 ```
 
 ## Output identity
 
-**R005-31.** `keys` is an ordered list of columns named in
+**R005-30.** `keys` is an ordered list of columns named in
 `output.columns` and must name at least one. A column must not be listed
 twice.
 
-**R005-32.** Once every column's lifecycle is complete, the combined key
+**R005-31.** Once every column's lifecycle is complete, the combined key
 values of each row must be non-missing and unique across the artifact. Key
 validation happens before dataset verifications, which R009 runs last.
 String key values use R019 equality. Key order is significant to R003,
@@ -191,32 +185,32 @@ keys are used for enrichment and do not change the identity asserted here.
 
 ## Artifact row order
 
-**R005-33.** `output.order_by` declares the order the artifact's rows are
+**R005-32.** `output.order_by` declares the order the artifact's rows are
 presented in. It is optional. An artifact whose specification omits the
 order keeps R001's construction order: row-template order, and input order
 or first-occurrence group order within each row template.
 
-**R005-34.** Its terms are R007's order terms. A bare variable is ascending
+**R005-33.** Its terms are R007's order terms. A bare variable is ascending
 with missing values last. `direction` and `nulls` are declared per term.
 `nulls` does not flip with `direction`. Each non-missing value takes the
 order its type owns.
 
-**R005-35.** A term may name any declared column, output or internal,
+**R005-34.** A term may name any declared column, output or internal,
 because a submission order often rests on a working value the artifact does
 not publish: a numeric ordinal beside the text it labels, or a rank.
 
-**R005-36.** Every term must name a declared column. No variable may be
+**R005-35.** Every term must name a declared column. No variable may be
 repeated. A qualified source variable is not a declared column and has no
 value on a completed row to order by. A repeated term states nothing the
 first term did not.
 
-**R005-37.** Rows equal on every declared term keep their construction order.
+**R005-36.** Rows equal on every declared term keep their construction order.
 R007 applies the same tie-break to window ordering. The order is therefore
 total for every input. No tie is an error. No comparison is undefined. No
 specification declares a term merely to make the result deterministic. A
 specification wanting a tie broken declares the term that breaks it.
 
-**R005-38.** Ordering is presentation. It runs once, after the derivation
+**R005-37.** Ordering is presentation. It runs once, after the derivation
 lifecycle, key validation, and every R009 verification, so it cannot
 change whether a run passes or warns. It changes nothing about evaluation
 either. R001's dependency order, a window's partitions, and the neighbours
@@ -225,12 +219,12 @@ construction order for its own tie-break.
 
 ## Specification-wide uniqueness
 
-**R005-39.** Within one specification, implementations must reject duplicate
+**R005-38.** Within one specification, implementations must reject duplicate
 YAML mapping keys. Dataset identifiers, column names, and row IDs must
 each be unique. R006 owns the corresponding requirements for the schema
 bundle.
 
-**R005-40.** R017 matches identifiers across inheritance layers before this
+**R005-39.** R017 matches identifiers across inheritance layers before this
 rule applies, so a later layer may refine one inherited declaration.
 Duplicate identifiers within a single layer remain an error. The resolved
 specification contains one declaration for each identifier.
@@ -251,43 +245,43 @@ runtime's file order.
 
 ## Errors
 
-**R005-41.** A declared column with no derivation: fail and report the
+**R005-40.** A declared column with no derivation: fail and report the
 column name.
 
-**R005-42.** A column derived both at column level and in a `rows` entry:
+**R005-41.** A column derived both at column level and in a `rows` entry:
 fail.
 
-**R005-43.** A column derived in some `rows` entries but not all: fail and
+**R005-42.** A column derived in some `rows` entries but not all: fail and
 report the entries that omit it.
 
-**R005-44.** A `rows` derivation naming an undeclared column: fail.
+**R005-43.** A `rows` derivation naming an undeclared column: fail.
 
-**R005-45.** An internal column named in `keys`: fail and report the column
+**R005-44.** An internal column named in `keys`: fail and report the column
 name.
 
-**R005-46.** A missing `output.columns`, a duplicate entry, or an entry
+**R005-45.** A missing `output.columns`, a duplicate entry, or an entry
 naming an undeclared column: fail and report the column name.
 
-**R005-47.** An empty `keys`, an unknown key column, or a repeated key
+**R005-46.** An empty `keys`, an unknown key column, or a repeated key
 column: fail.
 
-**R005-48.** An `output.order_by` term naming anything but a declared
+**R005-47.** An `output.order_by` term naming anything but a declared
 column: fail and report the term.
 
-**R005-49.** An `output.order_by` variable declared more than once: fail and
+**R005-48.** An `output.order_by` variable declared more than once: fail and
 report it.
 
-**R005-50.** A duplicate YAML mapping key, dataset identifier, column name,
+**R005-49.** A duplicate YAML mapping key, dataset identifier, column name,
 or row ID: fail.
 
-**R005-51.** A conversion failure with no `conversion_failure` handler:
+**R005-50.** A conversion failure with no `conversion_failure` handler:
 fail.
 
-**R005-52.** A missing or duplicate combined key value: fail and report the
+**R005-51.** A missing or duplicate combined key value: fail and report the
 offending rows. A specification without `rows` emits one row per key
 combination under R001-12, so a duplicate key can come only from row
 templates emitting one combination more than once, under R001-12a.
 
-**R005-53.** A failed error-level verification: fail under R009. A
+**R005-52.** A failed error-level verification: fail under R009. A
 warning-level violation leaves the primary artifact intact and enters R009's
 violation log.

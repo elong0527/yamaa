@@ -16,7 +16,7 @@ than a live engine.
 the serialization yet. The observations below are the ones #101's
 requirements enumerate -- column order, row order, missing values, runtime
 types, rendered values, `phase`, `condition`, `spec_paths`, declared
-context, and R008-21 handler counts -- so ratifying that contract renames
+context, and R008-20 handler counts -- so ratifying that contract renames
 this envelope rather than changing what the engine is asked for.
 """
 
@@ -103,7 +103,7 @@ class UnsupportedObservation(_FrozenModel):
 
 
 class HandlerObservation(_FrozenModel):
-    """How often one declared handler path fired, zero included (R008-21)."""
+    """How often one declared handler path fired, zero included (R008-20)."""
 
     spec_path: str = Field(min_length=1)
     handler: str = Field(min_length=1)
@@ -565,7 +565,7 @@ def compare_example(
     order, a missing value, and a quoted empty string are compared as
     rendered, and the artifact verdict is the complete bytes.
 
-    R008-21 requires a run to report every declared handler path. The counts
+    R008-20 requires a run to report every declared handler path. The counts
     themselves become a comparison only when a caller states them, because
     no example commits them yet; #101's cross-runtime comparator is where R
     and Python counts meet.

@@ -31,13 +31,13 @@ columns:
     type: str
     label: Analysis Severity/Intensity
     derivation:
-      value:
-        str_upper:
-          source: AE.AESEV
-      override:
+      case:
         - when: "USUBJID = 'CATH-01-001' AND AESEQ = 2"
-          value:
+          then:
             literal: SEVERE
+        - otherwise:
+            str_upper:
+              source: AE.AESEV
     verifications:
       - not_missing: {}
       - allowed_values:

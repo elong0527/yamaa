@@ -70,12 +70,11 @@ columns:
     label: Exact Text Equality Flag
     derivation:
       case:
-        branches:
-          - when: "RAWTXT IS NULL AND PEERTXT IS NULL"
-            then: {literal: "Y"}
-          - when: "RAWTXT = PEERTXT"
-            then: {literal: "Y"}
-        otherwise: {literal: "N"}
+        - when: "RAWTXT IS NULL AND PEERTXT IS NULL"
+          then: {literal: "Y"}
+        - when: "RAWTXT = PEERTXT"
+          then: {literal: "Y"}
+        - otherwise: {literal: "N"}
 
   - name: LEASTTXT
     type: str

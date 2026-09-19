@@ -16,7 +16,7 @@ explained in [Schema concepts](../articles/schema-concepts.md).
 |---|---|
 | [`schema.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema.yaml) | The specification entry point: `root_class`, `column_class`, inputs, outputs, rows, verifications, metadata |
 | [`schema_shared.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_shared.yaml) | Headers shared across schema files |
-| [`schema_derivation.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_derivation.yaml) | The `derivation` field: the expression plus its `conversion_failure` and `override` layers |
+| [`schema_derivation.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_derivation.yaml) | The `derivation` field: the expression plus its `conversion_failure` layer |
 | [`schema_expression_core.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_core.yaml) | Core expressions: `source`, `literal`, `first_available`, `case` |
 | [`schema_expression_mapping.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_mapping.yaml) | Vocabulary mapping: `mapping`, `mapping_from`, `cut` |
 | [`schema_expression_str.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_str.yaml) | String expressions: `str_extract`, `str_concat`, `str_template`, `str_upper`, `str_lower` |

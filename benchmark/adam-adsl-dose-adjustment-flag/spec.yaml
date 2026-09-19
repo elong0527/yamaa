@@ -75,13 +75,12 @@ columns:
     label: Dose Adjustment Flag
     derivation:
       case:
-        branches:
-          - when: "EX_ADJ_CNT > 0 OR EC_ADJ_CNT > 0 OR FA_ADJ_CNT > 0"
-            then:
-              literal: "Y"
-          - when: "EX_ANY_CNT > 0 OR EC_ANY_CNT > 0 OR FA_ANY_CNT > 0"
-            then:
-              literal: "N"
+        - when: "EX_ADJ_CNT > 0 OR EC_ADJ_CNT > 0 OR FA_ADJ_CNT > 0"
+          then:
+            literal: "Y"
+        - when: "EX_ANY_CNT > 0 OR EC_ANY_CNT > 0 OR FA_ANY_CNT > 0"
+          then:
+            literal: "N"
     verifications:
       allowed_values:
         values: ["Y", "N"]

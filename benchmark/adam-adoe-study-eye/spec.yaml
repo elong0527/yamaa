@@ -64,19 +64,18 @@ columns:
     label: Analysis Eye
     derivation:
       case:
-        branches:
-          - when: "OELAT = 'BILATERAL' AND STUDYEYE IS NOT NULL"
-            then:
-              literal: Both Eyes
-          - when: "STUDYEYE = 'BILATERAL' AND OELAT IS NOT NULL"
-            then:
-              literal: Study Eye
-          - when: "OELAT = STUDYEYE"
-            then:
-              literal: Study Eye
-          - when: "STUDYEYE IS NOT NULL AND OELAT IS NOT NULL"
-            then:
-              literal: Fellow Eye
+        - when: "OELAT = 'BILATERAL' AND STUDYEYE IS NOT NULL"
+          then:
+            literal: Both Eyes
+        - when: "STUDYEYE = 'BILATERAL' AND OELAT IS NOT NULL"
+          then:
+            literal: Study Eye
+        - when: "OELAT = STUDYEYE"
+          then:
+            literal: Study Eye
+        - when: "STUDYEYE IS NOT NULL AND OELAT IS NOT NULL"
+          then:
+            literal: Fellow Eye
     verifications:
       allowed_values:
         values: [Study Eye, Fellow Eye, Both Eyes]

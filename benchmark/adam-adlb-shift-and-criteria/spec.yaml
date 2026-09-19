@@ -70,18 +70,17 @@ columns:
     label: Analysis Reference Range Indicator
     derivation:
       case:
-        branches:
-          - when: "AVAL IS NULL OR ANRLO IS NULL OR ANRHI IS NULL"
-            then:
-              literal: null
-          - when: "AVAL < ANRLO"
-            then:
-              literal: LOW
-          - when: "AVAL > ANRHI"
-            then:
-              literal: HIGH
-        otherwise:
-          literal: NORMAL
+        - when: "AVAL IS NULL OR ANRLO IS NULL OR ANRHI IS NULL"
+          then:
+            literal: null
+        - when: "AVAL < ANRLO"
+          then:
+            literal: LOW
+        - when: "AVAL > ANRHI"
+          then:
+            literal: HIGH
+        - otherwise:
+            literal: NORMAL
     verifications:
       allowed_values:
         values: [LOW, NORMAL, HIGH]
@@ -143,25 +142,23 @@ columns:
     label: Analysis Criterion 1
     derivation:
       case:
-        branches:
-          - when: "AVAL IS NOT NULL AND CRITLIM IS NOT NULL"
-            then:
-              literal: Result greater than 3 x ULN
+        - when: "AVAL IS NOT NULL AND CRITLIM IS NOT NULL"
+          then:
+            literal: Result greater than 3 x ULN
 
   - name: CRIT1FL
     type: str
     label: Criterion 1 Evaluation Result Flag
     derivation:
       case:
-        branches:
-          - when: "AVAL IS NULL OR CRITLIM IS NULL"
-            then:
-              literal: null
-          - when: "AVAL > CRITLIM"
-            then:
-              literal: Y
-        otherwise:
-          literal: N
+        - when: "AVAL IS NULL OR CRITLIM IS NULL"
+          then:
+            literal: null
+        - when: "AVAL > CRITLIM"
+          then:
+            literal: Y
+        - otherwise:
+            literal: N
     verifications:
       allowed_values:
         values: [Y, N]

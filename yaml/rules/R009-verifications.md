@@ -76,7 +76,7 @@ specification that must assert the claim derives at the parent's grain.
 `dataset_verifications`.
 
 **R009-6.** Column verifications infer the column on which they are declared.
-They run after that column's derivation, conversion, and final override.
+They run after that column's derivation and conversion.
 Dataset verifications run after all column work, output-key validation, and
 column verifications finish.
 

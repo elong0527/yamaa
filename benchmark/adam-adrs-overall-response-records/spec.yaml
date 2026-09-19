@@ -120,10 +120,9 @@ columns:
     label: Analysis Record Flag 01
     derivation:
       case:
-        branches:
-          - when: "WORSTORD = 1"
-            then:
-              literal: Y
+        - when: "WORSTORD = 1"
+          then:
+            literal: Y
     verifications:
       allowed_values:
         values: [Y]

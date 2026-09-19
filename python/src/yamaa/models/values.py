@@ -40,7 +40,6 @@ HandlerName: TypeAlias = Literal[
     "no_match",
     "invalid",
     "conversion_failure",
-    "override",
 ]
 
 INT64_MIN = -(2**63)
@@ -189,7 +188,7 @@ class RuntimeCondition(_FrozenModel):
 class HandlerObservation(_FrozenModel):
     """One handler that fired inside a nested expression.
 
-    R008-21 counts every handler path, and R007-3 lets `case` and
+    R008-20 counts every handler path, and R007-3 lets `case` and
     `str_concat` nest an expression that owns handlers of its own. The path
     is relative to the payload of the operation that returned this result,
     so the caller that knows the specification path can complete it.

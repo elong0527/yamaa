@@ -51,13 +51,12 @@ columns:
     label: Parameter Code
     derivation:
       case:
-        branches:
-          - when: "ADVSPRE.PARAMCD = 'BMI'"
-            then:
-              literal: BMIPCTL
-          - when: "ADVSPRE.PARAMCD = 'WEIGHT'"
-            then:
-              literal: WGTPCTL
+        - when: "ADVSPRE.PARAMCD = 'BMI'"
+          then:
+            literal: BMIPCTL
+        - when: "ADVSPRE.PARAMCD = 'WEIGHT'"
+          then:
+            literal: WGTPCTL
     verifications:
       allowed_values:
         values: [BMIPCTL, WGTPCTL]
@@ -67,13 +66,12 @@ columns:
     label: Parameter
     derivation:
       case:
-        branches:
-          - when: "PARAMCD = 'BMIPCTL'"
-            then:
-              literal: BMI-for-Age Percentile
-          - when: "PARAMCD = 'WGTPCTL'"
-            then:
-              literal: Weight-for-Age Percentile
+        - when: "PARAMCD = 'BMIPCTL'"
+          then:
+            literal: BMI-for-Age Percentile
+        - when: "PARAMCD = 'WGTPCTL'"
+          then:
+            literal: Weight-for-Age Percentile
 
   - name: ZNUM
     type: float
@@ -87,16 +85,15 @@ columns:
     label: Standard Normal Cumulative Probability
     derivation:
       case:
-        branches:
-          - when: "ZNUM IS NULL"
-            then:
-              literal: null
-        otherwise:
-          function:
-            name: normal_cdf
-            contract_version: "1.0.0"
-            args:
-              q: ZNUM
+        - when: "ZNUM IS NULL"
+          then:
+            literal: null
+        - otherwise:
+            function:
+              name: normal_cdf
+              contract_version: "1.0.0"
+              args:
+                q: ZNUM
 
   - name: AVAL
     type: float

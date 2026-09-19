@@ -9,10 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from yamaa.expressions import (
     ExpressionDispatcher,
-    PredicateValue,
     Resolver,
-    TruthValue,
-    evaluate_predicate,
 )
 from yamaa.models import (
     ConditionResult,
@@ -28,7 +25,7 @@ from yamaa.specification.models import ColumnType, Expression
 
 ResolverFactory = Callable[[Mapping[str, object]], Resolver]
 
-# Which R008 handler fields each registered operation offers. R008-22 makes a
+# Which R008 handler fields each registered operation offers. R008-21 makes a
 # handler on an operation that does not register it a schema failure, so this
 # map is the one place a new operation declares its handler paths.
 DECLARED_HANDLERS: dict[str, tuple[HandlerName, ...]] = {
@@ -74,10 +71,6 @@ class HandlerCounter:
         declaration = planned.declaration
         if "conversion_failure" in declaration.model_fields_set:
             self.register(f"{planned.path}.conversion_failure", "conversion_failure")
-        for index, override in enumerate(declaration.override or ()):
-            override_path = f"{planned.path}.override[{index}]"
-            self.register(override_path, "override")
-            self._register_expression(override.value, f"{override_path}.value")
 
     def _register_expression(self, expression: Expression, path: str) -> None:
         operation = expression.operation
@@ -90,26 +83,31 @@ class HandlerCounter:
         payload: object,
         operation_path: str,
     ) -> None:
+        # R007-3 lets these fields nest an expression that owns handlers of
+        # its own, so their paths are registered too. `case` takes a list
+        # payload; every other operation takes a mapping.
+        if operation == "case":
+            if isinstance(payload, Sequence) and not isinstance(payload, str):
+                for index, item in enumerate(payload):
+                    if isinstance(item, Mapping):
+                        if "otherwise" in item:
+                            self._register_one(
+                                item["otherwise"],
+                                f"{operation_path}[{index}].otherwise",
+                            )
+                        else:
+                            self._register_one(
+                                item.get("then"),
+                                f"{operation_path}[{index}].then",
+                            )
+            return
         if not isinstance(payload, Mapping):
             return
         for handler in DECLARED_HANDLERS.get(operation, ()):
             if handler in payload:
                 self.register(f"{operation_path}.{handler}", handler)
-        # R007-3 lets these fields nest an expression that owns handlers of
-        # its own, so their paths are registered too.
         if operation == "str_concat":
             self._register_nested(payload.get("sources"), operation_path, "sources")
-        elif operation == "case":
-            branches = payload.get("branches")
-            if isinstance(branches, Sequence) and not isinstance(branches, str):
-                for index, branch in enumerate(branches):
-                    if isinstance(branch, Mapping):
-                        self._register_one(
-                            branch.get("then"),
-                            f"{operation_path}.branches[{index}].then",
-                        )
-            if "otherwise" in payload:
-                self._register_one(payload["otherwise"], f"{operation_path}.otherwise")
 
     def _register_nested(self, values: object, prefix: str, field: str) -> None:
         if not isinstance(values, Sequence) or isinstance(values, str):
@@ -130,8 +128,9 @@ class HandlerCounter:
         if result.handled_by is not None:
             self.increment(f"{operation_path}.{result.handled_by}", result.handled_by)
         for observation in result.observations:
+            sep = "" if observation.path.startswith("[") else "."
             self.increment(
-                f"{operation_path}.{observation.path}.{observation.handler}",
+                f"{operation_path}{sep}{observation.path}.{observation.handler}",
                 observation.handler,
             )
 
@@ -163,7 +162,10 @@ def _condition_diagnostic(
     path: str,
 ) -> ExecutionDiagnostic:
     if condition.path_suffix is not None:
-        path = f"{path}.{condition.path_suffix}"
+        # A suffix starting with "[" continues a list item (case[0].when),
+        # so no dot separator is added.
+        sep = "" if condition.path_suffix.startswith("[") else "."
+        path = f"{path}{sep}{condition.path_suffix}"
     return ExecutionDiagnostic(
         phase=condition.phase,
         condition=condition.condition,
@@ -234,7 +236,7 @@ def evaluate_derivation(
     dispatcher: ExpressionDispatcher,
     counter: HandlerCounter,
 ) -> RuntimeValue:
-    """Evaluate, convert, handle, and override one scalar in R005 order."""
+    """Evaluate, convert, and handle one scalar in R005 order."""
     declaration = planned.declaration
     expression = declaration.value
     evaluated = dispatcher.evaluate(expression, resolver_factory(output_values))
@@ -266,30 +268,4 @@ def evaluate_derivation(
     else:
         current = converted.value
 
-    for index, override in enumerate(declaration.override or ()):
-        override_path = f"{planned.path}.override[{index}]"
-        resolver = resolver_factory({**output_values, planned.column: current})
-        predicate = evaluate_predicate(planned.override_predicates[index], resolver)
-        if isinstance(predicate, ConditionResult):
-            raise LifecycleCondition(
-                _condition_diagnostic(predicate.condition, f"{override_path}.when")
-            )
-        assert isinstance(predicate, PredicateValue)
-        if predicate.value is not TruthValue.TRUE:
-            continue
-
-        counter.increment(override_path, "override")
-        override_result = dispatcher.evaluate(override.value, resolver)
-        override_raw = _value_or_raise(
-            override_result,
-            f"{override_path}.value",
-            override.value,
-            counter,
-        )
-        current = _converted_or_raise(
-            override_raw,
-            target,
-            f"{override_path}.value",
-        )
-        break
     return current

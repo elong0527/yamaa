@@ -416,7 +416,7 @@ def test_concatenation_places_literals_beside_sources() -> None:
 
 
 def test_a_handler_inside_a_nested_source_is_observed_at_its_own_path() -> None:
-    # R008-21 counts every handler path, including one R007-3 lets nest.
+    # R008-20 counts every handler path, including one R007-3 lets nest.
     result = evaluate_expression(
         {
             "str_concat": {

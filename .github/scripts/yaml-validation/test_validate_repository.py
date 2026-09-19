@@ -294,14 +294,12 @@ class TestPredicateLanguage(unittest.TestCase):
                         'name': 'AGE',
                         'type': 'int',
                         'derivation': {
-                            'case': {
-                                'branches': [
-                                    {
-                                        'when': 'DM.AGE >= 18',
-                                        'then': {'source': 'DM.AGE'},
-                                    }
-                                ]
-                            }
+                            'case': [
+                                {
+                                    'when': 'DM.AGE >= 18',
+                                    'then': {'source': 'DM.AGE'},
+                                }
+                            ]
                         },
                     },
                 ],
@@ -6151,20 +6149,18 @@ class TestRetiredOdmItemReferences(unittest.TestCase):
 
     def test_rejects_an_item_inside_a_case_branch(self):
         findings = self.findings({
-            'case': {
-                'branches': [
-                    {
-                        'when': "USUBJID = '001'",
-                        'then': {'literal': '2024-01-01'},
-                    }
-                ],
-                'otherwise': {'source': {'variable': 'ODM.IT.DS.DTC'}},
-            },
+            'case': [
+                {
+                    'when': "USUBJID = '001'",
+                    'then': {'literal': '2024-01-01'},
+                },
+                {'otherwise': {'source': {'variable': 'ODM.IT.DS.DTC'}}},
+            ],
         })
 
         self.assertEqual(len(findings), 1)
         self.assertIn(
-            'derivation.case.otherwise.source.variable', findings[0]
+            'derivation.case[1].otherwise.source.variable', findings[0]
         )
 
     def test_exempts_the_specifications_506_still_owes(self):

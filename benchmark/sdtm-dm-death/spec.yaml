@@ -72,10 +72,9 @@ columns:
     label: Subject Death Flag
     derivation:
       case:
-        branches:
-          - when: "DSDTHDT IS NOT NULL OR AEDTHDT IS NOT NULL"
-            then:
-              literal: Y
+        - when: "DSDTHDT IS NOT NULL OR AEDTHDT IS NOT NULL"
+          then:
+            literal: Y
     verifications:
       allowed_values:
         values: [Y]

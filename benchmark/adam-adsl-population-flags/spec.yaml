@@ -38,12 +38,11 @@ columns:
     label: Safety Population Flag
     derivation:
       case:
-        branches:
-          - when: "TRTSDT IS NOT NULL"
-            then:
-              literal: Y
-        otherwise:
-          literal: N
+        - when: "TRTSDT IS NOT NULL"
+          then:
+            literal: Y
+        - otherwise:
+            literal: N
     verifications:
       - not_missing: {}
       - allowed_values:
@@ -54,12 +53,11 @@ columns:
     label: Intent-to-Treat Population Flag
     derivation:
       case:
-        branches:
-          - when: "ARMCD IS NOT NULL"
-            then:
-              literal: Y
-        otherwise:
-          literal: N
+        - when: "ARMCD IS NOT NULL"
+          then:
+            literal: Y
+        - otherwise:
+            literal: N
     verifications:
       - not_missing: {}
       - allowed_values:

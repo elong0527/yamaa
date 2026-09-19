@@ -32,11 +32,10 @@ square root:
 ```yaml
 derivation:
   case:
-    branches:
-      - when: "HEIGHTCM > 0 AND WEIGHTKG > 0"
-        then:
-          compute:
-            expr: "SQRT(HEIGHTCM * WEIGHTKG / 3600)"
+    - when: "HEIGHTCM > 0 AND WEIGHTKG > 0"
+      then:
+        compute:
+          expr: "SQRT(HEIGHTCM * WEIGHTKG / 3600)"
 ```
 
 With no `otherwise`, an invalid measurement produces missing.

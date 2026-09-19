@@ -66,20 +66,18 @@ columns:
     label: Fatal Event Flag
     derivation:
       case:
-        branches:
-          - when: "AE.AEOUT = 'FATAL'"
-            then:
-              literal: Y
+        - when: "AE.AEOUT = 'FATAL'"
+          then:
+            literal: Y
 
   - name: DTHFL
     type: str
     label: Death Flag
     derivation:
       case:
-        branches:
-          - when: "EVDTHDT IS NOT NULL OR DMDTHDT IS NOT NULL"
-            then:
-              literal: Y
+        - when: "EVDTHDT IS NOT NULL OR DMDTHDT IS NOT NULL"
+          then:
+            literal: Y
     verifications:
       allowed_values:
         values: [Y]

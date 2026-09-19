@@ -83,10 +83,9 @@ columns:
     label: Analysis Record Flag 01
     derivation:
       case:
-        branches:
-          - when: "NMEAS = NTARGET"
-            then:
-              literal: Y
+        - when: "NMEAS = NTARGET"
+          then:
+            literal: Y
     verifications:
       allowed_values:
         values: [Y]

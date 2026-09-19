@@ -86,10 +86,9 @@ columns:
     label: Worst Grade Occurrence Flag
     derivation:
       case:
-        branches:
-          - when: "WGRSEQ = 1"
-            then:
-              literal: Y
+        - when: "WGRSEQ = 1"
+          then:
+            literal: Y
     verifications:
       allowed_values:
         values: [Y]

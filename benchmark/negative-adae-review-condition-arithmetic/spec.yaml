@@ -24,7 +24,6 @@ columns:
     label: Protocol Review Flag
     derivation:
       case:
-        branches:
-          - when: "AE.AESEQ + 1 > 1"
-            then: {literal: Y}
-        otherwise: {literal: N}
+        - when: "AE.AESEQ + 1 > 1"
+          then: {literal: Y}
+        - otherwise: {literal: N}

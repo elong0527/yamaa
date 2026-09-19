@@ -71,14 +71,13 @@ class UnsupportedFeature(_FrozenModel):
 
 
 class PlannedDerivation(_FrozenModel):
-    """One derivation with its dependencies and parsed override predicates."""
+    """One derivation with its dependencies."""
 
     column: str = Field(min_length=1)
     path: str = Field(min_length=1)
     expression_path: str = Field(min_length=1)
     declaration: HandledExpression
     dependencies: tuple[str, ...]
-    override_predicates: tuple[dict[str, Any], ...]
 
     @property
     def operation_path(self) -> str:
@@ -274,7 +273,7 @@ def _diagnostic(
 
 def expression_path(path: str, derivation: HandledExpression) -> str:
     """Recover the authored bare-expression path where normalization permits it."""
-    handled = {"conversion_failure", "override"} & derivation.model_fields_set
+    handled = {"conversion_failure"} & derivation.model_fields_set
     return f"{path}.value" if handled else path
 
 
@@ -471,28 +470,31 @@ def _expression_info(
         if isinstance(sources, Sequence) and not isinstance(sources, str):
             for index, nested in enumerate(sources):
                 nest(nested, f"{operation_path}.sources[{index}]")
-    elif operation == "case" and isinstance(payload, Mapping):
-        branches = payload.get("branches")
-        if isinstance(branches, Sequence) and not isinstance(branches, str):
-            for index, branch in enumerate(branches):
-                if not isinstance(branch, Mapping):
-                    continue
-                branch_path = f"{operation_path}.branches[{index}]"
-                when = branch.get("when")
-                if isinstance(when, str):
-                    ast = _parse_predicate_at(when, f"{branch_path}.when", diagnostics)
-                    if ast is not None:
-                        references.extend(
-                            _Reference(
-                                name,
-                                f"{branch_path}.when",
-                                requirement="R004-32",
-                            )
-                            for name in _predicate_identifiers(ast)
+    elif (
+        operation == "case"
+        and isinstance(payload, Sequence)
+        and not isinstance(payload, str)
+    ):
+        for index, item in enumerate(payload):
+            if not isinstance(item, Mapping):
+                continue
+            item_path = f"{operation_path}[{index}]"
+            if "otherwise" in item:
+                nest(item["otherwise"], f"{item_path}.otherwise")
+                continue
+            when = item.get("when")
+            if isinstance(when, str):
+                ast = _parse_predicate_at(when, f"{item_path}.when", diagnostics)
+                if ast is not None:
+                    references.extend(
+                        _Reference(
+                            name,
+                            f"{item_path}.when",
+                            requirement="R004-32",
                         )
-                nest(branch.get("then"), f"{branch_path}.then")
-        if "otherwise" in payload:
-            nest(payload["otherwise"], f"{operation_path}.otherwise")
+                        for name in _predicate_identifiers(ast)
+                    )
+            nest(item.get("then"), f"{item_path}.then")
 
     return _ExpressionInfo(
         references=_deduplicate_references(references),
@@ -1054,38 +1056,6 @@ def _plan_derivation(
     unsupported.extend(info.unsupported)
     diagnostics.extend(info.diagnostics)
 
-    override_predicates: list[PredicateAst] = []
-    for index, override in enumerate(declaration.override or ()):
-        override_path = f"{path}.override[{index}]"
-        ast = _parse_predicate_at(override.when, f"{override_path}.when", diagnostics)
-        override_predicates.append(ast or {})
-        if ast is not None:
-            references.extend(
-                _Reference(
-                    name,
-                    f"{override_path}.when",
-                    current_value_available=True,
-                )
-                for name in _predicate_identifiers(ast)
-            )
-        override_info = _expression_info(
-            override.value,
-            f"{override_path}.value",
-            supported_operations,
-            scope=scope,
-        )
-        diagnostics.extend(override_info.diagnostics)
-        references.extend(
-            _Reference(
-                reference.name,
-                reference.path,
-                reference.expected_type,
-                current_value_available=True,
-            )
-            for reference in override_info.references
-        )
-        unsupported.extend(override_info.unsupported)
-
     ordered_references = _deduplicate_references(references)
     dependencies = tuple(
         dict.fromkeys(
@@ -1102,7 +1072,6 @@ def _plan_derivation(
             expression_path=value_path,
             declaration=declaration,
             dependencies=dependencies,
-            override_predicates=tuple(override_predicates),
         ),
         ordered_references,
     )
@@ -2020,15 +1989,6 @@ def _preflight_findings(
                     scope=scope,
                 ).unsupported
             )
-            for override_index, override in enumerate(declaration.override or ()):
-                unsupported.extend(
-                    _expression_info(
-                        override.value,
-                        f"{path}.override[{override_index}].value",
-                        supported_operations,
-                        scope=scope,
-                    ).unsupported
-                )
 
     column_scope = _Scope(record_lookups=_lookup_ids(specification))
     for column in specification.columns:
@@ -2044,15 +2004,6 @@ def _preflight_findings(
                 scope=column_scope,
             ).unsupported
         )
-        for override_index, override in enumerate(declaration.override or ()):
-            unsupported.extend(
-                _expression_info(
-                    override.value,
-                    f"{path}.override[{override_index}].value",
-                    supported_operations,
-                    scope=column_scope,
-                ).unsupported
-            )
 
     return diagnostics, _unique_features(unsupported)
 

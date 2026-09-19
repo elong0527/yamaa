@@ -376,7 +376,7 @@ def evaluate_nested(
     """Evaluate one expression R007-3 permits an operation to nest.
 
     The handler paths a nested expression fires are rebased under `prefix`,
-    so the caller that knows the specification path can report every R008-21
+    so the caller that knows the specification path can report every R008-20
     count without the nested operation knowing where it sits.
     """
     if not isinstance(expression, Mapping) or len(expression) != 1:

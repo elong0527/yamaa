@@ -168,7 +168,7 @@ omission; each is a decision recorded in a rule.
 | `25.5` becoming `int` 26 | Fails. A non-integral value is neither truncated nor rounded | R011 |
 | A result of `Inf` or `NaN` | Normalized to **missing**, immediately, at every boundary | R011 |
 | A same-named source variable picked up automatically | Forbidden. Every column is derived explicitly; write `literal: null` for a deliberate blank | R002 / R005 |
-| A nested expression in an operand field | Nesting exists in three places only (`case.then`, `str_concat.sources`, `override.value`); otherwise name an intermediate column | R007 |
+| A nested expression in an operand field | Nesting exists in two places only (`case` items, `str_concat.sources`); otherwise name an intermediate column | R007 |
 | A computed argument in `function.args` | Invalid. Arguments are variable names or closed literal leaves | R018 |
 | `MAX(SUM(...))` | Reductions do not nest. Two levels means two specifications with a stored intermediate | R013 |
 | A data-driven column count (SMQ01 ... SMQ0n) | The column list is fixed by the spec. A dictionary that outgrows it is a spec change, not a data-dependent artifact schema | R005 |

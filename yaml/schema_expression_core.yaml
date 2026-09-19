@@ -27,14 +27,9 @@ expressions:
             type: "list[variable]"
             required: true
             description: Mutually comparable variables to inspect.
-    case: # Returns the first true branch, then otherwise, or missing.
-        - branches:
-            type: "list[case_branch_class]"
-            required: true
-            description: Ordered conditions and result expressions.
-        - otherwise:
-            type: expression
-            description: Result used when no branch condition is true.
+    case: # Returns the first true branch's value, then otherwise, or missing.
+        type: "list[case_item_class]"
+        description: Ordered when/then items with an optional trailing otherwise; R007 defines the item order.
 
 source_binding_class:
     - variable:
@@ -96,6 +91,10 @@ order_term_class:
         values: [first, last]
         description: Placement of missing values, independent of direction.
 
+case_item_class:
+    type: [case_branch_class, case_otherwise_class]
+    description: A when/then branch, or the trailing otherwise item.
+
 case_branch_class:
     - when:
         type: sql
@@ -105,3 +104,9 @@ case_branch_class:
         type: expression
         required: true
         description: Result returned when the condition is true.
+
+case_otherwise_class:
+    - otherwise:
+        type: expression
+        required: true
+        description: Result used when no branch condition is true.

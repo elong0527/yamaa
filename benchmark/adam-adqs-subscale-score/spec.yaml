@@ -63,16 +63,15 @@ columns:
     label: Analysis Value
     derivation:
       case:
-        branches:
-          - when: "PARAMCD = 'PFSCORE' AND ITEMANS >= 3"
-            then:
-              compute:
-                expr: "100 * (ITEMSUM / ITEMANS) / 4"
-          - when: "PARAMCD = 'PFSCORE'"
-            then:
-              literal: null
-        otherwise:
-          source: ITEMRESN
+        - when: "PARAMCD = 'PFSCORE' AND ITEMANS >= 3"
+          then:
+            compute:
+              expr: "100 * (ITEMSUM / ITEMANS) / 4"
+        - when: "PARAMCD = 'PFSCORE'"
+          then:
+            literal: null
+        - otherwise:
+            source: ITEMRESN
     verifications:
       range:
         min: 0

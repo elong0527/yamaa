@@ -40,10 +40,9 @@ literal unless its behavior says otherwise:
 | impute | `date_impute.missing`, `date_precision.missing` | See R016 |
 | impute | `date_impute.invalid`, `date_precision.invalid` | See R016 |
 | convert | `conversion_failure` | Failed output conversion |
-| final | `override` | Apply the first matching final expression |
 
-**R008-2.** Literal handlers are substituted only when their condition
-occurs. Only final override values remain nested expressions.
+**R008-2.** Handlers are substituted only when their condition occurs; every
+handler value is a literal.
 
 **R008-3.** Omitting an applicable handler field makes its condition
 fatal.
@@ -117,7 +116,7 @@ what each reducer returns for such a group.
 
 ## Result handlers
 
-**R008-17.** A derivation with conversion or final handling uses `value`
+**R008-17.** A derivation with conversion handling uses `value`
 to hold its normal expression. A bare expression is the R006 shorthand
 for that wrapper, so every derivation carries its expression in `value`
 once expanded.
@@ -127,18 +126,11 @@ when conversion to the declared column type fails. R011 defines which
 conversions fail and states that a missing input is not converted at
 all, so `conversion_failure` never fires for one.
 
-**R008-19.** After successful conversion, evaluate `override` predicates
-in list order against the converted output row. Evaluate the first
-matching `value`, convert it to the column type, and stop. If no
-predicate is `TRUE`, keep the original value.
-
 ## Dependencies and audit
 
-**R008-20.** Override values and predicates contribute dependencies
-under R001 even when their path is not taken. Literal handlers add no
-dependencies.
+**R008-19.** Literal handlers add no dependencies.
 
-**R008-21.** Implementations must report each handler path's record count.
+**R008-20.** Implementations must report each handler path's record count.
 A handler firing zero times is reportable and is not an error.
 
 ## Rationale
@@ -155,19 +147,15 @@ firing the handler.
 
 ## Errors
 
-**R008-22.** A handler field on an expression that does not register it:
+**R008-21.** A handler field on an expression that does not register it:
 schema failure.
 
-**R008-23.** A result wrapper with neither `conversion_failure` nor
-`override`: fail.
+**R008-22.** A result wrapper with no `conversion_failure`: fail.
 
-**R008-24.** A handler literal incompatible with its result context:
+**R008-23.** A handler literal incompatible with its result context:
 fail with both the handler and original context.
 
-**R008-25.** `multiple_matches.keep` outside `first` or `last`: schema
+**R008-24.** `multiple_matches.keep` outside `first` or `last`: schema
 failure.
 
-**R008-26.** A conversion replacement that cannot be converted: fail.
-
-**R008-27.** More than one successful override is not evaluated; first
-match wins.
+**R008-25.** A conversion replacement that cannot be converted: fail.

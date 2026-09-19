@@ -52,10 +52,9 @@ columns:
     label: Treatment Emergent Analysis Flag
     derivation:
       case:
-        branches:
-          - when: "ASTDTM IS NOT NULL AND TRTSDTM IS NOT NULL AND ASTDTM >= TRTSDTM"
-            then:
-              literal: Y
+        - when: "ASTDTM IS NOT NULL AND TRTSDTM IS NOT NULL AND ASTDTM >= TRTSDTM"
+          then:
+            literal: Y
     verifications:
       allowed_values:
         values: [Y]
@@ -74,10 +73,9 @@ columns:
     label: First Occurrence Within Subject Flag
     derivation:
       case:
-        branches:
-          - when: "AOCCSEQ = 1"
-            then:
-              literal: Y
+        - when: "AOCCSEQ = 1"
+          then:
+            literal: Y
     verifications:
       allowed_values:
         values: [Y]

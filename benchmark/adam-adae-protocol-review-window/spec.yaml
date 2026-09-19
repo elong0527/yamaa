@@ -53,14 +53,13 @@ columns:
     label: Protocol Review Flag
     derivation:
       case:
-        branches:
-          - when: >-
-              (ASTDT BETWEEN DATE '2025-01-01' AND DATE '2025-01-31'
-              OR ASTDTM >= DATETIME '2025-02-01T09:30')
-              AND AETERM LIKE 'INF!_%' ESCAPE '!'
-              AND SCORE >= -1.5
-            then: {literal: Y}
-        otherwise: {literal: N}
+        - when: >-
+            (ASTDT BETWEEN DATE '2025-01-01' AND DATE '2025-01-31'
+            OR ASTDTM >= DATETIME '2025-02-01T09:30')
+            AND AETERM LIKE 'INF!_%' ESCAPE '!'
+            AND SCORE >= -1.5
+          then: {literal: Y}
+        - otherwise: {literal: N}
     verifications:
       allowed_values: {values: [Y, N]}
 

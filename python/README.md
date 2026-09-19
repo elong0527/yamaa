@@ -290,10 +290,9 @@ The lower-level executor remains available for adapters and injected test
 hooks. It plans dependencies before evaluation, constructs record-driven rows
 in specification and source order, then enriches those rows without changing
 their count. The provider entry point completes all source-independent
-validation before it asks for source bytes. Each scalar completes expression
-evaluation, declared type conversion, conversion handling, and first-match
-override before a dependent reads it. Handler counts include declared paths
-that fired zero times. Column, key, dataset-verification, and ordered-output
+validation before it asks for source bytes. each scalar completes expression evaluation, declared type conversion, and
+conversion handling before a dependent reads it. Handler counts include
+declared paths that fired zero times. Column, key, dataset-verification, and ordered-output
 work is delegated to the pure hooks exposed by the verification and I/O
 components.
 
@@ -598,7 +597,7 @@ A report carries what a cross-runtime comparison needs and nothing that
 belongs to one implementation: the artifact's column order, declared
 types, record count, R020 bytes and their digest; a failure's `phase`,
 `condition`, `spec_paths`, `requirement`, and context; each unsupported
-operation and where it was declared; and the R008-21 count for every
+operation and where it was declared; and the R008-20 count for every
 declared handler path, including the ones that never fired.
 
 ```python

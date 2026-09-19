@@ -127,10 +127,9 @@ columns:
     label: Completion Status
     derivation:
       case:
-        branches:
-          - when: "LBORRES = 'NOT DONE'"
-            then:
-              literal: NOT DONE
+        - when: "LBORRES = 'NOT DONE'"
+          then:
+            literal: NOT DONE
     verifications:
       allowed_values:
         values: [NOT DONE]

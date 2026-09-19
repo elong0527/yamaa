@@ -64,13 +64,12 @@ columns:
     label: On-Treatment Flag
     derivation:
       case:
-        branches:
-          - when: >
-              TRTSDT IS NOT NULL AND
-              (TRTEDT IS NULL OR ASTDT IS NULL OR ASTDT <= TRTEDT) AND
-              (AENDT IS NULL OR AENDT >= TRTSDT)
-            then:
-              literal: Y
+        - when: >
+            TRTSDT IS NOT NULL AND
+            (TRTEDT IS NULL OR ASTDT IS NULL OR ASTDT <= TRTEDT) AND
+            (AENDT IS NULL OR AENDT >= TRTSDT)
+          then:
+            literal: Y
     verifications:
       allowed_values:
         values: [Y]

@@ -65,14 +65,13 @@ columns:
     label: Decision Rule
     derivation:
       case:
-        branches:
-          - when: "SAEFL = 'Y' OR DCSREAS IS NOT NULL"
-            then: {literal: SAFETY}
-          - when: "PCHG IS NULL"
-            then: {literal: MISSING}
-          - when: "PCHG <= -75"
-            then: {literal: THRESHOLD}
-        otherwise: {literal: OTHERWISE}
+        - when: "SAEFL = 'Y' OR DCSREAS IS NOT NULL"
+          then: {literal: SAFETY}
+        - when: "PCHG IS NULL"
+          then: {literal: MISSING}
+        - when: "PCHG <= -75"
+          then: {literal: THRESHOLD}
+        - otherwise: {literal: OTHERWISE}
 
   - name: AVALC
     type: str
@@ -109,13 +108,12 @@ columns:
     label: Analysis Value
     derivation:
       case:
-        branches:
-          - when: "AVALC = 'RESPONDER'"
-            then:
-              literal: 1
-          - when: "AVALC = 'NON-RESPONDER'"
-            then:
-              literal: 0
+        - when: "AVALC = 'RESPONDER'"
+          then:
+            literal: 1
+        - when: "AVALC = 'NON-RESPONDER'"
+          then:
+            literal: 0
 
 verifications:
   - unique:
