@@ -16,8 +16,8 @@ Bind validated bytes to the bytes ingestion receives.
 ## Boundaries
 
 This rule owns the approved roots, the project configuration that declares
-them, the written form of a `project_path`, the file kinds a run may read,
-content identity from validation to ingestion, and the resulting errors.
+them, the written form of a `project_path`, file kinds a run may read,
+content identity from validation to ingestion, and resulting errors.
 
 R002 owns dataset declaration and how a name resolves to a value. R014 owns
 what a stored field becomes once its bytes are available, including the
@@ -117,7 +117,7 @@ identically on every platform and reveals nothing about the host.
   misspelling with no legitimate layout behind it, and an empty path is one
   empty segment.
 - **R021-12.** A `..` segment climbs to the parent directory and a `.` segment
-  stays put. A relative path may write both. Both resolve textually
+  stays put. A relative path may contain both. Both resolve textually
   before the filesystem is consulted. A traversal that stays inside the
   approved project root names one file by one spelling, because the canonical
   resolved path below is the snapshot identity. A traversal that climbs

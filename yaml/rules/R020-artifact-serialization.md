@@ -17,9 +17,9 @@ strings, float display precision, and target replacement.
 ## Boundaries
 
 This rule starts where R005 ends. R005 owns the artifact's columns, their
-order, its rows, and row order. R020 cannot change them. R011 owns column
-values and the text conversion to `str` produces. R020 owns the one display
-rounding after every calculation. R016 owns the canonical text of a `date` and
+order, its rows, and row order. R020 cannot change them. R011 owns
+column values and conversion to `str`. R020 owns one display rounding after
+every calculation. R016 owns the canonical text of a `date` and
 `datetime`. R019 owns string contents, ill-formed-text failure, and string
 order.
 
@@ -229,8 +229,8 @@ under `csv`, whose byte guarantee is exactly that.
 **R020-29.** A `float` enters this profile as the binary64 value its derivation
 produced. `output.decimals` does not apply. No rounding happens on output, so a
 consumer that reads the artifact receives the value the calculation used.
-Storing a container's native double is not display. This design rounds once,
-at display.
+Storing native double values is not display. This design rounds once, at
+display.
 
 ## Display precision
 
