@@ -1,0 +1,164 @@
+schema_version: "1.0"
+domain: EX
+keys: [STUDYID, USUBJID, EXSEQ]
+
+input:
+  EC: {path: input/ec.csv, types: {ECSEQ: int, TABLETS: int, STRENGTH_MG: float, DOSE_MGKG: float, ECSTDTC: date, ECENDTC: date}}
+  WEIGHT: {path: input/weight.csv, types: {WEIGHT_KG: float}}
+  KITLIST: {path: input/kit_list.csv, types: {DOSE_MG: float}}
+
+base: EC
+
+record_lookups:
+  - id: BODYWEIGHT
+    dataset: WEIGHT
+  - id: KITMAP
+    dataset: KITLIST
+    source: [KIT]
+    key: [KIT]
+    incomplete: missing
+
+output:
+  path: ex.csv
+  columns: [DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXSTDTC, EXENDTC]
+  order_by: [USUBJID, EXSEQ]
+
+rows:
+  - id: taken
+    dataset: EC
+    filter: "EC.ECOCCUR = 'Y'"
+    derivations:
+      FORM:
+        source: EC.FORM
+      KIT:
+        source: EC.KIT
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: EX
+    verifications:
+      allowed_values:
+        values: [EX]
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: EC.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: EC.USUBJID
+
+  - name: FORM
+    type: str
+    label: Collected Dose Form
+    verifications:
+      allowed_values:
+        values: [TABLET, INFUSION, KITDOSE]
+
+  - name: KIT
+    type: str
+    label: Blinded Kit Number as Collected
+
+  - name: TABLET_COUNT
+    type: int
+    label: Tablets Taken as Collected
+    derivation:
+      source: EC.TABLETS
+
+  - name: TABLET_STRENGTH_MG
+    type: float
+    label: Tablet Strength in mg as Collected
+    derivation:
+      source: EC.STRENGTH_MG
+
+  - name: DOSE_MG_PER_KG
+    type: float
+    label: Weight-Based Dose in mg/kg as Collected
+    derivation:
+      source: EC.DOSE_MGKG
+
+  - name: EXTRT
+    type: str
+    label: Name of Treatment
+    derivation:
+      case:
+        - when: "FORM = 'KITDOSE'"
+          then:
+            source: KITMAP.TREATMENT
+        - otherwise:
+            source: EC.ECTRT
+    verifications:
+      - not_missing: {}
+
+  - name: EXDOSE
+    type: float
+    label: Dose
+    derivation:
+      case:
+        - when: "FORM = 'TABLET'"
+          then:
+            compute:
+              expr: "TABLET_COUNT * TABLET_STRENGTH_MG"
+        - when: "FORM = 'INFUSION'"
+          then:
+            compute:
+              expr: "DOSE_MG_PER_KG * BODYWEIGHT.WEIGHT_KG"
+        - otherwise:
+            source: KITMAP.DOSE_MG
+    verifications:
+      - not_missing: {}
+
+  - name: EXDOSU
+    type: str
+    label: Dose Units
+    derivation:
+      literal: mg
+    verifications:
+      allowed_values:
+        values: [mg]
+
+  - name: EXSTDTC
+    type: date
+    label: Start Date/Time of Treatment
+    derivation:
+      source: EC.ECSTDTC
+    verifications:
+      - not_missing: {}
+
+  - name: EXENDTC
+    type: date
+    label: End Date/Time of Treatment
+    derivation:
+      source: EC.ECENDTC
+    verifications:
+      - not_missing: {}
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [EC.ECSTDTC, EXTRT]
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, EXSEQ]
+  - row_count:
+      min: 5
+      max: 5
+  - predicate:
+      id: every-administration-has-dose-and-unit
+      assert: "EXDOSE IS NOT NULL AND EXDOSU IS NOT NULL"
+  - implies:
+      id: placebo-kit-carries-zero-dose
+      when: "EXTRT = 'PLACEBO'"
+      then: "EXDOSE = 0"
