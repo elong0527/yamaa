@@ -10,7 +10,6 @@ source_system_version: "1.0"
 
 study:
   id: STUDY01
-  name: STUDY01
   description: Example study demonstrating the Define-XML metadata contract
   protocol_name: STUDY-01
 
@@ -21,7 +20,6 @@ metadata_version:
 
 standards:
   - id: SDTMIG
-    name: SDTMIG
     type: IG
     version: "3.4"
     status: Final

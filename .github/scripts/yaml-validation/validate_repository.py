@@ -4123,15 +4123,6 @@ def validate_project_environment(
                 f"ERROR: {vector_label}.schema_version: must match the "
                 "project environment"
             )
-        if vectors.get('function') != name:
-            errors.append(
-                f"ERROR: {vector_label}.function: expected {name!r}"
-            )
-        if vectors.get('contract_version') != contract.get('contract_version'):
-            errors.append(
-                f"ERROR: {vector_label}.contract_version: must match the "
-                "logical contract"
-            )
         cases = vectors.get('cases')
         if isinstance(cases, list) and not cases:
             errors.append(

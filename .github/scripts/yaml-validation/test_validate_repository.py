@@ -1374,8 +1374,6 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
         conformance.mkdir()
         (conformance / 'test-value.yaml').write_text(
             'schema_version: "1.0"\n'
-            'function: test_value\n'
-            'contract_version: "1.0.0"\n'
             'cases:\n'
             '  - id: ordinary\n'
             '    covers: [normal, numeric-comparison, boolean-true:enabled]\n'
@@ -1644,8 +1642,6 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
             document, environment_path = self.write_project(root, contract)
             vectors = {
                 'schema_version': '1.0',
-                'function': 'test_value',
-                'contract_version': '1.0.0',
                 'cases': [
                     {
                         'id': 'ordinary',

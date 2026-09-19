@@ -205,7 +205,8 @@ attributes in this order:
 
 **R026-22.** `Study` carries `OID` alone. Its `GlobalVariables` child
 carries `StudyName`, `StudyDescription`, and `ProtocolName`, in that order,
-from `study.name`, `study.description`, and `study.protocol_name`.
+from `study.name` (defaulting to `study.id` when omitted), `study.description`,
+and `study.protocol_name`.
 
 **R026-23.** `MetaDataVersion` carries `OID`, `Name` from
 `metadata_version.name`, `Description` when declared, and `def:DefineVersion`

@@ -29,8 +29,4 @@ functions:
     returns: float
     binding:
       call: projectbmi::bmi
-      args:
-        weight_kg: weight_kg
-        height_cm: height_cm
-        cm_per_m: cm_per_m
     conformance: conformance/bmi.yaml

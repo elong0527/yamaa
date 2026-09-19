@@ -98,13 +98,11 @@ function_binding_class:
         description: Statically written callable inside the immutable runtime.
     - args:
         type: "dict[identifier, host_argument_name]"
-        required: true
-        description: Complete mapping from logical to host argument names.
+        required: false
+        description: Complete mapping from logical to host argument names; omitted, every logical parameter name is its own host argument name.
 
 function_conformance_class:
     - schema_version: {type: str, required: true}
-    - function: {type: identifier, required: true}
-    - contract_version: {type: function_contract_version, required: true}
     - cases: {type: "list[function_conformance_case_class]", required: true}
 
 function_conformance_case_class:

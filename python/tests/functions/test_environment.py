@@ -29,7 +29,8 @@ def test_a_written_project_root_loads_its_contracts(bmi_project, repository) -> 
 
     assert loaded.environment.runtime.language == "python"
     assert sorted(loaded.environment.functions) == ["bmi"]
-    assert loaded.conformance["bmi"].contract_version == "1.0.0"
+    assert loaded.environment.functions["bmi"].contract_version == "1.0.0"
+    assert loaded.conformance["bmi"].cases
     assert loaded.vector_identity.startswith("sha256:")
 
 
@@ -159,6 +160,27 @@ def test_a_binding_that_leaves_a_parameter_unmapped_is_invalid(
     assert failure.context["unmapped"] == ["cm_per_m"]
 
 
+def test_an_omitted_binding_args_maps_names_to_themselves(
+    bmi_project, repository
+) -> None:
+    # R018-22: omitting `args` is the identity mapping, not an unmapped
+    # signature -- every logical parameter name is its own host name.
+    text = bmi_project.environment_text
+    start = text.index("      args:\n")
+    end = text.index("    conformance:")
+    (bmi_project.path / "environment.yaml").write_text(
+        text[:start] + text[end:], "utf-8"
+    )
+
+    loaded = load_environment(bmi_project.path, repository.schema)
+
+    assert loaded.environment.functions["bmi"].binding.args == {
+        "weight_kg": "weight_kg",
+        "height_cm": "height_cm",
+        "cm_per_m": "cm_per_m",
+    }
+
+
 def test_a_host_argument_name_that_is_a_keyword_is_invalid(
     bmi_project, repository
 ) -> None:
@@ -198,21 +220,24 @@ def test_a_conformance_path_leaving_the_root_is_invalid(
     assert failure.condition == "project_environment_invalid"
 
 
-def test_a_vector_document_naming_another_contract_is_invalid(
+def test_a_vector_document_carrying_a_contract_identity_is_invalid(
     bmi_project, repository
 ) -> None:
-    # R018-26: a vector document identifies the same logical name and the
-    # same contract version it activates.
+    # R018-26: the `functions` entry alone identifies the contract a vector
+    # document activates, so a document that still carries its own identity
+    # is rejected rather than trusted.
     bmi_project.write_vectors(
         repository.vectors.replace(
-            'contract_version: "1.0.0"', 'contract_version: "2.0.0"'
+            'schema_version: "1.0"',
+            'schema_version: "1.0"\nfunction: bmi\ncontract_version: "1.0.0"',
+            1,
         )
     )
 
     failure = _failure(bmi_project.path, repository.schema)
 
     assert failure.condition == "project_environment_invalid"
-    assert failure.context["expected"] == ["bmi", "1.0.0"]
+    assert failure.requirement == "R018-34"
 
 
 def test_an_r_environment_loads_for_inspection_without_a_python_runner(

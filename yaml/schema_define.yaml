@@ -98,9 +98,9 @@ study_class:
         description: Identifier the study's generated identity is built from.
     - name:
         type: str
-        required: true
+        required: false
         min_length: 1
-        description: Name of the study.
+        description: Name of the study; omitted, the id is the name.
     - description:
         type: str
         required: true
@@ -135,8 +135,8 @@ standard_class:
         description: Name datasets and codelists refer to this standard by.
     - name:
         type: standard_name
-        required: true
-        description: Published standard name.
+        required: false
+        description: Published standard name; omitted, the id is the published name.
     - type:
         type: str
         required: true
