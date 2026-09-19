@@ -78,13 +78,13 @@ def test_recursive_alias_tries_a_later_union_member(tmp_path: Path) -> None:
     schema_root = _mutate_schema(
         tmp_path,
         "schema.yaml",
-        "type: domain_name",
+        "type: identifier",
         "type: recursive_domain",
     )
     schema_path = schema_root / "schema.yaml"
     source = schema_path.read_text(encoding="ascii")
     schema_path.write_text(
-        f"{source}\nrecursive_domain:\n    type: [recursive_domain, domain_name]\n",
+        f"{source}\nrecursive_domain:\n    type: [recursive_domain, identifier]\n",
         encoding="ascii",
     )
 
@@ -115,7 +115,7 @@ def test_does_not_expand_collection_shorthand_in_larger_union(
     schema_root = _mutate_schema(
         tmp_path,
         "schema.yaml",
-        "type: domain_name",
+        "type: identifier",
         'type: [str, "list[str]", int]',
     )
 
@@ -128,7 +128,7 @@ def test_expands_list_valued_collection_shorthand(tmp_path: Path) -> None:
     schema_root = _mutate_schema(
         tmp_path,
         "schema.yaml",
-        "type: domain_name",
+        "type: identifier",
         'type: [items, "list[items]"]',
     )
     schema_path = schema_root / "schema.yaml"
@@ -152,7 +152,7 @@ def test_does_not_expand_class_shorthand_when_field_is_a_union(
     schema_root = _mutate_schema(
         tmp_path,
         "schema.yaml",
-        "type: domain_name",
+        "type: identifier",
         "type: [str, domain_wrapper]",
     )
     schema_path = schema_root / "schema.yaml"
@@ -315,13 +315,13 @@ def test_reports_invalid_schema_patterns(tmp_path: Path) -> None:
         ),
         (
             "schema.yaml",
-            "type: domain_name",
-            'type: "list[domain_name"',
+            "type: identifier",
+            'type: "list[identifier"',
             "invalid type expression",
         ),
         (
             "schema.yaml",
-            "type: domain_name",
+            "type: identifier",
             "type: missing_type",
             "unknown schema type 'missing_type'",
         ),

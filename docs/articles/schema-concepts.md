@@ -39,7 +39,7 @@ once in `schema.yaml`:
 
 ```yaml
 column_class:
-    - name:   {type: column_name, required: true}
+    - name:   {type: identifier, required: true}
     - type:   {type: column_type, required: true}
     - label:  {type: str, required: false}
     - derivation:    {type: derivation, required: false}

@@ -2253,7 +2253,7 @@ def validate_inheritance_layer(layer, label, env, require_output=False):
                 member_path = f"{path}.{member_id}"
                 errors.extend(
                     validate_type(
-                        member_id, ['dataset_id'], env,
+                        member_id, ['identifier'], env,
                         f"{path}.key({member_id})",
                     )
                 )
@@ -2910,11 +2910,46 @@ def string_template_identifier_names(text):
         return set()
 
 
-def collect_descriptor_references(data, descriptor, env):
-    return collect_type_references(data, descriptor['type'], env)
+def collect_descriptor_references(data, descriptor, env, scope=None):
+    return collect_type_references(data, descriptor['type'], env, scope)
 
 
-def collect_inline_class_references(data, fields, env):
+# (class or registry keyword, field) positions where an `identifier` string
+# names a declared dataset. Replaces the nominal `dataset_id` alias dispatch.
+_IDENTIFIER_DATASET_FIELDS = frozenset(
+    {
+        ('root_class', 'base'),
+        ('row_class', 'dataset'),
+        ('record_lookup_class', 'dataset'),
+        ('mapping_from', 'dataset'),
+    }
+)
+
+# (class, field) positions where an `identifier` string names a declared
+# column. Replaces the nominal `column_name` alias dispatch.
+_IDENTIFIER_COLUMN_FIELDS = frozenset(
+    {
+        ('column_class', 'name'),
+        ('root_class', 'keys'),
+        ('output_class', 'columns'),
+    }
+)
+
+
+def _identifier_reference_kind(scope):
+    """Return the reference kind for an `identifier` string at `scope`.
+
+    `scope` is a (class or registry keyword, field) pair, or None. Returns
+    'dataset', 'variable', or None when the position names no namespace.
+    """
+    if scope in _IDENTIFIER_DATASET_FIELDS:
+        return 'dataset'
+    if scope in _IDENTIFIER_COLUMN_FIELDS:
+        return 'variable'
+    return None
+
+
+def collect_inline_class_references(data, fields, env, scope=None):
     if not isinstance(data, dict):
         return set()
     references = set()
@@ -2927,16 +2962,21 @@ def collect_inline_class_references(data, fields, env):
         descriptor = descriptors.get(name)
         if descriptor is not None:
             references.update(
-                collect_descriptor_references(value, descriptor, env)
+                collect_descriptor_references(
+                    value, descriptor, env, (scope, name) if scope else None
+                )
             )
     return references
 
 
-def collect_single_type_references(data, type_ref, env):
-    if type_ref in {'variable', 'column_name'} and isinstance(data, str):
+def collect_single_type_references(data, type_ref, env, scope=None):
+    if type_ref == 'variable' and isinstance(data, str):
         return {('variable', data)}
-    if type_ref == 'dataset_id' and isinstance(data, str):
-        return {('dataset', data)}
+    if type_ref == 'identifier' and isinstance(data, str):
+        kind = _identifier_reference_kind(scope)
+        if kind is None:
+            return set()
+        return {(kind, data)}
     if type_ref == 'sql':
         return {
             ('variable', name)
@@ -2964,7 +3004,7 @@ def collect_single_type_references(data, type_ref, env):
         inner = type_ref[5:-1].strip()
         references = set()
         for item in data:
-            references.update(collect_type_references(item, inner, env))
+            references.update(collect_type_references(item, inner, env, scope))
         return references
 
     if type_ref.startswith('dict[') and type_ref.endswith(']'):
@@ -2974,13 +3014,13 @@ def collect_single_type_references(data, type_ref, env):
         references = set()
         for value in data.values():
             references.update(
-                collect_type_references(value, value_type, env)
+                collect_type_references(value, value_type, env, scope)
             )
         return references
 
     if type_ref in env.get('classes', {}):
         return collect_inline_class_references(
-            data, env['classes'][type_ref], env
+            data, env['classes'][type_ref], env, type_ref
         )
 
     alias = env.get('aliases', {}).get(type_ref)
@@ -2988,23 +3028,23 @@ def collect_single_type_references(data, type_ref, env):
         return set()
     registry_name = alias.get('registry')
     if registry_name is None:
-        return collect_type_references(data, alias['type'], env)
+        return collect_type_references(data, alias['type'], env, scope)
     if not isinstance(data, dict) or len(data) != 1:
         return set()
     keyword, payload = next(iter(data.items()))
     definition = env.get('registries', {}).get(registry_name, {}).get(keyword)
     if isinstance(definition, list):
-        return collect_inline_class_references(payload, definition, env)
+        return collect_inline_class_references(payload, definition, env, keyword)
     if isinstance(definition, dict) and 'type' in definition:
-        return collect_descriptor_references(payload, definition, env)
+        return collect_descriptor_references(payload, definition, env, scope)
     return set()
 
 
-def collect_type_references(data, type_value, env):
+def collect_type_references(data, type_value, env, scope=None):
     members = _type_members(type_value)
     for member in members:
         if _type_matches(data, member, env):
-            return collect_single_type_references(data, member, env)
+            return collect_single_type_references(data, member, env, scope)
     return set()
 
 
@@ -3017,7 +3057,7 @@ def collect_member_field_references(member, class_name, fields, env):
         if field in member and field in descriptors:
             references.update(
                 collect_descriptor_references(
-                    member[field], descriptors[field], env
+                    member[field], descriptors[field], env, (class_name, field)
                 )
             )
     return references
@@ -3072,7 +3112,7 @@ def example_migration_label(spec_path):
     return '/'.join(parts[index + 1:])
 
 
-def iter_type_reference_paths(data, type_value, env, path):
+def iter_type_reference_paths(data, type_value, env, path, scope=None):
     """Yield (name, path) for each variable reference under a schema type.
 
     This mirrors collect_type_references and adds the spec path each
@@ -3081,7 +3121,7 @@ def iter_type_reference_paths(data, type_value, env, path):
     for member in _type_members(type_value):
         if _type_matches(data, member, env):
             yield from _iter_single_type_reference_paths(
-                data, member, env, path
+                data, member, env, path, scope
             )
             return
 
@@ -3098,9 +3138,15 @@ EXPRESSION_IDENTIFIER_READERS = {
 }
 
 
-def _iter_single_type_reference_paths(data, type_ref, env, path):
-    if type_ref in {'variable', 'column_name'} and isinstance(data, str):
+def _iter_single_type_reference_paths(data, type_ref, env, path, scope=None):
+    if type_ref == 'variable' and isinstance(data, str):
         yield data, path
+        return
+    if type_ref == 'identifier' and isinstance(data, str):
+        # The old `column_name` alias yielded here; the old `dataset_id`
+        # alias never did, so only the column scope yields.
+        if _identifier_reference_kind(scope) == 'variable':
+            yield data, path
         return
 
     reader = EXPRESSION_IDENTIFIER_READERS.get(type_ref)
@@ -3114,7 +3160,7 @@ def _iter_single_type_reference_paths(data, type_ref, env, path):
             inner = type_ref[5:-1].strip()
             for index, item in enumerate(data):
                 yield from iter_type_reference_paths(
-                    item, inner, env, f"{path}[{index}]"
+                    item, inner, env, f"{path}[{index}]", scope
                 )
         return
 
@@ -3123,13 +3169,13 @@ def _iter_single_type_reference_paths(data, type_ref, env, path):
             _, value_type = split_type_arguments(type_ref[5:-1])
             for key, value in data.items():
                 yield from iter_type_reference_paths(
-                    value, value_type, env, f"{path}.{key}"
+                    value, value_type, env, f"{path}.{key}", scope
                 )
         return
 
     if type_ref in env.get('classes', {}):
         yield from _iter_inline_class_reference_paths(
-            data, env['classes'][type_ref], env, path
+            data, env['classes'][type_ref], env, path, type_ref
         )
         return
 
@@ -3138,7 +3184,7 @@ def _iter_single_type_reference_paths(data, type_ref, env, path):
         return
     registry_name = alias.get('registry')
     if registry_name is None:
-        yield from iter_type_reference_paths(data, alias['type'], env, path)
+        yield from iter_type_reference_paths(data, alias['type'], env, path, scope)
         return
     if not isinstance(data, dict) or len(data) != 1:
         return
@@ -3147,15 +3193,15 @@ def _iter_single_type_reference_paths(data, type_ref, env, path):
     keyword_path = f"{path}.{keyword}"
     if isinstance(definition, list):
         yield from _iter_inline_class_reference_paths(
-            payload, definition, env, keyword_path
+            payload, definition, env, keyword_path, keyword
         )
     elif isinstance(definition, dict) and 'type' in definition:
         yield from iter_type_reference_paths(
-            payload, definition['type'], env, keyword_path
+            payload, definition['type'], env, keyword_path, scope
         )
 
 
-def _iter_inline_class_reference_paths(data, fields, env, path):
+def _iter_inline_class_reference_paths(data, fields, env, path, scope=None):
     if not isinstance(data, dict):
         return
     descriptors = {
@@ -3167,7 +3213,11 @@ def _iter_inline_class_reference_paths(data, fields, env, path):
         descriptor = descriptors.get(name)
         if descriptor is not None:
             yield from iter_type_reference_paths(
-                value, descriptor['type'], env, f"{path}.{name}"
+                value,
+                descriptor['type'],
+                env,
+                f"{path}.{name}",
+                (scope, name) if scope else None,
             )
 
 
@@ -3192,7 +3242,7 @@ def validate_retired_odm_item_references(spec, spec_label, spec_path, env):
 
     errors = []
     for name, path in iter_type_reference_paths(
-        spec, 'root_class', env, spec_label
+        spec, 'root_class', env, spec_label, 'root_class'
     ):
         if not isinstance(name, str) or '.' not in name:
             continue
@@ -3275,7 +3325,10 @@ def prune_inheritance_collections(spec, env):
     if 'verifications' in pruned and 'verifications' in root_fields:
         references.update(
             collect_descriptor_references(
-                pruned['verifications'], root_fields['verifications'], env
+                pruned['verifications'],
+                root_fields['verifications'],
+                env,
+                ('root_class', 'verifications'),
             )
         )
 
@@ -3290,7 +3343,7 @@ def prune_inheritance_collections(spec, env):
             if field in row and field in row_fields:
                 references.update(
                     collect_descriptor_references(
-                        row[field], row_fields[field], env
+                        row[field], row_fields[field], env, ('row_class', field)
                     )
                 )
 
@@ -3354,7 +3407,7 @@ def prune_inheritance_collections(spec, env):
                 if field in {'id', 'dataset'} or field not in lookup_fields:
                     continue
                 refs = collect_descriptor_references(
-                    value, lookup_fields[field], env
+                    value, lookup_fields[field], env, ('record_lookup_class', field)
                 )
                 for reference in refs:
                     changed |= _apply_reference(

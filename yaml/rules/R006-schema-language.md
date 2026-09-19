@@ -160,7 +160,7 @@ quoted wherever it is written inside one. Block form imposes no such
 requirement, but the bundle quotes a bracketed type expression in both:
 
 ```yaml
-- keys: {type: "list[column_name]", required: true}
+- keys: {type: "list[identifier]", required: true}
 - parents: {type: [path, "list[path]"], required: false}
 - order_by:
     type: "list[order_by_term]"
