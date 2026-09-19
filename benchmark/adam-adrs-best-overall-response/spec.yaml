@@ -6,13 +6,17 @@ input:
   ADRSSEL:
     path: input/adrs_selection.csv
     types: {BORSEQ: int}
-base: ADSL
-
-record_lookups:
+lookups:
   - id: RESPONSE
     dataset: ADRSSEL
     filter: "ADRSSEL.BORSEQ = 1"
-    unmatched: missing
+    source:
+      - STUDYID
+      - USUBJID
+    key:
+      - STUDYID
+      - USUBJID
+base: ADSL
 
 output:
   path: adrs.csv
@@ -73,7 +77,7 @@ columns:
           NON-CR/NON-PD: 4
           PD: 5
           NE: 6
-        missing: null
+        missing:
     verifications:
       range:
         min: 1

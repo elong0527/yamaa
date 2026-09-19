@@ -88,8 +88,11 @@ columns:
     type: date
     label: Date of First Exposure to Treatment
     derivation:
-      source: ADSL.TRTSDT
-
+      lookup:
+        dataset: ADSL
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
+        value: TRTSDT
   - name: ADY
     type: int
     label: Analysis Relative Day

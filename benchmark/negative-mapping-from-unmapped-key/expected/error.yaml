@@ -1,11 +1,14 @@
-phase: mapping
-condition: unmapped_key
+phase: join
+condition: unmatched_key
 spec_paths:
-  - columns.ANRHI.derivation.mapping_from
-requirement: R007-49
+  - columns.ANRHI.derivation.lookup
+requirement: R003-14
 context:
+  lookup: lookup(LBREF)
   dataset: LBREF
-  key: [LBTESTCD, SEX]
+  key:
+    - LBTESTCD
+    - SEX
   lookup_key:
     LBTESTCD: AST
     SEX: M

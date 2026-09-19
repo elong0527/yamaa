@@ -30,8 +30,8 @@ ResolverFactory = Callable[[Mapping[str, object]], Resolver]
 # map is the one place a new operation declares its handler paths.
 DECLARED_HANDLERS: dict[str, tuple[HandlerName, ...]] = {
     "source": ("missing", "multiple_matches"),
+    "lookup": ("missing", "multiple_matches"),
     "mapping": ("missing", "unmapped"),
-    "mapping_from": ("missing", "unmapped"),
     "cut": ("missing",),
     "date_impute": ("missing", "invalid"),
     "date_precision": ("missing", "invalid"),
@@ -104,7 +104,13 @@ class HandlerCounter:
         if not isinstance(payload, Mapping):
             return
         for handler in DECLARED_HANDLERS.get(operation, ()):
-            if handler in payload:
+            # A lookup declares its selection handler with `keep` rather than
+            # naming it: the choice exists exactly where keep does.
+            if handler in payload or (
+                operation == "lookup"
+                and handler == "multiple_matches"
+                and "keep" in payload
+            ):
                 self.register(f"{operation_path}.{handler}", handler)
         if operation == "str_concat":
             self._register_nested(payload.get("sources"), operation_path, "sources")

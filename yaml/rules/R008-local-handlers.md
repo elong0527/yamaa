@@ -70,7 +70,7 @@ conditions coincide. `date_impute` and `date_precision` read the same
 source and answer the same two conditions about it, so both use
 `impute` in structured errors.
 
-**R008-9.** Where an operation takes several inputs, as `mapping_from`
+**R008-9.** Where an operation takes several inputs, as `lookup`
 does, `missing` fires when any input is missing. The
 present-but-unusable handler fires only when all inputs are present.
 

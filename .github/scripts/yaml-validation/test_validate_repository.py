@@ -805,7 +805,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
             }
         })
         length = self.validate({
-            'mapping_from': {
+            'lookup': {
                 'source': ['KEY1', 'KEY2'],
                 'dataset': 'REF',
                 'key': 'K',
@@ -871,15 +871,15 @@ class TestStaticSemanticContracts(unittest.TestCase):
             invalid_to_date[0].condition, 'incompatible_input_type'
         )
 
-    def test_record_lookup_range_types(self):
+    def test_lookup_range_types(self):
         spec = {
-            'record_lookups': [{
+            'lookups': [{
                 'id': 'R',
                 'dataset': 'REF',
                 'between': {'value': 'A', 'lower': 'LO', 'upper': 'HI'},
             }]
         }
-        errors = VALIDATOR.validate_record_lookup_static_semantics(
+        errors = VALIDATOR.validate_lookup_static_semantics(
             spec,
             'spec.yaml',
             {'REF': {'LO': 'int', 'HI': 'float'}},
@@ -889,16 +889,16 @@ class TestStaticSemanticContracts(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0].condition, 'incomparable_range_types')
 
-    def test_record_lookup_equality_key_types(self):
+    def test_lookup_equality_key_types(self):
         spec = {
-            'record_lookups': [{
+            'lookups': [{
                 'id': 'R',
                 'dataset': 'REF',
                 'source': 'A',
                 'key': 'K',
             }]
         }
-        errors = VALIDATOR.validate_record_lookup_static_semantics(
+        errors = VALIDATOR.validate_lookup_static_semantics(
             spec,
             'spec.yaml',
             {'REF': {'K': 'str'}},
@@ -2000,7 +2000,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 '  DM: ../input/dm.csv\n'
                 '  UNUSED: ../input/missing.csv\n'
                 'base: DM\n'
-                'record_lookups:\n'
+                'lookups:\n'
                 '  - id: unused_lookup\n'
                 '    dataset: UNUSED\n'
                 'columns:\n'
@@ -2066,7 +2066,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             resolved['input'],
             {'DM': {'path': 'input/dm.csv', 'types': {'AGE': 'int'}}},
         )
-        self.assertNotIn('record_lookups', resolved)
+        self.assertNotIn('lookups', resolved)
         self.assertEqual(
             [column['name'] for column in resolved['columns']],
             ['RESULT', 'AUDIT', 'LATE', 'DEPENDENT'],
@@ -2088,7 +2088,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 '  DM: input/dm.csv\n'
                 '  REF: input/ref.csv\n'
                 'base: DM\n'
-                'record_lookups:\n'
+                'lookups:\n'
                 '  - id: ref\n'
                 '    dataset: REF\n'
                 '    source: DM.KEY\n'
@@ -2112,9 +2112,9 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'domain: TEST\n'
                 'keys: [X]\n'
                 'output: {path: out.csv, columns: [X]}\n'
-                'record_lookups:\n'
+                'lookups:\n'
                 '  - id: ref\n'
-                '    unmatched: missing\n'
+                '    missing: 0\n'
                 'rows:\n'
                 '  - id: main\n'
                 '    derivations:\n'
@@ -2125,13 +2125,13 @@ class TestSpecificationInheritance(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertEqual(
-            resolved['record_lookups'][0],
+            resolved['lookups'][0],
             {
                 'id': 'ref',
                 'dataset': 'REF',
                 'source': ['DM.KEY'],
                 'key': ['KEY'],
-                'unmatched': 'missing',
+                'missing': 0,
             },
         )
         self.assertEqual(
@@ -2809,7 +2809,7 @@ class TestSpecNames(unittest.TestCase):
             "domain": "ADSL",
             "input": {"DM": "dm.csv", "EX": "ex.csv"},
             "base": "DM",
-            "record_lookups": [{"id": "dose", "dataset": "EX"}],
+            "lookups": [{"id": "dose", "dataset": "EX"}],
             "keys": ["USUBJID"],
             "output": {"columns": ["USUBJID"]},
             "columns": [{"name": "USUBJID"}],
@@ -2990,7 +2990,7 @@ class TestSpecNames(unittest.TestCase):
             "domain": "ADSL",
             "input": {"ADSL": "input.csv"},
             "base": "MISSING",
-            "record_lookups": [
+            "lookups": [
                 {"id": "ADSL", "dataset": "MISSING"},
                 {"id": "ADSL", "dataset": "ADSL"},
             ],
@@ -3005,7 +3005,7 @@ class TestSpecNames(unittest.TestCase):
         message = "\n".join(errors)
         self.assertIn("must not equal the output domain", message)
         self.assertIn("undeclared dataset 'MISSING'", message)
-        self.assertIn("duplicate record lookup id", message)
+        self.assertIn("duplicate lookup id", message)
         self.assertIn("conflicts with a dataset or domain", message)
         self.assertIn("duplicate row id", message)
 
@@ -3102,8 +3102,7 @@ class TestSpecContracts(unittest.TestCase):
             "domain": "ADSL",
             "input": {"DM": "dm.csv"},
             "base": "DM",
-            "record_lookups": [
-                {"id": "LAST", "dataset": "DM", "source": "USUBJID"},
+            "lookups": [
                 {"id": "FIRST", "dataset": "DM", "order_by": ["DM.DATE"]},
             ],
             "keys": ["USUBJID"],
@@ -3125,7 +3124,6 @@ class TestSpecContracts(unittest.TestCase):
         errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
 
         message = "\n".join(errors)
-        self.assertIn("source and key", message)
         self.assertIn("order_by and keep", message)
         self.assertIn("requires at least one bound", message)
         self.assertIn("at least two distinct columns", message)

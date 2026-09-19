@@ -10,9 +10,7 @@ input:
     types: {VSDTC: date}
   ADSL: input/adsl.csv
 
-base: PLAN
-
-record_lookups:
+lookups:
   - id: SUBJECT
     dataset: ADSL
     source: [STUDYID, USUBJID]
@@ -22,7 +20,7 @@ record_lookups:
     dataset: VS
     source: [STUDYID, USUBJID, PARAMCD, ADT]
     key: [STUDYID, USUBJID, VSTESTCD, VSDTC]
-    unmatched: missing
+base: PLAN
 
 output:
   path: advs.csv

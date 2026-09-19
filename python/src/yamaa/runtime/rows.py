@@ -42,23 +42,24 @@ from yamaa.models import (
     RuntimeValue,
 )
 from yamaa.odm import BindingIndex
-from yamaa.planning import ExecutionDiagnostic, PlannedRow
+from yamaa.planning import ExecutionDiagnostic, PlannedLookup, PlannedRow
 from yamaa.runtime.joins import (
     IndexedRecord,
     OrderError,
     RelationIndex,
-    applicable_keys,
     compare_values,
     eligible_records,
-    evaluate_mapping_from,
-    join_scalar,
     json_value,
     order_records,
     partition_records,
-    resolution_result,
 )
 from yamaa.runtime.lifecycle import LifecycleCondition
-from yamaa.runtime.lookups import LookupOutcome, RecordLookupSelector
+from yamaa.runtime.lookups import (
+    LookupOutcome,
+    LookupSelector,
+    absent_value,
+    evaluate_lookup,
+)
 from yamaa.specification.models import OrderTerm
 
 
@@ -95,7 +96,7 @@ class RelationalContext:
 
     bindings: BindingIndex
     relations: dict[str, RelationIndex]
-    lookups: RecordLookupSelector
+    lookups: LookupSelector
     output_keys: tuple[str, ...]
     rows: list[CandidateRow] = field(default_factory=list)
     _partitions: dict[tuple[str, ...], dict[tuple[object, ...], list[CandidateRow]]] = (
@@ -198,9 +199,11 @@ class RowResolver:
         if qualifier is None:
             return self._base.resolve(variable)
         if self._context.lookups.declares(qualifier):
-            return self._record_lookup(qualifier, variable.split(".", 1)[1])
-        if self._joins(qualifier):
-            return self._join(qualifier, variable.split(".", 1)[1], None, None)
+            return self._lookup_read(qualifier, variable.split(".", 1)[1])
+        # R003-1: a dataset-qualified scalar source reaches its dataset only
+        # through a lookup. The planner rejects any other qualified scalar,
+        # so reaching the base here means the qualifier is a row driver and
+        # the read is the current driver record.
         return self._base.resolve(variable)
 
     def resolve_selected(
@@ -211,75 +214,29 @@ class RowResolver:
         multiple_matches: Mapping[str, object] | None,
     ) -> Resolution:
         qualifier = variable.split(".", 1)[0] if "." in variable else None
-        if qualifier is not None and self._joins(qualifier):
-            return self._join(
-                qualifier, variable.split(".", 1)[1], selector, multiple_matches
-            )
         if qualifier is not None and self._context.lookups.declares(qualifier):
-            # R015 already chose the record; the source reads a column of it.
-            return self._record_lookup(qualifier, variable.split(".", 1)[1])
+            # R003 already chose the record; the source reads a column of it.
+            return self._lookup_read(qualifier, variable.split(".", 1)[1])
         return self._base.resolve_selected(
             variable, selector=selector, multiple_matches=multiple_matches
         )
 
-    def _joins(self, qualifier: str) -> bool:
-        """Return whether reaching this relation needs the R003 join.
-
-        R003-18 lets the qualifier equal the current row driver, and a scalar
-        source then reads the driver record the row was constructed from
-        rather than joining back to its relation.
-        """
-        return (
-            qualifier in self._context.relations
-            and qualifier not in self._candidate.source_rows
-        )
-
-    def _join(
-        self,
-        dataset: str,
-        field_name: str,
-        selector: str | None,
-        multiple_matches: Mapping[str, object] | None,
-    ) -> Resolution:
-        relation = self._context.relations[dataset]
-        keys = applicable_keys(self._context.output_keys, relation)
-        if not keys:
-            # R003-7 and R003-33: without an applicable key the join has no
-            # stated identity to match on.
+    def _lookup_read(self, identifier: str, field_name: str) -> Resolution:
+        plan = self._context.lookups.plans[identifier]
+        relation = self._context.relations[plan.dataset]
+        if not relation.has(field_name):
             return _failed(
                 _condition(
-                    "no_applicable_keys",
-                    {
-                        "dataset": dataset,
-                        "keys": list(self._context.output_keys),
-                    },
-                    requirement="R003-33",
+                    "unknown_field",
+                    {"identifier": f"{identifier}.{field_name}"},
+                    requirement="R003-15",
                 )
             )
-        unavailable = [key for key in keys if key not in self._values]
-        if unavailable:
-            # R003-34: the left key must already be complete, because a join
-            # cannot match on a value this row has not derived yet.
-            return _failed(
-                _condition(
-                    "key_unavailable",
-                    {"dataset": dataset, "keys": unavailable},
-                    requirement="R003-34",
-                )
-            )
-        return join_scalar(
-            relation,
-            keys,
-            [self._values[key] for key in keys],
-            field_name,
-            selector=selector,
-            multiple_matches=multiple_matches,
-        )
-
-    def _record_lookup(self, identifier: str, field_name: str) -> Resolution:
         outcome = self._candidate.lookups.get(identifier)
         if outcome is None:
-            outcome = self._context.lookups.select(identifier, self._values)
+            outcome = self._context.lookups.select(
+                identifier, self._lookup_current(plan)
+            )
             self._candidate.lookups[identifier] = outcome
         if outcome.condition is not None:
             assert outcome.spec_path is not None
@@ -292,21 +249,40 @@ class RowResolver:
                     context=outcome.condition.condition.context,
                 )
             )
-        plan = self._context.lookups.plans[identifier]
-        relation = self._context.relations[plan.dataset]
-        if not relation.has(field_name):
-            return _failed(
-                _condition(
-                    "unknown_field",
-                    {"identifier": f"{identifier}.{field_name}"},
-                    requirement="R015-31",
-                )
-            )
         if outcome.record is None:
-            # R015-18 and R015-22: an absent record is missing everywhere it
-            # is read, and stays distinct from a record whose value is blank.
-            return ResolvedValue(value=MISSING)
-        return ResolvedValue(value=outcome.record.values[field_name])
+            # R003-14: a lookup that yields nothing answers its decided
+            # absence, which stays distinct from a record whose value is
+            # missing.
+            return ResolvedValue(
+                value=absent_value(outcome.absent), handled_by=outcome.handled_by
+            )
+        return ResolvedValue(
+            value=outcome.record.values[field_name], handled_by=outcome.handled_by
+        )
+
+    def _lookup_current(self, plan: PlannedLookup) -> dict[str, RuntimeValue]:
+        """Resolve this row's match values under their declared names."""
+        names = list(plan.match_variables)
+        if plan.between_value is not None:
+            names.append(plan.between_value)
+        current: dict[str, RuntimeValue] = {}
+        for name in names:
+            resolved = self.resolve(name)
+            if isinstance(resolved, ResolvedValue):
+                current[name] = resolved.value
+            elif isinstance(resolved, FailedResolution):
+                raise LifecycleCondition(
+                    ExecutionDiagnostic(
+                        phase=resolved.condition.phase,
+                        condition=resolved.condition.condition,
+                        spec_paths=(),
+                        requirement=resolved.condition.requirement,
+                        context=resolved.condition.context,
+                    )
+                )
+            else:
+                current[name] = MISSING
+        return current
 
     def resolve_relation(
         self,
@@ -314,8 +290,8 @@ class RowResolver:
         payload: Mapping[str, object],
     ) -> EvaluationResult:
         """Answer the operations that read a relation rather than one value."""
-        if operation == "mapping_from":
-            return self._mapping_from(payload)
+        if operation == "lookup":
+            return self._inline_lookup(payload)
         if operation in WINDOW_OPERATIONS:
             return self._window(operation, payload)
         return self._aggregate(payload)
@@ -437,18 +413,11 @@ class RowResolver:
             kept.append(result.value is TruthValue.TRUE)
         return tuple(kept)
 
-    def _mapping_from(self, payload: Mapping[str, object]) -> EvaluationResult:
+    def _inline_lookup(self, payload: Mapping[str, object]) -> EvaluationResult:
         dataset = payload.get("dataset")
         if not isinstance(dataset, str) or dataset not in self._context.relations:
-            return _invalid("mapping_from", "an undeclared dataset")
-        names = _names(payload.get("source"))
-        values: dict[str, RuntimeValue] = {}
-        for name in names:
-            resolved = self.resolve(name)
-            if not isinstance(resolved, ResolvedValue):
-                return resolution_result(resolved)
-            values[name] = resolved.value  # type: ignore[assignment]
-        return evaluate_mapping_from(payload, self._context.relations[dataset], values)
+            return _invalid("lookup", "an undeclared dataset")
+        return evaluate_lookup(payload, self._context.relations[dataset], self.resolve)
 
     def _aggregate(self, payload: Mapping[str, object]) -> EvaluationResult:
         expr = payload.get("expr")
@@ -479,8 +448,24 @@ class RowResolver:
         elif self._row_phase and relation_name == self._candidate.group_driver:
             selected = self._driver_group(relation_name, identifiers, predicate)
         else:
+            key_fields = _names(payload.get("key"))
+            key_variables = _names(payload.get("source"))
+            if (
+                not key_fields
+                or not key_variables
+                or len(key_fields) != len(key_variables)
+            ):
+                # R003-30: the planner requires the declared pairs, so this
+                # is only reachable on an unplanned path.
+                return _invalid("aggregate", "declared key and source pairs")
             selected = self._right_side(
-                relation_name, identifiers, group_by, predicate, payload.get("between")
+                relation_name,
+                identifiers,
+                group_by,
+                predicate,
+                payload.get("between"),
+                key_fields,
+                key_variables,
             )
         if isinstance(selected, ConditionResult):
             return selected
@@ -522,32 +507,25 @@ class RowResolver:
         group_by: Sequence[str],
         predicate: PredicateAst | None,
         between: object,
+        key_fields: Sequence[str],
+        key_variables: Sequence[str],
     ) -> tuple[list[dict[str, object]], dict[str, object]] | ConditionResult:
-        """Reduce the partition R003-17 selects for the current row."""
+        """Reduce the partition R003-30 selects for the current row."""
         relation = self._context.relations[dataset]
-        if group_by:
-            # R003-20: a coarser declared grain is what the join matches on.
-            fields = tuple(name.split(".", 1)[-1] for name in group_by)
-        else:
-            fields = applicable_keys(self._context.output_keys, relation)
-        if not fields:
-            return ConditionResult(
-                condition=_condition(
-                    "no_applicable_keys",
-                    {"dataset": dataset, "keys": list(self._context.output_keys)},
-                    requirement="R003-33",
-                )
-            )
-        unavailable = [name for name in fields if name not in self._values]
-        if unavailable:
-            return ConditionResult(
-                condition=_condition(
-                    "key_unavailable",
-                    {"dataset": dataset, "keys": unavailable},
-                    requirement="R003-34",
-                )
-            )
-        matched = relation.matching(fields, [self._values[name] for name in fields])
+        values: list[RuntimeValue] = []
+        for name in key_variables:
+            resolved = self.resolve(name)
+            if isinstance(resolved, ResolvedValue):
+                values.append(resolved.value)
+            elif isinstance(resolved, FailedResolution):
+                return ConditionResult(condition=resolved.condition)
+            else:
+                values.append(MISSING)
+        # `matching` keeps right records with a missing key out of every
+        # match, and a current row carrying a missing key reaches nothing
+        # for the same reason: an uncollected identifier is not an identity
+        # two rows share.
+        matched = relation.matching(key_fields, values)
         grouped: dict[str, object] = {
             name: matched[0].values[name.split(".", 1)[-1]] if matched else MISSING
             for name in group_by

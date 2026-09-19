@@ -40,14 +40,20 @@ columns:
     type: date
     label: Date of First Exposure to Treatment
     derivation:
-      source: ADSL.TRTSDT
-
+      lookup:
+        dataset: ADSL
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
+        value: TRTSDT
   - name: TRT01A
     type: str
     label: Actual Treatment for Period 01
     derivation:
-      source: ADSL.TRT01A
-
+      lookup:
+        dataset: ADSL
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
+        value: TRT01A
   - name: AVAL
     type: float
     label: Analysis Value

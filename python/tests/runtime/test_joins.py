@@ -10,7 +10,6 @@ from yamaa.runtime.joins import (
     applicable_keys,
     compare_values,
     eligible_records,
-    evaluate_mapping_from,
     join_scalar,
     order_records,
     partition_records,
@@ -265,93 +264,6 @@ def lbref() -> RelationIndex:
         [("LBTESTCD", "str"), ("SEX", "str"), ("ANRHI", "float")],
         [["ALT", "F", 33.0], ["ALT", "M", 41.0], ["AST", "F", 32.0]],
     )
-
-
-def mapping_from(values: dict[str, object], **extra: object) -> object:
-    payload = {
-        "source": ["PARAMCD", "SEX"],
-        "dataset": "LBREF",
-        "key": ["LBTESTCD", "SEX"],
-        "value": "ANRHI",
-        **extra,
-    }
-    return evaluate_mapping_from(payload, lbref(), values)
-
-
-def test_declared_key_pairs_reach_a_right_side_keyed_on_something_else() -> None:
-    result = mapping_from({"PARAMCD": "ALT", "SEX": "M"})
-
-    assert isinstance(result, ValueResult)
-    assert result.value == 41.0
-
-
-def test_an_incomplete_key_never_reaches_the_unmapped_handler() -> None:
-    # R008-9: with several inputs the two conditions stay disjoint.
-    unhandled = mapping_from({"PARAMCD": "ALT", "SEX": MISSING})
-    handled = mapping_from({"PARAMCD": "ALT", "SEX": MISSING}, missing=0.0)
-    wrong_handler = mapping_from({"PARAMCD": "ALT", "SEX": MISSING}, unmapped=1.0)
-
-    assert isinstance(unhandled, ConditionResult)
-    assert unhandled.condition.condition == "missing_input"
-    assert unhandled.condition.context["missing_source"] == "SEX"
-    assert isinstance(handled, ValueResult)
-    assert handled.value == 0.0
-    assert handled.handled_by == "missing"
-    assert isinstance(wrong_handler, ConditionResult)
-
-
-def test_a_complete_key_with_no_entry_is_the_unmapped_condition() -> None:
-    unhandled = mapping_from({"PARAMCD": "AST", "SEX": "M"})
-    handled = mapping_from({"PARAMCD": "AST", "SEX": "M"}, unmapped=None)
-
-    assert isinstance(unhandled, ConditionResult)
-    assert unhandled.condition.condition == "unmapped_key"
-    assert unhandled.condition.context["lookup_key"] == {
-        "LBTESTCD": "AST",
-        "SEX": "M",
-    }
-    assert isinstance(handled, ValueResult)
-    assert handled.value is MISSING
-
-
-def test_a_duplicate_lookup_key_fails_rather_than_taking_file_order() -> None:
-    duplicated = relation(
-        "LBREF",
-        [("LBTESTCD", "str"), ("SEX", "str"), ("ANRHI", "float")],
-        [["ALT", "F", 33.0], ["ALT", "F", 35.0]],
-    )
-
-    result = evaluate_mapping_from(
-        {
-            "source": ["PARAMCD", "SEX"],
-            "dataset": "LBREF",
-            "key": ["LBTESTCD", "SEX"],
-            "value": "ANRHI",
-        },
-        duplicated,
-        {"PARAMCD": "ALT", "SEX": "F"},
-    )
-
-    assert isinstance(result, ConditionResult)
-    assert result.condition.condition == "duplicate_lookup_key"
-    assert result.condition.context["match_count"] == 2
-
-
-def test_unequal_source_and_key_lists_name_no_key() -> None:
-    result = evaluate_mapping_from(
-        {
-            "source": ["PARAMCD", "SEX"],
-            "dataset": "LBREF",
-            "key": ["LBTESTCD"],
-            "value": "ANRHI",
-        },
-        lbref(),
-        {"PARAMCD": "ALT", "SEX": "F"},
-    )
-
-    assert isinstance(result, ConditionResult)
-    assert result.condition.condition == "source_key_length_mismatch"
-    assert result.condition.requirement == "R007-48"
 
 
 def test_an_unnormalized_selection_is_reported_rather_than_raised() -> None:

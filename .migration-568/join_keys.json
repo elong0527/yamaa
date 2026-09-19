@@ -1,0 +1,1790 @@
+{
+ "adam-adae-death-outcome": {
+  "joins": [
+   {
+    "dataset": "DM",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.DMDTHDT.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "AE",
+    "filter": "AE.AEOUT = 'FATAL'",
+    "id": "DEATHEV",
+    "incomplete": null,
+    "keep": null,
+    "key": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "order_by": false,
+    "source": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "unmatched": "missing"
+   }
+  ]
+ },
+ "adam-adae-event-severity": {
+  "joins": [
+   {
+    "dataset": "SUPP",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID",
+     "AESEQ"
+    ],
+    "spec_path": "columns.AESEV.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adae-occurrence-flags": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adae-partial-dates": {
+  "joins": [
+   {
+    "dataset": "ADSL",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRTSDT.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adae-post-dose-onset": {
+  "joins": [
+   {
+    "dataset": "ADSL",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRTSDTM.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adae-post-reference-event": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "AE",
+    "filter": "AE.AEDECOD = 'COVID-19'",
+    "id": "FIRSTCOV",
+    "incomplete": null,
+    "keep": "first",
+    "key": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "order_by": true,
+    "source": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "unmatched": "missing"
+   }
+  ]
+ },
+ "adam-adae-protocol-review-window": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adae-query-flags": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "QUERY",
+    "filter": "QUERY.PREFIX = 'SMQ01'",
+    "id": "SMQ1",
+    "incomplete": "missing",
+    "keep": null,
+    "key": [
+     "TERM"
+    ],
+    "order_by": false,
+    "source": [
+     "AEDECOD"
+    ],
+    "unmatched": "missing"
+   },
+   {
+    "between": false,
+    "dataset": "QUERY",
+    "filter": "QUERY.PREFIX = 'SMQ02'",
+    "id": "SMQ2",
+    "incomplete": "missing",
+    "keep": null,
+    "key": [
+     "TERM"
+    ],
+    "order_by": false,
+    "source": [
+     "AEDECOD"
+    ],
+    "unmatched": "missing"
+   },
+   {
+    "between": false,
+    "dataset": "QUERY",
+    "filter": "QUERY.PREFIX = 'CQ01'",
+    "id": "CQ1",
+    "incomplete": "missing",
+    "keep": null,
+    "key": [
+     "TERM"
+    ],
+    "order_by": false,
+    "source": [
+     "AEDECOD"
+    ],
+    "unmatched": "missing"
+   }
+  ]
+ },
+ "adam-adae-review-order": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "ASEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adae-serious-event-listing": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adae-serious-event-sequence": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adae-severity-override": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adae-severity-rank": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adae-string-handlers": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adae-treatment-emergent": {
+  "joins": [
+   {
+    "dataset": "ADSL",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRTSDT.derivation.source"
+   },
+   {
+    "dataset": "ADSL",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRTEDT.derivation.source"
+   },
+   {
+    "dataset": "ADSL",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRTA.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adae-worst-severity": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adce-worst-toxicity-grade": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "CESEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adcm-on-treatment-flag": {
+  "joins": [
+   {
+    "dataset": "ADSL",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRTSDT.derivation.source"
+   },
+   {
+    "dataset": "ADSL",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRTEDT.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "CMSEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adeg-bazett-qtc": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD",
+   "AVISIT"
+  ],
+  "record_lookups": []
+ },
+ "adam-adeg-fridericia-qtc": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD",
+   "AVISIT"
+  ],
+  "record_lookups": []
+ },
+ "adam-adeg-rr-interval": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD",
+   "AVISIT"
+  ],
+  "record_lookups": []
+ },
+ "adam-adex-cumulative-dose": {
+  "joins": [
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID",
+     "EXTRT"
+    ],
+    "spec_path": "columns.DOSECUM.derivation.aggregate"
+   },
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID",
+     "EXTRT"
+    ],
+    "spec_path": "columns.NCYCLES.derivation.aggregate"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "EXTRT"
+  ],
+  "record_lookups": []
+ },
+ "adam-adex-dose-reduction-flag": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "EXSEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adex-uncollected-exposure": {
+  "joins": [
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID",
+     "EXTRT"
+    ],
+    "spec_path": "columns.DOSECUM.derivation.aggregate"
+   },
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID",
+     "EXTRT"
+    ],
+    "spec_path": "columns.NDOSREC.derivation.aggregate"
+   },
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID",
+     "EXTRT"
+    ],
+    "spec_path": "columns.NDOSVAL.derivation.aggregate"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "EXTRT"
+  ],
+  "record_lookups": []
+ },
+ "adam-adlb-absolute-wbc-differential": {
+  "joins": [],
+  "keys": [
+   "USUBJID",
+   "VISIT",
+   "PARAMCD"
+  ],
+  "record_lookups": []
+ },
+ "adam-adlb-bds": {
+  "joins": [
+   {
+    "dataset": "ADSL",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRTSDT.derivation.source"
+   },
+   {
+    "dataset": "ADSL",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRT01A.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD",
+   "ADT",
+   "ASEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adlb-closest-visit": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD",
+   "LBSEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adlb-mean": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "LBSEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adlb-order-sensitive-sum": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "LBSEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adlb-reported-precision": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD"
+  ],
+  "record_lookups": []
+ },
+ "adam-adlb-shift-and-criteria": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD",
+   "ASEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adoe-study-eye": {
+  "joins": [
+   {
+    "dataset": "ADSL",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.STUDYEYE.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "OESEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adqs-subscale-score": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "VISIT",
+   "PARAMCD"
+  ],
+  "record_lookups": []
+ },
+ "adam-adrs-best-overall-response": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "ADRSSEL",
+    "filter": "ADRSSEL.BORSEQ = 1",
+    "id": "RESPONSE",
+    "incomplete": null,
+    "keep": null,
+    "key": null,
+    "order_by": false,
+    "source": null,
+    "unmatched": "missing"
+   }
+  ]
+ },
+ "adam-adrs-best-response-selection": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "ASEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adrs-composite-response": {
+  "joins": [
+   {
+    "dataset": "ADSL",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.SAEFL.derivation.source"
+   },
+   {
+    "dataset": "ADSL",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.DCSREAS.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD",
+   "AVISIT"
+  ],
+  "record_lookups": []
+ },
+ "adam-adrs-confirmed-response": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "RSSEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adrs-measurable-disease": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "TU",
+    "filter": "TU.TUTESTCD = 'TUMIDENT' AND TU.VISIT = 'SCREENING' AND TU.TUSTRESC = 'TARGET'",
+    "id": "TU_TARGET",
+    "incomplete": null,
+    "keep": "first",
+    "key": null,
+    "order_by": true,
+    "source": null,
+    "unmatched": "missing"
+   }
+  ]
+ },
+ "adam-adrs-overall-response-records": {
+  "joins": [
+   {
+    "dataset": "ADSL",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRTSDT.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "RSSEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-age-group": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-age-quality-review": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-analysis-age": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-bmi-compute": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-completion-flag": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "DS",
+    "filter": "DS.DSDECOD = 'COMPLETED'",
+    "id": "COMPLT",
+    "incomplete": null,
+    "keep": null,
+    "key": null,
+    "order_by": false,
+    "source": null,
+    "unmatched": "missing"
+   }
+  ]
+ },
+ "adam-adsl-crossover-periods": {
+  "joins": [
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TR01SDT.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TR01EDT.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TR02SDT.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TR02EDT.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRT01A.derivation.source"
+   },
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRT02A.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-disposition": {
+  "joins": [
+   {
+    "dataset": "DS",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.EOSDT.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "DS",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.EOSDECOD.derivation.source"
+   },
+   {
+    "dataset": "DS",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.EOSREAS.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-dose-adjustment-flag": {
+  "joins": [
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.EX_ADJ_CNT.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.EX_ANY_CNT.derivation.aggregate"
+   },
+   {
+    "dataset": "EC",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.EC_ADJ_CNT.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "EC",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.EC_ANY_CNT.derivation.aggregate"
+   },
+   {
+    "dataset": "FA",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.FA_ADJ_CNT.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "FA",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.FA_ANY_CNT.derivation.aggregate"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-duration-weeks-months": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-geography-normalization": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-identifier-parsing": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-investigator-comment": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-last-alive-date": {
+  "joins": [
+   {
+    "dataset": "ADAE",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.ADAE_LST.derivation.aggregate"
+   },
+   {
+    "dataset": "ADVS",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.ADVS_LST.derivation.aggregate"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-mapping": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-new-anticancer-therapy-date": {
+  "joins": [
+   {
+    "dataset": "CM",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.CMNACTDT.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "PR",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.PRNACTDT.derivation.aggregate.expr"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-population-flags": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-portable-text": {
+  "joins": [
+   {
+    "dataset": "DM",
+    "declared_grain": true,
+    "keys": [
+     "STUDYID"
+    ],
+    "spec_path": "columns.MINTXT.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "DM",
+    "declared_grain": true,
+    "keys": [
+     "STUDYID"
+    ],
+    "spec_path": "columns.MAXTXT.derivation.aggregate.expr"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-rescue-medication": {
+  "joins": [
+   {
+    "dataset": "CM",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.RESCTRT.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adsl-treatment-selection": {
+  "joins": [
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRT01RAW.derivation.source"
+   },
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRTSDT.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.TRTEDT.derivation.aggregate.expr"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "adam-adtr-current-nadir": {
+  "joins": [
+   {
+    "dataset": "ADTRPRE",
+    "declared_grain": true,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.NADIR.derivation.aggregate.expr"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AVISIT"
+  ],
+  "record_lookups": []
+ },
+ "adam-adtr-sum-of-target-diameters": {
+  "joins": [
+   {
+    "dataset": "TR",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID",
+     "AVISIT"
+    ],
+    "spec_path": "columns.AVAL.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "TR",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID",
+     "AVISIT"
+    ],
+    "spec_path": "columns.NMEAS.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "TU",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.NTARGET.derivation.aggregate.expr"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AVISIT"
+  ],
+  "record_lookups": []
+ },
+ "adam-adtte-duration-of-response": {
+  "joins": [
+   {
+    "dataset": "ADRSPRE",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.PDDT.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "ADRSPRE",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.PDSEQ.derivation.source"
+   },
+   {
+    "dataset": "DS",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.DEATHDT.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "DS",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.DEATHSEQ.derivation.source"
+   },
+   {
+    "dataset": "ADRSPRE",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.LASTVLDT.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "ADRSPRE",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.LASTVLSEQ.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD"
+  ],
+  "record_lookups": []
+ },
+ "adam-adtte-first-adverse-event": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "ADAE",
+    "filter": null,
+    "id": "AE_REC",
+    "incomplete": null,
+    "keep": "first",
+    "key": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "order_by": true,
+    "source": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "unmatched": "missing"
+   }
+  ]
+ },
+ "adam-adtte-overall-survival": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "ADRS",
+    "filter": "ADRS.PARAMCD = 'DEATH' AND ADRS.AVALC = 'Y' AND ADRS.ANL01FL = 'Y'",
+    "id": "DEATH_REC",
+    "incomplete": null,
+    "keep": "first",
+    "key": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "order_by": true,
+    "source": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "unmatched": "missing"
+   }
+  ]
+ },
+ "adam-adtte-progression-free-survival": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "RS",
+    "filter": "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y'",
+    "id": "PROGRESSION",
+    "incomplete": null,
+    "keep": "first",
+    "key": null,
+    "order_by": true,
+    "source": null,
+    "unmatched": null
+   },
+   {
+    "between": false,
+    "dataset": "DS",
+    "filter": "DS.DSDECOD = 'DEATH'",
+    "id": "DEATH",
+    "incomplete": null,
+    "keep": "first",
+    "key": null,
+    "order_by": true,
+    "source": null,
+    "unmatched": null
+   },
+   {
+    "between": false,
+    "dataset": "RS",
+    "filter": "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y'",
+    "id": "LASTASSESS",
+    "incomplete": null,
+    "keep": "last",
+    "key": null,
+    "order_by": true,
+    "source": null,
+    "unmatched": null
+   }
+  ]
+ },
+ "adam-advs-analysis-visit": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD",
+   "VSSEQ"
+  ],
+  "record_lookups": []
+ },
+ "adam-advs-analysis-window-table": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "PARAMCD",
+   "VSSEQ"
+  ],
+  "record_lookups": [
+   {
+    "between": true,
+    "dataset": "AWINDOW",
+    "filter": null,
+    "id": "AWIN",
+    "incomplete": "missing",
+    "keep": null,
+    "key": [
+     "STUDYID"
+    ],
+    "order_by": false,
+    "source": [
+     "STUDYID"
+    ],
+    "unmatched": "missing"
+   }
+  ]
+ },
+ "adam-advs-body-mass-index": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AVISIT",
+   "PARAMCD"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "ADVSIN",
+    "filter": "ADVSIN.PARAMCD = 'HEIGHT'",
+    "id": "BASE_HEIGHT",
+    "incomplete": null,
+    "keep": null,
+    "key": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "order_by": false,
+    "source": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "unmatched": "missing"
+   }
+  ]
+ },
+ "adam-advs-body-surface-area": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "VISIT",
+   "PARAMCD"
+  ],
+  "record_lookups": []
+ },
+ "adam-advs-mean-arterial-pressure": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "VISIT",
+   "PARAMCD"
+  ],
+  "record_lookups": []
+ },
+ "adam-advs-once-measured-carry-forward": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "ASEQ"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "ADSL",
+    "filter": null,
+    "id": "SUBJECT",
+    "incomplete": null,
+    "keep": null,
+    "key": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "order_by": false,
+    "source": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "unmatched": null
+   },
+   {
+    "between": false,
+    "dataset": "VS",
+    "filter": null,
+    "id": "COLLECTED",
+    "incomplete": null,
+    "keep": null,
+    "key": [
+     "STUDYID",
+     "USUBJID",
+     "VSTESTCD",
+     "VSDTC"
+    ],
+    "order_by": false,
+    "source": [
+     "STUDYID",
+     "USUBJID",
+     "PARAMCD",
+     "ADT"
+    ],
+    "unmatched": "missing"
+   }
+  ]
+ },
+ "adam-advs-prior-character-result": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "VSSEQ"
+  ],
+  "record_lookups": []
+ },
+ "odm-form-scoped-item-resolution": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "LBSEQ"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-ae-dictionary-coding": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-ae-seriousness-criteria": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "AESEQ"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-dm-arm-assignment": {
+  "joins": [
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.EXTRT1.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-dm-basic": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-dm-birth-date-age": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-dm-death": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "DS",
+    "filter": "DS.DSDECOD = 'DEATH'",
+    "id": "DTHDS",
+    "incomplete": null,
+    "keep": "last",
+    "key": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "order_by": true,
+    "source": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "unmatched": "missing"
+   },
+   {
+    "between": false,
+    "dataset": "AE",
+    "filter": "AE.AEOUT = 'FATAL'",
+    "id": "DTHAE",
+    "incomplete": null,
+    "keep": "last",
+    "key": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "order_by": true,
+    "source": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "unmatched": "missing"
+   }
+  ]
+ },
+ "sdtm-dm-reference-dates": {
+  "joins": [
+   {
+    "dataset": "EX",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.RFXSTDTC.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "DS",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.DSDT0.derivation.aggregate.expr"
+   },
+   {
+    "dataset": "AE",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.AEDT0.derivation.aggregate.expr"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "EX",
+    "filter": "EX.EXENDTC IS NOT NULL",
+    "id": "LASTEX",
+    "incomplete": null,
+    "keep": "last",
+    "key": null,
+    "order_by": true,
+    "source": null,
+    "unmatched": null
+   }
+  ]
+ },
+ "sdtm-ds-discontinuation-reasons": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "DSSEQ"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-ds-disposition-sequence": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "DSSEQ"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-ex-combination-regimen": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "EXSEQ"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-fa-fever-occurrence": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "FASEQ"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-lb-conditional-compartments": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "LBSEQ"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-lb-ctcae-grading": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "LBSEQ"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-lb-findings": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "LBSEQ"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-lb-multiform": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "LBSEQ"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-lb-reference-range-indicator": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "LBSEQ"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "LBRANGE",
+    "filter": null,
+    "id": "REFRANGE",
+    "incomplete": null,
+    "keep": null,
+    "key": [
+     "LBTESTCD",
+     "SEX"
+    ],
+    "order_by": false,
+    "source": [
+     "LBTESTCD",
+     "SEX"
+    ],
+    "unmatched": null
+   }
+  ]
+ },
+ "sdtm-relrec-many-to-many": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "RDOMAIN",
+   "IDVAR",
+   "IDVARVAL",
+   "RELID"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-suppmh-parent-linkage": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "RDOMAIN",
+   "USUBJID",
+   "IDVAR",
+   "IDVARVAL",
+   "QNAM"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-suppmh-qualifiers": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "RDOMAIN",
+   "USUBJID",
+   "IDVAR",
+   "IDVARVAL",
+   "QNAM"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-vs-unit-standardization": {
+  "joins": [],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "VSSEQ"
+  ],
+  "record_lookups": []
+ },
+ "sdtm-vs-visit-study-day": {
+  "joins": [
+   {
+    "dataset": "DM",
+    "declared_grain": false,
+    "keys": [
+     "STUDYID",
+     "USUBJID"
+    ],
+    "spec_path": "columns.RFSTDTC.derivation.source"
+   }
+  ],
+  "keys": [
+   "STUDYID",
+   "USUBJID",
+   "VSSEQ"
+  ],
+  "record_lookups": [
+   {
+    "between": false,
+    "dataset": "TV",
+    "filter": null,
+    "id": "PLANNEDVISIT",
+    "incomplete": null,
+    "keep": null,
+    "key": [
+     "VISIT"
+    ],
+    "order_by": false,
+    "source": [
+     "VISIT"
+    ],
+    "unmatched": "missing"
+   },
+   {
+    "between": true,
+    "dataset": "TEPOCH",
+    "filter": null,
+    "id": "EPOCHDEF",
+    "incomplete": "missing",
+    "keep": null,
+    "key": [
+     "STUDYID"
+    ],
+    "order_by": false,
+    "source": [
+     "STUDYID"
+    ],
+    "unmatched": "fail"
+   }
+  ]
+ }
+}

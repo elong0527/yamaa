@@ -51,8 +51,11 @@ columns:
     type: str
     label: Treatment Received as Collected
     derivation:
-      source: EX.EXTRT
-
+      lookup:
+        dataset: EX
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
+        value: EXTRT
   - name: ACTARMCD
     type: str
     label: Actual Arm Code
@@ -62,8 +65,8 @@ columns:
         dict:
           PLACEBO: PBO
           VITAMIN D3: TRT
-        missing: null
-        unmapped: null
+        missing:
+        unmapped:
 
   - name: ACTARM
     type: str
@@ -74,8 +77,8 @@ columns:
         dict:
           PLACEBO: Placebo
           VITAMIN D3: Vitamin D3
-        missing: null
-        unmapped: null
+        missing:
+        unmapped:
 
   - name: ACTARMUD
     type: str

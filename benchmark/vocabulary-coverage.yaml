@@ -22,7 +22,7 @@ coverage:
   least: [negative-least-incomparable-sources]
   literal: [negative-literal-non-scalar]
   mapping: [negative-mapping-case-fold-collision]
-  mapping_from: [negative-mapping-from-unmapped-key]
+  lookup: [negative-mapping-from-unmapped-key]
   previous_non_missing: [negative-previous-non-missing-non-variable-source]
   rank: [negative-rank-invalid-method]
   row_number: [negative-row-number-numeric-filter]

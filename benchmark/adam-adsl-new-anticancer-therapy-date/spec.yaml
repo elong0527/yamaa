@@ -40,6 +40,8 @@ columns:
         filter: "CM.CMCAT = 'ON TREATMENT' AND CM.CMSTDTC IS NOT NULL"
         expr: "MIN(CM.CMSTDTC)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: PRNACTDT
     type: date
     label: First New Anti-Cancer Procedure Date
@@ -48,6 +50,8 @@ columns:
         filter: "PR.PRCAT = 'CANCER RELATED' AND PR.PRSCAT = 'ON TREATMENT' AND PR.PRSTDTC IS NOT NULL"
         expr: "MIN(PR.PRSTDTC)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: NACTDT
     type: date
     label: New Anti-Cancer Therapy Start Date

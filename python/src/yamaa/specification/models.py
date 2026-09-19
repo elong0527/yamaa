@@ -50,23 +50,24 @@ class Output(_StrictModel):
     order_by: list[OrderTerm] | None = None
 
 
-class RecordLookupBetween(_StrictModel):
+class LookupBetween(_StrictModel):
     value: str
     lower: str
     upper: str
 
 
-class RecordLookup(_StrictModel):
+class Lookup(_StrictModel):
     id: str
     dataset: str
-    source: list[str] | None = None
-    key: list[str] | None = None
-    between: RecordLookupBetween | None = None
+    source: list[str]
+    key: list[str]
+    between: LookupBetween | None = None
     filter: str | None = None
     order_by: list[OrderTerm] | None = None
     keep: Literal["first", "last"] | None = None
-    unmatched: Literal["missing", "fail"] | None = None
-    incomplete: Literal["missing", "fail"] | None = None
+    columns: list[str] | None = None
+    missing: JsonValue = None
+    strict: bool = False
 
 
 class HandledExpression(_StrictModel):
@@ -97,7 +98,7 @@ class Specification(_StrictModel):
     input: dict[str, DatasetSource]
     base: str | None = None
     parents: list[str] | None = None
-    record_lookups: list[RecordLookup] | None = None
+    lookups: list[Lookup] | None = None
     keys: list[str]
     output: Output
     columns: list[Column]

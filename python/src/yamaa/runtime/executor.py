@@ -46,7 +46,7 @@ from yamaa.runtime.lifecycle import (
     LifecycleUnsupported,
     evaluate_derivation,
 )
-from yamaa.runtime.lookups import RecordLookupSelector
+from yamaa.runtime.lookups import LookupSelector
 from yamaa.runtime.rows import (
     CandidateRow,
     RelationalContext,
@@ -695,7 +695,7 @@ def execute_specification(
         context = RelationalContext(
             bindings=BindingIndex(plan.bindings, sources),
             relations=relations,
-            lookups=RecordLookupSelector(plan.record_lookups, relations),
+            lookups=LookupSelector(plan.lookups, relations),
             output_keys=tuple(specification.keys),
         )
         candidates = _construct_rows(

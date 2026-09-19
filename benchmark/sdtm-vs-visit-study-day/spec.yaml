@@ -8,15 +8,11 @@ input:
   TEPOCH:
     path: input/tepoch.csv
     types: {DYLO: int, DYHI: int}
-base: VS_RAW
-
-record_lookups:
+lookups:
   - id: PLANNEDVISIT
     dataset: TV
     source: VISIT
     key: VISIT
-    unmatched: missing
-
   - id: EPOCHDEF
     dataset: TEPOCH
     source: STUDYID
@@ -25,8 +21,7 @@ record_lookups:
       value: VSDY
       lower: DYLO
       upper: DYHI
-    incomplete: missing
-    unmatched: fail
+base: VS_RAW
 
 output:
   path: vs.csv
@@ -93,8 +88,11 @@ columns:
     type: date
     label: Subject Reference Start Date/Time
     derivation:
-      source: DM.RFSTDTC
-
+      lookup:
+        dataset: DM
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
+        value: RFSTDTC
   - name: VSDY
     type: int
     label: Study Day of Vital Signs

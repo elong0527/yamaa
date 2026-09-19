@@ -4,11 +4,17 @@ keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
   EX: input/ex.csv
-base: DM
-
-record_lookups:
+lookups:
   - id: DOSING
     dataset: EX
+
+    source:
+      - STUDYID
+      - USUBJID
+    key:
+      - STUDYID
+      - USUBJID
+base: DM
 
 output:
   path: adsl.csv

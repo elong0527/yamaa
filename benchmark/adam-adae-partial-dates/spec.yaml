@@ -45,8 +45,11 @@ columns:
     type: date
     label: Date of First Exposure to Treatment
     derivation:
-      source: ADSL.TRTSDT
-
+      lookup:
+        dataset: ADSL
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
+        value: TRTSDT
   - name: ASTDT
     type: date
     label: Analysis Start Date
@@ -57,8 +60,8 @@ columns:
         day: 15
         minimum_source_precision: month
         not_before: TRTSDT
-        missing: null
-        invalid: null
+        missing:
+        invalid:
 
   - name: ASTDTC
     type: str
@@ -72,7 +75,7 @@ columns:
     derivation:
       date_precision:
         source: ASTDT
-        missing: null
+        missing:
 
   - name: ASTDTF
     type: str

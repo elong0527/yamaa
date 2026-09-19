@@ -627,7 +627,7 @@ def test_implication_validates_its_consequent_without_short_circuiting(
     assert raised.value.spec_path == "verifications[0].implies.then"
 
 
-def test_predicates_receive_typed_resolved_record_lookup_bindings() -> None:
+def test_predicates_receive_typed_resolved_lookup_bindings() -> None:
     completed = table(
         [("STUDYID", "str"), ("USUBJID", "str")],
         [["S", "S-1"], ["S", "S-2"]],
@@ -650,8 +650,8 @@ def test_predicates_receive_typed_resolved_record_lookup_bindings() -> None:
             ],
             KEYS,
             [declaration],
-            record_lookup_columns=(TypedColumn(name="VISIT.ADT", type="date"),),
-            record_lookup_rows=[
+            lookup_columns=(TypedColumn(name="VISIT.ADT", type="date"),),
+            lookup_rows=[
                 {"VISIT.ADT": dt.date(2025, 1, 1)},
                 {"VISIT.ADT": DateValue.parse("2025-01-02")},
             ],
@@ -660,7 +660,7 @@ def test_predicates_receive_typed_resolved_record_lookup_bindings() -> None:
     )
 
 
-def test_row_count_filters_receive_resolved_record_lookup_bindings() -> None:
+def test_row_count_filters_receive_resolved_lookup_bindings() -> None:
     completed = table(
         [("STUDYID", "str"), ("USUBJID", "str")],
         [["S", "S-1"], ["S", "S-2"]],
@@ -680,14 +680,14 @@ def test_row_count_filters_receive_resolved_record_lookup_bindings() -> None:
             completed,
             [declaration],
             KEYS,
-            record_lookup_columns=(TypedColumn(name="VISIT.KEEP", type="str"),),
-            record_lookup_rows=[{"VISIT.KEEP": "Y"}, {"VISIT.KEEP": "N"}],
+            lookup_columns=(TypedColumn(name="VISIT.KEEP", type="str"),),
+            lookup_rows=[{"VISIT.KEEP": "Y"}, {"VISIT.KEEP": "N"}],
         )
         == ()
     )
 
 
-def test_record_lookup_bindings_must_match_their_typed_row_schema() -> None:
+def test_lookup_bindings_must_match_their_typed_row_schema() -> None:
     completed = table([("STUDYID", "str"), ("USUBJID", "str")], [["S", "S-1"]])
     lookup = (TypedColumn(name="VISIT.ADT", type="date"),)
 
@@ -696,24 +696,24 @@ def test_record_lookup_bindings_must_match_their_typed_row_schema() -> None:
             completed,
             [],
             KEYS,
-            record_lookup_columns=lookup,
-            record_lookup_rows=[],
+            lookup_columns=lookup,
+            lookup_rows=[],
         )
     with pytest.raises(ValueError, match="match their schema"):
         check_dataset(
             completed,
             [],
             KEYS,
-            record_lookup_columns=lookup,
-            record_lookup_rows=[{}],
+            lookup_columns=lookup,
+            lookup_rows=[{}],
         )
     with pytest.raises(ValueError, match="must be date"):
         check_dataset(
             completed,
             [],
             KEYS,
-            record_lookup_columns=lookup,
-            record_lookup_rows=[{"VISIT.ADT": "2025-01-01"}],
+            lookup_columns=lookup,
+            lookup_rows=[{"VISIT.ADT": "2025-01-01"}],
         )
 
 

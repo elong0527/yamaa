@@ -57,14 +57,11 @@ columns:
     type: float
     label: Aspartate Aminotransferase Analysis Value
     derivation:
-      mapping_from:
-        source: [USUBJID, ADT, ASTCODE]
+      lookup:
         dataset: ADLB
+        source: [USUBJID, ADT, ASTCODE]
         key: [USUBJID, ADT, PARAMCD]
         value: AVAL
-        missing: null
-        unmapped: null
-
   - name: AVAL
     type: float
     label: Analysis Value
@@ -89,7 +86,7 @@ rows:
       LBRESN:
         source: LB.LBSTRESN
       ALTDEN:
-        literal: null
+        literal:
 
   - id: ast
     dataset: LB
@@ -102,7 +99,7 @@ rows:
       LBRESN:
         source: LB.LBSTRESN
       ALTDEN:
-        literal: null
+        literal:
 
   - id: ast_alt_ratio
     dataset: LB
@@ -113,7 +110,7 @@ rows:
       PARAM:
         literal: Aspartate to Alanine Aminotransferase Ratio
       LBRESN:
-        literal: null
+        literal:
       ALTDEN:
         source: LB.LBSTRESN
 

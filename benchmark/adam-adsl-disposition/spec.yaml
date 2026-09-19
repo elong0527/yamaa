@@ -31,28 +31,36 @@ columns:
         filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
         expr: "MAX(DS.DSSTDTC)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: EOSDECOD
     type: str
     label: End of Study Decoded Term
     derivation:
-      source:
-        variable: DS.DSDECOD
+      lookup:
+        dataset: DS
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
+        value: DSDECOD
         filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
-        multiple_matches:
-          order_by: [DS.DSSTDTC, DS.DSSEQ]
-          keep: last
-
+        order_by:
+          - variable: DS.DSSTDTC
+          - variable: DS.DSSEQ
+        keep: last
   - name: EOSREAS
     type: str
     label: End of Study Reason
     derivation:
-      source:
-        variable: DS.DSTERM
+      lookup:
+        dataset: DS
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
+        value: DSTERM
         filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
-        multiple_matches:
-          order_by: [DS.DSSTDTC, DS.DSSEQ]
-          keep: last
-
+        order_by:
+          - variable: DS.DSSTDTC
+          - variable: DS.DSSEQ
+        keep: last
   - name: EOSSTT
     type: str
     label: End of Study Status

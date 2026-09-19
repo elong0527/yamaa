@@ -39,4 +39,8 @@ columns:
     type: str
     label: Severity
     derivation:
-      source: SUPP.AESEV
+      lookup:
+        dataset: SUPP
+        source: [STUDYID, USUBJID, AESEQ]
+        key: [STUDYID, USUBJID, AESEQ]
+        value: AESEV

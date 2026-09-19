@@ -62,6 +62,8 @@ columns:
         filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
         expr: "SUM(TR.TRSTRESN)"
 
+        source: [STUDYID, USUBJID, AVISIT]
+        key: [STUDYID, USUBJID, AVISIT]
   - name: NMEAS
     type: int
     label: Number of Measured Target Lesions
@@ -70,6 +72,8 @@ columns:
         filter: "TR.TRGRPID = 'TARGET' AND TR.TRTESTCD = 'LDIAM'"
         expr: "COUNT(TR.TRSTRESN)"
 
+        source: [STUDYID, USUBJID, AVISIT]
+        key: [STUDYID, USUBJID, AVISIT]
   - name: NTARGET
     type: int
     label: Number of Target Lesions
@@ -78,6 +82,8 @@ columns:
         filter: "TU.TUGRPID = 'TARGET'"
         expr: "COUNT(TU.TULNKID)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: ANL01FL
     type: str
     label: Analysis Record Flag 01

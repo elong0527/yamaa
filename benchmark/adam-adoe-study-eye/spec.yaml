@@ -54,7 +54,11 @@ columns:
     type: str
     label: Study Eye Laterality
     derivation:
-      source: ADSL.STUDYEYE
+      lookup:
+        dataset: ADSL
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
+        value: STUDYEYE
     verifications:
       allowed_values:
         values: [LEFT, RIGHT, BILATERAL]

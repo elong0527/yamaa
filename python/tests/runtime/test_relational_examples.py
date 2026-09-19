@@ -26,7 +26,7 @@ from yamaa.runtime import (
     execute_specification,
     execute_with_source_provider,
 )
-from yamaa.specification import load_specification
+from yamaa.specification import SpecificationError, load_specification
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
@@ -55,7 +55,7 @@ ERROR_EXAMPLES = [
     "negative-record-lookup-incomplete-key",
     "negative-record-lookup-id-collision",
     "negative-record-lookup-incomparable-range",
-    # R015-34: an unhandled multiple match names the lookup's match under
+    # R003-33: an unhandled multiple match names the lookup's match under
     # `key` and `lookup_key` and the offending output row under `keys`, the
     # way an unmatched key already did.
     "negative-query-slot-overflow",
@@ -102,10 +102,15 @@ def test_a_committed_error_contract_is_reproduced(name: str) -> None:
     directory = EXAMPLES / name
     committed = _committed_error(directory)
 
-    result = _run(directory)
-
-    assert isinstance(result, ExecutionFailure), result
-    diagnostic = result.diagnostics[0]
+    try:
+        result = _run(directory)
+    except SpecificationError as error:
+        # A spec that fails schema validation never reaches execution; the
+        # schema diagnostic is the committed contract.
+        diagnostic = error.diagnostics[0]
+    else:
+        assert isinstance(result, ExecutionFailure), result
+        diagnostic = result.diagnostics[0]
     assert diagnostic.phase == committed["phase"]
     assert diagnostic.condition == committed["condition"]
     assert list(diagnostic.spec_paths) == committed["spec_paths"]
@@ -186,11 +191,11 @@ def test_a_different_input_batch_size_changes_no_value_and_no_row_order() -> Non
     )
 
 
-# One compact study that exercises the whole component in one run: an
-# implicit R003 join with a declared selection, a right-side reduction, an
-# R015 record lookup, a `mapping_from` declared-key lookup, an output-row
-# reduction, and a grouped row template with a grouped filter. It stays
-# scalar-only because sdtm-lb-multiform's own end-to-end run waits on #221.
+# One compact study that exercises the whole component in one run: a named
+# lookup with a declared selection, a cross-dataset aggregate, an inline
+# `lookup` declared-key lookup, an output-row reduction, and a grouped row
+# template with a grouped filter. It stays scalar-only because
+# sdtm-lb-multiform's own end to end run waits on #221.
 _SPEC = """\
 schema_version: "1.0"
 domain: ADLB
@@ -200,9 +205,11 @@ input:
   REF: {path: input/ref.csv, types: {ANRHI: float}}
 keys: [STUDYID, USUBJID, PARAMCD]
 
-record_lookups:
+lookups:
   - id: LASTEX
     dataset: EX
+    source: [STUDYID, USUBJID]
+    key: [STUDYID, USUBJID]
     order_by: [EX.EXSEQ]
     keep: last
 
@@ -227,24 +234,28 @@ columns:
   - name: ANRHI
     type: float
     derivation:
-      mapping_from:
+      lookup:
         source: [PARAMCD, SEX]
         dataset: REF
         key: [PARAMCD, SEX]
         value: ANRHI
-        unmapped: null
+        missing: null
   - name: TRT
     type: str
     derivation:
-      source:
-        variable: EX.EXTRT
-        multiple_matches:
-          order_by: [EX.EXSEQ]
-          keep: first
+      lookup:
+        dataset: EX
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
+        value: EXTRT
+        order_by: [EX.EXSEQ]
+        keep: first
   - name: TOTDOSE
     type: float
     derivation:
       aggregate:
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
         filter: "EX.EXDOSE > 0"
         expr: "SUM(EX.EXDOSE)"
   - name: LASTTRT
@@ -353,10 +364,10 @@ def test_that_study_reports_the_selection_handler_only_where_it_chose(
         (count.spec_path, count.handler): count.count for count in result.handler_counts
     }
     assert (
-        counts[("columns.TRT.derivation.source.multiple_matches", "multiple_matches")]
+        counts[("columns.TRT.derivation.lookup.multiple_matches", "multiple_matches")]
         == 3
     )
-    assert counts[("columns.ANRHI.derivation.mapping_from.unmapped", "unmapped")] == 1
+    assert counts[("columns.ANRHI.derivation.lookup.missing", "missing")] == 1
 
 
 def test_that_study_is_reproduced_exactly_on_a_second_run(
@@ -383,7 +394,7 @@ input:
 base: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 
-record_lookups:
+lookups:
   - id: EPOCHDEF
     dataset: EPOCHS
     source: [STUDYID]
@@ -414,6 +425,8 @@ columns:
     type: float
     derivation:
       aggregate:
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
         between: {value: ADY, lower: EX.STARTDY, upper: EX.ENDDY}
         expr: "SUM(EX.EXDOSE)"
   - name: EPOCH
@@ -428,6 +441,8 @@ columns:
     type: float
     derivation:
       aggregate:
+        source: [STUDYID]
+        key: [STUDYID]
         group_by: [EX.STUDYID]
         expr: "SUM(EX.EXDOSE)"
 """
@@ -483,21 +498,13 @@ def test_range_narrowing_and_a_coarser_grain_reach_their_own_records(
 def test_a_missing_cutoff_never_reduces_the_unrestricted_right_side(
     range_study: Path,
 ) -> None:
-    # R003-27 and R013-8: a missing current-row value leaves the right side
-    # empty rather than silently removing the narrowing.
+    # R003-14: a missing current-row value leaves the lookup with nothing to
+    # match, so the absent policy (default missing) answers without narrowing.
     (range_study / "input/vs.csv").write_text(
         "STUDYID,USUBJID,VSSEQ,ADY,AVAL\nS1,P1,1,,120\n", encoding="utf-8"
     )
     (range_study / "input/epochs.csv").write_text(
         "STUDYID,EPOCH,LO,HI,LIMIT\nS1,TREATMENT,1,28,10\n", encoding="utf-8"
-    )
-    spec = (range_study / "spec.yaml").read_text(encoding="utf-8")
-    (range_study / "spec.yaml").write_text(
-        spec.replace(
-            "    between: {value: ADY, lower: LO, upper: HI}",
-            "    between: {value: ADY, lower: LO, upper: HI}\n    incomplete: missing",
-        ),
-        encoding="utf-8",
     )
 
     result = _run(range_study)
@@ -572,6 +579,8 @@ columns:
     type: float
     derivation:
       aggregate:
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
         between: {{BETWEEN}}
         expr: "SUM(EX.EXDOSE)"
 """
@@ -583,7 +592,7 @@ def test_a_contextual_odm_item_is_not_reachable_through_the_join(
     # A long-form ODM item is resolved from the current row's complete R002
     # context, never widened to whichever records a key happens to reach. A
     # relation that is not the row driver carries no such context, so the
-    # join refuses rather than answering across item groups.
+    # binding refuses rather than answering across item groups.
     (tmp_path / "input").mkdir()
     (tmp_path / "spec.yaml").write_text(textwrap.dedent(_ODM_SPEC), encoding="utf-8")
     (tmp_path / "input/dm.csv").write_text(
@@ -599,9 +608,8 @@ def test_a_contextual_odm_item_is_not_reachable_through_the_join(
 
     assert isinstance(result, ExecutionFailure), result
     diagnostic = result.diagnostics[0]
-    assert diagnostic.condition == "no_applicable_keys"
-    assert diagnostic.requirement == "R003-33"
-    assert diagnostic.context["dataset"] == "ODM"
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.context["identifier"] == "ODM.IT.DM.DIAGGRP"
 
 
 _ODM_SPEC = """\

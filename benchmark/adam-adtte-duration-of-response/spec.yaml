@@ -57,17 +57,22 @@ columns:
         filter: "ADRSPRE.AVALC = 'PD'"
         expr: "MIN(ADRSPRE.ADT)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: PDSEQ
     type: int
     label: Disease Progression Source Sequence Number
     derivation:
-      source:
-        variable: ADRSPRE.ASEQ
+      lookup:
+        dataset: ADRSPRE
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
+        value: ASEQ
         filter: "ADRSPRE.AVALC = 'PD'"
-        multiple_matches:
-          order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
-          keep: first
-
+        order_by:
+          - variable: ADRSPRE.ADT
+          - variable: ADRSPRE.ASEQ
+        keep: first
   - name: DEATHDT
     type: date
     label: Death Date
@@ -76,17 +81,22 @@ columns:
         filter: "DS.DSDECOD = 'DEATH'"
         expr: "MIN(DS.DSSTDTC)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: DEATHSEQ
     type: int
     label: Death Source Sequence Number
     derivation:
-      source:
-        variable: DS.DSSEQ
+      lookup:
+        dataset: DS
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
+        value: DSSEQ
         filter: "DS.DSDECOD = 'DEATH'"
-        multiple_matches:
-          order_by: [DS.DSSTDTC, DS.DSSEQ]
-          keep: first
-
+        order_by:
+          - variable: DS.DSSTDTC
+          - variable: DS.DSSEQ
+        keep: first
   - name: LASTVLDT
     type: date
     label: Last Valid Assessment Date
@@ -95,17 +105,22 @@ columns:
         filter: "ADRSPRE.AVALC <> 'NE'"
         expr: "MAX(ADRSPRE.ADT)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: LASTVLSEQ
     type: int
     label: Last Valid Assessment Sequence Number
     derivation:
-      source:
-        variable: ADRSPRE.ASEQ
+      lookup:
+        dataset: ADRSPRE
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
+        value: ASEQ
         filter: "ADRSPRE.AVALC <> 'NE'"
-        multiple_matches:
-          order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
-          keep: last
-
+        order_by:
+          - variable: ADRSPRE.ADT
+          - variable: ADRSPRE.ASEQ
+        keep: last
   - name: EVENTALLDT
     type: date
     label: Earliest Progression or Death Date
