@@ -387,8 +387,30 @@ def evaluate_intermediate(
     names = list(sources)
     between = payload.get("between")
     between_value: str | None = None
-    if isinstance(between, Mapping) and isinstance(between.get("value"), str):
-        between_value = str(between["value"])
+    between_lower: str | None = None
+    between_upper: str | None = None
+    if between is not None:
+        # The planner requires all three together; a payload that reached
+        # here without them narrows by a bound it cannot read, so answer the
+        # declaration rather than raising on the missing one.
+        bounds = (
+            [between.get(name) for name in ("value", "lower", "upper")]
+            if isinstance(between, Mapping)
+            else []
+        )
+        if len(bounds) != 3 or not all(isinstance(bound, str) for bound in bounds):
+            return ConditionResult(
+                condition=RuntimeCondition(
+                    phase="validation",
+                    condition="invalid_field_type",
+                    context={
+                        "operation": "lookup",
+                        "expected": "between value, lower, and upper",
+                    },
+                    requirement="R007-36",
+                )
+            )
+        between_value, between_lower, between_upper = (str(bound) for bound in bounds)
         names.append(between_value)
     for name in names:
         resolution = resolve(name)
@@ -430,8 +452,8 @@ def evaluate_intermediate(
         order_terms=terms or (),
         keep=keep_value,
         between_value=between_value,
-        between_lower=str(between["lower"]) if isinstance(between, Mapping) else None,
-        between_upper=str(between["upper"]) if isinstance(between, Mapping) else None,
+        between_lower=between_lower,
+        between_upper=between_upper,
         missing=payload.get("missing"),
         strict=bool(payload.get("strict", False)),
         missing_declared="missing" in payload,

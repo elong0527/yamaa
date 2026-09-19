@@ -537,6 +537,34 @@ def test_an_aggregate_with_a_key_naming_no_identifiers_is_reported() -> None:
     assert diagnostic.requirement == "R003-30"
 
 
+def test_an_inline_lookup_with_an_incomplete_between_is_reported() -> None:
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation(
+                    {
+                        "lookup": {
+                            "dataset": "RIGHT",
+                            "key": ["X"],
+                            "value": "V",
+                            "between": {"value": "X"},
+                        }
+                    }
+                ),
+            ),
+        ]
+    )
+
+    # R007-36: the named form requires value, lower and upper together, so a
+    # partial inline range is reported before it reaches the runtime.
+    assert diagnostic.condition == "invalid_field_type"
+    assert diagnostic.requirement == "R007-36"
+    assert diagnostic.spec_paths == ("columns.V.derivation.lookup.between",)
+
+
 def test_an_inline_lookup_with_an_omitted_key_infers_the_applicable_keys() -> None:
     plan = plan_two(
         [

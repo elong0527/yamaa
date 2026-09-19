@@ -809,7 +809,24 @@ def _lookup_references(
                 references.append(_Reference(variable, order_path, reach="declared"))
 
     between = payload.get("between")
-    if isinstance(between, Mapping):
+    if between is not None and not (
+        isinstance(between, Mapping)
+        and all(
+            isinstance(between.get(name), str) for name in ("value", "lower", "upper")
+        )
+    ):
+        # The named form's `between` requires all three, so the inline form
+        # states the same range or none at all: a partial one narrows by a
+        # bound the record has no column for.
+        diagnostics.append(
+            _diagnostic(
+                "invalid_field_type",
+                f"{operation_path}.between",
+                {"operation": "lookup", "expected": "value, lower, and upper"},
+                requirement="R007-36",
+            )
+        )
+    elif isinstance(between, Mapping):
         between_value = between.get("value")
         if isinstance(between_value, str):
             references.append(
