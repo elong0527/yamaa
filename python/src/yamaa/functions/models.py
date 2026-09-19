@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from yamaa.specification.models import ColumnType
 
@@ -67,6 +67,36 @@ class FunctionContract(_StrictModel):
     binding: FunctionBinding
     conformance: str = Field(min_length=1)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _default_binding_args(cls, data: object) -> object:
+        """Read an omitted `binding.args` as the identity mapping.
+
+        The schema leaves `args` optional; every consumer below expects the
+        complete logical-to-host mapping, so the absent field is materialized
+        here, before any signature check runs. A present `args` still covers
+        the signature exactly -- partial mappings stay invalid.
+        """
+        if not isinstance(data, dict):
+            return data
+        binding = data.get("binding")
+        if not isinstance(binding, dict) or "args" in binding:
+            return data
+        params = data.get("params")
+        names = (
+            [
+                parameter["name"]
+                for parameter in params
+                if isinstance(parameter, dict)
+                and isinstance(parameter.get("name"), str)
+            ]
+            if isinstance(params, list)
+            else []
+        )
+        data = dict(data)
+        data["binding"] = {**binding, "args": {name: name for name in names}}
+        return data
+
     @property
     def parameters(self) -> dict[str, FunctionParameter]:
         return {parameter.name: parameter for parameter in self.params}
@@ -105,11 +135,13 @@ class ConformanceCase(_StrictModel):
 
 
 class ConformanceDocument(_StrictModel):
-    """The language-neutral vectors one contract is activated against."""
+    """The language-neutral vectors one contract is activated against.
+
+    The contract the document activates is the `functions` entry that names
+    it; the document itself carries no identity beyond the schema version.
+    """
 
     schema_version: str = Field(min_length=1)
-    function: str
-    contract_version: str = Field(min_length=1)
     cases: list[ConformanceCase]
 
 

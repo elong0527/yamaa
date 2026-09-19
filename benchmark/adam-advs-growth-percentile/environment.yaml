@@ -21,6 +21,4 @@ functions:
     returns: float
     binding:
       call: stats::pnorm
-      args:
-        q: q
     conformance: conformance/normal_cdf.yaml

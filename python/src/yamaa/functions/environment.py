@@ -275,16 +275,6 @@ def _load_conformance(
         contract.conformance,
     )
     assert isinstance(vectors, ConformanceDocument)
-    if (
-        vectors.function != name
-        or vectors.contract_version != contract.contract_version
-    ):
-        raise _invalid(
-            "a vector document must identify its own contract",
-            function=f"functions.{name}",
-            declared=[vectors.function, vectors.contract_version],
-            expected=[name, contract.contract_version],
-        )
     identifiers = [case.id for case in vectors.cases]
     if not identifiers:
         raise _invalid(

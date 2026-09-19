@@ -18,6 +18,4 @@ functions:
     returns: float
     binding:
       call: projectfunctions.project_value
-      args:
-        x: x
     conformance: conformance/project_value.yaml

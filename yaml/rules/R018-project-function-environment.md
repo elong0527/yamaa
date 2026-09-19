@@ -183,7 +183,8 @@ therefore does not require `may_return_missing: true`.
 the selected runtime: an R package-qualified name such as `projectbmi::bmi`, or
 a Python module-qualified name such as `orgstats.normal_cdf`. The environment
 also maps every logical parameter name to one unique host argument name. The
-mapping must exactly cover the logical signature. A Python host name is an
+mapping must exactly cover the logical signature. Omitting `args` maps every
+logical name to itself. A Python host name is an
 ASCII identifier and not a Python keyword. An R host name is an unquoted
 syntactic R name and not a reserved word, `...`, or a `..n` positional name.
 
@@ -209,8 +210,9 @@ true`.
 ## Activation conformance
 
 **R018-26.** Every logical contract names a language-neutral YAML conformance
-document. It identifies the same logical name and contract version and contains
-uniquely named cases. A case supplies `covers`, logical arguments, and one
+document. The `functions` entry identifies the contract the document
+activates -- the document itself carries no name or version -- and the
+document contains uniquely named cases. A case supplies `covers`, logical arguments, and one
 expected scalar result. Its arguments obey the same signature, exact-type,
 default, and missing rules as a specification call.
 

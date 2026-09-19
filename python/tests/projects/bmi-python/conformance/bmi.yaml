@@ -1,6 +1,4 @@
 schema_version: "1.0"
-function: bmi
-contract_version: "1.0.0"
 cases:
   - id: explicit-scale
     covers: [normal, numeric-comparison]
