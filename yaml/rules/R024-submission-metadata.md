@@ -98,7 +98,7 @@ only when the dataset's implementation guide defines one for it.
 
 **R024-10.** `structure` states in prose the level of detail one record
 represents, such as `One record per subject`. `structure` is required,
-because keys alone do not fix a dataset's grain: one key list serves
+because keys alone do not fix a dataset's structure: one key list serves
 several structures.
 
 **R024-11.** `repeating` is required and states whether the dataset may carry

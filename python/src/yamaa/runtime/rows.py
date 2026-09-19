@@ -105,7 +105,7 @@ class RelationalContext:
     def partition(
         self, fields: tuple[str, ...]
     ) -> dict[tuple[object, ...], list[CandidateRow]]:
-        """Group the constructed rows by these columns, once per grain.
+        """Group the constructed rows by these columns, once per key combination.
 
         R007-9 broadcasts an output-row reduction back to each row of its
         partition, so every row of one partition asks the same question. The
@@ -526,7 +526,7 @@ class RowResolver:
         """Reduce the partition R003-17 selects for the current row."""
         relation = self._context.relations[dataset]
         if group_by:
-            # R003-20: a coarser declared grain is what the join matches on.
+            # R003-20: a coarser declared key set is what the join matches on.
             fields = tuple(name.split(".", 1)[-1] for name in group_by)
         else:
             fields = applicable_keys(self._context.output_keys, relation)
@@ -739,7 +739,7 @@ def group_candidates(
                 values={},
                 # R001-12b collects a direct read across the records feeding
                 # one key combination. A grouped candidate has no such read:
-                # its scalars are the grain, and everything else reduces.
+                # its scalars are the keys, and everything else reduces.
                 feeding_rows={},
                 row_id=planned.declaration.id if planned.declaration else None,
                 group_driver=planned.driver,

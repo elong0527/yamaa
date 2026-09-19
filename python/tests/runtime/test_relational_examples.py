@@ -506,7 +506,7 @@ def test_a_missing_cutoff_never_reduces_the_unrestricted_right_side(
     row = result.artifact.frame.to_dicts()[0]
     assert row["EXPDOSE"] is None
     assert row["EPOCH"] is None
-    # The coarser grain does not read the cutoff, so it still reduces.
+    # The coarser keys do not read the cutoff, so it still reduces.
     assert row["STUDYTOT"] == 60.0
 
 

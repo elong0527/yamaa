@@ -96,7 +96,7 @@ distinct `STUDYID` and `USUBJID` combinations the extract carries are the
 output rows, in the order they first appear: a subject collected on three
 item records is one row, and a subject whose sex was never collected is a row
 all the same. This is the cleanest illustration in the suite that row
-construction and column derivation are separate phases -- the grain names no
+construction and column derivation are separate phases -- the keys name no
 column value, and no filter decides how many records come out.
 
 **Step 4 -- the columns that carry judgement.**
@@ -140,7 +140,7 @@ rather than a `missing` handler: the arm is absent, not unusable.
 sparse subject you predicted appears with the substituted value rather than
 being dropped.
 
-Five minutes, and you have the full loop: intent -> shape -> grain -> handlers ->
+Five minutes, and you have the full loop: intent -> shape -> keys -> handlers ->
 result.
 
 ---
@@ -151,7 +151,7 @@ The suite's own README names three benchmarks, in this order:
 
 | # | Benchmark | What it establishes |
 |---|---|---|
-| 1 | [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-basic) | Reading collected items, handlers, and the declared keys as the grain |
+| 1 | [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-basic) | Reading collected items, handlers, and the declared keys as the row identity |
 | 2 | [`sdtm-lb-findings`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-lb-findings) | Real row construction: one template per collected test, `row_number` for the sequence |
 | 3 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-bds) | A full Basic Data Structure build: parameters as row templates, then baseline, change and sequence as columns |
 
@@ -177,7 +177,7 @@ Rule coverage across the 52 questions below:
 
 | Question | Rule | Benchmark |
 |---|---|---|
-| How do I build one record per subject? | R001 | [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-basic) -- the declared `keys` are the grain, so there is no row template to write |
+| How do I build one record per subject? | R001 | [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-basic) -- the declared `keys` are the row identity, so there is no row template to write |
 | How does one collected record become several analysis records? | R001 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-bds) -- `alt` and `alt_si` share a filter, so each ALT result produces two rows |
 | How do I build one record per collected result rather than per scheduled test? | R001 | [`sdtm-lb-findings`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-lb-findings) |
 | How do I consolidate several collection forms into one domain? | R001, R002 | [`sdtm-lb-multiform`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-lb-multiform) -- the same analyte on two forms is separated by specimen and location, not by test code |

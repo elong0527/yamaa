@@ -87,7 +87,7 @@ broadcasts the result to each row.
 **R007-10.** Context 3: it is a row derivation of a grouped row template
 and every identifier is qualified to that template's input
 dataset. It reduces the records of the current input group to one
-candidate-row value. The enclosing `row.group_by` owns the grain, so
+candidate-row value. The enclosing `row.group_by` owns the keys, so
 the aggregate itself omits `group_by`.
 
 **R007-11.** Any other aggregate context is an error. A `filter` narrows the
@@ -217,7 +217,7 @@ inside its registry entry keeps the language checkable. No generic argument bag
 can drift between implementations. Nesting is allowed only where selecting or
 composing expressions is the field's purpose. An operation cannot silently
 become a second expression language. The three aggregate contexts match the
-language's three grains: a joined relation, a constructed partition, and an
+language's three key scopes: a joined relation, a constructed partition, and an
 input group. The rule fixes order-term defaults. SQL engine disagreement about
 null placement must not change results. Runtime types make an order term
 compare one type by construction. Multi-variable expressions are the only

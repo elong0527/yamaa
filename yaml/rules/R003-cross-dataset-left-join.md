@@ -214,5 +214,5 @@ output column, a grouped row template's source reads one group key
 
 **R003-39.** Validation reports the inferred applicable keys for every
 qualified source. A reviewer sees the same-named columns the join matches.
-The report shows the type each side declares and any coarser reduction grain
+The report shows the type each side declares and any coarser reduction keys
 in place of the keys.

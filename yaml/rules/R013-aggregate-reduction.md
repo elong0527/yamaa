@@ -17,7 +17,7 @@ per reducer. Avoid host-language code.
 ## Boundaries
 
 This rule owns the `aggregate_expression` primitive: its grammar, reducer
-vocabulary, grain rule, result semantics, and failure conditions. R007 owns the
+vocabulary, key rule, result semantics, and failure conditions. R007 owns the
 three contexts an aggregate is valid in. R003 owns the join that consumes a
 right-side reduction. R004 owns the Boolean `filter`. String reductions use
 R019's text equality and total order.
@@ -83,7 +83,7 @@ applicable keys R003 joins on. An unqualified expression declares
 current-output columns and must declare at least one. A reduction over the
 whole output is not registered: no example needs one. A grouped-row aggregate
 declares no local `group_by`. The enclosing
-`row.group_by` already fixes its current relation and grain.
+`row.group_by` already fixes its current relation and keys.
 
 ## Row-relative range narrowing
 
@@ -173,9 +173,9 @@ record order. `ONLY` is the reduction for a grouped calculation that requires
 one source record and must reject duplicates.
 
 **R013-18.** Reductions do not nest. A reduction argument must contain no
-reduction, so `MAX(SUM(EX.EXDOSE))` is an error. Reducing at one grain and
+reduction, so `MAX(SUM(EX.EXDOSE))` is an error. Reducing at one key level and
 reducing that result at another uses two specifications. The first artifact
-names and validates the intermediate grain. The downstream specification
+names and validates the intermediate keys. The downstream specification
 declares that stored artifact as an ordinary source under R002. Pipeline
 orchestration supplies the execution and materialization boundary. The boundary
 is not inferred from a source path.
@@ -185,7 +185,7 @@ placeholder for the relation named by the expression's qualified identifiers
 (for example, `COUNT(EX.*)`). `COUNT(D.*)` is the one reducer that names no
 column and counts records where `COUNT(x)` counts values.
 
-## The grain rule
+## The key rule
 
 **R013-20.** Every identifier must appear inside a reduction, unless it names a
 `group_by` column. `SUM(a) / SUM(b)` is legal. `SUM(a) + b` is an error unless

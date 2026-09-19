@@ -6042,7 +6042,7 @@ def first_identifier_with_type(ast, resolver, value_type):
 def validate_aggregate_expression_ast(
     ast, path, expression, resolver, grouped, relation
 ):
-    """Validate R013 grain, reducer nesting, and static operand types."""
+    """Validate the R013 key rule, reducer nesting, and static operand types."""
     errors = []
 
     def validate_grain(node, inside_reduction=False):

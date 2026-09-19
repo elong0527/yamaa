@@ -29,7 +29,7 @@ data is read and no artifact is accepted.
 
 ## How to fix
 
-Use an aggregate and state the subject-level grain explicitly:
+Use an aggregate and state the subject-level keys explicitly:
 
 ```yaml
 derivation:

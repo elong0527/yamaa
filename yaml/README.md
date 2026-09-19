@@ -139,9 +139,9 @@ R003. A qualified aggregate may additionally narrow that relation against one
 current-row value through inclusive lower or upper bounds; R013 fixes the
 one-sided and missing-value behavior.
 
-A reduction at one grain followed by a reduction at another remains two
+A reduction at one key level followed by a reduction at another remains two
 specifications. The first artifact is a normal stored source of the second, so
-each grain keeps its own identity and validation contract without adding
+each keeps its own identity and validation contract without adding
 in-memory datasets or inferring pipeline order from paths.
 
 A row template may declare `group_by` when its driver records must first form

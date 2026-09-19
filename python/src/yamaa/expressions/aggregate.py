@@ -402,7 +402,7 @@ def aggregate_star_datasets(ast: AggregateAst) -> tuple[str, ...]:
 
 
 def ungrouped_identifiers(ast: AggregateAst) -> tuple[str, ...]:
-    """Return the identifiers R013-20 requires the enclosing grain to declare.
+    """Return the identifiers R013-20 requires the enclosing `group_by` to declare.
 
     A value that varies within the group gives the expression no single
     answer, so every identifier a reduction does not enclose must be grouped
@@ -688,7 +688,7 @@ def evaluate_aggregate(
     already in relation order, because R013-33 makes a reduction read that
     order rather than impose one of its own. Each maps an identifier as the
     expression writes it to that record's value. `grouped` holds the
-    identifiers the enclosing grain declares, which R013-21 makes constant
+    identifiers the enclosing `group_by` declares, which R013-21 makes constant
     within the group.
     """
     reported = dict(context or {})
