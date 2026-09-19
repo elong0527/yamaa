@@ -47,7 +47,7 @@ prohibition, `should` a strong recommendation with a reason required to depart
 from it, and `may` a truly optional behavior.
 
 For worked precedents of each rule in action, see the
-[examples walkthrough](../articles/yaml-examples-walkthrough.md), which maps
-constructs and questions to runnable examples, and the
+[benchmark walkthrough](../articles/yaml-benchmark-walkthrough.md), which maps
+constructs and questions to runnable benchmarks, and the
 [benchmark](../benchmark/index.md), which shows each one's input against its
 output.

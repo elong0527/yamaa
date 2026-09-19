@@ -3,7 +3,7 @@
   its front-matter `hide:` gets no Edit or View button. The benchmark gallery
   is generated into docs/benchmark/index.md and is not in the repository, so
   the buttons Material would draw for it would point at a file that does not
-  exist. Edit the example fixtures or the generator instead.
+  exist. Edit the benchmark fixtures or the generator instead.
 -#}
 {% set hidden = page.meta and page.meta.hide and "actions" in page.meta.hide %}
 {% if page.edit_url and not hidden %}

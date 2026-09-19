@@ -1,5 +1,5 @@
 #!/bin/sh
-# Regenerate every example dashboard into docs/examples/ before building or
+# Regenerate every benchmark dashboard into docs/benchmark/ before building or
 # serving the MkDocs site. Mirrors the generate step in
 # .github/workflows/deploy-docs.yml. Generated HTML is git-ignored; do not
 # edit it by hand.

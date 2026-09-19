@@ -69,7 +69,7 @@ nav:
       - Why YAMAA: articles/why-yamaa.md
       - Excel to YAMAA: articles/excel-to-yamaa.md
       - Schema concepts: articles/schema-concepts.md
-      - Examples walkthrough: articles/yaml-examples-walkthrough.md
+      - Benchmark walkthrough: articles/yaml-benchmark-walkthrough.md
   - Benchmark:
       - benchmark/index.md
   - Reference:

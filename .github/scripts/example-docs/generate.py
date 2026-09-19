@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate self-contained example dashboards from repository fixtures."""
+"""Generate self-contained benchmark dashboards from repository fixtures."""
 
 import argparse
 import csv
@@ -21,8 +21,8 @@ EXAMPLES = ROOT / "benchmark"
 DESTINATION = ROOT / "docs/benchmark"
 REPOSITORY = "https://github.com/elong0527/yamaa"
 # Comments are giscus threads in the repository's GitHub Discussions, so they
-# outlive any deployment. Each example maps to one discussion whose title is
-# COMMENT_TERM_PREFIX plus the example directory name; renaming a directory
+# outlive any deployment. Each benchmark maps to one discussion whose title is
+# COMMENT_TERM_PREFIX plus the benchmark directory name; renaming a directory
 # starts a new thread. IDs come from https://giscus.app after the repository
 # enables Discussions and installs the giscus app.
 GISCUS = {
@@ -36,7 +36,7 @@ COMMENT_TERM_PREFIX = "yaml/examples/"
 OUTCOMES = (
     (
         "positive",
-        "Examples",
+        "Benchmarks",
         "Each runs to completion and produces the artifact in expected/.",
     ),
     (
@@ -165,7 +165,7 @@ def render_readme(text, source_url):
     text = "\n".join(readme_lines(text))
     markdown = MarkdownIt("commonmark", {"html": False}).enable("table")
     tokens = markdown.parse(text)
-    title = "Example"
+    title = "Benchmark"
     if tokens and tokens[0].type == "heading_open" and tokens[0].tag == "h1":
         title = tokens[1].content
         tokens = tokens[3:]
@@ -268,14 +268,14 @@ def render_files(paths, group, example, derived, labels):
                     if key:
                         subjects.add(key)
             except (ValueError, csv.Error, UnicodeError):
-                # Malformed inputs are intentional in negative examples.
+                # Malformed inputs are intentional in negative benchmarks.
                 # Show their source literally instead of repairing or dropping it.
                 count = "raw CSV"
         if table is None:
             try:
                 table = f'<pre class="plain-file"><code>{escape(path.read_text(encoding="utf-8"))}</code></pre>'
             except UnicodeError:
-                table = '<p class="no-rows">Binary fixture; inspect it in the example source.</p>'
+                table = '<p class="no-rows">Binary fixture; inspect it in the benchmark source.</p>'
             if count == "raw CSV":
                 table = '<p class="no-rows">Showing raw CSV because the source is not a valid rectangular table.</p>' + table
         widths.append(f"minmax(0, {width}fr)")
@@ -296,7 +296,7 @@ def render_files(paths, group, example, derived, labels):
 
 
 def render_failure_section(error_path, edit_url):
-    """Render the expected-failure panel for an example the run must reject.
+    """Render the expected-failure panel for a benchmark the run must reject.
 
     The definition list carries only the stable facts; the full assertion,
     including spec paths, lives in the collapsed raw YAML below it.
@@ -347,7 +347,7 @@ def example_category(name, title, spec):
         return "Specification", title
     category, separator, heading = title.partition(": ")
     if not separator:
-        return str(spec.get("domain", "YAMAA example")), title
+        return str(spec.get("domain", "YAMAA benchmark")), title
     return category, heading
 
 
@@ -357,7 +357,7 @@ def describe_example(example):
     readme_path = example / "README.md"
     entry_path, _ = example_entry(example)
     if entry_path is None:
-        raise ValueError(f"example has no spec file: {example.name}")
+        raise ValueError(f"benchmark has no spec file: {example.name}")
     spec_path = entry_path
     title, _ = render_readme(readme_path.read_text(encoding="utf-8"), source_url)
     spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
@@ -405,7 +405,7 @@ def render_index(entries):
         )
         sections = [
             f"## {escape(heading)} {{: #{key} }}\n\n"
-            f'<p class="benchmark-note">{plural(total, "example")}. '
+            f'<p class="benchmark-note">{plural(total, "benchmark")}. '
             f"{escape(note)}</p>"
         ]
         for category in sorted(groups):
@@ -416,13 +416,13 @@ def render_index(entries):
             sections.append(
                 f"### {escape(category)}\n\n"
                 f'<p class="benchmark-count">'
-                f'{plural(len(groups[category]), "example")}</p>\n\n'
+                f'{plural(len(groups[category]), "benchmark")}</p>\n\n'
                 f'<ul class="benchmark-grid">\n{items}</ul>'
             )
         blocks.append("\n\n".join(sections))
     template = Template((HERE / "gallery.md").read_text(encoding="utf-8"))
     result = template.substitute(
-        total=plural(len(entries), "example"),
+        total=plural(len(entries), "benchmark"),
         source_url=REPOSITORY + "/tree/main/benchmark",
         summary="".join(jumps),
         sections="\n\n".join(blocks) + "\n",
@@ -507,7 +507,7 @@ def render_example(example, previous=None, next=None):
     readme_path = example / "README.md"
     spec_path, chain = example_entry(example)
     if spec_path is None:
-        raise ValueError(f"example has no spec file: {example.name}")
+        raise ValueError(f"benchmark has no spec file: {example.name}")
     spec_edit_url = edit_base + "/" + quote(spec_path.name)
     readme_text = readme_path.read_text(encoding="utf-8")
     lifecycle_state, lifecycle_url = readme_lifecycle(readme_text)
@@ -640,8 +640,8 @@ def render_example(example, previous=None, next=None):
         readme_edit_url=readme_edit_url,
         spec_file_header=spec_file_header,
         source_url=REPOSITORY + "/tree/main/benchmark/" + quote(example.name),
-        prev_link=page_link(previous, "Previous example", "prev"),
-        next_link=page_link(next, "Next example", "next"),
+        prev_link=page_link(previous, "Previous benchmark", "prev"),
+        next_link=page_link(next, "Next benchmark", "next"),
         metrics=metrics_html,
         subject_options="".join(subject_options), readme=readme,
         prose_class="prose prose-short" if readme_body_line_count(readme_text) <= 10 else "prose",
@@ -665,21 +665,21 @@ def render_example(example, previous=None, next=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("examples", nargs="*", help="Example directory names; defaults to existing generated dashboards")
-    parser.add_argument("--all", action="store_true", help="Generate every example containing README.md and a spec file")
+    parser.add_argument("examples", nargs="*", help="Benchmark directory names; defaults to existing generated dashboards")
+    parser.add_argument("--all", action="store_true", help="Generate every benchmark containing README.md and a spec file")
     parser.add_argument("--check", action="store_true", help="Fail if a selected dashboard is missing or differs; write nothing")
     parser.add_argument("--quiet", action="store_true", help="Suppress successful generation messages")
     parser.add_argument("--output-dir", type=Path, default=DESTINATION, help="Destination directory (default: docs/benchmark)")
     args = parser.parse_args()
     if args.all and args.examples:
-        parser.error("choose --all or explicit example names")
+        parser.error("choose --all or explicit benchmark names")
     names = args.examples
     if args.all:
         names = [path.name for path in sorted(EXAMPLES.iterdir()) if example_has_spec(path) and (path / "README.md").is_file()]
     elif not names:
         names = [path.stem for path in sorted(args.output_dir.glob("*.html"))]
     if not names:
-        parser.error("specify an example name or --all")
+        parser.error("specify a benchmark name or --all")
     ordered = sorted(set(names))
     complete = sorted(path.name for path in EXAMPLES.iterdir() if example_has_spec(path) and (path / "README.md").is_file())
     neighbors = {name: (complete[index - 1] if index else None, complete[index + 1] if index + 1 < len(complete) else None) for index, name in enumerate(complete) if name in set(ordered)}
@@ -688,10 +688,10 @@ def main():
     entries = []
     for name in ordered:
         if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
-            parser.error(f"invalid example name: {name}")
+            parser.error(f"invalid benchmark name: {name}")
         example = EXAMPLES / name
         if not (example / "README.md").is_file() or not example_has_spec(example):
-            parser.error(f"example must contain README.md and a spec file: {name}")
+            parser.error(f"benchmark must contain README.md and a spec file: {name}")
         try:
             previous, following = neighbors.get(name, (None, None))
             rendered = render_example(example, previous, following)

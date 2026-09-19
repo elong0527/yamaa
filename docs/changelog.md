@@ -14,6 +14,6 @@ tracked through the commit history and pull requests:
 The normative language surface -- rules in
 [`yaml/rules/`](https://github.com/elong0527/yamaa/tree/main/yaml/rules), the
 schema bundle in [`yaml/`](https://github.com/elong0527/yamaa/tree/main/yaml),
-and the runnable examples in
+and the runnable benchmarks in
 [`benchmark/`](https://github.com/elong0527/yamaa/tree/main/benchmark) --
 is versioned in git alongside this documentation.

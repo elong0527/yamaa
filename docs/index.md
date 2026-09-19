@@ -11,7 +11,7 @@ title: YAMAA documentation
 
 Language-neutral YAML specification for reproducible clinical trial data pipelines.
 
-Designed for AI-agent and human collaboration on clinical data standardization, following our [core principles](articles/principles.md). Engines in Python and R run YAMAA specifications, and minimal visible examples benchmark them in real cases.
+Designed for AI-agent and human collaboration on clinical data standardization, following our [core principles](articles/principles.md). Engines in Python and R run YAMAA specifications, and minimal visible benchmarks demonstrate them in real cases.
 
 ## Installation
 
@@ -41,7 +41,7 @@ The fastest way to explore YAMAA is with an AI agent. For example, ask an agent 
 - [Why YAMAA](articles/why-yamaa.md) -- the argument before the syntax.
 - [Excel to YAMAA](articles/excel-to-yamaa.md) -- translating specifications you already have.
 - [Schema concepts](articles/schema-concepts.md) -- the language itself.
-- [Benchmark](benchmark/index.md) -- every example, input against output.
+- [Benchmark](benchmark/index.md) -- every benchmark, input against output.
 
 ## License
 

@@ -4,7 +4,7 @@ title: Principles
 
 # Principles
 
-> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Examples walkthrough](yaml-examples-walkthrough.md)
+> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Benchmark walkthrough](yaml-benchmark-walkthrough.md)
 
 > **Read this if** you want a short answer to one question: what is YAMAA for?
 > For the longer answer, read [Why YAMAA](why-yamaa.md). For the syntax, read
@@ -105,4 +105,4 @@ different ways.
 These principles are not rules by themselves. Each one is enforced by the
 [rules](https://github.com/elong0527/yamaa/tree/main/yaml/rules) and
 demonstrated in the [benchmark](../benchmark/index.md) of minimal
-visible examples.
+visible benchmarks.

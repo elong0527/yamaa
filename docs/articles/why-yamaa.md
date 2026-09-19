@@ -4,7 +4,7 @@ title: Why YAMAA
 
 # Why YAMAA looks the way it does
 
-> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Examples walkthrough](yaml-examples-walkthrough.md)
+> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Benchmark walkthrough](yaml-benchmark-walkthrough.md)
 
 > **Read this if** you want to know what an Excel specification cannot say, why
 > that matters, and what YAMAA refuses to do about it.
@@ -28,7 +28,7 @@ YAMAA writes each layer into a different kind of file:
 | **Structure** | `yaml/schema*.yaml` | The **header row** of the Variable sheet |
 | **Algorithm** | your `spec.yaml` | The **body** of the Variable sheet, derivation column included |
 | **Semantics** | `yaml/rules/R0xx-*.md` | The conventions that were never written down |
-| **Worked examples** | `benchmark/` | The worked examples in an implementation guide -- but every one runs |
+| **Worked benchmarks** | `benchmark/` | The worked examples in an implementation guide -- but every one runs |
 
 In one sentence: **an Excel spec is written to be understood; a YAMAA spec is
 written to be executed the same way twice.**
@@ -47,7 +47,7 @@ situation --
 > understood it. Their programs disagree.
 
 The disagreement is almost never a misreading. It is that the specification
-never reached the point they disagreed on. The three examples in the table
+never reached the point they disagreed on. The three cases in the table
 above are chosen because they sit at three different levels.
 
 **"What missing means" -- the value level.** A specification says
@@ -139,11 +139,11 @@ holds:
 | Copying the company template and editing it | `parents:` layer inheritance (R017) |
 | `Working-Instruction-fill-in-spec.docx` | `rules/` -- normative text an implementation cites, not advice |
 | The company macro library | `environment.yaml` (R018), validated separately from any spec |
-| The worked examples in SDTMIG / ADaMIG | `benchmark/` -- the same illustrative role, except every example runs and its output is fixed byte for byte |
+| The worked examples in SDTMIG / ADaMIG | `benchmark/` -- the same illustrative role, except every benchmark runs and its output is fixed byte for byte |
 | "We can't express that one -- let's discuss it" | A `benchmark/negative-*/` directory that pins the rejection |
 
-The `negative-` directories are worth a slide of their own. They are not bad
-examples; they **declare where the design refuses you**, and
+The `negative-` directories are worth a slide of their own. They are not broken
+benchmarks; they **declare where the design refuses you**, and
 `expected/error.yaml` fixes exactly which error is raised. An Excel spec has no
 equivalent -- a spec that cannot be implemented is discovered by whoever tries.
 
@@ -180,7 +180,7 @@ One more thing worth saying about the rules themselves: **all nineteen indexed
 rules are normative -- none is draft.** The repository's admission policy is
 that a design proposal may live in an issue or a branch, but it becomes a rule
 only once its schema shape can be validated, its behavior is closed enough for
-independent R and Python implementations, and examples exercise both success
+independent R and Python implementations, and benchmarks exercise both success
 and failure. **An implementation must not substitute an open proposal for the
 indexed text.**
 
