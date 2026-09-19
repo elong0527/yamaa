@@ -1087,7 +1087,7 @@ def _column_dependencies(
         for intermediate_kind, intermediate_reference in _member_references(
             intermediate,
             "intermediate_class",
-            ("source", "between", "filter", "order_by"),
+            ("key_base", "between", "filter", "order_by"),
             bundle,
         ):
             if intermediate_kind == "variable" and "." not in intermediate_reference:

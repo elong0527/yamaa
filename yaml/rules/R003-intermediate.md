@@ -11,7 +11,7 @@ applies_to: [intermediates, expression.lookup, expression.aggregate, scalar.sour
 ## Intent
 
 Read another dataset through a stated match. A plain scalar
-`key_base: DATASET.COLUMN` joins that dataset on the applicable keys
+`source: DATASET.COLUMN` joins that dataset on the applicable keys
 whenever those keys are clear; an explicit `lookup:` states the match
 itself for every case where the keys are unclear, differ from the
 applicable output keys, or the read should be a reusable named lookup.
@@ -287,7 +287,7 @@ broke the agreement silently.
 
 The unification keeps the implicit join where the match is already
 stated: the output `keys` name the row's identity, so a plain
-`key_base: DATASET.COLUMN` matching on the applicable keys says nothing
+`source: DATASET.COLUMN` matching on the applicable keys says nothing
 twice. `record_lookups` and `mapping_from` become the one explicit
 `lookup` for everything else -- an unclear key, a key that differs from
 the applicable output keys, or a reusable named read -- so the
@@ -345,6 +345,13 @@ Here the current-row `LBTESTCD` matches the limit table's `TESTCD`
 column; omitting `key_base` would have matched `TESTCD` against a
 current-row `TESTCD` that does not exist.
 
+**R003-45.** A written `key_base` must not simply repeat `key`: naming
+the same columns on both sides states the R003-44 default twice, and the
+two statements can then drift apart under edit. A `key_base` equal to
+its `key` fails as `redundant_key_base`; the author omits it instead.
+The requirement is on what the author wrote: the `key_base` R003-44
+supplies is never redundant.
+
 
 ## Errors
 
@@ -356,5 +363,5 @@ R003-10, R003-12, R003-15, R003-22, R003-31), `incompatible_input_type`
 (R003-8, R003-41), `unpaired_fields` (R003-9), `incomparable_range_types`
 (R003-11), `conflicting_absent_policy` (R003-13), `unmatched_key`
 (R003-14), `phase_boundary` (R003-16), `multiple_matches` (R003-17,
-R003-35), `missing_aggregate_keys` (R003-30), and `prohibited_construct`
-(R003-38).
+R003-35), `missing_aggregate_keys` (R003-30), `prohibited_construct`
+(R003-38), and `redundant_key_base` (R003-45).

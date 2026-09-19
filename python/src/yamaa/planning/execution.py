@@ -643,7 +643,7 @@ def _lookup_references(
 ) -> None:
     """Collect the declared key pairs R007 makes this intermediate match on.
 
-    An inline `intermediate` is the same explicit declared-key mechanism as a
+    An inline `lookup:` is the same explicit declared-key mechanism as a
     named `intermediates` entry, written where it is read: R003-20 through R003-24
     hold it to the same validation the named declaration gets. Field
     existence rides on the declared references below, which
@@ -655,6 +655,23 @@ def _lookup_references(
     keys = _as_names(payload.get("key"))
     dataset = payload.get("dataset")
     value = payload.get("value")
+    for name, declared in (("key_base", sources), ("key", keys)):
+        if payload.get(name) is not None and declared is None:
+            # The fill leaves a written-but-malformed list alone, so a `key`
+            # or `key_base` that names no identifiers is reported here rather
+            # than reaching the runtime as an unvalidated payload.
+            diagnostics.append(
+                _diagnostic(
+                    "invalid_field_type",
+                    operation_path,
+                    {
+                        "operation": "lookup",
+                        "expected": f"{name} as an identifier or a list of them",
+                    },
+                    requirement="R007-36",
+                )
+            )
+            return
     if payload.get("key_base") is None or payload.get("key") is None:
         # R003-43/R003-44: the planner fills omitted pairs before reference
         # collection, or records no_applicable_keys when no key applies.
@@ -665,7 +682,7 @@ def _lookup_references(
             _diagnostic(
                 "invalid_field_type",
                 operation_path,
-                {"operation": "lookup", "expected": "source, dataset, and key"},
+                {"operation": "lookup", "expected": "key_base, dataset, and key"},
                 requirement="R007-36",
             )
         )
@@ -706,7 +723,7 @@ def _lookup_references(
         references.append(
             _Reference(
                 name,
-                f"{operation_path}.source[{index}]",
+                f"{operation_path}.key_base[{index}]",
                 # R007-21: each source and its key column must have the same
                 # comparable type, so the pair is checked rather than coerced.
                 same_type_as=f"{dataset}.{key}",
@@ -1023,7 +1040,25 @@ def _aggregate_references(
     if joined is not None:
         keys = _as_names(payload.get("key"))
         source_vars = _as_names(payload.get("key_base"))
-        if payload.get("key") is None or payload.get("key_base") is None:
+        if (payload.get("key") is not None and keys is None) or (
+            payload.get("key_base") is not None and source_vars is None
+        ):
+            # R003-30: the fill leaves a written-but-malformed list alone, so
+            # a `key` or `key_base` that names no identifiers is reported here
+            # rather than reducing over the whole relation unkeyed.
+            diagnostics.append(
+                _diagnostic(
+                    "missing_aggregate_keys",
+                    operation_path,
+                    {
+                        "dataset": joined,
+                        "key": list(keys or ()),
+                        "key_base": list(source_vars or ()),
+                    },
+                    requirement="R003-30",
+                )
+            )
+        elif payload.get("key") is None or payload.get("key_base") is None:
             # R003-43/R003-44: the planner fills omitted pairs before
             # reference collection, or records no_applicable_keys when no
             # key applies. Either way there is nothing left to check here.
@@ -1265,12 +1300,12 @@ def _fill_omitted_lookup_keys(
 ) -> tuple[HandledExpression, frozenset[str]]:
     """Fill omitted intermediate/aggregate key pairs from the applicable keys.
 
-    R003-43 lets a named intermediate, an inline `intermediate:`, or a dataset-qualified
+    R003-43 lets a named intermediate, an inline `lookup:`, or a qualified
     aggregate omit `key`, inferring the applicable output keys; R003-44 lets
-    a intermediate omit `source`, defaulting it to the key names. The planner and
-    the runtime downstream only understand complete pairs, so the omission
-    is resolved here, before reference collection. Returns the rewritten
-    declaration and the operation paths where a key was inferred.
+    either form omit `key_base`, defaulting it to the key names. The planner
+    and the runtime downstream only understand complete pairs, so the
+    omission is resolved here, before reference collection. Returns the
+    rewritten declaration and the operation paths where a key was inferred.
     """
     inferred: set[str] = set()
 
@@ -1472,7 +1507,7 @@ def _validate_qualified_reference(
     row's own datasets need no join: a scalar source qualified with a row
     driver reads the current driver record. During row construction R001-15
     lets a row derivation read its driver, its group keys, an earlier
-    row-derived column, or a intermediate, and nothing else.
+    row-derived column, or an intermediate, and nothing else.
     """
     qualifier = reference.name.split(".", 1)[0]
     if qualifier in intermediates:
@@ -1517,7 +1552,7 @@ def _validate_qualified_reference(
         # R003-42: the implicit-join pre-pass already recorded why the
         # applicable keys are unclear; nothing more to add here. Row
         # derivations fall through: R001-15 lets them read their driver,
-        # group keys, earlier row columns, or a intermediate, and nothing else.
+        # group keys, earlier row columns, or an intermediate, and nothing else.
         return
     if row is not None:
         _validate_row_phase_reference(
@@ -1584,7 +1619,7 @@ def _validate_intermediate_reference(
     bindings: BindingPlan,
     diagnostics: list[ExecutionDiagnostic],
 ) -> None:
-    """Check that a intermediate id qualifies a column its dataset has."""
+    """Check that an intermediate id qualifies a column its dataset has."""
     field = reference.name.split(".", 1)[1]
     dataset = bindings.datasets.get(intermediate.dataset)
     readable = intermediate.readable_columns
@@ -1697,8 +1732,8 @@ def _infer_applicable_keys(
                 path,
                 {
                     "source": key,
-                    "expected": fields[key],
-                    "actual": column_types[key],
+                    "expected": column_types[key],
+                    "actual": fields[key],
                 },
                 requirement="R003-41",
             )
@@ -1783,7 +1818,7 @@ def _with_relation_dependencies(
 ) -> PlannedDerivation:
     """Add the current-row values a derivation needs to reach another relation.
 
-    R001-18 makes a intermediate's match values dependencies of every column that
+    R001-18 makes an intermediate's match values dependencies of every column that
     reads it, and R003-30 makes an aggregate's declared `source` values
     dependencies the same way. Recording them as ordinary dependencies is
     what puts the keys' inputs before the read in R001's declaration order.
@@ -1869,7 +1904,7 @@ def _lookup_dependencies(
     reference: _Reference,
     intermediates: Mapping[str, PlannedIntermediate],
 ) -> tuple[str, ...]:
-    """Return the current-row values a intermediate-qualified reference needs."""
+    """Return the current-row values an intermediate-qualified reference needs."""
     intermediate = intermediates.get(reference.name.split(".", 1)[0])
     return intermediate.dependencies if intermediate is not None else ()
 
@@ -1972,7 +2007,26 @@ def _plan_lookups(
         else:
             variables = tuple(intermediate.key_base)
         if len(variables) != len(match_fields) or not variables:
-            # Reported by _lookup_declarations; skip planning this entry.
+            if intermediate.key_base is None or intermediate.key is None:
+                # R003-5: _lookup_declarations only sees the pairs the author
+                # wrote on both sides, so a pairing that fails after R003-43
+                # inference or R003-44 defaulting is reported here instead of
+                # dropping the intermediate and failing its readers as unknown.
+                diagnostics.append(
+                    _diagnostic(
+                        "source_key_length_mismatch",
+                        path,
+                        {
+                            "intermediate": intermediate.id,
+                            "key_base": list(variables),
+                            "key": list(match_fields),
+                            "key_base_count": len(variables),
+                            "key_count": len(match_fields),
+                        },
+                        requirement="R003-5",
+                    )
+                )
+            # Otherwise _lookup_declarations reported it; skip planning.
             continue
 
         failed = False
@@ -2014,7 +2068,7 @@ def _plan_lookups(
                 diagnostics.append(
                     _diagnostic(
                         "unknown_field",
-                        f"{path}.source",
+                        f"{path}.key_base",
                         {"intermediate": intermediate.id, "identifier": variable},
                         requirement="R003-7",
                     )
@@ -2144,7 +2198,7 @@ def _validate_intermediate_between(
     column_types: Mapping[str, ColumnType],
     diagnostics: list[ExecutionDiagnostic],
 ) -> bool:
-    """Check the closed range a intermediate matches by, before any data is read."""
+    """Check the closed range an intermediate matches by, before any data is read."""
     return _check_between(
         identifier,
         between.value,
@@ -2169,7 +2223,7 @@ def _check_between(
     column_types: Mapping[str, ColumnType],
     diagnostics: list[ExecutionDiagnostic],
 ) -> bool:
-    """Check the closed range a intermediate matches by, before any data is read."""
+    """Check the closed range an intermediate matches by, before any data is read."""
     context = {"intermediate": identifier} if identifier is not None else {}
     missing = [name for name in (lower, upper) if name not in fields]
     if missing:

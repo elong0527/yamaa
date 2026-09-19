@@ -313,7 +313,7 @@ class RowResolver:
                 )
             )
         if outcome.record is None:
-            # R003-14: a intermediate that yields nothing answers its decided
+            # R003-14: an intermediate that yields nothing answers its decided
             # absence, which stays distinct from a record whose value is
             # missing.
             return ResolvedValue(

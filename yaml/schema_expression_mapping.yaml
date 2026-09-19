@@ -23,11 +23,11 @@ expressions:
             type: literal_value
             description: Value returned when source has no dictionary entry.
     lookup: # Looks up one value in a declared dataset by explicit key pairs.
-        # Key_source and key lists pair by position, have equal length, and form a
+        # Key_base and key lists pair by position, have equal length, and form a
         # unique combined dataset key. Pair order does not change the result.
         # Either list may be omitted: an omitted key is inferred from the
         # applicable output keys (R003-40), and an omitted key_base defaults to
-        # the key names. Key_source must not repeat the key names (R003-45).
+        # the key names. Key_base must not repeat the key names (R003-45).
         - value:
             type: identifier
             required: true

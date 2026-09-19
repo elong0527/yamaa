@@ -1,10 +1,10 @@
 """R003 intermediates: select one record once, then read it many times.
 
-A intermediate states its match once and gives the chosen record a name, so the
+An intermediate states its match once and gives the chosen record a name, so the
 columns that read it are plainly reading one record. Everything about
 reaching that record -- filtering, equality matching, range narrowing, and
 ordered selection -- is one explicit declared-key mechanism, so a named
-intermediate and an inline `intermediate` cannot disagree.
+intermediate and an inline `lookup:` cannot disagree.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ from yamaa.specification.models import OrderTerm
 
 @dataclass(frozen=True, slots=True)
 class IntermediateOutcome:
-    """What one current row got from a intermediate.
+    """What one current row got from an intermediate.
 
     A selected record and a decided absence stay distinct: R003-14 keeps a
     matched record whose value is missing different from a match that never
@@ -143,7 +143,7 @@ def _select_eligible(
     """Match, narrow, and choose one record from the eligible records.
 
     Named and inline intermediates share these steps: the named selector caches
-    the eligible records per intermediate, while an inline `intermediate` derives them
+    the eligible records per intermediate, while an inline `lookup:` derives them
     from its payload on every row.
     """
     values = [current.get(name, MISSING) for name in plan.match_variables]
@@ -206,7 +206,7 @@ def _absent(
     plan: PlannedIntermediate,
     values: Sequence[RuntimeValue],
 ) -> IntermediateOutcome:
-    """Answer a intermediate that yields nothing under R003-14."""
+    """Answer an intermediate that yields nothing under R003-14."""
     if plan.strict:
         return IntermediateOutcome(
             condition=_condition(
@@ -298,7 +298,7 @@ def _equal(left: RuntimeValue, right: RuntimeValue) -> bool:
 
 
 def absent_value(absent: JsonValue) -> RuntimeValue:
-    """Return the runtime value a intermediate's decided absence carries."""
+    """Return the runtime value an intermediate's decided absence carries."""
     normalized = normalize_runtime_value(absent)
     if isinstance(normalized, ValueResult):
         return normalized.value
@@ -316,7 +316,7 @@ def _names(value: object) -> tuple[str, ...] | None:
 def _order_terms(
     payload: Mapping[str, object], dataset: str
 ) -> tuple[tuple[OrderTerm, str], ...] | None:
-    """Build the (term, field) pairs an inline `intermediate` orders by."""
+    """Build the (term, field) pairs an inline `lookup:` orders by."""
     raw = payload.get("order_by")
     if raw is None:
         return None
@@ -345,7 +345,7 @@ def evaluate_intermediate(
     relation: RelationIndex,
     resolve: Callable[[str], Resolution],
 ) -> EvaluationResult:
-    """Evaluate one inline `intermediate` operation against its dataset.
+    """Evaluate one inline `lookup:` operation against its dataset.
 
     The planner validates the declaration; this answers the row. `resolve`
     reads one current-row variable the way the derivation's own resolver
@@ -369,7 +369,7 @@ def evaluate_intermediate(
                 condition="invalid_field_type",
                 context={
                     "operation": "lookup",
-                    "expected": "key_base, dataset, key, value",
+                    "expected": "key_base, key, and value",
                 },
                 requirement="R007-36",
             )

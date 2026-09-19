@@ -447,6 +447,96 @@ def test_a_named_lookup_with_mismatched_source_and_key_lengths_fails() -> None:
     assert diagnostic.spec_paths == ("intermediates[0]",)
 
 
+def test_a_named_lookup_pairing_a_key_base_against_an_inferred_key_fails() -> None:
+    source = frame_from_values(
+        (TypedColumn(name="X", type="str"), TypedColumn(name="Y", type="str")),
+        [["one", "a"]],
+    )
+    spec = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={
+            "SRC": DatasetSource(path="input/source.csv"),
+            "RIGHT": DatasetSource(path="input/right.csv"),
+        },
+        base="SRC",
+        keys=["X"],
+        output=Output(path="out.csv", columns=["X", "Y", "V"]),
+        columns=[
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="Y", type="str", derivation=derivation({"source": "SRC.Y"})),
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+        ],
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(id="LOOK", dataset="RIGHT", key_base=["X", "Y"])
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source, "RIGHT": right_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    # R003-5: the two declared key_base names pair with one inferred key, so
+    # the pairing is reported rather than the intermediate silently vanishing
+    # and its readers failing as unknown fields.
+    [diagnostic] = [
+        d
+        for d in raised.value.diagnostics
+        if d.condition == "source_key_length_mismatch"
+    ]
+    assert diagnostic.requirement == "R003-5"
+    assert diagnostic.spec_paths == ("intermediates[0]",)
+    assert diagnostic.context["key_base"] == ["X", "Y"]
+    assert diagnostic.context["key"] == ["X"]
+
+
+def test_an_inline_lookup_with_a_key_naming_no_identifiers_is_reported() -> None:
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation(
+                    {"lookup": {"dataset": "RIGHT", "key": 5, "value": "V"}}
+                ),
+            ),
+        ]
+    )
+
+    # R007-36: a written key that names no identifiers is not an omitted key,
+    # so it is reported here instead of reaching the runtime unvalidated.
+    assert diagnostic.condition == "invalid_field_type"
+    assert diagnostic.requirement == "R007-36"
+    assert diagnostic.spec_paths == ("columns.V.derivation.lookup",)
+
+
+def test_an_aggregate_with_a_key_naming_no_identifiers_is_reported() -> None:
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation(
+                    {"aggregate": {"expr": "max(RIGHT.V)", "key": 5}}
+                ),
+            ),
+        ]
+    )
+
+    # R003-30: a written key that names no identifiers must not silently
+    # reduce over the whole relation unkeyed.
+    assert diagnostic.condition == "missing_aggregate_keys"
+    assert diagnostic.requirement == "R003-30"
+
+
 def test_an_inline_lookup_with_an_omitted_key_infers_the_applicable_keys() -> None:
     plan = plan_two(
         [

@@ -421,3 +421,22 @@ def test_committed_inheritance_negatives_match_exact_diagnostics() -> None:
             (EXAMPLES / name / "expected/error.yaml").read_text(encoding="ascii")
         )
         assert actual == expected
+
+
+def test_a_column_reading_an_intermediate_depends_on_its_key_base() -> None:
+    from yamaa.schema.inheritance import _column_dependencies
+
+    bundle = load_schema_bundle(SCHEMA_ROOT)
+    intermediates = {
+        "LOOK": {
+            "id": "LOOK",
+            "dataset": "RIGHT",
+            "key_base": ["MATCHKEY"],
+            "key": ["TESTCD"],
+        }
+    }
+    column = {"name": "V", "type": "float", "derivation": {"source": "LOOK.V"}}
+
+    # R001-18: the intermediate's match values are dependencies of every
+    # column that reads it, so R017 orders MATCHKEY before V.
+    assert _column_dependencies(column, [], intermediates, bundle) == {"MATCHKEY"}
