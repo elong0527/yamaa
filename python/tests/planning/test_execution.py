@@ -16,7 +16,6 @@ from yamaa.specification.models import (
     Expression,
     HandledExpression,
     Output,
-    OverrideRule,
     RecordLookup,
     Row,
     Specification,
@@ -305,30 +304,6 @@ def test_an_unimplemented_expression_is_not_a_semantic_failure() -> None:
         plan_execution(spec, {"SRC": source_table()})
 
     assert raised.value.features[0].operation == "str_upper"
-
-
-def test_an_override_can_read_the_converted_value_being_derived() -> None:
-    spec = specification(
-        [
-            Column(
-                name="A",
-                type="str",
-                derivation=HandledExpression(
-                    value=Expression(root={"source": "SRC.X"}),
-                    override=[
-                        OverrideRule(
-                            when="A = 'one'",
-                            value=Expression(root={"source": "A"}),
-                        )
-                    ],
-                ),
-            )
-        ]
-    )
-
-    plan = plan_execution(spec, {"SRC": source_table()})
-
-    assert plan.columns[0].dependencies == ()
 
 
 def two_dataset_specification(columns: list[Column]) -> Specification:

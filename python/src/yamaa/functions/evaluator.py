@@ -3,7 +3,7 @@
 R007 keeps expression dispatch a closed map, and R018 does not change that:
 an activated project adds exactly one operation to it. Registering rather
 than special-casing is what lets a call sit wherever an expression sits --
-a column derivation, a row derivation, an override, a branch of a `case` --
+a column derivation, a row derivation, a branch of a `case` --
 without any of those places knowing that a project supplied the code.
 """
 

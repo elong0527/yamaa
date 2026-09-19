@@ -76,12 +76,6 @@ def function_calls(specification: Specification) -> tuple[FunctionCall, ...]:
             calls.extend(
                 _expression_calls(declaration.value, expression_path(path, declaration))
             )
-            for position, override in enumerate(declaration.override or ()):
-                calls.extend(
-                    _expression_calls(
-                        override.value, f"{path}.override[{position}].value"
-                    )
-                )
     for column in specification.columns:
         declaration = column.derivation
         if declaration is None:
@@ -90,10 +84,6 @@ def function_calls(specification: Specification) -> tuple[FunctionCall, ...]:
         calls.extend(
             _expression_calls(declaration.value, expression_path(path, declaration))
         )
-        for position, override in enumerate(declaration.override or ()):
-            calls.extend(
-                _expression_calls(override.value, f"{path}.override[{position}].value")
-            )
     return tuple(calls)
 
 

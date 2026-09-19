@@ -40,7 +40,6 @@ HandlerName: TypeAlias = Literal[
     "no_match",
     "invalid",
     "conversion_failure",
-    "override",
 ]
 
 INT64_MIN = -(2**63)

@@ -115,8 +115,13 @@ def test_incomparable_sources_fail_rather_than_coerce_an_operand(
     }
 
 
-def _case(branches: list[dict[str, object]], **extra: object) -> dict[str, object]:
-    return {"case": {"branches": branches, **extra}}
+def _case(
+    items: list[dict[str, object]], otherwise: object = None
+) -> dict[str, object]:
+    branches = list(items)
+    if otherwise is not None:
+        branches.append({"otherwise": otherwise})
+    return {"case": branches}
 
 
 def test_case_returns_the_first_true_branch() -> None:
@@ -171,7 +176,7 @@ def test_a_handler_inside_a_case_branch_is_observed_at_its_own_path() -> None:
     assert isinstance(result, ValueResult)
     assert result.value == "x"
     assert [(item.path, item.handler) for item in result.observations] == [
-        ("branches[0].then.str_lower", "missing")
+        ("[0].then.str_lower", "missing")
     ]
 
 
@@ -183,7 +188,7 @@ def test_a_branch_predicate_outside_the_grammar_names_its_branch() -> None:
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "invalid_predicate"
     assert result.condition.requirement == "R004-31"
-    assert result.condition.path_suffix == "branches[0].when"
+    assert result.condition.path_suffix == "[0].when"
 
 
 def test_a_branch_predicate_failure_names_its_branch() -> None:
@@ -194,7 +199,7 @@ def test_a_branch_predicate_failure_names_its_branch() -> None:
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "incompatible_input_type"
-    assert result.condition.path_suffix == "branches[0].when"
+    assert result.condition.path_suffix == "[0].when"
 
 
 def test_an_unsupported_nested_operation_does_not_bypass_validation() -> None:

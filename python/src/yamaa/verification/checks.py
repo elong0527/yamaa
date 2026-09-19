@@ -2,7 +2,7 @@
 
 Each check reads values that have already finished their R005 lifecycle and
 reports failures rather than raising, so an executor can run one at the
-stage R005 gives it: a column check after that column's final override, key
+stage R005 gives it: a column check after that column's conversion, key
 validation once every column is complete, and the dataset checks last.
 """
 

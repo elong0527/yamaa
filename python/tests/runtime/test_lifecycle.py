@@ -6,7 +6,6 @@ from yamaa.expressions import (
     ExpressionDispatcher,
     MappingResolver,
     expression_condition,
-    parse_predicate,
 )
 from yamaa.planning import PlannedDerivation
 from yamaa.runtime.lifecycle import (
@@ -14,7 +13,7 @@ from yamaa.runtime.lifecycle import (
     LifecycleCondition,
     evaluate_derivation,
 )
-from yamaa.specification.models import Expression, HandledExpression, OverrideRule
+from yamaa.specification.models import Expression, HandledExpression
 
 
 def test_conversion_failure_is_replaced_and_counted() -> None:
@@ -28,7 +27,6 @@ def test_conversion_failure_is_replaced_and_counted() -> None:
         expression_path="columns.A.derivation.value",
         declaration=declaration,
         dependencies=(),
-        override_predicates=(),
     )
     counter = HandlerCounter()
     counter.register_derivation(planned)
@@ -62,7 +60,6 @@ def test_normalized_scalar_aggregate_does_not_invent_an_expr_path() -> None:
         expression_path="columns.A.derivation",
         declaration=declaration,
         dependencies=(),
-        override_predicates=(),
     )
     dispatcher = ExpressionDispatcher(
         handlers={
@@ -86,39 +83,3 @@ def test_normalized_scalar_aggregate_does_not_invent_an_expr_path() -> None:
         )
 
     assert raised.value.diagnostic.spec_paths == ("columns.A.derivation.aggregate",)
-
-
-def test_only_the_first_matching_override_runs_and_all_paths_are_reported() -> None:
-    overrides = [
-        OverrideRule(when="A = 1", value=Expression(root={"literal": 9})),
-        OverrideRule(when="A = 1", value=Expression(root={"literal": 10})),
-    ]
-    declaration = HandledExpression(
-        value=Expression(root={"source": "RAW.X"}),
-        override=overrides,
-    )
-    planned = PlannedDerivation(
-        column="A",
-        path="columns.A.derivation",
-        expression_path="columns.A.derivation.value",
-        declaration=declaration,
-        dependencies=("A",),
-        override_predicates=tuple(parse_predicate(item.when) for item in overrides),
-    )
-    counter = HandlerCounter()
-    counter.register_derivation(planned)
-
-    value = evaluate_derivation(
-        planned,
-        "int",
-        {},
-        lambda output: MappingResolver({"RAW.X": "1", **output}),
-        ExpressionDispatcher(),
-        counter,
-    )
-
-    assert value == 9
-    assert [(item.spec_path, item.count) for item in counter.snapshot()] == [
-        ("columns.A.derivation.override[0]", 1),
-        ("columns.A.derivation.override[1]", 0),
-    ]

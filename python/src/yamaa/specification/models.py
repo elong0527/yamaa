@@ -69,15 +69,9 @@ class RecordLookup(_StrictModel):
     incomplete: Literal["missing", "fail"] | None = None
 
 
-class OverrideRule(_StrictModel):
-    when: str
-    value: Expression
-
-
 class HandledExpression(_StrictModel):
     value: Expression
     conversion_failure: JsonValue = None
-    override: list[OverrideRule] | None = None
 
 
 class Column(_StrictModel):

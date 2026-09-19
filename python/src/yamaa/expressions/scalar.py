@@ -165,16 +165,24 @@ def _extreme(operation: str, *, largest: bool) -> ExpressionHandler:
 
 def _case(dispatcher: NestedDispatcher) -> ExpressionHandler:
     def handler(payload: object, resolver: Resolver) -> EvaluationResult:
-        if not isinstance(payload, Mapping):
-            return _invalid_payload("case", "a mapping")
-        branches = payload.get("branches")
-        if not isinstance(branches, Sequence) or isinstance(branches, (str, bytes)):
-            return _invalid_payload("case", "a list of branches")
-
-        for index, branch in enumerate(branches):
-            if not isinstance(branch, Mapping):
-                return _invalid_payload("case", "a branch mapping")
-            when = branch.get("when")
+        # R007-54: a non-empty list of when/then items with an optional
+        # single trailing otherwise item.
+        if not isinstance(payload, Sequence) or isinstance(payload, (str, bytes)):
+            return _invalid_payload("case", "a list of when/then items")
+        if not payload:
+            return _invalid_payload("case", "at least one when/then item")
+        otherwise = None
+        has_otherwise = False
+        for index, item in enumerate(payload):
+            if not isinstance(item, Mapping):
+                return _invalid_payload("case", "a when/then or otherwise item")
+            if "otherwise" in item:
+                if has_otherwise or index != len(payload) - 1:
+                    return _invalid_payload("case", "a single trailing otherwise item")
+                has_otherwise = True
+                otherwise = item["otherwise"]
+                continue
+            when = item.get("when")
             if not isinstance(when, str):
                 return _invalid_payload("case", "a branch predicate")
             try:
@@ -185,11 +193,11 @@ def _case(dispatcher: NestedDispatcher) -> ExpressionHandler:
                     "invalid_predicate",
                     {"predicate": when, "position": error.position},
                     requirement="R004-31",
-                    field=f"branches[{index}].when",
+                    field=f"[{index}].when",
                 )
             decided = evaluate_predicate(ast, resolver)
             if isinstance(decided, ConditionResult):
-                path_suffix = f"branches[{index}].when"
+                path_suffix = f"[{index}].when"
                 if decided.condition.path_suffix is not None:
                     path_suffix = f"{path_suffix}.{decided.condition.path_suffix}"
                 return ConditionResult(
@@ -203,15 +211,15 @@ def _case(dispatcher: NestedDispatcher) -> ExpressionHandler:
                 continue
             result, observations = evaluate_nested(
                 dispatcher,
-                branch.get("then"),
+                item.get("then"),
                 resolver,
-                f"branches[{index}].then",
+                f"[{index}].then",
             )
             return _selected(result, observations)
 
-        if "otherwise" in payload:
+        if has_otherwise:
             result, observations = evaluate_nested(
-                dispatcher, payload["otherwise"], resolver, "otherwise"
+                dispatcher, otherwise, resolver, "otherwise"
             )
             return _selected(result, observations)
         return ValueResult(value=MISSING)
