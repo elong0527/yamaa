@@ -812,6 +812,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  sdtm-lb-value-level-metadata:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   sdtm-relrec-many-to-many:
     status: blocked
     blocked_by: "#101"

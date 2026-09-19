@@ -1,0 +1,98 @@
+schema_version: "1.0"
+domain: LB
+keys: [STUDYID, USUBJID, LBTESTCD]
+input:
+  ODM: input/odm.csv
+
+submission:
+  label: Laboratory Test Results
+  class: FINDINGS
+  structure: One record per laboratory test per subject
+  repeating: true
+
+output:
+  path: lb.csv
+  columns: [DOMAIN, STUDYID, USUBJID, LBTESTCD, LBTEST, LBORRES, LBORRESU]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: LB
+    submission:
+      core: Req
+      origin:
+        type: Assigned
+        source: Sponsor
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: ODM.StudyOID
+    submission:
+      core: Req
+      origin:
+        type: Protocol
+        source: Sponsor
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: ODM.SubjectKey
+    submission:
+      core: Req
+      origin:
+        type: Collected
+        source: Vendor
+
+  - name: LBTESTCD
+    type: str
+    label: Lab Test or Examination Short Name
+    derivation:
+      source: ODM.IT.LB.LBTESTCD
+    submission:
+      core: Req
+      origin:
+        type: Collected
+        source: Vendor
+
+  - name: LBTEST
+    type: str
+    label: Lab Test or Examination Name
+    derivation:
+      source: ODM.IT.LB.LBTEST
+    submission:
+      core: Exp
+      origin:
+        type: Collected
+        source: Vendor
+
+  - name: LBORRES
+    type: str
+    label: Result or Finding in Original Units
+    derivation:
+      source: ODM.IT.LB.LBORRES
+    submission:
+      core: Exp
+      origin:
+        type: Collected
+        source: Vendor
+
+  - name: LBORRESU
+    type: str
+    label: Original Units
+    derivation:
+      source: ODM.IT.LB.LBORRESU
+    submission:
+      core: Exp
+      origin:
+        type: Collected
+        source: Vendor
+      values:
+        - testcd: "GLUC"
+          codelist: CL_UNIT_GLUCOSE
+        - testcd: "HGB"
+          codelist: CL_UNIT_HGB
