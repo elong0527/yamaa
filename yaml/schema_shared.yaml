@@ -21,20 +21,17 @@ project_path:
     description: Stored resource a run reads; R021 fixes its written form and
         confines it to a root the runner approved.
 
-function_name:
+identifier:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Logical function resolved by a project environment at the
-        implementation stage.
+    description: Single-token identifier; the field's own description states
+        which namespace it names (a declared dataset, a declared column,
+        a standard, a document, a function, or similar).
 
 function_contract_version:
     type: str
     min_length: 1
     description: Exact logical contract version required by a function call.
-
-function_parameter_name:
-    type: str
-    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
 
 function_param_type:
     type: str
@@ -55,14 +52,3 @@ function_value:
         - function_date_literal_class
         - function_datetime_literal_class
 
-codelist_id:
-    type: str
-    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Identifier of a codelist declared by the study document R026
-        defines.
-
-document_id:
-    type: str
-    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Identifier of a supporting document declared by the study
-        document R026 defines.

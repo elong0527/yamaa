@@ -298,7 +298,7 @@ def _validate_layer(
                 )
                 continue
             members: dict[str, object] = {}
-            key_descriptor = {"type": "dataset_id"}
+            key_descriptor = {"type": "identifier"}
             path_descriptor = {"type": "project_path"}
             for member_id, member in supplied.items():
                 member_path = _join(name, member_id)
@@ -734,18 +734,58 @@ def _language_references(value: object, type_name: str) -> set[tuple[str, str]]:
     return {("variable", name) for name in names}
 
 
+# (class or registry keyword, field) positions where an `identifier` string
+# names a declared dataset. Replaces the nominal `dataset_id` alias dispatch.
+# Mirrors the same tables in .github/scripts/yaml-validation/validate_repository.py.
+_IDENTIFIER_DATASET_FIELDS = frozenset(
+    {
+        ("root_class", "base"),
+        ("row_class", "dataset"),
+        ("record_lookup_class", "dataset"),
+        ("mapping_from", "dataset"),
+    }
+)
+
+# (class, field) positions where an `identifier` string names a declared
+# column. Replaces the nominal `column_name` alias dispatch.
+_IDENTIFIER_COLUMN_FIELDS = frozenset(
+    {
+        ("column_class", "name"),
+        ("root_class", "keys"),
+        ("output_class", "columns"),
+    }
+)
+
+
+def _identifier_reference_kind(scope):
+    """Return the reference kind for an `identifier` string at `scope`.
+
+    `scope` is a (class or registry keyword, field) pair, or None. Returns
+    "dataset", "variable", or None when the position names no namespace.
+    """
+    if scope in _IDENTIFIER_DATASET_FIELDS:
+        return "dataset"
+    if scope in _IDENTIFIER_COLUMN_FIELDS:
+        return "variable"
+    return None
+
+
 def _references(
     value: object,
     type_value: object,
     bundle: SchemaBundle,
+    scope: object = None,
 ) -> set[tuple[str, str]]:
     type_name = matching_type(value, type_value, bundle)
     if type_name is None:
         return set()
-    if type_name in {"variable", "column_name"} and isinstance(value, str):
+    if type_name == "variable" and isinstance(value, str):
         return {("variable", value)}
-    if type_name == "dataset_id" and isinstance(value, str):
-        return {("dataset", value)}
+    if type_name == "identifier" and isinstance(value, str):
+        kind = _identifier_reference_kind(scope)
+        if kind is None:
+            return set()
+        return {(kind, value)}
     language = _language_references(value, type_name)
     if language:
         return language
@@ -753,13 +793,13 @@ def _references(
         if not isinstance(value, list):
             return set()
         inner = type_name[5:-1].strip()
-        return set().union(*(_references(item, inner, bundle) for item in value))
+        return set().union(*(_references(item, inner, bundle, scope) for item in value))
     if type_name.startswith("dict[") and type_name.endswith("]"):
         if not isinstance(value, dict):
             return set()
         _, inner = split_type_arguments(type_name[5:-1])
         return set().union(
-            *(_references(item, inner, bundle) for item in value.values())
+            *(_references(item, inner, bundle, scope) for item in value.values())
         )
     if type_name in bundle.classes:
         if not isinstance(value, dict):
@@ -767,7 +807,7 @@ def _references(
         fields = class_fields(bundle, type_name)
         return set().union(
             *(
-                _references(item, fields[name]["type"], bundle)
+                _references(item, fields[name]["type"], bundle, (type_name, name))
                 for name, item in value.items()
                 if name in fields
             )
@@ -777,7 +817,7 @@ def _references(
         return set()
     registry = alias.get("registry")
     if registry is None:
-        return _references(value, alias["type"], bundle)
+        return _references(value, alias["type"], bundle, scope)
     if not isinstance(value, dict) or len(value) != 1:
         return set()
     operation, payload = next(iter(value.items()))
@@ -792,13 +832,13 @@ def _references(
         }
         return set().union(
             *(
-                _references(item, descriptors[name]["type"], bundle)
+                _references(item, descriptors[name]["type"], bundle, (operation, name))
                 for name, item in payload.items()
                 if name in descriptors
             )
         )
     if isinstance(definition, dict):
-        return _references(payload, definition["type"], bundle)
+        return _references(payload, definition["type"], bundle, scope)
     return set()
 
 
@@ -813,7 +853,7 @@ def _member_references(
     fields = class_fields(bundle, class_name)
     return set().union(
         *(
-            _references(member[name], fields[name]["type"], bundle)
+            _references(member[name], fields[name]["type"], bundle, (class_name, name))
             for name in names
             if name in member and name in fields
         )

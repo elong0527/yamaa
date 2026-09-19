@@ -16,19 +16,19 @@ root_class:
         required: true
         description: Schema bundle this specification is written against; R006 requires an exact match.
     - domain:
-        type: domain_name
+        type: identifier
         required: true
         description: Name of the output dataset this specification derives.
     - keys:
-        type: "list[column_name]"
+        type: "list[identifier]"
         required: true
         description: Output columns identifying a row; R005 defines the identity they assert.
     - input:
-        type: "dict[dataset_id, dataset_source]"
+        type: "dict[identifier, dataset_source]"
         required: true
         description: Source datasets readable by this specification, each under the name it is read through.
     - base:
-        type: dataset_id
+        type: identifier
         required: false
         description: Input dataset whose records build output rows when rows is absent; R001 states when it is required.
     - parents:
@@ -75,7 +75,7 @@ output_class:
         required: false
         description: Fixed display digits for every float column of a csv artifact; R020 defines the rounding and rejects it for parquet.
     - columns:
-        type: "list[column_name]"
+        type: "list[identifier]"
         required: true
         description: Declared columns selected for the artifact, in the order R005 requires.
     - violation_log:
@@ -93,7 +93,7 @@ record_lookup_class:
         required: true
         description: Name through which the looked-up record is read.
     - dataset:
-        type: dataset_id
+        type: identifier
         required: true
         description: Declared dataset the record is selected from.
     - source:
@@ -101,7 +101,7 @@ record_lookup_class:
         required: false
         description: Current-row values paired by position with key; omit both source and key to match on output keys.
     - key:
-        type: [dataset_column, "list[dataset_column]"]
+        type: [identifier, "list[identifier]"]
         required: false
         description: Dataset columns paired by position with source.
     - between:
@@ -138,17 +138,17 @@ record_lookup_between_class:
         required: true
         description: Value read from the current row.
     - lower:
-        type: dataset_column
+        type: identifier
         required: true
         description: Dataset column whose value is an inclusive lower bound.
     - upper:
-        type: dataset_column
+        type: identifier
         required: true
         description: Dataset column whose value is an inclusive upper bound.
 
 column_class:
     - name:
-        type: column_name
+        type: identifier
         required: true
         description: Column name this specification declares.
     - type:
@@ -182,7 +182,7 @@ row_class:
         required: true
         description: Identifier of this row template, unique within rows.
     - dataset:
-        type: dataset_id
+        type: identifier
         required: false
         description: Input dataset whose records build this entry's output rows; required when more than one dataset is declared.
     - group_by:
@@ -197,7 +197,7 @@ row_class:
             row template or completed candidate groups for a grouped row
             template.
     - derivations:
-        type: "dict[column_name, derivation]"
+        type: "dict[identifier, derivation]"
         required: true
         description: Columns this row template derives; R005 owns
             coverage across row templates.
@@ -206,11 +206,6 @@ variable:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$'
     description: Qualified source variable or unqualified current-output column.
-
-domain_name:
-    type: str
-    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Name of the dataset this specification derives.
 
 dataset_source:
     type: [project_path, dataset_class]
@@ -222,7 +217,7 @@ dataset_class:
         required: true
         description: Source data path, relative to the specification or rooted at an approved data root and confined by R021; R023 selects the source profile from its extension.
     - types:
-        type: "dict[dataset_column, column_type]"
+        type: "dict[identifier, column_type]"
         required: false
         description: Type each named field carries; R014 types the rest.
     - schema:
@@ -230,25 +225,10 @@ dataset_class:
         required: false
         description: Producing specification whose output contract supplies the source fields and types; R014 defines the workflow edge.
 
-dataset_id:
-    type: str
-    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Identifier of a dataset declared in input.
-
 record_lookup_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
     description: Identifier of a record lookup, unique among dataset identifiers, other record lookups, and the output domain.
-
-dataset_column:
-    type: str
-    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Column of a declared dataset, named without its dataset prefix.
-
-column_name:
-    type: str
-    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Name of a column declared by this specification.
 
 row_id:
     type: str

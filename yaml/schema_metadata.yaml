@@ -37,7 +37,7 @@ submission_dataset_class:
         default: false
         description: Whether the dataset carries reference data rather than subject data.
     - domain:
-        type: domain_name
+        type: identifier
         required: false
         description: Domain the dataset belongs to; defaults to the specification's domain.
     - comment:
@@ -77,7 +77,7 @@ submission_column_class:
         min_length: 1
         description: Presentation format carried for a reader; it never changes a computed value.
     - codelist:
-        type: codelist_id
+        type: identifier
         required: false
         description: Codelist whose values this column carries; R025 defines the binding.
     - origin:
@@ -161,7 +161,7 @@ formal_expression_class:
 
 document_reference_class:
     - document:
-        type: document_id
+        type: identifier
         required: true
         description: Supporting document this reference names.
     - pages:
@@ -195,7 +195,7 @@ submission_method:
     description: Algorithm stated in prose, or with its name, code, and documents.
 
 document_reference:
-    type: [document_id, document_reference_class]
+    type: [identifier, document_reference_class]
     description: Document identifier, or an identifier with the place it points at.
 
 core_designation:

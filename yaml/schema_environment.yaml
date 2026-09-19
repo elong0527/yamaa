@@ -18,7 +18,7 @@ environment_class:
         required: true
         description: One language and immutable artifact used by every binding.
     - functions:
-        type: "dict[function_name, function_contract_class]"
+        type: "dict[identifier, function_contract_class]"
         required: true
         description: Logical contracts and singular bindings available to specifications.
 
@@ -85,7 +85,7 @@ function_contract_class:
         description: Language-neutral vectors required for environment activation.
 
 function_parameter_class:
-    - name: {type: function_parameter_name, required: true}
+    - name: {type: identifier, required: true}
     - type: {type: function_param_type, required: true}
     - required: {type: bool, default: true}
     - default: {type: function_value}
@@ -97,20 +97,20 @@ function_binding_class:
         required: true
         description: Statically written callable inside the immutable runtime.
     - args:
-        type: "dict[function_parameter_name, host_argument_name]"
+        type: "dict[identifier, host_argument_name]"
         required: true
         description: Complete mapping from logical to host argument names.
 
 function_conformance_class:
     - schema_version: {type: str, required: true}
-    - function: {type: function_name, required: true}
+    - function: {type: identifier, required: true}
     - contract_version: {type: function_contract_version, required: true}
     - cases: {type: "list[function_conformance_case_class]", required: true}
 
 function_conformance_case_class:
     - id: {type: function_case_id, required: true}
     - covers: {type: "list[function_coverage]", required: true}
-    - args: {type: "dict[function_parameter_name, function_value]", required: true}
+    - args: {type: "dict[identifier, function_value]", required: true}
     - result: {type: function_value, required: true}
 
 artifact_digest:

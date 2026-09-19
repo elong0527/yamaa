@@ -71,7 +71,7 @@ define_class:
         required: true
         description: Standards the represented datasets and codelists conform to.
     - default_standard:
-        type: standard_id
+        type: identifier
         required: false
         description: Foundational standard every dataset follows unless its entry names another.
     - documents:
@@ -130,7 +130,7 @@ metadata_version_class:
 
 standard_class:
     - id:
-        type: standard_id
+        type: identifier
         required: true
         description: Name datasets and codelists refer to this standard by.
     - name:
@@ -160,7 +160,7 @@ standard_class:
 
 document_class:
     - id:
-        type: document_id
+        type: identifier
         required: true
         description: Name references to this document use.
     - kind:
@@ -180,7 +180,7 @@ document_class:
 
 codelist_class:
     - id:
-        type: codelist_id
+        type: identifier
         required: true
         description: Name column bindings refer to this codelist by.
     - name:
@@ -189,7 +189,7 @@ codelist_class:
         min_length: 1
         description: Name of the codelist, unique within the document.
     - standard:
-        type: standard_id
+        type: identifier
         required: false
         description: Controlled-terminology standard this codelist is drawn from; omission declares it sponsor-defined.
     - data_type:
@@ -263,7 +263,7 @@ external_codelist_class:
 
 define_dataset_class:
     - id:
-        type: define_dataset_id
+        type: identifier
         required: true
         description: Name the generated document gives this dataset.
     - spec:
@@ -271,7 +271,7 @@ define_dataset_class:
         required: true
         description: Resolved specification whose output this dataset is.
     - standard:
-        type: standard_id
+        type: identifier
         required: false
         description: Foundational standard this dataset follows; defaults to default_standard.
     - has_no_data:
@@ -285,20 +285,10 @@ define_output_class:
         required: true
         description: File this document produces; its extension must be .xml.
 
-standard_id:
-    type: str
-    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Identifier of a standard this document declares.
-
 define_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_.-]*$'
     description: Identifier a generated OID is built from.
-
-define_dataset_id:
-    type: str
-    pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Name of a dataset within the generated document.
 
 define_version:
     type: str

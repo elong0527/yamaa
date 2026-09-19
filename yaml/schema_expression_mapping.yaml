@@ -30,15 +30,15 @@ expressions:
             required: true
             description: One or more current-row lookup values.
         - dataset:
-            type: dataset_id
+            type: identifier
             required: true
             description: Declared dataset containing the lookup table.
         - key:
-            type: [dataset_column, "list[dataset_column]"]
+            type: [identifier, "list[identifier]"]
             required: true
             description: Dataset columns paired by position with source.
         - value:
-            type: dataset_column
+            type: identifier
             required: true
             description: Dataset column returned by the lookup.
         - missing:
