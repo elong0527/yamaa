@@ -12,25 +12,26 @@ applies_to: [expression.aggregate, aggregate_class.between,
 ## Intent
 
 Reduce many records to one value with one expression. Avoid one registry entry
-per reducer and avoid host-language code.
+per reducer. Avoid host-language code.
 
 ## Boundaries
 
 This rule owns the `aggregate_expression` primitive: its grammar, reducer
-vocabulary, grain rule, result semantics, and failure conditions. R007 owns
-the three contexts an aggregate is valid in. R003 owns the join that consumes
-a right-side reduction. R004 owns the Boolean `filter`. String reductions use
+vocabulary, grain rule, result semantics, and failure conditions. R007 owns the
+three contexts an aggregate is valid in. R003 owns the join that consumes a
+right-side reduction. R004 owns the Boolean `filter`. String reductions use
 R019's text equality and total order.
 
-Arithmetic outside a reduction is R010's, reused by reference: its operators,
-precedence, function table, numeric types, promotion, and failure conditions
-apply here unchanged and are not restated. R010 stays per-row and admits no
-reduction; this rule adds reductions and admits no window, `CASE`, comparison,
-or Boolean construct.
+Arithmetic outside a reduction is R010's. R010's operators, precedence,
+function table, numeric types, promotion, and failure conditions apply here
+unchanged and are not restated. R010 stays per-row and admits no reduction.
+This rule adds reductions. This rule admits no window, `CASE`, comparison, or
+Boolean construct.
 
-Ordering and choosing one record from several stay with the window expressions
-R007 defines and with `multiple_matches` under R003. `ONLY` does not choose: it
-accepts exactly one record and fails when several are present.
+Ordering records stays with the window expressions R007 defines. Choosing one
+record from several stays with `multiple_matches` under R003. `ONLY` does not
+choose. `ONLY` accepts exactly one record and fails when several records are
+present.
 
 ## Scope
 
@@ -43,8 +44,8 @@ owns whether that candidate row is appended.
 ## Relations and identifiers
 
 **R013-2.** An identifier is `NAME` or `DATASET.NAME`. R002 resolves each
-identifier in the same phase. A reducer expression and predicate never
-disagree about a name.
+identifier in the same phase. A reducer expression and predicate never disagree
+about a name.
 
 **R013-3.** Every identifier in one expression must name one relation. Three
 forms exist and must not be mixed:
@@ -53,7 +54,7 @@ forms exist and must not be mixed:
   During column derivation the expression reduces that right side before the
   R003 join, even when the expression qualifier equals the current row
   template's input dataset. A scalar source qualified to the row
-  template's input dataset reads one record; the aggregate keyword makes
+  template's input dataset reads one record. The aggregate keyword makes
   the same qualifier relational.
 - **Unqualified.** Every identifier names a current-output column. The
   expression reduces constructed output rows within its `group_by` partition
@@ -67,22 +68,22 @@ forms exist and must not be mixed:
 identifier with an unqualified one, is an error. A reduction is not a join. An
 expression combining two dataset relations first binds each relation to a
 column and then combines the results with `compute`. R010 admits a qualified
-identifier only for a record selected by an R015 record lookup; it
-still rejects an arbitrary dataset-qualified identifier, so every join remains
+identifier only for a record selected by an R015 record lookup. R010 still
+rejects an arbitrary dataset-qualified identifier. Every join remains
 under R003 or R015.
 
-**R013-5.** An ODM contextual reference is not available in this grammar,
-because its item identifiers carry further periods. Bind it with a structured
+**R013-5.** An ODM contextual reference is not available in this grammar. ODM
+item identifiers carry further periods. Bind the reference with a structured
 `source` first.
 
 **R013-6.** `group_by` follows the first two forms. An ordinary qualified
-expression declares qualified right-side columns, each of which must also be an
-output key, so the reduction stays coarser than or equal to the applicable keys
-R003 joins on. An unqualified expression declares current-output columns and
-must declare at least one: a reduction over the whole output is not registered,
-because no example needs one. A grouped-row aggregate declares no local
-`group_by`; the enclosing `row.group_by` already fixes its current relation and
-grain.
+expression declares qualified right-side columns. Each column must also be an
+output key. The reduction stays coarser than or equal to the
+applicable keys R003 joins on. An unqualified expression declares
+current-output columns and must declare at least one. A reduction over the
+whole output is not registered: no example needs one. A grouped-row aggregate
+declares no local `group_by`. The enclosing
+`row.group_by` already fixes its current relation and grain.
 
 ## Row-relative range narrowing
 
@@ -94,10 +95,10 @@ inclusive: `lower <= value` and `value <= upper`. Omitting one bound makes the
 match one-sided without excluding the stated endpoint.
 
 **R013-8.** The value and every stated bound must be mutually comparable under
-R007. A missing current-row value admits no right-side record, so the aggregate
-result is missing under the empty-group rule below. A right-side record with a
-missing stated bound is ineligible. A missing cutoff never causes an
-implementation to reduce the unrestricted right side.
+R007. A missing current-row value admits no right-side record. The aggregate
+result is missing under the empty-group rule below. A right-side
+record with a missing stated bound is ineligible. A missing cutoff never
+reduces the unrestricted right side.
 
 **R013-9.** `between` is invalid on an unqualified or grouped-row aggregate:
 neither has a separate right-side relation to narrow for each current row.
@@ -118,16 +119,15 @@ identifier := name ["." name]
 number     := digits ["." digits] [("e" | "E") ["+" | "-"] digits]
 ```
 
-`grammar/aggregate.yaml` is this grammar's only source. The grammar block
-above renders its content. Its vocabulary closes the reducer table below.
-Its cases record the text each implementation must accept or reject, how
-accepted identifiers bind, and the parse each case produces. Repository
-validation and the R implementation read that file, so the grammar cannot drift
-without failure.
+`grammar/aggregate.yaml` is this grammar's single source. The block above is
+its rendering. Its vocabulary closes the reducer table below. Its
+cases record the text each implementation must accept or reject, how accepted
+identifiers bind, and the parse each case produces. Repository validation and
+the R implementation read that file. The grammar cannot drift without failure.
 
 **R013-11.** Precedence, associativity, and the permitted `function` names are
-R010's. Reducer and function names and `NULL` are case-insensitive; identifiers
-are not.
+R010's. Reducer and function names and `NULL` are case-insensitive. Identifiers
+are case-sensitive.
 
 **R013-12.** Permitted reducers are exactly:
 
@@ -143,9 +143,9 @@ are not.
 
 **R013-13.** Any other reducer name, any window function or `OVER`, any
 subquery, any `CASE`, any comparison or Boolean operator, any string literal,
-and any host-language call are validation errors. Closing the vocabulary
-makes portability checkable; widening it requires amending this table, the
-whole cost of a new reduction.
+and any host-language call are validation errors. Closing the vocabulary makes
+portability checkable. Widening the vocabulary requires amending this table:
+the whole cost of a new reduction.
 
 **R013-14.** For a group with at least one non-missing value, `MEAN(x)` is
 evaluated as `SUM(x) / COUNT(x)` under this rule's `SUM` semantics and R010's
@@ -153,50 +153,50 @@ evaluated as `SUM(x) / COUNT(x)` under this rule's `SUM` semantics and R010's
 across runtimes without a host language mean.
 
 **R013-15.** `SUM(x)` is a left fold of the non-missing argument values in
-relation record order. The accumulator starts with the first such value, and
-each later value is added using R010's `+` semantics. Implementations must
-not reorder, reassociate, partition, or use a compensated or correctly rounded
-summation. The `filter`, when present, removes records without changing the
-order of those that remain. R014 defines stored-source record order, and R001
-defines constructed-output and grouped-input record order. `MEAN` uses the
-same ordered `SUM`, followed by division by `COUNT`, so `MEAN` inherits the
+relation record order. The accumulator starts with the first such value. Each
+later value is added using R010's `+` semantics. Implementations must not
+reorder, reassociate, partition, or use a compensated or correctly rounded
+summation. The `filter`, when present, removes records and keeps the order of
+the records that remain. R014 defines stored-source record order. R001
+defines constructed-output and grouped-input record order. `MEAN` uses the same
+ordered `SUM`, followed by division by `COUNT`. `MEAN` inherits the
 fold's binary64 rounding behavior.
 
 **R013-16.** `AVG` is not an alias; the portable reducer name is `MEAN`. A
 median would have to fix its interpolation rule before two runtimes could
-agree, so it is not registered by default.
+agree. No median is registered by default.
 
 **R013-17.** `ONLY` counts records, not non-missing values. An eligible group
-with one record returns that record's value even when missing. An eligible
-group with more than one record fails rather than choosing by value or record
-order. It is the reduction for a grouped calculation that requires one source
-record and must reject duplicates.
+with one record returns that record's value even when the value is missing. An
+eligible group with more than one record fails rather than choosing by value or
+record order. `ONLY` is the reduction for a grouped calculation that requires
+one source record and must reject duplicates.
 
 **R013-18.** Reductions do not nest. A reduction argument must contain no
 reduction, so `MAX(SUM(EX.EXDOSE))` is an error. Reducing at one grain and
 reducing that result at another uses two specifications. The first artifact
-names and validates the intermediate grain, and the downstream specification
+names and validates the intermediate grain. The downstream specification
 declares that stored artifact as an ordinary source under R002. Pipeline
-orchestration supplies the execution and materialization boundary; it is not
-inferred from a source path.
+orchestration supplies the execution and materialization boundary. The boundary
+is not inferred from a source path.
 
 **R013-19.** `COUNT(D.*)` takes no other argument; in this rule, `D` is a
 placeholder for the relation named by the expression's qualified identifiers
-(for example, `COUNT(EX.*)`). It is the one reducer that names no column, and
-it counts records where `COUNT(x)` counts values.
+(for example, `COUNT(EX.*)`). `COUNT(D.*)` is the one reducer that names no
+column and counts records where `COUNT(x)` counts values.
 
 ## The grain rule
 
 **R013-20.** Every identifier must appear inside a reduction, unless it names a
 `group_by` column. `SUM(a) / SUM(b)` is legal. `SUM(a) + b` is an error unless
-`b` is grouped on, because a value that varies within a group gives the
-expression no single answer, and taking one record's value would depend
-on record order. For a grouped-row aggregate, the enclosing `row.group_by`
-supplies those grouped columns.
+`b` is grouped on. A value that varies within a group gives the expression no
+single answer. Taking one record's value would depend on record order. For a
+grouped-row aggregate, the enclosing `row.group_by` supplies the grouped
+columns.
 
 **R013-21.** An identifier that is grouped on is constant within the group and
-may be used directly, so `SUM(EX.EXDOSE) / EX.EXPLDOS` is legal exactly when
-`EX.EXPLDOS` is declared in `group_by`.
+may be used directly, so `SUM(EX.EXDOSE) / EX.EXPLDOS` is legal exactly
+when `EX.EXPLDOS` is declared in `group_by`.
 
 ## Types
 
@@ -216,12 +216,12 @@ other expression. No implicit conversion happens inside this grammar.
 
 ## Missing values and empty groups
 
-**R013-26.** Inside a reduction's argument, `NULL` propagates under R010, so a
+**R013-26.** Inside a reduction's argument, `NULL` propagates under R010. A
 record whose operand is missing contributes a missing value rather than a zero.
 `SUM(EX.EXDOSE * EX.EXDUR)` skips a record missing either factor.
 
-**R013-27.** A reduction then ignores missing values; the table pins the
-rest, because the three target runtimes disagree:
+**R013-27.** A reduction then ignores missing values. The table pins the rest.
+The three target runtimes disagree:
 
 | Condition | Result |
 |---|---|
@@ -239,10 +239,10 @@ an absent record remains distinguishable from a collected missing value.
 It fails the current derivation and reports the group values and record count.
 
 **R013-30.** `MEAN` returns missing before its defined division when no
-non-missing value remains, so an all-missing group does not fail with division
-by zero. Arithmetic over reduction results follows R010: a missing reduction
-propagates through an operator, and a formula that must yield missing rather
-than fail says so with `NULLIF`.
+non-missing value remains. An all-missing group does not fail with division by
+zero. Arithmetic over reduction results follows R010. A missing
+reduction propagates through an operator. A formula that must yield missing
+rather than fail says so with `NULLIF`.
 
 ## Failure conditions
 
@@ -250,35 +250,34 @@ than fail says so with `NULLIF`.
 division by zero, `SQRT` of a negative argument, `LN` of a non-positive
 argument, invalid `POWER`, and integer overflow each fail the run. R011's non-
 finite normalization applies after every arithmetic or reduction result. `SUM`
-fails on integer overflow for the same reason. Because `MEAN` is defined by
-`SUM`, the same intermediate overflow fails even when the mathematical mean
+fails on integer overflow under the same condition. Because `MEAN` is defined
+by `SUM`, the same intermediate overflow fails even when the mathematical mean
 would fit.
 
 ## Determinism
 
-**R013-32.** Evaluation must be deterministic and side-effect free, and R
-and Python must produce identical results for every example. R010's determinism
+**R013-32.** Evaluation must be deterministic and side-effect free. R and
+Python must produce identical results for every example. R010's determinism
 requirements apply unchanged, including that an implementation must not
 reassociate or algebraically simplify a written expression.
 
-**R013-33.** A reduction does not sort the records. `SUM` and therefore
-`MEAN` consume relation record order as specified above; `COUNT`, `MIN`, and
-`MAX` are independent of that order, while `ONLY` accepts no group in which
-an order could choose among records. A rule that needs one record chosen by
-value order still uses a window or `multiple_matches`, where the value order
-is declared.
+**R013-33.** A reduction does not sort the records. `SUM` and therefore `MEAN`
+consume relation record order as specified above. `COUNT`, `MIN`, and `MAX` are
+independent of that order, while `ONLY` accepts no group in which an order
+could choose among records. A rule that needs one record chosen by value order
+still uses a window or `multiple_matches`, where the value order is declared.
 
 ## Rationale
 
 One expression with a closed reducer vocabulary keeps reductions portable.
-Anything outside the table fails validation, and no host dialect applies.
-A left-fold `SUM` in relation record order pins binary64 rounding identically
-in R and Python. `MEAN` inherits the fold through its defined division.
-Missing handling is pinned. Target runtimes disagree, so an uncollected
-quantity stays missing and an absent group stays distinguishable from
-a collected zero. `ONLY` rejects rather than chooses, so a one-record
-calculation cannot silently depend on order. Choosing by value order stays
-with windows and `multiple_matches`, which declare the value order.
+Anything outside the table fails validation. No host dialect applies. A
+left-fold `SUM` in relation record order pins binary64 rounding identically in
+R and Python. `MEAN` inherits the fold through its defined division. Missing
+handling is pinned. The target runtimes disagree. An uncollected quantity
+therefore stays missing, and an absent group stays distinguishable from a
+collected zero. `ONLY` rejects rather than chooses. A one-record
+calculation therefore cannot silently depend on order. Choosing by value order
+stays with windows and `multiple_matches`, which declare the value order.
 
 ## Errors
 
@@ -294,14 +293,13 @@ unqualified one: fail. **R013-40.** A `COUNT(D.*)` whose dataset is not the
 expression's relation: fail. **R013-41.** An ODM contextual reference: fail.
 **R013-42.** A qualified `group_by` column that is not an output key, or an
 unqualified expression with no `group_by`: fail. **R013-43.** A grouped-row
-aggregate declaring its own `group_by`, naming an identifier outside its
-row template's input dataset, or being used by an ungrouped row template:
-fail. **R013-44.** A
-`between` on an unqualified or grouped-row aggregate, declaring neither bound,
-naming a bound outside the qualified relation, or using incomparable operands:
-fail. **R013-45.** `SUM` or `MEAN` over a non-numeric argument, or arithmetic
-over a non-numeric reduction or grouped identifier: fail. **R013-46.** `MIN` or
-`MAX` over incomparable values: fail. **R013-47.** A window,
-`CASE`, comparison, Boolean, string, subquery, or host construct: fail.
-**R013-48.** Any R010 failure condition reached through the arithmetic: fail,
-reporting the expression and the column that failed.
+aggregate declaring its own `group_by`, naming an identifier outside its row
+template's input dataset, or being used by an ungrouped row template: fail.
+**R013-44.** A `between` on an unqualified or grouped-row aggregate, declaring
+neither bound, naming a bound outside the qualified relation, or using
+incomparable operands: fail. **R013-45.** `SUM` or `MEAN` over a non-numeric
+argument, or arithmetic over a non-numeric reduction or grouped identifier:
+fail. **R013-46.** `MIN` or `MAX` over incomparable values: fail. **R013-47.**
+A window, `CASE`, comparison, Boolean, string, subquery, or host construct:
+fail. **R013-48.** Any R010 failure condition reached through the arithmetic:
+fail, reporting the expression and the column that failed.

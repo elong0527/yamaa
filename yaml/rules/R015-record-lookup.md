@@ -11,17 +11,17 @@ applies_to: [root.record_lookups, record_lookup_class, expression.source,
 
 ## Intent
 
-Select one record from another input dataset and read several columns from
-the selected record.
+Select one record from another input dataset and read several columns from the
+selected record.
 
 ## Boundaries
 
 This rule owns the `record_lookups` declaration: how a record is matched and
 chosen, what its name means, and what an unmatched output row receives. R003
-owns the implicit join a qualified source performs on its own, and R007 owns
+owns the implicit join a qualified source performs on its own. R007 owns
 `mapping_from` and the per-column `multiple_matches` relaxation. Neither R003
-nor R007 changes here: a record lookup reaches the same records by the same
-means and differs only in being named once and read many times.
+nor R007 changes here. A record lookup reaches the same records by the same
+means but differs only in being named once and read many times.
 
 ## Declaration
 
@@ -36,8 +36,8 @@ record_lookups:
     keep: last
 ```
 
-**R015-2.** `id` is a name in the same namespace as dataset identifiers, so it
-must not equal a dataset identifier, another record lookup's `id`, or the
+**R015-2.** `id` is a name in the same namespace as dataset identifiers. The
+`id` must not equal a dataset identifier, another record lookup's `id`, or the
 output `domain`.
 
 ## Matching
@@ -46,15 +46,15 @@ output `domain`.
 derivation reads that lookup: against a current row during column derivation,
 or against the current candidate during grouped row construction:
 
-1. **R015-4.** `filter` selects eligible records. It is a predicate over
-   records of the record lookup's dataset only, evaluated exactly as R003
+1. **R015-4.** `filter` selects eligible records: a predicate over records
+   of the record lookup's dataset only, evaluated exactly as R003
    evaluates the filter of a right-side reduction.
 2. **R015-5.** Eligible records are matched. When `source` and `key` are
    declared, the `source` and `key` lists pair by position and match by
    equality, exactly as `mapping_from` does under R007. When neither is
    declared, the applicable output keys match, exactly as R003 defines them,
    and at least one is required.
-3. **R015-6.** `between`, when declared, narrows the equality-matched records
+3. **R015-6.** `between`, when declared, narrows those records
    as described below.
 4. **R015-7.** When `order_by` and `keep` are declared, the remaining records
    are ordered by R007's order terms and `first` or `last` is retained;
@@ -70,14 +70,14 @@ operands are under R015-11, and as an inferred applicable key is under
 R003-13a. No operand is converted to make any of the four match.
 
 **R015-9.** During grouped row construction, every current-row variable used
-for matching must be derived by that row template. R001 orders those row
+for matching must be derived by the grouped row template. R001 orders those row
 derivations before the derivation that reads the lookup and rejects a
 dependency on a value absent until column derivation.
 
 **R015-10.** A record lookup may also match by a closed range. Declaring
-`between` adds one `value` the current row reads and `lower` and `upper`
+`between` adds one `value` the current row reads plus `lower` and `upper`
 columns of the lookup's dataset. A record is eligible when `lower <= value`
-and `value <= upper`; both endpoints are inclusive.
+and `value <= upper`. Both endpoints are inclusive.
 
 **R015-11.** The value and both bounds must be mutually comparable under R007.
 `int` and `float` may compare through R010's numeric promotion; every other
@@ -87,11 +87,11 @@ comparison work.
 **R015-12.** A missing `between.value` is an incomplete match, answered before
 the right side is searched. A right-side record missing a stated bound is
 ineligible. A complete value with no eligible record is `unmatched`. The
-`between` match is the interval join R003 names: the comparison is fixed,
-the bounds name right-side columns, and the value names one current-row
-variable, so a match against a table of irregular intervals is declared
-rather than re-expressed as literals. `between.value` is a dependency of
-every column that reads the lookup, exactly as a `source` variable is.
+`between` match is the interval join R003 names: the comparison is fixed, the
+bounds name right-side columns, and the value names one current-row variable,
+so a match against a table of irregular intervals is declared rather than
+re-expressed as literals. `between.value` is a dependency of every column that
+reads the lookup, exactly as a `source` variable is.
 
 ## Reading a record lookup
 
@@ -128,20 +128,20 @@ record lookup whose match depends directly or indirectly on that column.
 
 ## When no record is selected
 
-**R015-16.** Two conditions leave an output row with no record. The
-conditions stay disjoint, as R008's `mapping_from` conditions do. An incomplete
-match value is answered before a record is sought. An unmatched key is answered
+**R015-16.** Two conditions leave an output row with no record. The conditions
+stay disjoint, as R008's `mapping_from` conditions do. An incomplete match
+value is answered before a record is sought. An unmatched key is answered
 afterward.
 
 **R015-17.** `incomplete` answers the first. A declared `source` or
-`between.value` whose value is missing matches nothing, and
-the default is `fail`, because a lookup that quietly returns nothing for an
-uncollected match value reports an absent record that was never looked for.
-Output keys are never missing, as R005 requires.
+`between.value` whose value is missing matches nothing. The default is `fail`,
+because a lookup that returns nothing for an uncollected match value reports
+an absent record that was never looked for. Output keys are never missing, as
+R005 requires.
 
-**R015-18.** `unmatched` answers the second: a complete match value that no
-record carries. `missing` gives every column reading the record lookup a
-missing value. `fail` rejects the run.
+**R015-18.** `unmatched` answers the second. `unmatched` means a complete match
+value that no record carries. `missing` gives every column reading the record
+lookup a missing value. `fail` rejects the run.
 
 **R015-19.** Omitting `unmatched` keeps the behavior of the match the record
 lookup performs, so replacing an existing derivation with a record lookup
@@ -154,20 +154,20 @@ never changes the result for an absent record:
   answers for it.
 
 **R015-22.** A record lookup that matched a record whose value is missing
-differs from a lookup that matched nothing. The first case is a collected
-blank and the second case is an absent record. `unmatched` answers only for
-an absent record.
+differs from a lookup that matched nothing. The first is a collected blank
+and the second is an absent record. `unmatched` answers only for an absent
+record.
 
 ## Rationale
 
-An expression returns one value, so without a named record every expression
-that reads another dataset reaches its own record. Two columns that must
-describe one record -- a date and the sequence number of the record the date
-came from, a value and the unit it was measured in -- then state their
-match twice and agree only by construction. A reviewer cannot see that
-agreement, and an edit to one statement and not the other breaks it silently.
-A record lookup states the match once and gives the chosen record a name, so
-the columns that read it are plainly reading one record.
+An expression returns one value. Without a named record, every expression that
+reads another dataset reaches its own record. Two columns that must describe
+one record -- a date and the sequence number of the record the date came from,
+a value and the unit it was measured in -- then state their match twice and
+agree only by construction. A reviewer cannot see that agreement. An edit to
+one statement and not the other breaks the agreement silently. A
+record lookup states the match once and gives the chosen record a name, so the
+columns that read the lookup are plainly reading one record.
 
 ## Errors
 
