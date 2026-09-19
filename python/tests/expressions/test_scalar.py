@@ -29,37 +29,39 @@ def _evaluate(expression: dict[str, object], values: dict[str, object]) -> objec
         ({"A": 0, "B": 1}, 0),
     ],
 )
-def test_coalesce_returns_the_first_non_missing_source(
+def test_first_available_returns_the_first_non_missing_source(
     values: dict[str, object], expected: object
 ) -> None:
     # R019 keeps the empty string distinct from missing, and zero is a value.
     result = _evaluate(
-        {"coalesce": {"sources": ["A", "B"], "default": "UNKNOWN"}}, values
+        {"first_available": {"sources": ["A", "B"], "default": "UNKNOWN"}}, values
     )
 
     assert result == ValueResult(value=expected)
 
 
-def test_coalesce_without_a_default_returns_missing() -> None:
+def test_first_available_without_a_default_returns_missing() -> None:
     result = _evaluate(
-        {"coalesce": {"sources": ["A", "B"]}}, {"A": MISSING, "B": MISSING}
+        {"first_available": {"sources": ["A", "B"]}}, {"A": MISSING, "B": MISSING}
     )
 
     assert result == ValueResult(value=MISSING)
 
 
-def test_coalesce_retains_the_selected_value_type() -> None:
+def test_first_available_retains_the_selected_value_type() -> None:
     # R007-33: a selection expression does not convert what it selects.
-    result = _evaluate({"coalesce": {"sources": ["A", "B"]}}, {"A": MISSING, "B": 7})
+    result = _evaluate(
+        {"first_available": {"sources": ["A", "B"]}}, {"A": MISSING, "B": 7}
+    )
 
     assert isinstance(result, ValueResult)
     assert type(result.value) is int
 
 
-def test_coalesce_default_is_not_a_handler_path() -> None:
-    # R008-1 does not list `coalesce.default`, so it fires no handler count.
+def test_first_available_default_is_not_a_handler_path() -> None:
+    # R008-1 does not list `first_available.default`, so it fires no handler count.
     result = _evaluate(
-        {"coalesce": {"sources": ["A"], "default": "UNKNOWN"}}, {"A": MISSING}
+        {"first_available": {"sources": ["A"], "default": "UNKNOWN"}}, {"A": MISSING}
     )
 
     assert result == ValueResult(value="UNKNOWN", handled_by=None)
@@ -283,11 +285,11 @@ def test_a_cut_declaration_that_labels_nothing_usable_is_refused(
 
 @pytest.mark.parametrize(
     "operation",
-    ["coalesce", "greatest", "least", "cut"],
+    ["first_available", "greatest", "least", "cut"],
 )
 def test_an_unresolved_source_is_a_structured_condition(operation: str) -> None:
     payloads: dict[str, object] = {
-        "coalesce": {"sources": ["ABSENT"]},
+        "first_available": {"sources": ["ABSENT"]},
         "greatest": {"sources": ["ABSENT", "ALSO_ABSENT"]},
         "least": {"sources": ["ABSENT", "ALSO_ABSENT"]},
         "cut": {"source": "ABSENT", "breaks": [1], "labels": ["a", "b"]},

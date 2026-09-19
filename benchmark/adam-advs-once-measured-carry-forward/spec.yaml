@@ -84,7 +84,7 @@ columns:
     type: float
     label: Analysis Value
     derivation:
-      coalesce:
+      first_available:
         sources: [AVALCOL, AVALPREV]
 
   - name: TRTSDT

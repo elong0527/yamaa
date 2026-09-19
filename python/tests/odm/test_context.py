@@ -634,14 +634,14 @@ def test_a_mapping_reads_the_records_its_own_filter_selects() -> None:
     assert result == ValueResult(value="M")
 
 
-def test_a_coalesce_source_states_the_records_it_reads() -> None:
+def test_a_first_available_source_states_the_records_it_reads() -> None:
     table = _collected_items()
     feeding = runtime_rows(table)
     context = _index(table).context({"ODM": feeding[0]}, feeding_rows={"ODM": feeding})
 
     present = evaluate_expression(
         {
-            "coalesce": {
+            "first_available": {
                 "sources": [
                     {"variable": "ODM.Value", "filter": "ODM.ItemOID = 'IT.DM.ARM'"}
                 ],
@@ -652,7 +652,7 @@ def test_a_coalesce_source_states_the_records_it_reads() -> None:
     )
     absent = evaluate_expression(
         {
-            "coalesce": {
+            "first_available": {
                 "sources": [
                     {"variable": "ODM.Value", "filter": "ODM.ItemOID = 'IT.DM.RACE'"}
                 ],

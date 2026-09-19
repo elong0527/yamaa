@@ -219,7 +219,7 @@ display reference:
   - name: SITEID                         # step 2: fall back
     type: str
     derivation:
-      coalesce:                          # one keyword
+      first_available:                          # one keyword
         sources: [SITEIDP, DM.SITEID]
         default: UNKNOWN
 
@@ -331,7 +331,7 @@ Two more registries work the same way: `column_verifications` and
 |---|---|---|---|
 | `source` | Read a variable, in this dataset or another | Origin = CRF / Predecessor | assignment, or a merge |
 | `literal` | A fixed value | Origin = Assigned | `DOMAIN = "DM";` |
-| `coalesce` | First non-missing, in order | "use A, else B" | `coalesce()` |
+| `first_available` | First non-missing, in order | "use A, else B" | `first_available()` |
 | `greatest` / `least` | Largest or smallest across variables on one row | "the later of X and Y" | `max(of a b)` |
 | `case` | Conditional branches | "if ... then ... else ..." | `if / else if` |
 
@@ -411,9 +411,9 @@ not pick one.
 It differs from `row_value`, which reads one fixed offset and does not skip
 gaps, and from `baseline_value`, which broadcasts one flagged record to the
 whole partition. It neither reduces a group like `aggregate` nor reads another
-dataset like a record lookup. The current row is not a candidate; coalesce its
-source with the earlier result when the artifact should retain a collected
-current value.
+dataset like a record lookup. The current row is not a candidate; take the first
+available of its source and the earlier result when the artifact should retain
+a collected current value.
 
 Ordering carries two rules that are easy to miss (R007):
 

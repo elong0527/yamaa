@@ -94,7 +94,7 @@ columns:
     type: date
     label: Date of Death
     derivation:
-      coalesce:
+      first_available:
         sources: [EVDTHDT, DMDTHDT]
 
 verifications:

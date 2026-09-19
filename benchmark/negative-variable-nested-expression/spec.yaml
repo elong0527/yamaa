@@ -27,5 +27,5 @@ columns:
     derivation:
       str_upper:
         source:
-          coalesce:
+          first_available:
             sources: [DM.COUNTRY, DM.SITECNTY]

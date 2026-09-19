@@ -72,10 +72,10 @@ fixtures:
     condition: value_not_permitted
     spec_paths: [columns.AVAL.type]
     validator: schema
-  negative-coalesce-self-reference:
+  negative-first-available-self-reference:
     rule: R001
     condition: dependency_cycle
-    spec_paths: [columns.SEVAL.derivation.coalesce]
+    spec_paths: [columns.SEVAL.derivation.first_available]
     validator: dependency_graph
   negative-column-forward-reference:
     rule: R001
@@ -252,7 +252,7 @@ fixtures:
     rule: R001
     condition: dependency_cycle
     spec_paths:
-      - columns.AVALF.derivation.coalesce
+      - columns.AVALF.derivation.first_available
       - columns.PRIORF.derivation.row_value
     validator: dependency_graph
   negative-row-value-zero-offset:

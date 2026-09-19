@@ -33,7 +33,7 @@ read and no artifact is accepted.
 ## How to fix
 
 Carry from the collected series rather than from the filled output. Search the
-earlier collected values, then coalesce that result with the current value:
+earlier collected values, then take the first available of that result and the current value:
 
 ```yaml
 - name: PRIOR
@@ -46,7 +46,7 @@ earlier collected values, then coalesce that result with the current value:
 - name: AVALF
   type: float
   derivation:
-    coalesce:
+    first_available:
       sources: [AVAL, PRIOR]
 ```
 

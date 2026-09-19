@@ -32,7 +32,7 @@ columns:
     type: str
     label: Description of Planned Arm
     derivation:
-      coalesce:
+      first_available:
         sources:
           - filter: ODM.ItemOID = 'IT.DM.ARM'
             variable: ODM.Value

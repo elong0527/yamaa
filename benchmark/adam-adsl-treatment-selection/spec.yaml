@@ -38,7 +38,7 @@ columns:
     type: str
     label: Selected Actual Treatment for Period 01
     derivation:
-      coalesce:
+      first_available:
         sources: [TRT01RAW, DM.ACTARM]
         default: NOT TREATED
 

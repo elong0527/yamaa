@@ -31,6 +31,6 @@ columns:
     type: int
     label: Severity Value
     derivation:
-      coalesce:
+      first_available:
         sources: [VS.SEVAL, SEVAL]
         default: 0
