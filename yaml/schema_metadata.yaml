@@ -92,6 +92,72 @@ submission_column_class:
         type: submission_comment
         required: false
         description: Sponsor comment carried with the column definition.
+    - values:
+        type: "list[submission_value_class]"
+        required: false
+        description: >-
+            Value-level submission metadata for findings datasets. Each entry
+            names one test-code value as a literal and overrides any subset of
+            this column's submission fields; undeclared fields inherit the
+            column-level declaration. R024 defines admission, the test-code
+            column resolution, and what each entry must satisfy.
+
+submission_value_class:
+    - testcd:
+        type: str
+        required: true
+        min_length: 1
+        description: >-
+            Test-code value this entry describes, stated as a literal. The
+            test-code column itself is resolved by R024 from the dataset
+            domain; it is never named here. The entry inherits the column
+            label; R024 does not admit a per-value label.
+    - core:
+        type: core_designation
+        required: false
+        description: Standard core designation for this value; R024 states which family declares it.
+    - mandatory:
+        type: bool
+        required: false
+        description: Whether this value must be present; R024 states when it is derived and when declared.
+    - role:
+        type: str
+        required: false
+        min_length: 1
+        description: Role this value plays in its dataset, in the vocabulary its standard publishes.
+    - data_type:
+        type: define_data_type
+        required: false
+        description: Submission data type for this value; R024 closes which ones each declared column type admits.
+    - length:
+        type: int
+        required: false
+        description: Maximum expected value length for this value; R024 binds it to the constraint that enforces it.
+    - significant_digits:
+        type: int
+        required: false
+        description: Digits after the decimal point for this value; required with a float submission data type.
+    - display_format:
+        type: str
+        required: false
+        min_length: 1
+        description: Presentation format carried for a reader; it never changes a computed value.
+    - codelist:
+        type: identifier
+        required: false
+        description: Codelist whose values this value carries; R025 defines the binding.
+    - origin:
+        type: submission_origin_class
+        required: false
+        description: Declared provenance of this value; when absent the column-level origin applies. R024 states what the graph refutes.
+    - method:
+        type: submission_method
+        required: false
+        description: Algorithm producing this value; R024 requires it for a derived origin.
+    - comment:
+        type: submission_comment
+        required: false
+        description: Sponsor comment carried with this value definition.
 
 submission_origin_class:
     - type:

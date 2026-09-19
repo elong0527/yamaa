@@ -81,6 +81,7 @@ class Column(_StrictModel):
     derivation: HandledExpression | None = None
     verifications: list[Expression] | None = None
     metadata: dict[str, str] | None = None
+    submission: dict[str, JsonValue] | None = None
 
 
 class Row(_StrictModel):
@@ -104,6 +105,7 @@ class Specification(_StrictModel):
     rows: list[Row] | None = None
     verifications: list[Expression] | None = None
     metadata: dict[str, str] | None = None
+    submission: dict[str, JsonValue] | None = None
 
     @property
     def default_driver(self):

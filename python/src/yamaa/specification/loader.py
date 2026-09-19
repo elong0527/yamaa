@@ -17,6 +17,11 @@ from yamaa.specification.schema import (
     normalize_specification,
     validate_specification,
 )
+from yamaa.specification.submission import (
+    has_value_level_metadata,
+    validate_value_level_metadata,
+    warn_value_level_define_deferred,
+)
 
 
 def _pydantic_path(location: tuple[object, ...]) -> str:
@@ -41,6 +46,11 @@ def load_specification(
             bundle,
             entry_document=document,
         )
+        submission_diagnostics = validate_value_level_metadata(resolved.document)
+        if submission_diagnostics:
+            raise SpecificationError(submission_diagnostics)
+        if has_value_level_metadata(resolved.document):
+            warn_value_level_define_deferred()
         return LoadedSpecification(
             specification=resolved.specification,
             written_path=written_path,
@@ -52,6 +62,10 @@ def load_specification(
         raise SpecificationError(diagnostics)
 
     assert isinstance(document, dict)
+    submission_diagnostics = validate_value_level_metadata(document)
+    if submission_diagnostics:
+        raise SpecificationError(submission_diagnostics)
+
     normalized = normalize_specification(document, bundle)
     try:
         specification = Specification.model_validate(normalized, strict=True)
@@ -65,6 +79,9 @@ def load_specification(
             for item in error.errors(include_url=False, include_input=False)
         ]
         raise SpecificationError(diagnostics) from error
+
+    if has_value_level_metadata(document):
+        warn_value_level_define_deferred()
 
     return LoadedSpecification(
         specification=specification,

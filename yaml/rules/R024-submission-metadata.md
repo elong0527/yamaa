@@ -365,8 +365,9 @@ destinations and carries the `refs` as a space-separated list.
 **R024-53.** Every requirement above that does not depend on a family is
 checked when the specification is validated on its own: the vocabularies, the
 required and prohibited field combinations, the length binding in R024-20, the
-graph refutations in R024-42 through R024-46, and the presence of `method` for
-a declared `Derived` origin.
+graph refutations in R024-42 through R024-46, the presence of `method` for
+a declared `Derived` origin, and the value-level requirements in R024-76
+through R024-81 except for the family half of R024-77.
 
 **R024-54.** Every family-dependent requirement is checked when R026 composes
 the specification into a document, because only the study document says which
@@ -435,3 +436,63 @@ standard of type `CT`: fail with `unknown_standard_family`, reporting the
 dataset and the standard. R026-7 owns the binding that fails.
 **R024-71.** A `reference_data: true` dataset declaring `repeating: true`:
 fail validation and report the dataset.
+
+## Value-level metadata
+
+The value-level statements extend this rule with the requirements and the
+errors for `values` (issue #565). They sit at the end so the requirement
+numbers run in order; R024-72 through R024-75 are requirements, R024-76
+through R024-81 are errors.
+
+**R024-72.** `values` declares value-level submission metadata: a list of
+entries, each naming one test-code value as a literal and overriding any
+subset of the column's submission fields. A field an entry does not declare
+is inherited from the column-level declaration, and the entry always
+inherits the column label: there is no per-value label. The test code is a
+literal, so the declaration is data-independent as R005 requires, and no
+expression may read value-level metadata: it describes the submission
+document, never a derived value.
+
+**R024-73.** `values` is admitted only for a findings-class dataset whose
+family is `sdtm` or `send`. The test-code column resolves as
+`<domain>TESTCD`, from the dataset domain (R024-12, R024-13) and class
+(R024-9); the resolution is a default with no override. The family half of
+admission is checked when R026 composes the specification into a document,
+per R024-54; the class half is checked when the specification is validated
+on its own.
+
+**R024-74.** Value-level metadata is an annotation in the KRC sense: it
+creates no rows, derives no values, and groups no rows. It needs no new
+manipulation and no new vocabulary term.
+
+**R024-75.** Define-XML value-level generation (R026) is not yet implemented.
+A specification declaring `values` validates, the declaration is retained,
+and validation emits a notice that the value-level document generation is
+deferred. The metadata is never silently dropped: any document generation
+that cannot carry it must fail loudly rather than omit it. This is the
+R026-53 closure for value-level metadata, landed in two steps.
+
+**R024-76.** `values` declared for a column outside `output.columns`: fail
+validation with `values_outside_output_columns`, reporting the column. This
+extends R024-55 to value-level metadata.
+**R024-77.** `values` declared for a dataset whose class is not `FINDINGS`:
+fail validation with `values_requires_findings_class`, reporting the column.
+The family half of R024-73 is checked at R026 composition time.
+**R024-78.** Two entries of one column's `values` naming the same `testcd`:
+fail validation with `duplicate_value_testcd`, reporting the column and the
+repeated test code.
+**R024-79.** An entry is checked like a column declaration: a `data_type`
+outside the set the column's declared type admits fails with
+`submission_data_type_not_admitted`; an entry whose effective origin type is
+`Derived` with no effective `method` fails with `method_missing`; an
+effective origin the derivation graph refutes under R024-43 through R024-46
+fails with `origin_contradicts_derivation`. The effective origin and method
+are the entry's own when declared, else the column's. For a row-derived
+column the refutation intersects across `rows` entries per R024-46.
+**R024-80.** A `values` declaration whose resolved `<domain>TESTCD` column
+is not in `output.columns`: fail validation with
+`value_testcd_column_missing`, reporting the column and the resolved name.
+**R024-81.** A `metadata` key naming `values` at column level: fail
+validation with `reserved_metadata_key`, reporting the key. `values` is a
+governed key under R024-56 and may not also appear in the free-form
+`metadata` map.
