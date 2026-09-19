@@ -81,11 +81,11 @@ a specification:
 | `record_lookup_class` | each item of `record_lookups:` | [`adam-adae-death-outcome/spec.yaml:10`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adae-death-outcome/spec.yaml#L10) |
 | `record_lookup_between_class` | `record_lookup.between:` | [`adam-advs-analysis-window-table/spec.yaml:16`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-advs-analysis-window-table/spec.yaml#L16) |
 | `handled_expression_class` | a `derivation:` that handles failure | [`adam-adsl-mapping/spec.yaml:98`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adsl-mapping/spec.yaml#L98) |
-| `override_rule_class` | each item of `override:` | [`adam-adae-severity-override/spec.yaml:37`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adae-severity-override/spec.yaml#L37) |
 | `source_binding_class` | a `source:` that states how it reads | [`sdtm-dm-basic/spec.yaml:55`](https://github.com/elong0527/yamaa/blob/main/benchmark/sdtm-dm-basic/spec.yaml#L55) |
 | `filtered_source_class` | another operation's `source:` that states which records it reads | [`sdtm-dm-basic/spec.yaml:42`](https://github.com/elong0527/yamaa/blob/main/benchmark/sdtm-dm-basic/spec.yaml#L42) |
 | `multiple_matches_class` | `source.multiple_matches:` | [`adam-adsl-treatment-selection/spec.yaml:33`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adsl-treatment-selection/spec.yaml#L33) |
-| `case_branch_class` | each item of `case.branches:` | [`adam-adae-treatment-emergent/spec.yaml:62`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adae-treatment-emergent/spec.yaml#L62) |
+| `case_branch_class` | each `when`/`then` item of `case:` | [`adam-adae-treatment-emergent/spec.yaml:62`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adae-treatment-emergent/spec.yaml#L62) |
+| `case_otherwise_class` | the trailing `otherwise` item of `case:` | [`adam-adae-treatment-emergent/spec.yaml:62`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adae-treatment-emergent/spec.yaml#L62) |
 | `order_term_class` | each item of any `order_by:` | [`adam-adae-severity-rank/spec.yaml:58`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adae-severity-rank/spec.yaml#L58) |
 | `aggregate_class` | a full-form `aggregate:` | [`adam-adlb-mean/spec.yaml:46`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adlb-mean/spec.yaml#L46) |
 | `str_template_class` | a `str_template:` with a handler | [`adam-adsl-identifier-parsing/spec.yaml:55`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adsl-identifier-parsing/spec.yaml#L55) |
@@ -165,7 +165,6 @@ goes wrong:
     value:                        <-   exactly one expression
       source: DM.AGE              <-     the registered keyword doing the work
     conversion_failure: null      <-   what if the result will not convert
-    override: [...]               <-   the final manual correction
 ```
 
 So what is an expression? **A mapping with exactly one entry**: the key is a
@@ -239,13 +238,12 @@ is two extra declarations; what it buys is that `SITEIDP` is a real column, and
 this specification publishes it deliberately so a reviewer can see which
 subjects fell back.
 
-**Nesting is permitted in exactly three places** (R007's nesting policy):
+**Nesting is permitted in exactly two places** (R007's nesting policy):
 
 | Field that nests | Why |
 |---|---|
-| `case.branches[].then` and `case.otherwise` | Selecting among expressions is what `case` is for |
+| `case` items' `then`, and the trailing `otherwise` | Selecting among expressions is what `case` is for |
 | `str_concat.sources` | Concatenation puts literals beside sources |
-| `override[].value` | A final correction may select any expression |
 
 `case` is the one you write most often:
 
@@ -254,17 +252,16 @@ subjects fell back.
     type: str
     derivation:
       case:
-        branches:
-          - when: "ASTDT >= TRTSDT AND ASTDT <= TRTEDT"
-            then:
-              literal: Y                 # <- a nested expression, permitted here
+        - when: "ASTDT >= TRTSDT AND ASTDT <= TRTEDT"
+          then:
+            literal: Y                 # <- a nested expression, permitted here
 ```
 
 Everywhere else, bind the value to a named column and reference the name. The
 payoff is that **dependencies are always visible**: nobody has to unfold an
 expression tree to see what a column reads.
 
-### 1.4 A derivation has three layers
+### 1.4 A derivation has two layers
 
 This is where the "if ... then ..." footnotes of an Excel spec belong.
 
@@ -273,9 +270,6 @@ derivation:
   value:                                  # layer 1: the expression from 4.3
     source: RAW.AGE
   conversion_failure: null                # layer 2: conversion to the declared type failed
-  override:                               # layer 3: the final manual correction
-    - when: "USUBJID = 'SPECIAL-01'"
-      value: {literal: 99}
 ```
 
 Writing `derivation: {source: RAW.AGE}` is shorthand for the same thing with
@@ -292,7 +286,6 @@ are the small print of an Excel spec:
 | `invalid` | "if the date is not a valid ISO date, leave blank" | The value is present but unusable |
 | `multiple_matches` | "if multiple, take the earliest" | Several right-side records matched |
 | `conversion_failure` | "if not numeric, leave blank" | Conversion to the declared type failed |
-| `override` | "per the data review meeting, subject X is corrected to ..." | A final replacement applies |
 
 **The discipline: omit a handler and its condition is fatal.** Nothing quietly
 produces a `.` and a NOTE in the log. This turns silent missing values into

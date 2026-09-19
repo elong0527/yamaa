@@ -151,7 +151,7 @@ wording, but the eleven jobs are the same.
 | Variable-level review checks | `column.verifications` | `not_missing`, `allowed_values`, `range`, `max_length`, `matches` |
 | "if not collected then U" | the `missing:` handler | See 4.4 |
 | "if not in codelist then 99" | the `unmapped:` handler | See 4.4 |
-| "subject X was corrected to 99" | `override:` | See 4.4 |
+| "subject X was corrected to 99" | a `case` branch | See 4.4 |
 
 Read the bottom five rows as the punchline: everything below `Comments for
 Define` is something a specification has to say and an Excel template has no
@@ -326,11 +326,10 @@ keys: [STUDYID, USUBJID, AESEQ]
     type: str
     derivation:
       case:
-        branches:
-          - when: "ASTDT IS NOT NULL AND TRTSDT IS NOT NULL AND TRTEDT IS NOT NULL
-                   AND ASTDT >= TRTSDT AND ASTDT <= TRTEDT"
-            then:
-              literal: Y
+        - when: "ASTDT IS NOT NULL AND TRTSDT IS NOT NULL AND TRTEDT IS NOT NULL
+                 AND ASTDT >= TRTSDT AND ASTDT <= TRTEDT"
+          then:
+            literal: Y
     verifications:
       allowed_values:
         values: [Y]
@@ -558,9 +557,8 @@ YAMAA:
     type: str
     derivation:
       case:
-        branches:
-          - when: "ASTDT IS NOT NULL AND ASTDTPR = 'M'"
-            then: {literal: "D"}
+        - when: "ASTDT IS NOT NULL AND ASTDTPR = 'M'"
+          then: {literal: "D"}
     verifications:
       allowed_values:
         values: ["D"]

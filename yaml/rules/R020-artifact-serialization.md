@@ -245,7 +245,7 @@ not its digits require it: at `n` of 4, an integral 25 is written `25.0000`.
 
 **R020-32.** This is the only place a value is rounded for presentation. It
 happens once, when the field is written, and after everything R005 sequences:
-every derivation, every conversion, every override, every verification, key
+every derivation, every conversion, every verification, key
 validation, and row ordering. No dependent column, predicate, aggregate,
 verification, key, or order term ever sees a rounded value, and changing
 `output.decimals` cannot change whether a run passes or which rows it produces.

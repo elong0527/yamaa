@@ -28,8 +28,8 @@ literals. Neither grammar admits the other's operators or functions.
 ## Predicate sites and results
 
 **R004-1.** The `sql` primitive is Boolean-valued. It is used by row,
-aggregate, window, record-lookup, and multiple-match filters; by `case` and
-final overrides; and by the `predicate` and `implies` verifications.
+aggregate, window, record-lookup, and multiple-match filters; by `case`;
+and by the `predicate` and `implies` verifications.
 
 **R004-2.** A predicate evaluates to `TRUE`, `FALSE`, or `UNKNOWN`. A filter
 retains a row or record only for `TRUE`. A verification holds only for
@@ -176,7 +176,7 @@ summary:
 - **R004-25.** a window filter sees completed output columns;
 - **R004-26.** a verification sees completed output columns and record lookups
   resolved for the completed row; and
-- **R004-27.** a `case` or override sees the values available to its enclosing
+- **R004-27.** a `case` sees the values available to its enclosing
   derivation.
 
 **R004-28.** An identifier in a right-side predicate is qualified by the
@@ -200,7 +200,7 @@ override those behaviors to match these rules or evaluate the grammar itself.
 
 ## Rationale
 
-A closed predicate grammar keeps row selection, overrides, and verifications
+A closed predicate grammar keeps row selection, corrections, and verifications
 reviewable and identical in R and Python. The grammar requires a named column
 for each value computed before comparison. The named column fixes type and
 missing-value behavior. Three-valued logic without implicit conversion

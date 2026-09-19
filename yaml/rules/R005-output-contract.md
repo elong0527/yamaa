@@ -123,7 +123,7 @@ column. Its entries select the artifact columns and control their order.
 
 **R005-20.** Every derived value passes through the same stages in this
 order. Nothing consumes a value before its lifecycle is complete. A
-dependent column, an override predicate, a verification, and the artifact
+dependent column, a verification, and the artifact
 all see the same converted value.
 
 **R005-21.** Stage 1: evaluate the derivation's expression for one value,
@@ -135,35 +135,32 @@ for one value, under R011.
 **R005-23.** Stage 3: on conversion failure, substitute
 `conversion_failure` and convert that, for one value, under R008.
 
-**R005-24.** Stage 4: evaluate `override` predicates in order and convert
-the first match's value, then stop, for one value, under R008.
-
-**R005-25.** Stage 5: run the column's verifications over the whole column,
+**R005-24.** Stage 4: run the column's verifications over the whole column,
 under R009. An error stops execution. Warnings accumulate without changing
 the column.
 
-**R005-26.** Stages 1 to 4 run on each value, in whichever phase its
-derivation belongs to. Stage 5 runs once, after every row holds that
+**R005-25.** Stages 1 to 3 run on each value, in whichever phase its
+derivation belongs to. Stage 4 runs once, after every row holds that
 column's final value.
 
-**R005-27.** A row-level derivation therefore completes stages 1 to 4
+**R005-26.** A row-level derivation therefore completes stages 1 to 3
 during row construction, and a column derivation that depends on it reads a
 converted value of the declared type. The declared type matters. R007
 permits no implicit conversion between operation inputs, so an operation
 consuming a row-derived column must rely on the column's declared type.
 
-**R005-28.** For a grouped row template, R001 evaluates its `filter` after
-stages 1 to 4 complete for every value on the candidate row. A discarded
-candidate never enters the completed dataset, so stage 5 column
+**R005-27.** For a grouped row template, R001 evaluates its `filter` after
+stages 1 to 3 complete for every value on the candidate row. A discarded
+candidate never enters the completed dataset, so stage 4 column
 verifications do not include it. An error reached while deriving the
 candidate still fails the run; the filter does not retroactively hide a
 failed derivation.
 
-**R005-29.** Conversion must be deterministic and must not silently replace
+**R005-28.** Conversion must be deterministic and must not silently replace
 an error with a missing value. A conversion failure with no
 `conversion_failure` handler fails the run.
 
-**R005-30.** A derivation that needs stage 3 or stage 4 wraps its expression
+**R005-29.** A derivation that needs stage 3 wraps its expression
 in `value`:
 
 ```yaml
@@ -171,9 +168,6 @@ derivation:
   value:
     source: RAW.AGE
   conversion_failure: null
-  override:
-    - when: "USUBJID = 'SPECIAL-01'"
-      value: {literal: 99}
 ```
 
 ## Output identity

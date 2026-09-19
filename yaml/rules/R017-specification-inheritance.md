@@ -157,7 +157,7 @@ A schema default is materialized on the composed value rather than on each
 contribution, so a later layer that never mentions a field cannot replace what
 an earlier layer wrote there with this bundle's default. Thus a child may
 change only `AVAL.label`, add one key to an inherited `AVAL.metadata`, or add
-`override` to an inherited `AVAL.derivation` without restating the expression,
+`conversion_failure` to an inherited `AVAL.derivation` without restating the expression,
 while a child derivation naming a different expression keyword replaces the
 whole derivation.
 

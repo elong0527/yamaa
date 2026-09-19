@@ -16,11 +16,6 @@ derivation:
 handled_expression_class:
     - value: {type: expression, required: true}
     - conversion_failure: {type: literal_value, required: false}
-    - override: {type: "list[override_rule_class]", required: false}
-
-override_rule_class:
-    - when: {type: sql, required: true}
-    - value: {type: expression, required: true}
 
 expression:
     registry: expressions

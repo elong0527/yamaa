@@ -43,10 +43,9 @@ expression names its input variables directly, except in the following fields
 whose declared type contains `expression`. Each is evaluated recursively and
 nests because selecting or composing expressions is the field's purpose:
 
-- `case.branches[].then` and `case.otherwise`: `case` selects among
-  expressions.
+- `case` items: `case` selects among expressions, so each `then` and the
+  trailing `otherwise` nests an expression.
 - `str_concat.sources`: concatenation places literals beside sources.
-- `override[].value`: a final correction may select any expression.
 
 **R007-4.** `derivation` and `handled_expression_class.value` also contain
 `expression`, but they hold a derivation's own top-level expression rather
@@ -272,3 +271,9 @@ fail under R008.
 
 **R007-53.** A project function that violates its environment, contract,
 binding, or result requirements: fail under R018.
+
+**R007-54.** A `case` is a non-empty list of `case_item_class`. Every item
+declares `when` and `then` except that one item may declare `otherwise`
+instead; the `otherwise` item, when present, is the last item. A `case`
+with no `when`/`then` item, more than one `otherwise` item, or an
+`otherwise` item in any other position: fail.

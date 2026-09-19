@@ -145,7 +145,7 @@ order and detect cycles. Recursively traverse each expression and collect:
 - **R001-24.** identifiers used by an `aggregate_expression`;
 - **R001-25.** variables used as placeholders in a `string_template`.
 
-**R001-26.** Predicates include `case.branches[].when`, `override[].when`,
+**R001-26.** Predicates include `case` items' `when`,
 `row.filter`, aggregate `filter`, and window `filter`. An ungrouped
 `row.filter` resolves only qualified variables of that row template's input
 dataset and runs before that row template's derivation graph. A grouped
