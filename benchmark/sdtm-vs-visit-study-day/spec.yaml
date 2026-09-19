@@ -8,7 +8,7 @@ input:
   TEPOCH:
     path: input/tepoch.csv
     types: {DYLO: int, DYHI: int}
-lookups:
+intermediates:
   - id: PLANNEDVISIT
     dataset: TV
     key: VISIT

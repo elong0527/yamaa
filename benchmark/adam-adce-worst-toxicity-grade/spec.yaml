@@ -74,12 +74,13 @@ columns:
     label: Worst Grade Sequence Number
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by:
-          - {variable: ASEVN, direction: desc}
-          - ASTDT
-          - CESEQ
-        filter: "ASEVN IS NOT NULL"
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by:
+            - {variable: ASEVN, direction: desc}
+            - ASTDT
+            - CESEQ
+          filter: "ASEVN IS NOT NULL"
 
   - name: AOCCFL
     type: str

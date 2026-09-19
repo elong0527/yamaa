@@ -53,10 +53,11 @@ columns:
     derivation:
       previous_non_missing:
         source: AVALC
-        group_by: [STUDYID, USUBJID, SERIES]
-        order_by:
-          - variable: AVISITN
-            nulls: last
+        window:
+          group_by: [STUDYID, USUBJID, SERIES]
+          order_by:
+            - variable: AVISITN
+              nulls: last
 
 verifications:
   - unique:

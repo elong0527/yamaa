@@ -63,9 +63,10 @@ columns:
     label: Subject Occurrence Sequence Number
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [ASTDTM, AESEQ]
-        filter: "TRTEMFL = 'Y'"
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ASTDTM, AESEQ]
+          filter: "TRTEMFL = 'Y'"
 
   - name: AOCCFL
     type: str

@@ -30,7 +30,7 @@ ResolverFactory = Callable[[Mapping[str, object]], Resolver]
 # map is the one place a new operation declares its handler paths.
 DECLARED_HANDLERS: dict[str, tuple[HandlerName, ...]] = {
     "source": ("missing", "multiple_matches"),
-    "lookup": ("missing", "multiple_matches"),
+    "intermediate": ("missing", "multiple_matches"),
     "mapping": ("missing", "unmapped"),
     "cut": ("missing",),
     "date_impute": ("missing", "invalid"),

@@ -27,7 +27,7 @@ absent range is intentionally represented by a missing value, state that policy
 explicitly:
 
 ```yaml
-record_lookups:
+intermediates:
   - id: REFRANGE
     dataset: LBRANGE
     source: [LBTESTCD, SEX]

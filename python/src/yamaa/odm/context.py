@@ -380,7 +380,7 @@ class BindingIndex:
         combination and section. A plain dataset field read collects one
         value across them under R001-12b: no value is missing, repeated
         readings of one value are that value, and two values disagreeing
-        fail. Record lookups keep using the single ``source_rows`` record
+        fail. Record intermediates keep using the single ``source_rows`` record
         as their ODM context.
         """
         return RuntimeContext(self, source_rows, output_values or {}, feeding_rows)

@@ -61,15 +61,17 @@ literals use their explicit tagged leaf forms.
 ## Evaluation kinds
 
 **R007-6.** Scalar expressions return one value per row. Window expressions
-partition constructed output rows by local `group_by` and preserve row count.
-Omitting `group_by` creates one partition. Within a declared group, missing
-values equal other missing values. Rows with equal present values and equal
-missing group positions share one partition.
+partition constructed output rows by their `window` specification's
+`group_by` and preserve row count. Omitting `group_by` creates one
+partition. Within a declared group, missing values equal other missing
+values. Rows with equal present values and equal missing group positions
+share one partition. A window partition is the KRC
+section: a group of rows.
 
-**R007-7.** A window that declares `filter` still preserves row count: an
-excluded row receives missing rather than being dropped. A window that reads
-another row of its partition returns missing when that row does not exist,
-the same result as for a neighbouring row with a missing value.
+**R007-7.** A window whose `window` declares `filter` still preserves row
+count: an excluded row receives missing rather than being dropped. A window
+that reads another row of its partition returns missing when that row does
+not exist, the same result as for a neighbouring row with a missing value.
 
 **R007-8.** `aggregate` is the only aggregate expression. R013 defines its
 grammar, the reducers it permits, and what each returns. This rule fixes
@@ -87,7 +89,7 @@ broadcasts the result to each row.
 **R007-10.** Context 3: it is a row derivation of a grouped row template
 and every identifier is qualified to that template's input
 dataset. It reduces the records of the current input group to one
-candidate-row value. The enclosing `row.group_by` owns the grain, so
+candidate-row value. The enclosing `row.group_by` owns the keys, so
 the aggregate itself omits `group_by`.
 
 **R007-11.** Any other aggregate context is an error. A `filter` narrows the
@@ -217,7 +219,7 @@ inside its registry entry keeps the language checkable. No generic argument bag
 can drift between implementations. Nesting is allowed only where selecting or
 composing expressions is the field's purpose. An operation cannot silently
 become a second expression language. The three aggregate contexts match the
-language's three grains: a joined relation, a constructed partition, and an
+language's three key scopes: a joined relation, a constructed partition, and an
 input group. The rule fixes order-term defaults. SQL engine disagreement about
 null placement must not change results. Runtime types make an order term
 compare one type by construction. Multi-variable expressions are the only
@@ -241,7 +243,7 @@ under R001, which owns the phase invariant.
 
 **R007-41.** A window expression used during row construction: fail.
 
-**R007-42.** A window `filter` that is not a Boolean predicate over
+**R007-42.** A `window.filter` that is not a Boolean predicate over
 current-output columns: fail.
 
 **R007-43.** A `row_value` whose `offset` is zero: fail. The current row's
@@ -277,3 +279,12 @@ declares `when` and `then` except that one item may declare `otherwise`
 instead; the `otherwise` item, when present, is the last item. A `case`
 with no `when`/`then` item, more than one `otherwise` item, or an
 `otherwise` item in any other position: fail.
+
+**R007-55.** `row_number`, `rank`, `row_value`, and `previous_non_missing`
+require `window.order_by`: without a declared order the window has no
+positions to number or to move along. Omitting it is a validation error.
+
+**R007-56.** `baseline_flag` and `baseline_value` do not take
+`window.order_by`: they locate the baseline row by date and flag, not by a
+declared order. Declaring it is a validation error rather than silently
+ignored.

@@ -50,18 +50,18 @@ class Output(_StrictModel):
     order_by: list[OrderTerm] | None = None
 
 
-class LookupBetween(_StrictModel):
+class IntermediateBetween(_StrictModel):
     value: str
     lower: str
     upper: str
 
 
-class Lookup(_StrictModel):
+class Intermediate(_StrictModel):
     id: str
     dataset: str
-    key_source: list[str] | None = None
+    key_base: list[str] | None = None
     key: list[str] | None = None
-    between: LookupBetween | None = None
+    between: IntermediateBetween | None = None
     filter: str | None = None
     order_by: list[OrderTerm] | None = None
     keep: Literal["first", "last"] | None = None
@@ -98,7 +98,7 @@ class Specification(_StrictModel):
     input: dict[str, DatasetSource]
     base: str | None = None
     parents: list[str] | None = None
-    lookups: list[Lookup] | None = None
+    intermediates: list[Intermediate] | None = None
     keys: list[str]
     output: Output
     columns: list[Column]

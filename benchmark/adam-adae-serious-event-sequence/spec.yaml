@@ -47,6 +47,7 @@ columns:
     label: Serious Event Sequence Number
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID]
-        order_by: [ASTDT, AESEQ]
-        filter: "AESER = 'Y'"
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ASTDT, AESEQ]
+          filter: "AESER = 'Y'"

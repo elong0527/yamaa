@@ -251,6 +251,17 @@ WINDOW_OPERATIONS: tuple[str, ...] = (
 )
 
 
+def window_spec(payload: Mapping[str, object]) -> Mapping[str, object]:
+    """Return the window_spec the payload declares; absent means an empty one.
+
+    R007 nests partitioning, ordering, and filtering under `window:` so the
+    six window expressions share one definition instead of repeating the
+    same three fields. Every reader of those fields goes through here.
+    """
+    window = payload.get("window")
+    return window if isinstance(window, Mapping) else {}
+
+
 def evaluate_window(
     operation: str,
     payload: Mapping[str, object],
@@ -291,7 +302,7 @@ def evaluate_window(
 
 
 def _order_variables(payload: Mapping[str, object]) -> tuple[str, ...]:
-    terms = payload.get("order_by")
+    terms = window_spec(payload).get("order_by")
     if not isinstance(terms, Sequence) or isinstance(terms, str):
         return ()
     names: list[str] = []

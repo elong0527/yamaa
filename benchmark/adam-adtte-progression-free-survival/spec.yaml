@@ -5,7 +5,7 @@ input:
   ADSL: input/adsl.csv
   RS: {path: input/rs.csv, types: {RSSEQ: int}}
   DS: {path: input/ds.csv, types: {DSSEQ: int}}
-lookups:
+intermediates:
   - id: PROGRESSION
     dataset: RS
     filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSSTRESC = 'PD' AND RS.ADEQFL = 'Y'"

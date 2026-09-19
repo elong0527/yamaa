@@ -3,9 +3,9 @@ from __future__ import annotations
 from yamaa.expressions import parse_predicate
 from yamaa.io.polars import frame_from_values
 from yamaa.models import MISSING, DateValue, TypedColumn
-from yamaa.planning import PlannedLookup
+from yamaa.planning import PlannedIntermediate
+from yamaa.runtime.intermediates import IntermediateSelector, types_comparable
 from yamaa.runtime.joins import RelationIndex
-from yamaa.runtime.lookups import LookupSelector, types_comparable
 from yamaa.specification.models import OrderTerm
 
 
@@ -39,15 +39,15 @@ def ex() -> RelationIndex:
     )
 
 
-def selector(plan: PlannedLookup) -> LookupSelector:
-    return LookupSelector([plan], {"EX": ex()})
+def selector(plan: PlannedIntermediate) -> IntermediateSelector:
+    return IntermediateSelector([plan], {"EX": ex()})
 
 
-def explicit_keys(**extra: object) -> PlannedLookup:
-    return PlannedLookup(
+def explicit_keys(**extra: object) -> PlannedIntermediate:
+    return PlannedIntermediate(
         identifier="LASTEX",
         dataset="EX",
-        path="lookups[0]",
+        path="intermediates[0]",
         match_variables=("STUDYID", "USUBJID"),
         match_fields=("STUDYID", "USUBJID"),
         **extra,
@@ -92,17 +92,19 @@ def test_a_tie_on_every_term_is_resolved_by_record_order() -> None:
         [("USUBJID", "str"), ("EXTRT", "str")],
         [["S1", "FIRST"], ["S1", "SECOND"]],
     )
-    plan = PlannedLookup(
+    plan = PlannedIntermediate(
         identifier="DOSING",
         dataset="EX",
-        path="lookups[0]",
+        path="intermediates[0]",
         match_variables=("USUBJID",),
         match_fields=("USUBJID",),
         order_terms=((OrderTerm(variable="EX.USUBJID"), "USUBJID"),),
         keep="first",
     )
 
-    outcome = LookupSelector([plan], {"EX": tied}).select("DOSING", {"USUBJID": "S1"})
+    outcome = IntermediateSelector([plan], {"EX": tied}).select(
+        "DOSING", {"USUBJID": "S1"}
+    )
 
     assert outcome.record is not None
     assert outcome.record.values["EXTRT"] == "FIRST"
@@ -118,7 +120,7 @@ def test_several_surviving_records_with_no_order_fail() -> None:
     assert outcome.condition.condition.condition == "multiple_matches"
     assert outcome.condition.condition.requirement == "R003-17"
     assert outcome.condition.condition.context["match_count"] == 3
-    assert outcome.spec_path == "lookups[0]"
+    assert outcome.spec_path == "intermediates[0]"
 
 
 def test_matching_on_explicit_keys_answers_an_absent_record_with_missing() -> None:
@@ -131,11 +133,11 @@ def test_matching_on_explicit_keys_answers_an_absent_record_with_missing() -> No
     assert outcome.condition is None
 
 
-def declared(strict: bool = True, **extra: object) -> PlannedLookup:
-    return PlannedLookup(
+def declared(strict: bool = True, **extra: object) -> PlannedIntermediate:
+    return PlannedIntermediate(
         identifier="REFRANGE",
         dataset="EX",
-        path="lookups[0]",
+        path="intermediates[0]",
         match_variables=("SUBJECT",),
         match_fields=("USUBJID",),
         strict=strict,
@@ -151,7 +153,7 @@ def test_a_declared_key_with_no_record_is_fatal_and_names_the_key() -> None:
     assert outcome.condition is not None
     assert outcome.condition.condition.condition == "unmatched_key"
     assert outcome.condition.condition.requirement == "R003-14"
-    assert outcome.condition.condition.context["lookup_key"] == {"USUBJID": "S9"}
+    assert outcome.condition.condition.context["intermediate_key"] == {"USUBJID": "S9"}
 
 
 def test_an_unhandled_multiple_match_names_the_key_it_matched_on() -> None:
@@ -164,7 +166,7 @@ def test_an_unhandled_multiple_match_names_the_key_it_matched_on() -> None:
     context = outcome.condition.condition.context
     assert outcome.condition.condition.condition == "multiple_matches"
     assert context["key"] == ["USUBJID"]
-    assert context["lookup_key"] == {"USUBJID": "S1"}
+    assert context["intermediate_key"] == {"USUBJID": "S1"}
     assert context["match_count"] == 3
     assert "keys" not in context
 
@@ -202,11 +204,11 @@ def epochs() -> RelationIndex:
     )
 
 
-def between(**extra: object) -> PlannedLookup:
-    return PlannedLookup(
+def between(**extra: object) -> PlannedIntermediate:
+    return PlannedIntermediate(
         identifier="EPOCHDEF",
         dataset="EPOCHS",
-        path="lookups[0]",
+        path="intermediates[0]",
         match_variables=("STUDYID",),
         match_fields=("STUDYID",),
         between_value="ADY",
@@ -217,8 +219,8 @@ def between(**extra: object) -> PlannedLookup:
     )
 
 
-def epoch_selector() -> LookupSelector:
-    return LookupSelector([between()], {"EPOCHS": epochs()})
+def epoch_selector() -> IntermediateSelector:
+    return IntermediateSelector([between()], {"EPOCHS": epochs()})
 
 
 def test_a_closed_range_includes_both_stated_endpoints() -> None:
@@ -244,7 +246,7 @@ def test_a_missing_range_value_is_an_absence_not_an_unmatched_key() -> None:
     # before any record is read, like a missing key.
     plan = between(strict=True)
 
-    outcome = LookupSelector([plan], {"EPOCHS": epochs()}).select(
+    outcome = IntermediateSelector([plan], {"EPOCHS": epochs()}).select(
         "EPOCHDEF", {"STUDYID": "CATH", "ADY": MISSING}
     )
 

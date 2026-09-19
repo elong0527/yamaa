@@ -5,7 +5,7 @@ input:
   AE:
     path: input/ae.csv
     types: {AESEQ: int, AESTDTC: date}
-lookups:
+intermediates:
   - id: FIRSTCOV
     dataset: AE
     key: [STUDYID, USUBJID]

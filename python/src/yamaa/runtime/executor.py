@@ -38,6 +38,7 @@ from yamaa.planning import (
     plan_execution,
     preflight_execution,
 )
+from yamaa.runtime.intermediates import IntermediateSelector
 from yamaa.runtime.joins import RelationIndex, build_relation_indexes
 from yamaa.runtime.lifecycle import (
     HandlerCount,
@@ -46,7 +47,6 @@ from yamaa.runtime.lifecycle import (
     LifecycleUnsupported,
     evaluate_derivation,
 )
-from yamaa.runtime.lookups import LookupSelector
 from yamaa.runtime.rows import (
     CandidateRow,
     RelationalContext,
@@ -594,7 +594,7 @@ def _derive_columns(
     specification = plan.specification
     column_types = {column.name: column.type for column in specification.columns}
     key_set = set(specification.keys)
-    # Key-grain mode (no `rows` template) seeds key values from the key table;
+    # Key mode (no `rows` template) seeds key values from the key table;
     # template mode derives every column per surviving driver record as before.
     key_grain = all(planned.declaration is None for planned in plan.rows)
     completed = set(plan.row_derived_columns)
@@ -696,7 +696,7 @@ def execute_specification(
         context = RelationalContext(
             bindings=BindingIndex(plan.bindings, sources),
             relations=relations,
-            lookups=LookupSelector(plan.lookups, relations),
+            intermediates=IntermediateSelector(plan.intermediates, relations),
             output_keys=tuple(specification.keys),
         )
         candidates = _construct_rows(

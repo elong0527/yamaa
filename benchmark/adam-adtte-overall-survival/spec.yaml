@@ -7,7 +7,7 @@ input:
     path: input/adrs.csv
     types:
       ASEQ: int
-lookups:
+intermediates:
   - id: DEATH_REC
     dataset: ADRS
     filter: "ADRS.PARAMCD = 'DEATH' AND ADRS.AVALC = 'Y' AND ADRS.ANL01FL = 'Y'"

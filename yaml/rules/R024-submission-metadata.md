@@ -98,7 +98,7 @@ only when the dataset's implementation guide defines one for it.
 
 **R024-10.** `structure` states in prose the level of detail one record
 represents, such as `One record per subject`. `structure` is required,
-because keys alone do not fix a dataset's grain: one key list serves
+because keys alone do not fix a dataset's structure: one key list serves
 several structures.
 
 **R024-11.** `repeating` is required and states whether the dataset may carry
@@ -334,10 +334,9 @@ method that replaces a missing value with a substitute declares `Imputation`.
 
 **R024-49.** `expression` carries code as text under a named `context`. This
 language neither parses nor evaluates the code, and a generated document
-carries the code unchanged. Nothing checks the code against the
-specification's own derivation, and this rule states that limit
-openly. An expression is documentation a sponsor supplies, not a second
-definition of the column.
+carries the code unchanged. No rule checks the code against the
+specification's derivation. An expression is sponsor-supplied documentation,
+not a second definition of the column.
 
 **R024-50.** No `expression` is generated from a derivation. A derivation has
 no canonical written form in this language, and inventing a form here would

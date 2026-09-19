@@ -206,7 +206,7 @@ input:
   REF: {path: input/ref.csv, types: {ANRHI: float}}
 keys: [STUDYID, USUBJID, PARAMCD]
 
-lookups:
+intermediates:
   - id: LASTEX
     dataset: EX
     key: [STUDYID, USUBJID]
@@ -391,7 +391,7 @@ input:
 base: VS
 keys: [STUDYID, USUBJID, VSSEQ]
 
-lookups:
+intermediates:
   - id: EPOCHDEF
     dataset: EPOCHS
     key: [STUDYID]
@@ -507,7 +507,7 @@ def test_a_missing_cutoff_never_reduces_the_unrestricted_right_side(
     row = result.artifact.frame.to_dicts()[0]
     assert row["EXPDOSE"] is None
     assert row["EPOCH"] is None
-    # The coarser grain does not read the cutoff, so it still reduces.
+    # The coarser keys do not read the cutoff, so it still reduces.
     assert row["STUDYTOT"] == 60.0
 
 

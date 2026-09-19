@@ -8,10 +8,10 @@ input:
   LMS:
     path: input/lms_ref.csv
     types: {L: float, M: float, S: float, AGE: int}
-lookups:
+intermediates:
   - id: GROWTH
     dataset: LMS
-    key_source: [ADVSPRE.PARAMCD, ADVSPRE.SEX, ADVSPRE.AGE]
+    key_base: [ADVSPRE.PARAMCD, ADVSPRE.SEX, ADVSPRE.AGE]
     key: [PARAMCD, SEX, AGE]
 base: ADVSPRE
 

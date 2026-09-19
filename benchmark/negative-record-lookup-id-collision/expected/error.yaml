@@ -1,7 +1,7 @@
 phase: validation
 condition: duplicate_identifier
 spec_paths:
-  - lookups[0].id
+  - intermediates[0].id
   - input.EX
 requirement: R003-3
 context:

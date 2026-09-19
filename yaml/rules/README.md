@@ -11,7 +11,7 @@ semantics, error behavior, and representative examples are complete.
 | --- | --- | --- | --- |
 | R001 | [Execution model](R001-execution-model.md) | normative | Phases, grouped row construction, dependency inference, evaluation order |
 | R002 | [Source binding](R002-source-binding.md) | normative | Dataset declaration, name resolution |
-| R003 | [Lookup](R003-lookup.md) | normative | Cross-dataset reads: the implicit join on applicable keys, named `lookups`, inline `lookup`, declared-key aggregates |
+| R003 | [Intermediate](R003-intermediate.md) | normative | Cross-dataset reads: the implicit join on applicable keys, named `intermediates`, inline `lookup`, declared-key aggregates |
 | R004 | [Predicate language](R004-predicate-language.md) | normative | The Boolean `sql` primitive |
 | R005 | [Output contract](R005-output-contract.md) | normative | Column coverage, output membership, the value lifecycle, output identity, artifact row order |
 | R006 | [Compact schema language](R006-schema-language.md) | normative | Schema notation and structural validation |
@@ -21,7 +21,7 @@ semantics, error behavior, and representative examples are complete.
 | R010 | [Scalar numeric computation](R010-scalar-computation.md) | normative | The `numeric_expression` primitive |
 | R011 | [Column types](R011-column-types.md) | normative | The `column_type` vocabulary, non-finite normalization, and conversion |
 | R012 | [String templates](R012-string-templates.md) | normative | Interpolation grammar, escaping, and evaluation |
-| R013 | [Aggregate reduction](R013-aggregate-reduction.md) | normative | The `aggregate_expression` primitive: reducers, row-relative narrowing, grain, and empty-group results |
+| R013 | [Aggregate reduction](R013-aggregate-reduction.md) | normative | The `aggregate_expression` primitive: reducers, row-relative narrowing, the key rule, and empty-group results |
 | R014 | [Source-format ingestion](R014-source-ingestion.md) | normative | Missing recognition and field typing at the source |
 | R016 | [Temporal values](R016-temporal-values.md) | normative | The `date` and `datetime` values: lexical form, zone and precision model, comparison, canonical text, and the operations over them |
 | R017 | [Specification inheritance](R017-specification-inheritance.md) | normative | Parent resolution, layer composition, pruning, and resolved order |

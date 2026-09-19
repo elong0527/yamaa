@@ -4,12 +4,12 @@ spec_paths:
   - columns.TRT01A.derivation.lookup
 requirement: R003-17
 context:
-  lookup: lookup(ADSL_RAW)
+  intermediate: intermediate(ADSL_RAW)
   dataset: ADSL_RAW
   key:
     - STUDYID
     - USUBJID
-  lookup_key:
+  intermediate_key:
     STUDYID: PILOT7
     USUBJID: P7-701
   match_count: 2

@@ -50,7 +50,7 @@ columns:
     derivation:
       lookup:
         dataset: MEDDRA
-        key_source: AE_RAW.AETERM
+        key_base: AE_RAW.AETERM
         key: LLTNAME
         value: PTNAME
         missing: NOT CODED
@@ -60,7 +60,7 @@ columns:
     derivation:
       lookup:
         dataset: MEDDRA
-        key_source: AE_RAW.AETERM
+        key_base: AE_RAW.AETERM
         key: LLTNAME
         value: SOCNAME
         missing: NOT CODED

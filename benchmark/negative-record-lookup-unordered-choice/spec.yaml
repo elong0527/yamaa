@@ -4,7 +4,7 @@ keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
   EX: input/ex.csv
-lookups:
+intermediates:
   - id: DOSING
     dataset: EX
 

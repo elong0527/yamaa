@@ -30,7 +30,7 @@ State the full order and which end of that order to keep. To choose the
 earliest administration:
 
 ```yaml
-record_lookups:
+intermediates:
   - id: DOSING
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]

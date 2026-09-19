@@ -1,22 +1,10 @@
----
-title: Principles
----
-
-# Principles
-
-> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Benchmark walkthrough](yaml-benchmark-walkthrough.md)
-
-> **Read this if** you want a short answer to one question: what is YAMAA for?
-> For the longer answer, read [Why YAMAA](why-yamaa.md). For the syntax, read
-> [Schema concepts](schema-concepts.md).
-
----
-
 # Motivation
 
-Two AI agents read the same prompt to generate SDTM / ADaM datasets. Both are sure they understand it. Each writes the code from scratch. The two output datasets disagree.
+Two AI-agent sessions read the same prompt to generate SDTM / ADaM datasets.
+Both are sure they understand it. Each writes the code from scratch. The two output datasets disagree.
 
-This disagreement is usually not a misreading. The agents simply follow different paths through the gaps in the prompt.
+This disagreement is usually not a misreading.
+The agents simply follow different paths through the gaps in the prompt.
 
 YAMAA moves agreement to the planning stage. People and AI agents build the
 specification together. Questions get answered while they are still
@@ -26,8 +14,6 @@ Electronic Data Capture (EDC) extraction through Study Data Tabulation Model
 (SDTM) and Analysis Data Model (ADaM) to define.xml.
 
 ## The core principle
-
-This is what the rules are designed to guarantee.
 
 > **A YAMAA specification has exactly one execution. Where it would have two,
 > YAMAA fails instead of choosing.**
@@ -48,10 +34,6 @@ input datasets are given. The contract covers two things:
   Numbered rules fix the meaning, so the R engine and the Python engine
   cannot read the same spec in two ways.
 
-Language neutrality keeps both parts of the contract honest across engines.
-And we test the contract. We do not just state it. Run the R engine, then run
-the Python engine. The output must not change by a single byte.
-
 ## Built for AI agents
 
 A person who finds something unclear can walk over and ask a colleague. A live
@@ -60,14 +42,14 @@ only the documents in front of it. There is no colleague to ask.
 
 So for people, one execution prevents arguments. For AI, it does a bigger
 job. The YAMAA language forces every question to be answered during planning,
-because the YAMAA specification should be the one place where people agree what to build.
+because the YAMAA specification should be the one place where people agree on what to build.
 
 This is also why the vocabulary is closed. The typical AI failure is confident
 invention: text that reads well but runs wrong, and then needs heavy review.
 Talking with AI can cost as much as talking with another person, or more. A closed
 vocabulary limits what the AI can write. Every line is either valid or caught
-by validation. Writing a specification becomes a loop: generate, validate, fix the specification. The
-errors are exact and repeatable.
+by validation. Working with an AI agent to complete CDISC data standardization
+becomes an iterative way to review generated datasets and improve the specification with minimal code changes.
 
 ## Principles
 
@@ -75,17 +57,17 @@ These four principles follow from the core principle of one execution:
 
 - **Inheritance**: e.g. organization, compound, and study layers combine in a fixed
   order into one final specification. A company standard is shared,
-  not copied into files that then change separately. (R017)
-- **Language neutral**: The same specification with the same inputs gives the
-  same file, byte for byte, in R and in Python. (R019, R020)
+  not copied into files that then change separately.
+- **Language neutral**: The same specification with the same inputs generates the
+  same output dataset in R and in Python.
 - **Explicit**: Nothing reaches the output unless the specification put it
-  there. Each declared column is derived in exactly one place. (R002, R005)
+  there. Each declared column is derived in exactly one place.
 - **Extension**: A specification holds no code from R or Python. It has one
   extension point: a named contract. A project function is declared by its
   contract where it is used, and written once, in one language for the
   project. (R018)
 
-Following the principles, the goal is to move most of the AI agents' work to
+Following the principles, the goal is to move most of the AI agents' work into
 building the YAMAA specification with people, where unclear points are cheap
 to fix.
 
@@ -103,6 +85,6 @@ different ways.
 ## Principles to Working Model
 
 These principles are not rules by themselves. Each one is enforced by the
-[rules](https://github.com/elong0527/yamaa/tree/main/yaml/rules) and
-demonstrated in the [benchmark](../benchmark/index.md) of minimal
+[rules](https://elong0527.github.io/yamaa/reference/rules/) and
+demonstrated in the [benchmark](https://elong0527.github.io/yamaa/benchmark/) with minimal,
 visible benchmarks.

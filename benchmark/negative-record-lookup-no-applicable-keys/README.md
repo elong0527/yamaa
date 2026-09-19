@@ -29,7 +29,7 @@ artifact is accepted.
 Name the lookup-table columns paired with the current-row values:
 
 ```yaml
-lookups:
+intermediates:
   - id: REFRANGE
     dataset: LBRANGE
     source: [LBTESTCD, SEX]

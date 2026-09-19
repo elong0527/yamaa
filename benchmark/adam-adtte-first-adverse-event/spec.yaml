@@ -7,7 +7,7 @@ input:
     path: input/adae.csv
     types:
       AESEQ: int
-lookups:
+intermediates:
   - id: AE_REC
     dataset: ADAE
     order_by: [ADAE.ASTDT, ADAE.AESEQ]

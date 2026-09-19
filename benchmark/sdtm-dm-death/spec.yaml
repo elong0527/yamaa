@@ -5,7 +5,7 @@ input:
   DM_RAW: input/dm_raw.csv
   DS: input/ds.csv
   AE: input/ae.csv
-lookups:
+intermediates:
   - id: DTHDS
     dataset: DS
     filter: "DS.DSDECOD = 'DEATH'"

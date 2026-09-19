@@ -1,10 +1,10 @@
-"""R003 lookups: select one record once, then read it many times.
+"""R003 intermediates: select one record once, then read it many times.
 
-A lookup states its match once and gives the chosen record a name, so the
+A intermediate states its match once and gives the chosen record a name, so the
 columns that read it are plainly reading one record. Everything about
 reaching that record -- filtering, equality matching, range narrowing, and
 ordered selection -- is one explicit declared-key mechanism, so a named
-lookup and an inline `lookup` cannot disagree.
+intermediate and an inline `intermediate` cannot disagree.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ from yamaa.models import (
     ValueResult,
     runtime_type_name,
 )
-from yamaa.planning import PlannedLookup
+from yamaa.planning import PlannedIntermediate
 from yamaa.runtime.joins import (
     IndexedRecord,
     RelationIndex,
@@ -46,8 +46,8 @@ from yamaa.specification.models import OrderTerm
 
 
 @dataclass(frozen=True, slots=True)
-class LookupOutcome:
-    """What one current row got from a lookup.
+class IntermediateOutcome:
+    """What one current row got from a intermediate.
 
     A selected record and a decided absence stay distinct: R003-14 keeps a
     matched record whose value is missing different from a match that never
@@ -88,12 +88,12 @@ def types_comparable(left: ColumnType, right: ColumnType) -> bool:
     return left == right or {left, right} <= {"int", "float"}
 
 
-class LookupSelector:
-    """Select at most one record per current row for each declared lookup."""
+class IntermediateSelector:
+    """Select at most one record per current row for each declared intermediate."""
 
     def __init__(
         self,
-        plans: Sequence[PlannedLookup],
+        plans: Sequence[PlannedIntermediate],
         relations: Mapping[str, RelationIndex],
     ) -> None:
         self.plans = {plan.identifier: plan for plan in plans}
@@ -104,11 +104,11 @@ class LookupSelector:
         return identifier in self.plans
 
     def _filtered(
-        self, plan: PlannedLookup
+        self, plan: PlannedIntermediate
     ) -> tuple[IndexedRecord, ...] | ConditionResult:
-        """Apply the lookup's `filter` once for the whole run.
+        """Apply the intermediate's `filter` once for the whole run.
 
-        R003-10 makes the filter a predicate over the lookup's own dataset,
+        R003-10 makes the filter a predicate over the intermediate's own dataset,
         so which records are eligible does not vary by current row and the
         predicate is evaluated once per record rather than once per row.
         """
@@ -124,30 +124,32 @@ class LookupSelector:
         self,
         identifier: str,
         current: Mapping[str, RuntimeValue],
-    ) -> LookupOutcome:
+    ) -> IntermediateOutcome:
         """Choose this row's record, in the order R003 lays the steps out."""
         plan = self.plans[identifier]
         eligible = self._filtered(plan)
         if isinstance(eligible, ConditionResult):
-            return LookupOutcome(condition=eligible, spec_path=f"{plan.path}.filter")
+            return IntermediateOutcome(
+                condition=eligible, spec_path=f"{plan.path}.filter"
+            )
         return _select_eligible(plan, eligible, current)
 
 
 def _select_eligible(
-    plan: PlannedLookup,
+    plan: PlannedIntermediate,
     eligible: Sequence[IndexedRecord],
     current: Mapping[str, RuntimeValue],
-) -> LookupOutcome:
+) -> IntermediateOutcome:
     """Match, narrow, and choose one record from the eligible records.
 
-    Named and inline lookups share these steps: the named selector caches
-    the eligible records per lookup, while an inline `lookup` derives them
+    Named and inline intermediates share these steps: the named selector caches
+    the eligible records per intermediate, while an inline `intermediate` derives them
     from its payload on every row.
     """
     values = [current.get(name, MISSING) for name in plan.match_variables]
     if any(value is MISSING for value in values):
         # A missing match value is not an identity any record shares,
-        # so the lookup yields nothing before any record is read.
+        # so the intermediate yields nothing before any record is read.
         return _absent(plan, values)
     if (
         plan.between_value is not None
@@ -166,22 +168,22 @@ def _select_eligible(
     ]
 
     narrowed = _narrowed(plan, matched, current)
-    if isinstance(narrowed, LookupOutcome):
+    if isinstance(narrowed, IntermediateOutcome):
         return narrowed
 
     if not narrowed:
         return _absent(plan, values)
     if len(narrowed) == 1:
-        return LookupOutcome(record=narrowed[0])
+        return IntermediateOutcome(record=narrowed[0])
     if plan.keep is None:
         # R003-17: more than one surviving record with nothing to choose
         # by is the unhandled multiple match the rule refuses.
-        return LookupOutcome(
+        return IntermediateOutcome(
             condition=_condition(
                 "multiple_matches",
                 "R003-17",
                 {
-                    "lookup": plan.identifier,
+                    "intermediate": plan.identifier,
                     "dataset": plan.dataset,
                     **_matched_key(plan, values),
                     "match_count": len(narrowed),
@@ -191,27 +193,27 @@ def _select_eligible(
         )
     chosen = select_record(narrowed, plan.order_terms, plan.keep)
     if isinstance(chosen, ConditionResult):
-        return LookupOutcome(condition=chosen, spec_path=f"{plan.path}.order_by")
+        return IntermediateOutcome(condition=chosen, spec_path=f"{plan.path}.order_by")
     handled_by: HandlerName | None = None
     if len(narrowed) > 1:
         # The declared keep actually chose among surviving records: R008
         # counts the selection where it happened.
         handled_by = "multiple_matches"
-    return LookupOutcome(record=chosen, handled_by=handled_by)
+    return IntermediateOutcome(record=chosen, handled_by=handled_by)
 
 
 def _absent(
-    plan: PlannedLookup,
+    plan: PlannedIntermediate,
     values: Sequence[RuntimeValue],
-) -> LookupOutcome:
-    """Answer a lookup that yields nothing under R003-14."""
+) -> IntermediateOutcome:
+    """Answer a intermediate that yields nothing under R003-14."""
     if plan.strict:
-        return LookupOutcome(
+        return IntermediateOutcome(
             condition=_condition(
                 "unmatched_key",
                 "R003-14",
                 {
-                    "lookup": plan.identifier,
+                    "intermediate": plan.identifier,
                     "dataset": plan.dataset,
                     **_matched_key(plan, values),
                 },
@@ -219,14 +221,14 @@ def _absent(
             spec_path=plan.path,
         )
     handled_by: HandlerName | None = "missing" if plan.missing_declared else None
-    return LookupOutcome(absent=plan.missing, handled_by=handled_by)
+    return IntermediateOutcome(absent=plan.missing, handled_by=handled_by)
 
 
 def _narrowed(
-    plan: PlannedLookup,
+    plan: PlannedIntermediate,
     matched: Sequence[IndexedRecord],
     current: Mapping[str, RuntimeValue],
-) -> list[IndexedRecord] | LookupOutcome:
+) -> list[IndexedRecord] | IntermediateOutcome:
     """Keep the equality-matched records the declared range admits."""
     if plan.between_value is None:
         return list(matched)
@@ -245,12 +247,12 @@ def _narrowed(
             if compare_values(lower, value) <= 0 and compare_values(value, upper) <= 0:
                 kept.append(record)
         except TypeError:
-            return LookupOutcome(
+            return IntermediateOutcome(
                 condition=_condition(
                     "incomparable_range_types",
                     "R003-11",
                     {
-                        "lookup": plan.identifier,
+                        "intermediate": plan.identifier,
                         "value_type": runtime_type_name(value),
                         "lower_type": runtime_type_name(lower),
                         "upper_type": runtime_type_name(upper),
@@ -263,18 +265,18 @@ def _narrowed(
 
 
 def _matched_key(
-    plan: PlannedLookup,
+    plan: PlannedIntermediate,
     values: Sequence[RuntimeValue],
 ) -> dict[str, JsonValue]:
-    """Return the fields the lookup matched on and the values it matched with.
+    """Return the fields the intermediate matched on and the values it matched with.
 
-    R003-33 keeps one vocabulary for every lookup failure, so an unmatched
+    R003-33 keeps one vocabulary for every intermediate failure, so an unmatched
     key and an unhandled multiple match report the match the same way and
     leave `keys` to the output row the failure belongs to.
     """
     return {
         "key": list(plan.match_fields),
-        "lookup_key": {
+        "intermediate_key": {
             field: json_value(value)
             for field, value in zip(plan.match_fields, values, strict=True)
         },
@@ -296,7 +298,7 @@ def _equal(left: RuntimeValue, right: RuntimeValue) -> bool:
 
 
 def absent_value(absent: JsonValue) -> RuntimeValue:
-    """Return the runtime value a lookup's decided absence carries."""
+    """Return the runtime value a intermediate's decided absence carries."""
     normalized = normalize_runtime_value(absent)
     if isinstance(normalized, ValueResult):
         return normalized.value
@@ -314,7 +316,7 @@ def _names(value: object) -> tuple[str, ...] | None:
 def _order_terms(
     payload: Mapping[str, object], dataset: str
 ) -> tuple[tuple[OrderTerm, str], ...] | None:
-    """Build the (term, field) pairs an inline `lookup` orders by."""
+    """Build the (term, field) pairs an inline `intermediate` orders by."""
     raw = payload.get("order_by")
     if raw is None:
         return None
@@ -338,19 +340,19 @@ def _order_terms(
     return tuple(terms)
 
 
-def evaluate_lookup(
+def evaluate_intermediate(
     payload: Mapping[str, object],
     relation: RelationIndex,
     resolve: Callable[[str], Resolution],
 ) -> EvaluationResult:
-    """Evaluate one inline `lookup` operation against its dataset.
+    """Evaluate one inline `intermediate` operation against its dataset.
 
     The planner validates the declaration; this answers the row. `resolve`
     reads one current-row variable the way the derivation's own resolver
     does, so a source may name an output column or a driver-qualified
     dataset column exactly as the specification wrote it.
     """
-    sources = _names(payload.get("key_source"))
+    sources = _names(payload.get("key_base"))
     keys = _names(payload.get("key"))
     value_field = payload.get("value")
     dataset = relation.dataset
@@ -367,7 +369,7 @@ def evaluate_lookup(
                 condition="invalid_field_type",
                 context={
                     "operation": "lookup",
-                    "expected": "key_source, dataset, key, value",
+                    "expected": "key_base, dataset, key, value",
                 },
                 requirement="R007-36",
             )
@@ -418,8 +420,8 @@ def evaluate_lookup(
     keep = payload.get("keep")
     keep_value = keep if keep in ("first", "last") else None
 
-    plan = PlannedLookup(
-        identifier=f"lookup({dataset})",
+    plan = PlannedIntermediate(
+        identifier=f"intermediate({dataset})",
         dataset=dataset,
         path="lookup",
         match_variables=tuple(sources),
@@ -448,9 +450,9 @@ def evaluate_lookup(
 
 
 __all__ = [
-    "LookupOutcome",
-    "LookupSelector",
+    "IntermediateOutcome",
+    "IntermediateSelector",
     "absent_value",
-    "evaluate_lookup",
+    "evaluate_intermediate",
     "types_comparable",
 ]

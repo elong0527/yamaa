@@ -6,7 +6,7 @@ input:
   EX: {path: input/ex.csv, types: {EXSEQ: int}}
   DS: input/ds.csv
   AE: input/ae.csv
-lookups:
+intermediates:
   - id: LASTEX
     dataset: EX
     filter: "EX.EXENDTC IS NOT NULL"

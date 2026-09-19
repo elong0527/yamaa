@@ -1,15 +1,15 @@
 phase: join
 condition: unmatched_key
 spec_paths:
-  - lookups[0]
+  - intermediates[0]
 requirement: R003-14
 context:
-  lookup: REFRANGE
+  intermediate: REFRANGE
   dataset: LBRANGE
   key:
     - LBTESTCD
     - SEX
-  lookup_key:
+  intermediate_key:
     LBTESTCD: ALT
     SEX:
   keys:

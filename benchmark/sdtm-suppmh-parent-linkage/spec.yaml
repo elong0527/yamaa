@@ -40,7 +40,7 @@ columns:
     derivation:
       lookup:
         dataset: MH
-        key_source: [MH_SUPP_RAW.USUBJID, MH_SUPP_RAW.MHTERM]
+        key_base: [MH_SUPP_RAW.USUBJID, MH_SUPP_RAW.MHTERM]
         key: [USUBJID, MHTERM]
         value: MHSEQ
     verifications:

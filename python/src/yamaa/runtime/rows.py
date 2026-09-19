@@ -32,7 +32,12 @@ from yamaa.expressions import (
     parse_aggregate_cached,
     parse_predicate_cached,
 )
-from yamaa.expressions.windows import WINDOW_OPERATIONS, Partition, evaluate_window
+from yamaa.expressions.windows import (
+    WINDOW_OPERATIONS,
+    Partition,
+    evaluate_window,
+    window_spec,
+)
 from yamaa.models import (
     MISSING,
     ConditionPhase,
@@ -46,8 +51,14 @@ from yamaa.odm import BindingIndex
 from yamaa.planning import (
     ExecutionDiagnostic,
     ImplicitJoin,
-    PlannedLookup,
+    PlannedIntermediate,
     PlannedRow,
+)
+from yamaa.runtime.intermediates import (
+    IntermediateOutcome,
+    IntermediateSelector,
+    absent_value,
+    evaluate_intermediate,
 )
 from yamaa.runtime.joins import (
     IndexedRecord,
@@ -60,12 +71,6 @@ from yamaa.runtime.joins import (
     partition_records,
 )
 from yamaa.runtime.lifecycle import LifecycleCondition
-from yamaa.runtime.lookups import (
-    LookupOutcome,
-    LookupSelector,
-    absent_value,
-    evaluate_lookup,
-)
 from yamaa.specification.models import OrderTerm
 
 
@@ -85,7 +90,7 @@ class CandidateRow:
     group_driver: str | None = None
     group_records: tuple[IndexedRecord, ...] = ()
     group_values: dict[str, RuntimeValue] = field(default_factory=dict)
-    lookups: dict[str, LookupOutcome] = field(default_factory=dict)
+    intermediates: dict[str, IntermediateOutcome] = field(default_factory=dict)
 
     @property
     def reported_group(self) -> dict[str, JsonValue]:
@@ -98,11 +103,11 @@ class CandidateRow:
 
 @dataclass(slots=True)
 class RelationalContext:
-    """The relations, lookups, and constructed rows one run shares."""
+    """The relations, intermediates, and constructed rows one run shares."""
 
     bindings: BindingIndex
     relations: dict[str, RelationIndex]
-    lookups: LookupSelector
+    intermediates: IntermediateSelector
     output_keys: tuple[str, ...]
     rows: list[CandidateRow] = field(default_factory=list)
     _partitions: dict[tuple[str, ...], dict[tuple[object, ...], list[CandidateRow]]] = (
@@ -112,7 +117,7 @@ class RelationalContext:
     def partition(
         self, fields: tuple[str, ...]
     ) -> dict[tuple[object, ...], list[CandidateRow]]:
-        """Group the constructed rows by these columns, once per grain.
+        """Group the constructed rows by these columns, once per key combination.
 
         R007-9 broadcasts an output-row reduction back to each row of its
         partition, so every row of one partition asks the same question. The
@@ -206,7 +211,7 @@ class RowResolver:
         qualifier = variable.split(".", 1)[0] if "." in variable else None
         if qualifier is None:
             return self._base.resolve(variable)
-        if self._context.lookups.declares(qualifier):
+        if self._context.intermediates.declares(qualifier):
             return self._lookup_read(qualifier, variable.split(".", 1)[1])
         implicit = self._implicit_joins.get(qualifier)
         if implicit is not None:
@@ -224,7 +229,7 @@ class RowResolver:
         multiple_matches: Mapping[str, object] | None,
     ) -> Resolution:
         qualifier = variable.split(".", 1)[0] if "." in variable else None
-        if qualifier is not None and self._context.lookups.declares(qualifier):
+        if qualifier is not None and self._context.intermediates.declares(qualifier):
             # R003 already chose the record; the source reads a column of it.
             return self._lookup_read(qualifier, variable.split(".", 1)[1])
         if qualifier is not None:
@@ -261,7 +266,7 @@ class RowResolver:
             )
         payload: dict[str, object] = {
             "dataset": join.dataset,
-            "key_source": list(join.keys),
+            "key_base": list(join.keys),
             "key": list(join.keys),
             "value": field_name,
         }
@@ -274,13 +279,13 @@ class RowResolver:
             keep = multiple_matches.get("keep")
             if keep is not None:
                 payload["keep"] = keep
-        result = evaluate_lookup(payload, relation, self.resolve)
+        result = evaluate_intermediate(payload, relation, self.resolve)
         if isinstance(result, ValueResult):
             return ResolvedValue(value=result.value, handled_by=result.handled_by)
         return FailedResolution(condition=result.condition)
 
     def _lookup_read(self, identifier: str, field_name: str) -> Resolution:
-        plan = self._context.lookups.plans[identifier]
+        plan = self._context.intermediates.plans[identifier]
         relation = self._context.relations[plan.dataset]
         if not relation.has(field_name):
             return _failed(
@@ -290,12 +295,12 @@ class RowResolver:
                     requirement="R003-15",
                 )
             )
-        outcome = self._candidate.lookups.get(identifier)
+        outcome = self._candidate.intermediates.get(identifier)
         if outcome is None:
-            outcome = self._context.lookups.select(
+            outcome = self._context.intermediates.select(
                 identifier, self._lookup_current(plan)
             )
-            self._candidate.lookups[identifier] = outcome
+            self._candidate.intermediates[identifier] = outcome
         if outcome.condition is not None:
             assert outcome.spec_path is not None
             raise LifecycleCondition(
@@ -308,7 +313,7 @@ class RowResolver:
                 )
             )
         if outcome.record is None:
-            # R003-14: a lookup that yields nothing answers its decided
+            # R003-14: a intermediate that yields nothing answers its decided
             # absence, which stays distinct from a record whose value is
             # missing.
             return ResolvedValue(
@@ -318,7 +323,7 @@ class RowResolver:
             value=outcome.record.values[field_name], handled_by=outcome.handled_by
         )
 
-    def _lookup_current(self, plan: PlannedLookup) -> dict[str, RuntimeValue]:
+    def _lookup_current(self, plan: PlannedIntermediate) -> dict[str, RuntimeValue]:
         """Resolve this row's match values under their declared names."""
         names = list(plan.match_variables)
         if plan.between_value is not None:
@@ -404,7 +409,8 @@ class RowResolver:
         | ConditionResult
     ):
         """Return this row's partition in declared order, and its place in it."""
-        fields = _names(payload.get("group_by"))
+        window = window_spec(payload)
+        fields = _names(window.get("group_by"))
         unavailable = [name for name in fields if name not in self._values]
         if unavailable:
             return ConditionResult(
@@ -415,7 +421,7 @@ class RowResolver:
             (row, _readable(row))
             for row in self._context.partition(fields).get(key, ())
         ]
-        terms = _order_terms(payload.get("order_by"))
+        terms = _order_terms(window.get("order_by"))
         if terms:
             indexed = [
                 IndexedRecord(position=row.output_position, values=values)
@@ -457,7 +463,7 @@ class RowResolver:
         members: Sequence[tuple[CandidateRow, dict[str, object]]],
     ) -> tuple[bool, ...] | ConditionResult:
         """Say which partition rows the window's filter retained (R007-7)."""
-        predicate = self._predicate(payload.get("filter"))
+        predicate = self._predicate(window_spec(payload).get("filter"))
         if isinstance(predicate, ConditionResult):
             return predicate
         if predicate is None:
@@ -475,7 +481,9 @@ class RowResolver:
         dataset = payload.get("dataset")
         if not isinstance(dataset, str) or dataset not in self._context.relations:
             return _invalid("lookup", "an undeclared dataset")
-        return evaluate_lookup(payload, self._context.relations[dataset], self.resolve)
+        return evaluate_intermediate(
+            payload, self._context.relations[dataset], self.resolve
+        )
 
     def _aggregate(self, payload: Mapping[str, object]) -> EvaluationResult:
         expr = payload.get("expr")
@@ -507,7 +515,7 @@ class RowResolver:
             selected = self._driver_group(relation_name, identifiers, predicate)
         else:
             key_fields = _names(payload.get("key"))
-            key_variables = _names(payload.get("key_source"))
+            key_variables = _names(payload.get("key_base"))
             if (
                 not key_fields
                 or not key_variables
@@ -775,7 +783,7 @@ def group_candidates(
                 values={},
                 # R001-12b collects a direct read across the records feeding
                 # one key combination. A grouped candidate has no such read:
-                # its scalars are the grain, and everything else reduces.
+                # its scalars are the keys, and everything else reduces.
                 feeding_rows={},
                 row_id=planned.declaration.id if planned.declaration else None,
                 group_driver=planned.driver,

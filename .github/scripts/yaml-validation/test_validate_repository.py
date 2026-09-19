@@ -796,6 +796,36 @@ class TestStaticSemanticContracts(unittest.TestCase):
             expression, 'spec.columns.X.derivation', self.context()
         )
 
+    def test_window_order_by_required(self):
+        for operation in (
+            'row_number', 'rank', 'row_value', 'previous_non_missing'
+        ):
+            payload = (
+                {'source': 'B', 'offset': 1}
+                if operation == 'row_value'
+                else {}
+            )
+            errors = self.validate({operation: payload})
+            self.assertEqual(len(errors), 1)
+            self.assertEqual(errors[0].condition, 'window_order_by_required')
+            self.assertIn('window.order_by', errors[0].message)
+
+            ordered = self.validate(
+                {operation: {**payload, 'window': {'order_by': ['B']}}}
+            )
+            self.assertEqual(ordered, [])
+
+    def test_window_order_by_forbidden_on_baselines(self):
+        for operation in ('baseline_flag', 'baseline_value'):
+            errors = self.validate(
+                {operation: {'window': {'order_by': ['B']}}}
+            )
+            self.assertEqual(len(errors), 1)
+            self.assertEqual(errors[0].condition, 'window_order_by_forbidden')
+
+            unordered = self.validate({operation: {}})
+            self.assertEqual(unordered, [])
+
     def test_mapping_extreme_window_and_cut_contracts(self):
         collision = self.validate({
             'mapping': {
@@ -806,7 +836,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
         })
         length = self.validate({
             'lookup': {
-                'source': ['KEY1', 'KEY2'],
+                'key_base': ['KEY1', 'KEY2'],
                 'dataset': 'REF',
                 'key': 'K',
                 'value': 'K',
@@ -817,7 +847,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
         })
         offset = self.validate({
             'row_value': {
-                'source': 'B', 'offset': 0, 'order_by': ['B']
+                'source': 'B', 'offset': 0, 'window': {'order_by': ['B']}
             }
         })
         cut = self.validate({
@@ -871,15 +901,15 @@ class TestStaticSemanticContracts(unittest.TestCase):
             invalid_to_date[0].condition, 'incompatible_input_type'
         )
 
-    def test_lookup_range_types(self):
+    def test_intermediate_range_types(self):
         spec = {
-            'lookups': [{
+            'intermediates': [{
                 'id': 'R',
                 'dataset': 'REF',
                 'between': {'value': 'A', 'lower': 'LO', 'upper': 'HI'},
             }]
         }
-        errors = VALIDATOR.validate_lookup_static_semantics(
+        errors = VALIDATOR.validate_intermediate_static_semantics(
             spec,
             'spec.yaml',
             {'REF': {'LO': 'int', 'HI': 'float'}},
@@ -889,16 +919,16 @@ class TestStaticSemanticContracts(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0].condition, 'incomparable_range_types')
 
-    def test_lookup_equality_key_types(self):
+    def test_intermediate_equality_key_types(self):
         spec = {
-            'lookups': [{
+            'intermediates': [{
                 'id': 'R',
                 'dataset': 'REF',
                 'source': 'A',
                 'key': 'K',
             }]
         }
-        errors = VALIDATOR.validate_lookup_static_semantics(
+        errors = VALIDATOR.validate_intermediate_static_semantics(
             spec,
             'spec.yaml',
             {'REF': {'K': 'str'}},
@@ -923,7 +953,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
                     'derivation': {
                         'row_value': {
                             'source': 'A', 'offset': -1,
-                            'order_by': ['A'],
+                            'window': {'order_by': ['A']},
                         }
                     },
                 },
@@ -971,7 +1001,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
                     'derivation': {
                         'row_value': {
                             'source': 'A', 'offset': -1,
-                            'order_by': ['A'],
+                            'window': {'order_by': ['A']},
                         }
                     },
                 },
@@ -1945,7 +1975,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 '  DM: ../input/dm.csv\n'
                 '  UNUSED: ../input/missing.csv\n'
                 'base: DM\n'
-                'lookups:\n'
+                'intermediates:\n'
                 '  - id: unused_lookup\n'
                 '    dataset: UNUSED\n'
                 'columns:\n'
@@ -2011,7 +2041,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             resolved['input'],
             {'DM': {'path': 'input/dm.csv', 'types': {'AGE': 'int'}}},
         )
-        self.assertNotIn('lookups', resolved)
+        self.assertNotIn('intermediates', resolved)
         self.assertEqual(
             [column['name'] for column in resolved['columns']],
             ['RESULT', 'AUDIT', 'LATE', 'DEPENDENT'],
@@ -2033,10 +2063,10 @@ class TestSpecificationInheritance(unittest.TestCase):
                 '  DM: input/dm.csv\n'
                 '  REF: input/ref.csv\n'
                 'base: DM\n'
-                'lookups:\n'
+                'intermediates:\n'
                 '  - id: ref\n'
                 '    dataset: REF\n'
-                '    source: DM.KEY\n'
+                '    key_base: DM.KEY\n'
                 '    key: KEY\n'
                 'columns:\n'
                 '  - name: X\n'
@@ -2057,7 +2087,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'domain: TEST\n'
                 'keys: [X]\n'
                 'output: {path: out.csv, columns: [X]}\n'
-                'lookups:\n'
+                'intermediates:\n'
                 '  - id: ref\n'
                 '    missing: 0\n'
                 'rows:\n'
@@ -2070,11 +2100,11 @@ class TestSpecificationInheritance(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertEqual(
-            resolved['lookups'][0],
+            resolved['intermediates'][0],
             {
                 'id': 'ref',
                 'dataset': 'REF',
-                'source': ['DM.KEY'],
+                'key_base': ['DM.KEY'],
                 'key': ['KEY'],
                 'missing': 0,
             },
@@ -2654,14 +2684,16 @@ class TestPreviousNonMissingSchema(unittest.TestCase):
         errors = self.validate(
             {
                 "source": "AVAL",
-                "group_by": ["STUDYID", "USUBJID", "PARAMCD"],
-                "order_by": [
-                    {
-                        "variable": "ADT",
-                        "direction": "asc",
-                        "nulls": "last",
-                    }
-                ],
+                "window": {
+                    "group_by": ["STUDYID", "USUBJID", "PARAMCD"],
+                    "order_by": [
+                        {
+                            "variable": "ADT",
+                            "direction": "asc",
+                            "nulls": "last",
+                        }
+                    ],
+                },
             }
         )
 
@@ -2669,22 +2701,31 @@ class TestPreviousNonMissingSchema(unittest.TestCase):
 
     def test_allows_one_partition_by_omission(self):
         self.assertEqual(
-            self.validate({"source": "AVAL", "order_by": ["ADT"]}),
+            self.validate(
+                {"source": "AVAL", "window": {"order_by": ["ADT"]}}
+            ),
             [],
         )
 
-    def test_rejects_missing_source_and_unregistered_filter(self):
-        missing_source = self.validate({"order_by": ["ADT"]})
+    def test_rejects_missing_source(self):
+        missing_source = self.validate({"window": {"order_by": ["ADT"]}})
+
+        self.assertIn("missing required field 'source'", missing_source[0])
+
+    def test_accepts_window_filter(self):
+        # The shared window_spec offers filter to every window expression;
+        # the engine already honored it, only the schema withheld it.
         filtered = self.validate(
             {
                 "source": "AVAL",
-                "order_by": ["ADT"],
-                "filter": "PARAMCD = 'WEIGHT'",
+                "window": {
+                    "order_by": ["ADT"],
+                    "filter": "PARAMCD = 'WEIGHT'",
+                },
             }
         )
 
-        self.assertIn("missing required field 'source'", missing_source[0])
-        self.assertIn("unknown field 'filter'", filtered[0])
+        self.assertEqual(filtered, [])
 
 
 class TestGroupedRows(unittest.TestCase):
@@ -2754,7 +2795,7 @@ class TestSpecNames(unittest.TestCase):
             "domain": "ADSL",
             "input": {"DM": "dm.csv", "EX": "ex.csv"},
             "base": "DM",
-            "lookups": [{"id": "dose", "dataset": "EX"}],
+            "intermediates": [{"id": "dose", "dataset": "EX"}],
             "keys": ["USUBJID"],
             "output": {"columns": ["USUBJID"]},
             "columns": [{"name": "USUBJID"}],
@@ -2935,7 +2976,7 @@ class TestSpecNames(unittest.TestCase):
             "domain": "ADSL",
             "input": {"ADSL": "input.csv"},
             "base": "MISSING",
-            "lookups": [
+            "intermediates": [
                 {"id": "ADSL", "dataset": "MISSING"},
                 {"id": "ADSL", "dataset": "ADSL"},
             ],
@@ -2950,7 +2991,7 @@ class TestSpecNames(unittest.TestCase):
         message = "\n".join(errors)
         self.assertIn("must not equal the output domain", message)
         self.assertIn("undeclared dataset 'MISSING'", message)
-        self.assertIn("duplicate lookup id", message)
+        self.assertIn("duplicate intermediate id", message)
         self.assertIn("conflicts with a dataset or domain", message)
         self.assertIn("duplicate row id", message)
 
@@ -3047,7 +3088,7 @@ class TestSpecContracts(unittest.TestCase):
             "domain": "ADSL",
             "input": {"DM": "dm.csv"},
             "base": "DM",
-            "lookups": [
+            "intermediates": [
                 {"id": "FIRST", "dataset": "DM", "order_by": ["DM.DATE"]},
             ],
             "keys": ["USUBJID"],

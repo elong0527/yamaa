@@ -3,7 +3,7 @@ input:
   LB: input/lb.csv
   UNUSED: input/not-used.csv
 base: LB
-lookups:
+intermediates:
   - id: unused_reference
     dataset: UNUSED
     key:

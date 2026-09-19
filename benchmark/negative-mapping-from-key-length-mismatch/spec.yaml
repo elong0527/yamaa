@@ -46,7 +46,7 @@ columns:
     label: Analysis Normal Range Upper Limit
     derivation:
       lookup:
-        key_source: [PARAMCD, SEX]
+        key_base: [PARAMCD, SEX]
         dataset: LBREF
         key: LBTESTCD
         value: ANRHI

@@ -8,7 +8,7 @@ input:
   EPOCHS:
     path: input/epoch.csv
     types: {DYLO: int, DYHI: int}
-lookups:
+intermediates:
   - id: EPOCHDEF
     dataset: EPOCHS
     key: STUDYID

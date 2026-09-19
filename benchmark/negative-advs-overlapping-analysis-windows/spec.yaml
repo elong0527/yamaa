@@ -8,7 +8,7 @@ input:
   AWINDOW:
     path: input/awindow.csv
     types: {AWLO: int, AWHI: int}
-lookups:
+intermediates:
   - id: AWIN
     dataset: AWINDOW
     key: STUDYID

@@ -6,7 +6,7 @@ input:
   AWINDOW:
     path: input/awindow.csv
     types: {AVISITN: int, AWLO: int, AWHI: int, AWTARGET: int}
-lookups:
+intermediates:
   - id: AWIN
     dataset: AWINDOW
     between:
@@ -105,9 +105,10 @@ columns:
     label: Analysis Window Rank
     derivation:
       row_number:
-        group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]
-        order_by: [AWTABS, VSSEQ]
-        filter: "AVISIT IS NOT NULL"
+        window:
+          group_by: [STUDYID, USUBJID, PARAMCD, AVISIT]
+          order_by: [AWTABS, VSSEQ]
+          filter: "AVISIT IS NOT NULL"
 
   - name: ANL01FL
     type: str

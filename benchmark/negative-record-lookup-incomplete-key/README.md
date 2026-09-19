@@ -29,7 +29,7 @@ intended to make every value read from the lookup missing, state that policy
 on the record lookup:
 
 ```yaml
-record_lookups:
+intermediates:
   - id: REFRANGE
     dataset: LBRANGE
     source: [LBTESTCD, SEX]

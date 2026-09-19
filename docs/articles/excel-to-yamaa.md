@@ -460,7 +460,7 @@ Take this one slowly:
   changing the row count.
 - `NULLIF(BASE, 0)` in `PCHG`: a zero baseline yields a change but no percent
   change. Excel specs frequently omit that sentence.
-- `ASEQ` uses `row_number` **after every row exists**, so it is unique by
+- `ASEQ` uses the window expression `row_number` **after every row exists**, so it is unique by
   construction.
 
 ### Example 5: one-to-many summarization with `aggregate`
@@ -685,7 +685,7 @@ columns must come from **one** record, the construct is a named entry in the
 root `lookups` block:
 
 ```yaml
-lookups:
+intermediates:
   - id: DEATHEV
     dataset: AE
     source: [STUDYID, USUBJID]
@@ -721,7 +721,7 @@ input:
   LB: input/lb.csv
   UNUSED: input/not-used.csv
 base: LB
-lookups:
+intermediates:
   - id: unused_reference
     dataset: UNUSED
 columns:
@@ -830,7 +830,7 @@ metadata:                       # for define.xml; not validated
   dataset_label: Example Analysis Dataset
   dataset_structure: One record per subject per parameter
 
-lookups:                       # optional: only when columns must share one record
+intermediates:                       # optional: only when columns must share one record
   - id: FIRSTEX
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]

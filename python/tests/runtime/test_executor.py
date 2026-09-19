@@ -560,7 +560,7 @@ def test_source_provider_diagnostics_enter_the_execution_result() -> None:
     assert result.handler_counts == ()
 
 
-# Committed grain contracts: how many rows a specification emits is the
+# Committed key contracts: how many rows a specification emits is the
 # declared keys' answer (R001-12), so the two ways a key combination can
 # still come out wrong each keep an example pinning the error it raises.
 # test_examples.py compares every negative example's `requirement`; these
@@ -611,7 +611,14 @@ def test_window_key_numbers_partitions_after_scalar_keys() -> None:
                 name="SEQ",
                 type="int",
                 derivation=derive(
-                    {"row_number": {"group_by": ["GRP"], "order_by": ["SRC.X"]}}
+                    {
+                        "row_number": {
+                            "window": {
+                                "group_by": ["GRP"],
+                                "order_by": ["SRC.X"],
+                            }
+                        }
+                    }
                 ),
             ),
         ],

@@ -10,13 +10,13 @@ input:
     types: {VSDTC: date}
   ADSL: input/adsl.csv
 
-lookups:
+intermediates:
   - id: SUBJECT
     dataset: ADSL
 
   - id: COLLECTED
     dataset: VS
-    key_source: [STUDYID, USUBJID, PARAMCD, ADT]
+    key_base: [STUDYID, USUBJID, PARAMCD, ADT]
     key: [STUDYID, USUBJID, VSTESTCD, VSDTC]
 base: PLAN
 
@@ -73,8 +73,9 @@ columns:
     derivation:
       previous_non_missing:
         source: AVALCOL
-        group_by: [STUDYID, USUBJID, PARAMCD]
-        order_by: [ADT, ASEQ]
+        window:
+          group_by: [STUDYID, USUBJID, PARAMCD]
+          order_by: [ADT, ASEQ]
 
   - name: AVAL
     type: float
@@ -102,7 +103,8 @@ columns:
     label: Baseline Height Record Flag
     derivation:
       baseline_flag:
-        group_by: [STUDYID, USUBJID]
+        window:
+          group_by: [STUDYID, USUBJID]
         date: HGTDT
         reference_date: TRTSDT
 
@@ -111,7 +113,8 @@ columns:
     label: Baseline Height
     derivation:
       baseline_value:
-        group_by: [STUDYID, USUBJID]
+        window:
+          group_by: [STUDYID, USUBJID]
         value: AVALCOL
         flag: HGTBLFL
 

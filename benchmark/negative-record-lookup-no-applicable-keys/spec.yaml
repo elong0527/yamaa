@@ -4,10 +4,10 @@ keys: [STUDYID, USUBJID, LBSEQ]
 input:
   LB_RAW: input/lb_raw.csv
   LBRANGE: input/lbrange.csv
-lookups:
+intermediates:
   - id: REFRANGE
     dataset: LBRANGE
-    key_source: [LBTESTCD, SEX]
+    key_base: [LBTESTCD, SEX]
 
 base: LB_RAW
 

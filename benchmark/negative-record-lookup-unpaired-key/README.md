@@ -28,7 +28,7 @@ before any data is read; no artifact is accepted.
 Give each current-row value exactly one lookup-table column:
 
 ```yaml
-lookups:
+intermediates:
   - id: REFRANGE
     dataset: LBRANGE
     source: [LBTESTCD, SEX]

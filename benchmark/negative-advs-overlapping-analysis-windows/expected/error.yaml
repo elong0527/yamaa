@@ -1,14 +1,14 @@
 phase: join
 condition: multiple_matches
 spec_paths:
-  - lookups[0]
+  - intermediates[0]
 requirement: R003-17
 context:
-  lookup: AWIN
+  intermediate: AWIN
   dataset: AWINDOW
   key:
     - STUDYID
-  lookup_key:
+  intermediate_key:
     STUDYID: CATH
   match_count: 2
   keys:

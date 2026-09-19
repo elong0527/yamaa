@@ -108,7 +108,8 @@ columns:
     label: Text Scalar Order Sequence
     derivation:
       row_number:
-        order_by: [RAWTXT, USUBJID]
+        window:
+          order_by: [RAWTXT, USUBJID]
 
   - name: MINTXT
     type: str

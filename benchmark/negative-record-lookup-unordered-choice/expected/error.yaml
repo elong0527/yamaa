@@ -1,15 +1,15 @@
 phase: join
 condition: multiple_matches
 spec_paths:
-  - lookups[0]
+  - intermediates[0]
 requirement: R003-17
 context:
-  lookup: DOSING
+  intermediate: DOSING
   dataset: EX
   key:
     - STUDYID
     - USUBJID
-  lookup_key:
+  intermediate_key:
     STUDYID: PILOT7
     USUBJID: P7-321
   match_count: 2

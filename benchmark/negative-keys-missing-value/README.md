@@ -36,7 +36,7 @@ but the run still fails and no artifact is accepted.
 
 ## How to fix
 
-Decide which grain the dataset is on. If it is one record per analysis visit,
+Decide which keys the dataset is on. If it is one record per analysis visit,
 every record must fall in a window. Recover the analysis date in the governed
 source where it is available. Where it is not, keep the record out of the
 dataset rather than give it a place it does not have. A row template selects

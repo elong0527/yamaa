@@ -1,10 +1,10 @@
 phase: validation
 condition: incomparable_range_types
 spec_paths:
-  - lookups[0].between
+  - intermediates[0].between
 requirement: R003-11
 context:
-  lookup: EPOCHDEF
+  intermediate: EPOCHDEF
   value_type: date
   lower_type: int
   upper_type: int

@@ -102,8 +102,9 @@ columns:
     label: Pooled Age Group 1 Rank
     derivation:
       row_number:
-        group_by: [STUDYID]
-        order_by: [AGE, USUBJID]
+        window:
+          group_by: [STUDYID]
+          order_by: [AGE, USUBJID]
 
 verifications:
   - unique:

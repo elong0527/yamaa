@@ -46,5 +46,6 @@ columns:
       row_value:
         source: AVAL
         offset: 0
-        group_by: [STUDYID, USUBJID]
-        order_by: [ADT, VSSEQ]
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [ADT, VSSEQ]

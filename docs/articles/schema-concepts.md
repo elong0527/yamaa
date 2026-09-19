@@ -78,7 +78,7 @@ a specification:
 | `output_class` | `output:` | [`adam-adsl-bmi-compute/spec.yaml:8`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adsl-bmi-compute/spec.yaml#L8) |
 | `dataset_class` | each value under `input:` | [`adam-adex-cumulative-dose/spec.yaml:5`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adex-cumulative-dose/spec.yaml#L5) |
 | `row_class` | each item of `rows:` | [`adam-adlb-bds/spec.yaml:100`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adlb-bds/spec.yaml#L100) |
-| `lookup_class` | each item of `lookups:` | [`adam-adae-death-outcome/spec.yaml:7`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adae-death-outcome/spec.yaml#L7) |
+| `intermediate_class` | each item of `intermediates:` | [`adam-adae-death-outcome/spec.yaml:7`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adae-death-outcome/spec.yaml#L7) |
 | `lookup_between_class` | `lookup.between:` | [`adam-advs-analysis-window-table/spec.yaml:16`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-advs-analysis-window-table/spec.yaml#L16) |
 | `handled_expression_class` | a `derivation:` that handles failure | [`adam-adsl-mapping/spec.yaml:98`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adsl-mapping/spec.yaml#L98) |
 | `source_binding_class` | a `source:` that states how it reads | [`sdtm-dm-basic/spec.yaml:55`](https://github.com/elong0527/yamaa/blob/main/benchmark/sdtm-dm-basic/spec.yaml#L55) |
@@ -390,12 +390,12 @@ standard way to derive an imputation flag. See
 
 | Expression | What it does | Variable |
 |---|---|---|
-| `row_number` | Number rows from 1 within a partition | ASEQ, AESEQ |
+| `row_number` | Number rows from 1 within a window partition | ASEQ, AESEQ |
 | `rank` | The same, but ties share a number (`competition` or `dense`) | Severity ordering |
-| `row_value` | Read the value from a row at a given offset in the partition | The previous visit's value |
+| `row_value` | Read the value from a row at a given offset in the window partition | The previous visit's value |
 | `previous_non_missing` | Read the closest strictly earlier non-missing value | Carry a collected result through later planned gaps |
 | `baseline_flag` | Flag `Y` on the **unique** latest eligible row at or before a reference date | ABLFL |
-| `baseline_value` | Broadcast the flagged row's value to the whole partition | BASE |
+| `baseline_value` | Broadcast the flagged row's value to the whole window partition | BASE |
 
 A tie for the latest baseline date is an **error** in `baseline_flag`; it does
 not pick one.
@@ -403,7 +403,7 @@ not pick one.
 `previous_non_missing` is ordered propagation within constructed output rows.
 It differs from `row_value`, which reads one fixed offset and does not skip
 gaps, and from `baseline_value`, which broadcasts one flagged record to the
-whole partition. It neither reduces a group like `aggregate` nor reads another
+whole window partition. It neither reduces a group like `aggregate` nor reads another
 dataset like a record lookup. The current row is not a candidate; take the first
 available of its source and the earlier result when the artifact should retain
 a collected current value.
@@ -439,10 +439,10 @@ R013 closes the reducer table to seven: `SUM`, `COUNT`, `MIN`, `MAX`, `MEAN`,
   than one fails rather than choosing. It is the executable form of the Excel
   sentence "should be unique per subject".
 - **Reductions do not nest.** `MAX(SUM(EX.EXDOSE))` is an error. Two levels of
-  summarization means two specifications, with the intermediate grain stored as
-  a real artifact.
+  summarization means two specifications, with the intermediate aggregation
+  stored as a real artifact.
 
-There is also a grain rule: **every identifier must sit inside a reduction
+There is also a key rule: **every identifier must sit inside a reduction
 unless it is a `group_by` column.** `SUM(a) + b` is an error unless `b` is
 grouped on, because a value that varies within the group has no single answer.
 

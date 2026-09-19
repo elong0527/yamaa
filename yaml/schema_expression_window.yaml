@@ -1,19 +1,27 @@
 version: "1.0"
 
+# R007 defines the partitioning, ordering, and filtering one window_spec
+# declares; each window expression below nests it as `window:` and adds only
+# its own specific fields.
+
+window_spec:
+    - group_by:
+        type: "list[variable]"
+        description: Variables defining partitions; omission uses one partition.
+    - order_by:
+        type: "list[order_by_term]"
+        description: Terms ordering rows within each partition.
+    - filter:
+        type: sql
+        description: Predicate selecting rows before partitioning; excluded rows receive missing.
+
 expressions:
     row_number: # Numbers eligible rows from 1 within each partition.
         # Filtering happens before partitioning; excluded rows receive missing.
         # Ordering ties preserve row-template order, then base-record order.
-        - group_by:
-            type: "list[variable]"
-            description: Variables defining partitions; omission uses one partition.
-        - order_by:
-            type: "list[order_by_term]"
-            required: true
-            description: Terms ordering eligible rows within each partition.
-        - filter:
-            type: sql
-            description: Predicate selecting rows to number.
+        - window:
+            type: window_spec
+            description: Partition, ordering, and row selection for the window.
     rank: # Numbers eligible rows from 1 within each partition, sharing a number across ties.
         # Rows equal on every order term take one number. With competition, they
         # take the lowest position they occupy and the next distinct value takes
@@ -27,16 +35,9 @@ expressions:
             default: competition
             values: [competition, dense]
             description: Tie numbering; competition leaves position gaps and dense does not.
-        - group_by:
-            type: "list[variable]"
-            description: Variables defining partitions; omission uses one partition.
-        - order_by:
-            type: "list[order_by_term]"
-            required: true
-            description: Terms ordering eligible rows within each partition.
-        - filter:
-            type: sql
-            description: Predicate selecting rows to number.
+        - window:
+            type: window_spec
+            description: Partition, ordering, and row selection for the window.
     row_value: # Returns the source value from another row of the ordered partition.
         # offset counts along the declared order: positive moves toward later
         # rows and negative toward earlier ones, so reversing every order_by
@@ -52,13 +53,9 @@ expressions:
             type: int
             required: true
             description: Rows to move along the declared order; nonzero.
-        - group_by:
-            type: "list[variable]"
-            description: Variables defining partitions; omission uses one partition.
-        - order_by:
-            type: "list[order_by_term]"
-            required: true
-            description: Terms ordering rows within each partition.
+        - window:
+            type: window_spec
+            description: Partition, ordering, and row selection for the window.
     previous_non_missing: # Returns the source from the closest strictly earlier non-missing row.
         # The current row is never a candidate. Missing source values are
         # skipped, so one result can cross any number of consecutive gaps. A
@@ -68,19 +65,12 @@ expressions:
             type: variable
             required: true
             description: Variable searched for the closest earlier non-missing value.
-        - group_by:
-            type: "list[variable]"
-            description: Variables defining partitions; omission uses one partition.
-        - order_by:
-            type: "list[order_by_term]"
-            required: true
-            description: Terms ordering rows within each partition.
+        - window:
+            type: window_spec
+            description: Partition and ordering for the window.
     baseline_flag: # Returns Y for the unique latest eligible row, missing elsewhere.
         # An eligible row has a non-missing date at or before reference_date.
         # A tie for the latest eligible date is an error.
-        - group_by:
-            type: "list[variable]"
-            description: Variables defining baseline-selection partitions.
         - date:
             type: variable
             required: true
@@ -89,11 +79,11 @@ expressions:
             type: variable
             required: true
             description: Inclusive upper bound for the baseline date.
+        - window:
+            type: window_spec
+            description: Baseline-selection partitions for the window.
     baseline_value: # Broadcasts the value from the row whose flag is Y.
         # No flagged row returns missing; more than one is an error.
-        - group_by:
-            type: "list[variable]"
-            description: Variables defining broadcast partitions.
         - value:
             type: variable
             required: true
@@ -102,3 +92,6 @@ expressions:
             type: variable
             required: true
             description: Variable identifying the source row with Y.
+        - window:
+            type: window_spec
+            description: Broadcast partitions for the window.

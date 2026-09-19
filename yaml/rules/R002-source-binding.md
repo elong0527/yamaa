@@ -46,7 +46,7 @@ Declare that source under its own name.
 
 **R002-7.** No keyed construct reaches a sibling record of the output
 dataset. R001 owns what happens when a column reaches its own value
-through the partition rows of that column. Addressing a sibling record by
+through the window partition rows of that column. Addressing a sibling record by
 key is open work.
 
 ## Source expressions

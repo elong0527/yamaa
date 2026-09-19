@@ -16,7 +16,7 @@ from yamaa.specification.models import (
     DatasetSource,
     Expression,
     HandledExpression,
-    Lookup,
+    Intermediate,
     Output,
     Row,
     Specification,
@@ -263,9 +263,9 @@ def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
         ]
     ).model_copy(
         update={
-            "lookups": [
-                Lookup(
-                    id="LOOK", dataset="SRC", key_source=["A"], key=["X"], strict=True
+            "intermediates": [
+                Intermediate(
+                    id="LOOK", dataset="SRC", key_base=["A"], key=["X"], strict=True
                 )
             ]
         }
@@ -273,23 +273,25 @@ def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
 
     plan = plan_execution(spec, {"SRC": source_table()})
 
-    assert plan.lookups[0].match_variables == ("A",)
-    assert plan.lookups[0].match_fields == ("X",)
+    assert plan.intermediates[0].match_variables == ("A",)
+    assert plan.intermediates[0].match_fields == ("X",)
     # A declared source and key with strict: true makes an unmatched key fatal.
-    assert plan.lookups[0].strict is True
+    assert plan.intermediates[0].strict is True
     assert dict.fromkeys(plan.columns[1].dependencies) == {"A": None}
 
 
 def test_a_lookup_defaults_to_missing_on_absence() -> None:
     spec = specification(
         [Column(name="X", type="str", derivation=derivation({"source": "SRC.X"}))]
-    ).model_copy(update={"lookups": [Lookup(id="LOOK", dataset="SRC", key=["X"])]})
+    ).model_copy(
+        update={"intermediates": [Intermediate(id="LOOK", dataset="SRC", key=["X"])]}
+    )
 
     plan = plan_execution(spec, {"SRC": source_table()})
 
     # Absence defaults to missing: strict is false and no missing literal.
-    assert plan.lookups[0].strict is False
-    assert plan.lookups[0].missing is None
+    assert plan.intermediates[0].strict is False
+    assert plan.intermediates[0].missing is None
 
 
 def test_an_unimplemented_expression_is_not_a_semantic_failure() -> None:
@@ -354,7 +356,7 @@ def test_a_named_lookup_with_an_omitted_key_infers_the_applicable_keys() -> None
             Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
             Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
         ]
-    ).model_copy(update={"lookups": [Lookup(id="LOOK", dataset="RIGHT")]})
+    ).model_copy(update={"intermediates": [Intermediate(id="LOOK", dataset="RIGHT")]})
 
     plan = plan_execution(
         spec,
@@ -364,8 +366,8 @@ def test_a_named_lookup_with_an_omitted_key_infers_the_applicable_keys() -> None
 
     # R003-43: the omitted key is the applicable output keys; R003-44: the
     # omitted source defaults to the key names.
-    assert plan.lookups[0].match_variables == ("X",)
-    assert plan.lookups[0].match_fields == ("X",)
+    assert plan.intermediates[0].match_variables == ("X",)
+    assert plan.intermediates[0].match_fields == ("X",)
 
 
 def test_a_named_lookup_with_an_omitted_source_defaults_to_the_key_names() -> None:
@@ -374,7 +376,9 @@ def test_a_named_lookup_with_an_omitted_source_defaults_to_the_key_names() -> No
             Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
             Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
         ]
-    ).model_copy(update={"lookups": [Lookup(id="LOOK", dataset="RIGHT", key=["X"])]})
+    ).model_copy(
+        update={"intermediates": [Intermediate(id="LOOK", dataset="RIGHT", key=["X"])]}
+    )
 
     plan = plan_execution(
         spec,
@@ -383,8 +387,8 @@ def test_a_named_lookup_with_an_omitted_source_defaults_to_the_key_names() -> No
     )
 
     # R003-44: the omitted source defaults to the declared key names.
-    assert plan.lookups[0].match_variables == ("X",)
-    assert plan.lookups[0].match_fields == ("X",)
+    assert plan.intermediates[0].match_variables == ("X",)
+    assert plan.intermediates[0].match_fields == ("X",)
 
 
 def test_a_named_lookup_with_an_omitted_key_and_no_applicable_key_fails() -> None:
@@ -394,7 +398,7 @@ def test_a_named_lookup_with_an_omitted_key_and_no_applicable_key_fails() -> Non
             Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
             Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
         ]
-    ).model_copy(update={"lookups": [Lookup(id="LOOK", dataset="RIGHT")]})
+    ).model_copy(update={"intermediates": [Intermediate(id="LOOK", dataset="RIGHT")]})
 
     with pytest.raises(ExecutionPlanningError) as raised:
         plan_execution(
@@ -409,7 +413,7 @@ def test_a_named_lookup_with_an_omitted_key_and_no_applicable_key_fails() -> Non
         d for d in raised.value.diagnostics if d.condition == "no_applicable_keys"
     ]
     assert diagnostic.requirement == "R003-43"
-    assert diagnostic.spec_paths == ("lookups[0]",)
+    assert diagnostic.spec_paths == ("intermediates[0]",)
 
 
 def test_a_named_lookup_with_mismatched_source_and_key_lengths_fails() -> None:
@@ -420,8 +424,8 @@ def test_a_named_lookup_with_mismatched_source_and_key_lengths_fails() -> None:
         ]
     ).model_copy(
         update={
-            "lookups": [
-                Lookup(id="LOOK", dataset="RIGHT", key_source=["X", "X"], key=["X"])
+            "intermediates": [
+                Intermediate(id="LOOK", dataset="RIGHT", key_base=["X", "X"], key=["X"])
             ]
         }
     )
@@ -440,7 +444,7 @@ def test_a_named_lookup_with_mismatched_source_and_key_lengths_fails() -> None:
         if d.condition == "source_key_length_mismatch"
     ]
     assert diagnostic.requirement == "R003-5"
-    assert diagnostic.spec_paths == ("lookups[0]",)
+    assert diagnostic.spec_paths == ("intermediates[0]",)
 
 
 def test_an_inline_lookup_with_an_omitted_key_infers_the_applicable_keys() -> None:
@@ -578,7 +582,7 @@ def test_a_lookup_key_typed_differently_on_each_side_is_reported() -> None:
                     {
                         "lookup": {
                             "dataset": "RIGHT",
-                            "key_source": ["X"],
+                            "key_base": ["X"],
                             "key": ["V"],
                             "value": "V",
                         }
@@ -603,7 +607,7 @@ def test_a_declared_key_pair_must_carry_one_comparable_type() -> None:
                     {
                         "lookup": {
                             "dataset": "RIGHT",
-                            "key_source": ["X"],
+                            "key_base": ["X"],
                             "key": ["V"],
                             "value": "V",
                         }
@@ -743,7 +747,7 @@ def test_a_lookup_may_be_read_from_a_numeric_expression() -> None:
         ),
     ]
     spec = two_dataset_specification(columns).model_copy(
-        update={"lookups": [Lookup(id="LOOK", dataset="RIGHT", key=["X"])]}
+        update={"intermediates": [Intermediate(id="LOOK", dataset="RIGHT", key=["X"])]}
     )
 
     plan = plan_execution(
@@ -881,7 +885,9 @@ def test_a_lookup_source_has_already_chosen_its_record() -> None:
         ]
     ).model_copy(
         update={
-            "lookups": [Lookup(id="REF", dataset="SRC", key_source=["K"], key=["X"])]
+            "intermediates": [
+                Intermediate(id="REF", dataset="SRC", key_base=["K"], key=["X"])
+            ]
         }
     )
 

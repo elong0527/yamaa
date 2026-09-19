@@ -4,7 +4,7 @@ keys: [STUDYID, USUBJID, PARAMCD]
 input:
   ADSL: input/adsl.csv
   TU: input/tu.csv
-lookups:
+intermediates:
   - id: TU_TARGET
     dataset: TU
     filter: >-

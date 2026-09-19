@@ -4,12 +4,12 @@ spec_paths:
   - columns.ANRHI.derivation.lookup
 requirement: R003-14
 context:
-  lookup: lookup(LBREF)
+  intermediate: intermediate(LBREF)
   dataset: LBREF
   key:
     - LBTESTCD
     - SEX
-  lookup_key:
+  intermediate_key:
     LBTESTCD: AST
     SEX: M
   keys:

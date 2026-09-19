@@ -51,7 +51,7 @@ _DRIVE_ROOT = re.compile(r"^[A-Za-z]:[\\/]")
 
 _KEYED_COLLECTIONS: dict[str, tuple[Literal["mapping", "list"], str | None, str]] = {
     "input": ("mapping", None, "dataset_class"),
-    "lookups": ("list", "id", "lookup_class"),
+    "intermediates": ("list", "id", "intermediate_class"),
     "columns": ("list", "name", "column_class"),
     "rows": ("list", "id", "row_class"),
 }
@@ -741,7 +741,7 @@ _IDENTIFIER_DATASET_FIELDS = frozenset(
     {
         ("root_class", "base"),
         ("row_class", "dataset"),
-        ("lookup_class", "dataset"),
+        ("intermediate_class", "dataset"),
         ("lookup", "dataset"),
     }
 )
@@ -863,10 +863,10 @@ def _member_references(
 def _mark_reference(
     reference: tuple[str, str],
     datasets: Mapping[str, object],
-    lookups: Mapping[str, object],
+    intermediates: Mapping[str, object],
     live_columns: set[str],
     live_datasets: set[str],
-    live_lookups: set[str],
+    live_intermediates: set[str],
 ) -> bool:
     kind, name = reference
     target = live_datasets if kind == "dataset" else live_columns
@@ -879,10 +879,10 @@ def _mark_reference(
         before = len(live_datasets)
         live_datasets.add(qualifier)
         return len(live_datasets) != before
-    if qualifier in lookups:
-        before = len(live_lookups)
-        live_lookups.add(qualifier)
-        return len(live_lookups) != before
+    if qualifier in intermediates:
+        before = len(live_intermediates)
+        live_intermediates.add(qualifier)
+        return len(live_intermediates) != before
     return False
 
 
@@ -898,16 +898,20 @@ def _prune(document: dict[str, object], bundle: SchemaBundle) -> dict[str, objec
     result = copy.deepcopy(document)
     datasets = result.get("input") if isinstance(result.get("input"), dict) else {}
     columns = result.get("columns") if isinstance(result.get("columns"), list) else []
-    lookups = result.get("lookups") if isinstance(result.get("lookups"), list) else []
+    intermediates = (
+        result.get("intermediates")
+        if isinstance(result.get("intermediates"), list)
+        else []
+    )
     rows = result.get("rows") if isinstance(result.get("rows"), list) else []
     column_map = {
         item.get("name"): item
         for item in columns
         if isinstance(item, dict) and isinstance(item.get("name"), str)
     }
-    lookup_map = {
+    intermediate_map = {
         item.get("id"): item
-        for item in lookups
+        for item in intermediates
         if isinstance(item, dict) and isinstance(item.get("id"), str)
     }
 
@@ -933,7 +937,7 @@ def _prune(document: dict[str, object], bundle: SchemaBundle) -> dict[str, objec
     live_datasets: set[str] = set()
     if isinstance(result.get("base"), str):
         live_datasets.add(result["base"])
-    live_lookups: set[str] = set()
+    live_intermediates: set[str] = set()
     root_fields = class_fields(bundle, "root_class")
     initial: set[tuple[str, str]] = set()
     if "verifications" in result:
@@ -954,11 +958,16 @@ def _prune(document: dict[str, object], bundle: SchemaBundle) -> dict[str, objec
                 initial.update(_references(row[name], row_fields[name]["type"], bundle))
     for reference in initial:
         _mark_reference(
-            reference, datasets, lookup_map, live_columns, live_datasets, live_lookups
+            reference,
+            datasets,
+            intermediate_map,
+            live_columns,
+            live_datasets,
+            live_intermediates,
         )
 
     processed_columns: set[str] = set()
-    processed_lookups: set[str] = set()
+    processed_intermediates: set[str] = set()
     processed_rows: set[tuple[int, str]] = set()
     while True:
         changed = False
@@ -973,10 +982,10 @@ def _prune(document: dict[str, object], bundle: SchemaBundle) -> dict[str, objec
                 changed |= _mark_reference(
                     reference,
                     datasets,
-                    lookup_map,
+                    intermediate_map,
                     live_columns,
                     live_datasets,
-                    live_lookups,
+                    live_intermediates,
                 )
         for row_index, row in enumerate(rows):
             derivations = row.get("derivations") if isinstance(row, dict) else None
@@ -991,32 +1000,32 @@ def _prune(document: dict[str, object], bundle: SchemaBundle) -> dict[str, objec
                     changed |= _mark_reference(
                         reference,
                         datasets,
-                        lookup_map,
+                        intermediate_map,
                         live_columns,
                         live_datasets,
-                        live_lookups,
+                        live_intermediates,
                     )
-        lookup_fields = class_fields(bundle, "lookup_class")
-        for lookup_id in tuple(live_lookups - processed_lookups):
-            processed_lookups.add(lookup_id)
-            lookup = lookup_map.get(lookup_id)
-            if not isinstance(lookup, dict):
+        intermediate_fields = class_fields(bundle, "intermediate_class")
+        for intermediate_id in tuple(live_intermediates - processed_intermediates):
+            processed_intermediates.add(intermediate_id)
+            intermediate = intermediate_map.get(intermediate_id)
+            if not isinstance(intermediate, dict):
                 continue
-            if isinstance(lookup.get("dataset"), str):
-                live_datasets.add(lookup["dataset"])
-            for name, value in lookup.items():
-                if name in {"id", "dataset"} or name not in lookup_fields:
+            if isinstance(intermediate.get("dataset"), str):
+                live_datasets.add(intermediate["dataset"])
+            for name, value in intermediate.items():
+                if name in {"id", "dataset"} or name not in intermediate_fields:
                     continue
                 for reference in _references(
-                    value, lookup_fields[name]["type"], bundle
+                    value, intermediate_fields[name]["type"], bundle
                 ):
                     changed |= _mark_reference(
                         reference,
                         datasets,
-                        lookup_map,
+                        intermediate_map,
                         live_columns,
                         live_datasets,
-                        live_lookups,
+                        live_intermediates,
                     )
         if not changed:
             break
@@ -1033,14 +1042,14 @@ def _prune(document: dict[str, object], bundle: SchemaBundle) -> dict[str, objec
             for name, value in result["input"].items()
             if name in live_datasets
         }
-    if isinstance(result.get("lookups"), list):
-        result["lookups"] = [
+    if isinstance(result.get("intermediates"), list):
+        result["intermediates"] = [
             item
-            for item in result["lookups"]
-            if isinstance(item, dict) and item.get("id") in live_lookups
+            for item in result["intermediates"]
+            if isinstance(item, dict) and item.get("id") in live_intermediates
         ]
-        if not result["lookups"]:
-            del result["lookups"]
+        if not result["intermediates"]:
+            del result["intermediates"]
     if isinstance(result.get("rows"), list):
         for row in result["rows"]:
             derivations = row.get("derivations") if isinstance(row, dict) else None
@@ -1056,7 +1065,7 @@ def _prune(document: dict[str, object], bundle: SchemaBundle) -> dict[str, objec
 def _column_dependencies(
     column: dict[str, object],
     rows: Sequence[object],
-    lookups: Mapping[str, object],
+    intermediates: Mapping[str, object],
     bundle: SchemaBundle,
 ) -> set[str]:
     references: set[tuple[str, str]] = set()
@@ -1074,15 +1083,15 @@ def _column_dependencies(
         if "." not in reference:
             dependencies.add(reference)
             continue
-        lookup = lookups.get(reference.split(".", 1)[0])
-        for lookup_kind, lookup_reference in _member_references(
-            lookup,
-            "lookup_class",
+        intermediate = intermediates.get(reference.split(".", 1)[0])
+        for intermediate_kind, intermediate_reference in _member_references(
+            intermediate,
+            "intermediate_class",
             ("source", "between", "filter", "order_by"),
             bundle,
         ):
-            if lookup_kind == "variable" and "." not in lookup_reference:
-                dependencies.add(lookup_reference)
+            if intermediate_kind == "variable" and "." not in intermediate_reference:
+                dependencies.add(intermediate_reference)
     return dependencies
 
 
@@ -1098,16 +1107,18 @@ def _order_columns(
     typed_names = [name for name in names if isinstance(name, str)]
     positions = {name: index for index, name in enumerate(typed_names)}
     rows = document.get("rows") if isinstance(document.get("rows"), list) else []
-    lookup_items = (
-        document.get("lookups") if isinstance(document.get("lookups"), list) else []
+    intermediate_items = (
+        document.get("intermediates")
+        if isinstance(document.get("intermediates"), list)
+        else []
     )
-    lookups = {
+    intermediates = {
         item.get("id"): item
-        for item in lookup_items
+        for item in intermediate_items
         if isinstance(item, dict) and isinstance(item.get("id"), str)
     }
     dependencies = {
-        item["name"]: _column_dependencies(item, rows, lookups, bundle)
+        item["name"]: _column_dependencies(item, rows, intermediates, bundle)
         for item in columns
         if isinstance(item, dict) and isinstance(item.get("name"), str)
     }
@@ -1165,7 +1176,7 @@ def _schema_order(
     root = class_fields(bundle, "root_class")
     classes = {
         "input": "dataset_class",
-        "lookups": "lookup_class",
+        "intermediates": "intermediate_class",
         "columns": "column_class",
         "rows": "row_class",
     }

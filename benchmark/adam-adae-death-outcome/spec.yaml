@@ -4,7 +4,7 @@ keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE: input/ae.csv
   DM: input/dm.csv
-lookups:
+intermediates:
   - id: DEATHEV
     dataset: AE
     key: [STUDYID, USUBJID]

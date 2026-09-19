@@ -99,7 +99,8 @@ columns:
     label: Baseline Value
     derivation:
       baseline_value:
-        group_by: [STUDYID, USUBJID, PARAMCD]
+        window:
+          group_by: [STUDYID, USUBJID, PARAMCD]
         value: AVAL
         flag: ABLFL
 
@@ -108,7 +109,8 @@ columns:
     label: Baseline Reference Range Indicator
     derivation:
       baseline_value:
-        group_by: [STUDYID, USUBJID, PARAMCD]
+        window:
+          group_by: [STUDYID, USUBJID, PARAMCD]
         value: ANRIND
         flag: ABLFL
     verifications:

@@ -1,14 +1,14 @@
 phase: join
 condition: multiple_matches
 spec_paths:
-  - lookups[0]
+  - intermediates[0]
 requirement: R003-17
 context:
-  lookup: SMQ1
+  intermediate: SMQ1
   dataset: QUERY
   key:
     - TERM
-  lookup_key:
+  intermediate_key:
     TERM: STEVENS-JOHNSON SYNDROME
   match_count: 2
   keys:

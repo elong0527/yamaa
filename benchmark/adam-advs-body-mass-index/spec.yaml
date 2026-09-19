@@ -3,7 +3,7 @@ domain: ADVS
 keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
 input:
   ADVSIN: {path: input/advs.csv, types: {AVAL: float}}
-lookups:
+intermediates:
   - id: BASE_HEIGHT
     dataset: ADVSIN
     filter: "ADVSIN.PARAMCD = 'HEIGHT'"

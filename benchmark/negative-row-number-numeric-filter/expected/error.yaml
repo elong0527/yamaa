@@ -1,7 +1,7 @@
 phase: validation
 condition: invalid_field_type
 spec_paths:
-  - columns.VISITSEQ.derivation.row_number.filter
+  - columns.VISITSEQ.derivation.row_number.window.filter
 requirement: R006-46
 context:
   expected: str

@@ -1,15 +1,15 @@
 phase: validation
 condition: source_key_length_mismatch
 spec_paths:
-  - lookups[0]
+  - intermediates[0]
 requirement: R003-5
 context:
-  key_source:
+  key_base:
     - LBTESTCD
     - SEX
   key:
     - LBTESTCD
     - SEX
     - UNIT
-  key_source_count: 2
+  key_base_count: 2
   key_count: 3

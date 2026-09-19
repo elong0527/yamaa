@@ -303,9 +303,11 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R007', 'invalid_cut'): {'reason'},
     ('R007', 'incomparable_sources'): {'sources', 'types'},
     ('R007', 'source_key_length_mismatch'): {
-        'key', 'key_count', 'key_source', 'key_source_count',
+        'key', 'key_count', 'key_base', 'key_base_count',
     },
     ('R007', 'zero_offset'): {'offset'},
+    ('R007', 'window_order_by_required'): {'operation'},
+    ('R007', 'window_order_by_forbidden'): {'operation'},
     ('R009', 'missing_verification_id'): set(),
     ('R010', 'incompatible_input_type'): {
         'actual', 'expected', 'expr', 'source',
@@ -333,17 +335,17 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R014', 'unknown_field'): {'dataset', 'field'},
     ('R003', 'duplicate_identifier'): {'identifier'},
     ('R003', 'incomparable_range_types'): {
-        'lower_type', 'lookup', 'upper_type', 'value_type',
+        'lower_type', 'intermediate', 'upper_type', 'value_type',
     },
     ('R003', 'no_applicable_keys'): {'dataset', 'hint', 'keys'},
-    ('R003', 'redundant_key_source'): {
-        'key', 'key_source',
+    ('R003', 'redundant_key_base'): {
+        'key', 'key_base',
     },
     ('R003', 'source_key_length_mismatch'): {
-        'key', 'key_count', 'key_source', 'key_source_count',
+        'key', 'key_count', 'key_base', 'key_base_count',
     },
     ('R003', 'unpaired_fields'): {
-        'declared', 'lookup', 'missing',
+        'declared', 'intermediate', 'missing',
     },
     ('R006', 'missing_required_field'): {'class', 'field'},
     ('R016', 'month_out_of_range'): {'month'},
@@ -1983,7 +1985,7 @@ def _check_single_type(data, t, env, path, fragment=False):
 
 INHERITANCE_KEYED_COLLECTIONS = {
     'input': ('mapping', None, 'dataset_class'),
-    'lookups': ('list', 'id', 'lookup_class'),
+    'intermediates': ('list', 'id', 'intermediate_class'),
     'columns': ('list', 'name', 'column_class'),
     'rows': ('list', 'id', 'row_class'),
 }
@@ -2943,7 +2945,7 @@ _IDENTIFIER_DATASET_FIELDS = frozenset(
     {
         ('root_class', 'base'),
         ('row_class', 'dataset'),
-        ('lookup_class', 'dataset'),
+        ('intermediate_class', 'dataset'),
         ('lookup', 'dataset'),
     }
 )
@@ -3087,7 +3089,7 @@ def collect_member_field_references(member, class_name, fields, env):
 
 
 def _apply_reference(
-    reference, datasets, lookups, live_columns, live_datasets, live_lookups
+    reference, datasets, intermediates, live_columns, live_datasets, live_intermediates
 ):
     kind, name = reference
     changed = False
@@ -3105,8 +3107,8 @@ def _apply_reference(
     if qualifier in datasets and qualifier not in live_datasets:
         live_datasets.add(qualifier)
         changed = True
-    elif qualifier in lookups and qualifier not in live_lookups:
-        live_lookups.add(qualifier)
+    elif qualifier in intermediates and qualifier not in live_intermediates:
+        live_intermediates.add(qualifier)
         changed = True
     return changed
 
@@ -3302,12 +3304,12 @@ def prune_inheritance_collections(spec, env):
         for column in column_entries
         if isinstance(column, dict) and isinstance(column.get('name'), str)
     }
-    lookups = pruned.get('lookups')
-    lookup_entries = lookups if isinstance(lookups, list) else []
+    intermediates = pruned.get('intermediates')
+    intermediate_entries = intermediates if isinstance(intermediates, list) else []
     lookup_map = {
-        lookup.get('id'): lookup
-        for lookup in lookup_entries
-        if isinstance(lookup, dict) and isinstance(lookup.get('id'), str)
+        intermediate.get('id'): intermediate
+        for intermediate in intermediate_entries
+        if isinstance(intermediate, dict) and isinstance(intermediate.get('id'), str)
     }
     rows = pruned.get('rows')
     row_entries = rows if isinstance(rows, list) else []
@@ -3341,7 +3343,7 @@ def prune_inheritance_collections(spec, env):
         sole = [name for name in pruned_datasets if isinstance(name, str)]
         if len(sole) == 1:
             live_datasets.add(sole[0])
-    live_lookups = set()
+    live_intermediates = set()
 
     references = set()
     root_fields = schema_class_fields(env, 'root_class')
@@ -3373,11 +3375,11 @@ def prune_inheritance_collections(spec, env):
     for reference in references:
         _apply_reference(
             reference, datasets, lookup_map, live_columns, live_datasets,
-            live_lookups,
+            live_intermediates,
         )
 
     processed_columns = set()
-    processed_lookups = set()
+    processed_intermediates = set()
     processed_row_targets = set()
     while True:
         changed = False
@@ -3392,7 +3394,7 @@ def prune_inheritance_collections(spec, env):
             for reference in refs:
                 changed |= _apply_reference(
                     reference, datasets, lookup_map, live_columns,
-                    live_datasets, live_lookups,
+                    live_datasets, live_intermediates,
                 )
 
         for row_index, row in enumerate(row_entries):
@@ -3413,29 +3415,29 @@ def prune_inheritance_collections(spec, env):
                 for reference in refs:
                     changed |= _apply_reference(
                         reference, datasets, lookup_map, live_columns,
-                        live_datasets, live_lookups,
+                        live_datasets, live_intermediates,
                     )
 
-        lookup_fields = schema_class_fields(env, 'lookup_class')
-        for lookup_id in list(live_lookups - processed_lookups):
-            processed_lookups.add(lookup_id)
-            lookup = lookup_map.get(lookup_id)
-            if lookup is None:
+        lookup_fields = schema_class_fields(env, 'intermediate_class')
+        for intermediate_id in list(live_intermediates - processed_intermediates):
+            processed_intermediates.add(intermediate_id)
+            intermediate = lookup_map.get(intermediate_id)
+            if intermediate is None:
                 continue
-            dataset_id = lookup.get('dataset')
+            dataset_id = intermediate.get('dataset')
             if isinstance(dataset_id, str) and dataset_id not in live_datasets:
                 live_datasets.add(dataset_id)
                 changed = True
-            for field, value in lookup.items():
+            for field, value in intermediate.items():
                 if field in {'id', 'dataset'} or field not in lookup_fields:
                     continue
                 refs = collect_descriptor_references(
-                    value, lookup_fields[field], env, ('lookup_class', field)
+                    value, lookup_fields[field], env, ('intermediate_class', field)
                 )
                 for reference in refs:
                     changed |= _apply_reference(
                         reference, datasets, lookup_map, live_columns,
-                        live_datasets, live_lookups,
+                        live_datasets, live_intermediates,
                     )
 
         if not changed:
@@ -3451,13 +3453,13 @@ def prune_inheritance_collections(spec, env):
             name: source for name, source in pruned['input'].items()
             if name in live_datasets
         }
-    if isinstance(pruned.get('lookups'), list):
-        pruned['lookups'] = [
-            lookup for lookup in pruned['lookups']
-            if isinstance(lookup, dict) and lookup.get('id') in live_lookups
+    if isinstance(pruned.get('intermediates'), list):
+        pruned['intermediates'] = [
+            intermediate for intermediate in pruned['intermediates']
+            if isinstance(intermediate, dict) and intermediate.get('id') in live_intermediates
         ]
-        if not pruned['lookups']:
-            del pruned['lookups']
+        if not pruned['intermediates']:
+            del pruned['intermediates']
     if isinstance(pruned.get('rows'), list):
         for row in pruned['rows']:
             derivations = row.get('derivations') if isinstance(row, dict) else None
@@ -3472,7 +3474,7 @@ def prune_inheritance_collections(spec, env):
     return pruned
 
 
-def column_dependency_names(column, rows, lookups, env):
+def column_dependency_names(column, rows, intermediates, env):
     references = set()
     if isinstance(column, dict) and 'derivation' in column:
         references.update(
@@ -3494,12 +3496,12 @@ def column_dependency_names(column, rows, lookups, env):
             dependencies.add(reference)
             continue
         qualifier = reference.split('.', 1)[0]
-        lookup = lookups.get(qualifier)
-        if lookup is None:
+        intermediate = intermediates.get(qualifier)
+        if intermediate is None:
             continue
         lookup_refs = collect_member_field_references(
-            lookup,
-            'lookup_class',
+            intermediate,
+            'intermediate_class',
             ('source', 'between', 'filter', 'order_by'),
             env,
         )
@@ -3523,19 +3525,19 @@ def order_inherited_columns(spec, env):
     positions = {name: index for index, name in enumerate(names)}
     rows = spec.get('rows')
     rows = rows if isinstance(rows, list) else []
-    lookup_entries = spec.get('lookups')
-    lookup_entries = lookup_entries if isinstance(lookup_entries, list) else []
-    lookups = {
-        lookup.get('id'): lookup
-        for lookup in lookup_entries
-        if isinstance(lookup, dict) and isinstance(lookup.get('id'), str)
+    intermediate_entries = spec.get('intermediates')
+    intermediate_entries = intermediate_entries if isinstance(intermediate_entries, list) else []
+    intermediates = {
+        intermediate.get('id'): intermediate
+        for intermediate in intermediate_entries
+        if isinstance(intermediate, dict) and isinstance(intermediate.get('id'), str)
     }
     dependencies = {}
     errors = []
     for column in columns:
         name = column['name']
         dependencies[name] = column_dependency_names(
-            column, rows, lookups, env
+            column, rows, intermediates, env
         )
         for dependency in sorted(dependencies[name]):
             if dependency not in positions:
@@ -3582,7 +3584,7 @@ def order_resolved_spec_fields(spec, env):
     ordered = {}
     member_classes = {
         'input': 'dataset_class',
-        'lookups': 'lookup_class',
+        'intermediates': 'intermediate_class',
         'columns': 'column_class',
         'rows': 'row_class',
     }
@@ -4507,40 +4509,40 @@ def validate_spec_names(spec, spec_label):
                     f"undeclared dataset {driver!r}"
                 )
 
-    lookups = spec.get('lookups')
-    if isinstance(lookups, list):
-        lookup_ids = [
-            lookup.get('id') for lookup in lookups
-            if isinstance(lookup, dict) and isinstance(lookup.get('id'), str)
+    intermediates = spec.get('intermediates')
+    if isinstance(intermediates, list):
+        intermediate_ids = [
+            intermediate.get('id') for intermediate in intermediates
+            if isinstance(intermediate, dict) and isinstance(intermediate.get('id'), str)
         ]
-        duplicate_errors(lookup_ids, 'lookups', 'lookup id')
+        duplicate_errors(intermediate_ids, 'intermediates', 'intermediate id')
         reserved_names = dataset_names | ({domain} if isinstance(domain, str) else set())
-        for index, lookup in enumerate(lookups):
-            if not isinstance(lookup, dict):
+        for index, intermediate in enumerate(intermediates):
+            if not isinstance(intermediate, dict):
                 continue
-            lookup_id = lookup.get('id')
-            if isinstance(lookup_id, str) and lookup_id in reserved_names:
+            intermediate_id = intermediate.get('id')
+            if isinstance(intermediate_id, str) and intermediate_id in reserved_names:
                 conflict_path = (
-                    f"input.{lookup_id}"
-                    if lookup_id in dataset_names
+                    f"input.{intermediate_id}"
+                    if intermediate_id in dataset_names
                     else 'domain'
                 )
                 for path in (
-                    f"lookups[{index}].id", conflict_path
+                    f"intermediates[{index}].id", conflict_path
                 ):
                     errors.append(
                         validation_diagnostic(
                             f"{spec_label}.{path}",
                             'duplicate_identifier',
-                            f"identifier {lookup_id!r} conflicts with a "
+                            f"identifier {intermediate_id!r} conflicts with a "
                             'dataset or domain',
-                            context={'identifier': lookup_id},
+                            context={'identifier': intermediate_id},
                         )
                     )
-            lookup_dataset = lookup.get('dataset')
+            lookup_dataset = intermediate.get('dataset')
             if isinstance(lookup_dataset, str) and lookup_dataset not in dataset_names:
                 errors.append(
-                    f"ERROR: {spec_label}.lookups[{index}].dataset: "
+                    f"ERROR: {spec_label}.intermediates[{index}].dataset: "
                     f"undeclared dataset {lookup_dataset!r}"
                 )
 
@@ -4964,46 +4966,46 @@ def validate_spec_contracts(
                 "no derivation"
             )
 
-    lookups = spec.get('lookups')
-    if isinstance(lookups, list):
+    intermediates = spec.get('intermediates')
+    if isinstance(intermediates, list):
         catalog = dataset_type_catalog(spec, spec_path)
         root_keys = spec.get('keys')
         root_keys = root_keys if isinstance(root_keys, list) else []
-        for index, lookup in enumerate(lookups):
-            if not isinstance(lookup, dict):
+        for index, intermediate in enumerate(intermediates):
+            if not isinstance(intermediate, dict):
                 continue
-            path = f"{spec_label}.lookups[{index}]"
+            path = f"{spec_label}.intermediates[{index}]"
             # `order_by` and `keep` pair with each other; `source`/`key`
             # pairing is checked below now that both are optional (R003-43).
-            if ('order_by' in lookup) != ('keep' in lookup):
-                has_order = 'order_by' in lookup
+            if ('order_by' in intermediate) != ('keep' in intermediate):
+                has_order = 'order_by' in intermediate
                 errors.append(
                     validation_diagnostic(
                         path,
                         'unpaired_fields',
                         'order_by and keep must be declared together',
                         context={
-                            'lookup': lookup.get('id'),
+                            'intermediate': intermediate.get('id'),
                             'declared': ['order_by'] if has_order else ['keep'],
                             'missing': ['keep'] if has_order else ['order_by'],
                         },
                     )
                 )
-            sources = lookup.get('key_source')
-            keys = lookup.get('key')
+            sources = intermediate.get('key_base')
+            keys = intermediate.get('key')
             if (
                 isinstance(sources, list)
                 and isinstance(keys, list)
             ):
                 if sources == keys:
-                    # R003-45: key_source must not repeat the key names.
+                    # R003-45: key_base must not repeat the key names.
                     errors.append(
                         validation_diagnostic(
                             path,
-                            'redundant_key_source',
-                            'key_source repeats the key names; omit it',
+                            'redundant_key_base',
+                            'key_base repeats the key names; omit it',
                             context={
-                                'key_source': sources,
+                                'key_base': sources,
                                 'key': keys,
                             },
                         )
@@ -5013,20 +5015,20 @@ def validate_spec_contracts(
                         validation_diagnostic(
                             path,
                             'source_key_length_mismatch',
-                            f"key_source has {len(sources)} value(s), key has "
+                            f"key_base has {len(sources)} value(s), key has "
                             f"{len(keys)}",
                             context={
-                                'key_source': sources,
+                                'key_base': sources,
                                 'key': keys,
-                                'key_source_count': len(sources),
+                                'key_base_count': len(sources),
                                 'key_count': len(keys),
                             },
                         )
                     )
-            dataset = lookup.get('dataset')
+            dataset = intermediate.get('dataset')
             if keys is None and isinstance(dataset, str):
                 # R003-43: an omitted key is inferred from the output keys
-                # that name a column of the lookup dataset.
+                # that name a column of the intermediate dataset.
                 fields = catalog.get(dataset, {})
                 applicable = [key for key in root_keys if key in fields]
                 if not applicable:
@@ -5456,16 +5458,16 @@ def validate_spec_functions(spec, spec_label, spec_path, schema_env):
         return errors
 
     datasets = dataset_type_catalog(spec, spec_path, schema_env)
-    lookups = {}
-    lookup_entries = spec.get('lookups')
-    if isinstance(lookup_entries, list):
-        for lookup in lookup_entries:
-            if not isinstance(lookup, dict):
+    intermediates = {}
+    intermediate_entries = spec.get('intermediates')
+    if isinstance(intermediate_entries, list):
+        for intermediate in intermediate_entries:
+            if not isinstance(intermediate, dict):
                 continue
-            lookup_id = lookup.get('id')
-            dataset_id = lookup.get('dataset')
-            if isinstance(lookup_id, str) and isinstance(dataset_id, str):
-                lookups[lookup_id] = datasets.get(dataset_id, {})
+            intermediate_id = intermediate.get('id')
+            dataset_id = intermediate.get('dataset')
+            if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
+                intermediates[intermediate_id] = datasets.get(dataset_id, {})
 
     def resolve_variable(name):
         if not isinstance(name, str):
@@ -5473,7 +5475,7 @@ def validate_spec_functions(spec, spec_label, spec_path, schema_env):
         if '.' not in name:
             return column_types.get(name)
         qualifier, field = name.split('.', 1)
-        relation = datasets.get(qualifier, lookups.get(qualifier))
+        relation = datasets.get(qualifier, intermediates.get(qualifier))
         return relation.get(field) if isinstance(relation, dict) else None
 
     for payload, path, _expected_return in calls:
@@ -5682,10 +5684,12 @@ def validate_expression_predicates(
             )
 
     elif keyword in {'row_number', 'rank'} and isinstance(payload, dict):
-        if isinstance(payload.get('filter'), str):
+        window = payload.get('window')
+        window_filter = window.get('filter') if isinstance(window, dict) else None
+        if isinstance(window_filter, str):
             errors.extend(
                 validate_predicate_at(
-                    payload['filter'], f"{path}.{keyword}.filter", resolver
+                    window_filter, f"{path}.{keyword}.window.filter", resolver
                 )
             )
 
@@ -5727,17 +5731,17 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
     errors = []
     datasets = dataset_type_catalog(spec, spec_path, env)
     output_types = specification_column_types(spec)
-    lookups = {}
-    lookup_entries = spec.get('lookups')
-    if isinstance(lookup_entries, list):
-        for index, lookup in enumerate(lookup_entries):
-            if not isinstance(lookup, dict):
+    intermediates = {}
+    intermediate_entries = spec.get('intermediates')
+    if isinstance(intermediate_entries, list):
+        for index, intermediate in enumerate(intermediate_entries):
+            if not isinstance(intermediate, dict):
                 continue
-            lookup_id = lookup.get('id')
-            dataset_id = lookup.get('dataset')
-            if isinstance(lookup_id, str) and isinstance(dataset_id, str):
-                lookups[lookup_id] = datasets.get(dataset_id, {})
-            if isinstance(lookup.get('filter'), str):
+            intermediate_id = intermediate.get('id')
+            dataset_id = intermediate.get('dataset')
+            if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
+                intermediates[intermediate_id] = datasets.get(dataset_id, {})
+            if isinstance(intermediate.get('filter'), str):
                 resolver = predicate_resolver(
                     qualified={dataset_id: datasets.get(dataset_id, {})}
                     if isinstance(dataset_id, str)
@@ -5745,14 +5749,14 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
                 )
                 errors.extend(
                     validate_predicate_at(
-                        lookup['filter'],
-                        f"{spec_label}.lookups[{index}].filter",
+                        intermediate['filter'],
+                        f"{spec_label}.intermediates[{index}].filter",
                         resolver,
                     )
                 )
 
     column_resolver = predicate_resolver(
-        unqualified=output_types, qualified={**datasets, **lookups}
+        unqualified=output_types, qualified={**datasets, **intermediates}
     )
     columns = spec.get('columns')
     if isinstance(columns, list):
@@ -5825,7 +5829,7 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
         verifications = [verifications]
     if isinstance(verifications, list):
         output_resolver = predicate_resolver(
-            unqualified=output_types, qualified=lookups
+            unqualified=output_types, qualified=intermediates
         )
         for index, verification in enumerate(verifications):
             if not isinstance(verification, dict) or len(verification) != 1:
@@ -5973,19 +5977,19 @@ def validate_spec_numeric_expressions(
     errors = []
     datasets = dataset_type_catalog(spec, spec_path, env)
     output_types = specification_column_types(spec)
-    lookups = {}
-    lookup_entries = spec.get('lookups')
-    if isinstance(lookup_entries, list):
-        for lookup in lookup_entries:
-            if not isinstance(lookup, dict):
+    intermediates = {}
+    intermediate_entries = spec.get('intermediates')
+    if isinstance(intermediate_entries, list):
+        for intermediate in intermediate_entries:
+            if not isinstance(intermediate, dict):
                 continue
-            lookup_id = lookup.get('id')
-            dataset_id = lookup.get('dataset')
-            if isinstance(lookup_id, str) and isinstance(dataset_id, str):
-                lookups[lookup_id] = datasets.get(dataset_id, {})
+            intermediate_id = intermediate.get('id')
+            dataset_id = intermediate.get('dataset')
+            if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
+                intermediates[intermediate_id] = datasets.get(dataset_id, {})
 
     column_resolver = numeric_identifier_resolver(
-        unqualified=output_types, qualified=lookups
+        unqualified=output_types, qualified=intermediates
     )
     columns = spec.get('columns')
     if isinstance(columns, list):
@@ -6091,7 +6095,7 @@ def first_identifier_with_type(ast, resolver, value_type):
 def validate_aggregate_expression_ast(
     ast, path, expression, resolver, grouped, relation
 ):
-    """Validate R013 grain, reducer nesting, and static operand types."""
+    """Validate the R013 key rule, reducer nesting, and static operand types."""
     errors = []
 
     def validate_grain(node, inside_reduction=False):
@@ -6760,6 +6764,40 @@ def validate_expression_static_semantics(expression, path, context):
     keyword, payload = next(iter(expression.items()))
     resolver = context['resolver']
 
+    window_order_required = {
+        'row_number', 'rank', 'row_value', 'previous_non_missing',
+    }
+    window_order_forbidden = {'baseline_flag', 'baseline_value'}
+    if (
+        keyword in window_order_required | window_order_forbidden
+        and isinstance(payload, dict)
+    ):
+        window = payload.get('window')
+        order_by = window.get('order_by') if isinstance(window, dict) else None
+        operation_path = f"{path}.{keyword}"
+        if keyword in window_order_required and not order_by:
+            # R007-54: without a declared order the window has no positions
+            # to number or to move along.
+            errors.append(
+                validation_diagnostic(
+                    f"{operation_path}.window",
+                    'window_order_by_required',
+                    f'{keyword} requires window.order_by',
+                    context={'operation': keyword},
+                )
+            )
+        elif keyword in window_order_forbidden and order_by:
+            # R007-55: the baseline row is located by date and flag, not by
+            # a declared order, so a declared order would be silently ignored.
+            errors.append(
+                validation_diagnostic(
+                    f"{operation_path}.window.order_by",
+                    'window_order_by_forbidden',
+                    f'{keyword} does not take window.order_by',
+                    context={'operation': keyword},
+                )
+            )
+
     if keyword == 'aggregate':
         return validate_aggregate_at(
             payload, f"{path}.aggregate", context['aggregate']
@@ -6815,24 +6853,24 @@ def validate_expression_static_semantics(expression, path, context):
         return errors
 
     if keyword == 'lookup' and isinstance(payload, dict):
-        sources = normalize_scalar_list(payload.get('key_source'))
+        sources = normalize_scalar_list(payload.get('key_base'))
         keys = normalize_scalar_list(payload.get('key'))
         operation_path = f"{path}.lookup"
         # R003-45: only flag if BOTH were explicitly written (not inferred).
         # If either was omitted, the inference/defaulting is not redundant.
         if (
-            payload.get('key_source') is not None
+            payload.get('key_base') is not None
             and payload.get('key') is not None
             and sources == keys
         ):
-            # R003-45: key_source must not repeat the key names.
+            # R003-45: key_base must not repeat the key names.
             return [
                 validation_diagnostic(
                     operation_path,
-                    'redundant_key_source',
-                    'key_source repeats the key names; omit it',
+                    'redundant_key_base',
+                    'key_base repeats the key names; omit it',
                     context={
-                        'key_source': sources,
+                        'key_base': sources,
                         'key': keys,
                     },
                 )
@@ -6842,12 +6880,12 @@ def validate_expression_static_semantics(expression, path, context):
                 validation_diagnostic(
                     operation_path,
                     'source_key_length_mismatch',
-                    f"key_source has {len(sources)} value(s), key has "
+                    f"key_base has {len(sources)} value(s), key has "
                     f"{len(keys)}",
                     context={
-                        'key_source': sources,
+                        'key_base': sources,
                         'key': keys,
-                        'key_source_count': len(sources),
+                        'key_base_count': len(sources),
                         'key_count': len(keys),
                     },
                 )
@@ -7131,24 +7169,24 @@ def validate_derivation_static_semantics(derivation, path, context):
     return errors
 
 
-def validate_lookup_static_semantics(
+def validate_intermediate_static_semantics(
     spec, spec_label, datasets, output_types
 ):
     errors = []
-    lookups = spec.get('lookups')
-    if not isinstance(lookups, list):
+    intermediates = spec.get('intermediates')
+    if not isinstance(intermediates, list):
         return errors
     output_resolver = predicate_resolver(
         unqualified=output_types, qualified=datasets
     )
-    for index, lookup in enumerate(lookups):
-        if not isinstance(lookup, dict):
+    for index, intermediate in enumerate(intermediates):
+        if not isinstance(intermediate, dict):
             continue
-        operation_path = f"{spec_label}.lookups[{index}]"
-        dataset = lookup.get('dataset')
+        operation_path = f"{spec_label}.intermediates[{index}]"
+        dataset = intermediate.get('dataset')
         fields = datasets.get(dataset, {})
-        sources = lookup.get('source')
-        keys = lookup.get('key')
+        sources = intermediate.get('source')
+        keys = intermediate.get('key')
         if sources is not None and keys is not None:
             source_list = normalize_scalar_list(sources)
             key_list = normalize_scalar_list(keys)
@@ -7157,7 +7195,7 @@ def validate_lookup_static_semantics(
                     validation_diagnostic(
                         operation_path,
                         'source_key_length_mismatch',
-                        'record lookup source and key lengths differ',
+                        'record intermediate source and key lengths differ',
                         context={
                             'source': source_list,
                             'key': key_list,
@@ -7180,7 +7218,7 @@ def validate_lookup_static_semantics(
                             validation_diagnostic(
                                 f"{operation_path}.key",
                                 'unknown_field',
-                                f"unknown record lookup key {key!r}",
+                                f"unknown record intermediate key {key!r}",
                                 context={'identifier': key},
                             )
                         )
@@ -7201,7 +7239,7 @@ def validate_lookup_static_semantics(
                             source_type,
                         )
                     )
-        between = lookup.get('between')
+        between = intermediate.get('between')
         if not isinstance(between, dict) or not fields:
             continue
         value = between.get('value')
@@ -7222,7 +7260,7 @@ def validate_lookup_static_semantics(
                     validation_diagnostic(
                         f"{operation_path}.between.{name}",
                         'unknown_field',
-                        f"unknown record lookup bound {bound!r}",
+                        f"unknown record intermediate bound {bound!r}",
                         context={'identifier': bound},
                     )
                 )
@@ -7244,9 +7282,9 @@ def validate_lookup_static_semantics(
                 validation_diagnostic(
                     f"{operation_path}.between",
                     'incomparable_range_types',
-                    'record lookup range operands are not comparable',
+                    'record intermediate range operands are not comparable',
                     context={
-                        'lookup': lookup.get('id'),
+                        'intermediate': intermediate.get('id'),
                         'value_type': value_type,
                         'lower_type': lower_type,
                         'upper_type': upper_type,
@@ -7278,15 +7316,15 @@ def column_dependency_graph(spec, env):
         if isinstance(column, dict) and isinstance(column.get('name'), str)
     ]
     rows = spec.get('rows') if isinstance(spec.get('rows'), list) else []
-    lookup_entries = (
-        spec.get('lookups')
-        if isinstance(spec.get('lookups'), list)
+    intermediate_entries = (
+        spec.get('intermediates')
+        if isinstance(spec.get('intermediates'), list)
         else []
     )
-    lookups = {
-        lookup.get('id'): lookup
-        for lookup in lookup_entries
-        if isinstance(lookup, dict) and isinstance(lookup.get('id'), str)
+    intermediates = {
+        intermediate.get('id'): intermediate
+        for intermediate in intermediate_entries
+        if isinstance(intermediate, dict) and isinstance(intermediate.get('id'), str)
     }
     by_name = {
         column.get('name'): column
@@ -7297,7 +7335,7 @@ def column_dependency_graph(spec, env):
         name: {
             dependency
             for dependency in column_dependency_names(
-                by_name[name], rows, lookups, env
+                by_name[name], rows, intermediates, env
             )
             if dependency in by_name
         }
@@ -7430,21 +7468,21 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
     errors = []
     datasets = dataset_type_catalog(spec, spec_path, env)
     output_types = specification_column_types(spec)
-    lookups = {}
-    lookup_entries = spec.get('lookups')
-    if isinstance(lookup_entries, list):
-        for lookup in lookup_entries:
-            if not isinstance(lookup, dict):
+    intermediates = {}
+    intermediate_entries = spec.get('intermediates')
+    if isinstance(intermediate_entries, list):
+        for intermediate in intermediate_entries:
+            if not isinstance(intermediate, dict):
                 continue
-            lookup_id = lookup.get('id')
-            dataset_id = lookup.get('dataset')
-            if isinstance(lookup_id, str) and isinstance(dataset_id, str):
-                lookups[lookup_id] = datasets.get(dataset_id, {})
+            intermediate_id = intermediate.get('id')
+            dataset_id = intermediate.get('dataset')
+            if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
+                intermediates[intermediate_id] = datasets.get(dataset_id, {})
 
     keys = spec.get('keys') if isinstance(spec.get('keys'), list) else []
     column_context = {
         'resolver': predicate_resolver(
-            unqualified=output_types, qualified={**datasets, **lookups}
+            unqualified=output_types, qualified={**datasets, **intermediates}
         ),
         'input': datasets,
         'env': env,
@@ -7454,7 +7492,7 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
             'output_types': output_types,
             'keys': keys,
             'resolver': predicate_resolver(
-                unqualified=output_types, qualified={**datasets, **lookups}
+                unqualified=output_types, qualified={**datasets, **intermediates}
             ),
         },
     }
@@ -7492,7 +7530,7 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
                 'resolver': predicate_resolver(
                     unqualified=row_output,
                     qualified={
-                        **lookups,
+                        **intermediates,
                         **(
                             {driver: driver_fields}
                             if isinstance(driver, str)
@@ -7512,7 +7550,7 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
                     'resolver': predicate_resolver(
                         unqualified=row_output,
                         qualified={
-                            **lookups,
+                            **intermediates,
                             **(
                                 {driver: driver_fields}
                                 if isinstance(driver, str)
@@ -7532,7 +7570,7 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
                 )
 
     errors.extend(
-        validate_lookup_static_semantics(
+        validate_intermediate_static_semantics(
             spec, spec_label, datasets, output_types
         )
     )
@@ -7582,7 +7620,7 @@ def prepare_spec_document(spec, spec_label, spec_path, env):
 
 def inherited_error_logical_path(path, spec):
     identities = {
-        'lookups': 'id',
+        'intermediates': 'id',
         'columns': 'name',
         'rows': 'id',
     }
