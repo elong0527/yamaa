@@ -45,8 +45,9 @@ columns:
     type: float
     label: Analysis Normal Range Upper Limit
     derivation:
-      mapping_from:
-        source: [PARAMCD, SEX]
+      lookup:
+        key_base: [PARAMCD, SEX]
         dataset: LBREF
         key: [LBTESTCD, SEX]
         value: ANRHI
+        strict: true

@@ -5,17 +5,13 @@ input:
   AE:
     path: input/ae.csv
     types: {AESEQ: int, AESTDTC: date}
-
-record_lookups:
+intermediates:
   - id: FIRSTCOV
     dataset: AE
-    source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
     filter: "AE.AEDECOD = 'COVID-19'"
     order_by: [AE.AESTDTC, AE.AESEQ]
     keep: first
-    unmatched: missing
-
 output:
   path: adae.csv
   columns: [STUDYID, USUBJID, AESEQ, AEDECOD, ASTDT, AFTCOVFL]

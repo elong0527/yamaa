@@ -5,8 +5,7 @@ input:
   DM: input/dm.csv
   EX: input/ex.csv
 base: DM
-
-record_lookups:
+intermediates:
   - id: DOSING
     dataset: EX
 

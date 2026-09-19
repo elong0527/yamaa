@@ -1,12 +1,17 @@
-phase: mapping
-condition: missing_input
+phase: join
+condition: unmatched_key
 spec_paths:
-  - columns.ANRHI.derivation.mapping_from
-requirement: R007-49
+  - columns.ANRHI.derivation.lookup
+requirement: R003-14
 context:
+  intermediate: intermediate(LBREF)
   dataset: LBREF
-  source: [PARAMCD, SEX]
-  missing_source: SEX
+  key:
+    - LBTESTCD
+    - SEX
+  intermediate_key:
+    LBTESTCD: ALT
+    SEX:
   keys:
     - STUDYID: PILOT7
       USUBJID: P7-852

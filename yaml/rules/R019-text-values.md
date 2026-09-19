@@ -65,7 +65,7 @@ normalization, locale tailoring, or compatibility mapping.
 
 **R019-7.** Exact scalar equality applies whenever the language compares
 identities: predicate equality, case-sensitive inline mapping, dataset joins
-and record lookups, group and window partitions, key and uniqueness checks,
+and record intermediates, group and window partitions, key and uniqueness checks,
 allowed values, and any other operation that compares two `str` values.
 
 ## Total order

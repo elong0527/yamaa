@@ -12,18 +12,16 @@ conditions:
   decimals_not_applicable: {rules: [R020], phases: [validation]}
   dependency_cycle: {rules: [R001], phases: [validation]}
   division_by_zero: {rules: [R010], phases: [derivation]}
-  duplicate_identifier: {rules: [R002, R015], phases: [validation]}
+  duplicate_identifier: {rules: [R002, R003], phases: [validation]}
   duplicate_key: {rules: [R005], phases: [output]}
-  duplicate_lookup_key: {rules: [R007], phases: [mapping]}
   duplicate_order_term: {rules: [R005], phases: [validation]}
   field_parse_failed: {rules: [R014], phases: [ingest]}
   forward_reference: {rules: [R001], phases: [validation]}
   function_contract_mismatch: {rules: [R018], phases: [validation]}
   implication_failed: {rules: [R009], phases: [verification]}
-  incomparable_range_types: {rules: [R015], phases: [validation]}
+  incomparable_range_types: {rules: [R003], phases: [validation]}
   incomparable_sources: {rules: [R007], phases: [validation]}
   incompatible_input_type: {rules: [R004, R007, R010, R013, R016], phases: [validation]}
-  incomplete_match_value: {rules: [R015], phases: [join]}
   inheritance_cycle: {rules: [R017], phases: [validation]}
   integer_overflow: {rules: [R010], phases: [derivation]}
   internal_column_in_keys: {rules: [R005], phases: [validation]}
@@ -43,11 +41,13 @@ conditions:
   missing_entry_output: {rules: [R017], phases: [validation]}
   missing_input: {rules: [R008], phases: [mapping]}
   missing_key: {rules: [R005], phases: [output]}
+  missing_required_field: {rules: [R006], phases: [validation]}
   missing_verification_id: {rules: [R009], phases: [validation]}
   missing_violation_log: {rules: [R009], phases: [validation]}
   month_out_of_range: {rules: [R016], phases: [validation]}
   multiple_matches: {rules: [R003, R008], phases: [join]}
   multiple_values_per_key: {rules: [R001], phases: [derivation]}
+  no_applicable_keys: {rules: [R003], phases: [validation]}
   not_missing_failed: {rules: [R009], phases: [verification]}
   predicate_failed: {rules: [R009], phases: [verification]}
   producer_contract_mismatch: {rules: [R014], phases: [validation]}
@@ -70,7 +70,7 @@ conditions:
   source_field_name_empty: {rules: [R023, R027], phases: [ingest]}
   source_field_type_unsupported: {rules: [R027], phases: [ingest]}
   source_field_value_invalid: {rules: [R027], phases: [ingest]}
-  source_key_length_mismatch: {rules: [R007], phases: [validation]}
+  source_key_length_mismatch: {rules: [R003, R007], phases: [validation]}
   source_parquet_invalid: {rules: [R027], phases: [ingest]}
   source_profile_unknown: {rules: [R023], phases: [validation]}
   source_quote_unterminated: {rules: [R023], phases: [ingest]}
@@ -82,8 +82,8 @@ conditions:
   unknown_field: {rules: [R002, R003, R004, R010, R013, R014], phases: [validation]}
   unmapped_key: {rules: [R008], phases: [mapping]}
   unmapped_value: {rules: [R008], phases: [mapping]}
-  unmatched_key: {rules: [R015], phases: [join]}
-  unpaired_fields: {rules: [R015], phases: [validation]}
+  unmatched_key: {rules: [R003], phases: [join]}
+  unpaired_fields: {rules: [R003], phases: [validation]}
   unwritable_value: {rules: [R020], phases: [output]}
   value_not_permitted: {rules: [R009, R011, R016], phases: [validation]}
   zero_offset: {rules: [R007], phases: [validation]}

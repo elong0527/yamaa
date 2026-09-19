@@ -5,8 +5,7 @@ input:
   ADSL: input/adsl.csv
   TU: input/tu.csv
 base: ADSL
-
-record_lookups:
+intermediates:
   - id: TU_TARGET
     dataset: TU
     filter: >-
@@ -14,7 +13,6 @@ record_lookups:
       AND TU.TUSTRESC = 'TARGET'
     order_by: [TU.TUSEQ]
     keep: first
-    unmatched: missing
 
 output:
   path: adrs.csv

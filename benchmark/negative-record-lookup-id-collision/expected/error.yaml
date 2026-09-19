@@ -1,8 +1,8 @@
 phase: validation
 condition: duplicate_identifier
 spec_paths:
-  - record_lookups[0].id
+  - intermediates[0].id
   - input.EX
-requirement: R015-23
+requirement: R003-3
 context:
   identifier: EX

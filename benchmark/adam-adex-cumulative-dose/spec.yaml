@@ -39,14 +39,16 @@ columns:
     type: float
     label: Cumulative Dose
     derivation:
-      aggregate: "SUM(EX.EXDOSE)"
+      aggregate:
 
+        expr: "SUM(EX.EXDOSE)"
   - name: NCYCLES
     type: int
     label: Number of Treatment Cycles
     derivation:
-      aggregate: "COUNT(EX.EXSEQ)"
+      aggregate:
 
+        expr: "COUNT(EX.EXSEQ)"
   - name: PLANDOSE
     type: float
     label: Planned Dose per Cycle

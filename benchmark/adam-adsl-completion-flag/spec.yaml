@@ -5,12 +5,10 @@ input:
   ADSLPRE: input/adsl_pre.csv
   DS: input/ds.csv
 base: ADSLPRE
-
-record_lookups:
+intermediates:
   - id: COMPLT
     dataset: DS
     filter: "DS.DSDECOD = 'COMPLETED'"
-    unmatched: missing
 
 output:
   path: adsl.csv

@@ -10,6 +10,12 @@ from yamaa.runtime.executor import (
     execute_specification,
     execute_with_source_provider,
 )
+from yamaa.runtime.intermediates import (
+    IntermediateOutcome,
+    IntermediateSelector,
+    evaluate_intermediate,
+    types_comparable,
+)
 from yamaa.runtime.joins import (
     IndexedRecord,
     OrderError,
@@ -18,7 +24,6 @@ from yamaa.runtime.joins import (
     build_relation_indexes,
     compare_values,
     eligible_records,
-    evaluate_mapping_from,
     join_scalar,
     order_records,
     partition_key,
@@ -26,11 +31,6 @@ from yamaa.runtime.joins import (
     select_record,
 )
 from yamaa.runtime.lifecycle import HandlerCount
-from yamaa.runtime.lookups import (
-    LookupOutcome,
-    RecordLookupSelector,
-    types_comparable,
-)
 from yamaa.runtime.rows import (
     CandidateRow,
     RelationalContext,
@@ -48,9 +48,9 @@ __all__ = [
     "ExecutionUnsupported",
     "HandlerCount",
     "IndexedRecord",
-    "LookupOutcome",
+    "IntermediateOutcome",
+    "IntermediateSelector",
     "OrderError",
-    "RecordLookupSelector",
     "RelationIndex",
     "RelationalContext",
     "RowResolver",
@@ -60,7 +60,7 @@ __all__ = [
     "compare_values",
     "driver_groups",
     "eligible_records",
-    "evaluate_mapping_from",
+    "evaluate_intermediate",
     "execute_specification",
     "execute_with_source_provider",
     "group_candidates",

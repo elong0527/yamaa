@@ -70,7 +70,7 @@ create more instances of that row template.
 administration, or planned event, an input dataset must contain one input
 record per required row. Expected-but-uncollected rows use an explicit
 planning relation at those keys and may be enriched from collected
-relations through record lookups. Dynamically counted expansion must happen
+relations through record intermediates. Dynamically counted expansion must happen
 upstream. The expanded records enter the specification as ordinary input.
 
 **R001-12.** The `keys` state the output row identity, and `keys` must be

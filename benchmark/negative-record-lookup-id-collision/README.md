@@ -31,7 +31,7 @@ Give the record lookup a name that is distinct from every dataset and from
 the output domain, then read through that name:
 
 ```yaml
-record_lookups:
+intermediates:
   - id: FIRSTEX
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]

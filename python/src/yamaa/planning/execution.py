@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Collection, Mapping, Sequence
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
@@ -34,8 +34,8 @@ from yamaa.odm import BindingFailure, BindingPlan, BoundReference, build_binding
 from yamaa.specification.models import (
     Expression,
     HandledExpression,
+    IntermediateBetween,
     OrderTerm,
-    RecordLookupBetween,
     Row,
     Specification,
 )
@@ -79,6 +79,7 @@ class PlannedDerivation(_FrozenModel):
     expression_path: str = Field(min_length=1)
     declaration: HandledExpression
     dependencies: tuple[str, ...]
+    implicit_joins: tuple[ImplicitJoin, ...] = ()
 
     @property
     def operation_path(self) -> str:
@@ -86,14 +87,14 @@ class PlannedDerivation(_FrozenModel):
         return f"{self.expression_path}.{self.declaration.value.operation}"
 
 
-class PlannedRecordLookup(_FrozenModel):
-    """One validated `record_lookups` entry, ready to select a record.
+class PlannedIntermediate(_FrozenModel):
+    """One validated `intermediates` entry, ready to select a record.
 
     `match_variables` and `match_fields` pair by position: the first names
     what the current row reads, the second the right-side column it must
-    equal. When the entry declares neither `source` nor `key`, both hold the
-    applicable output keys R003 infers, which carry that one name on both
-    sides.
+    equal. Both come from the entry's declared `source` and `key`, with
+    R003-43 inferring an omitted key from the applicable output keys and
+    R003-44 defaulting an omitted source to the key names.
     """
 
     identifier: str = Field(min_length=1)
@@ -101,23 +102,24 @@ class PlannedRecordLookup(_FrozenModel):
     path: str = Field(min_length=1)
     match_variables: tuple[str, ...]
     match_fields: tuple[str, ...]
-    on_output_keys: bool
     filter_predicate: dict[str, Any] | None = None
     order_terms: tuple[tuple[OrderTerm, str], ...] = ()
     keep: Literal["first", "last"] | None = None
     between_value: str | None = None
     between_lower: str | None = None
     between_upper: str | None = None
-    unmatched: Literal["missing", "fail"] = "missing"
-    incomplete: Literal["missing", "fail"] = "fail"
+    readable_columns: tuple[str, ...] = ()
+    missing: Any = None
+    strict: bool = False
+    missing_declared: bool = False
 
     @property
     def dependencies(self) -> tuple[str, ...]:
-        """Return the current-row variables R001-18 makes this lookup need.
+        """Return the current-row variables R001-18 makes this intermediate need.
 
-        `filter` and `order_by` name records of the lookup's own dataset and
+        `filter` and `order_by` name records of the intermediate's own dataset and
         contribute no output-column dependency; `source` and `between.value`
-        do, exactly as a column using `mapping_from` depends on its sources.
+        do, exactly as a column using `intermediate` depends on its sources.
         """
         names = list(self.match_variables)
         if self.between_value is not None:
@@ -126,16 +128,31 @@ class PlannedRecordLookup(_FrozenModel):
 
 
 class ResolvedJoin(_FrozenModel):
-    """The columns one qualified reference resolved to matching on.
+    """The key pairs one intermediate-like resolution matches on.
 
-    R003-39 makes validation report the inferred applicable keys for every
-    qualified source, so a reviewer sees which same-named columns the join
-    matches on rather than having to infer them from two schemas. A record
-    lookup reports the same thing through `PlannedRecordLookup.match_fields`.
+    R003 makes validation report the pairs for every named intermediate, inline
+    intermediate, dataset-qualified aggregate, and implicit join, so a reviewer
+    sees which columns the resolution matches on rather than having to
+    infer them from two schemas. `inferred` marks the pairs R003-40 infers
+    from the applicable keys; the rest are declared by the author.
     """
 
     spec_path: str = Field(min_length=1)
     dataset: str = Field(min_length=1)
+    source: tuple[str, ...]
+    key: tuple[str, ...]
+    inferred: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ImplicitJoin:
+    """One restored R003 implicit join: the dataset and its inferred keys.
+
+    The runtime matches on `keys` (as both the source variables and the
+    right-side fields) whenever a derivation reads a column of `dataset`.
+    """
+
+    dataset: str
     keys: tuple[str, ...]
     # R003-20 lets a reduction declare keys coarser than the applicable
     # keys, and the join then matches on that instead.
@@ -178,7 +195,7 @@ class ExecutionPlan(_FrozenModel):
     rows: tuple[PlannedRow, ...]
     columns: tuple[PlannedDerivation, ...]
     row_derived_columns: tuple[str, ...]
-    record_lookups: tuple[PlannedRecordLookup, ...] = ()
+    intermediates: tuple[PlannedIntermediate, ...] = ()
     resolved_joins: tuple[ResolvedJoin, ...] = ()
 
 
@@ -212,20 +229,24 @@ class _Reference:
     current_value_available: bool = False
     # The R007 requirement the owning operation's input type is held to.
     requirement: str | None = None
-    # The relation this reference reaches through an R003 join, whose
-    # applicable keys the reading derivation therefore depends on.
+    # The relation this reference reaches through a declared intermediate pairing,
+    # whose key variables the reading derivation therefore depends on.
     join_relation: str | None = None
+    # The declared `key` columns of that pairing, in order.
+    join_key: tuple[str, ...] | None = None
+    # The declared `key_base` variables of that pairing, in order.
+    join_key_base: tuple[str, ...] | None = None
     # The columns that join replaces the applicable keys with, when R003-20
     # lets a reduction declare keys coarser than they are.
     join_group_by: tuple[str, ...] | None = None
     # How the reference reaches its relation: as one scalar of the current
-    # row driver or of an R003 join, as the records R013 reduces, as a
-    # right-side column R007 pairs with a declared key rather than a key of
-    # its own, or as a stored field of the records a predicate reads.
-    # R001-15 and R003-15 each turn on the difference.
+    # row driver, as the records R013 reduces, as a right-side column R003
+    # pairs with a declared key rather than a key of its own, or as a stored
+    # field of the records a predicate reads. R001-15 and R003-1 each turn
+    # on the difference.
     reach: Literal["scalar", "relation", "declared", "record"] = "scalar"
     # The other name this reference's runtime type must be comparable with,
-    # which is how R007-21 pairs a `mapping_from` source with its key column.
+    # which is how R007-21 pairs a `intermediate` source with its key column.
     same_type_as: str | None = None
 
 
@@ -241,7 +262,7 @@ class _Scope:
     column_phase: bool = True
     grouped_driver: str | None = None
     group_variables: tuple[str, ...] = ()
-    record_lookups: frozenset[str] = frozenset()
+    intermediates: frozenset[str] = frozenset()
 
 
 _COLUMN_SCOPE = _Scope()
@@ -289,7 +310,8 @@ def _deduplicate_references(references: Sequence[_Reference]) -> tuple[_Referenc
             reference.current_value_available,
             reference.requirement,
             reference.join_relation,
-            reference.join_group_by,
+            reference.join_key,
+            reference.join_key_base,
             reference.reach,
             reference.same_type_as,
         )
@@ -454,10 +476,8 @@ def _expression_info(
         diagnostics.extend(
             _aggregate_references(payload, operation_path, references, scope)
         )
-    elif operation == "mapping_from" and isinstance(payload, Mapping):
-        diagnostics.extend(
-            _mapping_from_references(payload, operation_path, references)
-        )
+    elif operation == "lookup" and isinstance(payload, Mapping):
+        _lookup_references(payload, operation_path, references, diagnostics)
     elif operation == "str_template":
         template = payload if isinstance(payload, str) else None
         if isinstance(payload, Mapping):
@@ -533,10 +553,10 @@ def _compute_references(
         if (
             scope.column_phase
             and qualifier is not None
-            and qualifier not in scope.record_lookups
+            and qualifier not in scope.intermediates
         ):
-            # R010-3 and R015-13: a qualified identifier is admitted only for
-            # a record already selected by a declared record lookup, so every
+            # R010-3 and R003-15: a qualified identifier is admitted only for
+            # a record already selected by a declared intermediate, so every
             # other join stays under R003 rather than inside the formula.
             diagnostics.append(
                 ExecutionDiagnostic(
@@ -576,10 +596,10 @@ def _filtered_source_references(
     )
     if (
         dataset is None
-        or dataset in scope.record_lookups
+        or dataset in scope.intermediates
         or (dataset == scope.grouped_driver)
     ):
-        # R003-35a: an output column, a chosen lookup record, and a group key
+        # R003-35a: an output column, a chosen intermediate record, and a group key
         # are each one value, so a filter has no records to select among.
         return [
             _diagnostic(
@@ -615,45 +635,95 @@ def _as_names(value: object) -> tuple[str, ...] | None:
     return None
 
 
-def _mapping_from_references(
+def _lookup_references(
     payload: Mapping[str, object],
     operation_path: str,
     references: list[_Reference],
-) -> list[ExecutionDiagnostic]:
-    """Collect the declared key pairs R007 makes this lookup match on."""
-    sources = _as_names(payload.get("source"))
+    diagnostics: list[ExecutionDiagnostic],
+) -> None:
+    """Collect the declared key pairs R007 makes this intermediate match on.
+
+    An inline `lookup:` is the same explicit declared-key mechanism as a
+    named `intermediates` entry, written where it is read: R003-20 through R003-24
+    hold it to the same validation the named declaration gets. Field
+    existence rides on the declared references below, which
+    `_validate_qualified_reference` resolves against the bindings; the
+    between's type comparability is checked when the intermediate runs, as with
+    an unplanned path.
+    """
+    sources = _as_names(payload.get("key_base"))
     keys = _as_names(payload.get("key"))
     dataset = payload.get("dataset")
     value = payload.get("value")
+    for name, declared in (("key_base", sources), ("key", keys)):
+        if payload.get(name) is not None and declared is None:
+            # The fill leaves a written-but-malformed list alone, so a `key`
+            # or `key_base` that names no identifiers is reported here rather
+            # than reaching the runtime as an unvalidated payload.
+            diagnostics.append(
+                _diagnostic(
+                    "invalid_field_type",
+                    operation_path,
+                    {
+                        "operation": "lookup",
+                        "expected": f"{name} as an identifier or a list of them",
+                    },
+                    requirement="R007-36",
+                )
+            )
+            return
+    if payload.get("key_base") is None or payload.get("key") is None:
+        # R003-43/R003-44: the planner fills omitted pairs before reference
+        # collection, or records no_applicable_keys when no key applies.
+        # Either way there is nothing left to collect here.
+        return
     if sources is None or keys is None or not isinstance(dataset, str):
-        return [
+        diagnostics.append(
             _diagnostic(
                 "invalid_field_type",
                 operation_path,
-                {"operation": "mapping_from", "expected": "source, dataset, and key"},
+                {"operation": "lookup", "expected": "key_base, dataset, and key"},
                 requirement="R007-36",
             )
-        ]
-    if len(sources) != len(keys):
-        # R007-48: the lists pair by position, so unequal lengths name no key.
-        return [
+        )
+        return
+    if list(sources) == list(keys) and not payload.get("_key_base_defaulted"):
+        # R003-45: an explicitly written key_base must not repeat the key
+        # names; omit it instead. (A defaulted key_base is not redundant.)
+        diagnostics.append(
+            _diagnostic(
+                "redundant_key_base",
+                operation_path,
+                {
+                    "key_base": list(sources),
+                    "key": list(keys),
+                },
+                requirement="R003-45",
+            )
+        )
+        return
+    if len(sources) != len(keys) or not sources:
+        # R007-48: the lists pair by position, so unequal lengths name no
+        # key, and an empty pairing matches nothing.
+        diagnostics.append(
             _diagnostic(
                 "source_key_length_mismatch",
                 operation_path,
                 {
-                    "source": list(sources),
+                    "key_base": list(sources),
                     "key": list(keys),
-                    "source_count": len(sources),
+                    "key_base_count": len(sources),
                     "key_count": len(keys),
                 },
                 requirement="R007-48",
             )
-        ]
+        )
+        return
     for index, (name, key) in enumerate(zip(sources, keys, strict=True)):
         references.append(
             _Reference(
                 name,
-                f"{operation_path}.source[{index}]",
+                f"{operation_path}.key_base[{index}]",
                 # R007-21: each source and its key column must have the same
                 # comparable type, so the pair is checked rather than coerced.
                 same_type_as=f"{dataset}.{key}",
@@ -667,15 +737,122 @@ def _mapping_from_references(
                 reach="declared",
             )
         )
-    if isinstance(value, str):
-        references.append(
-            _Reference(
-                f"{dataset}.{value}",
-                f"{operation_path}.value",
-                reach="declared",
+    if not isinstance(value, str):
+        diagnostics.append(
+            _diagnostic(
+                "invalid_field_type",
+                operation_path,
+                {"operation": "lookup", "expected": "a value column"},
+                requirement="R007-36",
             )
         )
-    return []
+        return
+    references.append(
+        _Reference(
+            f"{dataset}.{value}",
+            f"{operation_path}.value",
+            reach="declared",
+        )
+    )
+
+    def scoped(identifier: str, path: str) -> bool:
+        """Keep the intermediate's clauses on its own dataset (R003-10)."""
+        if identifier.split(".", 1)[0] != dataset:
+            diagnostics.append(
+                _diagnostic(
+                    "unknown_field",
+                    path,
+                    {"identifier": identifier, "dataset": dataset},
+                    requirement="R003-10",
+                )
+            )
+            return False
+        return True
+
+    predicate_text = payload.get("filter")
+    if isinstance(predicate_text, str):
+        filter_path = f"{operation_path}.filter"
+        predicate = _parse_predicate_at(predicate_text, filter_path, diagnostics)
+        if predicate is not None:
+            for identifier in _predicate_identifiers(predicate):
+                if scoped(identifier, filter_path):
+                    references.append(
+                        _Reference(identifier, filter_path, reach="declared")
+                    )
+
+    order_by = payload.get("order_by")
+    keep = payload.get("keep")
+    if (order_by is None) != (keep is None):
+        # R003-9: the ordered choice is declared as a pair, like the named
+        # intermediate's.
+        diagnostics.append(
+            _diagnostic(
+                "unpaired_fields",
+                operation_path,
+                {
+                    "declared": ["order_by"] if order_by is not None else ["keep"],
+                    "missing": ["keep"] if order_by is not None else ["order_by"],
+                },
+                requirement="R003-9",
+            )
+        )
+    elif isinstance(order_by, Sequence) and not isinstance(order_by, str):
+        for index, term in enumerate(order_by):
+            variable = term if isinstance(term, str) else None
+            if isinstance(term, Mapping):
+                raw_variable = term.get("variable")
+                variable = raw_variable if isinstance(raw_variable, str) else None
+            if not isinstance(variable, str):
+                continue
+            order_path = f"{operation_path}.order_by[{index}]"
+            if scoped(variable, order_path):
+                references.append(_Reference(variable, order_path, reach="declared"))
+
+    between = payload.get("between")
+    if between is not None and not (
+        isinstance(between, Mapping)
+        and all(
+            isinstance(between.get(name), str) for name in ("value", "lower", "upper")
+        )
+    ):
+        # The named form's `between` requires all three, so the inline form
+        # states the same range or none at all: a partial one narrows by a
+        # bound the record has no column for.
+        diagnostics.append(
+            _diagnostic(
+                "invalid_field_type",
+                f"{operation_path}.between",
+                {"operation": "lookup", "expected": "value, lower, and upper"},
+                requirement="R007-36",
+            )
+        )
+    elif isinstance(between, Mapping):
+        between_value = between.get("value")
+        if isinstance(between_value, str):
+            references.append(
+                _Reference(between_value, f"{operation_path}.between.value")
+            )
+        for bound in ("lower", "upper"):
+            raw = between.get(bound)
+            if isinstance(raw, str):
+                references.append(
+                    _Reference(
+                        f"{dataset}.{raw}",
+                        f"{operation_path}.between.{bound}",
+                        reach="declared",
+                    )
+                )
+
+    if payload.get("strict") is True and payload.get("missing") is not None:
+        # R003-13: a failing absence and a returned literal contradict.
+        diagnostics.append(
+            _diagnostic(
+                "conflicting_absent_policy",
+                operation_path,
+                {"missing": payload.get("missing")},
+                requirement="R003-13",
+            )
+        )
 
 
 # R007-12 types each window field as a variable, so each may name a current
@@ -871,15 +1048,71 @@ def _aggregate_references(
         if name not in grain
     )
 
-    # R003-17 joins a right-side reduction back on the applicable keys, or on
-    # the coarser keys R003-20 lets it declare. A grouped-row reduction
-    # reads its own driver group and joins nothing.
+    # R003-30: a right-side reduction over a qualified relation declares the
+    # key pairs it matches on. A grouped-row reduction reads its own driver
+    # group and declares none.
     joined = relation if scope.grouped_driver is None and relation else None
-    grain = (
-        tuple(name.split(".", 1)[-1] for name in group_by)
-        if group_by and joined
-        else None
-    )
+    key_fields: tuple[str, ...] | None = None
+    key_variables: tuple[str, ...] | None = None
+    if joined is not None:
+        keys = _as_names(payload.get("key"))
+        source_vars = _as_names(payload.get("key_base"))
+        if (payload.get("key") is not None and keys is None) or (
+            payload.get("key_base") is not None and source_vars is None
+        ):
+            # R003-30: the fill leaves a written-but-malformed list alone, so
+            # a `key` or `key_base` that names no identifiers is reported here
+            # rather than reducing over the whole relation unkeyed.
+            diagnostics.append(
+                _diagnostic(
+                    "missing_aggregate_keys",
+                    operation_path,
+                    {
+                        "dataset": joined,
+                        "key": list(keys or ()),
+                        "key_base": list(source_vars or ()),
+                    },
+                    requirement="R003-30",
+                )
+            )
+        elif payload.get("key") is None or payload.get("key_base") is None:
+            # R003-43/R003-44: the planner fills omitted pairs before
+            # reference collection, or records no_applicable_keys when no
+            # key applies. Either way there is nothing left to check here.
+            pass
+        elif list(source_vars or ()) == list(keys or ()) and not payload.get(
+            "_key_base_defaulted"
+        ):
+            # R003-45: an explicitly written key_base must not repeat the
+            # key names. (A defaulted key_base is not redundant.)
+            diagnostics.append(
+                _diagnostic(
+                    "redundant_key_base",
+                    operation_path,
+                    {
+                        "dataset": joined,
+                        "key_base": list(source_vars or ()),
+                        "key": list(keys or ()),
+                    },
+                    requirement="R003-45",
+                )
+            )
+        elif not keys or not source_vars or len(keys) != len(source_vars):
+            diagnostics.append(
+                _diagnostic(
+                    "missing_aggregate_keys",
+                    operation_path,
+                    {
+                        "dataset": joined,
+                        "key": list(keys or ()),
+                        "key_base": list(source_vars or ()),
+                    },
+                    requirement="R003-30",
+                )
+            )
+        else:
+            key_fields = tuple(keys)
+            key_variables = tuple(source_vars)
 
     def relational(name: str, path: str) -> _Reference:
         qualified = "." in name
@@ -887,7 +1120,8 @@ def _aggregate_references(
             name,
             path,
             join_relation=joined if qualified else None,
-            join_group_by=grain if qualified and joined else None,
+            join_key=key_fields if qualified and joined else None,
+            join_key_base=key_variables if qualified and joined else None,
             reach="relation" if qualified else "scalar",
         )
 
@@ -1075,6 +1309,127 @@ def _parse_predicate_at(
         return None
 
 
+def _fill_omitted_lookup_keys(
+    declaration: HandledExpression,
+    value_path: str,
+    scope: _Scope,
+    infer: Callable[[str, str], tuple[str, ...] | None],
+) -> tuple[HandledExpression, frozenset[str]]:
+    """Fill omitted intermediate/aggregate key pairs from the applicable keys.
+
+    R003-43 lets a named intermediate, an inline `lookup:`, or a qualified
+    aggregate omit `key`, inferring the applicable output keys; R003-44 lets
+    either form omit `key_base`, defaulting it to the key names. The planner
+    and the runtime downstream only understand complete pairs, so the
+    omission is resolved here, before reference collection. Returns the
+    rewritten declaration and the operation paths where a key was inferred.
+    """
+    inferred: set[str] = set()
+
+    def fill_pairs(
+        payload: Mapping[str, object],
+        dataset: str,
+        operation_path: str,
+    ) -> Mapping[str, object] | None:
+        """Return the payload with omitted pairs filled, or None to skip."""
+        key_present = payload.get("key") is not None
+        key_base_present = payload.get("key_base") is not None
+        if key_present and key_base_present:
+            return None
+        keys = _as_names(payload.get("key")) if key_present else None
+        if not key_present:
+            keys = infer(dataset, operation_path)
+            if keys is None:
+                # The diagnostic is recorded; leave the payload for the
+                # operation's own validation to report.
+                return None
+            inferred.add(operation_path)
+        sources = _as_names(payload.get("key_base")) if key_base_present else None
+        if not key_base_present:
+            sources = keys
+        if keys is None or sources is None:
+            # Present but malformed; downstream validation reports it.
+            return None
+        filled = {**payload, "key_base": list(sources), "key": list(keys)}
+        if not key_base_present:
+            # Mark that key_base was defaulted, so R003-45 (redundancy)
+            # does not flag the inferred default.
+            filled["_key_base_defaulted"] = True
+        return filled
+
+    def fill_intermediate(payload: object, operation_path: str) -> object:
+        if not isinstance(payload, Mapping):
+            return payload
+        dataset = payload.get("dataset")
+        if not isinstance(dataset, str):
+            return payload
+        filled = fill_pairs(payload, dataset, operation_path)
+        return payload if filled is None else filled
+
+    def qualified_relation(payload: Mapping[str, object]) -> str | None:
+        """Mirror _aggregate_references' join detection for the fill."""
+        expr = payload.get("expr")
+        if not isinstance(expr, str):
+            return None
+        try:
+            ast = parse_aggregate_cached(expr)
+        except AggregateError:
+            return None
+        identifiers = aggregate_identifiers(ast)
+        qualifiers = {name.split(".", 1)[0] for name in identifiers if "." in name}
+        unqualified = [name for name in identifiers if "." not in name]
+        relations = qualifiers | set(aggregate_star_datasets(ast))
+        if len(relations) > 1 or (relations and unqualified):
+            return None
+        relation = next(iter(sorted(relations)), None)
+        # A grouped-row reduction reads its own driver group and declares
+        # no key pairs (R003-32).
+        return relation if scope.grouped_driver is None and relation else None
+
+    def fill_aggregate(node: object, operation_path: str) -> object:
+        payload = node if isinstance(node, Mapping) else {"expr": node}
+        if not isinstance(payload, Mapping):
+            return node
+        relation = qualified_relation(payload)
+        if relation is None:
+            return node
+        filled = fill_pairs(payload, relation, operation_path)
+        if filled is None:
+            return node
+        return dict(filled)
+
+    def walk(node: object, operation_path: str) -> object:
+        if isinstance(node, Mapping):
+            if set(node) == {"lookup"}:
+                return {
+                    "lookup": fill_intermediate(
+                        node["lookup"], f"{operation_path}.lookup"
+                    )
+                }
+            if set(node) == {"aggregate"}:
+                return {
+                    "aggregate": fill_aggregate(
+                        node["aggregate"], f"{operation_path}.aggregate"
+                    )
+                }
+            return {
+                key: walk(value, f"{operation_path}.{key}")
+                for key, value in node.items()
+            }
+        if isinstance(node, Sequence) and not isinstance(node, str):
+            return [
+                walk(value, f"{operation_path}[{index}]")
+                for index, value in enumerate(node)
+            ]
+        return node
+
+    root = walk(declaration.value.root, value_path)
+    if root == declaration.value.root:
+        return declaration, frozenset()
+    rewritten = declaration.value.model_copy(update={"root": root})
+    return declaration.model_copy(update={"value": rewritten}), frozenset(inferred)
+
+
 def _plan_derivation(
     column: str,
     declaration: HandledExpression,
@@ -1084,8 +1439,20 @@ def _plan_derivation(
     unsupported: list[UnsupportedFeature],
     *,
     scope: _Scope = _COLUMN_SCOPE,
-) -> tuple[PlannedDerivation, tuple[_Reference, ...]]:
+    infer_keys: (
+        Callable[[str, str, list[ExecutionDiagnostic]], tuple[str, ...] | None] | None
+    ) = None,
+) -> tuple[PlannedDerivation, tuple[_Reference, ...], frozenset[str]]:
     value_path = expression_path(path, declaration)
+    inferred_paths: frozenset[str] = frozenset()
+    deferred: list[ExecutionDiagnostic] = []
+    if infer_keys is not None:
+        declaration, inferred_paths = _fill_omitted_lookup_keys(
+            declaration,
+            value_path,
+            scope,
+            lambda dataset, path: infer_keys(dataset, path, deferred),
+        )
     info = _expression_info(
         declaration.value,
         value_path,
@@ -1095,6 +1462,10 @@ def _plan_derivation(
     references = list(info.references)
     unsupported.extend(info.unsupported)
     diagnostics.extend(info.diagnostics)
+    # A failed key inference is reported after the operation's own
+    # validation, so a more fundamental problem (say, an aggregate in a
+    # context R007 forbids) is named first.
+    diagnostics.extend(deferred)
 
     ordered_references = _deduplicate_references(references)
     dependencies = tuple(
@@ -1114,6 +1485,7 @@ def _plan_derivation(
             dependencies=dependencies,
         ),
         ordered_references,
+        inferred_paths,
     )
 
 
@@ -1136,24 +1508,29 @@ def _bound_type(
 
 def _validate_qualified_reference(
     reference: _Reference,
-    driver: str | None,
+    drivers: Collection[str],
     bindings: BindingPlan,
     column_types: Mapping[str, ColumnType],
     diagnostics: list[ExecutionDiagnostic],
     *,
-    lookups: Mapping[str, PlannedRecordLookup] = {},
+    intermediates: Mapping[str, PlannedIntermediate] = {},
     row: Row | None = None,
 ) -> None:
     """Check one qualified name against the relation it reaches.
 
-    During column derivation a name qualified to another dataset is the R003
-    join; during row construction it is not, because R001-15 lets a row
-    derivation read its driver, its group keys, an earlier row-derived
-    column, or a record lookup, and nothing else.
+    R003-40: a name qualified with a dataset reaches that dataset through
+    the implicit join on the applicable keys; when the keys are unclear the
+    author wraps the read in an explicit `intermediate` (R003-42). The current
+    row's own datasets need no join: a scalar source qualified with a row
+    driver reads the current driver record. During row construction R001-15
+    lets a row derivation read its driver, its group keys, an earlier
+    row-derived column, or an intermediate, and nothing else.
     """
     qualifier = reference.name.split(".", 1)[0]
-    if qualifier in lookups:
-        _validate_lookup_reference(reference, lookups[qualifier], bindings, diagnostics)
+    if qualifier in intermediates:
+        _validate_intermediate_reference(
+            reference, intermediates[qualifier], bindings, diagnostics
+        )
         return
     bound = bindings.bind(reference.name)
     if isinstance(bound, BindingFailure):
@@ -1182,9 +1559,21 @@ def _validate_qualified_reference(
         )
         return
     assert bound.dataset is not None
+    if (
+        bound.kind == "dataset"
+        and reference.reach not in ("declared", "relation")
+        and reference.join_relation is None
+        and bound.dataset not in drivers
+        and row is None
+    ):
+        # R003-42: the implicit-join pre-pass already recorded why the
+        # applicable keys are unclear; nothing more to add here. Row
+        # derivations fall through: R001-15 lets them read their driver,
+        # group keys, earlier row columns, or an intermediate, and nothing else.
+        return
     if row is not None:
         _validate_row_phase_reference(
-            reference, bound.dataset, driver, row, diagnostics
+            reference, bound.dataset, next(iter(drivers), None), row, diagnostics
         )
     actual = _bound_type(bound, bindings, column_types)
     if reference.expected_type is not None and actual != reference.expected_type:
@@ -1241,19 +1630,28 @@ def _validate_row_phase_reference(
         )
 
 
-def _validate_lookup_reference(
+def _validate_intermediate_reference(
     reference: _Reference,
-    lookup: PlannedRecordLookup,
+    intermediate: PlannedIntermediate,
     bindings: BindingPlan,
     diagnostics: list[ExecutionDiagnostic],
 ) -> None:
-    """Check that a record lookup id qualifies a column its dataset has."""
+    """Check that an intermediate id qualifies a column its dataset has."""
     field = reference.name.split(".", 1)[1]
-    dataset = bindings.datasets.get(lookup.dataset)
-    if dataset is not None and field not in dataset.field_names:
-        # R015-31: the named column must exist in the lookup's dataset.
+    dataset = bindings.datasets.get(intermediate.dataset)
+    readable = intermediate.readable_columns
+    if dataset is not None and (
+        field not in dataset.field_names or (readable and field not in readable)
+    ):
+        # R003-15: the named column must exist in the intermediate's dataset and,
+        # when the intermediate declares `columns`, be one of them.
         diagnostics.append(
-            _diagnostic("unknown_field", reference.path, {"identifier": reference.name})
+            _diagnostic(
+                "unknown_field",
+                reference.path,
+                {"identifier": reference.name},
+                requirement="R003-15",
+            )
         )
 
 
@@ -1305,14 +1703,121 @@ def _comparable_types(left: ColumnType, right: ColumnType) -> bool:
     return left == right or {left, right} <= {"int", "float"}
 
 
-def _applicable_keys(
+def _infer_applicable_keys(
     specification: Specification,
     bindings: BindingPlan,
+    column_types: Mapping[str, ColumnType],
     dataset: str,
-) -> tuple[str, ...]:
-    """Return the output keys the right side also carries, in `keys` order."""
+    path: str,
+    diagnostics: list[ExecutionDiagnostic],
+    *,
+    hint: str = "declare an explicit `intermediate:` with `source`/`key` pairs",
+    requirement: str = "R003-42",
+) -> tuple[str, ...] | None:
+    """Infer the applicable keys R003-40 defines for an implicit join.
+
+    Returns the output keys, in output-key order, that also exist on the
+    right-side dataset, or None after recording why the key is unclear.
+    """
     fields = _dataset_types(bindings, dataset)
-    return tuple(key for key in specification.keys if key in fields)
+    keys = tuple(key for key in specification.keys if key in fields)
+    if not keys:
+        # R003-42: with no applicable key the intended match is unclear,
+        # so the author must state it explicitly.
+        diagnostics.append(
+            _diagnostic(
+                "no_applicable_keys",
+                path,
+                {
+                    "dataset": dataset,
+                    "keys": list(specification.keys),
+                    "hint": hint,
+                },
+                requirement=requirement,
+            )
+        )
+        return None
+    mismatched = [
+        key for key in keys if not _comparable_types(column_types[key], fields[key])
+    ]
+    if mismatched:
+        # R003-41: an inferred key must compare equal on both sides.
+        key = mismatched[0]
+        diagnostics.append(
+            _diagnostic(
+                "incompatible_input_type",
+                path,
+                {
+                    "source": key,
+                    "expected": column_types[key],
+                    "actual": fields[key],
+                },
+                requirement="R003-41",
+            )
+        )
+        return None
+    return keys
+
+
+def _resolve_implicit_joins(
+    references: Sequence[_Reference],
+    specification: Specification,
+    bindings: BindingPlan,
+    drivers: Collection[str],
+    intermediates: Mapping[str, PlannedIntermediate],
+    column_types: Mapping[str, ColumnType],
+    diagnostics: list[ExecutionDiagnostic],
+) -> tuple[_Reference, ...]:
+    """Annotate plain cross-dataset scalar sources with their implicit join.
+
+    R003-40: a scalar `source` qualified with a dataset joins that dataset
+    on the applicable keys whenever those keys are clear. The annotation
+    marks the reference so relation-dependency recording, reference
+    validation, and the runtime all see the same inferred pairing. Only
+    plain dataset columns join: an ODM item resolves from the current
+    row's context, never through an inferred join.
+    """
+    annotated: list[_Reference] = []
+    for reference in references:
+        if "." not in reference.name:
+            annotated.append(reference)
+            continue
+        qualifier = reference.name.split(".", 1)[0]
+        if (
+            qualifier in intermediates
+            or qualifier not in bindings.datasets
+            or qualifier in drivers
+            or reference.reach != "scalar"
+            or reference.join_relation is not None
+        ):
+            annotated.append(reference)
+            continue
+        bound = bindings.bind(reference.name)
+        if isinstance(bound, BindingFailure) or bound.kind != "dataset":
+            # R003-40 joins dataset columns only: an ODM item resolves from
+            # the current row's context, never through an inferred join.
+            annotated.append(reference)
+            continue
+        keys = _infer_applicable_keys(
+            specification,
+            bindings,
+            column_types,
+            qualifier,
+            reference.path,
+            diagnostics,
+        )
+        if keys is None:
+            annotated.append(reference)
+            continue
+        annotated.append(
+            replace(
+                reference,
+                join_relation=qualifier,
+                join_key=keys,
+                join_key_base=keys,
+            )
+        )
+    return tuple(annotated)
 
 
 def _with_relation_dependencies(
@@ -1320,152 +1825,226 @@ def _with_relation_dependencies(
     references: Sequence[_Reference],
     specification: Specification,
     bindings: BindingPlan,
-    lookups: Mapping[str, PlannedRecordLookup],
+    intermediates: Mapping[str, PlannedIntermediate],
     drivers: Collection[str],
     diagnostics: list[ExecutionDiagnostic],
     column_types: Mapping[str, ColumnType],
     resolved: list[ResolvedJoin],
+    *,
+    inferred_paths: frozenset[str] = frozenset(),
 ) -> PlannedDerivation:
     """Add the current-row values a derivation needs to reach another relation.
 
-    R003-34 makes an unavailable applicable left key a failure, and R001-18
-    makes a record lookup's match values dependencies of every column that
-    reads it. Recording them as ordinary dependencies is what puts the join's
-    inputs before the join in R001's declaration order.
+    R001-18 makes an intermediate's match values dependencies of every column that
+    reads it, and R003-30 makes an aggregate's declared `source` values
+    dependencies the same way. Recording them as ordinary dependencies is
+    what puts the keys' inputs before the read in R001's declaration order.
+    R003-40 adds the inferred keys of an implicit join as dependencies too,
+    and records the join so the runtime can match on it.
     """
     extra: list[str] = []
-    # One reading per relation this derivation reaches: an aggregate names
-    # the same right side from its `expr` and its `filter`, and R003-39 asks
-    # for the keys the join matches on, not for one line per mention.
-    checked: set[str] = set()
+    implicit: list[ImplicitJoin] = []
+    # One reading per declared pairing: an aggregate names the same right
+    # side from its `expr` and its `filter`, and R003-33 asks for the keys
+    # the resolution matches on, not for one line per mention.
+    checked: set[tuple[str, tuple[str, ...], tuple[str, ...]]] = set()
     for reference in references:
         if "." not in reference.name:
             continue
         qualifier = reference.name.split(".", 1)[0]
-        if qualifier in lookups:
-            extra.extend(lookups[qualifier].dependencies)
+        if qualifier in intermediates:
+            extra.extend(intermediates[qualifier].dependencies)
             continue
         if reference.reach in {"declared", "record"}:
-            # R003-15: `mapping_from` declares its own pairs and never
-            # consults output keys, so it depends on no applicable key, and
+            # R003-20: `intermediate` declares its own pairs and never consults
+            # output keys, so it depends on no key beyond its sources, and
             # R003-22 keeps a source filter inside the right side it reads.
             continue
-        if reference.join_relation is not None:
-            keys = (
-                reference.join_group_by
-                if reference.join_group_by is not None
-                else _applicable_keys(specification, bindings, reference.join_relation)
+        if (
+            reference.join_relation is not None
+            and reference.join_key is not None
+            and reference.join_key_base is not None
+        ):
+            if reference.reach == "scalar":
+                # R003-40: an implicit join the pre-pass inferred from the
+                # applicable keys. The keys were validated there.
+                implicit.append(
+                    ImplicitJoin(
+                        dataset=reference.join_relation, keys=reference.join_key_base
+                    )
+                )
+            else:
+                _validate_aggregate_keys(
+                    reference,
+                    bindings,
+                    column_types,
+                    diagnostics,
+                )
+            extra.extend(reference.join_key_base)
+            pairing = (
+                reference.join_relation,
+                reference.join_key_base,
+                reference.join_key,
             )
-        elif qualifier in bindings.datasets and qualifier not in drivers:
-            # R003-18: a scalar source qualified to the current row driver
-            # reads the driver record, so it joins nothing and needs no key.
-            keys = _applicable_keys(specification, bindings, qualifier)
-        else:
-            continue
-        extra.extend(keys)
-        if qualifier in checked:
-            continue
-        checked.add(qualifier)
-        resolved.append(
-            ResolvedJoin(
-                spec_path=reference.path,
-                dataset=qualifier,
-                keys=tuple(keys),
-                declared_grain=reference.join_group_by is not None,
+            if pairing in checked:
+                continue
+            checked.add(pairing)
+            resolved.append(
+                ResolvedJoin(
+                    spec_path=reference.path,
+                    dataset=reference.join_relation,
+                    source=reference.join_key_base,
+                    key=reference.join_key,
+                    inferred=reference.reach == "scalar"
+                    or any(
+                        reference.path == path or reference.path.startswith(f"{path}.")
+                        for path in inferred_paths
+                    ),
+                )
             )
-        )
-        _validate_join_key_types(
-            reference.path, qualifier, keys, bindings, column_types, diagnostics
-        )
-    if not extra:
+    if not extra and not implicit:
         return planned
     dependencies = tuple(
         dict.fromkeys(
             (*planned.dependencies, *(name for name in extra if name != planned.column))
         )
     )
-    return planned.model_copy(update={"dependencies": dependencies})
+    return planned.model_copy(
+        update={
+            "dependencies": dependencies,
+            "implicit_joins": tuple(dict.fromkeys(implicit)),
+        }
+    )
 
 
 def _lookup_dependencies(
     reference: _Reference,
-    lookups: Mapping[str, PlannedRecordLookup],
+    intermediates: Mapping[str, PlannedIntermediate],
 ) -> tuple[str, ...]:
-    """Return the current-row values a lookup-qualified reference needs."""
-    lookup = lookups.get(reference.name.split(".", 1)[0])
-    return lookup.dependencies if lookup is not None else ()
+    """Return the current-row values an intermediate-qualified reference needs."""
+    intermediate = intermediates.get(reference.name.split(".", 1)[0])
+    return intermediate.dependencies if intermediate is not None else ()
 
 
-def _validate_join_key_types(
-    path: str,
-    dataset: str,
-    keys: Sequence[str],
+def _validate_aggregate_keys(
+    reference: _Reference,
     bindings: BindingPlan,
     column_types: Mapping[str, ColumnType],
     diagnostics: list[ExecutionDiagnostic],
 ) -> None:
-    """Check that each side of the match carries one comparable type.
+    """Check the declared pairs one aggregate matches on.
 
-    R007-19 performs no implicit conversion between operation inputs, so an
-    output key and the same-named right-side column must already agree.
-    Reporting the disagreement is what keeps a join from quietly matching
-    nothing and presenting an unasked question as an absent record.
+    R003-31 names the key a column of the relation and the source key a
+    resolvable current-row variable; R007-19 performs no implicit conversion
+    between operation inputs, so the two sides of each pair must already
+    agree. Reporting the disagreement is what keeps a resolution from
+    quietly matching nothing and presenting an unasked question as an
+    absent record.
     """
+    assert reference.join_relation is not None
+    assert reference.join_key is not None
+    assert reference.join_key_base is not None
+    dataset = reference.join_relation
     fields = _dataset_types(bindings, dataset)
-    for key in keys:
-        left = column_types.get(key)
-        right = fields.get(key)
-        if left is None or right is None or _comparable_types(left, right):
+    for variable, field in zip(
+        reference.join_key_base, reference.join_key, strict=True
+    ):
+        if field not in fields:
+            diagnostics.append(
+                _diagnostic(
+                    "unknown_field",
+                    reference.path,
+                    {"identifier": f"{dataset}.{field}"},
+                    requirement="R003-31",
+                )
+            )
+            continue
+        left = _reference_type(variable, bindings, column_types)
+        if left is None:
+            diagnostics.append(
+                _diagnostic(
+                    "unknown_field",
+                    reference.path,
+                    {"identifier": variable},
+                    requirement="R003-31",
+                )
+            )
+            continue
+        right = fields[field]
+        if _comparable_types(left, right):
             continue
         diagnostics.append(
             _diagnostic(
                 "incompatible_input_type",
-                path,
-                {"source": f"{dataset}.{key}", "expected": left, "actual": right},
-                requirement="R007-38",
+                reference.path,
+                {"source": variable, "expected": left, "actual": right},
+                requirement="R007-19",
             )
         )
 
 
-def _plan_record_lookups(
+def _plan_lookups(
     specification: Specification,
     bindings: BindingPlan,
     column_types: Mapping[str, ColumnType],
     diagnostics: list[ExecutionDiagnostic],
-) -> dict[str, PlannedRecordLookup]:
-    """Validate each declared record lookup against its loaded dataset."""
-    planned: dict[str, PlannedRecordLookup] = {}
-    for index, lookup in enumerate(specification.record_lookups or ()):
-        path = f"record_lookups[{index}]"
-        if lookup.dataset not in bindings.datasets:
+    resolved: list[ResolvedJoin],
+) -> dict[str, PlannedIntermediate]:
+    """Validate each declared intermediate against its loaded dataset."""
+    planned: dict[str, PlannedIntermediate] = {}
+    for index, intermediate in enumerate(specification.intermediates or ()):
+        path = f"intermediates[{index}]"
+        if intermediate.dataset not in bindings.datasets:
             continue
-        fields = _dataset_types(bindings, lookup.dataset)
-        declared = lookup.source is not None and lookup.key is not None
-        if declared:
-            assert lookup.source is not None and lookup.key is not None
-            if len(lookup.source) != len(lookup.key):
+        fields = _dataset_types(bindings, intermediate.dataset)
+        key_inferred = False
+        source_defaulted = False
+        if intermediate.key is None:
+            # R003-43: an omitted key is inferred from the applicable keys.
+            inferred = _infer_applicable_keys(
+                specification,
+                bindings,
+                column_types,
+                intermediate.dataset,
+                path,
+                diagnostics,
+                hint="declare the `key` explicitly",
+                requirement="R003-43",
+            )
+            if inferred is None:
                 continue
-            variables = tuple(lookup.source)
-            match_fields = tuple(lookup.key)
+            match_fields = inferred
+            key_inferred = True
         else:
-            # R015-5: with neither declared, the applicable output keys match
-            # exactly as R003 defines them, and R015-27 requires at least one.
-            match_fields = _applicable_keys(specification, bindings, lookup.dataset)
+            match_fields = tuple(intermediate.key)
+        if intermediate.key_base is None:
+            # R003-44: an omitted key_base defaults to the key names.
             variables = match_fields
-            if not match_fields:
+            source_defaulted = True
+        else:
+            variables = tuple(intermediate.key_base)
+        if len(variables) != len(match_fields) or not variables:
+            if intermediate.key_base is None or intermediate.key is None:
+                # R003-5: _lookup_declarations only sees the pairs the author
+                # wrote on both sides, so a pairing that fails after R003-43
+                # inference or R003-44 defaulting is reported here instead of
+                # dropping the intermediate and failing its readers as unknown.
                 diagnostics.append(
                     _diagnostic(
-                        "no_applicable_keys",
+                        "source_key_length_mismatch",
                         path,
                         {
-                            "record_lookup": lookup.id,
-                            "dataset": lookup.dataset,
-                            "keys": list(specification.keys),
+                            "intermediate": intermediate.id,
+                            "key_base": list(variables),
+                            "key": list(match_fields),
+                            "key_base_count": len(variables),
+                            "key_count": len(match_fields),
                         },
-                        requirement="R003-33",
+                        requirement="R003-5",
                     )
                 )
-                continue
+            # Otherwise _lookup_declarations reported it; skip planning.
+            continue
 
         failed = False
         for variable, field in zip(variables, match_fields, strict=True):
@@ -1478,7 +2057,7 @@ def _plan_record_lookups(
                     "incompatible_input_type",
                     f"{path}.key",
                     {
-                        "record_lookup": lookup.id,
+                        "intermediate": intermediate.id,
                         "source": variable,
                         "expected": left,
                         "actual": right,
@@ -1494,9 +2073,10 @@ def _plan_record_lookups(
                         "unknown_field",
                         f"{path}.key",
                         {
-                            "record_lookup": lookup.id,
-                            "identifier": f"{lookup.dataset}.{field}",
+                            "intermediate": intermediate.id,
+                            "identifier": f"{intermediate.dataset}.{field}",
                         },
+                        requirement="R003-6",
                     )
                 )
                 failed = True
@@ -1505,20 +2085,21 @@ def _plan_record_lookups(
                 diagnostics.append(
                     _diagnostic(
                         "unknown_field",
-                        f"{path}.source",
-                        {"record_lookup": lookup.id, "identifier": variable},
+                        f"{path}.key_base",
+                        {"intermediate": intermediate.id, "identifier": variable},
+                        requirement="R003-7",
                     )
                 )
                 failed = True
 
         predicate = None
-        if lookup.filter is not None:
+        if intermediate.filter is not None:
             predicate = _parse_predicate_at(
-                lookup.filter, f"{path}.filter", diagnostics
+                intermediate.filter, f"{path}.filter", diagnostics
             )
             if predicate is not None:
                 for identifier in _predicate_identifiers(predicate):
-                    if identifier.split(".", 1)[0] != lookup.dataset or (
+                    if identifier.split(".", 1)[0] != intermediate.dataset or (
                         identifier.split(".", 1)[-1] not in fields
                     ):
                         diagnostics.append(
@@ -1526,33 +2107,62 @@ def _plan_record_lookups(
                                 "unknown_field",
                                 f"{path}.filter",
                                 {
-                                    "record_lookup": lookup.id,
+                                    "intermediate": intermediate.id,
                                     "identifier": identifier,
                                 },
+                                requirement="R003-10",
                             )
                         )
                         failed = True
 
         terms: list[tuple[OrderTerm, str]] = []
-        for term_index, term in enumerate(lookup.order_by or ()):
+        for term_index, term in enumerate(intermediate.order_by or ()):
             qualifier, _, field = term.variable.partition(".")
-            if qualifier != lookup.dataset or field not in fields:
+            if qualifier != intermediate.dataset or field not in fields:
                 diagnostics.append(
                     _diagnostic(
                         "unknown_field",
                         f"{path}.order_by[{term_index}]",
-                        {"record_lookup": lookup.id, "identifier": term.variable},
+                        {"intermediate": intermediate.id, "identifier": term.variable},
+                        requirement="R003-10",
                     )
                 )
                 failed = True
                 continue
             terms.append((term, field))
 
-        between = lookup.between
+        if intermediate.columns is not None:
+            for field in intermediate.columns:
+                if field not in fields:
+                    diagnostics.append(
+                        _diagnostic(
+                            "unknown_field",
+                            f"{path}.columns",
+                            {
+                                "intermediate": intermediate.id,
+                                "identifier": f"{intermediate.dataset}.{field}",
+                            },
+                            requirement="R003-12",
+                        )
+                    )
+                    failed = True
+
+        if intermediate.strict and intermediate.missing is not None:
+            diagnostics.append(
+                _diagnostic(
+                    "conflicting_absent_policy",
+                    path,
+                    {"intermediate": intermediate.id, "missing": intermediate.missing},
+                    requirement="R003-13",
+                )
+            )
+            failed = True
+
+        between = intermediate.between
         if between is not None:
             failed = (
-                _validate_lookup_between(
-                    lookup.id,
+                _validate_intermediate_between(
+                    intermediate.id,
                     between,
                     path,
                     fields,
@@ -1565,79 +2175,115 @@ def _plan_record_lookups(
         if failed:
             continue
 
-        planned[lookup.id] = PlannedRecordLookup(
-            identifier=lookup.id,
-            dataset=lookup.dataset,
+        resolved.append(
+            ResolvedJoin(
+                spec_path=path,
+                dataset=intermediate.dataset,
+                source=variables,
+                key=match_fields,
+                inferred=key_inferred or source_defaulted,
+            )
+        )
+        planned[intermediate.id] = PlannedIntermediate(
+            identifier=intermediate.id,
+            dataset=intermediate.dataset,
             path=path,
-            match_variables=tuple(variables),
-            match_fields=tuple(match_fields),
-            on_output_keys=not declared,
+            match_variables=variables,
+            match_fields=match_fields,
             filter_predicate=predicate,
             order_terms=tuple(terms),
-            keep=lookup.keep if lookup.order_by is not None else None,
+            keep=intermediate.keep if intermediate.order_by is not None else None,
             between_value=between.value if between is not None else None,
             between_lower=between.lower if between is not None else None,
             between_upper=between.upper if between is not None else None,
-            # R015-19 keeps the behavior of the match the lookup performs, so
-            # replacing a derivation with a lookup never changes what an
-            # absent record does.
-            unmatched=lookup.unmatched or ("fail" if declared else "missing"),
-            incomplete=lookup.incomplete or "fail",
+            readable_columns=tuple(intermediate.columns)
+            if intermediate.columns
+            else (),
+            missing=intermediate.missing,
+            strict=intermediate.strict,
+            missing_declared="missing" in intermediate.model_fields_set,
         )
     return planned
 
 
-def _validate_lookup_between(
+def _validate_intermediate_between(
     identifier: str,
-    between: RecordLookupBetween,
+    between: IntermediateBetween,
     path: str,
     fields: Mapping[str, ColumnType],
     bindings: BindingPlan,
     column_types: Mapping[str, ColumnType],
     diagnostics: list[ExecutionDiagnostic],
 ) -> bool:
-    """Check the closed range a lookup matches by, before any data is read."""
-    missing = [name for name in (between.lower, between.upper) if name not in fields]
+    """Check the closed range an intermediate matches by, before any data is read."""
+    return _check_between(
+        identifier,
+        between.value,
+        between.lower,
+        between.upper,
+        path,
+        fields,
+        bindings,
+        column_types,
+        diagnostics,
+    )
+
+
+def _check_between(
+    identifier: str | None,
+    value: str,
+    lower: str,
+    upper: str,
+    path: str,
+    fields: Mapping[str, ColumnType],
+    bindings: BindingPlan,
+    column_types: Mapping[str, ColumnType],
+    diagnostics: list[ExecutionDiagnostic],
+) -> bool:
+    """Check the closed range an intermediate matches by, before any data is read."""
+    context = {"intermediate": identifier} if identifier is not None else {}
+    missing = [name for name in (lower, upper) if name not in fields]
     if missing:
-        # R015-29: a bound naming a column the dataset does not have.
+        # R003-11: a bound naming a column the dataset does not have.
         diagnostics.extend(
             _diagnostic(
                 "unknown_field",
                 f"{path}.between",
-                {"record_lookup": identifier, "identifier": name},
-                requirement="R015-29",
+                {**context, "identifier": name},
+                requirement="R003-11",
             )
             for name in missing
         )
         return True
-    value_type = _reference_type(between.value, bindings, column_types)
+    value_type = _reference_type(value, bindings, column_types)
     if value_type is None:
         diagnostics.append(
             _diagnostic(
                 "unknown_field",
                 f"{path}.between.value",
-                {"record_lookup": identifier, "identifier": between.value},
+                {**context, "identifier": value},
+                requirement="R003-11",
             )
         )
         return True
-    lower_type = fields[between.lower]
-    upper_type = fields[between.upper]
+    lower_type = fields[lower]
+    upper_type = fields[upper]
     if _comparable_types(value_type, lower_type) and _comparable_types(
         value_type, upper_type
     ):
         return False
-    # R015-30: report the runtime types before any record is compared.
+    # R003-11: report the runtime types before any record is compared.
     diagnostics.append(
         _diagnostic(
             "incomparable_range_types",
             f"{path}.between",
             {
-                "record_lookup": identifier,
+                **context,
                 "value_type": value_type,
                 "lower_type": lower_type,
                 "upper_type": upper_type,
             },
-            requirement="R015-11",
+            requirement="R003-11",
         )
     )
     return True
@@ -1765,8 +2411,10 @@ def _unique_features(
     return ordered
 
 
-def _lookup_ids(specification: Specification) -> frozenset[str]:
-    return frozenset(lookup.id for lookup in specification.record_lookups or ())
+def _intermediate_ids(specification: Specification) -> frozenset[str]:
+    return frozenset(
+        intermediate.id for intermediate in specification.intermediates or ()
+    )
 
 
 def _row_scope(
@@ -1775,14 +2423,14 @@ def _row_scope(
     driver: str | None,
 ) -> _Scope:
     """Return where this template's row derivations sit."""
-    lookups = _lookup_ids(specification)
+    intermediates = _intermediate_ids(specification)
     if row.group_by is None or driver is None:
-        return _Scope(column_phase=False, record_lookups=lookups)
+        return _Scope(column_phase=False, intermediates=intermediates)
     return _Scope(
         column_phase=False,
         grouped_driver=driver,
         group_variables=tuple(row.group_by),
-        record_lookups=lookups,
+        intermediates=intermediates,
     )
 
 
@@ -1821,87 +2469,103 @@ def _group_by_declaration(
     ]
 
 
-def _record_lookup_declarations(
+def _lookup_declarations(
     specification: Specification,
 ) -> list[ExecutionDiagnostic]:
-    """Check every `record_lookups` entry that needs no source data.
+    """Check every `intermediates` entry that needs no source data.
 
-    R015-23 through R015-25 are decided by the declaration alone, so they are
-    answered before a dataset is read rather than on the first row that
-    reaches the lookup.
+    R003-3 through R003-5 and R003-9 are decided by the declaration alone,
+    so they are answered before a dataset is read rather than on the first
+    row that reaches the intermediate.
     """
     diagnostics: list[ExecutionDiagnostic] = []
     seen: dict[str, str] = {}
-    for index, lookup in enumerate(specification.record_lookups or ()):
-        path = f"record_lookups[{index}]"
+    for index, intermediate in enumerate(specification.intermediates or ()):
+        path = f"intermediates[{index}]"
         collision = None
-        if lookup.id in specification.input:
-            collision = f"input.{lookup.id}"
-        elif lookup.id == specification.domain:
+        if intermediate.id in specification.input:
+            collision = f"input.{intermediate.id}"
+        elif intermediate.id == specification.domain:
             collision = "domain"
-        elif lookup.id in seen:
-            collision = seen[lookup.id]
+        elif intermediate.id in seen:
+            collision = seen[intermediate.id]
         if collision is not None:
-            # R015-23: the id shares one namespace with dataset identifiers,
+            # R003-3: the id shares one namespace with dataset identifiers,
             # so a qualified name would otherwise reach two relations.
             diagnostics.append(
                 _diagnostic(
                     "duplicate_identifier",
                     (f"{path}.id", collision),
-                    {"identifier": lookup.id},
-                    requirement="R015-23",
+                    {"identifier": intermediate.id},
+                    requirement="R003-3",
                 )
             )
-        seen.setdefault(lookup.id, f"{path}.id")
-        if lookup.dataset not in specification.input:
+        seen.setdefault(intermediate.id, f"{path}.id")
+        if intermediate.dataset not in specification.input:
             diagnostics.append(
                 _diagnostic(
                     "unknown_field",
                     f"{path}.dataset",
-                    {"record_lookup": lookup.id, "identifier": lookup.dataset},
+                    {
+                        "intermediate": intermediate.id,
+                        "identifier": intermediate.dataset,
+                    },
+                    requirement="R003-10",
                 )
             )
-        for declared, missing, requirement in (
-            ("source", "key", "R015-26"),
-            ("key", "source", "R015-26"),
-            ("order_by", "keep", "R015-25"),
-            ("keep", "order_by", "R015-25"),
+        for declared, missing in (
+            ("order_by", "keep"),
+            ("keep", "order_by"),
         ):
             if (
-                getattr(lookup, declared) is not None
-                and getattr(lookup, missing) is None
+                getattr(intermediate, declared) is not None
+                and getattr(intermediate, missing) is None
             ):
                 diagnostics.append(
                     _diagnostic(
                         "unpaired_fields",
                         path,
                         {
-                            "record_lookup": lookup.id,
+                            "intermediate": intermediate.id,
                             "declared": [declared],
                             "missing": [missing],
                         },
-                        requirement=requirement,
+                        requirement="R003-9",
                     )
                 )
-        if (
-            lookup.source is not None
-            and lookup.key is not None
-            and len(lookup.source) != len(lookup.key)
-        ):
-            diagnostics.append(
-                _diagnostic(
-                    "source_key_length_mismatch",
-                    path,
-                    {
-                        "record_lookup": lookup.id,
-                        "source": list(lookup.source),
-                        "key": list(lookup.key),
-                        "source_count": len(lookup.source),
-                        "key_count": len(lookup.key),
-                    },
-                    requirement="R015-26",
+        if intermediate.key_base is not None and intermediate.key is not None:
+            if list(intermediate.key_base) == list(intermediate.key):
+                # R003-45: key_base must not repeat the key names.
+                diagnostics.append(
+                    _diagnostic(
+                        "redundant_key_base",
+                        path,
+                        {
+                            "intermediate": intermediate.id,
+                            "key_base": list(intermediate.key_base),
+                            "key": list(intermediate.key),
+                        },
+                        requirement="R003-45",
+                    )
                 )
-            )
+            elif (
+                len(intermediate.key_base) != len(intermediate.key)
+                or not intermediate.key_base
+            ):
+                diagnostics.append(
+                    _diagnostic(
+                        "source_key_length_mismatch",
+                        path,
+                        {
+                            "intermediate": intermediate.id,
+                            "key_base": list(intermediate.key_base),
+                            "key": list(intermediate.key),
+                            "key_base_count": len(intermediate.key_base),
+                            "key_count": len(intermediate.key),
+                        },
+                        requirement="R003-5",
+                    )
+                )
     return diagnostics
 
 
@@ -1982,7 +2646,7 @@ def _preflight_findings(
         unsupported.append(
             UnsupportedFeature(operation="inheritance", spec_path="parents")
         )
-    diagnostics.extend(_record_lookup_declarations(specification))
+    diagnostics.extend(_lookup_declarations(specification))
     diagnostics.extend(_violation_log_declarations(specification))
 
     rows = specification.rows or ()
@@ -2030,7 +2694,7 @@ def _preflight_findings(
                 ).unsupported
             )
 
-    column_scope = _Scope(record_lookups=_lookup_ids(specification))
+    column_scope = _Scope(intermediates=_intermediate_ids(specification))
     for column in specification.columns:
         declaration = column.derivation
         if declaration is None:
@@ -2107,8 +2771,26 @@ def plan_execution(
     column_order = [column.name for column in specification.columns]
     column_positions = {name: index for index, name in enumerate(column_order)}
     column_types = {column.name: column.type for column in specification.columns}
-    lookups = _plan_record_lookups(specification, bindings, column_types, diagnostics)
     resolved_joins: list[ResolvedJoin] = []
+
+    def infer_lookup_keys(
+        dataset: str, path: str, deferred: list[ExecutionDiagnostic]
+    ) -> tuple[str, ...] | None:
+        """Infer omitted intermediate/aggregate keys (R003-43)."""
+        return _infer_applicable_keys(
+            specification,
+            bindings,
+            column_types,
+            dataset,
+            path,
+            deferred,
+            hint="declare the `source`/`key` pairs explicitly",
+            requirement="R003-43",
+        )
+
+    intermediates = _plan_lookups(
+        specification, bindings, column_types, diagnostics, resolved_joins
+    )
     row_plans: list[PlannedRow] = []
     row_references: dict[tuple[int, str], tuple[_Reference, ...]] = {}
 
@@ -2161,11 +2843,11 @@ def plan_execution(
                         else:
                             _validate_qualified_reference(
                                 _Reference(identifier, path),
-                                driver,
+                                {driver} if driver is not None else frozenset(),
                                 bindings,
                                 column_types,
                                 diagnostics,
-                                lookups=lookups,
+                                intermediates=intermediates,
                             )
                     elif not grouped:
                         diagnostics.append(
@@ -2186,7 +2868,7 @@ def plan_execution(
                 declaration = row.derivations.get(name)
                 if declaration is None:
                     continue
-                planned, references = _plan_derivation(
+                planned, references, inferred_paths = _plan_derivation(
                     name,
                     declaration,
                     f"rows[{index}].derivations.{name}",
@@ -2194,17 +2876,19 @@ def plan_execution(
                     diagnostics,
                     unsupported,
                     scope=row_scope,
+                    infer_keys=infer_lookup_keys,
                 )
                 derivations[name] = _with_relation_dependencies(
                     planned,
                     references,
                     specification,
                     bindings,
-                    lookups,
+                    intermediates,
                     {driver},
                     diagnostics,
                     column_types,
                     resolved_joins,
+                    inferred_paths=inferred_paths,
                 )
                 row_references[(index, name)] = references
 
@@ -2229,11 +2913,11 @@ def plan_execution(
                     if "." in reference.name:
                         _validate_qualified_reference(
                             reference,
-                            driver,
+                            {driver} if driver is not None else frozenset(),
                             bindings,
                             column_types,
                             diagnostics,
-                            lookups=lookups,
+                            intermediates=intermediates,
                             row=row,
                         )
                         diagnostics.extend(
@@ -2243,16 +2927,16 @@ def plan_execution(
                                 {
                                     "identifier": match,
                                     "row": row.id,
-                                    "record_lookup": reference.name.split(".", 1)[0],
+                                    "intermediate": reference.name.split(".", 1)[0],
                                     "available_phase": "column_derivation",
                                     "required_phase": "row_construction",
                                 },
-                                requirement="R015-9",
+                                requirement="R003-16",
                             )
-                            # R015-9: during grouped row construction, every
-                            # value the lookup matches on must be derived by
-                            # this template rather than by a later phase.
-                            for match in _lookup_dependencies(reference, lookups)
+                            # R003-16: during row construction, every value
+                            # the intermediate matches on must be derived by this
+                            # template rather than by a later phase.
+                            for match in _lookup_dependencies(reference, intermediates)
                             if match not in row_names
                         )
                     elif reference.name not in column_types:
@@ -2340,37 +3024,48 @@ def plan_execution(
     for column in specification.columns:
         if column.derivation is None:
             continue
-        planned, references = _plan_derivation(
+        planned, references, inferred_paths = _plan_derivation(
             column.name,
             column.derivation,
             f"columns.{column.name}.derivation",
             supported_operations,
             diagnostics,
             unsupported,
-            scope=_Scope(record_lookups=frozenset(lookups)),
+            scope=_Scope(intermediates=frozenset(intermediates)),
+            infer_keys=infer_lookup_keys,
+        )
+        annotated = _resolve_implicit_joins(
+            references,
+            specification,
+            bindings,
+            drivers,
+            intermediates,
+            column_types,
+            diagnostics,
         )
         column_plans.append(
             _with_relation_dependencies(
                 planned,
-                references,
+                annotated,
                 specification,
                 bindings,
-                lookups,
+                intermediates,
                 drivers,
                 diagnostics,
                 column_types,
                 resolved_joins,
+                inferred_paths=inferred_paths,
             )
         )
-        for reference in references:
+        for reference in annotated:
             if "." in reference.name:
                 _validate_qualified_reference(
                     reference,
-                    None,
+                    drivers,
                     bindings,
                     column_types,
                     diagnostics,
-                    lookups=lookups,
+                    intermediates=intermediates,
                 )
             elif reference.name not in column_types:
                 diagnostics.append(
@@ -2486,6 +3181,6 @@ def plan_execution(
         rows=tuple(row_plans),
         columns=tuple(column_plans),
         row_derived_columns=row_derived,
-        record_lookups=tuple(lookups.values()),
+        intermediates=tuple(intermediates.values()),
         resolved_joins=tuple(resolved_joins),
     )

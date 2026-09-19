@@ -83,7 +83,7 @@ project environment, and not before.
 | `str_concat` | R007 | its nested expression results, in order |
 | `str_template` | R012 | literal text with its placeholders interpolated |
 | `str_upper`, `str_lower` | R019 | the exact ASCII casing substitution |
-| `mapping_from` | R003, R007 | one right-side column reached by declared key pairs |
+| `lookup` | R003, R007 | one right-side column reached by declared key pairs |
 | `aggregate` | R003, R007, R013 | one relation, or one partition, reduced to one value |
 | `date_diff` | R016 | whole calendar units between two dates |
 | `study_day` | R016 | the CDISC study day, counting from 1 with no day zero |
@@ -326,8 +326,7 @@ the output keys both sides carry, in `keys` order:
 
 `yamaa.runtime.joins` reads each declared source once into ordered typed
 records and answers every operation that reaches them from that one reading,
-so a left join, a `mapping_from` lookup, an R013 reduction, an R015 record
-lookup, and grouped row construction cannot disagree about which records a
+so a `lookup`, an R013 reduction, and grouped row construction cannot disagree about which records a
 key reaches or which record an order puts first. Its `partition_records`,
 `order_records`, and `compare_values` are the typed partition and order
 helpers, published for the window component.
@@ -339,11 +338,11 @@ key is missing matches nothing, so a subject id reused under a second study
 never reads the first study's records, and a right-side record with no left
 row creates none.
 
-`yamaa.runtime.lookups` performs the R015 match once and names the record, so
+`yamaa.runtime.lookups` performs the R003 match once and names the record, so
 the columns that read it are plainly reading one record:
 
 ```yaml
-record_lookups:
+intermediates:
   - id: LASTEX
     dataset: EX
     filter: "EX.EXENDTC IS NOT NULL"
@@ -374,7 +373,7 @@ Because a join infers its keys, the plan states what it inferred.
 `ExecutionPlan.resolved_joins` names, for each qualified source and each
 reduction, the dataset it reaches and the columns it matches on -- the
 coarser keys when declared, the applicable keys otherwise -- and
-`ExecutionPlan.record_lookups` says the same for each named record:
+`ExecutionPlan.intermediates` says the same for each named record:
 
 ```python
 plan = plan_execution(specification, sources)

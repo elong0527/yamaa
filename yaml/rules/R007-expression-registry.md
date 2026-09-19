@@ -145,8 +145,8 @@ have compatible runtime types.
 **R007-20.** `mapping` requires a string source because dictionary keys are
 strings.
 
-**R007-21.** `mapping_from` requires each source and its positionally
-corresponding dictionary key column to have the same comparable type.
+**R007-21.** `lookup` requires each source and its positionally
+corresponding key column to have the same comparable type.
 
 **R007-22.** `cut` requires a numeric source.
 
@@ -181,7 +181,7 @@ type is comparable only with itself. Collected precision, which R016
 defines, is not a runtime type and so takes no part in comparability. Two
 temporal values of one type are comparable whatever precision each carries.
 A comparable type therefore satisfies any input requiring mutually
-comparable values -- `greatest` and `least`, `mapping_from` key pairing, an
+comparable values -- `greatest` and `least`, `lookup` key pairing, an
 `order_by` term, and R013's `MIN` and `MAX` -- while a `sources` list or one
 ordering term mixing two types is the incompatible-input error below rather
 than a comparison over a coerced operand. Each owning rule defines the order
@@ -259,7 +259,7 @@ row template's input dataset or declaring its own `group_by`: fail.
 
 **R007-47.** An `aggregate` expression that violates R013: fail.
 
-**R007-48.** `mapping_from` whose `source` and `key` lists differ in length:
+**R007-48.** `lookup` whose `source` and `key` lists differ in length:
 fail.
 
 **R007-49.** An unhandled local missing, mapping, or extraction condition:

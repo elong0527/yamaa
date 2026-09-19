@@ -28,26 +28,30 @@ columns:
     type: str
     label: Randomization Metastatic Disease Status
     derivation:
-      source: RE.METSTAT
-
+      lookup:
+        dataset: RE
+        value: METSTAT
   - name: ECOG0R
     type: str
     label: Randomization Baseline ECOG Performance Status
     derivation:
-      source: RE.ECOG0
-
+      lookup:
+        dataset: RE
+        value: ECOG0
   - name: REGIONUSR
     type: str
     label: Randomization United States Region
     derivation:
-      source: RE.REGIONUS
-
+      lookup:
+        dataset: RE
+        value: REGIONUS
   - name: METSTAT
     type: str
     label: Metastatic Disease Status
     derivation:
-      source: MH.METSTAT
-
+      lookup:
+        dataset: MH
+        value: METSTAT
   - name: ECOG0
     type: str
     label: Baseline ECOG Performance Status

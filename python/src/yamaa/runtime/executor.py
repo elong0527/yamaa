@@ -38,6 +38,7 @@ from yamaa.planning import (
     plan_execution,
     preflight_execution,
 )
+from yamaa.runtime.intermediates import IntermediateSelector
 from yamaa.runtime.joins import RelationIndex, build_relation_indexes
 from yamaa.runtime.lifecycle import (
     HandlerCount,
@@ -46,7 +47,6 @@ from yamaa.runtime.lifecycle import (
     LifecycleUnsupported,
     evaluate_derivation,
 )
-from yamaa.runtime.lookups import RecordLookupSelector
 from yamaa.runtime.rows import (
     CandidateRow,
     RelationalContext,
@@ -306,6 +306,7 @@ def _evaluate_one(
                 values,
                 row_phase=row_phase,
                 column=planned.column,
+                implicit_joins=planned.implicit_joins,
             ),
             dispatcher,
             counter,
@@ -695,7 +696,7 @@ def execute_specification(
         context = RelationalContext(
             bindings=BindingIndex(plan.bindings, sources),
             relations=relations,
-            lookups=RecordLookupSelector(plan.record_lookups, relations),
+            intermediates=IntermediateSelector(plan.intermediates, relations),
             output_keys=tuple(specification.keys),
         )
         candidates = _construct_rows(

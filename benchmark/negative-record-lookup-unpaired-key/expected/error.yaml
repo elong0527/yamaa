@@ -1,9 +1,15 @@
 phase: validation
-condition: unpaired_fields
+condition: source_key_length_mismatch
 spec_paths:
-  - record_lookups[0]
-requirement: R015-26
+  - intermediates[0]
+requirement: R003-5
 context:
-  record_lookup: REFRANGE
-  declared: [source]
-  missing: [key]
+  key_base:
+    - LBTESTCD
+    - SEX
+  key:
+    - LBTESTCD
+    - SEX
+    - UNIT
+  key_base_count: 2
+  key_count: 3

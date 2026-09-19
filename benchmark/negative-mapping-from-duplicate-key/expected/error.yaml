@@ -1,12 +1,19 @@
-phase: mapping
-condition: duplicate_lookup_key
+phase: join
+condition: multiple_matches
 spec_paths:
-  - columns.ANRHI.derivation.mapping_from
-requirement: R007-37
+  - columns.ANRHI.derivation.lookup
+requirement: R003-17
 context:
+  intermediate: intermediate(LBREF)
   dataset: LBREF
-  key: [LBTESTCD, SEX]
-  lookup_key:
+  key:
+    - LBTESTCD
+    - SEX
+  intermediate_key:
     LBTESTCD: ALT
     SEX: F
   match_count: 2
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-831
+      PARAMCD: ALT

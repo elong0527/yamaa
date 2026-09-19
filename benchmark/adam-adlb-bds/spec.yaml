@@ -41,13 +41,11 @@ columns:
     label: Date of First Exposure to Treatment
     derivation:
       source: ADSL.TRTSDT
-
   - name: TRT01A
     type: str
     label: Actual Treatment for Period 01
     derivation:
       source: ADSL.TRT01A
-
   - name: AVAL
     type: float
     label: Analysis Value

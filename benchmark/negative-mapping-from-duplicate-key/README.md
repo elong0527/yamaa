@@ -33,6 +33,6 @@ Make the lookup table unique on `[LBTESTCD, SEX]` by resolving the
 conflicting `ALT/F` reference limits under the study's governed
 reference-range rules. A lookup cannot choose one duplicate by file order. If
 both rows are valid for different conditions, add the distinguishing field to
-both the current-row source list and the lookup key list. For example, a
-method-specific table would use matching lists such as
-`source: [PARAMCD, SEX, METHOD]` and `key: [LBTESTCD, SEX, METHOD]`.
+both the current-row `key_base` list and the lookup `key` list. For example,
+a method-specific table would use matching lists such as
+`key_base: [PARAMCD, SEX, METHOD]` and `key: [LBTESTCD, SEX, METHOD]`.

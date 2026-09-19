@@ -2,21 +2,39 @@ from __future__ import annotations
 
 import pytest
 
-from yamaa.expressions import FailedResolution, ResolvedValue, parse_predicate
+from yamaa.expressions import (
+    DEFAULT_EXPRESSION_OPERATIONS,
+    FailedResolution,
+    ResolvedValue,
+    parse_predicate,
+)
 from yamaa.io.polars import frame_from_values
 from yamaa.models import MISSING, ConditionResult, DateValue, TypedColumn, ValueResult
+from yamaa.planning import plan_execution
+from yamaa.runtime import (
+    ExecutionFailure,
+    ExecutionSuccess,
+    execute_with_source_provider,
+)
 from yamaa.runtime.joins import (
     RelationIndex,
     applicable_keys,
     compare_values,
     eligible_records,
-    evaluate_mapping_from,
     join_scalar,
     order_records,
     partition_records,
     resolution_result,
 )
-from yamaa.specification.models import OrderTerm
+from yamaa.specification.models import (
+    Column,
+    DatasetSource,
+    Expression,
+    HandledExpression,
+    OrderTerm,
+    Output,
+    Specification,
+)
 
 # R006 normalization expands a bare order term before execution sees it.
 ORDER_BY = {"variable": "EX.EXSTDTC", "direction": "asc", "nulls": "last"}
@@ -267,93 +285,6 @@ def lbref() -> RelationIndex:
     )
 
 
-def mapping_from(values: dict[str, object], **extra: object) -> object:
-    payload = {
-        "source": ["PARAMCD", "SEX"],
-        "dataset": "LBREF",
-        "key": ["LBTESTCD", "SEX"],
-        "value": "ANRHI",
-        **extra,
-    }
-    return evaluate_mapping_from(payload, lbref(), values)
-
-
-def test_declared_key_pairs_reach_a_right_side_keyed_on_something_else() -> None:
-    result = mapping_from({"PARAMCD": "ALT", "SEX": "M"})
-
-    assert isinstance(result, ValueResult)
-    assert result.value == 41.0
-
-
-def test_an_incomplete_key_never_reaches_the_unmapped_handler() -> None:
-    # R008-9: with several inputs the two conditions stay disjoint.
-    unhandled = mapping_from({"PARAMCD": "ALT", "SEX": MISSING})
-    handled = mapping_from({"PARAMCD": "ALT", "SEX": MISSING}, missing=0.0)
-    wrong_handler = mapping_from({"PARAMCD": "ALT", "SEX": MISSING}, unmapped=1.0)
-
-    assert isinstance(unhandled, ConditionResult)
-    assert unhandled.condition.condition == "missing_input"
-    assert unhandled.condition.context["missing_source"] == "SEX"
-    assert isinstance(handled, ValueResult)
-    assert handled.value == 0.0
-    assert handled.handled_by == "missing"
-    assert isinstance(wrong_handler, ConditionResult)
-
-
-def test_a_complete_key_with_no_entry_is_the_unmapped_condition() -> None:
-    unhandled = mapping_from({"PARAMCD": "AST", "SEX": "M"})
-    handled = mapping_from({"PARAMCD": "AST", "SEX": "M"}, unmapped=None)
-
-    assert isinstance(unhandled, ConditionResult)
-    assert unhandled.condition.condition == "unmapped_key"
-    assert unhandled.condition.context["lookup_key"] == {
-        "LBTESTCD": "AST",
-        "SEX": "M",
-    }
-    assert isinstance(handled, ValueResult)
-    assert handled.value is MISSING
-
-
-def test_a_duplicate_lookup_key_fails_rather_than_taking_file_order() -> None:
-    duplicated = relation(
-        "LBREF",
-        [("LBTESTCD", "str"), ("SEX", "str"), ("ANRHI", "float")],
-        [["ALT", "F", 33.0], ["ALT", "F", 35.0]],
-    )
-
-    result = evaluate_mapping_from(
-        {
-            "source": ["PARAMCD", "SEX"],
-            "dataset": "LBREF",
-            "key": ["LBTESTCD", "SEX"],
-            "value": "ANRHI",
-        },
-        duplicated,
-        {"PARAMCD": "ALT", "SEX": "F"},
-    )
-
-    assert isinstance(result, ConditionResult)
-    assert result.condition.condition == "duplicate_lookup_key"
-    assert result.condition.context["match_count"] == 2
-
-
-def test_unequal_source_and_key_lists_name_no_key() -> None:
-    result = evaluate_mapping_from(
-        {
-            "source": ["PARAMCD", "SEX"],
-            "dataset": "LBREF",
-            "key": ["LBTESTCD"],
-            "value": "ANRHI",
-        },
-        lbref(),
-        {"PARAMCD": "ALT", "SEX": "F"},
-    )
-
-    assert isinstance(result, ConditionResult)
-    assert result.condition.condition == "source_key_length_mismatch"
-    assert result.condition.requirement == "R007-48"
-
-
 def test_an_unnormalized_selection_is_reported_rather_than_raised() -> None:
     result = join_scalar(
         ex_relation(),
@@ -376,3 +307,182 @@ def test_comparison_refuses_two_types_that_are_not_mutually_comparable() -> None
 
 def test_a_resolution_becomes_the_result_an_expression_returns() -> None:
     assert resolution_result(ResolvedValue(value=3)) == ValueResult(value=3)
+
+
+# R003-40: the implicit join the planner restores for a plain cross-dataset
+# scalar source when the applicable keys are clear.
+
+
+def _implicit_run(
+    left_rows: list[list[object]],
+    right_rows: list[list[object]],
+) -> object:
+    left = frame_from_values(
+        (
+            TypedColumn(name="STUDYID", type="str"),
+            TypedColumn(name="USUBJID", type="str"),
+        ),
+        left_rows,
+    )
+    right = frame_from_values(
+        (
+            TypedColumn(name="STUDYID", type="str"),
+            TypedColumn(name="USUBJID", type="str"),
+            TypedColumn(name="V", type="float"),
+        ),
+        right_rows,
+    )
+    specification = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={
+            "LEFT": DatasetSource(path="input/left.csv"),
+            "RIGHT": DatasetSource(path="input/right.csv"),
+        },
+        base="LEFT",
+        keys=["STUDYID", "USUBJID"],
+        output=Output(path="out.csv", columns=["STUDYID", "USUBJID", "V"]),
+        columns=[
+            Column(
+                name="STUDYID",
+                type="str",
+                derivation=HandledExpression(
+                    value=Expression(root={"source": "LEFT.STUDYID"})
+                ),
+            ),
+            Column(
+                name="USUBJID",
+                type="str",
+                derivation=HandledExpression(
+                    value=Expression(root={"source": "LEFT.USUBJID"})
+                ),
+            ),
+            Column(
+                name="V",
+                type="float",
+                derivation=HandledExpression(
+                    value=Expression(root={"source": "RIGHT.V"})
+                ),
+            ),
+        ],
+    )
+    plan_execution(
+        specification,
+        {"LEFT": left, "RIGHT": right},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+    return execute_with_source_provider(
+        specification, lambda datasets: {"LEFT": left, "RIGHT": right}
+    )
+
+
+def test_implicit_join_matches_on_the_applicable_keys_in_left_row_order() -> None:
+    result = _implicit_run(
+        [["S", "b"], ["S", "a"]],
+        [["S", "a", 1.0], ["S", "b", 2.0]],
+    )
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.table.frame.to_dicts() == [
+        {"STUDYID": "S", "USUBJID": "b", "V": 2.0},
+        {"STUDYID": "S", "USUBJID": "a", "V": 1.0},
+    ]
+
+
+def test_implicit_join_yields_missing_when_no_right_side_matches() -> None:
+    result = _implicit_run(
+        [["S", "a"]],
+        [["S", "b", 1.0]],
+    )
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.table.frame.to_dicts() == [
+        {"STUDYID": "S", "USUBJID": "a", "V": None}
+    ]
+
+
+def test_implicit_join_reports_duplicate_right_side_matches() -> None:
+    result = _implicit_run(
+        [["S", "a"]],
+        [["S", "a", 1.0], ["S", "a", 2.0]],
+    )
+
+    assert isinstance(result, ExecutionFailure)
+    assert result.diagnostics[0].condition == "multiple_matches"
+
+
+def test_a_structured_implicit_source_filters_and_selects_before_reading() -> None:
+    # R003-1: a structured cross-dataset source keeps its filter and
+    # multiple_matches on the implicit join.
+    left = frame_from_values(
+        (
+            TypedColumn(name="STUDYID", type="str"),
+            TypedColumn(name="USUBJID", type="str"),
+        ),
+        [["S", "a"]],
+    )
+    right = frame_from_values(
+        (
+            TypedColumn(name="STUDYID", type="str"),
+            TypedColumn(name="USUBJID", type="str"),
+            TypedColumn(name="V", type="float"),
+            TypedColumn(name="FLAG", type="str"),
+        ),
+        [["S", "a", 1.0, "N"], ["S", "a", 2.0, "Y"], ["S", "a", 3.0, "Y"]],
+    )
+    specification = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={
+            "LEFT": DatasetSource(path="input/left.csv"),
+            "RIGHT": DatasetSource(path="input/right.csv"),
+        },
+        base="LEFT",
+        keys=["STUDYID", "USUBJID"],
+        output=Output(path="out.csv", columns=["STUDYID", "USUBJID", "V"]),
+        columns=[
+            Column(
+                name="STUDYID",
+                type="str",
+                derivation=HandledExpression(
+                    value=Expression(root={"source": "LEFT.STUDYID"})
+                ),
+            ),
+            Column(
+                name="USUBJID",
+                type="str",
+                derivation=HandledExpression(
+                    value=Expression(root={"source": "LEFT.USUBJID"})
+                ),
+            ),
+            Column(
+                name="V",
+                type="float",
+                derivation=HandledExpression(
+                    value=Expression(
+                        root={
+                            "source": {
+                                "variable": "RIGHT.V",
+                                "filter": "RIGHT.FLAG = 'Y'",
+                                "multiple_matches": {
+                                    "order_by": ["RIGHT.V"],
+                                    "keep": "last",
+                                },
+                            }
+                        }
+                    )
+                ),
+            ),
+        ],
+    )
+    plan_execution(
+        specification,
+        {"LEFT": left, "RIGHT": right},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+    result = execute_with_source_provider(
+        specification, lambda datasets: {"LEFT": left, "RIGHT": right}
+    )
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.table.frame.to_dicts() == [{"STUDYID": "S", "USUBJID": "a", "V": 3.0}]

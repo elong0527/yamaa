@@ -5,12 +5,11 @@ input:
   LB_RAW: input/lb_raw.csv
   LBRANGE: input/lbrange.csv
 base: LB_RAW
-
-record_lookups:
+intermediates:
   - id: REFRANGE
     dataset: LBRANGE
-    source: [LBTESTCD, SEX]
     key: [LBTESTCD, SEX]
+    strict: true
 
 output:
   path: lb.csv

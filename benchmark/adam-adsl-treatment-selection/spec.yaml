@@ -33,7 +33,6 @@ columns:
         multiple_matches:
           order_by: [EX.EXSTDTC, EX.EXSEQ]
           keep: first
-
   - name: TRT01SRC
     type: str
     label: Selected Actual Treatment for Period 01

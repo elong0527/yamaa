@@ -81,6 +81,7 @@ columns:
         group_by: [ADTRPRE.STUDYID, ADTRPRE.USUBJID]
         expr: "MIN(ADTRPRE.AVAL)"
 
+        key: [STUDYID, USUBJID]
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, AVISIT]

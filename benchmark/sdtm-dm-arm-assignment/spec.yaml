@@ -52,7 +52,6 @@ columns:
     label: Treatment Received as Collected
     derivation:
       source: EX.EXTRT
-
   - name: ACTARMCD
     type: str
     label: Actual Arm Code

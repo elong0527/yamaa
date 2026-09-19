@@ -8,13 +8,9 @@ input:
     types:
       AESEQ: int
 base: ADSL
-
-record_lookups:
+intermediates:
   - id: AE_REC
     dataset: ADAE
-    source: [STUDYID, USUBJID]
-    key: [STUDYID, USUBJID]
-    unmatched: missing
     order_by: [ADAE.ASTDT, ADAE.AESEQ]
     keep: first
 

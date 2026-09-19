@@ -7,12 +7,10 @@ input:
     path: input/adrs_selection.csv
     types: {BORSEQ: int}
 base: ADSL
-
-record_lookups:
+intermediates:
   - id: RESPONSE
     dataset: ADRSSEL
     filter: "ADRSSEL.BORSEQ = 1"
-    unmatched: missing
 
 output:
   path: adrs.csv

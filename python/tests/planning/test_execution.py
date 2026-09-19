@@ -7,6 +7,7 @@ from yamaa.io.polars import frame_from_values
 from yamaa.models import TypedColumn
 from yamaa.planning import (
     ExecutionPlanningError,
+    ImplicitJoin,
     UnsupportedPlanningError,
     plan_execution,
 )
@@ -15,8 +16,8 @@ from yamaa.specification.models import (
     DatasetSource,
     Expression,
     HandledExpression,
+    Intermediate,
     Output,
-    RecordLookup,
     Row,
     Specification,
 )
@@ -254,7 +255,7 @@ def test_a_grouped_filter_naming_a_qualified_variable_is_rejected() -> None:
     assert raised.value.diagnostics[0].condition == "phase_boundary"
 
 
-def test_a_record_lookup_contributes_its_match_values_as_dependencies() -> None:
+def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
     spec = specification(
         [
             Column(name="A", type="str", derivation=derivation({"source": "SRC.X"})),
@@ -262,31 +263,35 @@ def test_a_record_lookup_contributes_its_match_values_as_dependencies() -> None:
         ]
     ).model_copy(
         update={
-            "record_lookups": [
-                RecordLookup(id="LOOK", dataset="SRC", source=["A"], key=["X"])
+            "intermediates": [
+                Intermediate(
+                    id="LOOK", dataset="SRC", key_base=["A"], key=["X"], strict=True
+                )
             ]
         }
     )
 
     plan = plan_execution(spec, {"SRC": source_table()})
 
-    assert plan.record_lookups[0].match_variables == ("A",)
-    assert plan.record_lookups[0].match_fields == ("X",)
-    # R015-21: a declared source and key make an unmatched key fatal.
-    assert plan.record_lookups[0].unmatched == "fail"
+    assert plan.intermediates[0].match_variables == ("A",)
+    assert plan.intermediates[0].match_fields == ("X",)
+    # A declared source and key with strict: true makes an unmatched key fatal.
+    assert plan.intermediates[0].strict is True
     assert dict.fromkeys(plan.columns[1].dependencies) == {"A": None}
 
 
-def test_a_record_lookup_matching_on_output_keys_defaults_to_missing() -> None:
+def test_a_lookup_defaults_to_missing_on_absence() -> None:
     spec = specification(
         [Column(name="X", type="str", derivation=derivation({"source": "SRC.X"}))]
-    ).model_copy(update={"record_lookups": [RecordLookup(id="LOOK", dataset="SRC")]})
+    ).model_copy(
+        update={"intermediates": [Intermediate(id="LOOK", dataset="SRC", key=["X"])]}
+    )
 
     plan = plan_execution(spec, {"SRC": source_table()})
 
-    # R015-20: R003 treats an absent right-side record as ordinary missing.
-    assert plan.record_lookups[0].on_output_keys
-    assert plan.record_lookups[0].unmatched == "missing"
+    # Absence defaults to missing: strict is false and no missing literal.
+    assert plan.intermediates[0].strict is False
+    assert plan.intermediates[0].missing is None
 
 
 def test_an_unimplemented_expression_is_not_a_semantic_failure() -> None:
@@ -345,7 +350,276 @@ def first_diagnostic(columns: list[Column], right: str = "str"):
     return raised.value.diagnostics[0]
 
 
-def test_a_qualified_source_joins_on_the_applicable_keys_it_depends_on() -> None:
+def test_a_named_lookup_with_an_omitted_key_infers_the_applicable_keys() -> None:
+    spec = two_dataset_specification(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+        ]
+    ).model_copy(update={"intermediates": [Intermediate(id="LOOK", dataset="RIGHT")]})
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table(), "RIGHT": right_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    # R003-43: the omitted key is the applicable output keys; R003-44: the
+    # omitted source defaults to the key names.
+    assert plan.intermediates[0].match_variables == ("X",)
+    assert plan.intermediates[0].match_fields == ("X",)
+
+
+def test_a_named_lookup_with_an_omitted_source_defaults_to_the_key_names() -> None:
+    spec = two_dataset_specification(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+        ]
+    ).model_copy(
+        update={"intermediates": [Intermediate(id="LOOK", dataset="RIGHT", key=["X"])]}
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table(), "RIGHT": right_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    # R003-44: the omitted source defaults to the declared key names.
+    assert plan.intermediates[0].match_variables == ("X",)
+    assert plan.intermediates[0].match_fields == ("X",)
+
+
+def test_a_named_lookup_with_an_omitted_key_and_no_applicable_key_fails() -> None:
+    right = frame_from_values((TypedColumn(name="V", type="float"),), [[1.0]])
+    spec = two_dataset_specification(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+        ]
+    ).model_copy(update={"intermediates": [Intermediate(id="LOOK", dataset="RIGHT")]})
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table(), "RIGHT": right},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    # R003-43: no output key exists on RIGHT, so the omitted key cannot be
+    # inferred and the author must declare it.
+    [diagnostic] = [
+        d for d in raised.value.diagnostics if d.condition == "no_applicable_keys"
+    ]
+    assert diagnostic.requirement == "R003-43"
+    assert diagnostic.spec_paths == ("intermediates[0]",)
+
+
+def test_a_named_lookup_with_mismatched_source_and_key_lengths_fails() -> None:
+    spec = two_dataset_specification(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+        ]
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(id="LOOK", dataset="RIGHT", key_base=["X", "X"], key=["X"])
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source_table(), "RIGHT": right_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    # R003-5: explicit pairs must pair by position after inference.
+    [diagnostic] = [
+        d
+        for d in raised.value.diagnostics
+        if d.condition == "source_key_length_mismatch"
+    ]
+    assert diagnostic.requirement == "R003-5"
+    assert diagnostic.spec_paths == ("intermediates[0]",)
+
+
+def test_a_named_lookup_pairing_a_key_base_against_an_inferred_key_fails() -> None:
+    source = frame_from_values(
+        (TypedColumn(name="X", type="str"), TypedColumn(name="Y", type="str")),
+        [["one", "a"]],
+    )
+    spec = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={
+            "SRC": DatasetSource(path="input/source.csv"),
+            "RIGHT": DatasetSource(path="input/right.csv"),
+        },
+        base="SRC",
+        keys=["X"],
+        output=Output(path="out.csv", columns=["X", "Y", "V"]),
+        columns=[
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(name="Y", type="str", derivation=derivation({"source": "SRC.Y"})),
+            Column(name="V", type="float", derivation=derivation({"source": "LOOK.V"})),
+        ],
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(id="LOOK", dataset="RIGHT", key_base=["X", "Y"])
+            ]
+        }
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            {"SRC": source, "RIGHT": right_table()},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    # R003-5: the two declared key_base names pair with one inferred key, so
+    # the pairing is reported rather than the intermediate silently vanishing
+    # and its readers failing as unknown fields.
+    [diagnostic] = [
+        d
+        for d in raised.value.diagnostics
+        if d.condition == "source_key_length_mismatch"
+    ]
+    assert diagnostic.requirement == "R003-5"
+    assert diagnostic.spec_paths == ("intermediates[0]",)
+    assert diagnostic.context["key_base"] == ["X", "Y"]
+    assert diagnostic.context["key"] == ["X"]
+
+
+def test_an_inline_lookup_with_a_key_naming_no_identifiers_is_reported() -> None:
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation(
+                    {"lookup": {"dataset": "RIGHT", "key": 5, "value": "V"}}
+                ),
+            ),
+        ]
+    )
+
+    # R007-36: a written key that names no identifiers is not an omitted key,
+    # so it is reported here instead of reaching the runtime unvalidated.
+    assert diagnostic.condition == "invalid_field_type"
+    assert diagnostic.requirement == "R007-36"
+    assert diagnostic.spec_paths == ("columns.V.derivation.lookup",)
+
+
+def test_an_aggregate_with_a_key_naming_no_identifiers_is_reported() -> None:
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation(
+                    {"aggregate": {"expr": "max(RIGHT.V)", "key": 5}}
+                ),
+            ),
+        ]
+    )
+
+    # R003-30: a written key that names no identifiers must not silently
+    # reduce over the whole relation unkeyed.
+    assert diagnostic.condition == "missing_aggregate_keys"
+    assert diagnostic.requirement == "R003-30"
+
+
+def test_an_inline_lookup_with_an_incomplete_between_is_reported() -> None:
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation(
+                    {
+                        "lookup": {
+                            "dataset": "RIGHT",
+                            "key": ["X"],
+                            "value": "V",
+                            "between": {"value": "X"},
+                        }
+                    }
+                ),
+            ),
+        ]
+    )
+
+    # R007-36: the named form requires value, lower and upper together, so a
+    # partial inline range is reported before it reaches the runtime.
+    assert diagnostic.condition == "invalid_field_type"
+    assert diagnostic.requirement == "R007-36"
+    assert diagnostic.spec_paths == ("columns.V.derivation.lookup.between",)
+
+
+def test_an_inline_lookup_with_an_omitted_key_infers_the_applicable_keys() -> None:
+    plan = plan_two(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation({"lookup": {"dataset": "RIGHT", "value": "V"}}),
+            ),
+        ]
+    )
+
+    # R003-43/R003-44: the inline lookup omits both lists. The inferred
+    # source becomes a dependency of the column.
+    [derived] = [column for column in plan.columns if column.column == "V"]
+    assert "X" in derived.dependencies
+
+
+def test_a_qualified_aggregate_with_an_omitted_key_infers_the_applicable_keys() -> None:
+    plan = plan_two(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            aggregate_column({"expr": "SUM(RIGHT.V)"}),
+        ]
+    )
+
+    # R003-43/R003-44: the aggregate omits both lists and groups on X.
+    [join] = [
+        join
+        for join in plan.resolved_joins
+        if join.spec_path == "columns.V.derivation.aggregate.expr"
+    ]
+    assert join.source == ("X",)
+    assert join.key == ("X",)
+    assert join.inferred is True
+
+
+def test_an_inferred_lookup_key_typed_differently_on_each_side_is_reported() -> None:
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation({"lookup": {"dataset": "RIGHT", "value": "V"}}),
+            ),
+        ],
+        right="int",
+    )
+
+    # R003-41: an inferred key must compare equal on both sides.
+    assert diagnostic.condition == "incompatible_input_type"
+
+
+def test_a_cross_dataset_source_with_clear_keys_uses_the_implicit_join() -> None:
     plan = plan_two(
         [
             Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
@@ -355,13 +629,49 @@ def test_a_qualified_source_joins_on_the_applicable_keys_it_depends_on() -> None
         ]
     )
 
-    # R003-34: the applicable left key must be complete before the join runs.
-    assert plan.columns[1].dependencies == ("X",)
+    # R003-40: the output key X exists on RIGHT, so the read joins on it.
+    [derived] = [column for column in plan.columns if column.column == "V"]
+    assert derived.implicit_joins == (ImplicitJoin(dataset="RIGHT", keys=("X",)),)
+    assert "X" in derived.dependencies
+    [resolved] = [
+        join
+        for join in plan.resolved_joins
+        if join.spec_path == "columns.V.derivation.source"
+    ]
+    assert resolved.inferred is True
+    assert resolved.source == ("X",)
+    assert resolved.key == ("X",)
 
 
-def test_a_join_key_typed_differently_on_each_side_is_reported() -> None:
-    # R007-19 performs no implicit conversion, so a silent all-missing join
-    # is reported rather than presented as an absent record.
+def test_a_cross_dataset_source_without_applicable_keys_requires_a_lookup() -> None:
+    right = frame_from_values((TypedColumn(name="V", type="float"),), [[1.0]])
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            two_dataset_specification(
+                [
+                    Column(
+                        name="X", type="str", derivation=derivation({"source": "SRC.X"})
+                    ),
+                    Column(
+                        name="V",
+                        type="float",
+                        derivation=derivation({"source": "RIGHT.V"}),
+                    ),
+                ]
+            ),
+            {"SRC": source_table(), "RIGHT": right},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    # R003-42: no output key exists on RIGHT, so the intended match is
+    # unclear and the author must declare it with an explicit `lookup:`.
+    [diagnostic] = raised.value.diagnostics
+    assert diagnostic.condition == "no_applicable_keys"
+    assert diagnostic.requirement == "R003-42"
+    assert diagnostic.spec_paths == ("columns.V.derivation.source",)
+
+
+def test_an_implicit_join_key_typed_differently_on_each_side_is_reported() -> None:
     diagnostic = first_diagnostic(
         [
             Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
@@ -372,13 +682,36 @@ def test_a_join_key_typed_differently_on_each_side_is_reported() -> None:
         right="int",
     )
 
+    # R003-41: an inferred key must compare equal on both sides.
     assert diagnostic.condition == "incompatible_input_type"
-    assert diagnostic.requirement == "R007-38"
-    assert diagnostic.context == {
-        "source": "RIGHT.X",
-        "expected": "str",
-        "actual": "int",
-    }
+    assert diagnostic.requirement == "R003-41"
+
+
+def test_a_lookup_key_typed_differently_on_each_side_is_reported() -> None:
+    # R007-19 performs no implicit conversion, so a type-mismatched
+    # explicit lookup key is reported.
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V",
+                type="float",
+                derivation=derivation(
+                    {
+                        "lookup": {
+                            "dataset": "RIGHT",
+                            "key_base": ["X"],
+                            "key": ["V"],
+                            "value": "V",
+                        }
+                    }
+                ),
+            ),
+        ],
+        right="int",
+    )
+
+    assert diagnostic.condition == "incompatible_input_type"
 
 
 def test_a_declared_key_pair_must_carry_one_comparable_type() -> None:
@@ -390,10 +723,10 @@ def test_a_declared_key_pair_must_carry_one_comparable_type() -> None:
                 type="float",
                 derivation=derivation(
                     {
-                        "mapping_from": {
-                            "source": ["X"],
+                        "lookup": {
                             "dataset": "RIGHT",
-                            "key": ["X"],
+                            "key_base": ["X"],
+                            "key": ["V"],
                             "value": "V",
                         }
                     }
@@ -452,7 +785,7 @@ def test_a_grouped_identifier_beside_a_reduction_is_admitted() -> None:
         ]
     )
 
-    # R003-20: the join matches on the declared keys instead of the applicable keys.
+    # R003-30: the join matches on the declared keys instead of the applicable keys.
     assert plan.columns[1].dependencies == ("X",)
 
 
@@ -532,8 +865,8 @@ def test_a_one_field_aggregate_names_the_shared_shorthand_operation() -> None:
     assert diagnostic.spec_paths == ("columns.V.derivation.aggregate",)
 
 
-def test_a_record_lookup_may_be_read_from_a_numeric_expression() -> None:
-    # R015-13: R010 admits a qualified identifier for a record a lookup has
+def test_a_lookup_may_be_read_from_a_numeric_expression() -> None:
+    # R003-15: R010 admits a qualified identifier for a record a lookup has
     # already selected, and R010-38 still rejects every other dataset.
     columns = [
         Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
@@ -544,11 +877,7 @@ def test_a_record_lookup_may_be_read_from_a_numeric_expression() -> None:
         ),
     ]
     spec = two_dataset_specification(columns).model_copy(
-        update={
-            "record_lookups": [
-                RecordLookup(id="LOOK", dataset="RIGHT", source=["X"], key=["X"])
-            ]
-        }
+        update={"intermediates": [Intermediate(id="LOOK", dataset="RIGHT", key=["X"])]}
     )
 
     plan = plan_execution(
@@ -573,93 +902,6 @@ def test_a_record_lookup_may_be_read_from_a_numeric_expression() -> None:
         ).condition
         == "qualified_identifier"
     )
-
-
-def test_a_row_phase_lookup_cannot_match_on_a_later_phase_value() -> None:
-    # R015-9: during row construction every current-row variable used for
-    # matching must be derived by that same row template.
-    columns = [
-        Column(name="X", type="str"),
-        Column(name="W", type="float"),
-        Column(name="LATE", type="str", derivation=derivation({"source": "X"})),
-    ]
-    spec = two_dataset_specification(columns).model_copy(
-        update={
-            "record_lookups": [
-                RecordLookup(id="LOOK", dataset="RIGHT", source=["LATE"], key=["X"])
-            ],
-            "rows": [
-                Row(
-                    id="row",
-                    dataset="SRC",
-                    derivations={
-                        "X": derivation({"source": "SRC.X"}),
-                        "W": derivation({"source": "LOOK.V"}),
-                    },
-                )
-            ],
-        }
-    )
-
-    with pytest.raises(ExecutionPlanningError) as raised:
-        plan_execution(
-            spec,
-            {"SRC": source_table(), "RIGHT": right_table()},
-            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
-        )
-
-    reported = [
-        diagnostic
-        for diagnostic in raised.value.diagnostics
-        if diagnostic.requirement == "R015-9"
-    ]
-    assert reported and reported[0].condition == "phase_boundary"
-    assert reported[0].context["identifier"] == "LATE"
-
-
-def test_the_plan_reports_the_keys_every_qualified_source_matches_on() -> None:
-    # R003-39: a reviewer sees which same-named columns the join matches on
-    # rather than inferring them from two schemas.
-    plan = plan_two(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            Column(
-                name="V", type="float", derivation=derivation({"source": "RIGHT.V"})
-            ),
-        ]
-    )
-
-    assert [
-        (join.spec_path, join.dataset, join.keys, join.declared_grain)
-        for join in plan.resolved_joins
-    ] == [("columns.V.derivation.source", "RIGHT", ("X",), False)]
-
-
-def test_a_reduction_reports_the_coarser_grain_it_matches_on_instead() -> None:
-    plan = plan_two(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            aggregate_column({"group_by": ["RIGHT.X"], "expr": "SUM(RIGHT.V)"}),
-        ]
-    )
-
-    assert [
-        (join.dataset, join.keys, join.declared_grain) for join in plan.resolved_joins
-    ] == [("RIGHT", ("X",), True)]
-
-
-def test_one_relation_is_reported_once_however_often_it_is_named() -> None:
-    # An aggregate names its right side from both `expr` and `filter`; the
-    # join it performs is still one join.
-    plan = plan_two(
-        [
-            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
-            aggregate_column({"filter": "RIGHT.V > 0", "expr": "SUM(RIGHT.V)"}),
-        ]
-    )
-
-    assert len(plan.resolved_joins) == 1
-    assert plan.resolved_joins[0].keys == ("X",)
 
 
 def filter_diagnostics(spec: Specification) -> list[object]:
@@ -759,7 +1001,7 @@ def test_a_grouped_row_template_source_has_no_records_to_filter() -> None:
     assert diagnostic.requirement == "R003-38"
 
 
-def test_a_record_lookup_source_has_already_chosen_its_record() -> None:
+def test_a_lookup_source_has_already_chosen_its_record() -> None:
     spec = specification(
         [
             Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
@@ -773,8 +1015,8 @@ def test_a_record_lookup_source_has_already_chosen_its_record() -> None:
         ]
     ).model_copy(
         update={
-            "record_lookups": [
-                RecordLookup(id="REF", dataset="SRC", source=["K"], key=["X"])
+            "intermediates": [
+                Intermediate(id="REF", dataset="SRC", key_base=["K"], key=["X"])
             ]
         }
     )

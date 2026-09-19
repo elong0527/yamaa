@@ -46,7 +46,6 @@ columns:
     label: Date of First Exposure to Treatment
     derivation:
       source: ADSL.TRTSDT
-
   - name: ASTDT
     type: date
     label: Analysis Start Date

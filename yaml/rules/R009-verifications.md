@@ -60,8 +60,8 @@ needs that shape and the shape cannot be written as a producer and a consumer.
 **R009-3.** A supplemental qualifier record pointing at its parent domain
 record, like every other cross-dataset link, is asserted by the derivation
 that produces the link rather than by a verification over the finished
-artifact. R015's `unmatched: fail` rejects a value matching no record, and a
-`mapping_from` result carried by a column declaring `not_missing` does the
+artifact. a lookup's `strict: true` rejects a value matching no record, and a
+`lookup` result carried by a column declaring `not_missing` does the
 same; `sdtm-suppmh-parent-linkage` links `IDVARVAL` to its medical-history
 record that way.
 

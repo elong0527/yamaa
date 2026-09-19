@@ -23,7 +23,7 @@ fixtures:
   negative-adex-relative-dose-intensity:
     rule: R013
     condition: aggregate_identifier_not_grouped
-    spec_paths: [columns.RDI.derivation.aggregate]
+    spec_paths: [columns.RDI.derivation.aggregate.expr]
     validator: aggregate_expression
   negative-adlb-computed-parameter:
     rule: R001
@@ -196,7 +196,7 @@ fixtures:
   negative-mapping-from-key-length-mismatch:
     rule: R007
     condition: source_key_length_mismatch
-    spec_paths: [columns.ANRHI.derivation.mapping_from]
+    spec_paths: [columns.ANRHI.derivation.lookup]
     validator: mapping_contract
   negative-matches-unreadable-pattern:
     rule: R022
@@ -214,24 +214,29 @@ fixtures:
     spec_paths: ["output.order_by[1]"]
     validator: name_contract
   negative-record-lookup-id-collision:
-    rule: R015
+    rule: R003
     condition: duplicate_identifier
-    spec_paths: ["record_lookups[0].id", input.EX]
+    spec_paths: ["intermediates[0].id", input.EX]
     validator: name_contract
   negative-record-lookup-incomparable-range:
-    rule: R015
+    rule: R003
     condition: incomparable_range_types
-    spec_paths: ["record_lookups[0].between"]
-    validator: record_lookup
+    spec_paths: ["intermediates[0].between"]
+    validator: lookup_contract
   negative-record-lookup-unordered-keep:
-    rule: R015
+    rule: R003
     condition: unpaired_fields
-    spec_paths: ["record_lookups[0]"]
+    spec_paths: ["intermediates[0]"]
     validator: spec_contract
   negative-record-lookup-unpaired-key:
-    rule: R015
-    condition: unpaired_fields
-    spec_paths: ["record_lookups[0]"]
+    rule: R003
+    condition: source_key_length_mismatch
+    spec_paths: ["intermediates[0]"]
+    validator: spec_contract
+  negative-record-lookup-no-applicable-keys:
+    rule: R003
+    condition: no_applicable_keys
+    spec_paths: ["intermediates[0]"]
     validator: spec_contract
   negative-previous-non-missing-non-variable-source:
     rule: R006

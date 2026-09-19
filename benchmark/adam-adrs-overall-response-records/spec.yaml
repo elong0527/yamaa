@@ -89,7 +89,6 @@ columns:
     label: Date of First Exposure to Treatment
     derivation:
       source: ADSL.TRTSDT
-
   - name: ADY
     type: int
     label: Analysis Relative Day

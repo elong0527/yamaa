@@ -27,7 +27,7 @@ reads from a path.
 
 **R002-1.** `input` maps dataset identifiers to source data
 declarations. Identifiers are used by `base`, `rows.dataset`, qualified
-source variables, and `mapping_from`.
+source variables, and `lookup`.
 
 **R002-2.** A declaration is a path, or a path with the types the fields
 carry. R014 owns that reading and the shorthand between the two forms.

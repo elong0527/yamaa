@@ -18,6 +18,14 @@ aggregate_class:
     - group_by:
         type: "list[variable]"
         description: Grouping keys of an ordinary right-side or output-row reduction; omit when the enclosing grouped row owns the keys.
+    - key:
+        type: [identifier, "list[identifier]"]
+        required: false
+        description: Dataset columns matched against key_base; omit to match on the applicable output keys (R003-40) when the expression reads a qualified dataset relation.
+    - key_base:
+        type: [variable, "list[variable]"]
+        required: false
+        description: Current-row variables paired by position with key; omit when they name the same columns as key. Must not repeat the key names (R003-45).
     - expr:
         type: aggregate_expression
         required: true

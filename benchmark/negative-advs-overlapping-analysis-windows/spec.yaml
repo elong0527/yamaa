@@ -9,11 +9,9 @@ input:
     path: input/awindow.csv
     types: {AWLO: int, AWHI: int}
 base: ADVSPRE
-
-record_lookups:
+intermediates:
   - id: AWIN
     dataset: AWINDOW
-    source: STUDYID
     key: STUDYID
     between: {value: ADY, lower: AWLO, upper: AWHI}
 

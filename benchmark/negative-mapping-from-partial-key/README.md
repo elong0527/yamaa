@@ -35,8 +35,8 @@ missing reference limit whenever any lookup input is missing, state that with
 the lookup's missing-value answer:
 
 ```yaml
-mapping_from:
-  source: [PARAMCD, SEX]
+lookup:
+  key_base: [PARAMCD, SEX]
   dataset: LBREF
   key: [LBTESTCD, SEX]
   value: ANRHI

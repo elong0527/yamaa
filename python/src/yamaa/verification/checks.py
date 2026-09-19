@@ -285,7 +285,7 @@ def _truth(
     return result.value
 
 
-def _record_lookup_bindings(
+def _lookup_bindings(
     table: TypedTable,
     columns: Sequence[TypedColumn],
     rows: Sequence[Mapping[str, object]] | None,
@@ -293,7 +293,7 @@ def _record_lookup_bindings(
     """Validate and normalize one lookup binding aligned to every output row."""
     lookup_types = {column.name: column.type for column in columns}
     if len(lookup_types) != len(columns):
-        raise ValueError("record lookup column names must be unique")
+        raise ValueError("lookup column names must be unique")
     if any(
         name.count(".") != 1 or not all(part for part in name.split("."))
         for name in lookup_types
@@ -549,18 +549,16 @@ def check_dataset(
     verifications: Sequence[Expression],
     keys: Sequence[str],
     *,
-    record_lookup_columns: Sequence[TypedColumn] = (),
-    record_lookup_rows: Sequence[Mapping[str, object]] | None = None,
+    lookup_columns: Sequence[TypedColumn] = (),
+    lookup_rows: Sequence[Mapping[str, object]] | None = None,
 ) -> tuple[VerificationFailure, ...]:
     """Run dataset verifications with resolved per-row lookup bindings."""
     if not verifications:
-        if record_lookup_columns or record_lookup_rows is not None:
-            _record_lookup_bindings(table, record_lookup_columns, record_lookup_rows)
+        if lookup_columns or lookup_rows is not None:
+            _lookup_bindings(table, lookup_columns, lookup_rows)
         return ()
     _require_columns(table, keys, "keys", "R005-46")
-    lookup_types, lookup_rows = _record_lookup_bindings(
-        table, record_lookup_columns, record_lookup_rows
-    )
+    lookup_types, lookup_rows = _lookup_bindings(table, lookup_columns, lookup_rows)
     identifiers: dict[str, str] = {}
     failures: list[VerificationFailure] = []
     key_maps = _key_maps(table, keys)
@@ -840,8 +838,8 @@ def verify_completed_table(
     keys: Sequence[str],
     verifications: Sequence[Expression] = (),
     *,
-    record_lookup_columns: Sequence[TypedColumn] = (),
-    record_lookup_rows: Sequence[Mapping[str, object]] | None = None,
+    lookup_columns: Sequence[TypedColumn] = (),
+    lookup_rows: Sequence[Mapping[str, object]] | None = None,
 ) -> TypedTable:
     """Run every stage in R005 order and raise at the first that fails.
 
@@ -867,8 +865,8 @@ def verify_completed_table(
             table,
             verifications,
             keys,
-            record_lookup_columns=record_lookup_columns,
-            record_lookup_rows=record_lookup_rows,
+            lookup_columns=lookup_columns,
+            lookup_rows=lookup_rows,
         )
     )
     errors = [failure for failure in failures if failure.severity == "error"]

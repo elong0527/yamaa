@@ -5,23 +5,17 @@ input:
   AE: input/ae.csv
   QUERY: {path: input/queries.csv, types: {GRPID: int}}
 base: AE
-
-record_lookups:
+intermediates:
   - id: SMQ1
     dataset: QUERY
-    source: [AEDECOD]
+    key_base: [AEDECOD]
     key: [TERM]
     filter: "QUERY.PREFIX = 'SMQ01'"
-    incomplete: missing
-    unmatched: missing
-
   - id: SMQ2
     dataset: QUERY
-    source: [AEDECOD]
+    key_base: [AEDECOD]
     key: [TERM]
     filter: "QUERY.PREFIX = 'SMQ02'"
-    incomplete: missing
-    unmatched: missing
 
 output:
   path: adae.csv

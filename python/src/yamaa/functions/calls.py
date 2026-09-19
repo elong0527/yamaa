@@ -97,7 +97,8 @@ class _TypeCatalog:
             for dataset, source in specification.input.items()
         }
         self._lookups = {
-            lookup.id: lookup.dataset for lookup in specification.record_lookups or ()
+            intermediate.id: intermediate.dataset
+            for intermediate in specification.intermediates or ()
         }
 
     def resolve(self, variable: str) -> ColumnType | None:

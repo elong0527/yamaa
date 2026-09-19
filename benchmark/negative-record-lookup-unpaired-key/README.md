@@ -1,4 +1,4 @@
-# Reject a reference limit matched against nothing
+# Reject a lookup whose source and key lists do not pair up
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-record-lookup-unpaired-key.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
@@ -16,24 +16,22 @@ table carrying the upper limit (`NRHI`) by test code and sex.
 - `LBSTNRHI` would contain the upper limit value from the
   reference-limit table for the test code and sex of the result.
 
-**Note:** the current-row values are paired with the limit table
-by test code and sex, but nothing says which columns of the limit
-table those values are matched against; guessing by matching names
-would make a rule out of a coincidence of naming, so the run is
-rejected before any data is read and no artifact is accepted.
+**Note:** the lookup pairs two current-row values with three
+limit-table columns, so one column would match against nothing.
+The two lists pair by position, and a length mismatch is rejected
+before any data is read; no artifact is accepted.
 
 **Standard:** SDTM | **Domain:** LB
 
 ## How to fix
 
-Name the lookup-table columns paired with the current-row values:
+Give each current-row value exactly one lookup-table column:
 
 ```yaml
-record_lookups:
+intermediates:
   - id: REFRANGE
     dataset: LBRANGE
-    source: [LBTESTCD, SEX]
     key: [LBTESTCD, SEX]
 ```
 
-The two lists pair by position and must always be stated together.
+The two lists pair by position and must have the same length.

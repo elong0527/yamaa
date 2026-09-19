@@ -1,10 +1,13 @@
 phase: validation
 condition: source_key_length_mismatch
 spec_paths:
-  - columns.ANRHI.derivation.mapping_from
+  - columns.ANRHI.derivation.lookup
 requirement: R007-48
 context:
-  source: [PARAMCD, SEX]
-  key: [LBTESTCD]
-  source_count: 2
+  key_base:
+    - PARAMCD
+    - SEX
+  key:
+    - LBTESTCD
+  key_base_count: 2
   key_count: 1

@@ -32,8 +32,8 @@ Pair every current-row lookup value with its corresponding lookup-table
 column:
 
 ```yaml
-mapping_from:
-  source: [PARAMCD, SEX]
+lookup:
+  key_base: [PARAMCD, SEX]
   dataset: LBREF
   key: [LBTESTCD, SEX]
   value: ANRHI

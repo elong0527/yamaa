@@ -46,7 +46,6 @@ columns:
     label: Datetime of First Exposure to Treatment
     derivation:
       source: ADSL.TRTSDTM
-
   - name: TRTEMFL
     type: str
     label: Treatment Emergent Analysis Flag

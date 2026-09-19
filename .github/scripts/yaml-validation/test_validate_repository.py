@@ -835,8 +835,8 @@ class TestStaticSemanticContracts(unittest.TestCase):
             }
         })
         length = self.validate({
-            'mapping_from': {
-                'source': ['KEY1', 'KEY2'],
+            'lookup': {
+                'key_base': ['KEY1', 'KEY2'],
                 'dataset': 'REF',
                 'key': 'K',
                 'value': 'K',
@@ -901,15 +901,15 @@ class TestStaticSemanticContracts(unittest.TestCase):
             invalid_to_date[0].condition, 'incompatible_input_type'
         )
 
-    def test_record_lookup_range_types(self):
+    def test_intermediate_range_types(self):
         spec = {
-            'record_lookups': [{
+            'intermediates': [{
                 'id': 'R',
                 'dataset': 'REF',
                 'between': {'value': 'A', 'lower': 'LO', 'upper': 'HI'},
             }]
         }
-        errors = VALIDATOR.validate_record_lookup_static_semantics(
+        errors = VALIDATOR.validate_intermediate_static_semantics(
             spec,
             'spec.yaml',
             {'REF': {'LO': 'int', 'HI': 'float'}},
@@ -919,16 +919,16 @@ class TestStaticSemanticContracts(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0].condition, 'incomparable_range_types')
 
-    def test_record_lookup_equality_key_types(self):
+    def test_intermediate_equality_key_types(self):
         spec = {
-            'record_lookups': [{
+            'intermediates': [{
                 'id': 'R',
                 'dataset': 'REF',
                 'source': 'A',
                 'key': 'K',
             }]
         }
-        errors = VALIDATOR.validate_record_lookup_static_semantics(
+        errors = VALIDATOR.validate_intermediate_static_semantics(
             spec,
             'spec.yaml',
             {'REF': {'K': 'str'}},
@@ -1947,61 +1947,6 @@ class TestRuleMetadata(unittest.TestCase):
         self.assertTrue(all('normative' in error for error in errors))
 
 
-class TestJoinKeyInference(unittest.TestCase):
-    def write_example(self, root, name, spec, files):
-        ex_dir = root / 'benchmark' / name
-        (ex_dir / 'input').mkdir(parents=True)
-        (ex_dir / 'spec.yaml').write_text(spec)
-        for filename, content in files.items():
-            (ex_dir / 'input' / filename).write_text(content)
-
-    def test_reports_inferred_keys_per_qualified_source(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            self.write_example(
-                root, 'ex',
-                'schema_version: "1.0"\n'
-                'input:\n'
-                '  AE: input/ae.csv\n'
-                '  SUPP: input/supp.csv\n'
-                'base: AE\n'
-                'keys: [STUDYID, USUBJID, AESEQ]\n'
-                'columns:\n'
-                '  - name: AESEV\n'
-                '    derivation:\n'
-                "      source: SUPP.AESEV\n",
-                {
-                    'ae.csv': 'STUDYID,USUBJID,AESEQ\n1,1,1\n',
-                    'supp.csv': 'STUDYID,USUBJID,AESEQ,AESEV\n1,1,1,MILD\n',
-                },
-            )
-            warnings = VALIDATOR.validate_join_key_inference(root)
-
-        self.assertEqual(len(warnings), 1)
-        self.assertIn('qualified source SUPP', warnings[0])
-        self.assertIn('[STUDYID, USUBJID, AESEQ]', warnings[0])
-
-    def test_skips_base_dataset_and_missing_right_side(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            self.write_example(
-                root, 'ex',
-                'schema_version: "1.0"\n'
-                'input:\n'
-                '  AE: input/ae.csv\n'
-                'base: AE\n'
-                'keys: [STUDYID]\n'
-                'columns:\n'
-                '  - name: X\n'
-                '    derivation:\n'
-                "      source: AE.X\n",
-                {'ae.csv': 'STUDYID,X\n1,a\n'},
-            )
-            warnings = VALIDATOR.validate_join_key_inference(root)
-
-        self.assertEqual(warnings, [])
-
-
 class TestSpecificationInheritance(unittest.TestCase):
     def setUp(self):
         self.env, schema_errors = VALIDATOR.build_schema_env(
@@ -2030,7 +1975,7 @@ class TestSpecificationInheritance(unittest.TestCase):
                 '  DM: ../input/dm.csv\n'
                 '  UNUSED: ../input/missing.csv\n'
                 'base: DM\n'
-                'record_lookups:\n'
+                'intermediates:\n'
                 '  - id: unused_lookup\n'
                 '    dataset: UNUSED\n'
                 'columns:\n'
@@ -2096,7 +2041,7 @@ class TestSpecificationInheritance(unittest.TestCase):
             resolved['input'],
             {'DM': {'path': 'input/dm.csv', 'types': {'AGE': 'int'}}},
         )
-        self.assertNotIn('record_lookups', resolved)
+        self.assertNotIn('intermediates', resolved)
         self.assertEqual(
             [column['name'] for column in resolved['columns']],
             ['RESULT', 'AUDIT', 'LATE', 'DEPENDENT'],
@@ -2118,10 +2063,10 @@ class TestSpecificationInheritance(unittest.TestCase):
                 '  DM: input/dm.csv\n'
                 '  REF: input/ref.csv\n'
                 'base: DM\n'
-                'record_lookups:\n'
+                'intermediates:\n'
                 '  - id: ref\n'
                 '    dataset: REF\n'
-                '    source: DM.KEY\n'
+                '    key_base: DM.KEY\n'
                 '    key: KEY\n'
                 'columns:\n'
                 '  - name: X\n'
@@ -2142,9 +2087,9 @@ class TestSpecificationInheritance(unittest.TestCase):
                 'domain: TEST\n'
                 'keys: [X]\n'
                 'output: {path: out.csv, columns: [X]}\n'
-                'record_lookups:\n'
+                'intermediates:\n'
                 '  - id: ref\n'
-                '    unmatched: missing\n'
+                '    missing: 0\n'
                 'rows:\n'
                 '  - id: main\n'
                 '    derivations:\n'
@@ -2155,13 +2100,13 @@ class TestSpecificationInheritance(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertEqual(
-            resolved['record_lookups'][0],
+            resolved['intermediates'][0],
             {
                 'id': 'ref',
                 'dataset': 'REF',
-                'source': ['DM.KEY'],
+                'key_base': ['DM.KEY'],
                 'key': ['KEY'],
-                'unmatched': 'missing',
+                'missing': 0,
             },
         )
         self.assertEqual(
@@ -2850,7 +2795,7 @@ class TestSpecNames(unittest.TestCase):
             "domain": "ADSL",
             "input": {"DM": "dm.csv", "EX": "ex.csv"},
             "base": "DM",
-            "record_lookups": [{"id": "dose", "dataset": "EX"}],
+            "intermediates": [{"id": "dose", "dataset": "EX"}],
             "keys": ["USUBJID"],
             "output": {"columns": ["USUBJID"]},
             "columns": [{"name": "USUBJID"}],
@@ -3031,7 +2976,7 @@ class TestSpecNames(unittest.TestCase):
             "domain": "ADSL",
             "input": {"ADSL": "input.csv"},
             "base": "MISSING",
-            "record_lookups": [
+            "intermediates": [
                 {"id": "ADSL", "dataset": "MISSING"},
                 {"id": "ADSL", "dataset": "ADSL"},
             ],
@@ -3046,7 +2991,7 @@ class TestSpecNames(unittest.TestCase):
         message = "\n".join(errors)
         self.assertIn("must not equal the output domain", message)
         self.assertIn("undeclared dataset 'MISSING'", message)
-        self.assertIn("duplicate record lookup id", message)
+        self.assertIn("duplicate intermediate id", message)
         self.assertIn("conflicts with a dataset or domain", message)
         self.assertIn("duplicate row id", message)
 
@@ -3143,8 +3088,7 @@ class TestSpecContracts(unittest.TestCase):
             "domain": "ADSL",
             "input": {"DM": "dm.csv"},
             "base": "DM",
-            "record_lookups": [
-                {"id": "LAST", "dataset": "DM", "source": "USUBJID"},
+            "intermediates": [
                 {"id": "FIRST", "dataset": "DM", "order_by": ["DM.DATE"]},
             ],
             "keys": ["USUBJID"],
@@ -3166,7 +3110,6 @@ class TestSpecContracts(unittest.TestCase):
         errors = VALIDATOR.validate_spec_contracts(spec, "example/spec.yaml")
 
         message = "\n".join(errors)
-        self.assertIn("source and key", message)
         self.assertIn("order_by and keep", message)
         self.assertIn("requires at least one bound", message)
         self.assertIn("at least two distinct columns", message)

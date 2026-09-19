@@ -4,7 +4,7 @@ title: Schema concepts
 
 # The schema: class, type, expression, registry
 
-> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Benchmark walkthrough](yaml-benchmark-walkthrough.md)
+> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Examples walkthrough](yaml-examples-walkthrough.md)
 
 > **Read this if** you are writing or reviewing a specification and want the
 > language itself: what the four schema words mean, and every derivation verb
@@ -27,7 +27,7 @@ is exactly the one you already know -- **a header row and the rows filled in
 under it.**
 
 **`root_class` is the header for the file.** It declares `schema_version`,
-`domain`, `keys`, `input`, `base`, `parents`, `record_lookups`, `output`,
+`domain`, `keys`, `input`, `base`, `parents`, `lookups`, `output`,
 `columns`, `rows`, `verifications` and `metadata`, of which six are required.
 The specification in
 [Excel to YAMAA](excel-to-yamaa.md)
@@ -78,8 +78,8 @@ a specification:
 | `output_class` | `output:` | [`adam-adsl-bmi-compute/spec.yaml:8`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adsl-bmi-compute/spec.yaml#L8) |
 | `dataset_class` | each value under `input:` | [`adam-adex-cumulative-dose/spec.yaml:5`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adex-cumulative-dose/spec.yaml#L5) |
 | `row_class` | each item of `rows:` | [`adam-adlb-bds/spec.yaml:100`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adlb-bds/spec.yaml#L100) |
-| `record_lookup_class` | each item of `record_lookups:` | [`adam-adae-death-outcome/spec.yaml:10`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adae-death-outcome/spec.yaml#L10) |
-| `record_lookup_between_class` | `record_lookup.between:` | [`adam-advs-analysis-window-table/spec.yaml:16`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-advs-analysis-window-table/spec.yaml#L16) |
+| `intermediate_class` | each item of `intermediates:` | [`adam-adae-death-outcome/spec.yaml:7`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adae-death-outcome/spec.yaml#L7) |
+| `lookup_between_class` | `lookup.between:` | [`adam-advs-analysis-window-table/spec.yaml:16`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-advs-analysis-window-table/spec.yaml#L16) |
 | `handled_expression_class` | a `derivation:` that handles failure | [`adam-adsl-mapping/spec.yaml:98`](https://github.com/elong0527/yamaa/blob/main/benchmark/adam-adsl-mapping/spec.yaml#L98) |
 | `source_binding_class` | a `source:` that states how it reads | [`sdtm-dm-basic/spec.yaml:55`](https://github.com/elong0527/yamaa/blob/main/benchmark/sdtm-dm-basic/spec.yaml#L55) |
 | `filtered_source_class` | another operation's `source:` that states which records it reads | [`sdtm-dm-basic/spec.yaml:42`](https://github.com/elong0527/yamaa/blob/main/benchmark/sdtm-dm-basic/spec.yaml#L42) |
@@ -333,7 +333,7 @@ Two more registries work the same way: `column_verifications` and
 | Expression | What it does | Notes |
 |---|---|---|
 | `mapping` | Look up an inline dictionary | Has a `case_sensitive` option |
-| `mapping_from` | Look up a declared dataset | Keys are declared explicitly; output `keys` are **not** consulted |
+| `lookup` | Look up a declared dataset | Keys are declared explicitly; output `keys` are **not** consulted |
 | `cut` | Numeric banding | `breaks` plus `labels`; exactly one more label than breaks |
 
 ### 2.3 Strings
@@ -384,7 +384,7 @@ Two points that always come up:
 
 `date_impute` and `date_precision` read the same source; that pairing is the
 standard way to derive an imputation flag. See
-[case 6](excel-to-yamaa.md#case-6-partial-dates-and-the-imputation-flag).
+[example 6](excel-to-yamaa.md#example-6-partial-dates-and-the-imputation-flag).
 
 ### 2.6 Window expressions (over constructed output rows)
 

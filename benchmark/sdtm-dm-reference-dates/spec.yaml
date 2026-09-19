@@ -7,8 +7,7 @@ input:
   DS: input/ds.csv
   AE: input/ae.csv
 base: DM_RAW
-
-record_lookups:
+intermediates:
   - id: LASTEX
     dataset: EX
     filter: "EX.EXENDTC IS NOT NULL"

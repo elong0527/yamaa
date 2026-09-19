@@ -27,12 +27,10 @@ absent range is intentionally represented by a missing value, state that policy
 explicitly:
 
 ```yaml
-record_lookups:
+intermediates:
   - id: REFRANGE
     dataset: LBRANGE
-    source: [LBTESTCD, SEX]
     key: [LBTESTCD, SEX]
-    unmatched: missing
 ```
 
 The lookup then returns a missing value for every column read through it when

@@ -9,13 +9,11 @@ input:
     path: input/lms_ref.csv
     types: {L: float, M: float, S: float, AGE: int}
 base: ADVSPRE
-
-record_lookups:
+intermediates:
   - id: GROWTH
     dataset: LMS
-    source: [ADVSPRE.PARAMCD, ADVSPRE.SEX, ADVSPRE.AGE]
+    key_base: [ADVSPRE.PARAMCD, ADVSPRE.SEX, ADVSPRE.AGE]
     key: [PARAMCD, SEX, AGE]
-    unmatched: missing
 
 output:
   path: advs.csv

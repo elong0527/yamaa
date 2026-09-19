@@ -174,7 +174,7 @@ summary:
 - **R004-24.** aggregate, record-lookup, and multiple-match filters see
   records of their owning right-side dataset;
 - **R004-25.** a window filter sees completed output columns;
-- **R004-26.** a verification sees completed output columns and record lookups
+- **R004-26.** a verification sees completed output columns and record intermediates
   resolved for the completed row; and
 - **R004-27.** a `case` sees the values available to its enclosing
   derivation.

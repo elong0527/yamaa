@@ -18,7 +18,7 @@ explained in [Schema concepts](../articles/schema-concepts.md).
 | [`schema_shared.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_shared.yaml) | Headers shared across schema files |
 | [`schema_derivation.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_derivation.yaml) | The `derivation` field: the expression plus its `conversion_failure` layer |
 | [`schema_expression_core.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_core.yaml) | Core expressions: `source`, `literal`, `first_available`, `case` |
-| [`schema_expression_mapping.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_mapping.yaml) | Vocabulary mapping: `mapping`, `mapping_from`, `cut` |
+| [`schema_expression_mapping.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_mapping.yaml) | Vocabulary mapping: `mapping`, `lookup`, `cut` |
 | [`schema_expression_str.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_str.yaml) | String expressions: `str_extract`, `str_concat`, `str_template`, `str_upper`, `str_lower` |
 | [`schema_expression_numeric.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_numeric.yaml) | The closed `compute` grammar (R010) |
 | [`schema_expression_aggregate.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_aggregate.yaml) | The `aggregate` reducers (R013) |

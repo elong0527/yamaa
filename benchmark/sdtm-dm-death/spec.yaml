@@ -6,24 +6,17 @@ input:
   DS: input/ds.csv
   AE: input/ae.csv
 base: DM_RAW
-
-record_lookups:
+intermediates:
   - id: DTHDS
     dataset: DS
-    source: [STUDYID, USUBJID]
-    key: [STUDYID, USUBJID]
     filter: "DS.DSDECOD = 'DEATH'"
     order_by: [DS.DSSTDTC]
     keep: last
-    unmatched: missing
   - id: DTHAE
     dataset: AE
-    source: [STUDYID, USUBJID]
-    key: [STUDYID, USUBJID]
     filter: "AE.AEOUT = 'FATAL'"
     order_by: [AE.AEENDTC]
     keep: last
-    unmatched: missing
 
 output:
   path: dm.csv

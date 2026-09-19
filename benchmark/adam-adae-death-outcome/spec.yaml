@@ -5,14 +5,11 @@ input:
   AE: input/ae.csv
   DM: input/dm.csv
 base: AE
-
-record_lookups:
+intermediates:
   - id: DEATHEV
     dataset: AE
-    source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
     filter: "AE.AEOUT = 'FATAL'"
-    unmatched: missing
 
 output:
   path: adae.csv
@@ -60,7 +57,6 @@ columns:
     label: Death Date from Demographics
     derivation:
       source: DM.DTHDT
-
   - name: FATALFL
     type: str
     label: Fatal Event Flag

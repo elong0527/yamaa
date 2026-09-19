@@ -30,7 +30,7 @@ State which end of the order supplies the treatment alongside the order
 itself. For the earliest treatment:
 
 ```yaml
-record_lookups:
+intermediates:
   - id: DOSING
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]

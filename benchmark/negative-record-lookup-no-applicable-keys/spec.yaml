@@ -1,0 +1,52 @@
+schema_version: "1.0"
+domain: LB
+keys: [STUDYID, USUBJID, LBSEQ]
+input:
+  LB_RAW: input/lb_raw.csv
+  LBRANGE: input/lbrange.csv
+base: LB_RAW
+intermediates:
+  - id: REFRANGE
+    dataset: LBRANGE
+    key_base: [LBTESTCD, SEX]
+
+output:
+  path: lb.csv
+  columns: [STUDYID, USUBJID, LBSEQ, LBTESTCD, SEX, LBSTNRHI]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: LB_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: LB_RAW.USUBJID
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: LB_RAW.LBSEQ
+
+  - name: LBTESTCD
+    type: str
+    label: Lab Test or Examination Short Name
+    derivation:
+      source: LB_RAW.LBTESTCD
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation:
+      source: LB_RAW.SEX
+
+  - name: LBSTNRHI
+    type: float
+    label: Reference Range Upper Limit-Std Units
+    derivation:
+      source: REFRANGE.NRHI

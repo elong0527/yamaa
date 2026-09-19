@@ -45,8 +45,9 @@ columns:
     type: date
     label: Date of First Exposure to Treatment
     derivation:
-      source: ADSL.TRTSDT
-
+      lookup:
+        dataset: ADSL
+        value: TRTSDT
   - name: AVAL
     type: float
     label: Analysis Value

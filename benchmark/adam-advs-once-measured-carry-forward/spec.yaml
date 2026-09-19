@@ -11,18 +11,14 @@ input:
   ADSL: input/adsl.csv
 
 base: PLAN
-
-record_lookups:
+intermediates:
   - id: SUBJECT
     dataset: ADSL
-    source: [STUDYID, USUBJID]
-    key: [STUDYID, USUBJID]
 
   - id: COLLECTED
     dataset: VS
-    source: [STUDYID, USUBJID, PARAMCD, ADT]
+    key_base: [STUDYID, USUBJID, PARAMCD, ADT]
     key: [STUDYID, USUBJID, VSTESTCD, VSDTC]
-    unmatched: missing
 
 output:
   path: advs.csv

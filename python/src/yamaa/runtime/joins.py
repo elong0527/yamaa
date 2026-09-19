@@ -1,9 +1,9 @@
-"""R003 keyed joins, R007 declared-key lookups, and the helpers they share.
+"""R003 keyed joins and the helpers they share.
 
 One relation is read once into ordered typed records, and every operation
-that reaches those records -- an implicit left join, a `mapping_from`
-lookup, an R013 reduction, an R015 record lookup, and the grouped row
-construction R001 defines -- selects from that one reading. Partitioning and
+that reaches those records -- a named or inline `lookup`, an R013
+reduction, and the grouped row construction R001 defines -- selects from
+that one reading. Partitioning and
 ordering live here rather than beside each caller so that two operations
 cannot disagree about which records a key reaches or which record an order
 puts first.
@@ -28,7 +28,6 @@ from yamaa.expressions import (
     ResolvedValue,
     TruthValue,
     evaluate_predicate,
-    handler_value,
     parse_predicate_cached,
 )
 from yamaa.io.polars import runtime_rows
@@ -446,117 +445,6 @@ def _parsed(predicate: str | None) -> PredicateAst | None | ConditionResult:
             {"predicate": predicate, "position": error.position},
             requirement="R004-31",
         )
-
-
-def evaluate_mapping_from(
-    payload: Mapping[str, object],
-    relation: RelationIndex,
-    resolver_values: Mapping[str, RuntimeValue],
-) -> EvaluationResult:
-    """Look one value up by the key pairs the specification declares.
-
-    R003-14 and R003-15 make this the same equality left join as an implicit
-    qualified source, differing only in where the keys come from: declared
-    pairs rather than output keys, so it reaches a right side keyed on
-    something else.
-    """
-    sources = _string_list(payload.get("source"))
-    keys = _string_list(payload.get("key"))
-    value_field = payload.get("value")
-    if sources is None or keys is None or not isinstance(value_field, str):
-        return _condition(
-            "validation",
-            "invalid_field_type",
-            {"operation": "mapping_from", "expected": "source, key, and value"},
-            requirement="R007-36",
-        )
-    if len(sources) != len(keys):
-        return _condition(
-            "validation",
-            "source_key_length_mismatch",
-            {
-                "source": list(sources),
-                "key": list(keys),
-                "source_count": len(sources),
-                "key_count": len(keys),
-            },
-            requirement="R007-48",
-        )
-    for field in (*keys, value_field):
-        if not relation.has(field):
-            return _condition(
-                "validation",
-                "unknown_field",
-                {"identifier": f"{relation.dataset}.{field}"},
-            )
-
-    values: list[RuntimeValue] = []
-    for name in sources:
-        if name not in resolver_values:
-            return _condition("validation", "unknown_field", {"identifier": name})
-        values.append(resolver_values[name])
-
-    missing = [
-        name for name, value in zip(sources, values, strict=True) if value is MISSING
-    ]
-    if missing:
-        # R008-9: with several inputs, `missing` fires when any one of them
-        # is missing, so an incomplete key never reaches `unmapped`.
-        if "missing" in payload:
-            return handler_value(payload, "missing")
-        return _condition(
-            "mapping",
-            "missing_input",
-            {
-                "dataset": relation.dataset,
-                "source": list(sources),
-                "missing_source": missing[0],
-            },
-            requirement="R007-49",
-            applicable_handler="missing",
-        )
-
-    lookup_key = {
-        field: json_value(value) for field, value in zip(keys, values, strict=True)
-    }
-    matches = relation.matching(keys, values)
-    if len(matches) > 1:
-        # R007-21's pairing identifies one record; two make the answer depend
-        # on file order rather than on the study's reference data.
-        return _condition(
-            "mapping",
-            "duplicate_lookup_key",
-            {
-                "dataset": relation.dataset,
-                "key": list(keys),
-                "lookup_key": lookup_key,
-                "match_count": len(matches),
-            },
-            requirement="R007-37",
-        )
-    if not matches:
-        if "unmapped" in payload:
-            return handler_value(payload, "unmapped")
-        return _condition(
-            "mapping",
-            "unmapped_key",
-            {
-                "dataset": relation.dataset,
-                "key": list(keys),
-                "lookup_key": lookup_key,
-            },
-            requirement="R007-49",
-            applicable_handler="unmapped",
-        )
-    return normalize_runtime_value(matches[0].values[value_field])
-
-
-def _string_list(value: object) -> tuple[str, ...] | None:
-    if isinstance(value, str):
-        return (value,)
-    if isinstance(value, Sequence) and all(isinstance(item, str) for item in value):
-        return tuple(value)  # type: ignore[arg-type]
-    return None
 
 
 def resolution_result(resolution: Resolution) -> EvaluationResult:
