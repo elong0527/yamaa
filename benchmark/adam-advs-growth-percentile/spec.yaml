@@ -8,14 +8,12 @@ input:
   LMS:
     path: input/lms_ref.csv
     types: {L: float, M: float, S: float, AGE: int}
-base: ADVSPRE
-
-record_lookups:
+lookups:
   - id: GROWTH
     dataset: LMS
     source: [ADVSPRE.PARAMCD, ADVSPRE.SEX, ADVSPRE.AGE]
     key: [PARAMCD, SEX, AGE]
-    unmatched: missing
+base: ADVSPRE
 
 output:
   path: advs.csv

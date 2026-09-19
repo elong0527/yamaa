@@ -4,9 +4,7 @@ keys: [STUDYID, USUBJID, PARAMCD]
 input:
   ADSL: input/adsl.csv
   TU: input/tu.csv
-base: ADSL
-
-record_lookups:
+lookups:
   - id: TU_TARGET
     dataset: TU
     filter: >-
@@ -14,7 +12,13 @@ record_lookups:
       AND TU.TUSTRESC = 'TARGET'
     order_by: [TU.TUSEQ]
     keep: first
-    unmatched: missing
+    source:
+      - STUDYID
+      - USUBJID
+    key:
+      - STUDYID
+      - USUBJID
+base: ADSL
 
 output:
   path: adrs.csv

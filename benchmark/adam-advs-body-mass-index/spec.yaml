@@ -3,15 +3,12 @@ domain: ADVS
 keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
 input:
   ADVSIN: {path: input/advs.csv, types: {AVAL: float}}
-
-record_lookups:
+lookups:
   - id: BASE_HEIGHT
     dataset: ADVSIN
     filter: "ADVSIN.PARAMCD = 'HEIGHT'"
     source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
-    unmatched: missing
-
 output:
   path: advs.csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVAL, AVISIT, DTYPE]

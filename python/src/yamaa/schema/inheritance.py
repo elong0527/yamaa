@@ -51,7 +51,7 @@ _DRIVE_ROOT = re.compile(r"^[A-Za-z]:[\\/]")
 
 _KEYED_COLLECTIONS: dict[str, tuple[Literal["mapping", "list"], str | None, str]] = {
     "input": ("mapping", None, "dataset_class"),
-    "record_lookups": ("list", "id", "record_lookup_class"),
+    "lookups": ("list", "id", "lookup_class"),
     "columns": ("list", "name", "column_class"),
     "rows": ("list", "id", "row_class"),
 }
@@ -741,8 +741,8 @@ _IDENTIFIER_DATASET_FIELDS = frozenset(
     {
         ("root_class", "base"),
         ("row_class", "dataset"),
-        ("record_lookup_class", "dataset"),
-        ("mapping_from", "dataset"),
+        ("lookup_class", "dataset"),
+        ("lookup", "dataset"),
     }
 )
 
@@ -898,11 +898,7 @@ def _prune(document: dict[str, object], bundle: SchemaBundle) -> dict[str, objec
     result = copy.deepcopy(document)
     datasets = result.get("input") if isinstance(result.get("input"), dict) else {}
     columns = result.get("columns") if isinstance(result.get("columns"), list) else []
-    lookups = (
-        result.get("record_lookups")
-        if isinstance(result.get("record_lookups"), list)
-        else []
-    )
+    lookups = result.get("lookups") if isinstance(result.get("lookups"), list) else []
     rows = result.get("rows") if isinstance(result.get("rows"), list) else []
     column_map = {
         item.get("name"): item
@@ -1000,7 +996,7 @@ def _prune(document: dict[str, object], bundle: SchemaBundle) -> dict[str, objec
                         live_datasets,
                         live_lookups,
                     )
-        lookup_fields = class_fields(bundle, "record_lookup_class")
+        lookup_fields = class_fields(bundle, "lookup_class")
         for lookup_id in tuple(live_lookups - processed_lookups):
             processed_lookups.add(lookup_id)
             lookup = lookup_map.get(lookup_id)
@@ -1037,14 +1033,14 @@ def _prune(document: dict[str, object], bundle: SchemaBundle) -> dict[str, objec
             for name, value in result["input"].items()
             if name in live_datasets
         }
-    if isinstance(result.get("record_lookups"), list):
-        result["record_lookups"] = [
+    if isinstance(result.get("lookups"), list):
+        result["lookups"] = [
             item
-            for item in result["record_lookups"]
+            for item in result["lookups"]
             if isinstance(item, dict) and item.get("id") in live_lookups
         ]
-        if not result["record_lookups"]:
-            del result["record_lookups"]
+        if not result["lookups"]:
+            del result["lookups"]
     if isinstance(result.get("rows"), list):
         for row in result["rows"]:
             derivations = row.get("derivations") if isinstance(row, dict) else None
@@ -1081,7 +1077,7 @@ def _column_dependencies(
         lookup = lookups.get(reference.split(".", 1)[0])
         for lookup_kind, lookup_reference in _member_references(
             lookup,
-            "record_lookup_class",
+            "lookup_class",
             ("source", "between", "filter", "order_by"),
             bundle,
         ):
@@ -1103,9 +1099,7 @@ def _order_columns(
     positions = {name: index for index, name in enumerate(typed_names)}
     rows = document.get("rows") if isinstance(document.get("rows"), list) else []
     lookup_items = (
-        document.get("record_lookups")
-        if isinstance(document.get("record_lookups"), list)
-        else []
+        document.get("lookups") if isinstance(document.get("lookups"), list) else []
     )
     lookups = {
         item.get("id"): item
@@ -1171,7 +1165,7 @@ def _schema_order(
     root = class_fields(bundle, "root_class")
     classes = {
         "input": "dataset_class",
-        "record_lookups": "record_lookup_class",
+        "lookups": "lookup_class",
         "columns": "column_class",
         "rows": "row_class",
     }

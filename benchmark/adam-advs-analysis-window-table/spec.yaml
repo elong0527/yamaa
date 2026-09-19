@@ -6,9 +6,7 @@ input:
   AWINDOW:
     path: input/awindow.csv
     types: {AVISITN: int, AWLO: int, AWHI: int, AWTARGET: int}
-base: ADVSPRE
-
-record_lookups:
+lookups:
   - id: AWIN
     dataset: AWINDOW
     source: [STUDYID]
@@ -17,8 +15,7 @@ record_lookups:
       value: ADY
       lower: AWLO
       upper: AWHI
-    incomplete: missing
-    unmatched: missing
+base: ADVSPRE
 
 output:
   path: advs.csv

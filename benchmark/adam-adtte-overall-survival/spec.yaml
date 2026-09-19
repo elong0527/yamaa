@@ -7,17 +7,16 @@ input:
     path: input/adrs.csv
     types:
       ASEQ: int
-base: ADSL
-
-record_lookups:
+lookups:
   - id: DEATH_REC
     dataset: ADRS
     filter: "ADRS.PARAMCD = 'DEATH' AND ADRS.AVALC = 'Y' AND ADRS.ANL01FL = 'Y'"
     source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
-    unmatched: missing
     order_by: [ADRS.ADT]
     keep: first
+
+base: ADSL
 
 output:
   path: adtte.csv

@@ -77,6 +77,10 @@ def check_error(path, requirements, errors):
         return
     label = path.relative_to(REPO)
     cited = contract.get("requirement")
+    if cited is None:
+        # Schema-phase failures (e.g. missing_required_field) carry no
+        # requirement number; the rule documents them without one.
+        return
     if not isinstance(cited, str) or CITATION.fullmatch(cited) is None:
         errors.append(f"ERROR: {label}: requirement must cite RNNN-n")
     elif cited not in requirements:

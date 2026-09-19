@@ -11,7 +11,7 @@ semantics, error behavior, and representative examples are complete.
 | --- | --- | --- | --- |
 | R001 | [Execution model](R001-execution-model.md) | normative | Phases, grouped row construction, dependency inference, evaluation order |
 | R002 | [Source binding](R002-source-binding.md) | normative | Dataset declaration, name resolution |
-| R003 | [Cross-dataset left join](R003-cross-dataset-left-join.md) | normative | The implicit join and its right-side reduction |
+| R003 | [Lookup](R003-lookup.md) | normative | Cross-dataset reads: the implicit join on applicable keys, named `lookups`, inline `lookup`, declared-key aggregates |
 | R004 | [Predicate language](R004-predicate-language.md) | normative | The Boolean `sql` primitive |
 | R005 | [Output contract](R005-output-contract.md) | normative | Column coverage, output membership, the value lifecycle, output identity, artifact row order |
 | R006 | [Compact schema language](R006-schema-language.md) | normative | Schema notation and structural validation |
@@ -23,7 +23,6 @@ semantics, error behavior, and representative examples are complete.
 | R012 | [String templates](R012-string-templates.md) | normative | Interpolation grammar, escaping, and evaluation |
 | R013 | [Aggregate reduction](R013-aggregate-reduction.md) | normative | The `aggregate_expression` primitive: reducers, row-relative narrowing, grain, and empty-group results |
 | R014 | [Source-format ingestion](R014-source-ingestion.md) | normative | Missing recognition and field typing at the source |
-| R015 | [Record lookup](R015-record-lookup.md) | normative | Looking up one record of another dataset and reading it by name |
 | R016 | [Temporal values](R016-temporal-values.md) | normative | The `date` and `datetime` values: lexical form, zone and precision model, comparison, canonical text, and the operations over them |
 | R017 | [Specification inheritance](R017-specification-inheritance.md) | normative | Parent resolution, layer composition, pruning, and resolved order |
 | R018 | [Project function environment](R018-project-function-environment.md) | normative | Project resolution, logical function contracts, singular runtime binding, activation conformance |
@@ -48,6 +47,12 @@ and failure.
 Normative does not mean immutable. A rule can change through the repository's
 review and versioning process, but an implementation must not substitute an
 open proposal for the indexed text.
+
+Retired rules are deleted, not kept as files: the git history preserves the
+superseded text. R015 (record lookup) and `mapping_from` were retired by
+issue #568, which unified the three join mechanisms into this index's R003:
+the implicit join stays for clear applicable keys, and one explicit lookup
+covers every unclear or differing key.
 
 ## Rule requirements
 

@@ -14,7 +14,7 @@ authoritative text, follow the links.
 |---|---|---|
 | R001 | [Execution model](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R001-execution-model.md) | Phases, grouped row construction, dependency inference, evaluation order |
 | R002 | [Source binding](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R002-source-binding.md) | Dataset declaration, name resolution |
-| R003 | [Cross-dataset left join](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R003-cross-dataset-left-join.md) | The implicit join and its right-side reduction |
+| R003 | [Lookup](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R003-lookup.md) | Cross-dataset reads: the implicit join on applicable keys, named `lookups`, inline `lookup`, declared-key aggregates |
 | R004 | [Predicate language](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R004-predicate-language.md) | The Boolean `sql` primitive |
 | R005 | [Output contract](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R005-output-contract.md) | Column coverage, output membership, the value lifecycle, output identity, artifact row order |
 | R006 | [Compact schema language](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R006-schema-language.md) | Schema notation and structural validation |
@@ -26,7 +26,6 @@ authoritative text, follow the links.
 | R012 | [String templates](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R012-string-templates.md) | Interpolation grammar, escaping, and evaluation |
 | R013 | [Aggregate reduction](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R013-aggregate-reduction.md) | The `aggregate_expression` primitive: reducers, row-relative narrowing, grain, and empty-group results |
 | R014 | [Source-format ingestion](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R014-source-ingestion.md) | Missing recognition and field typing at the source |
-| R015 | [Record lookup](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R015-record-lookup.md) | Looking up one record of another dataset and reading it by name |
 | R016 | [Temporal values](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R016-temporal-values.md) | The `date` and `datetime` values: lexical form, zone and precision model, comparison, canonical text, and the operations over them |
 | R017 | [Specification inheritance](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R017-specification-inheritance.md) | Parent resolution, layer composition, pruning, and resolved order |
 | R018 | [Project function environment](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R018-project-function-environment.md) | Project resolution, logical function contracts, singular runtime binding, activation conformance |
@@ -47,7 +46,7 @@ prohibition, `should` a strong recommendation with a reason required to depart
 from it, and `may` a truly optional behavior.
 
 For worked precedents of each rule in action, see the
-[benchmark walkthrough](../articles/yaml-benchmark-walkthrough.md), which maps
-constructs and questions to runnable benchmarks, and the
+[examples walkthrough](../articles/yaml-examples-walkthrough.md), which maps
+constructs and questions to runnable examples, and the
 [benchmark](../benchmark/index.md), which shows each one's input against its
 output.

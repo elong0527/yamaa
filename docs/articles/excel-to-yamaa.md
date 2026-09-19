@@ -4,7 +4,7 @@ title: Excel to YAMAA
 
 # Translating an Excel specification
 
-> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Benchmark walkthrough](yaml-benchmark-walkthrough.md)
+> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Examples walkthrough](yaml-examples-walkthrough.md)
 
 > **Read this if** you have SDTM or ADaM specifications in Excel and want to
 > know what each cell becomes. It maps every column of a Variable sheet, then
@@ -138,7 +138,7 @@ wording, but the eleven jobs are the same.
 | `Variable Type` (SDTM / SUPP) | *no field* -- it is a **second** `spec.yaml` | `domain` fixes one dataset per specification, so SUPP qualifiers are their own spec |
 | `Length` | a `max_length` verification | It is a constraint, so it becomes an executed one; **Length is not a type**. Add `column.metadata.length` when define.xml needs to show it |
 | Significant digits / display format | *project setting* | R011: decimal places belong to the project, not the spec |
-| `Controlled Terms or Format` | `mapping.dict` / `mapping_from` / `allowed_values`, plus `column.metadata.codelist` | See 3.3 -- translation and enforcement separate here too |
+| `Controlled Terms or Format` | `mapping.dict` / `lookup` / `allowed_values`, plus `column.metadata.codelist` | See 3.3 -- translation and enforcement separate here too |
 | `Origin` = Assigned | `literal: DM` | |
 | `Origin` = Collected (CRF / eDT) | `source: {variable: ODM.Value, filter: "ODM.ItemOID = 'IT.DM.AGE'"}` | The `filter` says which collected records the value comes from. The retired `ODM.IT.DM.AGE` form is not an alternative |
 | `Origin` = Predecessor | `source: ADSL.TRTSDT` | A qualified cross-dataset name performs an **automatic left join** (R003) |
@@ -162,12 +162,12 @@ column for.
 Excel has one Codelist column. YAMAA separates by where the vocabulary lives,
 which makes a good teaching moment:
 
-| Situation | YAMAA | Case |
+| Situation | YAMAA | Example |
 |---|---|---|
 | Short vocabulary, written in the spec | `mapping` | `M -> M, F -> F` |
-| Vocabulary is an external file (MedDRA, WHODrug, a reference-range table) | `mapping_from` | Case 8 |
+| Vocabulary is an external file (MedDRA, WHODrug, a reference-range table) | `lookup` | Example 8 |
 | No translation, only a **check** that the value is one of these | `allowed_values` | `values: [M, F, U]` |
-| Numeric banding (AGEGR1, BMI categories) | `cut` | Case 1 |
+| Numeric banding (AGEGR1, BMI categories) | `cut` | Example 1 |
 
 ### 2.4 Value-level metadata
 
@@ -183,7 +183,7 @@ own derivation. `AVAL` is the standard case -- alanine aminotransferase where
 | "this PARAM is derived from another PARAM" | Another row template with its own `literal` PARAMCD |
 | "one collected record yields several analysis records" | Several row templates, appended in order |
 
-This is where the two formats line up most directly -- see case 4.
+This is where the two formats line up most directly -- see example 4.
 
 ---
 
@@ -195,7 +195,7 @@ Each one shows the Excel rows first, then the YAML, then what actually
 differs. All of them are real directories under `benchmark/` with fixed
 expected output.
 
-### Case 1: direct mapping, a codelist, and numeric banding
+### Example 1: direct mapping, a codelist, and numeric banding
 
 *Source: [`adam-adsl-mapping`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-mapping)*
 
@@ -260,7 +260,7 @@ What changed:
   lives in `mapping.dict`, the check lives in `allowed_values`, and the name
   itself goes in `column.metadata.codelist` if you generate define.xml.
 
-### Case 2: a Comment sentence becomes `compute`
+### Example 2: a Comment sentence becomes `compute`
 
 *Source: [`adam-adsl-bmi-compute`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-bmi-compute)*
 
@@ -294,13 +294,13 @@ What changed:
   stated in an Excel spec -- **into the formula**. R010 makes division by zero a
   failure rather than a silent missing value, so it has to be stated.
 - **"rounded to 1 decimal" has no translation, on purpose.** A derivation does
-  not round; decimal places are a project rendering setting (the benchmark suite
+  not round; decimal places are a project rendering setting (the example suite
   uses four). This is the point that generates the most discussion: rounding
   belongs to the TFL, not to the ADaM value.
 - The `implies` verification turns "BMI is empty exactly when height is
   unusable" -- normally a note to the reviewer -- into an executable assertion.
 
-### Case 3: Predecessor and the automatic left join
+### Example 3: Predecessor and the automatic left join
 
 *Source: [`adam-adae-treatment-emergent`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adae-treatment-emergent)*
 
@@ -359,7 +359,7 @@ What changed:
 - `all_or_none` turns "TRTSDT and TRTEDT are either both present or both
   absent" into a check.
 
-### Case 4: VLM and BDS in one spec
+### Example 4: VLM and BDS in one spec
 
 *Source: [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-bds)*
 
@@ -456,14 +456,14 @@ Take this one slowly:
   because the row templates supply them. R005 requires a column to be derived
   either at column level or in **every** row template -- never in some of them.
   That turns the classic "one blank VLM cell" into a hard error.
-- `TRTSDT` and `TRT01A` arrive from ADSL through the case-3 join, without
+- `TRTSDT` and `TRT01A` arrive from ADSL through the example-3 join, without
   changing the row count.
 - `NULLIF(BASE, 0)` in `PCHG`: a zero baseline yields a change but no percent
   change. Excel specs frequently omit that sentence.
 - `ASEQ` uses `row_number` **after every row exists**, so it is unique by
   construction.
 
-### Case 5: one-to-many summarization with `aggregate`
+### Example 5: one-to-many summarization with `aggregate`
 
 *Source: [`adam-adex-cumulative-dose`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adex-cumulative-dose)*
 
@@ -510,7 +510,7 @@ What changed:
 
 - `aggregate: "SUM(EX.EXDOSE)"` declares no `group_by`, so it reduces **by the
   applicable keys** -- `STUDYID`, `USUBJID`, `EXTRT`. Omission does not mean
-  "reduce all of EX as one group", and the benchmark README says so explicitly.
+  "reduce all of EX as one group", and the example README says so explicitly.
 - `EX: {path: ..., types: {EXDOSE: float}}` -- a CSV is a typeless container, so
   R014 makes **every field `str` by default**. A field entering arithmetic must
   declare its type. This is the `input`/`put` conversion an Excel spec never
@@ -521,7 +521,7 @@ What changed:
   column. This is the "no nested expressions, use named intermediates" design
   in practice.
 
-### Case 6: partial dates and the imputation flag
+### Example 6: partial dates and the imputation flag
 
 *Source: [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adae-partial-dates)*
 
@@ -588,7 +588,7 @@ What changed:
   distinction is what makes `ASTDT >= TRTSDT` a date comparison rather than a
   string comparison.
 
-### Case 7: define.xml metadata versus executable checks
+### Example 7: define.xml metadata versus executable checks
 
 *Source: [`sdtm-dm-metadata-contract`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-metadata-contract)*
 
@@ -634,7 +634,7 @@ The point that gets challenged most often:
 - `str_concat` is the one string operation whose `sources` may mix `source` and
   `literal`, because putting literals between sources is what concatenation is.
 
-### Case 8: coding against an external dictionary
+### Example 8: coding against an external dictionary
 
 *Source: [`sdtm-ae-dictionary-coding`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-ae-dictionary-coding)*
 
@@ -650,45 +650,47 @@ metadata:
     type: str
     label: Dictionary-Derived Term
     derivation:
-      mapping_from:
+      lookup:
         source: AE_RAW.AETERM
         dataset: MEDDRA
         key: LLTNAME
         value: PTNAME
         missing: NOT CODED
-        unmapped: NOT CODED
 
   - name: AEBODSYS
     type: str
     derivation:
-      mapping_from:
+      lookup:
         source: AE_RAW.AETERM
         dataset: MEDDRA
         key: LLTNAME
         value: SOCNAME
         missing: NOT CODED
-        unmapped: NOT CODED
 ```
 
-- `mapping_from` is **not** the R003 join. Its keys are declared explicitly
-  (`source` and `key` pair by position) and output `keys` are never consulted,
-  which is exactly why it can reach a table keyed on something else.
+- `lookup` is the one R003 cross-dataset mechanism. Its keys are declared
+  explicitly (`source` and `key` pair by position) and output `keys` are never
+  consulted, which is exactly why it can reach a table keyed on something
+  else.
 - It requires the key combination to be unique in the dictionary; a duplicate
   fails ([`negative-mapping-from-duplicate-key`](https://github.com/elong0527/yamaa/tree/main/benchmark/negative-mapping-from-duplicate-key) pins that error).
+- One absence vocabulary covers every case: `missing: NOT CODED` answers both
+  a missing source and a source that matches nothing. The old split between
+  `missing` and `unmapped` is gone.
 - The dictionary version travels with the spec in `metadata`.
 
 **A related contrast.** `AEDECOD` and `AEBODSYS` above each perform their own
 lookup, and nothing guarantees they reached the same record. When several
-columns must come from **one** record, the construct is `record_lookups`:
+columns must come from **one** record, the construct is a named entry in the
+root `lookups` block:
 
 ```yaml
-record_lookups:
+lookups:
   - id: DEATHEV
     dataset: AE
     source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
     filter: "AE.AEOUT = 'FATAL'"
-    unmatched: missing
 
   - name: DTHCAUS
     derivation: {source: DEATHEV.AEDECOD}
@@ -696,15 +698,15 @@ record_lookups:
     derivation: {source: DEATHEV.ASTDT}
 ```
 
-R015 argues this directly: an expression returns one value, so every column
+R003 argues this directly: an expression returns one value, so every column
 reading another dataset does its own match. Two columns that are supposed to
 describe one record -- a date and the sequence number identifying it, a value
 and its unit -- therefore state the match twice and agree **only by
 construction**. A reviewer cannot see the agreement, and editing one statement
-and not the other breaks it silently. A record lookup states the match once and
+and not the other breaks it silently. A named lookup states the match once and
 names the record. Excel has no such concept, but it has the bug.
 
-### Case 9: organization, compound and study layers
+### Example 9: organization, compound and study layers
 
 *Source: [`spec-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmark/spec-inheritance)*
 
@@ -719,7 +721,7 @@ input:
   LB: input/lb.csv
   UNUSED: input/not-used.csv
 base: LB
-record_lookups:
+lookups:
   - id: unused_reference
     dataset: UNUSED
 columns:
@@ -781,7 +783,7 @@ What to point out:
   `Analysis Value`. A difference between two parents is settled by their order;
   it is **not** a conflict error.
 - **Composition is shallow -- the most commonly misread rule.** Only the four
-  keyed collections (`input`, `record_lookups`, `columns`, `rows`) merge
+  keyed collections (`input`, `lookups`, `columns`, `rows`) merge
   member fields by identifier. Every other root field is **replaced whole**. So
   a child writing `AVAL.label` changes only the label, but a child writing
   `AVAL.derivation` replaces the **entire** derivation, even if both use the
@@ -793,7 +795,7 @@ What to point out:
 - **The entry file must declare a complete `output`.** Here that is
   `spec_study.yaml`: an inherited layer cannot decide the final artifact's
   membership or order.
-- **Pruning.** This case deliberately leaves an `UNUSED` dataset, an
+- **Pruning.** This example deliberately leaves an `UNUSED` dataset, an
   `unused_reference` lookup and a `TEMP` column in the corporate layer. Nothing
   reachable references them, so they are removed during resolution. **A
   corporate layer can therefore be generous, and a study carries only what it
@@ -828,7 +830,7 @@ metadata:                       # for define.xml; not validated
   dataset_label: Example Analysis Dataset
   dataset_structure: One record per subject per parameter
 
-record_lookups:                 # optional: only when columns must share one record
+lookups:                       # optional: only when columns must share one record
   - id: FIRSTEX
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]

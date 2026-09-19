@@ -1,10 +1,10 @@
 phase: join
 condition: unmatched_key
 spec_paths:
-  - record_lookups[0]
-requirement: R015-18
+  - lookups[0]
+requirement: R003-14
 context:
-  record_lookup: REFRANGE
+  lookup: REFRANGE
   dataset: LBRANGE
   key: [LBTESTCD, SEX]
   lookup_key:

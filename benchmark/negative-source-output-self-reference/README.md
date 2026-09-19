@@ -48,7 +48,7 @@ Renaming the declaration alone leaves the read pointing at a name that no
 longer exists, so change where it reads from as well:
 
 ```yaml
-mapping_from:
+lookup:
   dataset: ADLBIN
 ```
 

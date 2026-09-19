@@ -1,29 +1,39 @@
-"""R015 record lookups: select one record once, then read it many times.
+"""R003 lookups: select one record once, then read it many times.
 
-A record lookup states its match once and gives the chosen record a name, so
-the columns that read it are plainly reading one record. Everything about
+A lookup states its match once and gives the chosen record a name, so the
+columns that read it are plainly reading one record. Everything about
 reaching that record -- filtering, equality matching, range narrowing, and
-ordered selection -- is the join R003 already defines, performed here through
-the same helpers so a lookup and an implicit qualified source cannot disagree.
+ordered selection -- is one explicit declared-key mechanism, so a named
+lookup and an inline `lookup` cannot disagree.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import JsonValue
+from pydantic import JsonValue, ValidationError
 
+from yamaa.expressions.core import (
+    FailedResolution,
+    Resolution,
+    ResolvedValue,
+    normalize_runtime_value,
+)
+from yamaa.expressions.predicates import PredicateError, parse_predicate_cached
 from yamaa.models import (
     MISSING,
     ColumnType,
     ConditionResult,
+    EvaluationResult,
+    HandlerName,
     RuntimeCondition,
     RuntimeValue,
+    ValueResult,
     runtime_type_name,
 )
-from yamaa.planning import PlannedRecordLookup
+from yamaa.planning import PlannedLookup
 from yamaa.runtime.joins import (
     IndexedRecord,
     RelationIndex,
@@ -32,20 +42,23 @@ from yamaa.runtime.joins import (
     json_value,
     select_record,
 )
+from yamaa.specification.models import OrderTerm
 
 
 @dataclass(frozen=True, slots=True)
 class LookupOutcome:
-    """What one current row got from a record lookup.
+    """What one current row got from a lookup.
 
-    A selected record, a decided absence, and a failure stay distinct:
-    R015-22 keeps a matched record whose value is missing different from a
-    match that never happened.
+    A selected record and a decided absence stay distinct: R003-14 keeps a
+    matched record whose value is missing different from a match that never
+    happened, which answers with the declared `missing` literal instead.
     """
 
     record: IndexedRecord | None = None
+    absent: JsonValue = None
     condition: ConditionResult | None = None
     spec_path: str | None = None
+    handled_by: HandlerName | None = None
 
 
 def _condition(
@@ -68,19 +81,19 @@ def _condition(
 def types_comparable(left: ColumnType, right: ColumnType) -> bool:
     """Return whether two declared types may be compared without conversion.
 
-    R015-11 lets `int` and `float` compare through R010's promotion and
+    R003-11 lets `int` and `float` compare through R010's promotion and
     requires every other type to match exactly, so no operand is converted
     implicitly to make a range comparison work.
     """
     return left == right or {left, right} <= {"int", "float"}
 
 
-class RecordLookupSelector:
+class LookupSelector:
     """Select at most one record per current row for each declared lookup."""
 
     def __init__(
         self,
-        plans: Sequence[PlannedRecordLookup],
+        plans: Sequence[PlannedLookup],
         relations: Mapping[str, RelationIndex],
     ) -> None:
         self.plans = {plan.identifier: plan for plan in plans}
@@ -91,12 +104,12 @@ class RecordLookupSelector:
         return identifier in self.plans
 
     def _filtered(
-        self, plan: PlannedRecordLookup
+        self, plan: PlannedLookup
     ) -> tuple[IndexedRecord, ...] | ConditionResult:
         """Apply the lookup's `filter` once for the whole run.
 
-        R015-4 makes the filter a predicate over the lookup's own dataset, so
-        which records are eligible does not vary by current row and the
+        R003-10 makes the filter a predicate over the lookup's own dataset,
+        so which records are eligible does not vary by current row and the
         predicate is evaluated once per record rather than once per row.
         """
         cached = self._eligible.get(plan.identifier)
@@ -112,167 +125,152 @@ class RecordLookupSelector:
         identifier: str,
         current: Mapping[str, RuntimeValue],
     ) -> LookupOutcome:
-        """Choose this row's record, in the order R015-3 lays the steps out."""
+        """Choose this row's record, in the order R003 lays the steps out."""
         plan = self.plans[identifier]
         eligible = self._filtered(plan)
         if isinstance(eligible, ConditionResult):
             return LookupOutcome(condition=eligible, spec_path=f"{plan.path}.filter")
+        return _select_eligible(plan, eligible, current)
 
-        incomplete = self._incomplete_match_value(plan, current)
-        if incomplete is not None:
-            return incomplete
 
-        values = [current.get(name, MISSING) for name in plan.match_variables]
-        if any(value is MISSING for value in values):
-            # An output key is never missing under R005, so this is only
-            # reachable before key verification; nothing can match it.
-            return LookupOutcome()
-        matched = [
-            record
-            for record in eligible
-            if all(
-                _equal(record.values[field], value)
-                for field, value in zip(plan.match_fields, values, strict=True)
-            )
-        ]
+def _select_eligible(
+    plan: PlannedLookup,
+    eligible: Sequence[IndexedRecord],
+    current: Mapping[str, RuntimeValue],
+) -> LookupOutcome:
+    """Match, narrow, and choose one record from the eligible records.
 
-        narrowed = self._narrowed(plan, matched, current)
-        if isinstance(narrowed, LookupOutcome):
-            return narrowed
+    Named and inline lookups share these steps: the named selector caches
+    the eligible records per lookup, while an inline `lookup` derives them
+    from its payload on every row.
+    """
+    values = [current.get(name, MISSING) for name in plan.match_variables]
+    if any(value is MISSING for value in values):
+        # A missing match value is not an identity any record shares,
+        # so the lookup yields nothing before any record is read.
+        return _absent(plan, values)
+    if (
+        plan.between_value is not None
+        and current.get(plan.between_value, MISSING) is MISSING
+    ):
+        # A missing range value is incomplete, not unmatched: it yields
+        # nothing before any record is read.
+        return _absent(plan, values)
+    matched = [
+        record
+        for record in eligible
+        if all(
+            _equal(record.values[field], value)
+            for field, value in zip(plan.match_fields, values, strict=True)
+        )
+    ]
 
-        if not narrowed:
-            return self._unmatched(plan, values)
-        if len(narrowed) == 1:
-            return LookupOutcome(record=narrowed[0])
-        if plan.keep is None:
-            # R015-28: more than one surviving record with nothing to choose
-            # by is the unhandled multiple match R003 refuses.
-            return LookupOutcome(
-                condition=_condition(
-                    "multiple_matches",
-                    "R015-28",
-                    {
-                        "record_lookup": plan.identifier,
-                        "dataset": plan.dataset,
-                        **_matched_key(plan, values),
-                        "match_count": len(narrowed),
-                    },
-                ),
-                spec_path=plan.path,
-            )
-        chosen = select_record(narrowed, plan.order_terms, plan.keep)
-        if isinstance(chosen, ConditionResult):
-            return LookupOutcome(condition=chosen, spec_path=f"{plan.path}.order_by")
-        return LookupOutcome(record=chosen)
+    narrowed = _narrowed(plan, matched, current)
+    if isinstance(narrowed, LookupOutcome):
+        return narrowed
 
-    def _incomplete_match_value(
-        self,
-        plan: PlannedRecordLookup,
-        current: Mapping[str, RuntimeValue],
-    ) -> LookupOutcome | None:
-        """Answer a missing declared match value before any record is read.
-
-        R015-16 keeps the two absences disjoint: an incomplete match value is
-        answered before a record is looked for, and an unmatched key after.
-        """
-        if plan.on_output_keys and plan.between_value is None:
-            return None
-        names = list(plan.match_variables) if not plan.on_output_keys else []
-        if plan.between_value is not None:
-            names.append(plan.between_value)
-        missing = [name for name in names if current.get(name, MISSING) is MISSING]
-        if not missing:
-            return None
-        if plan.incomplete == "missing":
-            return LookupOutcome()
-        field = "between.value" if missing[0] == plan.between_value else "source"
+    if not narrowed:
+        return _absent(plan, values)
+    if len(narrowed) == 1:
+        return LookupOutcome(record=narrowed[0])
+    if plan.keep is None:
+        # R003-17: more than one surviving record with nothing to choose
+        # by is the unhandled multiple match the rule refuses.
         return LookupOutcome(
             condition=_condition(
-                "incomplete_match_value",
-                "R015-17",
+                "multiple_matches",
+                "R003-17",
                 {
-                    "record_lookup": plan.identifier,
+                    "lookup": plan.identifier,
                     "dataset": plan.dataset,
-                    "missing_source": missing[0],
+                    **_matched_key(plan, values),
+                    "match_count": len(narrowed),
                 },
             ),
-            spec_path=f"{plan.path}.{field}",
+            spec_path=plan.path,
         )
+    chosen = select_record(narrowed, plan.order_terms, plan.keep)
+    if isinstance(chosen, ConditionResult):
+        return LookupOutcome(condition=chosen, spec_path=f"{plan.path}.order_by")
+    handled_by: HandlerName | None = None
+    if len(narrowed) > 1:
+        # The declared keep actually chose among surviving records: R008
+        # counts the selection where it happened.
+        handled_by = "multiple_matches"
+    return LookupOutcome(record=chosen, handled_by=handled_by)
 
-    def _narrowed(
-        self,
-        plan: PlannedRecordLookup,
-        matched: Sequence[IndexedRecord],
-        current: Mapping[str, RuntimeValue],
-    ) -> list[IndexedRecord] | LookupOutcome:
-        """Keep the equality-matched records the declared range admits."""
-        if plan.between_value is None:
-            return list(matched)
-        value = current.get(plan.between_value, MISSING)
-        assert plan.between_lower is not None
-        assert plan.between_upper is not None
-        kept: list[IndexedRecord] = []
-        for record in matched:
-            lower = record.values[plan.between_lower]
-            upper = record.values[plan.between_upper]
-            # R015-10 and R015-12: both endpoints are inclusive, and a
-            # record missing a stated bound is ineligible rather than open.
-            if lower is MISSING or upper is MISSING:
-                continue
-            try:
-                # R015-10: both endpoints are inclusive.
-                if (
-                    compare_values(lower, value) <= 0
-                    and compare_values(value, upper) <= 0
-                ):
-                    kept.append(record)
-            except TypeError:
-                return LookupOutcome(
-                    condition=_condition(
-                        "incomparable_range_types",
-                        "R015-11",
-                        {
-                            "record_lookup": plan.identifier,
-                            "value_type": runtime_type_name(value),
-                            "lower_type": runtime_type_name(lower),
-                            "upper_type": runtime_type_name(upper),
-                        },
-                        phase="validation",
-                    ),
-                    spec_path=f"{plan.path}.between",
-                )
-        return kept
 
-    def _unmatched(
-        self,
-        plan: PlannedRecordLookup,
-        values: Sequence[RuntimeValue],
-    ) -> LookupOutcome:
-        if plan.unmatched == "missing":
-            return LookupOutcome()
+def _absent(
+    plan: PlannedLookup,
+    values: Sequence[RuntimeValue],
+) -> LookupOutcome:
+    """Answer a lookup that yields nothing under R003-14."""
+    if plan.strict:
         return LookupOutcome(
             condition=_condition(
                 "unmatched_key",
-                "R015-18",
+                "R003-14",
                 {
-                    "record_lookup": plan.identifier,
+                    "lookup": plan.identifier,
                     "dataset": plan.dataset,
                     **_matched_key(plan, values),
                 },
             ),
             spec_path=plan.path,
         )
+    handled_by: HandlerName | None = "missing" if plan.missing_declared else None
+    return LookupOutcome(absent=plan.missing, handled_by=handled_by)
+
+
+def _narrowed(
+    plan: PlannedLookup,
+    matched: Sequence[IndexedRecord],
+    current: Mapping[str, RuntimeValue],
+) -> list[IndexedRecord] | LookupOutcome:
+    """Keep the equality-matched records the declared range admits."""
+    if plan.between_value is None:
+        return list(matched)
+    value = current.get(plan.between_value, MISSING)
+    assert plan.between_lower is not None
+    assert plan.between_upper is not None
+    kept: list[IndexedRecord] = []
+    for record in matched:
+        lower = record.values[plan.between_lower]
+        upper = record.values[plan.between_upper]
+        # R003-18: both endpoints are inclusive, and a record missing a
+        # stated bound is ineligible rather than open.
+        if lower is MISSING or upper is MISSING:
+            continue
+        try:
+            if compare_values(lower, value) <= 0 and compare_values(value, upper) <= 0:
+                kept.append(record)
+        except TypeError:
+            return LookupOutcome(
+                condition=_condition(
+                    "incomparable_range_types",
+                    "R003-11",
+                    {
+                        "lookup": plan.identifier,
+                        "value_type": runtime_type_name(value),
+                        "lower_type": runtime_type_name(lower),
+                        "upper_type": runtime_type_name(upper),
+                    },
+                    phase="validation",
+                ),
+                spec_path=f"{plan.path}.between",
+            )
+    return kept
 
 
 def _matched_key(
-    plan: PlannedRecordLookup,
+    plan: PlannedLookup,
     values: Sequence[RuntimeValue],
 ) -> dict[str, JsonValue]:
     """Return the fields the lookup matched on and the values it matched with.
 
-    R015-34 keeps one vocabulary for every record lookup failure, so an
-    unmatched key and an unhandled multiple match report the match the same
-    way and leave `keys` to the output row the failure belongs to.
+    R003-33 keeps one vocabulary for every lookup failure, so an unmatched
+    key and an unhandled multiple match report the match the same way and
+    leave `keys` to the output row the failure belongs to.
     """
     return {
         "key": list(plan.match_fields),
@@ -286,8 +284,8 @@ def _matched_key(
 def _equal(left: RuntimeValue, right: RuntimeValue) -> bool:
     """Compare two match values under the equality their type owns.
 
-    R015-8 uses R019 equality for strings, which is Python's, and a missing
-    right-side value matches nothing because absence is not an identity.
+    R019 equality for strings is Python's, and a missing right-side value
+    matches nothing because absence is not an identity.
     """
     if left is MISSING or right is MISSING:
         return False
@@ -297,9 +295,162 @@ def _equal(left: RuntimeValue, right: RuntimeValue) -> bool:
         return False
 
 
+def absent_value(absent: JsonValue) -> RuntimeValue:
+    """Return the runtime value a lookup's decided absence carries."""
+    normalized = normalize_runtime_value(absent)
+    if isinstance(normalized, ValueResult):
+        return normalized.value
+    return MISSING
+
+
+def _names(value: object) -> tuple[str, ...] | None:
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, Sequence) and all(isinstance(item, str) for item in value):
+        return tuple(value)  # type: ignore[arg-type]
+    return None
+
+
+def _order_terms(
+    payload: Mapping[str, object], dataset: str
+) -> tuple[tuple[OrderTerm, str], ...] | None:
+    """Build the (term, field) pairs an inline `lookup` orders by."""
+    raw = payload.get("order_by")
+    if raw is None:
+        return None
+    if not isinstance(raw, Sequence) or isinstance(raw, str):
+        return None
+    terms: list[tuple[OrderTerm, str]] = []
+    for item in raw:
+        if isinstance(item, str):
+            term = OrderTerm(variable=item)
+        elif isinstance(item, Mapping):
+            try:
+                term = OrderTerm.model_validate(dict(item))
+            except ValidationError:
+                return None
+        else:
+            return None
+        qualifier, _, field = term.variable.partition(".")
+        if qualifier != dataset:
+            return None
+        terms.append((term, field))
+    return tuple(terms)
+
+
+def evaluate_lookup(
+    payload: Mapping[str, object],
+    relation: RelationIndex,
+    resolve: Callable[[str], Resolution],
+) -> EvaluationResult:
+    """Evaluate one inline `lookup` operation against its dataset.
+
+    The planner validates the declaration; this answers the row. `resolve`
+    reads one current-row variable the way the derivation's own resolver
+    does, so a source may name an output column or a driver-qualified
+    dataset column exactly as the specification wrote it.
+    """
+    sources = _names(payload.get("source"))
+    keys = _names(payload.get("key"))
+    value_field = payload.get("value")
+    dataset = relation.dataset
+    if (
+        sources is None
+        or keys is None
+        or not isinstance(value_field, str)
+        or len(sources) != len(keys)
+        or not sources
+    ):
+        return ConditionResult(
+            condition=RuntimeCondition(
+                phase="validation",
+                condition="invalid_field_type",
+                context={
+                    "operation": "lookup",
+                    "expected": "source, dataset, key, value",
+                },
+                requirement="R007-36",
+            )
+        )
+    if not relation.has(value_field) or any(not relation.has(key) for key in keys):
+        return ConditionResult(
+            condition=RuntimeCondition(
+                phase="validation",
+                condition="unknown_field",
+                context={"identifier": f"{dataset}.{value_field}"},
+            )
+        )
+
+    current: dict[str, RuntimeValue] = {}
+    names = list(sources)
+    between = payload.get("between")
+    between_value: str | None = None
+    if isinstance(between, Mapping) and isinstance(between.get("value"), str):
+        between_value = str(between["value"])
+        names.append(between_value)
+    for name in names:
+        resolution = resolve(name)
+        if isinstance(resolution, ResolvedValue):
+            current[name] = resolution.value
+        elif isinstance(resolution, FailedResolution):
+            return ConditionResult(condition=resolution.condition)
+        else:
+            current[name] = MISSING
+
+    predicate = None
+    filter_text = payload.get("filter")
+    if isinstance(filter_text, str):
+        try:
+            predicate = parse_predicate_cached(filter_text)
+        except PredicateError:
+            return ConditionResult(
+                condition=RuntimeCondition(
+                    phase="validation",
+                    condition="invalid_field_type",
+                    context={"identifier": filter_text},
+                )
+            )
+    eligible = eligible_records(relation.records, predicate, relation)
+    if isinstance(eligible, ConditionResult):
+        return eligible
+
+    terms = _order_terms(payload, dataset)
+    keep = payload.get("keep")
+    keep_value = keep if keep in ("first", "last") else None
+
+    plan = PlannedLookup(
+        identifier=f"lookup({dataset})",
+        dataset=dataset,
+        path="lookup",
+        match_variables=tuple(sources),
+        match_fields=tuple(keys),
+        filter_predicate=None,
+        order_terms=terms or (),
+        keep=keep_value,
+        between_value=between_value,
+        between_lower=str(between["lower"]) if isinstance(between, Mapping) else None,
+        between_upper=str(between["upper"]) if isinstance(between, Mapping) else None,
+        missing=payload.get("missing"),
+        strict=bool(payload.get("strict", False)),
+        missing_declared="missing" in payload,
+    )
+    outcome = _select_eligible(plan, eligible, current)
+    if outcome.condition is not None:
+        return outcome.condition
+    if outcome.record is not None:
+        resolved = normalize_runtime_value(outcome.record.values[value_field])
+        if isinstance(resolved, ValueResult) and outcome.handled_by is not None:
+            return resolved.model_copy(update={"handled_by": outcome.handled_by})
+        return resolved
+    return ValueResult(
+        value=absent_value(outcome.absent), handled_by=outcome.handled_by
+    )
+
+
 __all__ = [
     "LookupOutcome",
-    "PlannedRecordLookup",
-    "RecordLookupSelector",
+    "LookupSelector",
+    "absent_value",
+    "evaluate_lookup",
     "types_comparable",
 ]

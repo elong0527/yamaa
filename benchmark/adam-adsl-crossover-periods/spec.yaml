@@ -31,6 +31,8 @@ columns:
         filter: "EX.APERIOD = 1 AND EX.EXSTDTC IS NOT NULL"
         expr: "MIN(EX.EXSTDTC)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: TR01EDT
     type: date
     label: Date of Last Exposure in Period 01
@@ -39,6 +41,8 @@ columns:
         filter: "EX.APERIOD = 1 AND EX.EXENDTC IS NOT NULL"
         expr: "MAX(EX.EXENDTC)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: TR02SDT
     type: date
     label: Date of First Exposure in Period 02
@@ -47,6 +51,8 @@ columns:
         filter: "EX.APERIOD = 2 AND EX.EXSTDTC IS NOT NULL"
         expr: "MIN(EX.EXSTDTC)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: TR02EDT
     type: date
     label: Date of Last Exposure in Period 02
@@ -55,6 +61,8 @@ columns:
         filter: "EX.APERIOD = 2 AND EX.EXENDTC IS NOT NULL"
         expr: "MAX(EX.EXENDTC)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: TRT01A
     type: str
     label: Actual Treatment for Period 01

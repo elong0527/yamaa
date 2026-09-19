@@ -27,4 +27,12 @@ columns:
     type: str
     label: Actual Treatment for Period 01
     derivation:
-      source: ADSL_RAW.TRT01A
+      lookup:
+        dataset: ADSL_RAW
+        source:
+          - STUDYID
+          - USUBJID
+        key:
+          - STUDYID
+          - USUBJID
+        value: TRT01A

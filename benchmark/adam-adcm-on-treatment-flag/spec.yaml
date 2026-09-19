@@ -52,13 +52,11 @@ columns:
     label: Date of First Exposure to Treatment
     derivation:
       source: ADSL.TRTSDT
-
   - name: TRTEDT
     type: date
     label: Date of Last Exposure to Treatment
     derivation:
       source: ADSL.TRTEDT
-
   - name: ONTRTFL
     type: str
     label: On-Treatment Flag

@@ -48,22 +48,19 @@ columns:
     type: str
     label: Dictionary-Derived Term
     derivation:
-      mapping_from:
-        source: AE_RAW.AETERM
+      lookup:
         dataset: MEDDRA
+        source: AE_RAW.AETERM
         key: LLTNAME
         value: PTNAME
         missing: NOT CODED
-        unmapped: NOT CODED
-
   - name: AEBODSYS
     type: str
     label: Body System or Organ Class
     derivation:
-      mapping_from:
-        source: AE_RAW.AETERM
+      lookup:
         dataset: MEDDRA
+        source: AE_RAW.AETERM
         key: LLTNAME
         value: SOCNAME
         missing: NOT CODED
-        unmapped: NOT CODED

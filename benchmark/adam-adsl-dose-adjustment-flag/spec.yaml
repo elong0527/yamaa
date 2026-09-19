@@ -33,6 +33,8 @@ columns:
         filter: "EX.EXADJ IS NOT NULL"
         expr: "COUNT(EX.USUBJID)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: EX_ANY_CNT
     type: int
     label: Record Count in EX
@@ -40,6 +42,8 @@ columns:
       aggregate:
         expr: "COUNT(EX.USUBJID)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: EC_ADJ_CNT
     type: int
     label: Dose Adjustment Count in EC
@@ -48,6 +52,8 @@ columns:
         filter: "EC.ECADJ IS NOT NULL"
         expr: "COUNT(EC.USUBJID)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: EC_ANY_CNT
     type: int
     label: Record Count in EC
@@ -55,6 +61,8 @@ columns:
       aggregate:
         expr: "COUNT(EC.USUBJID)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: FA_ADJ_CNT
     type: int
     label: Dose Adjustment Count in FA
@@ -63,6 +71,8 @@ columns:
         filter: "FA.FATESTCD = 'OCCUR' AND FA.FAOBJ = 'DOSE ADJUSTMENT' AND FA.FASTRESC = 'Y'"
         expr: "COUNT(FA.USUBJID)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: FA_ANY_CNT
     type: int
     label: Record Count in FA
@@ -70,6 +80,8 @@ columns:
       aggregate:
         expr: "COUNT(FA.USUBJID)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: DOSADJFL
     type: str
     label: Dose Adjustment Flag

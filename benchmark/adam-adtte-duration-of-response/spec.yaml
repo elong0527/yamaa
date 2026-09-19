@@ -57,6 +57,8 @@ columns:
         filter: "ADRSPRE.AVALC = 'PD'"
         expr: "MIN(ADRSPRE.ADT)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: PDSEQ
     type: int
     label: Disease Progression Source Sequence Number
@@ -67,7 +69,6 @@ columns:
         multiple_matches:
           order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
           keep: first
-
   - name: DEATHDT
     type: date
     label: Death Date
@@ -76,6 +77,8 @@ columns:
         filter: "DS.DSDECOD = 'DEATH'"
         expr: "MIN(DS.DSSTDTC)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: DEATHSEQ
     type: int
     label: Death Source Sequence Number
@@ -86,7 +89,6 @@ columns:
         multiple_matches:
           order_by: [DS.DSSTDTC, DS.DSSEQ]
           keep: first
-
   - name: LASTVLDT
     type: date
     label: Last Valid Assessment Date
@@ -95,6 +97,8 @@ columns:
         filter: "ADRSPRE.AVALC <> 'NE'"
         expr: "MAX(ADRSPRE.ADT)"
 
+        source: [STUDYID, USUBJID]
+        key: [STUDYID, USUBJID]
   - name: LASTVLSEQ
     type: int
     label: Last Valid Assessment Sequence Number
@@ -105,7 +109,6 @@ columns:
         multiple_matches:
           order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
           keep: last
-
   - name: EVENTALLDT
     type: date
     label: Earliest Progression or Death Date

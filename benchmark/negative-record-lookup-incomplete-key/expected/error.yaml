@@ -1,11 +1,17 @@
 phase: join
-condition: incomplete_match_value
+condition: unmatched_key
 spec_paths:
-  - record_lookups[0].source
-requirement: R015-17
+  - lookups[0]
+requirement: R003-14
 context:
-  record_lookup: REFRANGE
-  missing_source: SEX
+  lookup: REFRANGE
+  dataset: LBRANGE
+  key:
+    - LBTESTCD
+    - SEX
+  lookup_key:
+    LBTESTCD: ALT
+    SEX:
   keys:
     - STUDYID: PILOT7
       USUBJID: P7-522

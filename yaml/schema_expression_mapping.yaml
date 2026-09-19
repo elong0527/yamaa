@@ -22,31 +22,51 @@ expressions:
         - unmapped:
             type: literal_value
             description: Value returned when source has no dictionary entry.
-    mapping_from: # Looks up a value in a declared dataset by explicit key pairs.
+    lookup: # Looks up one value in a declared dataset by explicit key pairs.
         # Source and key lists pair by position, have equal length, and form a
         # unique combined dataset key. Pair order does not change the result.
-        - source:
-            type: [variable, "list[variable]"]
-            required: true
-            description: One or more current-row lookup values.
-        - dataset:
-            type: identifier
-            required: true
-            description: Declared dataset containing the lookup table.
-        - key:
-            type: [identifier, "list[identifier]"]
-            required: true
-            description: Dataset columns paired by position with source.
         - value:
             type: identifier
             required: true
             description: Dataset column returned by the lookup.
+        - dataset:
+            type: identifier
+            required: true
+            description: Declared dataset containing the lookup table.
+        - source:
+            type: [variable, "list[variable]"]
+            required: true
+            description: One or more current-row lookup values.
+        - key:
+            type: [identifier, "list[identifier]"]
+            required: true
+            description: Dataset columns paired by position with source.
+        - filter:
+            type: sql
+            required: false
+            description: Predicate selecting eligible records before matching.
+        - between:
+            type: lookup_between_class
+            required: false
+            description: Current-row value matched inclusively against lower and upper dataset bounds.
+        - order_by:
+            type: "list[order_by_term]"
+            required: false
+            description: Terms ordering eligible records; declared with keep.
+        - keep:
+            type: str
+            required: false
+            values: [first, last]
+            description: Ordered record to retain; declared with order_by.
         - missing:
             type: literal_value
-            description: Value returned when any source is missing.
-        - unmapped:
-            type: literal_value
-            description: Value returned when the complete key has no match.
+            required: false
+            description: Value returned when the lookup yields nothing; defaults to missing.
+        - strict:
+            type: bool
+            required: false
+            default: false
+            description: Fail when the lookup yields nothing.
     cut: # Assigns a numeric source to one of the labeled break intervals.
         - source:
             type: variable

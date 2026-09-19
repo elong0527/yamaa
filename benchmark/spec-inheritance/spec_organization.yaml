@@ -3,9 +3,13 @@ input:
   LB: input/lb.csv
   UNUSED: input/not-used.csv
 base: LB
-record_lookups:
+lookups:
   - id: unused_reference
     dataset: UNUSED
+    source:
+      - USUBJID
+    key:
+      - USUBJID
 columns:
   - name: USUBJID
     type: str

@@ -86,10 +86,10 @@ their missing fields. The entry file must declare its complete, non-null
 order.
 
 **R017-11.** The mapping key identifies an `input` member. Every member
-of `record_lookups`, `columns`, or `rows` must carry the respective `id`,
+of `lookups`, `columns`, or `rows` must carry the respective `id`,
 `name`, or `id` field. Two members of one layer must not share one identifier.
 
-**R017-12.** A non-null member field of `input`, `record_lookups`, or `rows`
+**R017-12.** A non-null member field of `input`, `lookups`, or `rows`
 is complete at that field boundary. Its nested classes, mappings, lists,
 registries, and scalar constraints validate normally; they are not partial
 patches. A non-keyed root field supplied by a layer likewise validates as one
@@ -116,7 +116,7 @@ value.
 | `schema_version` | Must be identical in every layer |
 | `parents` | Traversal instruction; never contributed |
 | `input` | Keyed by dataset ID |
-| `record_lookups` | Keyed by `id` |
+| `lookups` | Keyed by `id` |
 | `columns` | Keyed by `name` |
 | `rows` | Keyed by `id` |
 | Every other root field | Complete field replacement |
@@ -128,7 +128,7 @@ replace their complete inherited values.
 
 **R017-17.** Members of a keyed collection compose by identifier. A new
 identifier appends in contribution order. A matching identifier retains its
-first position. A matching `input`, `record_lookups`, or `rows` member then
+first position. A matching `input`, `lookups`, or `rows` member then
 merges the immediate fields of the member: an absent member field is inherited
 and a present non-null member field replaces its complete value. A matching
 `columns` member instead composes each present non-null field with the value it
@@ -224,7 +224,7 @@ dataset or record lookup live. A live record lookup makes its dataset and
 matching inputs live. A live row makes its input dataset, filter inputs,
 grouping inputs, and derivations needed for live columns live.
 
-**R017-27.** Dead entries are removed from `input`, `record_lookups`, and
+**R017-27.** Dead entries are removed from `input`, `lookups`, and
 `columns`. Row-derivation entries targeting dead columns are removed with those
 columns. Rows participate in reachability, but each final row declaration is
 itself a root because it can add records; a resolver cannot discard one merely

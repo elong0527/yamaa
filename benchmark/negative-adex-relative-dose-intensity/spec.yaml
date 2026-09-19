@@ -39,10 +39,24 @@ columns:
     type: float
     label: Cumulative Dose
     derivation:
-      aggregate: "SUM(EX.EXDOSE)"
+      aggregate:
 
+        source:
+          - STUDYID
+          - USUBJID
+        key:
+          - STUDYID
+          - USUBJID
+        expr: "SUM(EX.EXDOSE)"
   - name: RDI
     type: float
     label: Relative Dose Intensity
     derivation:
-      aggregate: "100 * SUM(EX.EXDOSE) / EX.EXPLDOS"
+      aggregate:
+        source:
+          - STUDYID
+          - USUBJID
+        key:
+          - STUDYID
+          - USUBJID
+        expr: "100 * SUM(EX.EXDOSE) / EX.EXPLDOS"

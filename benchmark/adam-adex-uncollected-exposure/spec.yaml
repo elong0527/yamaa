@@ -33,20 +33,29 @@ columns:
     type: float
     label: Cumulative Dose
     derivation:
-      aggregate: "SUM(EX.EXDOSE)"
+      aggregate:
 
+        expr: "SUM(EX.EXDOSE)"
+        source: [STUDYID, USUBJID, EXTRT]
+        key: [STUDYID, USUBJID, EXTRT]
   - name: NDOSREC
     type: int
     label: Number of Dose Records
     derivation:
-      aggregate: "COUNT(EX.EXSEQ)"
+      aggregate:
 
+        expr: "COUNT(EX.EXSEQ)"
+        source: [STUDYID, USUBJID, EXTRT]
+        key: [STUDYID, USUBJID, EXTRT]
   - name: NDOSVAL
     type: int
     label: Number of Nonmissing Doses
     derivation:
-      aggregate: "COUNT(EX.EXDOSE)"
+      aggregate:
 
+        expr: "COUNT(EX.EXDOSE)"
+        source: [STUDYID, USUBJID, EXTRT]
+        key: [STUDYID, USUBJID, EXTRT]
 verifications:
   - row_count:
       min: 3

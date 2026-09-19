@@ -53,13 +53,11 @@ columns:
     label: Serious Adverse Event Flag
     derivation:
       source: ADSL.SAEFL
-
   - name: DCSREAS
     type: str
     label: Reason for Discontinuation
     derivation:
       source: ADSL.DCSREAS
-
   - name: RULE
     type: str
     label: Decision Rule

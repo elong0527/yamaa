@@ -37,7 +37,7 @@ class ResolvedValue(_FrozenModel):
 
     status: Literal["value"] = "value"
     value: object
-    handled_by: Literal["multiple_matches"] | None = None
+    handled_by: HandlerName | None = None
 
 
 class AbsentValue(_FrozenModel):

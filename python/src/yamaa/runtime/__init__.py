@@ -18,7 +18,6 @@ from yamaa.runtime.joins import (
     build_relation_indexes,
     compare_values,
     eligible_records,
-    evaluate_mapping_from,
     join_scalar,
     order_records,
     partition_key,
@@ -28,7 +27,8 @@ from yamaa.runtime.joins import (
 from yamaa.runtime.lifecycle import HandlerCount
 from yamaa.runtime.lookups import (
     LookupOutcome,
-    RecordLookupSelector,
+    LookupSelector,
+    evaluate_lookup,
     types_comparable,
 )
 from yamaa.runtime.rows import (
@@ -49,8 +49,8 @@ __all__ = [
     "HandlerCount",
     "IndexedRecord",
     "LookupOutcome",
+    "LookupSelector",
     "OrderError",
-    "RecordLookupSelector",
     "RelationIndex",
     "RelationalContext",
     "RowResolver",
@@ -60,7 +60,7 @@ __all__ = [
     "compare_values",
     "driver_groups",
     "eligible_records",
-    "evaluate_mapping_from",
+    "evaluate_lookup",
     "execute_specification",
     "execute_with_source_provider",
     "group_candidates",
