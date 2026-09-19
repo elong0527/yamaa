@@ -25,6 +25,7 @@ from yamaa.expressions import (
     source_operand,
     template_identifiers,
     ungrouped_identifiers,
+    window_spec,
 )
 from yamaa.io.artifact import profile_of
 from yamaa.io.source import LoadedDataset
@@ -688,6 +689,20 @@ _WINDOW_VARIABLES: dict[str, tuple[str, ...]] = {
     "baseline_value": ("value", "flag"),
 }
 
+# R007-55: these windows number or move along declared positions, so they
+# require window.order_by. R007-56: the baseline windows locate their row
+# by date and flag instead, so a declared order_by is rejected.
+_WINDOW_ORDER_BY_REQUIRED: tuple[str, ...] = (
+    "row_number",
+    "rank",
+    "row_value",
+    "previous_non_missing",
+)
+_WINDOW_ORDER_BY_FORBIDDEN: tuple[str, ...] = (
+    "baseline_flag",
+    "baseline_value",
+)
+
 
 def _window_references(
     operation: str,
@@ -724,23 +739,48 @@ def _window_references(
                 requirement="R007-43",
             )
         )
+    window = window_spec(payload)
+    if operation in _WINDOW_ORDER_BY_REQUIRED and not window.get("order_by"):
+        # R007-55: without a declared order the window has no positions to
+        # number or to move along.
+        diagnostics.append(
+            _diagnostic(
+                "window_order_by_required",
+                f"{operation_path}.window",
+                {"operation": operation},
+                requirement="R007-55",
+            )
+        )
+    if operation in _WINDOW_ORDER_BY_FORBIDDEN and window.get("order_by"):
+        # R007-56: the baseline row is located by date and flag, not by a
+        # declared order, so a declared order would be silently ignored.
+        diagnostics.append(
+            _diagnostic(
+                "window_order_by_forbidden",
+                f"{operation_path}.window.order_by",
+                {"operation": operation},
+                requirement="R007-56",
+            )
+        )
     for field in _WINDOW_VARIABLES[operation]:
         name = payload.get(field)
         if isinstance(name, str):
             references.append(_Reference(name, f"{operation_path}.{field}"))
-    for index, name in enumerate(_as_names(payload.get("group_by")) or ()):
-        references.append(_Reference(name, f"{operation_path}.group_by[{index}]"))
-    for index, term in enumerate(payload.get("order_by") or ()):
+    for index, name in enumerate(_as_names(window.get("group_by")) or ()):
+        references.append(
+            _Reference(name, f"{operation_path}.window.group_by[{index}]")
+        )
+    for index, term in enumerate(window.get("order_by") or ()):
         variable = term if isinstance(term, str) else None
         if isinstance(term, Mapping) and isinstance(term.get("variable"), str):
             variable = str(term["variable"])
         if isinstance(variable, str):
             references.append(
-                _Reference(variable, f"{operation_path}.order_by[{index}]")
+                _Reference(variable, f"{operation_path}.window.order_by[{index}]")
             )
-    predicate = payload.get("filter")
+    predicate = window.get("filter")
     if isinstance(predicate, str):
-        filter_path = f"{operation_path}.filter"
+        filter_path = f"{operation_path}.window.filter"
         ast = _parse_predicate_at(predicate, filter_path, diagnostics)
         if ast is not None:
             references.extend(

@@ -305,6 +305,8 @@ VALIDATION_CONTEXT_FIELDS = {
         'key', 'key_count', 'source', 'source_count',
     },
     ('R007', 'zero_offset'): {'offset'},
+    ('R007', 'window_order_by_required'): {'operation'},
+    ('R007', 'window_order_by_forbidden'): {'operation'},
     ('R009', 'missing_verification_id'): set(),
     ('R010', 'incompatible_input_type'): {
         'actual', 'expected', 'expr', 'source',
@@ -5633,10 +5635,12 @@ def validate_expression_predicates(
             )
 
     elif keyword in {'row_number', 'rank'} and isinstance(payload, dict):
-        if isinstance(payload.get('filter'), str):
+        window = payload.get('window')
+        window_filter = window.get('filter') if isinstance(window, dict) else None
+        if isinstance(window_filter, str):
             errors.extend(
                 validate_predicate_at(
-                    payload['filter'], f"{path}.{keyword}.filter", resolver
+                    window_filter, f"{path}.{keyword}.window.filter", resolver
                 )
             )
 
@@ -6858,6 +6862,40 @@ def validate_expression_static_semantics(expression, path, context):
                 )
             )
         return errors
+
+    window_order_required = {
+        'row_number', 'rank', 'row_value', 'previous_non_missing',
+    }
+    window_order_forbidden = {'baseline_flag', 'baseline_value'}
+    if (
+        keyword in window_order_required | window_order_forbidden
+        and isinstance(payload, dict)
+    ):
+        window = payload.get('window')
+        order_by = window.get('order_by') if isinstance(window, dict) else None
+        operation_path = f"{path}.{keyword}"
+        if keyword in window_order_required and not order_by:
+            # R007-55: without a declared order the window has no positions
+            # to number or to move along.
+            errors.append(
+                validation_diagnostic(
+                    f"{operation_path}.window",
+                    'window_order_by_required',
+                    f'{keyword} requires window.order_by',
+                    context={'operation': keyword},
+                )
+            )
+        elif keyword in window_order_forbidden and order_by:
+            # R007-56: the baseline row is located by date and flag, not by
+            # a declared order, so a declared order would be silently ignored.
+            errors.append(
+                validation_diagnostic(
+                    f"{operation_path}.window.order_by",
+                    'window_order_by_forbidden',
+                    f'{keyword} does not take window.order_by',
+                    context={'operation': keyword},
+                )
+            )
 
     if keyword == 'cut' and isinstance(payload, dict):
         breaks = payload.get('breaks')

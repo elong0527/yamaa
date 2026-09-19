@@ -32,7 +32,12 @@ from yamaa.expressions import (
     parse_aggregate_cached,
     parse_predicate_cached,
 )
-from yamaa.expressions.windows import WINDOW_OPERATIONS, Partition, evaluate_window
+from yamaa.expressions.windows import (
+    WINDOW_OPERATIONS,
+    Partition,
+    evaluate_window,
+    window_spec,
+)
 from yamaa.models import (
     MISSING,
     ConditionPhase,
@@ -370,7 +375,8 @@ class RowResolver:
         | ConditionResult
     ):
         """Return this row's partition in declared order, and its place in it."""
-        fields = _names(payload.get("group_by"))
+        window = window_spec(payload)
+        fields = _names(window.get("group_by"))
         unavailable = [name for name in fields if name not in self._values]
         if unavailable:
             return ConditionResult(
@@ -381,7 +387,7 @@ class RowResolver:
             (row, _readable(row))
             for row in self._context.partition(fields).get(key, ())
         ]
-        terms = _order_terms(payload.get("order_by"))
+        terms = _order_terms(window.get("order_by"))
         if terms:
             indexed = [
                 IndexedRecord(position=row.output_position, values=values)
@@ -423,7 +429,7 @@ class RowResolver:
         members: Sequence[tuple[CandidateRow, dict[str, object]]],
     ) -> tuple[bool, ...] | ConditionResult:
         """Say which partition rows the window's filter retained (R007-7)."""
-        predicate = self._predicate(payload.get("filter"))
+        predicate = self._predicate(window_spec(payload).get("filter"))
         if isinstance(predicate, ConditionResult):
             return predicate
         if predicate is None:

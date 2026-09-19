@@ -73,6 +73,7 @@ from yamaa.expressions.windows import (
     Partition,
     evaluate_window,
     window_handlers,
+    window_spec,
 )
 
 __all__ = [
@@ -139,4 +140,5 @@ __all__ = [
     "ungrouped_identifiers",
     "whole_units",
     "window_handlers",
+    "window_spec",
 ]
