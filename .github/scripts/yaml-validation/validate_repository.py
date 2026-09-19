@@ -6715,6 +6715,40 @@ def validate_expression_static_semantics(expression, path, context):
     keyword, payload = next(iter(expression.items()))
     resolver = context['resolver']
 
+    window_order_required = {
+        'row_number', 'rank', 'row_value', 'previous_non_missing',
+    }
+    window_order_forbidden = {'baseline_flag', 'baseline_value'}
+    if (
+        keyword in window_order_required | window_order_forbidden
+        and isinstance(payload, dict)
+    ):
+        window = payload.get('window')
+        order_by = window.get('order_by') if isinstance(window, dict) else None
+        operation_path = f"{path}.{keyword}"
+        if keyword in window_order_required and not order_by:
+            # R007-54: without a declared order the window has no positions
+            # to number or to move along.
+            errors.append(
+                validation_diagnostic(
+                    f"{operation_path}.window",
+                    'window_order_by_required',
+                    f'{keyword} requires window.order_by',
+                    context={'operation': keyword},
+                )
+            )
+        elif keyword in window_order_forbidden and order_by:
+            # R007-55: the baseline row is located by date and flag, not by
+            # a declared order, so a declared order would be silently ignored.
+            errors.append(
+                validation_diagnostic(
+                    f"{operation_path}.window.order_by",
+                    'window_order_by_forbidden',
+                    f'{keyword} does not take window.order_by',
+                    context={'operation': keyword},
+                )
+            )
+
     if keyword == 'aggregate':
         return validate_aggregate_at(
             payload, f"{path}.aggregate", context['aggregate']

@@ -256,7 +256,7 @@ def test_every_registered_window_dispatches_to_its_own_operation() -> None:
     located = partition(rows, 1)
 
     assert _value(evaluate_window("row_number", {}, located)) == 2
-    assert _value(evaluate_window("rank", {"order_by": ["AVAL"]}, located)) == 2
+    assert _value(evaluate_window("rank", {"window": {"order_by": ["AVAL"]}}, located)) == 2
     assert (
         _value(evaluate_window("row_value", {"source": "AVAL", "offset": -1}, located))
         == 5

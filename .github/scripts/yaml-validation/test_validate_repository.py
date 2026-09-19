@@ -796,6 +796,36 @@ class TestStaticSemanticContracts(unittest.TestCase):
             expression, 'spec.columns.X.derivation', self.context()
         )
 
+    def test_window_order_by_required(self):
+        for operation in (
+            'row_number', 'rank', 'row_value', 'previous_non_missing'
+        ):
+            payload = (
+                {'source': 'B', 'offset': 1}
+                if operation == 'row_value'
+                else {}
+            )
+            errors = self.validate({operation: payload})
+            self.assertEqual(len(errors), 1)
+            self.assertEqual(errors[0].condition, 'window_order_by_required')
+            self.assertIn('window.order_by', errors[0].message)
+
+            ordered = self.validate(
+                {operation: {**payload, 'window': {'order_by': ['B']}}}
+            )
+            self.assertEqual(ordered, [])
+
+    def test_window_order_by_forbidden_on_baselines(self):
+        for operation in ('baseline_flag', 'baseline_value'):
+            errors = self.validate(
+                {operation: {'window': {'order_by': ['B']}}}
+            )
+            self.assertEqual(len(errors), 1)
+            self.assertEqual(errors[0].condition, 'window_order_by_forbidden')
+
+            unordered = self.validate({operation: {}})
+            self.assertEqual(unordered, [])
+
     def test_mapping_extreme_window_and_cut_contracts(self):
         collision = self.validate({
             'mapping': {
@@ -817,7 +847,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
         })
         offset = self.validate({
             'row_value': {
-                'source': 'B', 'offset': 0, 'order_by': ['B']
+                'source': 'B', 'offset': 0, 'window': {'order_by': ['B']}
             }
         })
         cut = self.validate({
@@ -2709,14 +2739,16 @@ class TestPreviousNonMissingSchema(unittest.TestCase):
         errors = self.validate(
             {
                 "source": "AVAL",
-                "group_by": ["STUDYID", "USUBJID", "PARAMCD"],
-                "order_by": [
-                    {
-                        "variable": "ADT",
-                        "direction": "asc",
-                        "nulls": "last",
-                    }
-                ],
+                "window": {
+                    "group_by": ["STUDYID", "USUBJID", "PARAMCD"],
+                    "order_by": [
+                        {
+                            "variable": "ADT",
+                            "direction": "asc",
+                            "nulls": "last",
+                        }
+                    ],
+                },
             }
         )
 
@@ -2724,22 +2756,31 @@ class TestPreviousNonMissingSchema(unittest.TestCase):
 
     def test_allows_one_partition_by_omission(self):
         self.assertEqual(
-            self.validate({"source": "AVAL", "order_by": ["ADT"]}),
+            self.validate(
+                {"source": "AVAL", "window": {"order_by": ["ADT"]}}
+            ),
             [],
         )
 
-    def test_rejects_missing_source_and_unregistered_filter(self):
-        missing_source = self.validate({"order_by": ["ADT"]})
+    def test_rejects_missing_source(self):
+        missing_source = self.validate({"window": {"order_by": ["ADT"]}})
+
+        self.assertIn("missing required field 'source'", missing_source[0])
+
+    def test_accepts_window_filter(self):
+        # The shared window_spec offers filter to every window expression;
+        # the engine already honored it, only the schema withheld it.
         filtered = self.validate(
             {
                 "source": "AVAL",
-                "order_by": ["ADT"],
-                "filter": "PARAMCD = 'WEIGHT'",
+                "window": {
+                    "order_by": ["ADT"],
+                    "filter": "PARAMCD = 'WEIGHT'",
+                },
             }
         )
 
-        self.assertIn("missing required field 'source'", missing_source[0])
-        self.assertIn("unknown field 'filter'", filtered[0])
+        self.assertEqual(filtered, [])
 
 
 class TestGroupedRows(unittest.TestCase):
