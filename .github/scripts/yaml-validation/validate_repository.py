@@ -303,7 +303,7 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R007', 'invalid_cut'): {'reason'},
     ('R007', 'incomparable_sources'): {'sources', 'types'},
     ('R007', 'source_key_length_mismatch'): {
-        'key', 'key_count', 'source', 'source_count',
+        'key', 'key_count', 'key_source', 'key_source_count',
     },
     ('R007', 'zero_offset'): {'offset'},
     ('R009', 'missing_verification_id'): set(),
@@ -336,8 +336,11 @@ VALIDATION_CONTEXT_FIELDS = {
         'lower_type', 'lookup', 'upper_type', 'value_type',
     },
     ('R003', 'no_applicable_keys'): {'dataset', 'hint', 'keys'},
+    ('R003', 'redundant_key_source'): {
+        'key', 'key_source',
+    },
     ('R003', 'source_key_length_mismatch'): {
-        'key', 'key_count', 'source', 'source_count',
+        'key', 'key_count', 'key_source', 'key_source_count',
     },
     ('R003', 'unpaired_fields'): {
         'declared', 'lookup', 'missing',
@@ -4986,27 +4989,40 @@ def validate_spec_contracts(
                         },
                     )
                 )
-            sources = lookup.get('source')
+            sources = lookup.get('key_source')
             keys = lookup.get('key')
             if (
                 isinstance(sources, list)
                 and isinstance(keys, list)
-                and len(sources) != len(keys)
             ):
-                errors.append(
-                    validation_diagnostic(
-                        path,
-                        'source_key_length_mismatch',
-                        f"source has {len(sources)} value(s), key has "
-                        f"{len(keys)}",
-                        context={
-                            'source': sources,
-                            'key': keys,
-                            'source_count': len(sources),
-                            'key_count': len(keys),
-                        },
+                if sources == keys:
+                    # R003-45: key_source must not repeat the key names.
+                    errors.append(
+                        validation_diagnostic(
+                            path,
+                            'redundant_key_source',
+                            'key_source repeats the key names; omit it',
+                            context={
+                                'key_source': sources,
+                                'key': keys,
+                            },
+                        )
                     )
-                )
+                elif len(sources) != len(keys):
+                    errors.append(
+                        validation_diagnostic(
+                            path,
+                            'source_key_length_mismatch',
+                            f"key_source has {len(sources)} value(s), key has "
+                            f"{len(keys)}",
+                            context={
+                                'key_source': sources,
+                                'key': keys,
+                                'key_source_count': len(sources),
+                                'key_count': len(keys),
+                            },
+                        )
+                    )
             dataset = lookup.get('dataset')
             if keys is None and isinstance(dataset, str):
                 # R003-43: an omitted key is inferred from the output keys
@@ -6799,20 +6815,39 @@ def validate_expression_static_semantics(expression, path, context):
         return errors
 
     if keyword == 'lookup' and isinstance(payload, dict):
-        sources = normalize_scalar_list(payload.get('source'))
+        sources = normalize_scalar_list(payload.get('key_source'))
         keys = normalize_scalar_list(payload.get('key'))
         operation_path = f"{path}.lookup"
+        # R003-45: only flag if BOTH were explicitly written (not inferred).
+        # If either was omitted, the inference/defaulting is not redundant.
+        if (
+            payload.get('key_source') is not None
+            and payload.get('key') is not None
+            and sources == keys
+        ):
+            # R003-45: key_source must not repeat the key names.
+            return [
+                validation_diagnostic(
+                    operation_path,
+                    'redundant_key_source',
+                    'key_source repeats the key names; omit it',
+                    context={
+                        'key_source': sources,
+                        'key': keys,
+                    },
+                )
+            ]
         if len(sources) != len(keys):
             return [
                 validation_diagnostic(
                     operation_path,
                     'source_key_length_mismatch',
-                    f"source has {len(sources)} value(s), key has "
+                    f"key_source has {len(sources)} value(s), key has "
                     f"{len(keys)}",
                     context={
-                        'source': sources,
+                        'key_source': sources,
                         'key': keys,
-                        'source_count': len(sources),
+                        'key_source_count': len(sources),
                         'key_count': len(keys),
                     },
                 )

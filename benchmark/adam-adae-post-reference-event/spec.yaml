@@ -8,7 +8,6 @@ input:
 lookups:
   - id: FIRSTCOV
     dataset: AE
-    source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
     filter: "AE.AEDECOD = 'COVID-19'"
     order_by: [AE.AESTDTC, AE.AESEQ]

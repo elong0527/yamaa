@@ -59,7 +59,7 @@ class LookupBetween(_StrictModel):
 class Lookup(_StrictModel):
     id: str
     dataset: str
-    source: list[str] | None = None
+    key_source: list[str] | None = None
     key: list[str] | None = None
     between: LookupBetween | None = None
     filter: str | None = None

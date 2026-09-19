@@ -261,7 +261,7 @@ class RowResolver:
             )
         payload: dict[str, object] = {
             "dataset": join.dataset,
-            "source": list(join.keys),
+            "key_source": list(join.keys),
             "key": list(join.keys),
             "value": field_name,
         }
@@ -507,7 +507,7 @@ class RowResolver:
             selected = self._driver_group(relation_name, identifiers, predicate)
         else:
             key_fields = _names(payload.get("key"))
-            key_variables = _names(payload.get("source"))
+            key_variables = _names(payload.get("key_source"))
             if (
                 not key_fields
                 or not key_variables

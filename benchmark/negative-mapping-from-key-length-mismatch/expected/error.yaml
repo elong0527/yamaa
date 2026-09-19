@@ -4,10 +4,10 @@ spec_paths:
   - columns.ANRHI.derivation.lookup
 requirement: R007-48
 context:
-  source:
+  key_source:
     - PARAMCD
     - SEX
   key:
     - LBTESTCD
-  source_count: 2
+  key_source_count: 2
   key_count: 1

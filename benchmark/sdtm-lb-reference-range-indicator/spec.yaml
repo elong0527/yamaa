@@ -7,7 +7,6 @@ input:
 lookups:
   - id: REFRANGE
     dataset: LBRANGE
-    source: [LBTESTCD, SEX]
     key: [LBTESTCD, SEX]
 
 base: LB_RAW

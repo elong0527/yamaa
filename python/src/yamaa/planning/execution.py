@@ -640,11 +640,11 @@ def _lookup_references(
     between's type comparability is checked when the lookup runs, as with
     an unplanned path.
     """
-    sources = _as_names(payload.get("source"))
+    sources = _as_names(payload.get("key_source"))
     keys = _as_names(payload.get("key"))
     dataset = payload.get("dataset")
     value = payload.get("value")
-    if payload.get("source") is None or payload.get("key") is None:
+    if payload.get("key_source") is None or payload.get("key") is None:
         # R003-43/R003-44: the planner fills omitted pairs before reference
         # collection, or records no_applicable_keys when no key applies.
         # Either way there is nothing left to collect here.
@@ -659,6 +659,21 @@ def _lookup_references(
             )
         )
         return
+    if list(sources) == list(keys) and not payload.get("_key_source_defaulted"):
+        # R003-45: an explicitly written key_source must not repeat the key
+        # names; omit it instead. (A defaulted key_source is not redundant.)
+        diagnostics.append(
+            _diagnostic(
+                "redundant_key_source",
+                operation_path,
+                {
+                    "key_source": list(sources),
+                    "key": list(keys),
+                },
+                requirement="R003-45",
+            )
+        )
+        return
     if len(sources) != len(keys) or not sources:
         # R007-48: the lists pair by position, so unequal lengths name no
         # key, and an empty pairing matches nothing.
@@ -667,9 +682,9 @@ def _lookup_references(
                 "source_key_length_mismatch",
                 operation_path,
                 {
-                    "source": list(sources),
+                    "key_source": list(sources),
                     "key": list(keys),
-                    "source_count": len(sources),
+                    "key_source_count": len(sources),
                     "key_count": len(keys),
                 },
                 requirement="R007-48",
@@ -957,12 +972,29 @@ def _aggregate_references(
     key_variables: tuple[str, ...] | None = None
     if joined is not None:
         keys = _as_names(payload.get("key"))
-        source_vars = _as_names(payload.get("source"))
-        if payload.get("key") is None or payload.get("source") is None:
+        source_vars = _as_names(payload.get("key_source"))
+        if payload.get("key") is None or payload.get("key_source") is None:
             # R003-43/R003-44: the planner fills omitted pairs before
             # reference collection, or records no_applicable_keys when no
             # key applies. Either way there is nothing left to check here.
             pass
+        elif list(source_vars or ()) == list(keys or ()) and not payload.get(
+            "_key_source_defaulted"
+        ):
+            # R003-45: an explicitly written key_source must not repeat the
+            # key names. (A defaulted key_source is not redundant.)
+            diagnostics.append(
+                _diagnostic(
+                    "redundant_key_source",
+                    operation_path,
+                    {
+                        "dataset": joined,
+                        "key_source": list(source_vars or ()),
+                        "key": list(keys or ()),
+                    },
+                    requirement="R003-45",
+                )
+            )
         elif not keys or not source_vars or len(keys) != len(source_vars):
             diagnostics.append(
                 _diagnostic(
@@ -971,7 +1003,7 @@ def _aggregate_references(
                     {
                         "dataset": joined,
                         "key": list(keys or ()),
-                        "source": list(source_vars or ()),
+                        "key_source": list(source_vars or ()),
                     },
                     requirement="R003-30",
                 )
@@ -1199,8 +1231,8 @@ def _fill_omitted_lookup_keys(
     ) -> Mapping[str, object] | None:
         """Return the payload with omitted pairs filled, or None to skip."""
         key_present = payload.get("key") is not None
-        source_present = payload.get("source") is not None
-        if key_present and source_present:
+        key_source_present = payload.get("key_source") is not None
+        if key_present and key_source_present:
             return None
         keys = _as_names(payload.get("key")) if key_present else None
         if not key_present:
@@ -1210,13 +1242,18 @@ def _fill_omitted_lookup_keys(
                 # operation's own validation to report.
                 return None
             inferred.add(operation_path)
-        sources = _as_names(payload.get("source")) if source_present else None
-        if not source_present:
+        sources = _as_names(payload.get("key_source")) if key_source_present else None
+        if not key_source_present:
             sources = keys
         if keys is None or sources is None:
             # Present but malformed; downstream validation reports it.
             return None
-        return {**payload, "source": list(sources), "key": list(keys)}
+        filled = {**payload, "key_source": list(sources), "key": list(keys)}
+        if not key_source_present:
+            # Mark that key_source was defaulted, so R003-45 (redundancy)
+            # does not flag the inferred default.
+            filled["_key_source_defaulted"] = True
+        return filled
 
     def fill_lookup(payload: object, operation_path: str) -> object:
         if not isinstance(payload, Mapping):
@@ -1872,12 +1909,12 @@ def _plan_lookups(
             key_inferred = True
         else:
             match_fields = tuple(lookup.key)
-        if lookup.source is None:
-            # R003-44: an omitted source defaults to the key names.
+        if lookup.key_source is None:
+            # R003-44: an omitted key_source defaults to the key names.
             variables = match_fields
             source_defaulted = True
         else:
-            variables = tuple(lookup.source)
+            variables = tuple(lookup.key_source)
         if len(variables) != len(match_fields) or not variables:
             # Reported by _lookup_declarations; skip planning this entry.
             continue
@@ -2362,25 +2399,36 @@ def _lookup_declarations(
                         requirement="R003-9",
                     )
                 )
-        if (
-            lookup.source is not None
-            and lookup.key is not None
-            and (len(lookup.source) != len(lookup.key) or not lookup.source)
-        ):
-            diagnostics.append(
-                _diagnostic(
-                    "source_key_length_mismatch",
-                    path,
-                    {
-                        "lookup": lookup.id,
-                        "source": list(lookup.source),
-                        "key": list(lookup.key),
-                        "source_count": len(lookup.source),
-                        "key_count": len(lookup.key),
-                    },
-                    requirement="R003-5",
+        if lookup.key_source is not None and lookup.key is not None:
+            if list(lookup.key_source) == list(lookup.key):
+                # R003-45: key_source must not repeat the key names.
+                diagnostics.append(
+                    _diagnostic(
+                        "redundant_key_source",
+                        path,
+                        {
+                            "lookup": lookup.id,
+                            "key_source": list(lookup.key_source),
+                            "key": list(lookup.key),
+                        },
+                        requirement="R003-45",
+                    )
                 )
-            )
+            elif len(lookup.key_source) != len(lookup.key) or not lookup.key_source:
+                diagnostics.append(
+                    _diagnostic(
+                        "source_key_length_mismatch",
+                        path,
+                        {
+                            "lookup": lookup.id,
+                            "key_source": list(lookup.key_source),
+                            "key": list(lookup.key),
+                            "key_source_count": len(lookup.key_source),
+                            "key_count": len(lookup.key),
+                        },
+                        requirement="R003-5",
+                    )
+                )
     return diagnostics
 
 

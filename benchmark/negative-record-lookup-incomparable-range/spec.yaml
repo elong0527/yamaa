@@ -11,7 +11,6 @@ input:
 lookups:
   - id: EPOCHDEF
     dataset: EPOCHS
-    source: STUDYID
     key: STUDYID
     between: {value: VSDTC, lower: DYLO, upper: DYHI}
 

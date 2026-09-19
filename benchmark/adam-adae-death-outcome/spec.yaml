@@ -7,7 +7,6 @@ input:
 lookups:
   - id: DEATHEV
     dataset: AE
-    source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
     filter: "AE.AEOUT = 'FATAL'"
 base: AE

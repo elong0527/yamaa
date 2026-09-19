@@ -7,12 +7,12 @@ input:
 lookups:
   - id: SMQ1
     dataset: QUERY
-    source: [AEDECOD]
+    key_source: [AEDECOD]
     key: [TERM]
     filter: "QUERY.PREFIX = 'SMQ01'"
   - id: SMQ2
     dataset: QUERY
-    source: [AEDECOD]
+    key_source: [AEDECOD]
     key: [TERM]
     filter: "QUERY.PREFIX = 'SMQ02'"
 base: AE

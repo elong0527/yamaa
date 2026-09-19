@@ -6,8 +6,6 @@ base: LB
 lookups:
   - id: unused_reference
     dataset: UNUSED
-    source:
-      - USUBJID
     key:
       - USUBJID
 columns:

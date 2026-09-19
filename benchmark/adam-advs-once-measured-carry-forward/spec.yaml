@@ -16,7 +16,7 @@ lookups:
 
   - id: COLLECTED
     dataset: VS
-    source: [STUDYID, USUBJID, PARAMCD, ADT]
+    key_source: [STUDYID, USUBJID, PARAMCD, ADT]
     key: [STUDYID, USUBJID, VSTESTCD, VSDTC]
 base: PLAN
 

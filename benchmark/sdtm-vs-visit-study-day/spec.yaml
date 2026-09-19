@@ -11,11 +11,9 @@ input:
 lookups:
   - id: PLANNEDVISIT
     dataset: TV
-    source: VISIT
     key: VISIT
   - id: EPOCHDEF
     dataset: TEPOCH
-    source: STUDYID
     key: STUDYID
     between:
       value: VSDY

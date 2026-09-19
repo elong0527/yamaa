@@ -11,7 +11,7 @@ input:
 lookups:
   - id: GROWTH
     dataset: LMS
-    source: [ADVSPRE.PARAMCD, ADVSPRE.SEX, ADVSPRE.AGE]
+    key_source: [ADVSPRE.PARAMCD, ADVSPRE.SEX, ADVSPRE.AGE]
     key: [PARAMCD, SEX, AGE]
 base: ADVSPRE
 

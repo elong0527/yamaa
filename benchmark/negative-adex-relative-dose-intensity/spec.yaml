@@ -41,9 +41,6 @@ columns:
     derivation:
       aggregate:
 
-        source:
-          - STUDYID
-          - USUBJID
         key:
           - STUDYID
           - USUBJID
@@ -53,9 +50,6 @@ columns:
     label: Relative Dose Intensity
     derivation:
       aggregate:
-        source:
-          - STUDYID
-          - USUBJID
         key:
           - STUDYID
           - USUBJID

@@ -11,7 +11,6 @@ input:
 lookups:
   - id: AWIN
     dataset: AWINDOW
-    source: STUDYID
     key: STUDYID
     between: {value: ADY, lower: AWLO, upper: AWHI}
 

@@ -350,7 +350,7 @@ def evaluate_lookup(
     does, so a source may name an output column or a driver-qualified
     dataset column exactly as the specification wrote it.
     """
-    sources = _names(payload.get("source"))
+    sources = _names(payload.get("key_source"))
     keys = _names(payload.get("key"))
     value_field = payload.get("value")
     dataset = relation.dataset
@@ -367,7 +367,7 @@ def evaluate_lookup(
                 condition="invalid_field_type",
                 context={
                     "operation": "lookup",
-                    "expected": "source, dataset, key, value",
+                    "expected": "key_source, dataset, key, value",
                 },
                 requirement="R007-36",
             )

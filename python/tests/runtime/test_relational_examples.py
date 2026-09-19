@@ -209,7 +209,6 @@ keys: [STUDYID, USUBJID, PARAMCD]
 lookups:
   - id: LASTEX
     dataset: EX
-    source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
     order_by: [EX.EXSEQ]
     keep: last
@@ -236,7 +235,6 @@ columns:
     type: float
     derivation:
       lookup:
-        source: [PARAMCD, SEX]
         dataset: REF
         key: [PARAMCD, SEX]
         value: ANRHI
@@ -246,7 +244,6 @@ columns:
     derivation:
       lookup:
         dataset: EX
-        source: [STUDYID, USUBJID]
         key: [STUDYID, USUBJID]
         value: EXTRT
         order_by: [EX.EXSEQ]
@@ -255,7 +252,6 @@ columns:
     type: float
     derivation:
       aggregate:
-        source: [STUDYID, USUBJID]
         key: [STUDYID, USUBJID]
         filter: "EX.EXDOSE > 0"
         expr: "SUM(EX.EXDOSE)"
@@ -398,7 +394,6 @@ keys: [STUDYID, USUBJID, VSSEQ]
 lookups:
   - id: EPOCHDEF
     dataset: EPOCHS
-    source: [STUDYID]
     key: [STUDYID]
     between: {value: ADY, lower: LO, upper: HI}
 
@@ -426,7 +421,6 @@ columns:
     type: float
     derivation:
       aggregate:
-        source: [STUDYID, USUBJID]
         key: [STUDYID, USUBJID]
         between: {value: ADY, lower: EX.STARTDY, upper: EX.ENDDY}
         expr: "SUM(EX.EXDOSE)"
@@ -442,7 +436,6 @@ columns:
     type: float
     derivation:
       aggregate:
-        source: [STUDYID]
         key: [STUDYID]
         group_by: [EX.STUDYID]
         expr: "SUM(EX.EXDOSE)"
@@ -580,7 +573,6 @@ columns:
     type: float
     derivation:
       aggregate:
-        source: [STUDYID, USUBJID]
         key: [STUDYID, USUBJID]
         between: {{BETWEEN}}
         expr: "SUM(EX.EXDOSE)"

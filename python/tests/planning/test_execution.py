@@ -264,7 +264,9 @@ def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
     ).model_copy(
         update={
             "lookups": [
-                Lookup(id="LOOK", dataset="SRC", source=["A"], key=["X"], strict=True)
+                Lookup(
+                    id="LOOK", dataset="SRC", key_source=["A"], key=["X"], strict=True
+                )
             ]
         }
     )
@@ -281,9 +283,7 @@ def test_a_lookup_contributes_its_match_values_as_dependencies() -> None:
 def test_a_lookup_defaults_to_missing_on_absence() -> None:
     spec = specification(
         [Column(name="X", type="str", derivation=derivation({"source": "SRC.X"}))]
-    ).model_copy(
-        update={"lookups": [Lookup(id="LOOK", dataset="SRC", source=["X"], key=["X"])]}
-    )
+    ).model_copy(update={"lookups": [Lookup(id="LOOK", dataset="SRC", key=["X"])]})
 
     plan = plan_execution(spec, {"SRC": source_table()})
 
@@ -421,7 +421,7 @@ def test_a_named_lookup_with_mismatched_source_and_key_lengths_fails() -> None:
     ).model_copy(
         update={
             "lookups": [
-                Lookup(id="LOOK", dataset="RIGHT", source=["X", "X"], key=["X"])
+                Lookup(id="LOOK", dataset="RIGHT", key_source=["X", "X"], key=["X"])
             ]
         }
     )
@@ -578,8 +578,8 @@ def test_a_lookup_key_typed_differently_on_each_side_is_reported() -> None:
                     {
                         "lookup": {
                             "dataset": "RIGHT",
-                            "source": ["X"],
-                            "key": ["X"],
+                            "key_source": ["X"],
+                            "key": ["V"],
                             "value": "V",
                         }
                     }
@@ -603,8 +603,8 @@ def test_a_declared_key_pair_must_carry_one_comparable_type() -> None:
                     {
                         "lookup": {
                             "dataset": "RIGHT",
-                            "source": ["X"],
-                            "key": ["X"],
+                            "key_source": ["X"],
+                            "key": ["V"],
                             "value": "V",
                         }
                     }
@@ -743,9 +743,7 @@ def test_a_lookup_may_be_read_from_a_numeric_expression() -> None:
         ),
     ]
     spec = two_dataset_specification(columns).model_copy(
-        update={
-            "lookups": [Lookup(id="LOOK", dataset="RIGHT", source=["X"], key=["X"])]
-        }
+        update={"lookups": [Lookup(id="LOOK", dataset="RIGHT", key=["X"])]}
     )
 
     plan = plan_execution(
@@ -882,7 +880,9 @@ def test_a_lookup_source_has_already_chosen_its_record() -> None:
             ),
         ]
     ).model_copy(
-        update={"lookups": [Lookup(id="REF", dataset="SRC", source=["K"], key=["X"])]}
+        update={
+            "lookups": [Lookup(id="REF", dataset="SRC", key_source=["K"], key=["X"])]
+        }
     )
 
     diagnostic = filter_diagnostics(spec)[0]

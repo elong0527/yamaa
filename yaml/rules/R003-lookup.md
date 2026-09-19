@@ -11,7 +11,7 @@ applies_to: [lookups, expression.lookup, expression.aggregate, scalar.source]
 ## Intent
 
 Read another dataset through a stated match. A plain scalar
-`source: DATASET.COLUMN` joins that dataset on the applicable keys
+`key_source: DATASET.COLUMN` joins that dataset on the applicable keys
 whenever those keys are clear; an explicit `lookup:` states the match
 itself for every case where the keys are unclear, differ from the
 applicable output keys, or the read should be a reusable named lookup.
@@ -57,10 +57,10 @@ record the row was constructed from.
 
 ```yaml
 derivation:
-  source: ADSL.TRTSDTM
+  key_source: ADSL.TRTSDTM
 ```
 
-A structured `source:` keeps its `filter` and `multiple_matches` on the
+A structured `key_source:` keeps its `filter` and `multiple_matches` on the
 implicit join: the filter narrows the eligible records and
 `multiple_matches` chooses among the survivors exactly as an explicit
 lookup's would.
@@ -69,18 +69,18 @@ lookup's would.
 
 **R003-2.** The lookup's dataset is the relation read. The current row is
 the output row (or grouped-row candidate) the match runs for. Match fields
-are the `key` columns; match variables are the `source` values. Eligible
+are the `key` columns; match variables are the `key_source` values. Eligible
 records are the dataset records surviving `filter`.
 
 **R003-3.** A lookup `id` shares one namespace with dataset identifiers,
 other lookup ids, and the output `domain`. A collision fails as
 `duplicate_identifier`.
 
-**R003-4.** A named lookup declares `id` and `dataset`; `source` and
+**R003-4.** A named lookup declares `id` and `dataset`; `key_source` and
 `key` are optional. The schema requires `id` and `dataset`: omitting
 either fails as `missing_required_field` with no requirement attached,
 because the contract is structural. An omitted `key` is inferred from
-the applicable output keys (R003-43); an omitted `source` defaults to
+the applicable output keys (R003-43); an omitted `key_source` defaults to
 the key names (R003-44). State both lists only when the intended match
 differs from what omission would infer.
 
@@ -101,14 +101,14 @@ infer it:
 lookups:
   - id: DEATHEV
     dataset: AE
-    source: [STUDYID, USUBJID]
+    key_source: [STUDYID, USUBJID]
     key: [STUDYID, USUBJID]
     filter: "AE.AEOUT = 'FATAL'"
     order_by: [AE.ASTDT]
     keep: last
 ```
 
-**R003-5.** `source` and `key` pair by position, have equal length, and
+**R003-5.** `key_source` and `key` pair by position, have equal length, and
 are both non-empty -- after inference (R003-43) and defaulting (R003-44)
 have run. Otherwise the lookup names no key and fails as
 `source_key_length_mismatch`.
@@ -116,7 +116,7 @@ have run. Otherwise the lookup names no key and fails as
 **R003-6.** Every `key` column must exist in the lookup's dataset.
 Otherwise fail as `unknown_field`.
 
-**R003-7.** Every `source` variable must be a known current-row value.
+**R003-7.** Every `key_source` variable must be a known current-row value.
 Otherwise fail as `unknown_field`.
 
 **R003-8.** Each source/key pair must be mutually comparable under
@@ -214,14 +214,14 @@ narrow, choose, and absence steps for one value:
 derivation:
   lookup:
     dataset: MEDDRA
-    source: AE_RAW.AETERM
+    key_source: AE_RAW.AETERM
     key: LLTNAME
     value: PTNAME
     missing: NOT CODED
 ```
 
 Its `filter`, `order_by`, `keep`, `between`, `missing`, and `strict`
-behave exactly as the named form's, and its `source`/`key` follow the
+behave exactly as the named form's, and its `key_source`/`key` follow the
 same omission rules (R003-43, R003-44). Its operation-level mechanics
 stay in R007.
 
@@ -237,14 +237,14 @@ surviving records counts one `multiple_matches` handling, and a declared
 ## Aggregates over a qualified relation
 
 **R003-30.** An aggregate whose expression reads a qualified dataset
-relation matches on key pairs: `source` and `key` pair by position and
+relation matches on key pairs: `key_source` and `key` pair by position and
 are non-empty after inference (R003-43) and defaulting (R003-44) have
 run. An omitted `key` is inferred from the applicable output keys; an
-omitted `source` defaults to the key names. With no pairs at all the
+omitted `key_source` defaults to the key names. With no pairs at all the
 aggregate names no match and fails as `missing_aggregate_keys`.
 
 **R003-31.** An aggregate's declared `key` columns must exist in the
-relation and its `source` variables must be known, or fail as
+relation and its `key_source` variables must be known, or fail as
 `unknown_field`. A pair that cannot compare fails under R007-19.
 
 **R003-32.** A grouped-row aggregate reads its own driver group and
@@ -287,7 +287,7 @@ broke the agreement silently.
 
 The unification keeps the implicit join where the match is already
 stated: the output `keys` name the row's identity, so a plain
-`source: DATASET.COLUMN` matching on the applicable keys says nothing
+`key_source: DATASET.COLUMN` matching on the applicable keys says nothing
 twice. `record_lookups` and `mapping_from` become the one explicit
 `lookup` for everything else -- an unclear key, a key that differs from
 the applicable output keys, or a reusable named read -- so the
@@ -317,7 +317,7 @@ right types are not mutually comparable fails as
 
 **R003-42.** With no applicable key the intended match is unclear: the
 read fails as `no_applicable_keys`, and the author states the match with
-an explicit `lookup:` naming its `source`/`key` pairs. The same explicit
+an explicit `lookup:` naming its `key_source`/`key` pairs. The same explicit
 form serves whenever the intended keys differ from the applicable
 output keys or the read should be a reusable named lookup.
 
@@ -328,21 +328,21 @@ dataset also carries. The inference is the same one the implicit join
 uses, so a lookup that omits `key` matches exactly as the implicit join
 would. With no applicable key the read fails as `no_applicable_keys`.
 
-**R003-44.** A lookup may omit `source`: the omitted source defaults to
+**R003-44.** A lookup may omit `key_source`: the omitted source defaults to
 the (possibly inferred) key names, matching each key column against the
-same-named current-row value. `source` is stated only when a key column
+same-named current-row value. `key_source` is stated only when a key column
 is matched against a differently named current-row value.
 
 ```yaml
 lookups:
   - id: REFRANGE
     dataset: LBRANGE
-    source: [LBTESTCD, SEX]
+    key_source: [LBTESTCD, SEX]
     key: [TESTCD, SEX]
 ```
 
 Here the current-row `LBTESTCD` matches the limit table's `TESTCD`
-column; omitting `source` would have matched `TESTCD` against a
+column; omitting `key_source` would have matched `TESTCD` against a
 current-row `TESTCD` that does not exist.
 
 

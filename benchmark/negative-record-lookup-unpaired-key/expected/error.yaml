@@ -4,12 +4,12 @@ spec_paths:
   - lookups[0]
 requirement: R003-5
 context:
-  source:
+  key_source:
     - LBTESTCD
     - SEX
   key:
     - LBTESTCD
     - SEX
     - UNIT
-  source_count: 2
+  key_source_count: 2
   key_count: 3

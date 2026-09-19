@@ -117,7 +117,6 @@ columns:
       aggregate:
         expr: "MIN(DM.RAWTXT)"
         group_by: [DM.STUDYID]
-        source: [STUDYID]
         key: [STUDYID]
 
   - name: MAXTXT
@@ -127,7 +126,6 @@ columns:
       aggregate:
         expr: "MAX(DM.RAWTXT)"
         group_by: [DM.STUDYID]
-        source: [STUDYID]
         key: [STUDYID]
 
 verifications:
