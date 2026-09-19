@@ -67,7 +67,7 @@ Common -> A -> B -> entry
 ```
 
 Later contributions have higher precedence. A difference between two parents is
-resolved by their order; it is not a parent-conflict error. `parents` is
+resolved by order, not by a parent-conflict error. `parents` is
 consumed during traversal and is absent from the resolved specification.
 
 ## Layer validation
@@ -213,7 +213,7 @@ live. Reachability begins with:
 - columns read by dataset verifications;
 - a column carrying its own column verification;
 - every surviving row template, because declaring a row changes the artifact's
-  records; and
+  rows; and
 - a dataset named by `base`, including when a surviving row falls back to it.
 
 **R017-26.** The resolver then follows every semantic reference recursively.
