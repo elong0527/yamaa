@@ -1,0 +1,229 @@
+schema_version: "1.0"
+domain: DS
+keys: [STUDYID, USUBJID, DSSEQ]
+
+input:
+  ODM: input/odm.csv
+  RAND:
+    path: input/randomization.csv
+    types: {RANDDTC: date}
+
+output:
+  path: ds.csv
+  columns: [DOMAIN, STUDYID, USUBJID, DSCAT, DSSCAT, DSTERM, DSDECOD, DSSTDTC, DSSEQ]
+
+# Each collected item of one milestone is its own ODM record, so a row built
+# from the completion record reads the rest by subject and milestone.
+record_lookups:
+  - id: CONSENTDTC
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'IC' AND ODM.ItemOID = 'IT.DS.ICDTC'"
+    source: [USUBJID]
+    key: [SubjectKey]
+
+  - id: SCRNREAS
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'IC' AND ODM.ItemOID = 'IT.DS.SCRNREAS'"
+    source: [USUBJID]
+    key: [SubjectKey]
+
+  - id: SCRNDTC
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'IC' AND ODM.ItemOID = 'IT.DS.SCRNDTC'"
+    source: [USUBJID]
+    key: [SubjectKey]
+
+  - id: REASON
+    dataset: ODM
+    filter: "ODM.ItemOID = 'IT.DS.REASON'"
+    source: [USUBJID, MILESTONE]
+    key: [SubjectKey, StudyEventOID]
+
+  - id: REASONCD
+    dataset: ODM
+    filter: "ODM.ItemOID = 'IT.DS.REASONCD'"
+    source: [USUBJID, MILESTONE]
+    key: [SubjectKey, StudyEventOID]
+
+  - id: EVENTDTC
+    dataset: ODM
+    filter: "ODM.ItemOID = 'IT.DS.DTC'"
+    source: [USUBJID, MILESTONE]
+    key: [SubjectKey, StudyEventOID]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: DS
+    verifications:
+      allowed_values:
+        values: [DS]
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: MILESTONE
+    type: str
+    label: Collected Milestone Event
+
+  - name: DSCAT
+    type: str
+    label: Category for Disposition Event
+    verifications:
+      allowed_values:
+        values: [DISPOSITION EVENT, PROTOCOL MILESTONE]
+
+  - name: DSSCAT
+    type: str
+    label: Subcategory for Disposition Event
+    verifications:
+      allowed_values:
+        values: [STUDY TREATMENT, STUDY, SCREENING]
+
+  - name: DSTERM
+    type: str
+    label: Reported Term for the Disposition Event
+    verifications:
+      not_missing: {}
+
+  - name: DSDECOD
+    type: str
+    label: Standardized Disposition Term
+    verifications:
+      - not_missing: {}
+      - allowed_values:
+          values: [INFORMED CONSENT OBTAINED, RANDOMIZED, COMPLETED, ADVERSE EVENT, SCREEN FAILURE]
+
+  - name: DSSTDTC
+    type: date
+    label: Start Date/Time of Disposition Event
+    verifications:
+      not_missing: {}
+
+  - name: DSSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        group_by: [STUDYID, USUBJID]
+        order_by: [DSSTDTC, DSCAT, DSDECOD]
+    verifications:
+      not_missing: {}
+
+rows:
+  - id: consent
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'IC' AND ODM.ItemOID = 'IT.DS.ICYN' AND ODM.Value = 'Y'"
+    derivations:
+      STUDYID:
+        source: ODM.StudyOID
+      USUBJID:
+        source: ODM.SubjectKey
+      DSCAT:
+        literal: PROTOCOL MILESTONE
+      DSSCAT:
+        literal: null
+      DSTERM:
+        literal: INFORMED CONSENT OBTAINED
+      DSDECOD:
+        literal: INFORMED CONSENT OBTAINED
+      MILESTONE:
+        literal: IC
+      DSSTDTC:
+        source: CONSENTDTC.Value
+
+  - id: randomization
+    dataset: RAND
+    derivations:
+      STUDYID:
+        source: RAND.StudyOID
+      USUBJID:
+        source: RAND.USUBJID
+      DSCAT:
+        literal: PROTOCOL MILESTONE
+      DSSCAT:
+        literal: null
+      MILESTONE:
+        literal: null
+      DSTERM:
+        literal: RANDOMIZED
+      DSDECOD:
+        literal: RANDOMIZED
+      DSSTDTC:
+        source: RAND.RANDDTC
+
+  - id: screen_failure
+    dataset: ODM
+    filter: "ODM.StudyEventOID = 'IC' AND ODM.ItemOID = 'IT.DS.SCRNSTAT' AND ODM.Value = 'NOT ELIGIBLE'"
+    derivations:
+      STUDYID:
+        source: ODM.StudyOID
+      USUBJID:
+        source: ODM.SubjectKey
+      DSCAT:
+        literal: DISPOSITION EVENT
+      DSSCAT:
+        literal: SCREENING
+      MILESTONE:
+        literal: IC
+      DSTERM:
+        source: SCRNREAS.Value
+      DSDECOD:
+        literal: SCREEN FAILURE
+      DSSTDTC:
+        source: SCRNDTC.Value
+
+  - id: form_disposition
+    dataset: ODM
+    filter: "ODM.StudyEventOID IN ('EOT', 'EOS') AND ODM.ItemOID = 'IT.DS.COMP'"
+    derivations:
+      STUDYID:
+        source: ODM.StudyOID
+      USUBJID:
+        source: ODM.SubjectKey
+      DSCAT:
+        literal: DISPOSITION EVENT
+      DSSCAT:
+        case:
+          branches:
+            - when: "ODM.StudyEventOID = 'EOT'"
+              then:
+                literal: STUDY TREATMENT
+          otherwise:
+            literal: STUDY
+      MILESTONE:
+        source: ODM.StudyEventOID
+      DSTERM:
+        case:
+          branches:
+            - when: "ODM.Value = 'COMPLETED'"
+              then:
+                literal: COMPLETED
+          otherwise:
+            source: REASON.Value
+      DSDECOD:
+        case:
+          branches:
+            - when: "ODM.Value = 'COMPLETED'"
+              then:
+                literal: COMPLETED
+          otherwise:
+            source: REASONCD.Value
+      DSSTDTC:
+        source: EVENTDTC.Value
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, DSSEQ]
+  - unique:
+      columns: [STUDYID, USUBJID, DSCAT, DSSCAT, DSDECOD]
+  - row_count:
+      min: 10
+      max: 10
