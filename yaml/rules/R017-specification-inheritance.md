@@ -151,7 +151,7 @@ build the two-keyword value R007 rejects, and naming a different operation is
 how a layer says it derives the value differently. Every list replaces. A
 column's `verifications` entries carry no identifier to compose by, and the
 remaining lists are ordered arguments, such as `str_concat.sources`,
-`order_by`, `coalesce.sources`, and the `cut` breaks and labels, where
+`order_by`, `first_available.sources`, and the `cut` breaks and labels, where
 composing element by element would build a third argument list no layer wrote.
 A schema default is materialized on the composed value rather than on each
 contribution, so a later layer that never mentions a field cannot replace what

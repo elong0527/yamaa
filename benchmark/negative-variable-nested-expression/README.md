@@ -34,7 +34,7 @@ uppercasing step:
 - name: COUNTRYSRC
   type: str
   derivation:
-    coalesce:
+    first_available:
       sources: [DM.COUNTRY, DM.SITECNTY]
 
 - name: COUNTRY

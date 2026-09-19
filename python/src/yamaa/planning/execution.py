@@ -419,7 +419,7 @@ def _expression_info(
                 for name, value in arguments.items()
                 if isinstance(value, str)
             )
-    elif operation in {"coalesce", "greatest", "least"} and isinstance(
+    elif operation in {"first_available", "greatest", "least"} and isinstance(
         payload, Mapping
     ):
         sources = payload.get("sources")
@@ -427,7 +427,7 @@ def _expression_info(
             for index, entry in enumerate(sources):
                 operand = (
                     source_operand(entry)
-                    if operation == "coalesce"
+                    if operation == "first_available"
                     else (entry, None)
                     if isinstance(entry, str)
                     else None

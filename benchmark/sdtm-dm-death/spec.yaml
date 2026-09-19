@@ -64,7 +64,7 @@ columns:
     type: date
     label: Date/Time of Death
     derivation:
-      coalesce:
+      first_available:
         sources: [DSDTHDT, AEDTHDT]
 
   - name: DTHFL

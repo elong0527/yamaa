@@ -160,8 +160,8 @@ def test_a_nested_expression_is_rejected_before_execution() -> None:
     assert committed["context"].items() <= diagnostic.context.items()
 
 
-def test_a_coalesce_cycle_is_reported_before_any_row_is_built() -> None:
-    directory = EXAMPLES / "negative-coalesce-self-reference"
+def test_a_first_available_cycle_is_reported_before_any_row_is_built() -> None:
+    directory = EXAMPLES / "negative-first-available-self-reference"
     committed = _committed_error(directory)
 
     result = _run(directory)

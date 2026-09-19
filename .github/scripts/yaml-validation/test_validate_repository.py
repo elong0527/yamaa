@@ -365,7 +365,7 @@ class TestPredicateLanguage(unittest.TestCase):
                     'name': 'ARM',
                     'type': 'str',
                     'derivation': {
-                        'coalesce': {
+                        'first_available': {
                             'sources': [
                                 {
                                     'variable': 'ODM.Value',
@@ -393,7 +393,7 @@ class TestPredicateLanguage(unittest.TestCase):
         self.assertEqual(len(errors), 3)
         self.assertIn('columns.SEX.derivation.mapping.source.filter', message)
         self.assertIn('columns.AGE.derivation.source.filter', message)
-        self.assertIn('columns.ARM.derivation.coalesce.sources[0].filter', message)
+        self.assertIn('columns.ARM.derivation.first_available.sources[0].filter', message)
         self.assertIn("unknown identifier 'ODM.Unknown'", message)
         self.assertIn("unknown identifier 'USUBJID'", message)
         self.assertIn("unknown identifier 'ODM.Missing'", message)
@@ -918,7 +918,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
             'columns': [
                 {
                     'name': 'A', 'type': 'float',
-                    'derivation': {'coalesce': {'sources': ['B']}},
+                    'derivation': {'first_available': {'sources': ['B']}},
                 },
                 {
                     'name': 'B', 'type': 'float',
@@ -945,7 +945,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
             'columns': [
                 {
                     'name': 'A', 'type': 'float',
-                    'derivation': {'coalesce': {'sources': ['B']}},
+                    'derivation': {'first_available': {'sources': ['B']}},
                 },
                 {
                     'name': 'B', 'type': 'float',
@@ -966,7 +966,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
             'columns': [
                 {
                     'name': 'A', 'type': 'float',
-                    'derivation': {'coalesce': {'sources': ['B']}},
+                    'derivation': {'first_available': {'sources': ['B']}},
                 },
                 {
                     'name': 'B', 'type': 'float',

@@ -1,6 +1,6 @@
 """Conditional and scalar selection expressions registered under R007.
 
-`coalesce`, `greatest`, `least`, and `case` select one already-computed value
+`first_available`, `greatest`, `least`, and `case` select one already-computed value
 rather than compute a new one, so each retains the selected value's type
 (R007-33). `cut` is the one operation here that produces a new string.
 """
@@ -67,7 +67,7 @@ def _resolve(
     *,
     filtered: bool = False,
 ) -> ValueResult | ConditionResult:
-    """Read one operand, which R003-21b lets `coalesce` narrow to records."""
+    """Read one operand, which R003-21b lets `first_available` narrow to records."""
     operand = source_operand(variable) if filtered else None
     if operand is None:
         if not isinstance(variable, str):
@@ -104,13 +104,15 @@ def _variables(payload: object, operation: str) -> Sequence[object] | ConditionR
     return sources
 
 
-def _coalesce(payload: object, resolver: Resolver) -> EvaluationResult:
-    sources = _variables(payload, "coalesce")
+def _first_available(payload: object, resolver: Resolver) -> EvaluationResult:
+    sources = _variables(payload, "first_available")
     if isinstance(sources, ConditionResult):
         return sources
     assert isinstance(payload, Mapping)
     for variable in sources:
-        resolved = _resolve(variable, resolver, "coalesce", "sources", filtered=True)
+        resolved = _resolve(
+            variable, resolver, "first_available", "sources", filtered=True
+        )
         if not isinstance(resolved, ValueResult):
             return resolved
         if resolved.value is not MISSING:
@@ -289,7 +291,7 @@ def _cut(payload: object, resolver: Resolver) -> EvaluationResult:
 def scalar_handlers(dispatcher: NestedDispatcher) -> dict[str, ExpressionHandler]:
     """Return the R007 selection operations this component registers."""
     return {
-        "coalesce": _coalesce,
+        "first_available": _first_available,
         "greatest": _extreme("greatest", largest=True),
         "least": _extreme("least", largest=False),
         "case": _case(dispatcher),

@@ -161,7 +161,7 @@ columns:
     type: date
     label: Analysis Date
     derivation:
-      coalesce:
+      first_available:
         sources: [EVENTDT, CENSORDT]
     verifications:
       not_missing: {}

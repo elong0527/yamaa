@@ -49,7 +49,7 @@ columns:
     type: float
     label: Filled Analysis Value
     derivation:
-      coalesce:
+      first_available:
         sources: [AVAL, PRIORF]
 
   - name: PRIORF

@@ -39,7 +39,7 @@ it, exactly as the planned arm does:
 - name: ACTARM
   type: str
   derivation:
-    coalesce:
+    first_available:
       sources:
         - filter: ODM.ItemOID = 'IT.DM.ACTARM'
           variable: ODM.Value

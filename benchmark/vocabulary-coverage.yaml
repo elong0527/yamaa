@@ -11,7 +11,7 @@ coverage:
   baseline_flag: [negative-baseline-flag-tied-date]
   baseline_value: [negative-baseline-value-multiple-flags]
   case: [negative-adae-review-condition-arithmetic]
-  coalesce: [negative-coalesce-self-reference]
+  first_available: [negative-first-available-self-reference]
   compute: [negative-compute-comparison-operator]
   cut: [negative-cut-non-numeric-source]
   date_diff: [negative-date-diff-datetime-endpoints,

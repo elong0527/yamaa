@@ -7,7 +7,9 @@ expressions:
     literal: # Returns the declared scalar value unchanged.
         type: literal_value
         description: Returns the declared scalar value unchanged.
-    coalesce: # Returns the first non-missing source, else default or missing.
+    first_available: # Returns the value of the first source that is not missing.
+        # When every source is missing, returns the declared default, or missing
+        # when no default is declared.
         - sources:
             type: "list[filtered_source]"
             required: true

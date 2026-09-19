@@ -5560,13 +5560,13 @@ def validate_expression_predicates(
             )
         )
 
-    elif keyword == 'coalesce' and isinstance(payload, dict):
+    elif keyword == 'first_available' and isinstance(payload, dict):
         sources = payload.get('sources')
         if isinstance(sources, list):
             for index, source in enumerate(sources):
                 errors.extend(
                     source_filter_errors(
-                        source, f"{path}.coalesce.sources[{index}]", datasets
+                        source, f"{path}.first_available.sources[{index}]", datasets
                     )
                 )
 

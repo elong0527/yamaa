@@ -186,7 +186,7 @@ The version 1.0 input-shape audit covers every registered expression:
 | `date_impute` | One named source, an integer literal or a month-relative token for each imputed component, an optional minimum collected precision, and an optional named lower bound on the completed date; exceptional results are literals |
 | `date_precision` | One named source, either collected text or a temporal value; exceptional results are literals |
 | `to_date` | One named `datetime` source; no literals or nesting |
-| `coalesce` | Ordered named variables, each of which may state which records it reads, plus an optional literal default |
+| `first_available` | Ordered named variables, each of which may state which records it reads, plus an optional literal default |
 | `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
 | `row_number`, `rank`, `baseline_flag`, `baseline_value` | Named grouping, ordering, and value variables |
 | `row_value` | One named source with named grouping and ordering variables, plus a signed integer literal offset along the declared order |

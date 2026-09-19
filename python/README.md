@@ -75,7 +75,7 @@ project environment, and not before.
 | `literal` | R007 | the declared scalar, unchanged |
 | `mapping` | R007, R019 | an inline dictionary lookup on a string source |
 | `compute` | R010 | one scalar numeric formula in the closed grammar |
-| `coalesce` | R007 | the first non-missing source, else `default` |
+| `first_available` | R007 | the first non-missing source, else `default` |
 | `greatest`, `least` | R007, R019 | the row-wise extreme of comparable sources |
 | `case` | R004, R007 | the first true branch, then `otherwise`, else missing |
 | `cut` | R007 | the label of the break interval a numeric source lands in |

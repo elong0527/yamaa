@@ -42,7 +42,7 @@ columns:
     type: str
     label: Study Site Identifier
     derivation:
-      coalesce:
+      first_available:
         sources: [SITEIDP, DM.SITEID]
         default: UNKNOWN
     verifications:

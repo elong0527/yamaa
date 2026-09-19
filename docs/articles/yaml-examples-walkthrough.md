@@ -120,7 +120,7 @@ column value, and no filter decides how many records come out.
 
   - name: ARM
     derivation:
-      coalesce:
+      first_available:
         sources:
           - filter: ODM.ItemOID = 'IT.DM.ARM'
             variable: ODM.Value
@@ -133,7 +133,7 @@ record collected under it, so each column says which of them it reads: the
 recognised both become U" is `missing: U` beside `unmapped: U`. "Empty when age
 was never collected" needs no handler at all -- a subject with no age record
 selects nothing, and selecting nothing is an absent match rather than a
-condition to answer. That is also why `Unassigned` is a `coalesce` default
+condition to answer. That is also why `Unassigned` is a `first_available` default
 rather than a `missing` handler: the arm is absent, not unusable.
 
 **Step 5 -- `expected/dm.csv`.** Confirm your reading against the artifact. Every
@@ -232,7 +232,7 @@ Rule coverage across the 52 questions below:
 
 | Question | Rule | Example |
 |---|---|---|
-| How do I parse an identifier and fall back to a collected value? | R007, R012 | [`adam-adsl-identifier-parsing`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-identifier-parsing) -- `str_extract`, then `coalesce`, then `str_template` |
+| How do I parse an identifier and fall back to a collected value? | R007, R012 | [`adam-adsl-identifier-parsing`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-identifier-parsing) -- `str_extract`, then `first_available`, then `str_template` |
 | How do I translate one collected value into three vocabularies? | R007 | [`adam-adsl-mapping`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-mapping) -- three `mapping` expressions over the same source |
 | How do I band a numeric value? | R007 | [`adam-adsl-mapping`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-mapping) (`AGEGR1` via `cut`), [`adam-adsl-dependency-order`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-dependency-order) |
 | How do I build USUBJID from parts? | R007 | [`sdtm-dm-metadata-contract`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-metadata-contract) -- `str_concat` mixing sources and literals |

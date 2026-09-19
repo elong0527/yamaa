@@ -1,7 +1,7 @@
 phase: validation
 condition: dependency_cycle
 spec_paths:
-  - columns.AVALF.derivation.coalesce
+  - columns.AVALF.derivation.first_available
   - columns.PRIORF.derivation.row_value
 requirement: R001-41
 context:
