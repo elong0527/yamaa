@@ -49,9 +49,9 @@ a study that stores `DM.CSV` names the same container as one that stores
 | `.parquet` | `parquet` | Apache Parquet | R027 |
 
 **R023-2.** A source profile follows the artifact profile: a file R020 writes
-and this rule reads has one profile name both ways. A second field could
-disagree with the source path. A source declared `csv` but named otherwise
-misnames its contents, and the reader cannot check the claim.
+and this rule reads has one profile name in both directions. A second field
+could disagree with the source path, misname the contents, and leave the
+reader unable to check the claim.
 
 **R023-3.** Sniffing is not permitted. A reader that inspected a file's
 contents to choose a delimiter or a quote character could misread a

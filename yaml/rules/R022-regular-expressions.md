@@ -17,15 +17,12 @@ each subject.
 
 ## Boundaries
 
-This rule owns pattern syntax, the portable contract that decides it, the
-flag set, and the match semantics of every regular expression in the
-language. R006 owns
-descriptor structure and where a `pattern` keyword may be declared, R007 owns
-expression dispatch, R008 owns the handler lifecycle whose results
-`str_extract` returns, R009 owns when a verification runs and how a failure is
-reported, and R019 owns the scalar values a pattern is applied to. R004's
-`LIKE` is a predicate operator rather than a regular expression and keeps its
-own matching.
+This rule owns pattern syntax, its portable contract, flags, and match
+semantics. R006 owns descriptor structure and `pattern` declarations. R007
+owns expression dispatch. R008 owns the handler lifecycle for `str_extract`.
+R009 owns verification timing and failure reporting. R019 owns the scalar
+values patterns apply to. R004's `LIKE` is a predicate operator, not a regular
+expression. It keeps its own matching.
 
 ## Consumers
 
