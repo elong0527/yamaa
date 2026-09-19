@@ -28,7 +28,6 @@ from yamaa.expressions import (
     ResolvedValue,
     TruthValue,
     evaluate_predicate,
-    handler_value,
     parse_predicate_cached,
 )
 from yamaa.io.polars import runtime_rows

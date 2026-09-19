@@ -15,8 +15,8 @@ from yamaa.specification.models import (
     DatasetSource,
     Expression,
     HandledExpression,
-    Output,
     Lookup,
+    Output,
     Row,
     Specification,
 )
