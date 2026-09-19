@@ -33,8 +33,8 @@ root every declared path is confined to, and R019 owns the contents and
 ordering of the strings this document carries.
 
 This rule does not own dataset artifact production. A document describes
-artifacts R005 and R020 have already decided, and generating one neither runs
-a derivation nor reads an artifact's bytes.
+artifacts R005 and R020 already decide. Document generation neither runs a
+derivation nor reads an artifact's bytes.
 
 ## The study document
 
