@@ -953,7 +953,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
                     'derivation': {
                         'row_value': {
                             'source': 'A', 'offset': -1,
-                            'order_by': ['A'],
+                            'window': {'order_by': ['A']},
                         }
                     },
                 },
@@ -1001,7 +1001,7 @@ class TestStaticSemanticContracts(unittest.TestCase):
                     'derivation': {
                         'row_value': {
                             'source': 'A', 'offset': -1,
-                            'order_by': ['A'],
+                            'window': {'order_by': ['A']},
                         }
                     },
                 },
