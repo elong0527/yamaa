@@ -1,11 +1,11 @@
-# Derivation schema examples
+# Derivation benchmarks
 
-These examples exercise `yaml/schema.yaml` with small inputs and exact expected
+These benchmarks exercise `yaml/schema.yaml` with small inputs and exact expected
 outputs. They are intended for human review, automated tests, and AI-assisted
 implementation. Each holds a specification, its source CSVs, the exact expected
 CSV or error, and a README describing what the result means.
 
-CSV is used here because these are small, reviewable illustrations. Examples
+CSV is used here because these are small, reviewable illustrations. Benchmarks
 do not duplicate each CSV fixture with an equivalent Parquet file: the two
 copies would express the same rows while adding binary review and
 synchronization burden. Production artifacts should use R020's `parquet`
@@ -15,7 +15,7 @@ Execution behavior is defined by the schema's adjacent operation descriptions
 and the shared normative rules in
 [`../yaml/rules/README.md`](../yaml/rules/README.md); dataset declarations,
 variable references, and ODM contextual lookups by
-[R002](../yaml/rules/R002-source-binding.md). Example READMEs describe data,
+[R002](../yaml/rules/R002-source-binding.md). Benchmark READMEs describe data,
 not the specification; [`agents.md`](agents.md) states that contract.
 
 `odm.csv` is a tabular projection of ODM clinical data, not an ODM exchange
@@ -28,7 +28,7 @@ New to the suite? Read [`sdtm-dm-basic`](sdtm-dm-basic/) for direct mapping,
 
 ## Lifecycle
 
-Each example carries a lifecycle badge showing its review state:
+Each benchmark carries a lifecycle badge showing its review state:
 
 - `draft`: first commit.
 - `reviewed`: has discussion comments or GitHub issues.
@@ -36,11 +36,11 @@ Each example carries a lifecycle badge showing its review state:
 
 ## Index
 
-An example that cannot express something records a design finding. The suite
+A benchmark that cannot express something records a design finding. The suite
 passes when its declared error occurs. Those findings are collected in this
 repository's issue tracker, which also carries the schema work they justify.
 
-Expected-failure examples carry `expected/error.yaml`. When rejection happens
+Expected-failure benchmarks carry `expected/error.yaml`. When rejection happens
 after the dataset is completed, an expected CSV records the rows presented to
 the failing check. When a missing capability prevents execution, an expected
 CSV records the intended artifact once that capability exists.
@@ -48,7 +48,7 @@ CSV records the intended artifact once that capability exists.
 Every expected-failure README ends with a `How to fix` section that recommends
 the safest correction and shows the smallest useful YAML change.
 
-| Example | Derives | Lifecycle |
+| Benchmark | Derives | Lifecycle |
 |---|---|---|
 | [`adam-adae-death-outcome`](adam-adae-death-outcome/) | carry each subject's death onto every event | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle) |
 | [`adam-adae-event-severity`](adam-adae-event-severity/) | carry each event's severity from its supplemental record | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle) |

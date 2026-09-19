@@ -1,9 +1,9 @@
 # Pinned dependencies for building the YAMAA documentation site with
-# MkDocs Material. Install alongside the example-dashboard dependencies:
+# MkDocs Material. Install alongside the benchmark-dashboard dependencies:
 #
 #   pip install -r docs/requirements.txt -r .github/scripts/example-docs/requirements.txt
 #
-# The example-dashboard pins (markdown-it-py, mdurl, PyYAML) live in
+# The benchmark-dashboard pins (markdown-it-py, mdurl, PyYAML) live in
 # .github/scripts/example-docs/requirements.txt and are intentionally not
 # duplicated here.
 mkdocs==1.6.1

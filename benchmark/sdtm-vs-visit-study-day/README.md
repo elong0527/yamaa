@@ -36,7 +36,7 @@ period with its study-day bounds.
 
 **Note:** the reference start date is used to count the study day
 and then dropped, since it is not part of the result record; the
-epoch-range input is an example fixture rather than a standard
+epoch-range input is a benchmark fixture rather than a standard
 trial-design domain.
 
 **Standard:** SDTM | **Domain:** VS

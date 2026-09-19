@@ -1,5 +1,5 @@
 ---
-title: YAML examples walkthrough
+title: YAML benchmark walkthrough
 ---
 
 # A walkthrough of `benchmark/`
@@ -7,8 +7,8 @@ title: YAML examples walkthrough
 > **Audience:** anyone about to write, review, or implement a YAMAA
 > specification.
 >
-> **Purpose:** explain what the example suite is, how to read one example,
-> which example to open for which question, and what the negative examples
+> **Purpose:** explain what the benchmark suite is, how to read one benchmark,
+> which benchmark to open for which question, and what the negative benchmarks
 > cover.
 >
 > For the concepts themselves -- class, type, expression and the verb table --
@@ -41,17 +41,17 @@ The suite serves three audiences at once:
 2. **Specification authors** read it as a cookbook -- "how do I express a
    baseline flag" has an answer you can copy.
 3. **Designers** use it as the admission gate -- a construct enters the language
-   only when an example needs it and a negative example pins its failure
+   only when a benchmark needs it and a negative benchmark pins its failure
    behavior.
 
 ---
 
-## 2. Reading one example in five minutes
+## 2. Reading one benchmark in five minutes
 
-For a complete example on one page, see
+For a complete benchmark on one page, see
 **[ADaM ADAE: death outcome](../benchmark/adam-adae-death-outcome.html)**. The README
 appears above the input tables and expected output, with a collapsible YAML
-sidebar. Everything is generated directly from the example's source files.
+sidebar. Everything is generated directly from the benchmark's source files.
 
 Take [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-basic), the suggested first read.
 
@@ -147,9 +147,9 @@ result.
 
 ## 3. The recommended reading path
 
-The suite's own README names three examples, in this order:
+The suite's own README names three benchmarks, in this order:
 
-| # | Example | What it establishes |
+| # | Benchmark | What it establishes |
 |---|---|---|
 | 1 | [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-basic) | Reading collected items, handlers, and the declared keys as the grain |
 | 2 | [`sdtm-lb-findings`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-lb-findings) | Real row construction: one template per collected test, `row_number` for the sequence |
@@ -160,10 +160,10 @@ index.
 
 ---
 
-## 4. Positive examples by construct
+## 4. Positive benchmarks by construct
 
 The suite's own index is organized by clinical outcome. What follows is the
-complementary view -- **which example to open when you want to see a construct
+complementary view -- **which benchmark to open when you want to see a construct
 in use, and which rule governs it.** Rule IDs are the normative pages in
 [`yaml/rules/`](https://github.com/elong0527/yamaa/tree/main/yaml/rules).
 
@@ -175,7 +175,7 @@ Rule coverage across the 52 questions below:
 
 ### Row construction and value-level metadata
 
-| Question | Rule | Example |
+| Question | Rule | Benchmark |
 |---|---|---|
 | How do I build one record per subject? | R001 | [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-basic) -- the declared `keys` are the grain, so there is no row template to write |
 | How does one collected record become several analysis records? | R001 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-bds) -- `alt` and `alt_si` share a filter, so each ALT result produces two rows |
@@ -188,7 +188,7 @@ Rule coverage across the 52 questions below:
 
 ### Cross-dataset enrichment
 
-| Question | Rule | Example |
+| Question | Rule | Benchmark |
 |---|---|---|
 | How do I carry ADSL values onto every event without writing a merge? | R003 | [`adam-adae-treatment-emergent`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adae-treatment-emergent) -- `source: ADSL.TRTSDT` joins on the applicable keys |
 | How do I make several columns read **one** record? | R015 | [`adam-adae-death-outcome`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adae-death-outcome) -- a `record_lookups` entry named `DEATHEV`, read by both the cause and the date |
@@ -197,7 +197,7 @@ Rule coverage across the 52 questions below:
 | How do I choose one of several matching records deterministically? | R003, R015 | [`adam-adsl-rescue-medication`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-rescue-medication) and [`adam-adsl-treatment-selection`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-treatment-selection) use `multiple_matches`; [`sdtm-lb-reference-range-indicator`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-lb-reference-range-indicator) uses an ordered record lookup |
 ### Windows, baselines and ordering
 
-| Question | Rule | Example |
+| Question | Rule | Benchmark |
 |---|---|---|
 | How do I flag the baseline record and broadcast its value? | R007 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-bds) -- `baseline_flag` then `baseline_value`; also [`adam-adlb-shift-and-criteria`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-shift-and-criteria) |
 | How do I carry a result through later planned gaps? | R007, R015 | [`adam-advs-once-measured-carry-forward`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-advs-once-measured-carry-forward) -- a record lookup plus `previous_non_missing`; [`adam-advs-prior-character-result`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-advs-prior-character-result) pins missing groups, missing order values, and ties |
@@ -210,7 +210,7 @@ Rule coverage across the 52 questions below:
 
 ### Aggregation
 
-| Question | Rule | Example |
+| Question | Rule | Benchmark |
 |---|---|---|
 | How do I total a subject's exposure records? | R013 | [`adam-adex-cumulative-dose`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adex-cumulative-dose) -- `aggregate: "SUM(EX.EXDOSE)"` with no `group_by`, reducing by the applicable keys |
 | How do I broadcast a group mean back onto each row? | R013 | [`adam-adlb-mean`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-mean) -- an unqualified aggregate with an explicit `group_by` |
@@ -220,7 +220,7 @@ Rule coverage across the 52 questions below:
 
 ### Dates
 
-| Question | Rule | Example |
+| Question | Rule | Benchmark |
 |---|---|---|
 | How do I impute a partial date and flag what was imputed? | R016, R008 | [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adae-partial-dates) -- `date_impute` beside `date_precision` reading the same source |
 | How do I compute an age in whole years? | R016 | [`adam-adsl-analysis-age`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-analysis-age) -- `date_diff` with `unit: year` and explicit `bounds` |
@@ -230,7 +230,7 @@ Rule coverage across the 52 questions below:
 
 ### Strings, codelists and classification
 
-| Question | Rule | Example |
+| Question | Rule | Benchmark |
 |---|---|---|
 | How do I parse an identifier and fall back to a collected value? | R007, R012 | [`adam-adsl-identifier-parsing`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-identifier-parsing) -- `str_extract`, then `first_available`, then `str_template` |
 | How do I translate one collected value into three vocabularies? | R007 | [`adam-adsl-mapping`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-mapping) -- three `mapping` expressions over the same source |
@@ -243,25 +243,25 @@ Rule coverage across the 52 questions below:
 
 ### Contracts, metadata and checks
 
-| Question | Rule | Example |
+| Question | Rule | Benchmark |
 |---|---|---|
 | Where does define.xml metadata go, and what actually gets enforced? | R005, R009 | [`sdtm-dm-metadata-contract`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-metadata-contract) -- `metadata` for documentation, `verifications` for enforcement |
 | How do I chain population flags in dependency order? | R001 | [`adam-adsl-dependency-order`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-dependency-order) -- each flag reads the previous one, and `RANDFL` stays internal |
 | What happens to a non-finite number? | R011 | [`adam-adsl-non-finite-values`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-non-finite-values) -- nine derived values from YAML, source fields and a project function, all normalized to missing |
 | How do I distinguish an uncollected value from an inapplicable one? | R008 | [`adam-adex-uncollected-exposure`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adex-uncollected-exposure), [`sdtm-lb-conditional-compartments`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-lb-conditional-compartments) |
-| Which files may a specification read? | R021 | The six `negative-dataset-path-*` examples -- a machine location, a folder above the study, a web address, a stand-in name, a folder, and a table the study does not hold, each rejected before any data is read |
+| Which files may a specification read? | R021 | The six `negative-dataset-path-*` benchmarks -- a machine location, a folder above the study, a web address, a stand-in name, a folder, and a table the study does not hold, each rejected before any data is read |
 
 ### Inheritance
 
-| Question | Rule | Example |
+| Question | Rule | Benchmark |
 |---|---|---|
 | How do corporate, compound and study layers compose? | R017 | [`spec-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmark/spec-inheritance) -- three levels resolve `spec_organization -> spec_compound -> spec_study`, and `expected/spec_resolved.yaml` records the outcome: shorthand expanded to canonical form, keyed members merged while root fields are replaced whole, unreachable declarations pruned, and layer-relative paths rebased to the entry file |
 | How much of a column can a later layer change? | R017 | [`spec-column-composition`](https://github.com/elong0527/yamaa/tree/main/benchmark/spec-column-composition) -- a column composes by declared kind, so a later layer adds one dictionary entry, one annotation, or one correction without restating the branch around it, while a different expression keyword and every list still replace whole |
-| How does inheritance fail? | R017 | The four `negative-adsl-*parent*` examples plus [`negative-adsl-inherited-output`](https://github.com/elong0527/yamaa/tree/main/benchmark/negative-adsl-inherited-output) -- a cycle, a version mismatch, a remote path, an invalid clear, and an `output` an entry file may not inherit |
+| How does inheritance fail? | R017 | The four `negative-adsl-*parent*` benchmarks plus [`negative-adsl-inherited-output`](https://github.com/elong0527/yamaa/tree/main/benchmark/negative-adsl-inherited-output) -- a cycle, a version mismatch, a remote path, an invalid clear, and an `output` an entry file may not inherit |
 
 ### Project functions
 
-| Question | Rule | Example |
+| Question | Rule | Benchmark |
 |---|---|---|
 | When should a calculation leave the specification? | R018 | [`adam-adsl-bmi-function`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-bmi-function) versus [`adam-adsl-bmi-compute`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-bmi-compute) -- same input, same artifact; the difference is a closed numeric expression any implementation can evaluate versus a versioned project binding with a digest and a conformance vector |
 | What does a calculation with no portable closed form look like? | R018 | [`adam-advs-growth-percentile`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-advs-growth-percentile) |
@@ -269,16 +269,16 @@ Rule coverage across the 52 questions below:
 
 ### ODM specifics
 
-| Question | Rule | Example |
+| Question | Rule | Benchmark |
 |---|---|---|
 | How is an item resolved inside its collection form? | R002 | [`odm-form-scoped-item-resolution`](https://github.com/elong0527/yamaa/tree/main/benchmark/odm-form-scoped-item-resolution) -- identical item identifiers in two forms are different values and must not be collapsed |
 | How does a contextual item reference work in practice? | R002 | [`odm-form-scoped-item-resolution`](https://github.com/elong0527/yamaa/tree/main/benchmark/odm-form-scoped-item-resolution), [`sdtm-lb-findings`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-lb-findings) |
 
 ---
 
-## 5. Negative examples
+## 5. Negative benchmarks
 
-A negative example is a specification, its input, and an `expected/error.yaml`
+A negative benchmark is a specification, its input, and an `expected/error.yaml`
 stating the `phase` that rejects the run, a stable snake-case `condition`, the
 `spec_paths` implicated, and optional `context`. It is a partial assertion: an
 implementation may add context and word its message however it likes, but the
@@ -288,7 +288,7 @@ correction -- never a weakened check.
 
 Reading them by family is faster than reading them alphabetically:
 
-| Family | Examples | What they collectively pin |
+| Family | Benchmarks | What they collectively pin |
 |---|---|---|
 | Closed `compute` grammar | `negative-compute-*` (7) | Aggregate functions, comparison operators, qualified identifiers, division by zero, integer overflow, `LN(0)`, `SQRT(-1)` |
 | Predicate grammar | [`negative-adae-review-condition-arithmetic`](https://github.com/elong0527/yamaa/tree/main/benchmark/negative-adae-review-condition-arithmetic), `-review-text-date`, `-review-unknown-date` | An operand is a name or a literal; types must be comparable; names must resolve |
@@ -299,6 +299,6 @@ Reading them by family is faster than reading them alphabetically:
 | Inheritance | `negative-adsl-*parent*` (4), [`negative-adsl-inherited-output`](https://github.com/elong0527/yamaa/tree/main/benchmark/negative-adsl-inherited-output) | Cycles, version mismatches, remote paths, invalid clears, and who owns `output` |
 | Expressiveness limits | [`negative-adex-single-dose-expansion`](https://github.com/elong0527/yamaa/tree/main/benchmark/negative-adex-single-dose-expansion), [`negative-adlb-computed-parameter`](https://github.com/elong0527/yamaa/tree/main/benchmark/negative-adlb-computed-parameter), [`negative-query-slot-overflow`](https://github.com/elong0527/yamaa/tree/main/benchmark/negative-query-slot-overflow) | Where the language deliberately stops, and what to do upstream instead |
 
-An example that **cannot express something** is recorded as a design finding in
+A benchmark that **cannot express something** is recorded as a design finding in
 the issue tracker, so the last family is also the honest inventory of what the
 language cannot yet do.

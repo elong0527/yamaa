@@ -22,7 +22,7 @@
 
 **Note:** the dataset and its variables carry the description,
 labels, provenance, lengths, terminology, class, structure, and
-standard version a review needs, and the example carries the
+standard version a review needs, and the benchmark carries the
 data-definition document those declarations produce beside the data
 itself; a combined identifier longer than 30 characters is rejected
 rather than shortened.

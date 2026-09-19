@@ -4,7 +4,7 @@ title: Schema concepts
 
 # The schema: class, type, expression, registry
 
-> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Examples walkthrough](yaml-examples-walkthrough.md)
+> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Benchmark walkthrough](yaml-benchmark-walkthrough.md)
 
 > **Read this if** you are writing or reviewing a specification and want the
 > language itself: what the four schema words mean, and every derivation verb
@@ -384,7 +384,7 @@ Two points that always come up:
 
 `date_impute` and `date_precision` read the same source; that pairing is the
 standard way to derive an imputation flag. See
-[example 6](excel-to-yamaa.md#example-6-partial-dates-and-the-imputation-flag).
+[case 6](excel-to-yamaa.md#case-6-partial-dates-and-the-imputation-flag).
 
 ### 2.6 Window expressions (over constructed output rows)
 

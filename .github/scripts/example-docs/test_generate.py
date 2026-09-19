@@ -361,18 +361,18 @@ class DashboardTests(unittest.TestCase):
 
     def test_neighbor_navigation_links_examples(self):
         page = generate.render_example(EXAMPLE, "aaa-first", "zzz-last").decode("ascii")
-        self.assertIn('<a href="aaa-first.html" rel="prev">Previous example</a>', page)
-        self.assertIn('<a href="zzz-last.html" rel="next">Next example</a>', page)
-        self.assertIn('<a href="index.html">All examples</a>', page)
+        self.assertIn('<a href="aaa-first.html" rel="prev">Previous benchmark</a>', page)
+        self.assertIn('<a href="zzz-last.html" rel="next">Next benchmark</a>', page)
+        self.assertIn('<a href="index.html">All benchmarks</a>', page)
         edges = generate.render_example(EXAMPLE, None, None).decode("ascii")
-        self.assertIn('<span class="is-disabled" aria-disabled="true">Previous example</span>', edges)
-        self.assertIn('<span class="is-disabled" aria-disabled="true">Next example</span>', edges)
+        self.assertIn('<span class="is-disabled" aria-disabled="true">Previous benchmark</span>', edges)
+        self.assertIn('<span class="is-disabled" aria-disabled="true">Next benchmark</span>', edges)
 
     def test_gallery_link_is_reachable_without_scrolling(self):
         page = generate.render_example(EXAMPLE).decode("ascii")
         header, _, footer = page.partition("</header>")
         self.assertIn('<a class="gallery-link" href="index.html">', header)
-        self.assertIn('<a href="index.html">All examples</a>', footer)
+        self.assertIn('<a href="index.html">All benchmarks</a>', footer)
 
     def test_gallery_index_is_sorted_and_deterministic(self):
         entries = [
@@ -400,9 +400,9 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("<!doctype html>", text)
         self.assertNotIn("<body", text)
         self.assertIn("\n# Benchmark\n", text)
-        self.assertIn("\n## Examples {: #positive }\n", text)
+        self.assertIn("\n## Benchmarks {: #positive }\n", text)
         self.assertIn("\n### ADaM ADSL\n", text)
-        self.assertIn("1 example, generated from", text)
+        self.assertIn("1 benchmark, generated from", text)
 
     def test_gallery_lists_rejected_examples_apart_from_positive_ones(self):
         entries = [
@@ -417,7 +417,7 @@ class DashboardTests(unittest.TestCase):
         self.assertLess(negative, text.index("negative-adsl-two.html"))
         # One shared domain heading per group, not one shared between them.
         self.assertEqual(text.count("### ADaM ADSL\n"), 2)
-        self.assertIn('<a href="#positive">Examples (1)</a>', text)
+        self.assertIn('<a href="#positive">Benchmarks (1)</a>', text)
         self.assertIn('<a href="#negative">Anti-pattern (1)</a>', text)
 
     def test_gallery_omits_a_group_with_no_examples(self):

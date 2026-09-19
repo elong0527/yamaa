@@ -26,7 +26,7 @@ functioning scale, with study, subject, and visit (`STUDYID`,
   score record when fewer than three of the four items were
   answered.
 
-**Note:** in this example each administered visit carries a score
+**Note:** in this benchmark each administered visit carries a score
 record, even when too few items were answered to score it, so an
 empty score stays apart from a visit with no records at all. Item
 responses are expected within zero to four, and only `PF01`

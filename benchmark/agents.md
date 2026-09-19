@@ -1,17 +1,17 @@
-# Derivation examples
+# Derivation benchmarks
 
-Each subdirectory is one example: one or more alternative specifications, their
+Each subdirectory is one benchmark: one or more alternative specifications, their
 shared input data, the exact output an implementation must reproduce, and a
-README describing what the example derives.
+README describing what the benchmark derives.
 
 ## Required reading
 
 Read `../yaml/agents.md` first; it governs the schema and rules this directory
-exercises. Then read `README.md` here for the example index. The open design
+exercises. Then read `README.md` here for the benchmark index. The open design
 gaps and the schema work they justify are tracked in this repository's issue
 tracker, one work item per root cause.
 
-## Example layout
+## Benchmark layout
 
     <standard>-<domain>-<subject>/
         README.md
@@ -27,7 +27,7 @@ tracker, one work item per root cause.
         expected/spec_resolved.yaml                 # multi-level inheritance: resolution of the entry chain
 
 Use `spec.yaml` for one specification. Use one or more `spec_<variant>.yaml`
-files when the example intentionally demonstrates a runtime or design variant
+files when the benchmark intentionally demonstrates a runtime or design variant
 over shared inputs and an expected artifact. Do not mix the base filename with
 variants.
 
@@ -36,34 +36,34 @@ An expected failure before a dataset is completed replaces the CSV with
 contract. A failure over a completed dataset carries both the expected CSV and
 `expected/error.yaml`.
 
-A positive inherited example also carries the exact resolved YAML data tree.
+A positive inherited benchmark also carries the exact resolved YAML data tree.
 Use `expected/resolved.yaml` with `spec.yaml`, or
 `expected/resolved_<variant>.yaml` with `spec_<variant>.yaml`. This fixture
 must be complete, canonical, minimal, and free of `parents`.
 
-A multi-level example keeps each inheritance level beside the entry as
+A multi-level benchmark keeps each inheritance level beside the entry as
 `spec_<level>.yaml` and carries no top-level `spec.yaml`. The level no other
 file names in `parents` is the entry: it declares the complete `output`, and
 the chain resolves to `expected/spec_resolved.yaml`, which the dashboard shows
 in its specification dropdown (the default view) rather than as an expected
-dataset. Reserve this layout for examples whose point is the layering itself;
+dataset. Reserve this layout for benchmarks whose point is the layering itself;
 a single specification with shared parents keeps `spec.yaml`.
 
 Name the directory for what it derives, not for the construct it uses:
 `sdtm-vs-visit-study-day`, not `sdtm-vs-mapping-from`. The exception is an
-example whose subject is the specification language itself: name it `spec-*`
+benchmark whose subject is the specification language itself: name it `spec-*`
 (`spec-inheritance`), and the gallery lists it under its own Specification
 category rather than a data domain.
 
 ## The README describes data, not the specification
 
-A reader of an example README wants to know what the output means. The
+A reader of an benchmark README wants to know what the output means. The
 target audience is an average statistician or statistical programmer with a
 general understanding of SDTM and ADaM but limited engineering, ODM XML, or
 tooling detail: expand abbreviations on first use and state effects in
 study-data words. Write:
 
-- a short title of the form `# <what the example does>` (no
+- a short title of the form `# <what the benchmark does>` (no
   `<STANDARD> <DOMAIN>` prefix in the title), followed by a `Dashboard` badge
   linking to the rendered page:
   `[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/<directory>.html)`.
@@ -77,18 +77,18 @@ study-data words. Write:
 - at most one closing `Note:` paragraph, for a rule that governs several
   variables at once;
 - a final tags line of the form `Standard: <STANDARD> | Domain: <DOMAIN>`;
-- for every negative example, a final `## How to fix` section that recommends
+- for every negative benchmark, a final `## How to fix` section that recommends
   the safest correction first and uses a short YAML snippet when it clarifies
   the change.
 
-A `spec-*` example explains spec behavior rather than deriving data, so it
+A `spec-*` benchmark explains spec behavior rather than deriving data, so it
 carries no `Variables:` list: its `Input:` names the spec files and how they
 compose, and its `Note:` states the behavior rule. It still names every
 non-key golden column somewhere in the contract so the coverage check below
 stays silent.
 
-Every example README also carries a lifecycle badge (`draft`, `reviewed`,
-or `finalized` as defined in `README.md`); new examples start at `draft`.
+Every benchmark README also carries a lifecycle badge (`draft`, `reviewed`,
+or `finalized` as defined in `README.md`); new benchmarks start at `draft`.
 
 Keep bullets to the variables a reader must understand. Direct key copies and
 fixed values need no bullet.
@@ -105,7 +105,7 @@ no expression or field names, no `output.columns`, and none of the words
     + Its period-two right side is empty after filtering, which R003 treats as
       an absent match
 
-A positive example with alternative specs may add a final `## Specification
+A positive benchmark with alternative specs may add a final `## Specification
 variants` section after the data contract. Keep it to the variant filenames,
 runtime operations, and the semantic difference between them; do not turn it
 into a schema tutorial.
@@ -128,18 +128,18 @@ makes the remedy easier to apply. Distinguish alternatives only when they
 represent genuinely different policies; do not turn the section into a general
 tutorial.
 
-Wrap prose and code at 79 columns. Most positive examples fit in under 25
-lines; negative examples may be longer because they carry remediation.
+Wrap prose and code at 79 columns. Most positive benchmarks fit in under 25
+lines; negative benchmarks may be longer because they carry remediation.
 
 ## Design findings belong in the issue tracker
 
-An example that cannot express something is a design finding, and findings live
+An benchmark that cannot express something is a design finding, and findings live
 in this repository's issue tracker, grouped by root cause under one work
-item each, so that one limitation is stated once and names the examples
+item each, so that one limitation is stated once and names the benchmarks
 that show it.
 
-Before removing a finding from an example README, confirm the work item records
-it and names the example. If it does not, migrate it first. Deleting the only
+Before removing a finding from an benchmark README, confirm the work item records
+it and names the benchmark. If it does not, migrate it first. Deleting the only
 statement of a limitation is the most common way this suite loses information.
 
 When a gap closes, delete its statement from the work item rather than marking
@@ -174,18 +174,18 @@ it independently -- read the input, apply the rule by hand or in a short
 script, and compare -- rather than accepting whatever the change produced.
 
 Changing a golden file is a decision. Say in the pull request which values
-moved and why, and confirm that every other example's output is untouched.
+moved and why, and confirm that every other benchmark's output is untouched.
 
-## Expected failures and blocked examples
+## Expected failures and blocked benchmarks
 
-An example whose purpose is to fix failure behavior has
+An benchmark whose purpose is to fix failure behavior has
 `expected/error.yaml`. It is a partial structured assertion over the failure
 and has these fields:
 
 - `phase`: the evaluation phase that rejects the run;
 - `condition`: a stable snake-case name for the failed condition;
 - `spec_paths`: one or more specification locations implicated in the failure;
-- `requirement`: the numbered rule requirement the example pins, such as
+- `requirement`: the numbered rule requirement the benchmark pins, such as
   `R013-7`;
 - `context`: optional structured facts such as the dataset, offending keys,
   value, match count, or verification ID.
@@ -211,7 +211,7 @@ Register every validation-phase negative fixture exactly once in
 condition at every declared specification path; an unimplemented entry must
 name its open blocking issue.
 
-`phase` comes from the two closed tables below, so two examples that stop at
+`phase` comes from the two closed tables below, so two benchmarks that stop at
 the same point say so the same way. Whole-run evaluation failures use:
 
 | Phase | Rejects |
@@ -242,14 +242,14 @@ Declaring the corresponding handler is exactly what turns the failure into a
 value, which is what makes the pairing worth keeping.
 
 `condition` names what failed rather than what the implementation raised, and
-one condition keeps one name across every example that provokes it.
+one condition keeps one name across every benchmark that provokes it.
 
 An expected CSV may be committed beside `error.yaml`. For a failure after the
 dataset is completed, it is the dataset presented to the failing check. For an
 earlier expressiveness failure, it is the intended artifact once the missing
 capability exists. Neither is an accepted artifact from the current failed
 run. Its README still describes the expected variables under the same data-only
-contract as a positive example.
+contract as a positive benchmark.
 
 Every negative README ends with exactly one `## How to fix` section. It
 explains how to correct defective input and how to state an explicit policy
@@ -258,14 +258,14 @@ check merely to make the sample pass.
 
 ## Checks to run before finishing
 
-    # every declared example column has a non-empty, human-readable label
+    # every declared benchmark column has a non-empty, human-readable label
     # (validate_column_labels in validate_repository.py; the full prose gate
     # is check_documentation.py)
     uv run --project ../python --no-sync \
         python ../.github/scripts/yaml-validation/validate_repository.py
 
     # no schema vocabulary reached the data-contract portion of a README,
-    # and every negative example has exactly one remediation section
+    # and every negative benchmark has exactly one remediation section
     python3 - <<'PY'
     import glob, re
     pattern = re.compile(r"R0[0-9][0-9]|output\.columns|handler|verification")
@@ -300,29 +300,29 @@ Both scripts print nothing when the suite is clean. Key columns and fixed
 domain values are skipped because they carry no logic; anything the second
 check reports is a variable the README does not explain.
 
-## Adding an example
+## Adding an benchmark
 
 1. Write `spec.yaml`, or the applicable `spec_<variant>.yaml` files, the input
    data, and either the expected output or the expected error. Add an expected
    CSV beside an error when it makes a blocked or rejected result concrete.
-   For a positive inherited example, also write its expected resolved YAML.
-2. Write the README to the contract above. A negative example must include its
+   For a positive inherited benchmark, also write its expected resolved YAML.
+2. Write the README to the contract above. A negative benchmark must include its
    `## How to fix` section.
 3. Add a row to the index table in `README.md`. Its `Derives` column copies
    the README title, which now carries no standard/domain prefix.
 4. Record any finding it exposes as a gap on the matching work item in the
-   issue tracker, or add the example's name to the gap that already states it.
+   issue tracker, or add the benchmark's name to the gap that already states it.
 
-## Before deleting an example
+## Before deleting an benchmark
 
-Some examples are the only exercise of a construct or a rule, so removing one
-silently drops coverage. Check what an example uniquely covers before deleting
+Some benchmarks are the only exercise of a construct or a rule, so removing one
+silently drops coverage. Check what an benchmark uniquely covers before deleting
 or merging it, and replace the coverage in the same change.
 
 ## Adding an expression
 
-An expression enters the vocabulary when an example needs it, a negative
-example fixes its failure behavior, and R and Python can implement it the same
+An expression enters the vocabulary when an benchmark needs it, a negative
+benchmark fixes its failure behavior, and R and Python can implement it the same
 way. Sponsor-specific algorithms stay behind `function`.
 
 Prefer one closed grammar to an entry per operator: `compute` states the whole

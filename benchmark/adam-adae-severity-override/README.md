@@ -16,7 +16,7 @@ event sequence identifiers and the reported severity `AESEV`.
 
 - `ASEV`: analysis severity in upper case (`MILD`, `MODERATE`,
   `SEVERE`, `LIFE-THREATENING`); the approved correction reassigns
-  the one event covered by the approved correction in this example
+  the one event covered by the approved correction in this benchmark
   to `SEVERE`. An event with no reported severity and no applicable
   correction leaves `ASEV` empty.
 - `ASEVN`: numeric rank of `ASEV`, from `1` (`MILD`) to `4`

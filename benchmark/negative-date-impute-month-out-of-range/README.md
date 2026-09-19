@@ -27,8 +27,8 @@ month.
 
 ## How to fix
 
-Use a calendar month from 1 through 12. Because this example describes earliest
-imputation, January is the consistent correction:
+Use a calendar month from 1 through 12. Because this benchmark describes
+earliest imputation, January is the consistent correction:
 
 ```yaml
 date_impute:

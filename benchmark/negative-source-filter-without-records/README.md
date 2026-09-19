@@ -13,7 +13,7 @@ subject.
 
 - **ARM**: planned arm as collected; `Unassigned` when none was collected.
 - **ACTARM** would be the actual arm, always the planned arm in this
-  example, but the copy also states which collected rows to choose among.
+  benchmark, but the copy also states which collected rows to choose among.
   The planned arm is one value by then rather than a set of rows, so the
   run is rejected before any data is read and no artifact is accepted.
 
