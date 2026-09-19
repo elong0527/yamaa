@@ -1,27 +1,30 @@
 ---
 id: R003
-title: Explicit lookup
+title: Lookup
 status: normative
-applies_to: [lookups, expression.lookup, expression.aggregate]
+applies_to: [lookups, expression.lookup, expression.aggregate, scalar.source]
 
 ---
 
-# Explicit lookup
+# Lookup
 
 ## Intent
 
-Read another dataset only through an explicit, declared-key lookup. Every
-cross-dataset read names the dataset, the current-row values, and the
-dataset columns they match, paired by position. Keys are never inferred
-from output `keys` and no join happens implicitly.
+Read another dataset through a stated match. A plain scalar
+`source: DATASET.COLUMN` joins that dataset on the applicable keys
+whenever those keys are clear; an explicit `lookup:` states the match
+itself for every case where the keys are unclear, differ from the
+applicable output keys, or the read should be a reusable named lookup.
+Keys are inferred only from the output `keys`, never invented: when no
+applicable key exists, the author declares the match explicitly.
 
-Two forms share one mechanism. A named `lookups:` entry selects one
-record of a dataset for several columns to read. An inline `lookup:`
+Two explicit forms share one mechanism. A named `lookups:` entry selects
+one record of a dataset for several columns to read. An inline `lookup:`
 expression looks up one value for one column. Both match, narrow, choose,
 and answer absence the same way.
 
 R015 (record lookup) is retired: this rule is its replacement. The old
-implicit cross-dataset join is gone with it.
+`mapping_from` is retired into the inline `lookup:` expression.
 
 ## Boundaries
 
@@ -36,16 +39,31 @@ absence counts `missing`. R013 owns aggregates; an aggregate over a
 qualified relation declares its key pairs here (R003-30), and an
 aggregate expression that violates R013 fails there (R013-38 at
 `...aggregate.expr`). R002 owns binding: a qualified source naming no
-declared dataset or lookup fails at binding as `unknown_field` -- there
-is no "no applicable keys" condition anymore, because there is no
-implicit join to run out of keys. R001 owns dependency cycles: a column
-that reads a lookup whose match depends on that column is a cycle.
+declared dataset or lookup fails at binding as `unknown_field`. A
+qualified source naming a real dataset with no applicable key fails as
+`no_applicable_keys` (R003-42), because the implicit join has no stated
+identity to match on. R001 owns dependency cycles: a column
+that reads a lookup whose match depends on that column is a cycle, and
+R001-18 makes the applicable keys of an implicit join dependencies of
+the column that reads through it, so the keys are derived first.
 
 ## Declaration
 
-**R003-1.** A dataset-qualified scalar source with no lookup is not a
-read: fail as `unknown_lookup`. The author wraps the read in an explicit
-lookup.
+**R003-1.** A dataset-qualified scalar source reads that dataset through
+the implicit join: one value per current row, matched on the applicable
+keys (R003-40), answering absence as a missing result. The qualifier
+naming the current row's own driver is not a join: it reads the driver
+record the row was constructed from.
+
+```yaml
+derivation:
+  source: ADSL.TRTSDTM
+```
+
+A structured `source:` keeps its `filter` and `multiple_matches` on the
+implicit join: the filter narrows the eligible records and
+`multiple_matches` chooses among the survivors exactly as an explicit
+lookup's would.
 
 ## Terminology
 
@@ -246,24 +264,53 @@ reached another dataset -- the implicit join, `record_lookups`, and
 `mapping_from` -- with three key derivations and three absence
 vocabularies. A reviewer could not see that two columns reading "the
 same" record agreed, and an edit to one key statement and not the other
-broke the agreement silently. One explicit mechanism states the match
-once, gives the chosen record a name, and answers absence one way, so
-the declaration a reviewer reads is the match the engine runs.
+broke the agreement silently.
+
+The unification keeps the implicit join where the match is already
+stated: the output `keys` name the row's identity, so a plain
+`source: DATASET.COLUMN` matching on the applicable keys says nothing
+twice. `record_lookups` and `mapping_from` become the one explicit
+`lookup` for everything else -- an unclear key, a key that differs from
+the applicable output keys, or a reusable named read -- so the
+declaration a reviewer reads is the match the engine runs, whichever
+form states it.
 
 ## Review
 
-**R003-39.** Validation reports the declared source/key pairs for every
-lookup. A reviewer sees exactly the match the engine performs, the type
-each side declares, and the absence policy that answers a miss.
+**R003-39.** Validation reports the source/key pairs for every lookup
+and every implicit join. A reviewer sees exactly the match the engine
+performs, the type each side declares, whether the pairs were inferred
+(R003-40) or declared, and the absence policy that answers a miss.
+
+## The implicit join
+
+**R003-40.** The applicable keys are the output `keys`, in output-key
+order, that the right-side dataset also carries. The implicit join
+matches the current row's values of those keys against the same-named
+columns of the dataset. At least one applicable key is required; the
+match is left-row preserving, and a current row with no right-side
+match yields a missing result.
+
+**R003-41.** An inferred key must compare equal on both sides. R007-19
+performs no implicit conversion, so an applicable key whose left and
+right types are not mutually comparable fails as
+`incompatible_input_type`, reporting both types.
+
+**R003-42.** With no applicable key the intended match is unclear: the
+read fails as `no_applicable_keys`, and the author states the match with
+an explicit `lookup:` naming its `source`/`key` pairs. The same explicit
+form serves whenever the intended keys differ from the applicable
+output keys or the read should be a reusable named lookup.
+
 
 ## Errors
 
 The failure vocabulary, in the order the requirements introduce it:
-`unknown_lookup` (R003-1), `duplicate_identifier` (R003-3),
+`no_applicable_keys` (R003-42), `duplicate_identifier` (R003-3),
 `missing_required_field` (R003-4, schema phase, no requirement attached),
 `source_key_length_mismatch` (R003-5), `unknown_field` (R003-6, R003-7,
 R003-10, R003-12, R003-15, R003-22, R003-31), `incompatible_input_type`
-(R003-8), `unpaired_fields` (R003-9), `incomparable_range_types`
+(R003-8, R003-41), `unpaired_fields` (R003-9), `incomparable_range_types`
 (R003-11), `conflicting_absent_policy` (R003-13), `unmatched_key`
 (R003-14), `phase_boundary` (R003-16), `multiple_matches` (R003-17,
 R003-35), `missing_aggregate_keys` (R003-30), and `prohibited_construct`

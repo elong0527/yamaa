@@ -48,6 +48,7 @@ conditions:
   month_out_of_range: {rules: [R016], phases: [validation]}
   multiple_matches: {rules: [R003, R008], phases: [join]}
   multiple_values_per_key: {rules: [R001], phases: [derivation]}
+  no_applicable_keys: {rules: [R003], phases: [validation]}
   not_missing_failed: {rules: [R009], phases: [verification]}
   predicate_failed: {rules: [R009], phases: [verification]}
   producer_contract_mismatch: {rules: [R014], phases: [validation]}

@@ -67,16 +67,12 @@ columns:
     type: str
     label: Actual Treatment for Period 01
     derivation:
-      lookup:
-        dataset: EX
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
-        value: EXTRT
+      source:
+        variable: EX.EXTRT
         filter: "EX.APERIOD = 1"
-        order_by:
-          - variable: EX.EXSTDTC
-          - variable: EX.EXSEQ
-        keep: first
+        multiple_matches:
+          order_by: [EX.EXSTDTC, EX.EXSEQ]
+          keep: first
     verifications:
       allowed_values:
         values: [VITAMIN D3, PLACEBO]
@@ -85,16 +81,12 @@ columns:
     type: str
     label: Actual Treatment for Period 02
     derivation:
-      lookup:
-        dataset: EX
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
-        value: EXTRT
+      source:
+        variable: EX.EXTRT
         filter: "EX.APERIOD = 2"
-        order_by:
-          - variable: EX.EXSTDTC
-          - variable: EX.EXSEQ
-        keep: first
+        multiple_matches:
+          order_by: [EX.EXSTDTC, EX.EXSEQ]
+          keep: first
     verifications:
       allowed_values:
         values: [VITAMIN D3, PLACEBO]

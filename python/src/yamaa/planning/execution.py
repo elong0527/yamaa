@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Collection, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
@@ -78,6 +78,7 @@ class PlannedDerivation(_FrozenModel):
     expression_path: str = Field(min_length=1)
     declaration: HandledExpression
     dependencies: tuple[str, ...]
+    implicit_joins: tuple[ImplicitJoin, ...] = ()
 
     @property
     def operation_path(self) -> str:
@@ -125,18 +126,32 @@ class PlannedLookup(_FrozenModel):
 
 
 class ResolvedJoin(_FrozenModel):
-    """The declared key pairs one lookup-like resolution matches on.
+    """The key pairs one lookup-like resolution matches on.
 
-    R003 makes validation report the declared pairs for every named lookup,
-    inline lookup, and dataset-qualified aggregate, so a reviewer sees which
-    columns the resolution matches on rather than having to infer them from
-    two schemas. Keys are never inferred.
+    R003 makes validation report the pairs for every named lookup, inline
+    lookup, dataset-qualified aggregate, and implicit join, so a reviewer
+    sees which columns the resolution matches on rather than having to
+    infer them from two schemas. `inferred` marks the pairs R003-40 infers
+    from the applicable keys; the rest are declared by the author.
     """
 
     spec_path: str = Field(min_length=1)
     dataset: str = Field(min_length=1)
     source: tuple[str, ...]
     key: tuple[str, ...]
+    inferred: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ImplicitJoin:
+    """One restored R003 implicit join: the dataset and its inferred keys.
+
+    The runtime matches on `keys` (as both the source variables and the
+    right-side fields) whenever a derivation reads a column of `dataset`.
+    """
+
+    dataset: str
+    keys: tuple[str, ...]
 
 
 class PlannedRow(_FrozenModel):
@@ -1220,12 +1235,13 @@ def _validate_qualified_reference(
 ) -> None:
     """Check one qualified name against the relation it reaches.
 
-    R003-1: a name qualified with a dataset reaches that dataset only
-    through a lookup. The current row's own datasets need none: a scalar
-    source qualified with a row driver reads the current driver record.
-    During row construction R001-15 lets a row derivation read its driver,
-    its group keys, an earlier row-derived column, or a lookup, and nothing
-    else.
+    R003-40: a name qualified with a dataset reaches that dataset through
+    the implicit join on the applicable keys; when the keys are unclear the
+    author wraps the read in an explicit `lookup` (R003-42). The current
+    row's own datasets need no join: a scalar source qualified with a row
+    driver reads the current driver record. During row construction R001-15
+    lets a row derivation read its driver, its group keys, an earlier
+    row-derived column, or a lookup, and nothing else.
     """
     qualifier = reference.name.split(".", 1)[0]
     if qualifier in lookups:
@@ -1263,17 +1279,12 @@ def _validate_qualified_reference(
         and reference.reach not in ("declared", "relation")
         and reference.join_relation is None
         and bound.dataset not in drivers
+        and row is None
     ):
-        # R003-1: without a lookup, a dataset-qualified scalar source names
-        # no declared keys to match on.
-        diagnostics.append(
-            _diagnostic(
-                "unknown_lookup",
-                reference.path,
-                {"identifier": reference.name, "dataset": bound.dataset},
-                requirement="R003-1",
-            )
-        )
+        # R003-42: the implicit-join pre-pass already recorded why the
+        # applicable keys are unclear; nothing more to add here. Row
+        # derivations fall through: R001-15 lets them read their driver,
+        # group keys, earlier row columns, or a lookup, and nothing else.
         return
     if row is not None:
         _validate_row_phase_reference(
@@ -1407,6 +1418,120 @@ def _comparable_types(left: ColumnType, right: ColumnType) -> bool:
     return left == right or {left, right} <= {"int", "float"}
 
 
+def _infer_applicable_keys(
+    specification: Specification,
+    bindings: BindingPlan,
+    column_types: Mapping[str, ColumnType],
+    dataset: str,
+    path: str,
+    diagnostics: list[ExecutionDiagnostic],
+) -> tuple[str, ...] | None:
+    """Infer the applicable keys R003-40 defines for an implicit join.
+
+    Returns the output keys, in output-key order, that also exist on the
+    right-side dataset, or None after recording why the key is unclear.
+    """
+    fields = _dataset_types(bindings, dataset)
+    keys = tuple(key for key in specification.keys if key in fields)
+    if not keys:
+        # R003-42: with no applicable key the intended match is unclear,
+        # so the author must declare it with an explicit `lookup:`.
+        diagnostics.append(
+            _diagnostic(
+                "no_applicable_keys",
+                path,
+                {
+                    "dataset": dataset,
+                    "keys": list(specification.keys),
+                    "hint": "declare an explicit `lookup:` with `source`/`key` pairs",
+                },
+                requirement="R003-42",
+            )
+        )
+        return None
+    mismatched = [
+        key for key in keys if not _comparable_types(column_types[key], fields[key])
+    ]
+    if mismatched:
+        # R003-41: an inferred key must compare equal on both sides.
+        key = mismatched[0]
+        diagnostics.append(
+            _diagnostic(
+                "incompatible_input_type",
+                path,
+                {
+                    "source": key,
+                    "expected": fields[key],
+                    "actual": column_types[key],
+                },
+                requirement="R003-41",
+            )
+        )
+        return None
+    return keys
+
+
+def _resolve_implicit_joins(
+    references: Sequence[_Reference],
+    specification: Specification,
+    bindings: BindingPlan,
+    drivers: Collection[str],
+    lookups: Mapping[str, PlannedLookup],
+    column_types: Mapping[str, ColumnType],
+    diagnostics: list[ExecutionDiagnostic],
+) -> tuple[_Reference, ...]:
+    """Annotate plain cross-dataset scalar sources with their implicit join.
+
+    R003-40: a scalar `source` qualified with a dataset joins that dataset
+    on the applicable keys whenever those keys are clear. The annotation
+    marks the reference so relation-dependency recording, reference
+    validation, and the runtime all see the same inferred pairing. Only
+    plain dataset columns join: an ODM item resolves from the current
+    row's context, never through an inferred join.
+    """
+    annotated: list[_Reference] = []
+    for reference in references:
+        if "." not in reference.name:
+            annotated.append(reference)
+            continue
+        qualifier = reference.name.split(".", 1)[0]
+        if (
+            qualifier in lookups
+            or qualifier not in bindings.datasets
+            or qualifier in drivers
+            or reference.reach != "scalar"
+            or reference.join_relation is not None
+        ):
+            annotated.append(reference)
+            continue
+        bound = bindings.bind(reference.name)
+        if isinstance(bound, BindingFailure) or bound.kind != "dataset":
+            # R003-40 joins dataset columns only: an ODM item resolves from
+            # the current row's context, never through an inferred join.
+            annotated.append(reference)
+            continue
+        keys = _infer_applicable_keys(
+            specification,
+            bindings,
+            column_types,
+            qualifier,
+            reference.path,
+            diagnostics,
+        )
+        if keys is None:
+            annotated.append(reference)
+            continue
+        annotated.append(
+            replace(
+                reference,
+                join_relation=qualifier,
+                join_key=keys,
+                join_source=keys,
+            )
+        )
+    return tuple(annotated)
+
+
 def _with_relation_dependencies(
     planned: PlannedDerivation,
     references: Sequence[_Reference],
@@ -1424,8 +1549,11 @@ def _with_relation_dependencies(
     reads it, and R003-30 makes an aggregate's declared `source` values
     dependencies the same way. Recording them as ordinary dependencies is
     what puts the keys' inputs before the read in R001's declaration order.
+    R003-40 adds the inferred keys of an implicit join as dependencies too,
+    and records the join so the runtime can match on it.
     """
     extra: list[str] = []
+    implicit: list[ImplicitJoin] = []
     # One reading per declared pairing: an aggregate names the same right
     # side from its `expr` and its `filter`, and R003-33 asks for the keys
     # the resolution matches on, not for one line per mention.
@@ -1447,12 +1575,21 @@ def _with_relation_dependencies(
             and reference.join_key is not None
             and reference.join_source is not None
         ):
-            _validate_aggregate_keys(
-                reference,
-                bindings,
-                column_types,
-                diagnostics,
-            )
+            if reference.reach == "scalar":
+                # R003-40: an implicit join the pre-pass inferred from the
+                # applicable keys. The keys were validated there.
+                implicit.append(
+                    ImplicitJoin(
+                        dataset=reference.join_relation, keys=reference.join_source
+                    )
+                )
+            else:
+                _validate_aggregate_keys(
+                    reference,
+                    bindings,
+                    column_types,
+                    diagnostics,
+                )
             extra.extend(reference.join_source)
             pairing = (
                 reference.join_relation,
@@ -1468,16 +1605,22 @@ def _with_relation_dependencies(
                     dataset=reference.join_relation,
                     source=reference.join_source,
                     key=reference.join_key,
+                    inferred=reference.reach == "scalar",
                 )
             )
-    if not extra:
+    if not extra and not implicit:
         return planned
     dependencies = tuple(
         dict.fromkeys(
             (*planned.dependencies, *(name for name in extra if name != planned.column))
         )
     )
-    return planned.model_copy(update={"dependencies": dependencies})
+    return planned.model_copy(
+        update={
+            "dependencies": dependencies,
+            "implicit_joins": tuple(dict.fromkeys(implicit)),
+        }
+    )
 
 
 def _lookup_dependencies(
@@ -2507,10 +2650,19 @@ def plan_execution(
             unsupported,
             scope=_Scope(lookups=frozenset(lookups)),
         )
+        annotated = _resolve_implicit_joins(
+            references,
+            specification,
+            bindings,
+            drivers,
+            lookups,
+            column_types,
+            diagnostics,
+        )
         column_plans.append(
             _with_relation_dependencies(
                 planned,
-                references,
+                annotated,
                 specification,
                 bindings,
                 lookups,
@@ -2520,7 +2672,7 @@ def plan_execution(
                 resolved_joins,
             )
         )
-        for reference in references:
+        for reference in annotated:
             if "." in reference.name:
                 _validate_qualified_reference(
                     reference,

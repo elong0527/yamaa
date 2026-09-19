@@ -41,29 +41,17 @@ columns:
     type: date
     label: Date of First Exposure to Treatment
     derivation:
-      lookup:
-        dataset: ADSL
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
-        value: TRTSDT
+      source: ADSL.TRTSDT
   - name: TRTEDT
     type: date
     label: Date of Last Exposure to Treatment
     derivation:
-      lookup:
-        dataset: ADSL
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
-        value: TRTEDT
+      source: ADSL.TRTEDT
   - name: TRTA
     type: str
     label: Actual Treatment
     derivation:
-      lookup:
-        dataset: ADSL
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
-        value: TRT01A
+      source: ADSL.TRT01A
   - name: TRTEMFL
     type: str
     label: Treatment Emergent Analysis Flag

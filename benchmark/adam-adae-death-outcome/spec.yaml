@@ -57,11 +57,7 @@ columns:
     type: date
     label: Death Date from Demographics
     derivation:
-      lookup:
-        dataset: DM
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
-        value: DTHDT
+      source: DM.DTHDT
   - name: FATALFL
     type: str
     label: Fatal Event Flag

@@ -306,6 +306,7 @@ def _evaluate_one(
                 values,
                 row_phase=row_phase,
                 column=planned.column,
+                implicit_joins=planned.implicit_joins,
             ),
             dispatcher,
             counter,

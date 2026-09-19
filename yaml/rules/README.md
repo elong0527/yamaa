@@ -11,7 +11,7 @@ semantics, error behavior, and representative examples are complete.
 | --- | --- | --- | --- |
 | R001 | [Execution model](R001-execution-model.md) | normative | Phases, grouped row construction, dependency inference, evaluation order |
 | R002 | [Source binding](R002-source-binding.md) | normative | Dataset declaration, name resolution |
-| R003 | [Explicit lookup](R003-explicit-lookup.md) | normative | The one explicit declared-key lookup: named `lookups`, inline `lookup`, declared-key aggregates |
+| R003 | [Lookup](R003-lookup.md) | normative | Cross-dataset reads: the implicit join on applicable keys, named `lookups`, inline `lookup`, declared-key aggregates |
 | R004 | [Predicate language](R004-predicate-language.md) | normative | The Boolean `sql` primitive |
 | R005 | [Output contract](R005-output-contract.md) | normative | Column coverage, output membership, the value lifecycle, output identity, artifact row order |
 | R006 | [Compact schema language](R006-schema-language.md) | normative | Schema notation and structural validation |
@@ -49,9 +49,10 @@ review and versioning process, but an implementation must not substitute an
 open proposal for the indexed text.
 
 Retired rules are deleted, not kept as files: the git history preserves the
-superseded text. R015 (record lookup) was retired by issue #568, which unified
-the three join mechanisms into the one explicit lookup this index's R003
-defines.
+superseded text. R015 (record lookup) and `mapping_from` were retired by
+issue #568, which unified the three join mechanisms into this index's R003:
+the implicit join stays for clear applicable keys, and one explicit lookup
+covers every unclear or differing key.
 
 ## Rule requirements
 

@@ -40,9 +40,15 @@ from yamaa.models import (
     EvaluationResult,
     RuntimeCondition,
     RuntimeValue,
+    ValueResult,
 )
 from yamaa.odm import BindingIndex
-from yamaa.planning import ExecutionDiagnostic, PlannedLookup, PlannedRow
+from yamaa.planning import (
+    ExecutionDiagnostic,
+    ImplicitJoin,
+    PlannedLookup,
+    PlannedRow,
+)
 from yamaa.runtime.joins import (
     IndexedRecord,
     OrderError,
@@ -178,12 +184,14 @@ class RowResolver:
         *,
         row_phase: bool = False,
         column: str | None = None,
+        implicit_joins: Sequence[ImplicitJoin] = (),
     ) -> None:
         self._context = context
         self._candidate = candidate
         self._values: dict[str, Any] = dict(values)
         self._row_phase = row_phase
         self._column = column
+        self._implicit_joins = {join.dataset: join for join in implicit_joins}
         self._base = context.bindings.context(
             candidate.source_rows,
             self._values,
@@ -200,10 +208,12 @@ class RowResolver:
             return self._base.resolve(variable)
         if self._context.lookups.declares(qualifier):
             return self._lookup_read(qualifier, variable.split(".", 1)[1])
-        # R003-1: a dataset-qualified scalar source reaches its dataset only
-        # through a lookup. The planner rejects any other qualified scalar,
-        # so reaching the base here means the qualifier is a row driver and
-        # the read is the current driver record.
+        implicit = self._implicit_joins.get(qualifier)
+        if implicit is not None:
+            # R003-40: a plain cross-dataset scalar source joins on the
+            # applicable keys the planner inferred.
+            return self._implicit_read(implicit, variable.split(".", 1)[1])
+        # A row driver needs no join: the read is the current driver record.
         return self._base.resolve(variable)
 
     def resolve_selected(
@@ -217,9 +227,57 @@ class RowResolver:
         if qualifier is not None and self._context.lookups.declares(qualifier):
             # R003 already chose the record; the source reads a column of it.
             return self._lookup_read(qualifier, variable.split(".", 1)[1])
+        if qualifier is not None:
+            implicit = self._implicit_joins.get(qualifier)
+            if implicit is not None:
+                # R003-40: a structured cross-dataset source joins on the
+                # applicable keys, then selects among the matched records.
+                return self._implicit_read(
+                    implicit,
+                    variable.split(".", 1)[1],
+                    selector=selector,
+                    multiple_matches=multiple_matches,
+                )
         return self._base.resolve_selected(
             variable, selector=selector, multiple_matches=multiple_matches
         )
+
+    def _implicit_read(
+        self,
+        join: ImplicitJoin,
+        field_name: str,
+        *,
+        selector: str | None = None,
+        multiple_matches: Mapping[str, object] | None = None,
+    ) -> Resolution:
+        relation = self._context.relations[join.dataset]
+        if not relation.has(field_name):
+            return _failed(
+                _condition(
+                    "unknown_field",
+                    {"identifier": f"{join.dataset}.{field_name}"},
+                    requirement="R003-15",
+                )
+            )
+        payload: dict[str, object] = {
+            "dataset": join.dataset,
+            "source": list(join.keys),
+            "key": list(join.keys),
+            "value": field_name,
+        }
+        if selector is not None:
+            payload["filter"] = selector
+        if multiple_matches is not None:
+            order_by = multiple_matches.get("order_by")
+            if order_by is not None:
+                payload["order_by"] = list(order_by)  # type: ignore[arg-type]
+            keep = multiple_matches.get("keep")
+            if keep is not None:
+                payload["keep"] = keep
+        result = evaluate_lookup(payload, relation, self.resolve)
+        if isinstance(result, ValueResult):
+            return ResolvedValue(value=result.value, handled_by=result.handled_by)
+        return FailedResolution(condition=result.condition)
 
     def _lookup_read(self, identifier: str, field_name: str) -> Resolution:
         plan = self._context.lookups.plans[identifier]

@@ -27,16 +27,12 @@ columns:
     type: str
     label: Rescue Medication
     derivation:
-      lookup:
-        dataset: CM
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
-        value: CMTRT
+      source:
+        variable: CM.CMTRT
         filter: "CM.CMCAT = 'RESCUE MEDICATION'"
-        order_by:
-          - variable: CM.CMSTDTC
-          - variable: CM.CMSEQ
-        keep: first
+        multiple_matches:
+          order_by: [CM.CMSTDTC, CM.CMSEQ]
+          keep: first
 verifications:
   - row_count:
       min: 2

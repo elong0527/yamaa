@@ -52,20 +52,12 @@ columns:
     type: str
     label: Serious Adverse Event Flag
     derivation:
-      lookup:
-        dataset: ADSL
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
-        value: SAEFL
+      source: ADSL.SAEFL
   - name: DCSREAS
     type: str
     label: Reason for Discontinuation
     derivation:
-      lookup:
-        dataset: ADSL
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
-        value: DCSREAS
+      source: ADSL.DCSREAS
   - name: RULE
     type: str
     label: Decision Rule

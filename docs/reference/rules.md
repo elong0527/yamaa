@@ -14,7 +14,7 @@ authoritative text, follow the links.
 |---|---|---|
 | R001 | [Execution model](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R001-execution-model.md) | Phases, grouped row construction, dependency inference, evaluation order |
 | R002 | [Source binding](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R002-source-binding.md) | Dataset declaration, name resolution |
-| R003 | [Explicit lookup](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R003-explicit-lookup.md) | The one explicit declared-key lookup: named `lookups`, inline `lookup`, declared-key aggregates |
+| R003 | [Lookup](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R003-lookup.md) | Cross-dataset reads: the implicit join on applicable keys, named `lookups`, inline `lookup`, declared-key aggregates |
 | R004 | [Predicate language](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R004-predicate-language.md) | The Boolean `sql` primitive |
 | R005 | [Output contract](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R005-output-contract.md) | Column coverage, output membership, the value lifecycle, output identity, artifact row order |
 | R006 | [Compact schema language](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R006-schema-language.md) | Schema notation and structural validation |

@@ -88,11 +88,7 @@ columns:
     type: date
     label: Subject Reference Start Date/Time
     derivation:
-      lookup:
-        dataset: DM
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
-        value: RFSTDTC
+      source: DM.RFSTDTC
   - name: VSDY
     type: int
     label: Study Day of Vital Signs

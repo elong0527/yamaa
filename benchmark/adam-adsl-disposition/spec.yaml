@@ -37,30 +37,22 @@ columns:
     type: str
     label: End of Study Decoded Term
     derivation:
-      lookup:
-        dataset: DS
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
-        value: DSDECOD
+      source:
+        variable: DS.DSDECOD
         filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
-        order_by:
-          - variable: DS.DSSTDTC
-          - variable: DS.DSSEQ
-        keep: last
+        multiple_matches:
+          order_by: [DS.DSSTDTC, DS.DSSEQ]
+          keep: last
   - name: EOSREAS
     type: str
     label: End of Study Reason
     derivation:
-      lookup:
-        dataset: DS
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
-        value: DSTERM
+      source:
+        variable: DS.DSTERM
         filter: "DS.DSCAT = 'DISPOSITION EVENT' AND DS.DSSTDTC IS NOT NULL"
-        order_by:
-          - variable: DS.DSSTDTC
-          - variable: DS.DSSEQ
-        keep: last
+        multiple_matches:
+          order_by: [DS.DSSTDTC, DS.DSSEQ]
+          keep: last
   - name: EOSSTT
     type: str
     label: End of Study Status

@@ -7,6 +7,7 @@ from yamaa.io.polars import frame_from_values
 from yamaa.models import TypedColumn
 from yamaa.planning import (
     ExecutionPlanningError,
+    ImplicitJoin,
     UnsupportedPlanningError,
     plan_execution,
 )
@@ -347,8 +348,8 @@ def first_diagnostic(columns: list[Column], right: str = "str"):
     return raised.value.diagnostics[0]
 
 
-def test_an_unwrapped_cross_dataset_source_is_rejected() -> None:
-    diagnostic = first_diagnostic(
+def test_a_cross_dataset_source_with_clear_keys_uses_the_implicit_join() -> None:
+    plan = plan_two(
         [
             Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
             Column(
@@ -357,9 +358,62 @@ def test_an_unwrapped_cross_dataset_source_is_rejected() -> None:
         ]
     )
 
-    # R003: a cross-dataset scalar source with no lookup is rejected; the
-    # author must wrap it in an explicit lookup: with source/key pairs.
-    assert diagnostic.condition == "unknown_lookup"
+    # R003-40: the output key X exists on RIGHT, so the read joins on it.
+    [derived] = [column for column in plan.columns if column.column == "V"]
+    assert derived.implicit_joins == (ImplicitJoin(dataset="RIGHT", keys=("X",)),)
+    assert "X" in derived.dependencies
+    [resolved] = [
+        join
+        for join in plan.resolved_joins
+        if join.spec_path == "columns.V.derivation.source"
+    ]
+    assert resolved.inferred is True
+    assert resolved.source == ("X",)
+    assert resolved.key == ("X",)
+
+
+def test_a_cross_dataset_source_without_applicable_keys_requires_a_lookup() -> None:
+    right = frame_from_values((TypedColumn(name="V", type="float"),), [[1.0]])
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            two_dataset_specification(
+                [
+                    Column(
+                        name="X", type="str", derivation=derivation({"source": "SRC.X"})
+                    ),
+                    Column(
+                        name="V",
+                        type="float",
+                        derivation=derivation({"source": "RIGHT.V"}),
+                    ),
+                ]
+            ),
+            {"SRC": source_table(), "RIGHT": right},
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    # R003-42: no output key exists on RIGHT, so the intended match is
+    # unclear and the author must declare it with an explicit `lookup:`.
+    [diagnostic] = raised.value.diagnostics
+    assert diagnostic.condition == "no_applicable_keys"
+    assert diagnostic.requirement == "R003-42"
+    assert diagnostic.spec_paths == ("columns.V.derivation.source",)
+
+
+def test_an_implicit_join_key_typed_differently_on_each_side_is_reported() -> None:
+    diagnostic = first_diagnostic(
+        [
+            Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="V", type="float", derivation=derivation({"source": "RIGHT.V"})
+            ),
+        ],
+        right="int",
+    )
+
+    # R003-41: an inferred key must compare equal on both sides.
+    assert diagnostic.condition == "incompatible_input_type"
+    assert diagnostic.requirement == "R003-41"
 
 
 def test_a_lookup_key_typed_differently_on_each_side_is_reported() -> None:

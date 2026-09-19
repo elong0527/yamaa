@@ -27,16 +27,12 @@ columns:
     type: str
     label: First Actual Treatment from Exposure
     derivation:
-      lookup:
-        dataset: EX
-        source: [STUDYID, USUBJID]
-        key: [STUDYID, USUBJID]
-        value: EXTRT
+      source:
+        variable: EX.EXTRT
         filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXSTDTC IS NOT NULL"
-        order_by:
-          - variable: EX.EXSTDTC
-          - variable: EX.EXSEQ
-        keep: first
+        multiple_matches:
+          order_by: [EX.EXSTDTC, EX.EXSEQ]
+          keep: first
   - name: TRT01SRC
     type: str
     label: Selected Actual Treatment for Period 01
