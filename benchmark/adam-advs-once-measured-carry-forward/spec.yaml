@@ -10,6 +10,7 @@ input:
     types: {VSDTC: date}
   ADSL: input/adsl.csv
 
+base: PLAN
 intermediates:
   - id: SUBJECT
     dataset: ADSL
@@ -18,7 +19,6 @@ intermediates:
     dataset: VS
     key_base: [STUDYID, USUBJID, PARAMCD, ADT]
     key: [STUDYID, USUBJID, VSTESTCD, VSDTC]
-base: PLAN
 
 output:
   path: advs.csv

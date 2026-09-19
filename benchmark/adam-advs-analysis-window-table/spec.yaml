@@ -6,6 +6,7 @@ input:
   AWINDOW:
     path: input/awindow.csv
     types: {AVISITN: int, AWLO: int, AWHI: int, AWTARGET: int}
+base: ADVSPRE
 intermediates:
   - id: AWIN
     dataset: AWINDOW
@@ -13,7 +14,6 @@ intermediates:
       value: ADY
       lower: AWLO
       upper: AWHI
-base: ADVSPRE
 
 output:
   path: advs.csv

@@ -8,12 +8,12 @@ input:
   LMS:
     path: input/lms_ref.csv
     types: {L: float, M: float, S: float, AGE: int}
+base: ADVSPRE
 intermediates:
   - id: GROWTH
     dataset: LMS
     key_base: [ADVSPRE.PARAMCD, ADVSPRE.SEX, ADVSPRE.AGE]
     key: [PARAMCD, SEX, AGE]
-base: ADVSPRE
 
 output:
   path: advs.csv

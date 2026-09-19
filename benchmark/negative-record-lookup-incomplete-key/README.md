@@ -25,17 +25,16 @@ incomplete and the run is rejected with no artifact accepted.
 ## How to fix
 
 Recover the missing sex when possible. If an incomplete lookup key is
-intended to make every value read from the lookup missing, state that policy
-on the record lookup:
+intended to make every value read from the lookup missing, omit `strict:`
+so the lookup answers with its declared absence:
 
 ```yaml
 intermediates:
   - id: REFRANGE
     dataset: LBRANGE
-    source: [LBTESTCD, SEX]
     key: [LBTESTCD, SEX]
-    incomplete: missing
 ```
 
-A complete key the table does not contain is a separate condition needing its
-own policy.
+R003-14 gives an incomplete key and a complete key the table does not
+contain the one absence policy: both yield nothing, and `strict:` decides
+whether that fails or answers `missing:`.

@@ -4,6 +4,7 @@ keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE: input/ae.csv
   QUERY: {path: input/queries.csv, types: {GRPID: int}}
+base: AE
 intermediates:
   - id: SMQ1
     dataset: QUERY
@@ -20,7 +21,6 @@ intermediates:
     key_base: [AEDECOD]
     key: [TERM]
     filter: "QUERY.PREFIX = 'CQ01'"
-base: AE
 
 output:
   path: adae.csv

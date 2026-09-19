@@ -31,7 +31,6 @@ Give each current-row value exactly one lookup-table column:
 intermediates:
   - id: REFRANGE
     dataset: LBRANGE
-    source: [LBTESTCD, SEX]
     key: [LBTESTCD, SEX]
 ```
 

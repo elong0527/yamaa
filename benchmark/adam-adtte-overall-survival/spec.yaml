@@ -7,6 +7,7 @@ input:
     path: input/adrs.csv
     types:
       ASEQ: int
+base: ADSL
 intermediates:
   - id: DEATH_REC
     dataset: ADRS
@@ -14,8 +15,6 @@ intermediates:
     key: [STUDYID, USUBJID]
     order_by: [ADRS.ADT]
     keep: first
-
-base: ADSL
 
 output:
   path: adtte.csv

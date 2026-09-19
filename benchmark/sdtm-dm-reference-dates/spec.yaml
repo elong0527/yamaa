@@ -6,14 +6,13 @@ input:
   EX: {path: input/ex.csv, types: {EXSEQ: int}}
   DS: input/ds.csv
   AE: input/ae.csv
+base: DM_RAW
 intermediates:
   - id: LASTEX
     dataset: EX
     filter: "EX.EXENDTC IS NOT NULL"
     order_by: [EX.EXENDTC, EX.EXSEQ]
     keep: last
-
-base: DM_RAW
 
 output:
   path: dm.csv

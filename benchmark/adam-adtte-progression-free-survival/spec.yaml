@@ -5,6 +5,7 @@ input:
   ADSL: input/adsl.csv
   RS: {path: input/rs.csv, types: {RSSEQ: int}}
   DS: {path: input/ds.csv, types: {DSSEQ: int}}
+base: ADSL
 intermediates:
   - id: PROGRESSION
     dataset: RS
@@ -21,8 +22,6 @@ intermediates:
     filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.ADEQFL = 'Y'"
     order_by: [RS.RSDTC, RS.RSSEQ]
     keep: last
-
-base: ADSL
 
 output:
   path: adtte.csv

@@ -5,6 +5,7 @@ input:
   DM_RAW: input/dm_raw.csv
   DS: input/ds.csv
   AE: input/ae.csv
+base: DM_RAW
 intermediates:
   - id: DTHDS
     dataset: DS
@@ -16,7 +17,6 @@ intermediates:
     filter: "AE.AEOUT = 'FATAL'"
     order_by: [AE.AEENDTC]
     keep: last
-base: DM_RAW
 
 output:
   path: dm.csv

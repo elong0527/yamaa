@@ -8,13 +8,12 @@ input:
   AWINDOW:
     path: input/awindow.csv
     types: {AWLO: int, AWHI: int}
+base: ADVSPRE
 intermediates:
   - id: AWIN
     dataset: AWINDOW
     key: STUDYID
     between: {value: ADY, lower: AWLO, upper: AWHI}
-
-base: ADVSPRE
 
 output:
   path: advs.csv

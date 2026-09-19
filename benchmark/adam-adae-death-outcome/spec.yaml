@@ -4,12 +4,12 @@ keys: [STUDYID, USUBJID, AESEQ]
 input:
   AE: input/ae.csv
   DM: input/dm.csv
+base: AE
 intermediates:
   - id: DEATHEV
     dataset: AE
     key: [STUDYID, USUBJID]
     filter: "AE.AEOUT = 'FATAL'"
-base: AE
 
 output:
   path: adae.csv

@@ -35,12 +35,12 @@ exists. If the analysis intentionally leaves the limit missing when a complete
 key is not in the table, state that policy explicitly:
 
 ```yaml
-mapping_from:
-  source: [PARAMCD, SEX]
+lookup:
+  key_base: [PARAMCD, SEX]
   dataset: LBREF
   key: [LBTESTCD, SEX]
   value: ANRHI
-  unmapped: null
+  missing: null
 ```
 
 The missing-value answer does not apply to an incomplete key; an incomplete

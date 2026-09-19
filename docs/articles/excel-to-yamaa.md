@@ -835,7 +835,7 @@ intermediates:                       # optional: only when columns must share on
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]
     keep: first
-    unmatched: missing
+    missing: null
 
 output:                         # the entry file must declare this completely
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVAL, ABLFL, BASE, CHG]

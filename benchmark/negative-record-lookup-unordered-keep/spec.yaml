@@ -4,12 +4,11 @@ keys: [STUDYID, USUBJID]
 input:
   DM: input/dm.csv
   EX: input/ex.csv
+base: DM
 intermediates:
   - id: DOSING
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]
-
-base: DM
 
 output:
   path: adsl.csv

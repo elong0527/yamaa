@@ -30,9 +30,7 @@ explicitly:
 intermediates:
   - id: REFRANGE
     dataset: LBRANGE
-    source: [LBTESTCD, SEX]
     key: [LBTESTCD, SEX]
-    unmatched: missing
 ```
 
 The lookup then returns a missing value for every column read through it when

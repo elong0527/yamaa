@@ -8,13 +8,12 @@ input:
   EPOCHS:
     path: input/epoch.csv
     types: {DYLO: int, DYHI: int}
+base: VS_RAW
 intermediates:
   - id: EPOCHDEF
     dataset: EPOCHS
     key: STUDYID
     between: {value: VSDTC, lower: DYLO, upper: DYHI}
-
-base: VS_RAW
 
 output:
   path: vs.csv

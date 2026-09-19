@@ -8,6 +8,7 @@ input:
   TEPOCH:
     path: input/tepoch.csv
     types: {DYLO: int, DYHI: int}
+base: VS_RAW
 intermediates:
   - id: PLANNEDVISIT
     dataset: TV
@@ -19,7 +20,6 @@ intermediates:
       value: VSDY
       lower: DYLO
       upper: DYHI
-base: VS_RAW
 
 output:
   path: vs.csv

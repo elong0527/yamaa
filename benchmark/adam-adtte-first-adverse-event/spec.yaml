@@ -7,13 +7,12 @@ input:
     path: input/adae.csv
     types:
       AESEQ: int
+base: ADSL
 intermediates:
   - id: AE_REC
     dataset: ADAE
     order_by: [ADAE.ASTDT, ADAE.AESEQ]
     keep: first
-
-base: ADSL
 
 output:
   path: adtte.csv

@@ -4,6 +4,7 @@ keys: [STUDYID, USUBJID, PARAMCD]
 input:
   ADSL: input/adsl.csv
   TU: input/tu.csv
+base: ADSL
 intermediates:
   - id: TU_TARGET
     dataset: TU
@@ -12,7 +13,6 @@ intermediates:
       AND TU.TUSTRESC = 'TARGET'
     order_by: [TU.TUSEQ]
     keep: first
-base: ADSL
 
 output:
   path: adrs.csv
