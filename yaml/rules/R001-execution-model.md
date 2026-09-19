@@ -90,7 +90,7 @@ or candidate groups. Each retained input record or group yields one row.
 The sections concatenate in specification order. Row templates build a grain
 finer than input records only as R001-10 permits. The built grain must
 still be the `keys` grain. Repeating a key combination fails at the output
-gate under R005-52. A `filter` states which rows the artifact carries, never
+gate under R005-51. A `filter` states which rows the artifact carries, never
 which input record represents a key combination. A row template that keeps
 one of several input records with one key combination writes the `keys`
 grain. The specification omits `rows` instead.

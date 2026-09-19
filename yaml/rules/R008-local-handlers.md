@@ -128,9 +128,9 @@ all, so `conversion_failure` never fires for one.
 
 ## Dependencies and audit
 
-**R008-20.** Literal handlers add no dependencies.
+**R008-19.** Literal handlers add no dependencies.
 
-**R008-21.** Implementations must report each handler path's record count.
+**R008-20.** Implementations must report each handler path's record count.
 A handler firing zero times is reportable and is not an error.
 
 ## Rationale
@@ -147,15 +147,15 @@ firing the handler.
 
 ## Errors
 
-**R008-22.** A handler field on an expression that does not register it:
+**R008-21.** A handler field on an expression that does not register it:
 schema failure.
 
-**R008-23.** A result wrapper with no `conversion_failure`: fail.
+**R008-22.** A result wrapper with no `conversion_failure`: fail.
 
-**R008-24.** A handler literal incompatible with its result context:
+**R008-23.** A handler literal incompatible with its result context:
 fail with both the handler and original context.
 
-**R008-25.** `multiple_matches.keep` outside `first` or `last`: schema
+**R008-24.** `multiple_matches.keep` outside `first` or `last`: schema
 failure.
 
-**R008-26.** A conversion replacement that cannot be converted: fail.
+**R008-25.** A conversion replacement that cannot be converted: fail.

@@ -493,10 +493,10 @@ def check_keys(
 ) -> tuple[VerificationFailure, ...]:
     """Validate output identity once every column's lifecycle is complete."""
     if not keys:
-        raise DeclarationError("keys", "R005-47", "keys names at least one column")
+        raise DeclarationError("keys", "R005-46", "keys names at least one column")
     if len(set(keys)) != len(keys):
-        raise DeclarationError("keys", "R005-47", "a key column is repeated")
-    _require_columns(table, keys, "keys", "R005-47")
+        raise DeclarationError("keys", "R005-46", "a key column is repeated")
+    _require_columns(table, keys, "keys", "R005-46")
 
     columns = {name: _values(table, name) for name in keys}
     key_maps = _key_maps(table, keys)
@@ -512,7 +512,7 @@ def check_keys(
                 _failure(
                     "missing_key",
                     f"keys[{position}]",
-                    "R005-52",
+                    "R005-51",
                     {"column": name},
                     offending,
                     count_name="missing_count",
@@ -534,7 +534,7 @@ def check_keys(
             _failure(
                 "duplicate_key",
                 "keys",
-                "R005-52",
+                "R005-51",
                 {},
                 duplicated,
                 count_name="duplicate_count",
@@ -557,7 +557,7 @@ def check_dataset(
         if record_lookup_columns or record_lookup_rows is not None:
             _record_lookup_bindings(table, record_lookup_columns, record_lookup_rows)
         return ()
-    _require_columns(table, keys, "keys", "R005-47")
+    _require_columns(table, keys, "keys", "R005-46")
     lookup_types, lookup_rows = _record_lookup_bindings(
         table, record_lookup_columns, record_lookup_rows
     )

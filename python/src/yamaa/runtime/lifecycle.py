@@ -25,7 +25,7 @@ from yamaa.specification.models import ColumnType, Expression
 
 ResolverFactory = Callable[[Mapping[str, object]], Resolver]
 
-# Which R008 handler fields each registered operation offers. R008-22 makes a
+# Which R008 handler fields each registered operation offers. R008-21 makes a
 # handler on an operation that does not register it a schema failure, so this
 # map is the one place a new operation declares its handler paths.
 DECLARED_HANDLERS: dict[str, tuple[HandlerName, ...]] = {

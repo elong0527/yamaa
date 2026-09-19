@@ -226,7 +226,7 @@ def test_key_validation_reproduces_the_committed_missing_and_duplicate_contracts
         "phase": "output",
         "condition": "missing_key",
         "spec_paths": ["keys[3]"],
-        "requirement": "R005-52",
+        "requirement": "R005-51",
         "context": {
             "column": "AVISIT",
             "missing_count": 1,
@@ -244,7 +244,7 @@ def test_key_validation_reproduces_the_committed_missing_and_duplicate_contracts
         "phase": "output",
         "condition": "duplicate_key",
         "spec_paths": ["keys"],
-        "requirement": "R005-52",
+        "requirement": "R005-51",
         "context": {
             "duplicate_count": 1,
             "keys": [{"STUDYID": "PILOT7", "USUBJID": "P7-722"}],

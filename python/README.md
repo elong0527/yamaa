@@ -597,7 +597,7 @@ A report carries what a cross-runtime comparison needs and nothing that
 belongs to one implementation: the artifact's column order, declared
 types, record count, R020 bytes and their digest; a failure's `phase`,
 `condition`, `spec_paths`, `requirement`, and context; each unsupported
-operation and where it was declared; and the R008-21 count for every
+operation and where it was declared; and the R008-20 count for every
 declared handler path, including the ones that never fired.
 
 ```python

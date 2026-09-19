@@ -170,14 +170,14 @@ def _declaration_diagnostics(
                     "validation",
                     "duplicate_identifier",
                     path,
-                    "R005-46",
+                    "R005-45",
                     {"column": name},
                 )
             )
         elif name not in declared:
             diagnostics.append(
                 _diagnostic(
-                    "validation", "undeclared_column", path, "R005-46", {"column": name}
+                    "validation", "undeclared_column", path, "R005-45", {"column": name}
                 )
             )
         seen.add(name)
@@ -191,7 +191,7 @@ def _declaration_diagnostics(
                     "validation",
                     "internal_column_in_keys",
                     f"keys[{position}]",
-                    "R005-45",
+                    "R005-44",
                     {"column": name},
                 )
             )
@@ -205,19 +205,19 @@ def _declaration_diagnostics(
                     "validation",
                     "duplicate_order_term",
                     path,
-                    "R005-49",
+                    "R005-48",
                     {"column": term.variable},
                 )
             )
         elif term.variable not in declared:
-            # R005-35 admits an internal column here, so membership is the
+            # R005-34 admits an internal column here, so membership is the
             # declared set rather than the artifact's own columns.
             diagnostics.append(
                 _diagnostic(
                     "validation",
                     "undeclared_column",
                     path,
-                    "R005-48",
+                    "R005-47",
                     {"column": term.variable},
                 )
             )
@@ -356,7 +356,7 @@ def _json(value: object) -> JsonValue:
 def _ordered_frame(frame: pl.DataFrame, output: Output) -> pl.DataFrame:
     terms = output.order_by or ()
     if not terms:
-        # R005-33: an artifact whose specification declares no order keeps
+        # R005-32: an artifact whose specification declares no order keeps
         # the construction order R001 produced.
         return frame
     return frame.sort(
