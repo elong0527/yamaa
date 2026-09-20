@@ -70,21 +70,15 @@ rows:
     group_by: [EC_RAW.STUDYID, EC_RAW.USUBJID, EC_RAW.ECTRT, EC_RAW.ECDOSE, EC_RAW.ECDOSU, EC_RAW.ECDOSFRQ]
     derivations:
       DOMAIN: {literal: EX}
-      STUDYID: {source: EC_RAW.STUDYID}
-      USUBJID: {source: EC_RAW.USUBJID}
-      EXTRT: {source: EC_RAW.ECTRT}
-      EXDOSE: {source: EC_RAW.ECDOSE}
-      EXDOSU: {source: EC_RAW.ECDOSU}
-      EXDOSFRQ: {source: EC_RAW.ECDOSFRQ}
-      EXSTDTC:
-        aggregate:
-          expr: "MIN(EC_RAW.ECSTDTC)"
-      EXENDTC:
-        aggregate:
-          expr: "MAX(EC_RAW.ECSTDTC)"
-      EXADJ:
-        aggregate:
-          expr: "MIN(EC_RAW.ECADJ)"
+      STUDYID: EC_RAW.STUDYID
+      USUBJID: EC_RAW.USUBJID
+      EXTRT: EC_RAW.ECTRT
+      EXDOSE: EC_RAW.ECDOSE
+      EXDOSU: EC_RAW.ECDOSU
+      EXDOSFRQ: EC_RAW.ECDOSFRQ
+      EXSTDTC: {aggregate: "MIN(EC_RAW.ECSTDTC)"}
+      EXENDTC: {aggregate: "MAX(EC_RAW.ECSTDTC)"}
+      EXADJ: {aggregate: "MIN(EC_RAW.ECADJ)"}
 
 verifications:
   - unique:
