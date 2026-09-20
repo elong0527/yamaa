@@ -55,7 +55,7 @@ comparison  := operand compare operand
              | operand ["NOT"] "BETWEEN" operand "AND" operand
              | operand ["NOT"] "LIKE" operand ["ESCAPE" string]
 null_test   := operand "IS" ["NOT"] "NULL"
-compare     := "=" | "<>" | "<" | "<=" | ">" | ">="
+compare     := "=" | "<>" | "!=" | "<" | "<=" | ">" | ">="
 operand     := identifier | literal
 identifier  := name ["." name]
 name        := (letter | "_") { letter | digit | "_" }

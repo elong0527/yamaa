@@ -49,7 +49,7 @@ RESERVED_NAMES = frozenset(
         "TRUE",
     }
 )
-COMPARISON_OPERATORS = ("=", "<>", "<", "<=", ">", ">=")
+COMPARISON_OPERATORS = ("=", "<>", "!=", "<", "<=", ">", ">=")
 TWO_CHARACTER_OPERATORS = frozenset(
     operator for operator in COMPARISON_OPERATORS if len(operator) == 2
 )
@@ -220,9 +220,12 @@ class _PredicateParser:
 
         left = self.parse_operand()
         if self.token[0] == "OP":
+            operator = self.advance()[1]
+            # `!=` is a surface alias; the AST keeps the canonical `<>`.
+            operator = "<>" if operator == "!=" else operator
             return {
                 "kind": "comparison",
-                "operator": self.advance()[1],
+                "operator": operator,
                 "left": left,
                 "right": self.parse_operand(),
             }

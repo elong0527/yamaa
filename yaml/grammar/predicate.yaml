@@ -45,7 +45,7 @@ productions:
       operand "IS" ["NOT"] "NULL"
   - name: compare
     definition: |-
-      "=" | "<>" | "<" | "<=" | ">" | ">="
+      "=" | "<>" | "!=" | "<" | "<=" | ">" | ">="
   - name: operand
     definition: |-
       identifier | literal
@@ -114,11 +114,12 @@ cases:
     shape: (and (and (and (and (and (= (id A) (int 1)) (<> (id B) (int
       2))) (< (id C) (int 3))) (<= (id D) (int 4))) (> (id E) (int 5)))
       (>= (id F) (int 6)))
-  - id: not-equal-bang-is-outside-the-grammar
-    covers: [comparison, rejection]
+  - id: not-equal-bang-spells-not-equal
+    covers: [comparison]
     text: "AGE != 18"
-    parse: reject
-    condition: invalid_predicate
+    parse: accept
+    identifiers: [AGE]
+    shape: (<> (id AGE) (int 18))
   - id: and-binds-tighter-than-or
     covers: [logic, precedence]
     text: "A = 1 OR B = 2 AND C = 3"

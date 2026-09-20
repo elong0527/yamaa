@@ -74,6 +74,21 @@ def _ast_shape(node: PredicateAst) -> str:
     raise AssertionError(f"unknown AST node {kind!r}")
 
 
+def test_not_equal_bang_alias() -> None:
+    values = {"ACTARM": "Placebo", "AGE": 18}
+    for text, expected in [
+        ("ACTARM != 'Screen Failure'", TruthValue.TRUE),
+        ("ACTARM != 'Placebo'", TruthValue.FALSE),
+        ("AGE != 18", TruthValue.FALSE),
+        ("AGE != 19", TruthValue.TRUE),
+    ]:
+        result = _evaluate(text, values)
+        assert isinstance(result, PredicateValue)
+        assert result.value is expected
+    # The AST keeps the canonical `<>` spelling.
+    assert parse_predicate("AGE != 18")["operator"] == "<>"
+
+
 @pytest.mark.parametrize(
     "case",
     GRAMMAR["cases"],
