@@ -13,26 +13,32 @@ columns:
   - name: DOMAIN
     type: str
     label: Domain Abbreviation
+    derivation: {literal: EX}
 
   - name: STUDYID
     type: str
     label: Study Identifier
+    derivation: EC_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation: EC_RAW.USUBJID
 
   - name: EXTRT
     type: str
     label: Name of Treatment
+    derivation: EC_RAW.ECTRT
 
   - name: EXDOSE
     type: float
     label: Dose
+    derivation: EC_RAW.ECDOSE
 
   - name: EXDOSU
     type: str
     label: Dose Units
+    derivation: EC_RAW.ECDOSU
     verifications:
       allowed_values:
         values: [mg]
@@ -40,6 +46,7 @@ columns:
   - name: EXDOSFRQ
     type: str
     label: Dosing Frequency per Interval
+    derivation: EC_RAW.ECDOSFRQ
     verifications:
       allowed_values:
         values: [QD]
@@ -69,13 +76,6 @@ rows:
   - id: dose_intervals
     group_by: [EC_RAW.STUDYID, EC_RAW.USUBJID, EC_RAW.ECTRT, EC_RAW.ECDOSE, EC_RAW.ECDOSU, EC_RAW.ECDOSFRQ]
     derivations:
-      DOMAIN: {literal: EX}
-      STUDYID: EC_RAW.STUDYID
-      USUBJID: EC_RAW.USUBJID
-      EXTRT: EC_RAW.ECTRT
-      EXDOSE: EC_RAW.ECDOSE
-      EXDOSU: EC_RAW.ECDOSU
-      EXDOSFRQ: EC_RAW.ECDOSFRQ
       EXSTDTC: {aggregate: "MIN(EC_RAW.ECSTDTC)"}
       EXENDTC: {aggregate: "MAX(EC_RAW.ECSTDTC)"}
       EXADJ: {aggregate: "MIN(EC_RAW.ECADJ)"}
