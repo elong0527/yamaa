@@ -16,7 +16,7 @@ test (`VSTESTCD`), sequence (`VSSEQ`), result (`VSSTRESN`), and units
 - `VS.USUBJID`, `VS.VSTESTCD`, `VS.VSSEQ`, `VS.VSSTRESN`, and
   `VS.VSSTRESU` read the current vital-signs record straight through;
   the sequence restarts at 1 for each subject and survives into
-  `ADVS` as `ASEQ`, a key beside subject and test;
+  `ADVS` as `ASEQ`, a key beside the subject;
 - `DM.SEX`, `DM.AGE`, and `DM.RACE` reach the demographics dataset
   through the shared subject key, and a missing race stays blank;
 - `AGEGR1` groups the already-derived `AGE` into `<65` and `>=65`;
