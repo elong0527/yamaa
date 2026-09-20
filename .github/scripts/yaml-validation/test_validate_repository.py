@@ -1942,7 +1942,7 @@ class TestRuleMetadata(unittest.TestCase):
     def test_requires_normative_rule_and_index_status(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            rules = root / 'yaml' / 'rules'
+            rules = root / 'rules'
             rules.mkdir(parents=True)
             (rules / 'README.md').write_text(
                 '| ID | Rule | Status | Owns | Depends on |\n'
@@ -4480,7 +4480,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
         shutil.copytree(
             self.root / 'yaml' / 'grammar', root / 'yaml' / 'grammar'
         )
-        shutil.copytree(self.root / 'yaml' / 'rules', root / 'yaml' / 'rules')
+        shutil.copytree(self.root / 'rules', root / 'rules')
         for relative, (old, new) in replacements.items():
             path = root / relative
             text = path.read_text()
@@ -4519,7 +4519,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
             root = self.contract_root(
                 temp_dir,
                 **{
-                    'yaml/rules/operations/text.md': (
+                    'rules/operations/text.md': (
                         'placeholder := "{" variable "}"',
                         'placeholder := "{" variable "}" | variable',
                     )
@@ -4778,7 +4778,7 @@ class TestDatasetPathExamples(unittest.TestCase):
 
     def test_each_example_reports_its_declared_condition(self):
         examples = sorted(
-            (self.root / "benchmark").glob("negative-path-*")
+            (self.root / "benchmarks").glob("negative-path-*")
         )
         self.assertEqual(len(examples), 6)
 
@@ -4828,7 +4828,7 @@ class TestValidatorCLI(unittest.TestCase):
             repository / 'yaml' / 'grammar', self.root_dir / 'yaml' / 'grammar'
         )
         shutil.copytree(
-            repository / 'yaml' / 'rules', self.root_dir / 'yaml' / 'rules'
+            repository / 'rules', self.root_dir / 'rules'
         )
 
     def tearDown(self):
@@ -5153,7 +5153,7 @@ class TestValidatorCLI(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             copy = Path(temp_dir)
             shutil.copytree(root / 'yaml', copy / 'yaml', dirs_exist_ok=True)
-            shutil.copytree(root / 'benchmarks', copy / 'benchmark', dirs_exist_ok=True)
+            shutil.copytree(root / 'benchmarks', copy / 'benchmarks', dirs_exist_ok=True)
             document = (
                 copy / 'benchmarks' / source.name / 'define.yaml'
             )
@@ -5181,7 +5181,7 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertIn('error.yaml', result.stdout)
 
     def test_example_index_stale(self):
-        ex_dir = self.root_dir / 'benchmark'
+        ex_dir = self.root_dir / 'benchmarks'
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'README.md').write_text('# Index\n\n| [`stale`](stale/) | stale desc |\n')
 
@@ -5190,7 +5190,7 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertIn('stale', result.stdout)
 
     def test_example_index_link_must_match_directory(self):
-        examples_dir = self.root_dir / 'benchmark'
+        examples_dir = self.root_dir / 'benchmarks'
         ex_dir = examples_dir / 'good'
         ex_dir.mkdir(parents=True)
         (ex_dir / 'README.md').write_text('# Good: description')
@@ -5207,7 +5207,7 @@ class TestValidatorCLI(unittest.TestCase):
         self.assertIn('wrong-target', result.stdout)
 
     def test_example_index_missing(self):
-        ex_dir = self.root_dir / 'benchmark'
+        ex_dir = self.root_dir / 'benchmarks'
         ex_dir.mkdir(parents=True, exist_ok=True)
         (ex_dir / 'README.md').write_text('# Index\n')
         good_ex = ex_dir / 'good'
@@ -6140,7 +6140,7 @@ class TestSourceProfileDiagnostics(unittest.TestCase):
     def test_a_unicode_fixture_keeps_its_exemption_when_shouted(self):
         self.assertTrue(
             VALIDATOR.is_unicode_fixture_csv(
-                Path('benchmark/ex/input/DM.CSV')
+                Path('benchmarks/ex/input/DM.CSV')
             )
         )
 
@@ -6252,7 +6252,7 @@ class TestRetiredOdmItemReferences(unittest.TestCase):
 
     def test_exempts_the_specifications_506_still_owes(self):
         listed = sorted(VALIDATOR.ODM_CONTEXTUAL_REFERENCE_MIGRATION)
-        examples = TOOL_PATH.parents[3] / 'benchmark'
+        examples = TOOL_PATH.parents[3] / 'benchmarks'
 
         self.assertEqual(
             listed,
