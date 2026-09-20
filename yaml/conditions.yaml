@@ -8,6 +8,7 @@ conditions:
   ambiguous_baseline: {rules: [R007], phases: [derivation]}
   ambiguous_dictionary: {rules: [R007], phases: [validation]}
   artifact_path_collision: {rules: [R020], phases: [validation]}
+  assert_failed: {rules: [R009], phases: [verification]}
   conversion_failed: {rules: [R011], phases: [convert]}
   decimals_not_applicable: {rules: [R020], phases: [validation]}
   dependency_cycle: {rules: [R001], phases: [validation]}
@@ -49,7 +50,6 @@ conditions:
   multiple_values_per_key: {rules: [R001], phases: [derivation]}
   no_applicable_keys: {rules: [R003], phases: [validation]}
   not_missing_failed: {rules: [R009], phases: [verification]}
-  predicate_failed: {rules: [R009], phases: [verification]}
   producer_contract_mismatch: {rules: [R014], phases: [validation]}
   prohibited_construct: {rules: [R003, R010, R013], phases: [validation]}
   prohibited_function: {rules: [R010, R013], phases: [validation]}

@@ -54,7 +54,7 @@ than nest one inside an operation, so this policy does not restrict them.
 **R007-5.** Fields typed `numeric_expression`, `string_template`, and
 `aggregate_expression` are leaves whose identifiers R010, R012, and R013
 resolve. Plain strings are values unless their schema field is typed as
-`variable`, `function_arg`, `sql`, or `string_template`. R018 closes
+`variable`, `function_arg`, `predicate`, or `string_template`. R018 closes
 `function_arg`: a string is a variable, while string, date, and datetime
 literals use their explicit tagged leaf forms.
 

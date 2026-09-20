@@ -12,7 +12,7 @@ semantics, error behavior, and representative examples are complete.
 | R001 | [Execution model](R001-execution-model.md) | normative | Phases, grouped row construction, dependency inference, evaluation order |
 | R002 | [Source binding](R002-source-binding.md) | normative | Dataset declaration, name resolution |
 | R003 | [Intermediate](R003-intermediate.md) | normative | Cross-dataset reads: the implicit join on applicable keys, named `intermediates`, inline `lookup`, declared-key aggregates |
-| R004 | [Predicate language](R004-predicate-language.md) | normative | The Boolean `sql` primitive |
+| R004 | [Predicate language](R004-predicate-language.md) | normative | The Boolean `predicate` primitive |
 | R005 | [Output contract](R005-output-contract.md) | normative | Column coverage, output membership, the value lifecycle, output identity, artifact row order |
 | R006 | [Compact schema language](R006-schema-language.md) | normative | Schema notation and structural validation |
 | R007 | [Expression registry](R007-expression-registry.md) | normative | Registration, nesting, evaluation kinds, ordering, input types |

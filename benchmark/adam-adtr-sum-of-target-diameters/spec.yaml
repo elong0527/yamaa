@@ -91,9 +91,9 @@ verifications:
   - row_count:
       min: 7
       max: 7
-  - predicate:
+  - assert:
       id: measured-lesions-do-not-exceed-the-target-lesions
-      assert: "NMEAS IS NULL OR NMEAS <= NTARGET"
+      expr: "NMEAS IS NULL OR NMEAS <= NTARGET"
   - implies:
       id: complete-assessment-has-a-sum
       when: "ANL01FL = 'Y'"

@@ -12,7 +12,7 @@ window_spec:
         type: "list[order_by_term]"
         description: Terms ordering rows within each partition.
     - filter:
-        type: sql
+        type: predicate
         description: Predicate selecting rows before partitioning; excluded rows receive missing.
 
 expressions:

@@ -60,6 +60,6 @@ verifications:
   - row_count:
       min: 6
       max: 6
-  - predicate:
+  - assert:
       id: response-does-not-fall-back-after-a-complete-response
-      assert: "NOT (AVALC = 'PR' AND PREVAVALC IS NOT NULL AND PREVAVALC = 'CR')"
+      expr: "NOT (AVALC = 'PR' AND PREVAVALC IS NOT NULL AND PREVAVALC = 'CR')"

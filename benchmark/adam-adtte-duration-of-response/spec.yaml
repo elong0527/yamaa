@@ -249,6 +249,6 @@ verifications:
       id: censored-record-states-why
       when: "CNSR = 1"
       then: "CNSDTDSC IS NOT NULL"
-  - predicate:
+  - assert:
       id: response-duration-is-at-least-one-day
-      assert: "AVAL >= 1"
+      expr: "AVAL >= 1"

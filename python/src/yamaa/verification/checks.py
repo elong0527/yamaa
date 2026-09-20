@@ -62,10 +62,10 @@ _DATASET_REQUIREMENTS = {
     "unique": ("unique_failed", "R009-15"),
     "all_or_none": ("all_or_none_failed", "R009-16"),
     "implies": ("implication_failed", "R009-17"),
-    "predicate": ("predicate_failed", "R009-18"),
+    "assert": ("assert_failed", "R009-18"),
     "row_count": ("row_count_failed", "R009-19"),
 }
-_IDENTIFIED = frozenset({"all_or_none", "implies", "predicate"})
+_IDENTIFIED = frozenset({"all_or_none", "implies", "assert"})
 
 KeyMap = dict[str, JsonValue]
 
@@ -708,9 +708,9 @@ def _dataset_failure(
             if _implication_fails(when, then, row, when_path, then_path)
         ]
     else:
-        assertion_path = f"{spec_path}.assert"
+        assertion_path = f"{spec_path}.expr"
         assertion = _predicate(
-            arguments.get("assert"), assertion_path, "R009-23", predicate_types
+            arguments.get("expr"), assertion_path, "R009-23", predicate_types
         )
         offending = [
             key_maps[index]

@@ -89,6 +89,6 @@ verifications:
   - row_count:
       min: 6
       max: 6
-  - predicate:
+  - assert:
       id: reproduced-grade-agrees
-      assert: "ATOXGR = REPROGRADE"
+      expr: "ATOXGR = REPROGRADE"

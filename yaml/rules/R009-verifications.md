@@ -21,14 +21,14 @@ This rule owns what each verification asserts, when it runs, and how a failure
 is reported. R005 owns key uniqueness, which is checked by the output contract
 rather than declared as a verification. R005 also owns the artifact's
 row order, which no verification here observes. R004 owns the predicates that
-`implies`, `predicate`, and a grouped `row_count` evaluate. R019 owns string
+`implies`, `assert`, and a grouped `row_count` evaluate. R019 owns string
 equality and scalar counting. R005 owns whether the primary artifact is
 complete and publication-eligible. R020 owns the containers and publication of
 the artifact and the violation log.
 
 Verifications reach across rows only in deliberately fixed ways. `unique` and
 `row_count` ask one question about the full output. A grouped `row_count` asks
-one question per group. `all_or_none`, `implies`, and `predicate` see one
+one question per group. `all_or_none`, `implies`, and `assert` see one
 completed output row. No verification compares rows by order.
 
 ## An ordered frame is not a shape this rule has
@@ -39,7 +39,7 @@ adjacent row, a partition or its history up to the current row, or a derived
 property at coarser keys or from an upstream specification.
 
 - **The adjacent row.** `row_value` under R007 places another row's value on
-  the row and `predicate` compares the two.
+  the row and `assert` compares the two.
   `negative-adrs-partial-response-after-complete-response` uses
   the immediately preceding assessment, so it rejects a partial response next
   to a complete one and passes the same fault with an assessment in between.
@@ -86,7 +86,7 @@ offending keys. Reporting limits may be implementation options but must not
 change pass or fail. A `warning` violation records every offending key under
 R009-36 rather than applying the reporting limit.
 
-**R009-8.** `all_or_none`, `implies`, `predicate`, and a `row_count`
+**R009-8.** `all_or_none`, `implies`, `assert`, and a `row_count`
 declaring `group_by` require an `id`. These IDs must be unique across the
 dataset verifications that declare them and should describe the asserted
 business rule. Implementations must include the ID in failure reports in
@@ -128,7 +128,7 @@ not by regular-expression matching.
   When `when` is `TRUE`, `then` must be `TRUE`; a `FALSE` or `UNKNOWN` result
   from `then` fails. When `when` is `FALSE` or `UNKNOWN`, the row passes
   because the rule does not apply.
-- **R009-18.** `predicate` evaluates `assert` for every output row. Every
+- **R009-18.** `assert` evaluates `expr` for every output row. Every
   result must be `TRUE`; `FALSE` and `UNKNOWN` fail. This verification covers
   row-wise rules that lack a more specific verification type.
 - **R009-19.** `row_count` requires the output count to meet inclusive `min`
@@ -154,7 +154,7 @@ parameter is a `min` and a `max` of one over the rows whose baseline flag is
 `Y`, grouped by subject and parameter. The group exists because the subject
 has records, so a group holding no flagged record fails the `min` instead of
 disappearing. `unique` cannot state this because it admits no filter, and
-`predicate` cannot because one row cannot see how many others exist. A
+`assert` cannot because one row cannot see how many others exist. A
 failure reports the offending groups and their counts.
 
 **R009-22.** Bounds still apply only to the groups the artifact contains. A
@@ -193,7 +193,7 @@ admits no value at all is a column the specification should not declare, so
 - **R009-29.** An empty or duplicated `row_count.group_by`: fail.
 - **R009-30.** A verification applied to an incompatible column type: fail.
 - **R009-31.** An unknown column in `unique`, `all_or_none`, `implies`,
-  `predicate`, or `row_count.group_by`: fail.
+  `assert`, or `row_count.group_by`: fail.
 - **R009-32.** Any `error` verification failure: fail and report it. A
   `warning` violation follows R009-33 through R009-40 instead.
 

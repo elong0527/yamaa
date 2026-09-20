@@ -33,12 +33,12 @@ dataset_verifications:
         - severity: {type: verification_severity, required: false, default: error}
     implies:
         - id: {type: verification_id, required: true}
-        - when: {type: sql, required: true}
-        - then: {type: sql, required: true}
+        - when: {type: predicate, required: true}
+        - then: {type: predicate, required: true}
         - severity: {type: verification_severity, required: false, default: error}
-    predicate:
+    assert:
         - id: {type: verification_id, required: true}
-        - assert: {type: sql, required: true}
+        - expr: {type: predicate, required: true}
         - severity: {type: verification_severity, required: false, default: error}
     row_count: # Bounds how many rows a group holds, or the whole output.
         # group_by partitions the artifact's rows and applies both bounds to
@@ -47,7 +47,7 @@ dataset_verifications:
         # count requires id, which an ungrouped count does not.
         - id: {type: verification_id, required: false}
         - group_by: {type: "list[variable]", required: false}
-        - filter: {type: sql, required: false}
+        - filter: {type: predicate, required: false}
         - min: {type: int, required: false}
         - max: {type: int, required: false}
         - severity: {type: verification_severity, required: false, default: error}

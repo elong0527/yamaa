@@ -709,7 +709,7 @@ def _ast_identifiers(value: object) -> set[str]:
 def _language_references(value: object, type_name: str) -> set[tuple[str, str]]:
     if not isinstance(value, str):
         return set()
-    if type_name == "sql":
+    if type_name == "predicate":
         try:
             names = _ast_identifiers(parse_predicate_cached(value))
         except PredicateError:

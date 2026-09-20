@@ -86,6 +86,6 @@ verifications:
   - row_count:
       min: 10
       max: 10
-  - predicate:
+  - assert:
       id: no-pre-existing-target
-      assert: "NOT (PARAMCD = 'MAP' AND DTYPE IS NULL)"
+      expr: "NOT (PARAMCD = 'MAP' AND DTYPE IS NULL)"
