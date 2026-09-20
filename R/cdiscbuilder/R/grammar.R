@@ -37,8 +37,7 @@ YAMAA_NUMERIC_FUNCTIONS <- list(
   MOD = c(2, 2),
   GREATEST = c(2, NA),
   LEAST = c(2, NA),
-  NULLIF = c(2, 2),
-  COALESCE = c(1, NA)
+  NULLIF = c(2, 2)
 )
 
 #' Spellings R010 and R013 reserve for constructs they do not admit
