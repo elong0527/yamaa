@@ -59,10 +59,12 @@ def check(root):
         sources = migration["sources"]
         requirements = migration["requirements"]
         prose = migration["schema_prose"]
+        addenda = migration.get("provenance_addenda", [])
         if (
             not isinstance(sources, dict)
             or not isinstance(requirements, dict)
             or not isinstance(prose, list)
+            or not isinstance(addenda, list)
         ):
             return ["migration.yaml: invalid inventory shape"], {}
     except (ValueError, OSError, KeyError, yaml.YAMLError) as exc:
@@ -77,6 +79,10 @@ def check(root):
         errors.append(
             "migration.yaml: baseline must retain all 332 schema prose entries"
         )
+    # Post-rewrite requirements register provenance in the addenda. The
+    # baseline above stays immutable; the duplicate check below rejects an
+    # addendum that replaces a baseline source record.
+    all_prose = prose + addenda
     index = (directory / "README.md").read_text(encoding="ascii")
     found = {}
     references = set()
@@ -163,7 +169,7 @@ def check(root):
             mapped[family] += 1
 
     prose_by_source = {}
-    for entry in prose:
+    for entry in all_prose:
         if not isinstance(entry, dict) or not isinstance(entry.get("source"), str):
             errors.append("invalid schema prose entry")
             continue

@@ -73,6 +73,10 @@ submission_column_class:
         type: identifier
         required: false
         description: See REQ-1131 in rules/submission/metadata.md.
+    - inventory_vocabulary:
+        type: bool
+        required: false
+        description: See REQ-1156 in rules/submission/terminology.md.
     - origin:
         type: submission_origin_class
         required: true
@@ -85,6 +89,8 @@ submission_column_class:
         type: submission_comment
         required: false
         description: See REQ-1131 in rules/submission/metadata.md.
+
+# See REQ-1157 in rules/submission/metadata.md.
 
 submission_origin_class:
     - type:

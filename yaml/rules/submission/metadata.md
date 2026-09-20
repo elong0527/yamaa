@@ -402,6 +402,18 @@ derivation each `rows` entry declares. If entries disagree, the column keeps
 only the types all entries admit. No shared type is an error, not a silently
 admitted origin.
 
+<a id="req-1157"></a>
+
+**REQ-1157.** A column whose `origin.type` is `Predecessor` copies its values
+unchanged from the predecessor dataset and column `origin.description` names.
+The column's derivation must therefore be a bare `source` of that dataset and
+column: any other derivation computes rather than copies, and the
+[REQ-0897](metadata.md#req-0897) refutation already rejects a computed column that claims
+otherwise. When both the column and the named predecessor column declare
+submission metadata, their declared labels must be equal. A copy keeps the
+name, the label, and the values of what it copies; that is the ADaM
+conformance rule for variables carried unchanged from SDTM.
+
 ### Method
 
 <a id="req-0901"></a>

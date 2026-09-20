@@ -353,6 +353,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `submission_column_class.significant_digits` | `"int"` | `false` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
 | `submission_column_class.display_format` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1131](../submission/metadata.md#req-1131) |
 | `submission_column_class.codelist` | `"identifier"` | `false` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
+| `submission_column_class.inventory_vocabulary` | `"bool"` | `false` | Absent | -- | Schema constraint |
 | `submission_column_class.origin` | `"submission_origin_class"` | `true` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
 | `submission_column_class.method` | `"submission_method"` | `false` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
 | `submission_column_class.comment` | `"submission_comment"` | `false` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
@@ -430,6 +431,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `dataset_verifications.row_count.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.group_by` | `"list[variable]"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.filter` | `"predicate"` | `false` | Absent | -- | Schema constraint |
+| `dataset_verifications.row_count.when` | `"predicate"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.min` | `"int"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.max` | `"int"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |

@@ -214,6 +214,55 @@ record lookup declaring `unmatched: fail` under [Lookup and joins](../operations
 group the data cannot supply. A planning relation at the required keys
 gives every expected group an input record under [Row construction](rows.md).
 
+<a id="req-1154"></a>
+
+**REQ-1154.** `row_count` may declare `when`, a [Predicates](../operations/predicates.md)
+predicate over one completed output row. A group is bound when at least one of
+its rows evaluates `when` to `TRUE`; the bounds then apply to that group as
+[REQ-0386](verification.md#req-0386) and [REQ-0387](verification.md#req-0387) define. A group
+no row of which evaluates `when` to `TRUE` is exempt: the bounds do not apply
+to it. Without `group_by`, the whole output is one group, bound when any row
+satisfies `when`. `FALSE` and `UNKNOWN` do not bind, as `filter` admits only
+`TRUE` rows everywhere else. A conditional existence -- at least one baseline
+record for each subject and parameter that carries a baseline value -- is a
+`min` of one over the rows whose baseline flag is set, grouped by subject and
+parameter, with `when` selecting the rows that carry a baseline value; a group
+whose rows never carry one is not required to have one.
+
+### Functional dependency
+
+<a id="req-1153"></a>
+
+**REQ-1153.** `determines` requires its two listed columns to stand in a
+functional dependency: within each group, every distinct value of the first
+column is paired with exactly one distinct value of the second. `group_by`
+partitions the artifact's rows exactly as [REQ-0386](verification.md#req-0386)
+partitions them for `row_count`; without `group_by` the whole artifact is one
+group. Missing values participate as values, as in [REQ-0381](verification.md#req-0381):
+a missing determinant paired with two different dependents fails, while a
+missing determinant paired only with a missing dependent passes. A one-to-one
+mapping in both directions -- the code/decode bijection the ADaM conformance
+rules require of pairs like `TRTP` and `TRTPN` -- is two `determines`
+declarations with the columns reversed. `determines` requires an `id`. A
+`determines` that does not list exactly two columns, declares no `id`, or
+names an unknown column is rejected.
+
+### Reference membership
+
+<a id="req-1155"></a>
+
+**REQ-1155.** `subset_of` requires every non-missing value of the declared
+`column` to equal some value of `reference_column` in the named `dataset`.
+The named dataset must be declared in the study document; it need not be a
+derivation source of this specification, which is what distinguishes this
+check from the producer-side link assertions [REQ-0369](verification.md#req-0369)
+requires. Missing values pass; combine with `not_missing` when absence is
+invalid. `subset_of` requires an `id`. The ADaM conformance rule that every
+`USUBJID` appear in SDTM `DM` is a `subset_of` naming the study's `DM` dataset
+and its `USUBJID` column. A `subset_of` that declares no `id`, names a
+dataset the study document does not declare, or names an unknown column or
+reference column is rejected.
+
 ### Severity and the violation log
 
 <a id="req-0389"></a>
@@ -301,6 +350,7 @@ structural constraints come from its schema declaration.
 | Field | Meaning |
 | --- | --- |
 | `Result` | Bounds how many rows a group holds, or the whole output. group_by partitions the artifact's rows and applies both bounds to every group; a group's count is how many of its rows filter admits, and a row is admitted only when the predicate is TRUE. A grouped count requires id, which an ungrouped count does not. |
+| `dataset_verifications.row_count.when` | A predicate over one completed output row. A group is bound when at least one of its rows evaluates the predicate to TRUE; the bounds then apply to that group. A group no row of which evaluates it to TRUE is exempt. |
 
 ## Error conditions
 

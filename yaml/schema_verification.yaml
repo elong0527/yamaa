@@ -44,6 +44,10 @@ dataset_verifications:
         - id: {type: verification_id, required: false}
         - group_by: {type: "list[variable]", required: false}
         - filter: {type: predicate, required: false}
+        - when:
+            type: predicate
+            required: false
+            description: See REQ-1154 in rules/execution/verification.md.
         - min: {type: int, required: false}
         - max: {type: int, required: false}
         - severity: {type: verification_severity, required: false, default: error}
