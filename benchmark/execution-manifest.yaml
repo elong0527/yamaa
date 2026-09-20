@@ -648,3 +648,6 @@ examples:
   spec-inheritance:
     status: executable
     runtimes: ['python']
+  spec-source-binding:
+    status: executable
+    runtimes: ['python']
