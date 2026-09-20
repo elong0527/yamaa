@@ -37,7 +37,7 @@ columns:
     derivation:
       first_available:
         sources: [TRT01RAW, DM.ACTARM]
-        missing: NOT TREATED
+        default: NOT TREATED
 
   - name: TRT01A
     type: str

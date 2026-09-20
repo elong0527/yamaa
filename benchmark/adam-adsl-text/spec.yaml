@@ -90,18 +90,14 @@ columns:
     type: str
     label: ASCII Folded Mapping Category
     derivation:
-      case:
-        - when: "RAWTXT IS NULL"
-          then:
-            literal: MISSING
-        - otherwise:
-            mapping:
-              source: RAWTXT
-              case_sensitive: false
-              dict:
-                ABC: ASCII
-                I: ASCII_I
-              missing: OTHER
+      mapping:
+        source: RAWTXT
+        case_sensitive: false
+        dict:
+          ABC: ASCII
+          I: ASCII_I
+        missing: MISSING
+        unmapped: OTHER
 
   - name: TEXTSEQ
     type: int

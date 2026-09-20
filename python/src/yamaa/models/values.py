@@ -36,8 +36,10 @@ ConditionPhase: TypeAlias = Literal[
 HandlerName: TypeAlias = Literal[
     "missing",
     "multiple_matches",
+    "unmapped",
     "no_match",
     "invalid",
+    "conversion_failure",
 ]
 
 INT64_MIN = -(2**63)
@@ -363,7 +365,7 @@ def _float_text(value: float) -> str:
     return rendered.removesuffix(".0")
 
 
-def _failed_conversion(
+def _conversion_failure(
     value: RuntimeValue,
     target: ColumnType,
     requirement: str,
@@ -376,7 +378,7 @@ def _failed_conversion(
             "to": target,
             "value": _json_value(value),
         },
-        "missing",
+        "conversion_failure",
         requirement,
     )
 
@@ -401,13 +403,13 @@ def convert_value(value: object, target: ColumnType) -> EvaluationResult:
             return ValueResult(value=_float_text(source))
         if isinstance(source, (DateValue, DateTimeValue)):
             return ValueResult(value=source.to_text())
-        return _failed_conversion(source, target, "REQ-0013")
+        return _conversion_failure(source, target, "REQ-0013")
 
     if target == "float" and isinstance(source, str):
         if _NON_FINITE.fullmatch(source):
             return ValueResult(value=MISSING)
         if _NUMBER.fullmatch(source) is None:
-            return _failed_conversion(source, target, "REQ-0013")
+            return _conversion_failure(source, target, "REQ-0013")
         try:
             parsed_float = float(source)
         except OverflowError:
@@ -420,7 +422,7 @@ def convert_value(value: object, target: ColumnType) -> EvaluationResult:
         try:
             parsed = _parse_number(source)
         except ValueError:
-            return _failed_conversion(source, target, "REQ-0013")
+            return _conversion_failure(source, target, "REQ-0013")
         if parsed is MISSING:
             return ValueResult(value=MISSING)
         source = parsed
@@ -429,35 +431,35 @@ def convert_value(value: object, target: ColumnType) -> EvaluationResult:
         if type(source) is int:
             if INT64_MIN <= source <= INT64_MAX:
                 return ValueResult(value=source)
-            return _failed_conversion(source, target, "REQ-0021")
+            return _conversion_failure(source, target, "REQ-0021")
         if type(source) is float:
             if not source.is_integer():
-                return _failed_conversion(source, target, "REQ-0021")
+                return _conversion_failure(source, target, "REQ-0021")
             if not INT64_MIN <= source <= INT64_MAX:
-                return _failed_conversion(source, target, "REQ-0021")
+                return _conversion_failure(source, target, "REQ-0021")
             return ValueResult(value=int(source))
-        return _failed_conversion(source, target, "REQ-0013")
+        return _conversion_failure(source, target, "REQ-0013")
 
     if target == "float":
         if type(source) is int and INT64_MIN <= source <= INT64_MAX:
             return ValueResult(value=float(source))
         if type(source) is float:
             return ValueResult(value=source)
-        return _failed_conversion(source, target, "REQ-0013")
+        return _conversion_failure(source, target, "REQ-0013")
 
     if target == "date" and isinstance(source, str):
         try:
             return ValueResult(value=DateValue.parse(source))
         except ValueError:
-            return _failed_conversion(source, target, "REQ-0601")
+            return _conversion_failure(source, target, "REQ-0601")
 
     if target == "datetime" and isinstance(source, str):
         try:
             return ValueResult(value=DateTimeValue.parse(source))
         except ValueError:
-            return _failed_conversion(source, target, "REQ-0601")
+            return _conversion_failure(source, target, "REQ-0601")
 
-    return _failed_conversion(source, target, "REQ-0013")
+    return _conversion_failure(source, target, "REQ-0013")
 
 
 class TypedColumn(_FrozenModel):

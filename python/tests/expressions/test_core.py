@@ -70,7 +70,7 @@ def test_dispatch_accepts_the_normalized_expression_model() -> None:
     assert result == ValueResult(value="kept")
 
 
-def test_mapping_handles_missing_unlisted_and_ascii_case() -> None:
+def test_mapping_handles_missing_unmapped_and_ascii_case() -> None:
     resolver = MappingResolver({"MISSING": MISSING, "CODE": "yes"})
 
     missing = evaluate_expression(
@@ -100,19 +100,19 @@ def test_mapping_handles_missing_unlisted_and_ascii_case() -> None:
     assert isinstance(folded, ValueResult)
     assert folded.value == "Y"
 
-    unlisted = evaluate_expression(
+    unmapped = evaluate_expression(
         {
             "mapping": {
                 "source": "CODE",
                 "dict": {"N": "No"},
-                "missing": None,
+                "unmapped": None,
             }
         },
         resolver,
     )
-    assert isinstance(unlisted, ValueResult)
-    assert unlisted.value is MISSING
-    assert unlisted.handled_by == "missing"
+    assert isinstance(unmapped, ValueResult)
+    assert unmapped.value is MISSING
+    assert unmapped.handled_by == "unmapped"
 
 
 def test_mapping_resolver_failures_do_not_fire_data_handlers() -> None:
@@ -122,6 +122,7 @@ def test_mapping_resolver_failures_do_not_fire_data_handlers() -> None:
                 "source": "UNKNOWN",
                 "dict": {"Y": "Yes"},
                 "missing": "Unknown",
+                "unmapped": "Other",
             }
         },
         MappingResolver({}),

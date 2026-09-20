@@ -56,6 +56,7 @@ columns:
           PLACEBO: PBO
           VITAMIN D3: TRT
         missing: null
+        unmapped: null
 
   - name: ACTARM
     type: str
@@ -67,6 +68,7 @@ columns:
           PLACEBO: Placebo
           VITAMIN D3: Vitamin D3
         missing: null
+        unmapped: null
 
   - name: ACTARMUD
     type: str

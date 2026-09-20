@@ -137,8 +137,7 @@ class Intermediate(_StrictModel):
 
 class HandledExpression(_StrictModel):
     value: Expression
-    missing: JsonValue = None
-    strict: bool = False
+    conversion_failure: JsonValue = None
 
 
 class PageReference(_StrictModel):

@@ -213,7 +213,7 @@ in `value`:
 derivation:
   value:
     source: RAW.AGE
-  missing:
+  conversion_failure: null
 ```
 
 ## Error conditions
