@@ -1,0 +1,98 @@
+schema_version: "1.0"
+domain: EX
+keys: [STUDYID, USUBJID, EXSEQ]
+input:
+  EC_RAW: {path: input/ec_raw.csv, types: {ECDOSE: float, ECSTDTC: date}}
+
+output:
+  path: ex.csv
+  columns: [DOMAIN, STUDYID, USUBJID, EXSEQ, EXTRT, EXDOSE, EXDOSU, EXDOSFRQ, EXSTDTC, EXENDTC, EXADJ]
+  order_by: [STUDYID, USUBJID, EXSEQ]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation: {literal: EX}
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EC_RAW.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EC_RAW.USUBJID
+
+  - name: EXTRT
+    type: str
+    label: Name of Treatment
+    derivation: EC_RAW.ECTRT
+
+  - name: EXDOSE
+    type: float
+    label: Dose
+    derivation: EC_RAW.ECDOSE
+
+  - name: EXDOSU
+    type: str
+    label: Dose Units
+    derivation: EC_RAW.ECDOSU
+    verifications:
+      allowed_values:
+        values: [mg]
+
+  - name: EXDOSFRQ
+    type: str
+    label: Dosing Frequency per Interval
+    derivation: EC_RAW.ECDOSFRQ
+    verifications:
+      allowed_values:
+        values: [QD]
+
+  - name: EXSTDTC
+    type: date
+    label: Start Date/Time of Treatment
+
+  - name: EXENDTC
+    type: date
+    label: End Date/Time of Treatment
+
+  - name: EXADJ
+    type: str
+    label: Reason for Dose Adjustment
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [EXSTDTC, EXTRT]
+
+rows:
+  - id: dose_intervals
+    group_by: [EC_RAW.STUDYID, EC_RAW.USUBJID, EC_RAW.ECTRT, EC_RAW.ECDOSE, EC_RAW.ECDOSU, EC_RAW.ECDOSFRQ]
+    derivations:
+      EXSTDTC: {aggregate: "MIN(EC_RAW.ECSTDTC)"}
+      EXENDTC: {aggregate: "MAX(EC_RAW.ECSTDTC)"}
+      EXADJ: {aggregate: "MIN(EC_RAW.ECADJ)"}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, EXSEQ]
+  - row_count:
+      min: 6
+      max: 6
+  - assert:
+      id: intervals-have-ordered-bounds
+      expr: "EXSTDTC IS NOT NULL AND EXENDTC IS NOT NULL AND EXSTDTC <= EXENDTC"
+  - assert:
+      id: every-interval-has-dose-and-unit
+      expr: "EXDOSE IS NOT NULL AND EXDOSU IS NOT NULL"
+  - implies:
+      id: interruption-carries-zero-dose
+      when: "EXADJ = 'DOSE INTERRUPTED'"
+      then: "EXDOSE = 0"
