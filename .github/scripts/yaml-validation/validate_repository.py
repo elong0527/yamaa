@@ -8443,19 +8443,28 @@ def _desugar_bare_derivations(node):
     """Apply the R007-57 bare-string derivation shorthand to a raw spec dict.
 
     Contracts record diagnostic paths against the normalized form, where a
-    bare `derivation:` string has already become `{'source': value}`. The
+    bare `derivation:` string has already become `{'source': value}` and a
+    bare `input:` dataset string has already become `{'path': value}`. The
     raw file keeps the shorthand, so path checks must see the desugared
     shape or they would reject valid contract paths.
     """
     if isinstance(node, dict):
-        return {
-            key: (
-                {'source': value}
-                if key == 'derivation' and isinstance(value, str)
-                else _desugar_bare_derivations(value)
-            )
-            for key, value in node.items()
-        }
+        out = {}
+        for key, value in node.items():
+            if key == 'derivation' and isinstance(value, str):
+                out[key] = {'source': value}
+            elif key == 'input' and isinstance(value, dict):
+                out[key] = {
+                    alias: (
+                        {'path': source}
+                        if isinstance(source, str)
+                        else _desugar_bare_derivations(source)
+                    )
+                    for alias, source in value.items()
+                }
+            else:
+                out[key] = _desugar_bare_derivations(value)
+        return out
     if isinstance(node, list):
         return [_desugar_bare_derivations(item) for item in node]
     return node

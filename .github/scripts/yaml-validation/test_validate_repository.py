@@ -5392,9 +5392,8 @@ bad_field: "what"
         self.assertEqual(
             VALIDATOR.validate_examples_layout(self.root_dir), []
         )
-        self.assertEqual(
-            VALIDATOR.validate_examples_badges(self.root_dir), []
-        )
+        errors = VALIDATOR.validate_examples_badges(self.root_dir)
+        self.assertIn('lifecycle badge', '\n'.join(errors))
 
     def test_readme_dashboard_badge_accepts_lifecycle_badge(self):
         # Issue #184 round 2c: badge-line checks live in

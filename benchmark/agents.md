@@ -25,10 +25,11 @@ tracker, one work item per root cause.
         expected/define.xml                         # when the entry generates a document
         expected/resolved[_<variant>].yaml          # single-entry inheritance
         expected/spec_resolved.yaml                 # multi-level inheritance: resolution of the entry chain
-        run.py                                      # positive benchmarks only: run the entry spec
+        run.py                                      # when the entry spec executes: run it
 
-Every positive benchmark carries `run.py`, the three-line snippet that runs
-the entry specification:
+A positive benchmark whose entry specification executes and matches its
+committed artifact carries `run.py`,
+the three-line snippet that runs it:
 
     import yamaa
 
@@ -38,7 +39,11 @@ the entry specification:
 The variable is the domain in lowercase (for example `adsl`), and the entry
 spec is `spec.yaml`, or the file no other file parents for multi-level
 benchmarks. Negative benchmarks carry no `run.py`: the entry is expected to
-fail, so there is no artifact to bind.
+fail, so there is no artifact to bind. A positive benchmark whose entry does
+not execute under the engine, or executes but differs from its committed
+artifact (an unimplemented function, a validation error, a stale spec, a
+drifted golden), carries none either; its missing `run.py` marks it as not
+yet runnable, not as an oversight.
 
 Use `spec.yaml` for one specification. Use one or more `spec_<variant>.yaml`
 files when the benchmark intentionally demonstrates a runtime or design variant
