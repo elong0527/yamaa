@@ -11,7 +11,7 @@ from yamaa.specification import SpecificationError, load_specification
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
-EXAMPLE = REPOSITORY_ROOT / "benchmark" / "sdtm-lb-metadata"
+EXAMPLE = REPOSITORY_ROOT / "benchmark" / "sdtm-lb-value-level-metadata"
 
 
 def _mutated(tmp_path: Path, old: str, new: str) -> Path:

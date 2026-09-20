@@ -497,7 +497,7 @@ was invoked.
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-function-contract](../../../benchmark/negative-function-contract/README.md).
+- [negative-function-contract-mismatch](../../../benchmark/negative-function-contract-mismatch/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

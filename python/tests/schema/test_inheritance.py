@@ -17,10 +17,10 @@ EXAMPLES = REPOSITORY / "benchmark"
 
 
 def test_committed_inheritance_example_matches_resolved_artifact() -> None:
-    entry = EXAMPLES / "schema-inheritance/spec_study.yaml"
+    entry = EXAMPLES / "spec-inheritance/spec_study.yaml"
     resolved = resolve_specification(entry, load_schema_bundle(SCHEMA_ROOT))
     expected = yaml.safe_load(
-        (EXAMPLES / "schema-inheritance/expected/spec_resolved.yaml").read_text(
+        (EXAMPLES / "spec-inheritance/expected/spec_resolved.yaml").read_text(
             encoding="ascii"
         )
     )
@@ -35,12 +35,12 @@ def test_committed_inheritance_example_matches_resolved_artifact() -> None:
     ]
     assert (
         resolved.provenance["input.LB.path"].file
-        == (EXAMPLES / "schema-inheritance/spec_organization.yaml").resolve()
+        == (EXAMPLES / "spec-inheritance/spec_organization.yaml").resolve()
     )
 
 
 def test_committed_column_composition_example_matches_resolved_artifact() -> None:
-    example = EXAMPLES / "schema-column-composition"
+    example = EXAMPLES / "spec-column-composition"
     resolved = resolve_specification(
         example / "spec_study.yaml", load_schema_bundle(SCHEMA_ROOT)
     )
@@ -66,7 +66,7 @@ def test_committed_column_composition_example_matches_resolved_artifact() -> Non
 
 
 def test_committed_column_composition_example_executes_to_its_artifact() -> None:
-    example = EXAMPLES / "schema-column-composition"
+    example = EXAMPLES / "spec-column-composition"
 
     run = yamaa_domain(example / "spec_study.yaml", schema_root=SCHEMA_ROOT)
 
@@ -255,7 +255,7 @@ rows:
 
 def test_public_loader_resolves_parented_entry() -> None:
     loaded = load_specification(
-        EXAMPLES / "schema-inheritance/spec_study.yaml", SCHEMA_ROOT
+        EXAMPLES / "spec-inheritance/spec_study.yaml", SCHEMA_ROOT
     )
 
     assert loaded.specification.domain == "ADLB"
@@ -404,11 +404,11 @@ output: {path: out.csv, columns: [ID]}
 def test_committed_inheritance_negatives_match_exact_diagnostics() -> None:
     bundle = load_schema_bundle(SCHEMA_ROOT)
     names = (
-        "negative-cyclic-parent",
-        "negative-property-clear",
-        "negative-version-mismatch",
-        "negative-remote-parent",
-        "negative-inherited-output",
+        "negative-adsl-cyclic-parent",
+        "negative-adsl-invalid-parent-clear",
+        "negative-adsl-parent-version-mismatch",
+        "negative-adsl-remote-parent",
+        "negative-adsl-inherited-output",
     )
     for name in names:
         try:

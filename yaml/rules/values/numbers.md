@@ -126,10 +126,10 @@ Arithmetic errors remain distinct from conversion failures.
 
 Representative specifications, input data, and expected outcomes:
 
-- [adam-adsl-non-finite](../../../benchmark/adam-adsl-non-finite/README.md).
-- [negative-integer-overflow](../../../benchmark/negative-integer-overflow/README.md).
-- [negative-conversion-fractional](../../../benchmark/negative-conversion-fractional/README.md).
-- [negative-number-below-limit](../../../benchmark/negative-number-below-limit/README.md).
+- [adam-adsl-non-finite-values](../../../benchmark/adam-adsl-non-finite-values/README.md).
+- [negative-compute-integer-overflow](../../../benchmark/negative-compute-integer-overflow/README.md).
+- [negative-conversion-non-integral](../../../benchmark/negative-conversion-non-integral/README.md).
+- [negative-conversion-unparseable-number](../../../benchmark/negative-conversion-unparseable-number/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

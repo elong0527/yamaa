@@ -437,8 +437,8 @@ first. An implementation must not round to reach such a value.
 Representative specifications, input data, and expected outcomes:
 
 - [adam-adae-partial-dates](../../../benchmark/adam-adae-partial-dates/README.md).
-- [negative-date-incomplete](../../../benchmark/negative-date-incomplete/README.md).
-- [negative-datetime-zones](../../../benchmark/negative-datetime-zones/README.md).
+- [negative-conversion-incomplete-date](../../../benchmark/negative-conversion-incomplete-date/README.md).
+- [negative-datetime-zone-offset](../../../benchmark/negative-datetime-zone-offset/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

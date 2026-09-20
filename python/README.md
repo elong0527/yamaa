@@ -584,7 +584,7 @@ them with what those examples committed:
 ```bash
 python -m yamaa.adapters.conformance \
   --run-dir build/conformance \
-  sdtm-dm-basic negative-ambiguous-type
+  sdtm-dm-basic negative-column-type-unknown
 ```
 
 Artifacts land under `build/conformance/artifacts/` and reports under

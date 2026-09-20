@@ -97,8 +97,8 @@ It must not substitute a host default.
 
 Representative specifications, input data, and expected outcomes:
 
-- [adam-adsl-text](../../../benchmark/adam-adsl-text/README.md).
-- [negative-source-bad-encoding](../../../benchmark/negative-source-bad-encoding/README.md).
+- [adam-adsl-portable-text](../../../benchmark/adam-adsl-portable-text/README.md).
+- [negative-source-invalid-text](../../../benchmark/negative-source-invalid-text/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

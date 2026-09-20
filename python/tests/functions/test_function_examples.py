@@ -88,10 +88,10 @@ def test_the_committed_contract_mismatch_is_reproduced(repository) -> None:
     # The negative example selects its own directory as the project root:
     # the environment there provides `project_value` at contract 1.0.0 and
     # the specification asks for 2.0.0.
-    example = repository.examples / "negative-function-contract"
+    example = repository.examples / "negative-function-contract-mismatch"
     committed = yaml.safe_load((example / "expected" / "error.yaml").read_text("utf-8"))
 
-    result = _run(repository, "negative-function-contract", example)
+    result = _run(repository, "negative-function-contract-mismatch", example)
 
     assert isinstance(result, ExecutionFailure), result
     diagnostic = result.diagnostics[0]
@@ -106,8 +106,8 @@ def test_a_rejected_run_reads_no_study_data(repository) -> None:
     # The negative example's requested contract version is not the one the
     # environment provides, so the run is settled before any data is read
     # and a run that read data at all would be wrong.
-    example = repository.examples / "negative-function-contract"
-    specification = _specification(repository, "negative-function-contract")
+    example = repository.examples / "negative-function-contract-mismatch"
+    specification = _specification(repository, "negative-function-contract-mismatch")
     reached: list[str] = []
 
     def provide(datasets):
@@ -163,7 +163,7 @@ def test_repeated_execution_produces_an_identical_artifact(repository) -> None:
     ("example", "condition"),
     [
         ("adam-adsl-bmi-function", "runner_language_mismatch"),
-        ("negative-function-contract", "function_contract_mismatch"),
+        ("negative-function-contract-mismatch", "function_contract_mismatch"),
     ],
 )
 def test_every_failure_names_the_call_that_required_an_implementation(

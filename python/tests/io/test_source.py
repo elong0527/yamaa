@@ -395,7 +395,7 @@ def test_parquet_rejects_an_empty_schema(tmp_path: Path) -> None:
 
 
 def test_adae_fixture_treats_bare_and_quoted_empty_as_missing() -> None:
-    root = REPOSITORY / "benchmark/adam-adae-text-cleanup"
+    root = REPOSITORY / "benchmark/adam-adae-string-handlers"
 
     loaded = load_source_table(
         "AE",
@@ -460,42 +460,42 @@ def test_quoted_empty_is_missing_for_a_non_string_type(tmp_path: Path) -> None:
     ("example", "dataset", "path", "condition", "requirement"),
     [
         (
-            "negative-path-absolute",
+            "negative-dataset-path-absolute",
             "LBREF",
             "/shared/reference/lbref.csv",
             "resource_path_not_relative",
             "REQ-0781",
         ),
         (
-            "negative-path-directory",
+            "negative-dataset-path-directory",
             "LBREF",
             "input/lbref",
             "resource_path_not_regular_file",
             "REQ-0785",
         ),
         (
-            "negative-path-missing",
+            "negative-dataset-path-missing",
             "LBREF",
             "input/lbref.csv",
             "resource_path_missing",
             "REQ-0785",
         ),
         (
-            "negative-path-parent-escape",
+            "negative-dataset-path-parent-escape",
             "LBREF",
             "../reference/lbref.csv",
             "resource_path_outside_project",
             "REQ-0784",
         ),
         (
-            "negative-path-symlink",
+            "negative-dataset-path-symlink",
             "LBREF",
             "input/lbref.csv",
             "resource_path_symlink",
             "REQ-0783",
         ),
         (
-            "negative-path-url",
+            "negative-dataset-path-url",
             "LBREF",
             "https://reference.example.org/limits/lbref.csv",
             "resource_path_uri_scheme",
@@ -528,7 +528,7 @@ def test_path_fixtures_report_exact_diagnostics(
 
 
 def test_committed_symlink_fixture_is_a_real_symlink() -> None:
-    path = REPOSITORY / "benchmark/negative-path-symlink/input/lbref.csv"
+    path = REPOSITORY / "benchmark/negative-dataset-path-symlink/input/lbref.csv"
     assert path.is_symlink()
 
 
@@ -536,25 +536,25 @@ def test_committed_symlink_fixture_is_a_real_symlink() -> None:
     ("example", "condition", "requirement", "context"),
     [
         (
-            "negative-source-field-duplicate",
+            "negative-source-duplicate-field-name",
             "source_field_name_duplicate",
             "REQ-0851",
             {"record": 1, "field": "SEX"},
         ),
         (
-            "negative-source-unnamed-field",
+            "negative-source-empty-field-name",
             "source_field_name_empty",
             "REQ-0851",
             {"record": 1, "field": 4},
         ),
         (
-            "negative-source-bad-encoding",
+            "negative-source-invalid-text",
             "invalid_text",
             "REQ-0029",
             {"record": 3, "field": 3},
         ),
         (
-            "negative-source-extra-field",
+            "negative-source-record-width",
             "source_record_width",
             "REQ-0851",
             {"record": 3, "field": 5},
@@ -588,7 +588,7 @@ def test_csv_fixtures_report_exact_diagnostics(
 
 
 def test_unknown_profile_fails_before_snapshot_bytes_are_read() -> None:
-    root = REPOSITORY / "benchmark/negative-source-unknown-format"
+    root = REPOSITORY / "benchmark/negative-source-unknown-profile"
     resources = ProjectResources(root)
 
     with pytest.raises(SourceError) as raised:
@@ -626,8 +626,8 @@ def test_all_source_declarations_validate_before_any_snapshot_read(
 @pytest.mark.parametrize(
     ("example", "field", "target", "value"),
     [
-        ("negative-source-na-age", "AGE", "int", "NA"),
-        ("negative-ingest-unit", "EXDOSE", "float", "200 mg"),
+        ("negative-source-missing-sentinel", "AGE", "int", "NA"),
+        ("negative-ingest-unparseable-field", "EXDOSE", "float", "200 mg"),
     ],
 )
 def test_typed_parse_fixtures_are_ingestion_failures(

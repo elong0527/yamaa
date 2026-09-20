@@ -547,10 +547,10 @@ structural constraints come from its schema declaration.
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-overlapping-windows](../../../benchmark/negative-overlapping-windows/README.md).
-- [negative-mapping-duplicate-key](../../../benchmark/negative-mapping-duplicate-key/README.md).
-- [negative-mapping-unpaired-key](../../../benchmark/negative-mapping-unpaired-key/README.md).
-- [negative-mapping-partial-key](../../../benchmark/negative-mapping-partial-key/README.md).
+- [negative-advs-overlapping-analysis-windows](../../../benchmark/negative-advs-overlapping-analysis-windows/README.md).
+- [negative-mapping-from-duplicate-key](../../../benchmark/negative-mapping-from-duplicate-key/README.md).
+- [negative-mapping-from-key-length-mismatch](../../../benchmark/negative-mapping-from-key-length-mismatch/README.md).
+- [negative-mapping-from-partial-key](../../../benchmark/negative-mapping-from-partial-key/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

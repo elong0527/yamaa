@@ -425,11 +425,11 @@ constraint, with contributing provenance included in the diagnostic.
 
 Representative specifications, input data, and expected outcomes:
 
-- [schema-inheritance](../../../benchmark/schema-inheritance/README.md).
-- [negative-cyclic-parent](../../../benchmark/negative-cyclic-parent/README.md).
-- [negative-inherited-output](../../../benchmark/negative-inherited-output/README.md).
-- [negative-property-clear](../../../benchmark/negative-property-clear/README.md).
-- [negative-version-mismatch](../../../benchmark/negative-version-mismatch/README.md).
+- [spec-inheritance](../../../benchmark/spec-inheritance/README.md).
+- [negative-adsl-cyclic-parent](../../../benchmark/negative-adsl-cyclic-parent/README.md).
+- [negative-adsl-inherited-output](../../../benchmark/negative-adsl-inherited-output/README.md).
+- [negative-adsl-invalid-parent-clear](../../../benchmark/negative-adsl-invalid-parent-clear/README.md).
+- [negative-adsl-parent-version-mismatch](../../../benchmark/negative-adsl-parent-version-mismatch/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

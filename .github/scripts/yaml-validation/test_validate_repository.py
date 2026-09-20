@@ -1174,7 +1174,7 @@ class TestConditionRegistry(unittest.TestCase):
         self.assertEqual(
             errors,
             [
-                'ERROR: benchmark/negative-adlb-duplicate-wbc/'
+                'ERROR: benchmark/negative-adlb-absolute-wbc-duplicate/'
                 'expected/error.yaml.condition: unregistered condition '
                 "'aggregate_multiple_records'"
             ],
@@ -1191,7 +1191,7 @@ class TestConditionRegistry(unittest.TestCase):
         self.assertEqual(
             errors,
             [
-                'ERROR: benchmark/negative-adlb-duplicate-wbc/'
+                'ERROR: benchmark/negative-adlb-absolute-wbc-duplicate/'
                 'expected/error.yaml.phase: condition '
                 "'aggregate_multiple_records' is not registered for phase "
                 "'row_construction'"
@@ -4778,7 +4778,7 @@ class TestDatasetPathExamples(unittest.TestCase):
 
     def test_each_example_reports_its_declared_condition(self):
         examples = sorted(
-            (self.root / "benchmark").glob("negative-path-*")
+            (self.root / "benchmark").glob("negative-dataset-path-*")
         )
         self.assertEqual(len(examples), 6)
 
@@ -5149,7 +5149,7 @@ class TestValidatorCLI(unittest.TestCase):
 
     def test_a_define_document_field_outside_its_class_is_reported(self):
         root = TOOL_PATH.parents[3]
-        source = root / 'benchmark' / 'sdtm-dm-metadata'
+        source = root / 'benchmark' / 'sdtm-dm-metadata-contract'
         with tempfile.TemporaryDirectory() as temp_dir:
             copy = Path(temp_dir)
             shutil.copytree(root / 'yaml', copy / 'yaml', dirs_exist_ok=True)
@@ -6066,7 +6066,7 @@ class TestSuiteSourceCoverage(unittest.TestCase):
     def test_a_crlf_source_is_read_as_its_lf_twin(self):
         path = (
             self.root / 'benchmark'
-            / 'adam-adrs-best-response' / 'input' / 'adsl.csv'
+            / 'adam-adrs-best-overall-response' / 'input' / 'adsl.csv'
         )
         raw = path.read_bytes()
         self.assertIn(b'\r\n', raw, 'the suite needs one CRLF source')
@@ -6257,8 +6257,8 @@ class TestRetiredOdmItemReferences(unittest.TestCase):
         self.assertEqual(
             listed,
             [
-                'adam-adsl-randomization/input/dm.schema.yaml',
-                'odm-form-items/spec.yaml',
+                'adam-adsl-randomization-timing/input/dm.schema.yaml',
+                'odm-form-scoped-item-resolution/spec.yaml',
                 'sdtm-lb-findings/spec.yaml',
                 'sdtm-lb-multiform/spec.yaml',
             ],

@@ -380,9 +380,9 @@ message carries no host path, for the reason [Resource resolution](resources.md)
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-source-field-duplicate](../../../benchmark/negative-source-field-duplicate/README.md).
-- [negative-source-unnamed-field](../../../benchmark/negative-source-unnamed-field/README.md).
-- [negative-source-extra-field](../../../benchmark/negative-source-extra-field/README.md).
+- [negative-source-duplicate-field-name](../../../benchmark/negative-source-duplicate-field-name/README.md).
+- [negative-source-empty-field-name](../../../benchmark/negative-source-empty-field-name/README.md).
+- [negative-source-record-width](../../../benchmark/negative-source-record-width/README.md).
 - [negative-source-unterminated-quote](../../../benchmark/negative-source-unterminated-quote/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records

@@ -30,7 +30,7 @@ REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
 EXAMPLES = REPOSITORY_ROOT / "benchmark"
 POSITIVE = "sdtm-dm-basic"
-NEGATIVE = "negative-ambiguous-type"
+NEGATIVE = "negative-column-type-unknown"
 # A specification that calls a project function; with the project root it
 # carries removed, the call is a logical one no implementation answers.
 PORTABLE = "adam-adsl-bmi-function"

@@ -388,7 +388,7 @@ def highlight_yaml(line):
 
 
 def benchmark_category(name, title, spec):
-    if name.startswith(("spec-", "schema-")):
+    if name.startswith("spec-"):
         return "Specification", title
     category, separator, heading = title.partition(": ")
     if not separator:

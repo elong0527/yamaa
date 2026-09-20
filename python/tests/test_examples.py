@@ -123,7 +123,7 @@ def test_negative_example_requirements_match_committed_contracts() -> None:
 
 
 def test_producer_schema_without_workflow_is_unsupported() -> None:
-    example = EXAMPLES / "adam-adsl-randomization"
+    example = EXAMPLES / "adam-adsl-randomization-timing"
     loaded = load_specification(example / "spec.yaml", SCHEMA_ROOT)
     resources = ProjectResources(example)
 

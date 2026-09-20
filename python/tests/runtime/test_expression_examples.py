@@ -31,27 +31,27 @@ EXAMPLES = REPOSITORY_ROOT / "benchmark"
 # Every committed example whose derivations this component now executes.
 ARTIFACT_EXAMPLES = [
     "adam-adsl-bmi-compute",
-    "adam-adsl-site-parse",
-    "adam-adsl-demographics",
-    "adam-adae-text-cleanup",
+    "adam-adsl-identifier-parsing",
+    "adam-adsl-mapping",
+    "adam-adae-string-handlers",
 ]
 
 # Committed error contracts this component reproduces field for field.
 ERROR_EXAMPLES = [
-    "negative-zero-division",
-    "negative-negative-sqrt",
-    "negative-log-zero",
-    "negative-integer-overflow",
-    "negative-row-aggregate",
-    "negative-formula-flag",
-    "negative-direct-dose-read",
-    "negative-cut-coded",
-    "negative-str-lowercase-number",
-    "negative-str-uncaptured-group",
-    "negative-subject-reference",
-    "negative-greatest-mixed",
-    "negative-least-mixed",
-    "negative-review-arithmetic",
+    "negative-compute-division-by-zero",
+    "negative-compute-sqrt-of-negative",
+    "negative-compute-ln-of-zero",
+    "negative-compute-integer-overflow",
+    "negative-compute-aggregate-function",
+    "negative-compute-comparison-operator",
+    "negative-compute-qualified-identifier",
+    "negative-cut-non-numeric-source",
+    "negative-str-lower-non-string-source",
+    "negative-str-extract-undeclared-group",
+    "negative-adsl-subject-reference",
+    "negative-greatest-incomparable-sources",
+    "negative-least-incomparable-sources",
+    "negative-adae-review-condition-arithmetic",
     "negative-mapping-unmapped-value",
 ]
 
@@ -89,7 +89,7 @@ def test_a_committed_example_reproduces_its_committed_artifact(name: str) -> Non
     ("name", "expected_counts"),
     [
         (
-            "adam-adsl-site-parse",
+            "adam-adsl-identifier-parsing",
             [
                 ("columns.SITEIDP.derivation.str_extract.missing", "missing", 0),
                 ("columns.SITEIDP.derivation.str_extract.no_match", "no_match", 1),
@@ -97,7 +97,7 @@ def test_a_committed_example_reproduces_its_committed_artifact(name: str) -> Non
             ],
         ),
         (
-            "adam-adae-text-cleanup",
+            "adam-adae-string-handlers",
             [
                 ("columns.AEREFNUM.derivation.str_extract.missing", "missing", 2),
                 ("columns.AEREFNUM.derivation.str_extract.no_match", "no_match", 1),
@@ -105,7 +105,7 @@ def test_a_committed_example_reproduces_its_committed_artifact(name: str) -> Non
             ],
         ),
         (
-            "adam-adsl-demographics",
+            "adam-adsl-mapping",
             [
                 ("columns.AGEGR1.derivation.cut.missing", "missing", 2),
             ],
@@ -147,7 +147,7 @@ def test_a_committed_error_contract_is_reproduced(name: str) -> None:
 def test_a_nested_expression_is_rejected_before_execution() -> None:
     # The committed contract for this example is a load-time rejection, so
     # nothing reaches the dispatcher to be silently evaluated.
-    directory = EXAMPLES / "negative-variable-nested"
+    directory = EXAMPLES / "negative-variable-nested-expression"
     committed = _committed_error(directory)
 
     with pytest.raises(SpecificationError) as caught:
@@ -161,7 +161,7 @@ def test_a_nested_expression_is_rejected_before_execution() -> None:
 
 
 def test_a_first_available_cycle_is_reported_before_any_row_is_built() -> None:
-    directory = EXAMPLES / "negative-first-available-self"
+    directory = EXAMPLES / "negative-first-available-self-reference"
     committed = _committed_error(directory)
 
     result = _run(directory)

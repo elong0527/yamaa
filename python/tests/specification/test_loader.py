@@ -174,7 +174,7 @@ def test_does_not_expand_class_shorthand_when_field_is_a_union(
 def test_negative_column_type_matches_committed_diagnostic() -> None:
     with pytest.raises(SpecificationError) as caught:
         load_specification(
-            EXAMPLES / "negative-ambiguous-type/spec.yaml",
+            EXAMPLES / "negative-column-type-unknown/spec.yaml",
             SCHEMA_ROOT,
         )
 
@@ -195,7 +195,7 @@ def test_negative_column_type_matches_committed_diagnostic() -> None:
 def test_negative_nested_expression_matches_committed_diagnostic() -> None:
     with pytest.raises(SpecificationError) as caught:
         load_specification(
-            EXAMPLES / "negative-variable-nested/spec.yaml",
+            EXAMPLES / "negative-variable-nested-expression/spec.yaml",
             SCHEMA_ROOT,
         )
 

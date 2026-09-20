@@ -13,7 +13,7 @@ REPOSITORY = Path(__file__).parents[3]
 
 
 def _fixture_plan():
-    root = REPOSITORY / "benchmark/odm-form-items"
+    root = REPOSITORY / "benchmark/odm-form-scoped-item-resolution"
     loaded_spec = load_specification(root / "spec.yaml", REPOSITORY / "yaml")
     sources = load_source_tables(
         loaded_spec.specification.input,
@@ -77,7 +77,7 @@ def test_plan_requires_every_normalized_source_table() -> None:
     del plan
 
     loaded_spec = load_specification(
-        REPOSITORY / "benchmark/odm-form-items/spec.yaml",
+        REPOSITORY / "benchmark/odm-form-scoped-item-resolution/spec.yaml",
         REPOSITORY / "yaml",
     )
     with pytest.raises(ValueError, match="exactly match"):

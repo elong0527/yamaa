@@ -25,7 +25,7 @@ EXAMPLES = REPOSITORY / "benchmark"
 
 
 def test_two_stage_workflow_completes_producer_before_consumer_ingestion() -> None:
-    example = EXAMPLES / "adam-adsl-randomization"
+    example = EXAMPLES / "adam-adsl-randomization-timing"
     resources = ProjectResources(example)
     workflow = plan_workflow(
         example / "spec.yaml", load_schema_bundle(SCHEMA_ROOT), resources
@@ -246,7 +246,7 @@ columns:
 
 
 def test_inline_types_conflict_with_producer_before_sources_are_read() -> None:
-    example = EXAMPLES / "negative-redefined-date"
+    example = EXAMPLES / "negative-adsl-randomization-date-retyped"
     resources = ProjectResources(example)
 
     with pytest.raises(SpecificationError) as raised:

@@ -581,11 +581,11 @@ validation with `ambiguous_dictionary`.
 
 Representative specifications, input data, and expected outcomes:
 
-- [adam-adsl-text](../../../benchmark/adam-adsl-text/README.md).
-- [negative-subject-reference](../../../benchmark/negative-subject-reference/README.md).
-- [negative-mapping-case-collision](../../../benchmark/negative-mapping-case-collision/README.md).
-- [negative-matches-bad-pattern](../../../benchmark/negative-matches-bad-pattern/README.md).
-- [negative-str-uncaptured-group](../../../benchmark/negative-str-uncaptured-group/README.md).
+- [adam-adsl-portable-text](../../../benchmark/adam-adsl-portable-text/README.md).
+- [negative-adsl-subject-reference](../../../benchmark/negative-adsl-subject-reference/README.md).
+- [negative-mapping-case-fold-collision](../../../benchmark/negative-mapping-case-fold-collision/README.md).
+- [negative-matches-unreadable-pattern](../../../benchmark/negative-matches-unreadable-pattern/README.md).
+- [negative-str-extract-undeclared-group](../../../benchmark/negative-str-extract-undeclared-group/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

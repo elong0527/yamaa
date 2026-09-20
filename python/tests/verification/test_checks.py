@@ -65,7 +65,7 @@ def test_range_failure_reproduces_the_committed_error_contract() -> None:
     )
 
     assert len(failures) == 1
-    assert reported(failures[0]) == committed("negative-implausible-age")
+    assert reported(failures[0]) == committed("negative-verification-implausible-age")
 
 
 def test_warning_retains_all_keys_without_changing_fatal_diagnostic_shape() -> None:
@@ -100,7 +100,7 @@ def test_not_missing_failure_reproduces_the_committed_error_contract() -> None:
 
     failures = check_column(completed, column("AGE", "int", {"not_missing": {}}), KEYS)
 
-    assert reported(failures[0]) == committed("negative-not-missing-age")
+    assert reported(failures[0]) == committed("negative-not-missing-absent-age")
 
 
 def test_nonfinite_float_is_missing_before_column_verification() -> None:
@@ -129,7 +129,7 @@ def test_allowed_values_failure_reproduces_the_committed_error_contract() -> Non
         KEYS,
     )
 
-    assert reported(failures[0]) == committed("negative-invalid-sex")
+    assert reported(failures[0]) == committed("negative-allowed-values-mismatch")
 
 
 def test_max_length_failure_reproduces_the_committed_error_contract() -> None:
@@ -146,7 +146,7 @@ def test_max_length_failure_reproduces_the_committed_error_contract() -> None:
         completed, column("USUBJID", "str", {"max_length": {"max": 20}}), KEYS
     )
 
-    assert reported(failures[0]) == committed("negative-usubjid-length")
+    assert reported(failures[0]) == committed("negative-usubjid-exceeds-length")
 
 
 def test_unique_failure_reports_every_row_carrying_one_repeated_value() -> None:
@@ -159,7 +159,7 @@ def test_unique_failure_reports_every_row_carrying_one_repeated_value() -> None:
         completed, [Expression(root={"unique": {"columns": ["SITEID"]}})], KEYS
     )
 
-    assert reported(failures[0]) == committed("negative-unique-duplicate")
+    assert reported(failures[0]) == committed("negative-unique-duplicate-values")
 
 
 def test_all_or_none_failure_reproduces_the_committed_error_contract() -> None:
@@ -196,7 +196,7 @@ def test_all_or_none_failure_reproduces_the_committed_error_contract() -> None:
         KEYS,
     )
 
-    assert reported(failures[0]) == committed("negative-paired-dates")
+    assert reported(failures[0]) == committed("negative-all-or-none-partial-row")
 
 
 def test_key_validation_reproduces_the_committed_missing_and_duplicate_contracts() -> (
@@ -394,7 +394,7 @@ def test_grouped_row_count_failure_reproduces_the_committed_error_contract() -> 
     )
 
     assert len(failures) == 1
-    assert reported(failures[0]) == committed("negative-adlb-two-baselines")
+    assert reported(failures[0]) == committed("negative-adlb-multiple-baseline-records")
 
 
 def test_ungrouped_row_count_fails_a_minimum_on_an_empty_artifact() -> None:

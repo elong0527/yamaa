@@ -35,11 +35,11 @@ EXAMPLES = REPOSITORY_ROOT / "benchmark"
 # Committed examples whose join, lookup, aggregate, and grouped-row work this
 # component now performs end to end.
 ARTIFACT_EXAMPLES = [
-    "sdtm-dm-dates",
+    "sdtm-dm-reference-dates",
     "adam-adlb-mean",
     # REQ-0119 matches on the applicable keys as the two sides declare them, so
     # a sequence number joins once both sides say it is one.
-    "adam-adae-severity",
+    "adam-adae-event-severity",
     # #217 could only gate this one on `row_number`; PY-14 supplies the
     # window, so its joins and contextual ODM resolution now run end to end.
     "sdtm-lb-multiform",
@@ -47,25 +47,25 @@ ARTIFACT_EXAMPLES = [
 
 # Committed error contracts this component reproduces field for field.
 ERROR_EXAMPLES = [
-    "negative-source-duplicate-key",
-    "negative-lookup-unmatched-key",
-    "negative-lookup-unordered",
-    "negative-lookup-unchosen",
-    "negative-lookup-mismatched",
-    "negative-lookup-unknown-key",
-    "negative-lookup-missing-sex",
-    "negative-lookup-id-collision",
-    "negative-lookup-bad-range",
+    "negative-source-duplicate-right-key",
+    "negative-record-lookup-unmatched-key",
+    "negative-record-lookup-unordered-keep",
+    "negative-record-lookup-unordered-choice",
+    "negative-record-lookup-unpaired-key",
+    "negative-record-lookup-no-applicable-keys",
+    "negative-record-lookup-incomplete-key",
+    "negative-record-lookup-id-collision",
+    "negative-record-lookup-incomparable-range",
     # REQ-0143: an unhandled multiple match names the lookup's match under
     # `key` and `lookup_key` and the offending output row under `keys`, the
     # way an unmatched key already did.
-    "negative-query-overflow",
-    "negative-overlapping-windows",
-    "negative-mapping-duplicate-key",
-    "negative-mapping-unmapped-key",
-    "negative-mapping-partial-key",
-    "negative-mapping-unpaired-key",
-    "negative-adlb-duplicate-wbc",
+    "negative-query-slot-overflow",
+    "negative-advs-overlapping-analysis-windows",
+    "negative-mapping-from-duplicate-key",
+    "negative-mapping-from-unmapped-key",
+    "negative-mapping-from-partial-key",
+    "negative-mapping-from-key-length-mismatch",
+    "negative-adlb-absolute-wbc-duplicate",
 ]
 
 
@@ -125,7 +125,7 @@ def test_a_right_side_orphan_creates_no_row_and_studies_stay_apart() -> None:
     # REQ-0122 preserves left row count and order, so an exposure record whose
     # subject is absent from DM contributes to no row and creates none, and a
     # subject id reused under a second study reads only its own records.
-    result = _run(EXAMPLES / "sdtm-dm-dates")
+    result = _run(EXAMPLES / "sdtm-dm-reference-dates")
 
     assert isinstance(result, ExecutionSuccess)
     rows = result.artifact.frame.to_dicts()
@@ -141,8 +141,8 @@ def test_a_right_side_orphan_creates_no_row_and_studies_stay_apart() -> None:
 
 
 def test_repeated_execution_produces_an_identical_artifact() -> None:
-    first = _run(EXAMPLES / "sdtm-dm-dates")
-    second = _run(EXAMPLES / "sdtm-dm-dates")
+    first = _run(EXAMPLES / "sdtm-dm-reference-dates")
+    second = _run(EXAMPLES / "sdtm-dm-reference-dates")
 
     assert isinstance(first, ExecutionSuccess)
     assert isinstance(second, ExecutionSuccess)

@@ -315,10 +315,10 @@ which reports under `ingest`.
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-path-absolute](../../../benchmark/negative-path-absolute/README.md).
-- [negative-path-directory](../../../benchmark/negative-path-directory/README.md).
-- [negative-path-missing](../../../benchmark/negative-path-missing/README.md).
-- [negative-path-parent-escape](../../../benchmark/negative-path-parent-escape/README.md).
+- [negative-dataset-path-absolute](../../../benchmark/negative-dataset-path-absolute/README.md).
+- [negative-dataset-path-directory](../../../benchmark/negative-dataset-path-directory/README.md).
+- [negative-dataset-path-missing](../../../benchmark/negative-dataset-path-missing/README.md).
+- [negative-dataset-path-parent-escape](../../../benchmark/negative-dataset-path-parent-escape/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared
