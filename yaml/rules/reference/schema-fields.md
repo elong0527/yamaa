@@ -164,6 +164,8 @@ requirement link for behavior. It is not an additional semantic contract.
 | `function_contract_class.conformance` | `"path"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
 | `shared_function_contract_class.contract_version` | `"function_contract_version"` | `true` | Absent | -- | Schema constraint |
 | `shared_function_contract_class.description` | `"str"` | `true` | Absent | `{"min_length": 1}` | Schema constraint |
+| `shared_function_contract_class.comparison_decimals` | `"int"` | `false` | `4` | -- | Schema constraint |
+| `shared_function_contract_class.may_return_missing` | `"bool"` | `false` | `false` | -- | Schema constraint |
 | `shared_function_contract_class.params` | `"list[function_parameter_class]"` | `true` | Absent | -- | Schema constraint |
 | `shared_function_contract_class.returns` | `"column_type"` | `true` | Absent | -- | Schema constraint |
 | `function_parameter_class.name` | `"identifier"` | `true` | Absent | -- | Schema constraint |

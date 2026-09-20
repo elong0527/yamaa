@@ -3971,10 +3971,13 @@ def _resolve_shared_function_contract(
     entry's own fields), or None when resolution failed; every failure
     appends an error.
     """
-    inline_fields = ('contract_version', 'description', 'params', 'returns')
+    required_inline = ('contract_version', 'description', 'params', 'returns')
+    shareable_fields = required_inline + (
+        'comparison_decimals', 'may_return_missing',
+    )
     reference = contract.get('contract')
     if reference is None:
-        missing = [field for field in inline_fields if field not in contract]
+        missing = [field for field in required_inline if field not in contract]
         if missing:
             errors.append(
                 f"ERROR: {contract_path}: function entry must declare its "
@@ -3989,7 +3992,7 @@ def _resolve_shared_function_contract(
             "must be a path"
         )
         return None
-    inline = [field for field in inline_fields if field in contract]
+    inline = [field for field in shareable_fields if field in contract]
     if inline:
         errors.append(
             f"ERROR: {contract_path}: function entry must declare its "

@@ -101,6 +101,8 @@ class SharedFunctionContract(_StrictModel):
 
     contract_version: str = Field(min_length=1)
     description: str = Field(min_length=1)
+    comparison_decimals: int = 4
+    may_return_missing: bool = False
     params: list[FunctionParameter]
     returns: ColumnType
 

@@ -89,6 +89,12 @@ shared_function_contract_class:
         type: str
         required: true
         min_length: 1
+    - comparison_decimals:
+        type: int
+        default: 4
+    - may_return_missing:
+        type: bool
+        default: false
     - params:
         type: "list[function_parameter_class]"
         required: true

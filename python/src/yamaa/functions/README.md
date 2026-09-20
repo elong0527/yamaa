@@ -149,16 +149,17 @@ bmi-python/
   runtime/projectbmi.py   # the pinned code the binding resolves to
 ```
 
-The two roots calculate one contract fingerprint and run byte-identical
-vectors, which is what REQ-0675 and REQ-0690 require of two projects claiming
-one contract. A contract that needs no renaming writes its `environment.yaml`
+The two roots calculate one contract fingerprint and name one shared
+conformance-vector document, which is what REQ-0675 and REQ-0690 require of
+two projects claiming one contract. A contract that needs no renaming writes its `environment.yaml`
 without the two defaulted declarations: an omitted `binding.args` maps each
 logical parameter to the same-named host argument, and an omitted
 `implementation_version` is the environment `version`. When several roots
 implement one contract, each entry names the shared document once in
 `contract` (a project-root-local `contracts.yaml` holding `contract_version`,
-`description`, `params`, and `returns` per function) instead of repeating
-those fields inline; the entry keeps its own binding and conformance path.
+`description`, `comparison_decimals`, `may_return_missing`, `params`, and
+`returns` per function) instead of repeating those fields inline; the entry
+keeps its own `implementation_version`, binding, and conformance path.
 Re-pinning after changing the code is one call:
 
 ```python

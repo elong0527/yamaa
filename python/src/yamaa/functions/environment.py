@@ -266,7 +266,14 @@ def _conformance_path(root: Path, name: str, contract: FunctionContract) -> Path
 
 # REQ-0669 names the language-neutral fields one shared contract document
 # carries once for every project implementing the contract.
-_SHARED_CONTRACT_FIELDS = ("contract_version", "description", "params", "returns")
+_SHARED_CONTRACT_FIELDS = (
+    "contract_version",
+    "description",
+    "comparison_decimals",
+    "may_return_missing",
+    "params",
+    "returns",
+)
 
 
 def _resolve_shared_contracts(

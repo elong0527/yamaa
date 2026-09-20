@@ -12,4 +12,4 @@ functions:
     contract: python/contracts.yaml
     binding:
       call: projectbmi::bmi
-    conformance: conformance/bmi.yaml
+    conformance: python/conformance/bmi.yaml
