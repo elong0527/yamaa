@@ -11,6 +11,8 @@
   --ink: #1b2a3c;
   --muted: #5a6a7d;
   --brand: #2d5f8a;
+  /* Nothing here paints navy now that the bar is white, but the token stays:
+     it is --yamaa-navy-deep from extra.css, which dark mode there still uses. */
   --brand-deep: #1f3a5c;
   --line: #d5dfea;
   --surface: #fff;
@@ -18,8 +20,8 @@
   --danger: #b3261e;
   --danger-bg: #fdecea;
   --danger-line: #f0c6c2;
-  --on-brand: #fff;
-  --on-brand-muted: rgba(255, 255, 255, .78);
+  --on-bar: var(--ink);
+  --on-bar-muted: var(--muted);
   font-family: -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif;
   font-size: 16px;
 }
@@ -28,22 +30,22 @@ body { margin: 0; color: var(--ink); background: #eef2f7; }
 a { color: var(--brand); text-underline-offset: 3px; }
 button, select { font: inherit; cursor: pointer; }
 button:focus-visible, a:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 3px solid #227bce; outline-offset: 3px; }
-.brand-row a:focus-visible { outline-color: #fff; }
 [hidden] { display: none !important; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .skip-link { position: absolute; top: -100px; left: 20px; z-index: 10; padding: 12px; background: white; }
 .skip-link:focus { top: 10px; }
 .page-header { background: var(--surface); border-bottom: 1px solid var(--line); }
 .brand-row, .title-row, .comparison-bar, .panel-header, .section-header, .file-heading, .page-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-/* The same navy bar the Material pages carry, so the benchmark reads as part
-   of the documentation site rather than as a separate one. */
-.brand-row { padding: 10px 28px; background: var(--brand-deep); color: var(--on-brand); }
-.brand { display: flex; align-items: center; gap: 9px; color: var(--on-brand); font-weight: 700; font-size: 15px; letter-spacing: .03em; text-decoration: none; }
-.brand-mark { width: 26px; height: 26px; border-radius: 6px; object-fit: cover; background: rgba(255, 255, 255, .14); }
-.brand-separator { color: rgba(255, 255, 255, .5); font-weight: 400; margin: 0 5px; }
-.brand-location { font-size: 14px; font-weight: 450; letter-spacing: 0; color: var(--on-brand-muted); }
+/* The same white bar the Material pages carry, so the benchmark reads as part
+   of the documentation site rather than as a separate one. A white bar on a
+   white page needs the hairline to read as a bar at all. */
+.brand-row { padding: 10px 28px; background: var(--surface); color: var(--on-bar); border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 9px; color: var(--on-bar); font-weight: 700; font-size: 15px; letter-spacing: .03em; text-decoration: none; }
+.brand-mark { width: 26px; height: 26px; border-radius: 6px; object-fit: cover; }
+.brand-separator { color: rgba(0, 0, 0, .32); font-weight: 400; margin: 0 5px; }
+.brand-location { font-size: 14px; font-weight: 450; letter-spacing: 0; color: var(--on-bar-muted); }
 .header-links { display: flex; align-items: center; gap: 20px; }
-.source-link, .gallery-link { color: var(--on-brand); font-size: 14px; text-decoration: none; white-space: nowrap; }
+.source-link, .gallery-link { color: var(--on-bar); font-size: 14px; text-decoration: none; white-space: nowrap; }
 .brand:hover, .source-link:hover, .gallery-link:hover { text-decoration: underline; }
 .gallery-link { font-weight: 600; }
 .title-row { padding: 18px 28px; align-items: flex-end; }
