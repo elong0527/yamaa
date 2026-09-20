@@ -3,8 +3,7 @@ domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
   LB: input/lb.csv
-  LBREF:
-    path: ../reference/lbref.csv
+  LBREF: ../reference/lbref.csv
 base: LB
 
 output:

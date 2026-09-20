@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  DM: {path: input/dm.csv}
+  DM: input/dm.csv
 
 output:
   path: adsl.csv

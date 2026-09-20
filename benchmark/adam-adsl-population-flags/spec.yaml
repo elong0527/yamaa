@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  ADSLPRE: input/adsl_pre.csv
+  ADSL_RAW: input/adsl_raw.csv
 
 output:
   path: adsl.csv
@@ -12,22 +12,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADSLPRE.STUDYID
+    derivation: ADSL_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADSLPRE.USUBJID
+    derivation: ADSL_RAW.USUBJID
 
   - name: ARMCD
     type: str
     label: Planned Arm Code
-    derivation: ADSLPRE.ARMCD
+    derivation: ADSL_RAW.ARMCD
 
   - name: TRTSDT
     type: date
     label: Date of First Exposure to Treatment
-    derivation: ADSLPRE.TRTSDT
+    derivation: ADSL_RAW.TRTSDT
 
   - name: SAFFL
     type: str

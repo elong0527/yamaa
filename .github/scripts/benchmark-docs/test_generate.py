@@ -276,7 +276,7 @@ class DashboardTests(unittest.TestCase):
         page = generate.render_benchmark(benchmark).decode("ascii")
         self.assertEqual(
             re.findall(r'data-filename="([^"]+)"', page),
-            ["spec_organization.yaml", "spec_compound.yaml", "spec_study.yaml", "spec_resolved.yaml"],
+            ["spec_organization.yaml", "spec_compound.yaml", "spec_study.yaml", "spec_resolved.yaml", "run.py"],
         )
         self.assertIn("Choose specification document", page)
         self.assertIn('<span class="panel-caption">4 spec files</span>', page)

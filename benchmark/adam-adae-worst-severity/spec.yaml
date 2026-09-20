@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADAE
 keys: [STUDYID, USUBJID, AESEQ]
 input:
-  ADAEPRE: input/adae_pre.csv
+  ADAE_RAW: input/adae_raw.csv
 
 output:
   path: adae.csv
@@ -12,37 +12,37 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADAEPRE.STUDYID
+    derivation: ADAE_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADAEPRE.USUBJID
+    derivation: ADAE_RAW.USUBJID
 
   - name: AESEQ
     type: int
     label: Sequence Number
-    derivation: ADAEPRE.AESEQ
+    derivation: ADAE_RAW.AESEQ
 
   - name: AEBODSYS
     type: str
     label: Body System or Organ Class
-    derivation: ADAEPRE.AEBODSYS
+    derivation: ADAE_RAW.AEBODSYS
 
   - name: AEDECOD
     type: str
     label: Dictionary-Derived Term
-    derivation: ADAEPRE.AEDECOD
+    derivation: ADAE_RAW.AEDECOD
 
   - name: ASTDT
     type: date
     label: Analysis Start Date
-    derivation: ADAEPRE.ASTDT
+    derivation: ADAE_RAW.ASTDT
 
   - name: AESEV
     type: str
     label: Severity/Intensity
-    derivation: ADAEPRE.AESEV
+    derivation: ADAE_RAW.AESEV
     verifications:
       allowed_values:
         values: [MILD, MODERATE, SEVERE]
@@ -50,7 +50,7 @@ columns:
   - name: TRTEMFL
     type: str
     label: Treatment Emergent Analysis Flag
-    derivation: ADAEPRE.TRTEMFL
+    derivation: ADAE_RAW.TRTEMFL
     verifications:
       allowed_values:
         values: [Y]

@@ -2,11 +2,11 @@ schema_version: "1.0"
 domain: ADVS
 keys: [STUDYID, USUBJID, PARAMCD, VSSEQ]
 input:
-  ADVSPRE: input/advs_pre.csv
+  ADVS_RAW: input/advs_raw.csv
   AWINDOW:
     path: input/awindow.csv
     types: {AVISITN: int, AWLO: int, AWHI: int, AWTARGET: int}
-base: ADVSPRE
+base: ADVS_RAW
 intermediates:
   - id: AWIN
     dataset: AWINDOW
@@ -23,42 +23,42 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADVSPRE.STUDYID
+    derivation: ADVS_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADVSPRE.USUBJID
+    derivation: ADVS_RAW.USUBJID
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: ADVSPRE.PARAMCD
+    derivation: ADVS_RAW.PARAMCD
 
   - name: VSSEQ
     type: int
     label: Sequence Number
-    derivation: ADVSPRE.VSSEQ
+    derivation: ADVS_RAW.VSSEQ
 
   - name: VISIT
     type: str
     label: Visit Name
-    derivation: ADVSPRE.VISIT
+    derivation: ADVS_RAW.VISIT
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation: ADVSPRE.ADT
+    derivation: ADVS_RAW.ADT
 
   - name: ADY
     type: int
     label: Analysis Relative Day
-    derivation: ADVSPRE.ADY
+    derivation: ADVS_RAW.ADY
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation: ADVSPRE.AVAL
+    derivation: ADVS_RAW.AVAL
 
   - name: AVISIT
     type: str

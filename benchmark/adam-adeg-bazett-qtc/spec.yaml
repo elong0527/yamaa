@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADEG
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
-  ADEG_IN: {path: input/adeg.csv, types: {AVAL: float}}
+  ADEG_RAW: {path: input/adeg.csv, types: {AVAL: float}}
 
 output:
   path: adeg.csv
@@ -60,46 +60,46 @@ columns:
 rows:
   - id: collected
     derivations:
-      STUDYID: {source: ADEG_IN.STUDYID}
-      USUBJID: {source: ADEG_IN.USUBJID}
-      PARAMCD: {source: ADEG_IN.PARAMCD}
-      PARAM: {source: ADEG_IN.PARAM}
-      AVISIT: {source: ADEG_IN.AVISIT}
+      STUDYID: {source: ADEG_RAW.STUDYID}
+      USUBJID: {source: ADEG_RAW.USUBJID}
+      PARAMCD: {source: ADEG_RAW.PARAMCD}
+      PARAM: {source: ADEG_RAW.PARAM}
+      AVISIT: {source: ADEG_RAW.AVISIT}
       QTVAL: {literal: null}
       RRVAL: {literal: null}
       QTUNIT: {literal: null}
       RRUNIT: {literal: null}
-      AVAL: {source: ADEG_IN.AVAL}
-      AVALU: {source: ADEG_IN.AVALU}
+      AVAL: {source: ADEG_RAW.AVAL}
+      AVALU: {source: ADEG_RAW.AVALU}
       ROW_PROVENANCE: {literal: collected}
 
   - id: qtcbr
-    group_by: [ADEG_IN.STUDYID, ADEG_IN.USUBJID, ADEG_IN.AVISIT]
+    group_by: [ADEG_RAW.STUDYID, ADEG_RAW.USUBJID, ADEG_RAW.AVISIT]
     filter: >-
       QTVAL IS NOT NULL
       AND RRVAL IS NOT NULL
     derivations:
-      STUDYID: {source: ADEG_IN.STUDYID}
-      USUBJID: {source: ADEG_IN.USUBJID}
+      STUDYID: {source: ADEG_RAW.STUDYID}
+      USUBJID: {source: ADEG_RAW.USUBJID}
       PARAMCD: {literal: QTCBR}
       PARAM: {literal: "QTcB - Bazett's Correction Formula Rederived (ms)"}
-      AVISIT: {source: ADEG_IN.AVISIT}
+      AVISIT: {source: ADEG_RAW.AVISIT}
       QTVAL:
         aggregate:
-          filter: "ADEG_IN.PARAMCD = 'QT'"
-          expr: "ONLY(ADEG_IN.AVAL)"
+          filter: "ADEG_RAW.PARAMCD = 'QT'"
+          expr: "ONLY(ADEG_RAW.AVAL)"
       RRVAL:
         aggregate:
-          filter: "ADEG_IN.PARAMCD = 'RR'"
-          expr: "ONLY(ADEG_IN.AVAL)"
+          filter: "ADEG_RAW.PARAMCD = 'RR'"
+          expr: "ONLY(ADEG_RAW.AVAL)"
       QTUNIT:
         aggregate:
-          filter: "ADEG_IN.PARAMCD = 'QT'"
-          expr: "ONLY(ADEG_IN.AVALU)"
+          filter: "ADEG_RAW.PARAMCD = 'QT'"
+          expr: "ONLY(ADEG_RAW.AVALU)"
       RRUNIT:
         aggregate:
-          filter: "ADEG_IN.PARAMCD = 'RR'"
-          expr: "ONLY(ADEG_IN.AVALU)"
+          filter: "ADEG_RAW.PARAMCD = 'RR'"
+          expr: "ONLY(ADEG_RAW.AVALU)"
       AVAL:
         compute:
           expr: "QTVAL / SQRT(RRVAL / 1000)"

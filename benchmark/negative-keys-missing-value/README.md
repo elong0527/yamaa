@@ -4,7 +4,7 @@
 
 **Goal:** carry the analysis date (`ADT`), study day (`ADY`), and
 measured value (`AVAL`) through from a pre-derived ADVS slice
-(`ADVSPRE`), placing each record in the analysis window its study
+(`ADVS_RAW`), placing each record in the analysis window its study
 day falls in.
 
 **Input:** pre-derived ADVS slice carrying analysis date (`ADT`),
@@ -47,10 +47,10 @@ leave the rest where they are:
 
 rows:
   - id: windowed
-    filter: "ADVSPRE.ADY IS NOT NULL"
+    filter: "ADVS_RAW.ADY IS NOT NULL"
     derivations:
       AVAL:
-        source: ADVSPRE.AVAL
+        source: ADVS_RAW.AVAL
 ```
 
 If it is one record per collected record, identify rows by the collected

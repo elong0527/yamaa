@@ -2,10 +2,10 @@ schema_version: "1.0"
 domain: ADRS
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
-  ADRSPRE: input/adrs_pre.csv
+  ADRS_RAW: input/adrs_raw.csv
   ADSL: input/adsl.csv
 
-base: ADRSPRE
+base: ADRS_RAW
 
 output:
   path: adrs.csv
@@ -15,12 +15,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADRSPRE.STUDYID
+    derivation: ADRS_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADRSPRE.USUBJID
+    derivation: ADRS_RAW.USUBJID
 
   - name: PARAMCD
     type: str
@@ -37,12 +37,12 @@ columns:
   - name: AVISIT
     type: str
     label: Analysis Visit
-    derivation: ADRSPRE.AVISIT
+    derivation: ADRS_RAW.AVISIT
 
   - name: PCHG
     type: float
     label: Percent Change from Baseline
-    derivation: ADRSPRE.PCHG
+    derivation: ADRS_RAW.PCHG
 
   - name: SAEFL
     type: str

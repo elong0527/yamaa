@@ -2,11 +2,11 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  ADSL_PRE: input/adsl.csv
+  ADSL_RAW: input/adsl.csv
   EX: input/ex.csv
   EC: input/ec.csv
   FA: input/fa.csv
-base: ADSL_PRE
+base: ADSL_RAW
 
 output:
   path: adsl.csv
@@ -16,12 +16,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADSL_PRE.STUDYID
+    derivation: ADSL_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADSL_PRE.USUBJID
+    derivation: ADSL_RAW.USUBJID
 
   - name: EX_ADJ_CNT
     type: int

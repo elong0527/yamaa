@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADEG
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
-  ADEG_IN:
+  ADEG_RAW:
     path: input/adeg.csv
     types: {AVAL: float}
 
@@ -14,12 +14,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADEG_IN.STUDYID
+    derivation: ADEG_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADEG_IN.USUBJID
+    derivation: ADEG_RAW.USUBJID
 
   - name: PARAMCD
     type: str
@@ -32,7 +32,7 @@ columns:
   - name: AVISIT
     type: str
     label: Analysis Visit
-    derivation: ADEG_IN.AVISIT
+    derivation: ADEG_RAW.AVISIT
 
   - name: AVAL
     type: float
@@ -50,18 +50,18 @@ rows:
   - id: collected
     derivations:
       PARAMCD:
-        source: ADEG_IN.PARAMCD
+        source: ADEG_RAW.PARAMCD
       PARAM:
-        source: ADEG_IN.PARAM
+        source: ADEG_RAW.PARAM
       AVAL:
-        source: ADEG_IN.AVAL
+        source: ADEG_RAW.AVAL
       AVALU:
-        source: ADEG_IN.AVALU
+        source: ADEG_RAW.AVALU
       _PROVENANCE:
         literal: collected
 
   - id: derived_rrr
-    filter: "ADEG_IN.PARAMCD = 'HR' AND ADEG_IN.AVAL IS NOT NULL AND ADEG_IN.AVAL <> 0"
+    filter: "ADEG_RAW.PARAMCD = 'HR' AND ADEG_RAW.AVAL IS NOT NULL AND ADEG_RAW.AVAL <> 0"
     derivations:
       PARAMCD:
         literal: RRR
@@ -69,7 +69,7 @@ rows:
         literal: RR Duration Rederived (ms)
       AVAL:
         compute:
-          expr: "60000 / ADEG_IN.AVAL"
+          expr: "60000 / ADEG_RAW.AVAL"
       AVALU:
         literal: ms
       _PROVENANCE:
