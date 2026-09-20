@@ -23,68 +23,57 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADVSPRE.STUDYID
+    derivation: ADVSPRE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADVSPRE.USUBJID
+    derivation: ADVSPRE.USUBJID
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      source: ADVSPRE.PARAMCD
+    derivation: ADVSPRE.PARAMCD
 
   - name: VSSEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: ADVSPRE.VSSEQ
+    derivation: ADVSPRE.VSSEQ
 
   - name: VISIT
     type: str
     label: Visit Name
-    derivation:
-      source: ADVSPRE.VISIT
+    derivation: ADVSPRE.VISIT
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation:
-      source: ADVSPRE.ADT
+    derivation: ADVSPRE.ADT
 
   - name: ADY
     type: int
     label: Analysis Relative Day
-    derivation:
-      source: ADVSPRE.ADY
+    derivation: ADVSPRE.ADY
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation:
-      source: ADVSPRE.AVAL
+    derivation: ADVSPRE.AVAL
 
   - name: AVISIT
     type: str
     label: Analysis Visit
-    derivation:
-      source: AWIN.AVISIT
+    derivation: AWIN.AVISIT
 
   - name: AVISITN
     type: int
     label: Analysis Visit (N)
-    derivation:
-      source: AWIN.AVISITN
+    derivation: AWIN.AVISITN
 
   - name: AWTARGET
     type: int
     label: Analysis Window Target
-    derivation:
-      source: AWIN.AWTARGET
+    derivation: AWIN.AWTARGET
 
   - name: AWTDIFF
     type: int

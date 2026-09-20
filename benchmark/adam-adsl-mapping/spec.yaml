@@ -12,14 +12,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM.STUDYID
+    derivation: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
+    derivation: DM.USUBJID
 
   - name: SEX
     type: str
@@ -72,8 +70,7 @@ columns:
   - name: RACE
     type: str
     label: Race
-    derivation:
-      source: DM.RACE
+    derivation: DM.RACE
 
   - name: RACEN
     type: int

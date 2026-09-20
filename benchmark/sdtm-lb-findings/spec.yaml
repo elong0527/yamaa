@@ -18,14 +18,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ODM.StudyOID
+    derivation: ODM.StudyOID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ODM.SubjectKey
+    derivation: ODM.SubjectKey
 
   - name: LBTESTCD
     type: str
@@ -54,8 +52,7 @@ columns:
   - name: LBDTC
     type: date
     label: Date/Time of Specimen Collection
-    derivation:
-      source: ODM.IT.LB.LBDTC
+    derivation: ODM.IT.LB.LBDTC
 
   - name: LBSEQ
     type: int

@@ -12,44 +12,37 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADAEPRE.STUDYID
+    derivation: ADAEPRE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADAEPRE.USUBJID
+    derivation: ADAEPRE.USUBJID
 
   - name: AESEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: ADAEPRE.AESEQ
+    derivation: ADAEPRE.AESEQ
 
   - name: AEBODSYS
     type: str
     label: Body System or Organ Class
-    derivation:
-      source: ADAEPRE.AEBODSYS
+    derivation: ADAEPRE.AEBODSYS
 
   - name: AEDECOD
     type: str
     label: Dictionary-Derived Term
-    derivation:
-      source: ADAEPRE.AEDECOD
+    derivation: ADAEPRE.AEDECOD
 
   - name: ASTDT
     type: date
     label: Analysis Start Date
-    derivation:
-      source: ADAEPRE.ASTDT
+    derivation: ADAEPRE.ASTDT
 
   - name: AESEV
     type: str
     label: Severity/Intensity
-    derivation:
-      source: ADAEPRE.AESEV
+    derivation: ADAEPRE.AESEV
     verifications:
       allowed_values:
         values: [MILD, MODERATE, SEVERE]
@@ -57,8 +50,7 @@ columns:
   - name: TRTEMFL
     type: str
     label: Treatment Emergent Analysis Flag
-    derivation:
-      source: ADAEPRE.TRTEMFL
+    derivation: ADAEPRE.TRTEMFL
     verifications:
       allowed_values:
         values: [Y]

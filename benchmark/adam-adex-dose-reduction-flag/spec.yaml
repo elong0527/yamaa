@@ -12,32 +12,27 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: EX.STUDYID
+    derivation: EX.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: EX.USUBJID
+    derivation: EX.USUBJID
 
   - name: EXSEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: EX.EXSEQ
+    derivation: EX.EXSEQ
 
   - name: EXSTDTM
     type: datetime
     label: Start Date/Time of Treatment
-    derivation:
-      source: EX.EXSTDTM
+    derivation: EX.EXSTDTM
 
   - name: EXDOSE
     type: float
     label: Dose
-    derivation:
-      source: EX.EXDOSE
+    derivation: EX.EXDOSE
 
   - name: PREVDOSE
     type: float

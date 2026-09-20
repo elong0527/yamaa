@@ -24,14 +24,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADSL.STUDYID
+    derivation: ADSL.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADSL.USUBJID
+    derivation: ADSL.USUBJID
 
   - name: PARAMCD
     type: str
@@ -48,32 +46,27 @@ columns:
   - name: STARTDT
     type: date
     label: Time-to-Event Origin Date
-    derivation:
-      source: ADSL.RANDDT
+    derivation: ADSL.RANDDT
 
   - name: DEATHDT
     type: date
     label: Death Date
-    derivation:
-      source: DEATH_REC.ADT
+    derivation: DEATH_REC.ADT
 
   - name: DEATHSEQ
     type: int
     label: Death Source Sequence Number
-    derivation:
-      source: DEATH_REC.ASEQ
+    derivation: DEATH_REC.ASEQ
 
   - name: CENSORDT1
     type: date
     label: Last Known Alive Date
-    derivation:
-      source: ADSL.LSTALVDT
+    derivation: ADSL.LSTALVDT
 
   - name: CENSORDT2
     type: date
     label: Randomization Date
-    derivation:
-      source: ADSL.RANDDT
+    derivation: ADSL.RANDDT
 
   - name: ADT
     type: date

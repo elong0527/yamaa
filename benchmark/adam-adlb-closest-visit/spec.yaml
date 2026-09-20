@@ -12,44 +12,37 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADLBPRE.STUDYID
+    derivation: ADLBPRE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADLBPRE.USUBJID
+    derivation: ADLBPRE.USUBJID
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      source: ADLBPRE.PARAMCD
+    derivation: ADLBPRE.PARAMCD
 
   - name: LBSEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: ADLBPRE.LBSEQ
+    derivation: ADLBPRE.LBSEQ
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation:
-      source: ADLBPRE.ADT
+    derivation: ADLBPRE.ADT
 
   - name: ADY
     type: int
     label: Analysis Relative Day
-    derivation:
-      source: ADLBPRE.ADY
+    derivation: ADLBPRE.ADY
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation:
-      source: ADLBPRE.AVAL
+    derivation: ADLBPRE.AVAL
 
   - name: AVISIT
     type: str

@@ -23,26 +23,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: AE_RAW.STUDYID
+    derivation: AE_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: AE_RAW.USUBJID
+    derivation: AE_RAW.USUBJID
 
   - name: AESEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: AE_RAW.AESEQ
+    derivation: AE_RAW.AESEQ
 
   - name: AETERM
     type: str
     label: Reported Term for the Adverse Event
-    derivation:
-      source: AE_RAW.AETERM
+    derivation: AE_RAW.AETERM
 
   - name: AEDECOD
     type: str

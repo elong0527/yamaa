@@ -20,26 +20,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: AE_RAW.STUDYID
+    derivation: AE_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: AE_RAW.USUBJID
+    derivation: AE_RAW.USUBJID
 
   - name: AESEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: AE_RAW.AESEQ
+    derivation: AE_RAW.AESEQ
 
   - name: AETERM
     type: str
     label: Reported Term for the Adverse Event
-    derivation:
-      source: AE_RAW.AETERM
+    derivation: AE_RAW.AETERM
 
   - name: AESER
     type: str
@@ -58,48 +54,42 @@ columns:
   - name: AESDTH
     type: str
     label: Results in Death
-    derivation:
-      source: AE_RAW.AESDTH
+    derivation: AE_RAW.AESDTH
     verifications:
       allowed_values: {values: [Y, N]}
 
   - name: AESLIFE
     type: str
     label: Is Life Threatening
-    derivation:
-      source: AE_RAW.AESLIFE
+    derivation: AE_RAW.AESLIFE
     verifications:
       allowed_values: {values: [Y, N]}
 
   - name: AESHOSP
     type: str
     label: Requires or Prolongs Hospitalization
-    derivation:
-      source: AE_RAW.AESHOSP
+    derivation: AE_RAW.AESHOSP
     verifications:
       allowed_values: {values: [Y, N]}
 
   - name: AESDISAB
     type: str
     label: Persist or Significant Disability/Incapacity
-    derivation:
-      source: AE_RAW.AESDISAB
+    derivation: AE_RAW.AESDISAB
     verifications:
       allowed_values: {values: [Y, N]}
 
   - name: AESCONG
     type: str
     label: Congenital Anomaly or Birth Defect
-    derivation:
-      source: AE_RAW.AESCONG
+    derivation: AE_RAW.AESCONG
     verifications:
       allowed_values: {values: [Y, N]}
 
   - name: AESMIE
     type: str
     label: Other Medically Important Serious Event
-    derivation:
-      source: AE_RAW.AESMIE
+    derivation: AE_RAW.AESMIE
     verifications:
       allowed_values: {values: [Y, N]}
 

@@ -18,34 +18,29 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: VS_RAW.STUDYID
+    derivation: VS_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: VS_RAW.USUBJID
+    derivation: VS_RAW.USUBJID
 
   - name: VSSEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: VS_RAW.VSSEQ
+    derivation: VS_RAW.VSSEQ
     verifications:
       not_missing: {}
 
   - name: VISIT
     type: str
     label: Visit Name
-    derivation:
-      source: VS_RAW.VISIT
+    derivation: VS_RAW.VISIT
 
   - name: VSTESTCD
     type: str
     label: Vital Signs Test Short Name
-    derivation:
-      source: VS_RAW.VSTESTCD
+    derivation: VS_RAW.VSTESTCD
     verifications:
       allowed_values:
         values: [HEIGHT, WEIGHT, TEMP]
@@ -53,20 +48,17 @@ columns:
   - name: VSTEST
     type: str
     label: Vital Signs Test Name
-    derivation:
-      source: VS_RAW.VSTEST
+    derivation: VS_RAW.VSTEST
 
   - name: VSORRES
     type: str
     label: Result or Finding in Original Units
-    derivation:
-      source: VS_RAW.VSORRES
+    derivation: VS_RAW.VSORRES
 
   - name: VSORRESU
     type: str
     label: Original Units
-    derivation:
-      source: VS_RAW.VSORRESU
+    derivation: VS_RAW.VSORRESU
     verifications:
       allowed_values:
         values: [cm, kg, C, LB, F]
@@ -78,8 +70,7 @@ columns:
   - name: VSSTRESC
     type: str
     label: Character Result/Finding in Std Format
-    derivation:
-      source: VSSTRESN
+    derivation: VSSTRESN
 
   - name: VSSTRESU
     type: str

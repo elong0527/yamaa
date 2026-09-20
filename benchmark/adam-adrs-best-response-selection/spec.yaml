@@ -12,32 +12,32 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {source: ADRSPRE.STUDYID}
+    derivation: ADRSPRE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: {source: ADRSPRE.USUBJID}
+    derivation: ADRSPRE.USUBJID
 
   - name: ASEQ
     type: int
     label: Sequence Number
-    derivation: {source: ADRSPRE.ASEQ}
+    derivation: ADRSPRE.ASEQ
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation: {source: ADRSPRE.ADT}
+    derivation: ADRSPRE.ADT
 
   - name: RANDDY
     type: int
     label: Analysis Day Relative to Randomization
-    derivation: {source: ADRSPRE.RANDDY}
+    derivation: ADRSPRE.RANDDY
 
   - name: AVALC
     type: str
     label: Analysis Value (C)
-    derivation: {source: ADRSPRE.AVALC}
+    derivation: ADRSPRE.AVALC
 
   - name: BORCAT
     type: str

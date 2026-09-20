@@ -12,14 +12,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADEG_IN.STUDYID
+    derivation: ADEG_IN.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADEG_IN.USUBJID
+    derivation: ADEG_IN.USUBJID
 
   - name: PARAMCD
     type: str
@@ -32,8 +30,7 @@ columns:
   - name: AVISIT
     type: str
     label: Analysis Visit
-    derivation:
-      source: ADEG_IN.AVISIT
+    derivation: ADEG_IN.AVISIT
 
   - name: QTVAL
     type: float

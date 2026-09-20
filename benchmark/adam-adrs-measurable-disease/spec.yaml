@@ -22,14 +22,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADSL.STUDYID
+    derivation: ADSL.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADSL.USUBJID
+    derivation: ADSL.USUBJID
 
   - name: PARAMCD
     type: str
@@ -46,8 +44,7 @@ columns:
   - name: TUSTRESC
     type: str
     label: Character Result/Finding in Std Format
-    derivation:
-      source: TU_TARGET.TUSTRESC
+    derivation: TU_TARGET.TUSTRESC
 
   - name: AVALC
     type: str

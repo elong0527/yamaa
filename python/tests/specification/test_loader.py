@@ -241,14 +241,18 @@ def test_rejects_unknown_registry_operations_with_a_stable_path(
     tmp_path: Path,
 ) -> None:
     path, source = _copy_basic_specification(tmp_path)
-    path.write_text(
-        source.replace(
+    old_bare = "    derivation: ODM.StudyOID\n"
+    if old_bare in source:
+        rewritten = source.replace(
+            old_bare, "    derivation:\n      unknown_operation: ODM.StudyOID\n", 1
+        )
+    else:
+        rewritten = source.replace(
             "      source: ODM.StudyOID\n",
             "      unknown_operation: ODM.StudyOID\n",
             1,
-        ),
-        encoding="ascii",
-    )
+        )
+    path.write_text(rewritten, encoding="ascii")
 
     with pytest.raises(SpecificationError) as caught:
         load_specification(path, SCHEMA_ROOT)
@@ -541,20 +545,22 @@ def test_malformed_schema_version_has_a_structured_diagnostic(tmp_path: Path) ->
     }
 
 
-def _write_bare_string_variant(tmp_path: Path, old: str, new: str) -> Path:
+def _write_bare_string_variant(tmp_path: Path, new: str) -> Path:
     source = (EXAMPLES / "sdtm-dm-basic/spec.yaml").read_text(encoding="ascii")
-    assert old in source
+    old_block = "    derivation:\n      source: ODM.StudyOID"
+    old_bare = "    derivation: ODM.StudyOID"
+    if old_block in source:
+        source = source.replace(old_block, new, 1)
+    else:
+        assert old_bare in source
+        source = source.replace(old_bare, new, 1)
     path = tmp_path / "spec.yaml"
-    path.write_text(source.replace(old, new, 1), encoding="ascii")
+    path.write_text(source, encoding="ascii")
     return path
 
 
 def test_bare_string_derivation_desugars_to_source(tmp_path: Path) -> None:
-    path = _write_bare_string_variant(
-        tmp_path,
-        "    derivation:\n      source: ODM.StudyOID",
-        "    derivation: ODM.StudyOID",
-    )
+    path = _write_bare_string_variant(tmp_path, "    derivation: ODM.StudyOID")
 
     loaded = load_specification(path, SCHEMA_ROOT)
     columns = {column.name: column for column in loaded.specification.columns}
@@ -566,16 +572,16 @@ def test_bare_string_derivation_desugars_to_source(tmp_path: Path) -> None:
 
 
 def test_bare_string_derivation_matches_dict_form(tmp_path: Path) -> None:
-    bare_path = _write_bare_string_variant(
-        tmp_path,
-        "    derivation:\n      source: ODM.StudyOID",
-        "    derivation: ODM.StudyOID",
-    )
+    bare_path = _write_bare_string_variant(tmp_path, "    derivation: ODM.StudyOID")
+    dict_source = (EXAMPLES / "sdtm-dm-basic/spec.yaml").read_text(encoding="ascii")
+    old_bare = "    derivation: ODM.StudyOID"
+    old_block = "    derivation:\n      source: ODM.StudyOID"
+    if old_bare in dict_source:
+        dict_source = dict_source.replace(old_bare, old_block, 1)
+    else:
+        assert old_block in dict_source
     dict_path = tmp_path / "dict-spec.yaml"
-    dict_path.write_text(
-        (EXAMPLES / "sdtm-dm-basic/spec.yaml").read_text(encoding="ascii"),
-        encoding="ascii",
-    )
+    dict_path.write_text(dict_source, encoding="ascii")
 
     bare = load_specification(bare_path, SCHEMA_ROOT).specification
     written = load_specification(dict_path, SCHEMA_ROOT).specification
@@ -586,11 +592,7 @@ def test_bare_string_derivation_matches_dict_form(tmp_path: Path) -> None:
 def test_bare_string_derivation_names_a_source_not_a_literal(
     tmp_path: Path,
 ) -> None:
-    path = _write_bare_string_variant(
-        tmp_path,
-        "    derivation:\n      source: ODM.StudyOID",
-        "    derivation: NOPE.MISSING",
-    )
+    path = _write_bare_string_variant(tmp_path, "    derivation: NOPE.MISSING")
 
     loaded = load_specification(path, SCHEMA_ROOT)
     columns = {column.name: column for column in loaded.specification.columns}
@@ -605,11 +607,7 @@ def test_bare_string_derivation_names_a_source_not_a_literal(
 def test_non_string_scalar_derivation_names_the_dict_form(
     tmp_path: Path, scalar: str
 ) -> None:
-    path = _write_bare_string_variant(
-        tmp_path,
-        "    derivation:\n      source: ODM.StudyOID",
-        f"    derivation: {scalar}",
-    )
+    path = _write_bare_string_variant(tmp_path, f"    derivation: {scalar}")
 
     with pytest.raises(SpecificationError) as caught:
         load_specification(path, SCHEMA_ROOT)

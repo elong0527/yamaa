@@ -22,14 +22,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADSL.STUDYID
+    derivation: ADSL.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADSL.USUBJID
+    derivation: ADSL.USUBJID
 
   - name: PARAMCD
     type: str
@@ -46,20 +44,17 @@ columns:
   - name: STARTDT
     type: date
     label: Time-to-Event Origin Date
-    derivation:
-      source: ADSL.TRTSDT
+    derivation: ADSL.TRTSDT
 
   - name: AEDT
     type: date
     label: Adverse Event Date
-    derivation:
-      source: AE_REC.ASTDT
+    derivation: AE_REC.ASTDT
 
   - name: AESEQ
     type: int
     label: Adverse Event Source Sequence Number
-    derivation:
-      source: AE_REC.AESEQ
+    derivation: AE_REC.AESEQ
 
   - name: RAWDT
     type: date

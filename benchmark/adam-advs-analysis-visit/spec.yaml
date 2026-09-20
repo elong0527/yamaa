@@ -12,56 +12,47 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADVSPRE.STUDYID
+    derivation: ADVSPRE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADVSPRE.USUBJID
+    derivation: ADVSPRE.USUBJID
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      source: ADVSPRE.PARAMCD
+    derivation: ADVSPRE.PARAMCD
 
   - name: VSSEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: ADVSPRE.VSSEQ
+    derivation: ADVSPRE.VSSEQ
 
   - name: VISIT
     type: str
     label: Visit Name
-    derivation:
-      source: ADVSPRE.VISIT
+    derivation: ADVSPRE.VISIT
 
   - name: VISITNUM
     type: float
     label: Visit Number
-    derivation:
-      source: ADVSPRE.VISITNUM
+    derivation: ADVSPRE.VISITNUM
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation:
-      source: ADVSPRE.ADT
+    derivation: ADVSPRE.ADT
 
   - name: ADY
     type: int
     label: Analysis Relative Day
-    derivation:
-      source: ADVSPRE.ADY
+    derivation: ADVSPRE.ADY
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation:
-      source: ADVSPRE.AVAL
+    derivation: ADVSPRE.AVAL
     verifications:
       not_missing: {}
 

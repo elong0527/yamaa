@@ -17,23 +17,19 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM.STUDYID
+    derivation: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
+    derivation: DM.USUBJID
 
   - name: TRT01A
     type: str
     label: Actual Treatment for Period 01
-    derivation:
-      source: DOSING.EXTRT
+    derivation: DOSING.EXTRT
 
   - name: TRT01DOSE
     type: float
     label: Actual Dose for Period 01
-    derivation:
-      source: DOSING.EXDOSE
+    derivation: DOSING.EXDOSE

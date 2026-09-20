@@ -12,25 +12,21 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: LB.USUBJID
+    derivation: LB.USUBJID
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      source: LB.LBTESTCD
+    derivation: LB.LBTESTCD
   - name: AVAL
     type: float
     label: Standardized Numeric Result
-    derivation:
-      source: LB.LBSTRESN
+    derivation: LB.LBSTRESN
     metadata:
       analysis_role: analysis-value
   - name: AVALU
     type: str
     label: Analysis Value Unit
-    derivation:
-      source: LB.LBSTRESU
+    derivation: LB.LBSTRESU
   - name: TEMP
     type: str
     label: Unused Intermediate Value

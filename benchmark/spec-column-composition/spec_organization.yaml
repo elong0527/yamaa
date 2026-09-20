@@ -12,18 +12,15 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: LB.USUBJID
+    derivation: LB.USUBJID
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      source: LB.LBTESTCD
+    derivation: LB.LBTESTCD
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation:
-      source: LB.LBSTRESN
+    derivation: LB.LBSTRESN
     verifications:
       - range:
           min: 0

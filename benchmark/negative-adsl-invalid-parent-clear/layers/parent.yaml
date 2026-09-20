@@ -6,5 +6,4 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
+    derivation: DM.USUBJID

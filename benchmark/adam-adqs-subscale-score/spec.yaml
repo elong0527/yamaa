@@ -12,20 +12,17 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: QS.STUDYID
+    derivation: QS.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: QS.USUBJID
+    derivation: QS.USUBJID
 
   - name: VISIT
     type: str
     label: Visit Name
-    derivation:
-      source: QS.VISIT
+    derivation: QS.VISIT
 
   - name: PARAMCD
     type: str

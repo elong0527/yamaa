@@ -22,14 +22,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ODM.StudyOID
+    derivation: ODM.StudyOID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ODM.SubjectKey
+    derivation: ODM.SubjectKey
 
   - name: SEX
     type: str

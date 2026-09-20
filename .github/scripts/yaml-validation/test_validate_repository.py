@@ -1961,6 +1961,16 @@ class TestSpecificationInheritance(unittest.TestCase):
             spec, 'example/spec.yaml', path, self.env
         )
 
+    def test_bare_string_derivation_normalizes_to_source(self):
+        # R007-57: the repository validator mirrors the engine's parse-time
+        # expansion so resolved fixtures keep the canonical form.
+        normalized = VALIDATOR.normalize_single_type_value(
+            'DM.AGE', 'derivation', self.env, False
+        )
+        self.assertEqual(
+            normalized, {'value': {'source': {'variable': 'DM.AGE'}}}
+        )
+
     def test_resolves_shallow_diamond_and_minimal_ordered_spec(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

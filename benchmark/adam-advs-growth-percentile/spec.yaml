@@ -23,26 +23,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADVSPRE.STUDYID
+    derivation: ADVSPRE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADVSPRE.USUBJID
+    derivation: ADVSPRE.USUBJID
 
   - name: AVISIT
     type: str
     label: Analysis Visit
-    derivation:
-      source: ADVSPRE.AVISIT
+    derivation: ADVSPRE.AVISIT
 
   - name: AVALSRC
     type: float
     label: Source Analysis Value
-    derivation:
-      source: ADVSPRE.AVAL
+    derivation: ADVSPRE.AVAL
 
   - name: PARAMCD
     type: str

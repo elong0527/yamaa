@@ -16,14 +16,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADSL_PRE.STUDYID
+    derivation: ADSL_PRE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADSL_PRE.USUBJID
+    derivation: ADSL_PRE.USUBJID
 
   - name: EX_ADJ_CNT
     type: int

@@ -2131,6 +2131,12 @@ def normalize_single_type_value(data, type_ref, env, fragment=False):
                     payload, definition, env, fragment
                 )
             return {keyword: payload}
+        if type_ref == 'derivation' and isinstance(data, str):
+            # R007-57: a bare derivation string is the source shorthand.
+            # Expand it before the union dispatch so the registry and the
+            # handled-expression expansion apply unchanged, mirroring the
+            # engine's parse-time normalization.
+            data = {'source': data}
         return normalize_type_value(data, alias['type'], env, fragment)
     return copy.deepcopy(data)
 
@@ -7443,6 +7449,10 @@ def derivation_primary_path(spec, spec_label, name):
                 continue
             derivation = column.get('derivation')
             path = f"{spec_label}.columns.{name}.derivation"
+            if isinstance(derivation, str):
+                # R007-57: a bare string desugars to {source: string} before
+                # any path is computed, so diagnostics name the source.
+                derivation = {'source': derivation}
             if isinstance(derivation, dict) and 'value' in derivation:
                 derivation = derivation.get('value')
                 path += '.value'
@@ -7457,6 +7467,8 @@ def derivation_primary_path(spec, spec_label, name):
                 continue
             derivation = derivations[name]
             path = f"{spec_label}.rows[{index}].derivations.{name}"
+            if isinstance(derivation, str):
+                derivation = {'source': derivation}
             if isinstance(derivation, dict) and len(derivation) == 1:
                 path += '.' + next(iter(derivation))
             return path
@@ -7614,8 +7626,18 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
 
 def prepare_spec_document(spec, spec_label, spec_path, env):
     if isinstance(spec, dict) and 'parents' in spec:
-        return resolve_spec_inheritance(spec, spec_label, spec_path, env)
-    return copy.deepcopy(spec), [], {}
+        resolved, errors, provenance = resolve_spec_inheritance(
+            spec, spec_label, spec_path, env
+        )
+    else:
+        resolved, errors, provenance = copy.deepcopy(spec), [], {}
+    if isinstance(resolved, dict):
+        # R007-57: the engine desugars a bare-string derivation to
+        # {source: string} before anything else runs. The repository
+        # validator works on the same normalized shape so its paths and
+        # reference walkers agree with engine diagnostics.
+        resolved = _desugar_bare_derivations(resolved)
+    return resolved, errors, provenance
 
 
 def inherited_error_logical_path(path, spec):
@@ -8411,6 +8433,28 @@ def validate_condition_registry(root: Path, registry):
     return errors
 
 
+def _desugar_bare_derivations(node):
+    """Apply the R007-57 bare-string derivation shorthand to a raw spec dict.
+
+    Contracts record diagnostic paths against the normalized form, where a
+    bare `derivation:` string has already become `{'source': value}`. The
+    raw file keeps the shorthand, so path checks must see the desugared
+    shape or they would reject valid contract paths.
+    """
+    if isinstance(node, dict):
+        return {
+            key: (
+                {'source': value}
+                if key == 'derivation' and isinstance(value, str)
+                else _desugar_bare_derivations(value)
+            )
+            for key, value in node.items()
+        }
+    if isinstance(node, list):
+        return [_desugar_bare_derivations(item) for item in node]
+    return node
+
+
 def spec_path_exists(spec, path):
     node = spec
     for part in path.split('.'):
@@ -8504,6 +8548,7 @@ def validate_expected_error_contracts(root: Path):
                 continue
             if not isinstance(spec, dict):
                 continue
+            spec = _desugar_bare_derivations(spec)
             for path in paths:
                 if condition == 'missing_required_field':
                     # The diagnostic points at the field that should exist.

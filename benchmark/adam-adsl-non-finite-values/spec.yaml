@@ -27,8 +27,7 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
+    derivation: DM.USUBJID
 
   - name: YAML_PINF
     type: float
@@ -51,20 +50,17 @@ columns:
   - name: SOURCE_PINF
     type: float
     label: Positive Infinity Source Value
-    derivation:
-      source: DM.POSITIVE_INFINITY
+    derivation: DM.POSITIVE_INFINITY
 
   - name: SOURCE_NINF
     type: float
     label: Negative Infinity Source Value
-    derivation:
-      source: DM.NEGATIVE_INFINITY
+    derivation: DM.NEGATIVE_INFINITY
 
   - name: SOURCE_NAN
     type: float
     label: Not-a-Number Source Value
-    derivation:
-      source: DM.NOT_A_NUMBER
+    derivation: DM.NOT_A_NUMBER
 
   - name: FUNCTION_PINF
     type: float

@@ -24,26 +24,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADSL_IN.STUDYID
+    derivation: ADSL_IN.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADSL_IN.USUBJID
+    derivation: ADSL_IN.USUBJID
 
   - name: TRTEDT
     type: date
     label: Date of Last Exposure to Treatment
-    derivation:
-      source: ADSL_IN.TRTEDT
+    derivation: ADSL_IN.TRTEDT
 
   - name: LSTCNTDC
     type: str
     label: Date of Last Contact
-    derivation:
-      source: ADSL_IN.LSTCNTDC
+    derivation: ADSL_IN.LSTCNTDC
 
   - name: LSTCNTDT
     type: date

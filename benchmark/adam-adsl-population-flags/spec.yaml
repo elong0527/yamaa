@@ -12,26 +12,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADSLPRE.STUDYID
+    derivation: ADSLPRE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADSLPRE.USUBJID
+    derivation: ADSLPRE.USUBJID
 
   - name: ARMCD
     type: str
     label: Planned Arm Code
-    derivation:
-      source: ADSLPRE.ARMCD
+    derivation: ADSLPRE.ARMCD
 
   - name: TRTSDT
     type: date
     label: Date of First Exposure to Treatment
-    derivation:
-      source: ADSLPRE.TRTSDT
+    derivation: ADSLPRE.TRTSDT
 
   - name: SAFFL
     type: str

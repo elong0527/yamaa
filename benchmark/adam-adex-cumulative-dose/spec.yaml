@@ -14,26 +14,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: TRT.STUDYID
+    derivation: TRT.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: TRT.USUBJID
+    derivation: TRT.USUBJID
 
   - name: EXTRT
     type: str
     label: Name of Treatment
-    derivation:
-      source: TRT.EXTRT
+    derivation: TRT.EXTRT
 
   - name: EXDOSU
     type: str
     label: Dose Units
-    derivation:
-      source: TRT.EXDOSU
+    derivation: TRT.EXDOSU
 
   - name: DOSECUM
     type: float
@@ -52,14 +48,12 @@ columns:
   - name: PLANDOSE
     type: float
     label: Planned Dose per Cycle
-    derivation:
-      source: TRT.PLANDOSE
+    derivation: TRT.PLANDOSE
 
   - name: PLANCYC
     type: int
     label: Planned Number of Cycles
-    derivation:
-      source: TRT.PLANCYC
+    derivation: TRT.PLANCYC
 
   - name: RDI
     type: float

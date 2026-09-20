@@ -28,20 +28,17 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM_RAW.STUDYID
+    derivation: DM_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM_RAW.USUBJID
+    derivation: DM_RAW.USUBJID
 
   - name: RFICDTC
     type: date
     label: Date/Time of Informed Consent
-    derivation:
-      source: DM_RAW.RFICDTC
+    derivation: DM_RAW.RFICDTC
     verifications:
       not_missing: {}
 
@@ -56,20 +53,17 @@ columns:
   - name: RFXENDTC
     type: date
     label: Date/Time of Last Study Treatment
-    derivation:
-      source: LASTEX.EXENDTC
+    derivation: LASTEX.EXENDTC
 
   - name: RFSTDTC
     type: date
     label: Subject Reference Start Date/Time
-    derivation:
-      source: RFXSTDTC
+    derivation: RFXSTDTC
 
   - name: EXDOSE0
     type: float
     label: Last Exposure Dose
-    derivation:
-      source: LASTEX.EXDOSE
+    derivation: LASTEX.EXDOSE
 
   - name: DSDT0
     type: date

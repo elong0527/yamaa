@@ -12,20 +12,17 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: RS.STUDYID
+    derivation: RS.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: RS.USUBJID
+    derivation: RS.USUBJID
 
   - name: RSSEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: RS.RSSEQ
+    derivation: RS.RSSEQ
 
   - name: AVALC
     type: str

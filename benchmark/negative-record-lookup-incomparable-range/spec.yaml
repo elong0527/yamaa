@@ -23,24 +23,24 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {source: VS_RAW.STUDYID}
+    derivation: VS_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: {source: VS_RAW.USUBJID}
+    derivation: VS_RAW.USUBJID
 
   - name: VSSEQ
     type: int
     label: Sequence Number
-    derivation: {source: VS_RAW.VSSEQ}
+    derivation: VS_RAW.VSSEQ
 
   - name: VSDTC
     type: date
     label: Date/Time of Measurements
-    derivation: {source: VS_RAW.VSDTC}
+    derivation: VS_RAW.VSDTC
 
   - name: EPOCH
     type: str
     label: Epoch
-    derivation: {source: EPOCHDEF.EPOCH}
+    derivation: EPOCHDEF.EPOCH
