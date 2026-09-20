@@ -90,7 +90,6 @@ columns:
   - name: LBORRES
     type: str
     label: Result or Finding in Original Units
-    derivation: ODM.Value
     verifications:
       not_missing: {}
 
@@ -145,7 +144,8 @@ columns:
 
 rows:
   - id: serum_vitamin_d
-    filter: "ODM.ItemGroupOID = 'IG.NCT00789880.LB' AND ODM.ItemOID = 'IT.NCT00789880.LB.VITD' AND ODM.Value IS NOT NULL"
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "LBORRES IS NOT NULL"
     derivations:
       LBTESTCD:
         literal: VITD25OH
@@ -157,15 +157,22 @@ rows:
         literal: SERUM
       LBLOC:
         literal: null
+      LBORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.NCT00789880.LB.VITD'"
+          expr: "ONLY(ODM.Value)"
       LBORRESU:
         literal: ng/mL
       LBSTRESU:
         literal: ng/mL
       LBDTC:
-        source: ODM.IT.NCT00789880.LB.LBDTC
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.NCT00789880.LB.LBDTC'"
+          expr: "ONLY(ODM.Value)"
 
   - id: biopsy_il13_lesional
-    filter: "ODM.ItemGroupOID = 'IG.NCT00789880.BX' AND ODM.ItemOID = 'IT.NCT00789880.BX.IL13_LES' AND ODM.Value IS NOT NULL"
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "LBORRES IS NOT NULL"
     derivations:
       LBTESTCD:
         literal: IL13
@@ -177,15 +184,22 @@ rows:
         literal: SKIN BIOPSY
       LBLOC:
         literal: LESIONAL
+      LBORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.NCT00789880.BX.IL13_LES'"
+          expr: "ONLY(ODM.Value)"
       LBORRESU:
         literal: CYCLE
       LBSTRESU:
         literal: CYCLE
       LBDTC:
-        source: ODM.IT.NCT00789880.BX.BXDTC
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.NCT00789880.BX.BXDTC'"
+          expr: "ONLY(ODM.Value)"
 
   - id: biopsy_il13_nonlesional
-    filter: "ODM.ItemGroupOID = 'IG.NCT00789880.BX' AND ODM.ItemOID = 'IT.NCT00789880.BX.IL13_NONLES' AND ODM.Value IS NOT NULL"
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "LBORRES IS NOT NULL"
     derivations:
       LBTESTCD:
         literal: IL13
@@ -197,15 +211,22 @@ rows:
         literal: SKIN BIOPSY
       LBLOC:
         literal: NON-LESIONAL
+      LBORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.NCT00789880.BX.IL13_NONLES'"
+          expr: "ONLY(ODM.Value)"
       LBORRESU:
         literal: CYCLE
       LBSTRESU:
         literal: CYCLE
       LBDTC:
-        source: ODM.IT.NCT00789880.BX.BXDTC
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.NCT00789880.BX.BXDTC'"
+          expr: "ONLY(ODM.Value)"
 
   - id: saliva_cathelicidin
-    filter: "ODM.ItemGroupOID = 'IG.NCT00789880.SAL' AND ODM.ItemOID = 'IT.NCT00789880.SAL.SAL_CAMP' AND ODM.Value IS NOT NULL"
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "LBORRES IS NOT NULL"
     derivations:
       LBTESTCD:
         literal: CAMPPRO
@@ -217,15 +238,22 @@ rows:
         literal: SALIVA
       LBLOC:
         literal: null
+      LBORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.NCT00789880.SAL.SAL_CAMP'"
+          expr: "ONLY(ODM.Value)"
       LBORRESU:
         literal: ng/mL
       LBSTRESU:
         literal: ng/mL
       LBDTC:
-        source: ODM.IT.NCT00789880.SAL.SALDTC
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.NCT00789880.SAL.SALDTC'"
+          expr: "ONLY(ODM.Value)"
 
   - id: tape_cathelicidin_lesional
-    filter: "ODM.ItemGroupOID = 'IG.NCT00789880.TS' AND ODM.ItemOID = 'IT.NCT00789880.TS.TS_CAMP_LES' AND ODM.Value IS NOT NULL"
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "LBORRES IS NOT NULL"
     derivations:
       LBTESTCD:
         literal: CAMPPRO
@@ -237,15 +265,22 @@ rows:
         literal: TAPE STRIP
       LBLOC:
         literal: LESIONAL
+      LBORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.NCT00789880.TS.TS_CAMP_LES'"
+          expr: "ONLY(ODM.Value)"
       LBORRESU:
         literal: ng/mL
       LBSTRESU:
         literal: ng/mL
       LBDTC:
-        source: ODM.IT.NCT00789880.TS.TSDTC
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.NCT00789880.TS.TSDTC'"
+          expr: "ONLY(ODM.Value)"
 
   - id: tape_cathelicidin_nonlesional
-    filter: "ODM.ItemGroupOID = 'IG.NCT00789880.TS' AND ODM.ItemOID = 'IT.NCT00789880.TS.TS_CAMP_NONLES' AND ODM.Value IS NOT NULL"
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.ItemGroupOID, ODM.ItemGroupRepeatKey]
+    filter: "LBORRES IS NOT NULL"
     derivations:
       LBTESTCD:
         literal: CAMPPRO
@@ -257,12 +292,18 @@ rows:
         literal: TAPE STRIP
       LBLOC:
         literal: NON-LESIONAL
+      LBORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.NCT00789880.TS.TS_CAMP_NONLES'"
+          expr: "ONLY(ODM.Value)"
       LBORRESU:
         literal: ng/mL
       LBSTRESU:
         literal: ng/mL
       LBDTC:
-        source: ODM.IT.NCT00789880.TS.TSDTC
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.NCT00789880.TS.TSDTC'"
+          expr: "ONLY(ODM.Value)"
 
 verifications:
   - unique:
