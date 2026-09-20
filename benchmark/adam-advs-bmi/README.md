@@ -11,7 +11,6 @@ dataset with baseline height information.
 **Variables:**
 
 - `AVAL` is the collected measurement on collected records and
-  the BMI on BMI records; missing without a usable height, and
-  no BMI record is made without a weight.
+  the BMI. No BMI record is made without a weight.
 
 **Standard:** ADaM | **Domain:** ADVS
