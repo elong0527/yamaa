@@ -64,15 +64,14 @@ plugins:
 
 nav:
   - Home: index.md
-  - Introduction:
-      - Principles: articles/principles.md
-      - Derivation: articles/derive.md
-      - Why YAMAA: articles/why-yamaa.md
+  - Start:
+      - Core concepts: articles/concepts.md
+      - Spec anatomy: articles/spec-anatomy.md
       - Excel to YAMAA: articles/excel-to-yamaa.md
-  - Schema:
-      - Schema concepts: articles/schema-concepts.md
+  - Examples:
+      - Reading the examples: articles/examples.md
+  - Reference:
       - Schema reference: reference/schema.md
-  - Rule:
       - Rules: reference/rules.md
   - Benchmark:
       - benchmark/index.md
