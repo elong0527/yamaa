@@ -16,12 +16,13 @@ portable. `function` is the explicit project-environment extension point.
 ## Boundaries
 
 This rule owns registration, the nesting policy, evaluation kinds, ordering
-terms, and cross-operation type compatibility. Behavior specific to one
+terms, and expression input and result types. R011 owns input compatibility
+and comparability. Behavior specific to one
 operation is documented beside its registry entry. Cross-cutting behavior stays
 in its owning rule: R002 and R003 for source binding and joins, R008 for local
 handlers, R010 for `compute`, R011 for column types, R012 for string templates,
-R013 for aggregate reduction, R014 for the type a source field carries, R015
-for a record selected once and read by several columns, R016 for dates and
+R013 for aggregate reduction, R014 for the type a source field carries,
+R003 for a record selected once and read by several columns, R016 for dates and
 datetimes, R018 for project functions, and R004 for predicates.
 R019 owns string values, casing, equality, and order.
 
@@ -73,31 +74,19 @@ count: an excluded row receives missing rather than being dropped. A window
 that reads another row of its partition returns missing when that row does
 not exist, the same result as for a neighbouring row with a missing value.
 
-**R007-8.** `aggregate` is the only aggregate expression. R013 defines its
-grammar, the reducers it permits, and what each returns. This rule fixes
-where it may be used. It is valid in exactly three contexts. Context 1: its
-identifiers are qualified to one declared dataset relation during column
-derivation. It then reduces that right side before the R003 join. R003
-defines the join. The qualifier may equal the current row template's input
-dataset because an aggregate reads the relation rather than the
-scalar input record.
+**R007-8.** `aggregate` is the only aggregate expression. Its three permitted
+evaluation contexts are defined by R013-3; R013 owns its grammar, reducers,
+and result semantics.
 
-**R007-9.** Context 2: its identifiers are unqualified. It then declares
-`group_by`, reduces constructed output rows within each partition, and
-broadcasts the result to each row.
+**R007-9.** The unqualified aggregate context is defined by R013-3 and
+R013-6. This ID remains a compatibility reference.
 
-**R007-10.** Context 3: it is a row derivation of a grouped row template
-and every identifier is qualified to that template's input
-dataset. It reduces the records of the current input group to one
-candidate-row value. The enclosing `row.group_by` owns the keys, so
-the aggregate itself omits `group_by`.
+**R007-10.** The grouped-input aggregate context is defined by R013-3 and
+R013-6. This ID remains a compatibility reference.
 
-**R007-11.** Any other aggregate context is an error. A `filter` narrows the
-records the owning expression works in: right-side records for
-context 1, and constructed output rows for a window or for context 2, and
-current input-group records for context 3. `between` is valid only in
-context 1. It narrows those right-side records separately for each current
-row under R013.
+**R007-11.** A window's `window.filter` narrows constructed output rows.
+Aggregate filter scope is defined by R013-49, permitted contexts by
+R013-3, and `between` applicability by R013-9.
 
 ## Ordering
 
@@ -138,9 +127,8 @@ that breaks it, whichever method it uses.
 
 ## Type behavior
 
-**R007-19.** No implicit conversion occurs between named operation inputs.
-R005 converts only the completed derivation result. Inputs must therefore
-have compatible runtime types.
+**R007-19.** Input compatibility and the absence of implicit input conversion
+are defined by R011-34. This ID remains a compatibility reference.
 
 **R007-20.** `mapping` requires a string source because dictionary keys are
 strings.
@@ -175,17 +163,8 @@ is where comparability is a requirement rather than a consequence.
 
 **R007-30.** `function` states its exact argument and result types in R018.
 
-**R007-31.** Comparability is a property of the runtime type. `int` and
-`float` are mutually comparable, because R010 promotes them. Every other
-type is comparable only with itself. Collected precision, which R016
-defines, is not a runtime type and so takes no part in comparability. Two
-temporal values of one type are comparable whatever precision each carries.
-A comparable type therefore satisfies any input requiring mutually
-comparable values -- `greatest` and `least`, `lookup` key pairing, an
-`order_by` term, and R013's `MIN` and `MAX` -- while a `sources` list or one
-ordering term mixing two types is the incompatible-input error below rather
-than a comparison over a coerced operand. Each owning rule defines the order
-its type takes.
+**R007-31.** Runtime-type comparability is defined by R011-35. This ID
+remains a compatibility reference.
 
 **R007-32.** `source` retains its source type, which R014 defines.
 `literal` retains its YAML scalar type after R011's non-finite
@@ -212,18 +191,20 @@ states the operation result. Descriptor `description` fields explain
 parameters. These definitions are authoritative for operation-local behavior
 and do not affect schema validation.
 
-## Rationale
+## Derivation shorthand
 
-Keeping each keyword's inputs, options, grouping, handlers, and semantics
-inside its registry entry keeps the language checkable. No generic argument bag
-can drift between implementations. Nesting is allowed only where selecting or
-composing expressions is the field's purpose. An operation cannot silently
-become a second expression language. The three aggregate contexts match the
-language's three key scopes: a joined relation, a constructed partition, and an
-input group. The rule fixes order-term defaults. SQL engine disagreement about
-null placement must not change results. Runtime types make an order term
-compare one type by construction. Multi-variable expressions are the only
-constructs that require stated comparability.
+**R007-57.** A `derivation` written as a bare string is the source
+shorthand: it desugars to `{source: <string>}` before registry dispatch,
+and the R006-25 handled-expression expansion then applies unchanged. The
+string is always a source reference, never a literal: `derivation: DM`
+with no column `DM` fails validation rather than producing the literal
+`"DM"`. A validated document contains only the canonical dict form.
+
+**R007-58.** A `derivation` that is a non-string scalar is invalid; the
+error names the dict form, so `derivation: 5` must be written
+`{literal: 5}`. The specification reader uses YAML 1.2 core, so only
+`true`/`false` spellings, numbers, and null parse as non-strings; quote a
+column reference that YAML would otherwise parse as a non-string.
 
 ## Errors
 
@@ -289,17 +270,15 @@ positions to number or to move along. Omitting it is a validation error.
 declared order. Declaring it is a validation error rather than silently
 ignored.
 
-## Derivation shorthand
+## Rationale
 
-**R007-57.** A `derivation` written as a bare string is the source
-shorthand: it desugars to `{source: <string>}` before registry dispatch,
-and the R006-25 handled-expression expansion then applies unchanged. The
-string is always a source reference, never a literal: `derivation: DM`
-with no column `DM` fails validation rather than producing the literal
-`"DM"`. A validated document contains only the canonical dict form.
-
-**R007-58.** A `derivation` that is a non-string scalar is invalid; the
-error names the dict form, so `derivation: 5` must be written
-`{literal: 5}`. The specification reader uses YAML 1.2 core, so only
-`true`/`false` spellings, numbers, and null parse as non-strings; quote a
-column reference that YAML would otherwise parse as a non-string.
+Keeping each keyword's inputs, options, grouping, handlers, and semantics
+inside its registry entry keeps the language checkable. No generic argument bag
+can drift between implementations. Nesting is allowed only where selecting or
+composing expressions is the field's purpose. An operation cannot silently
+become a second expression language. The three aggregate contexts match the
+language's three key scopes: a joined relation, a constructed partition, and an
+input group. The rule fixes order-term defaults. SQL engine disagreement about
+null placement must not change results. Runtime types make an order term
+compare one type by construction. Multi-variable expressions are the only
+constructs that require stated comparability.

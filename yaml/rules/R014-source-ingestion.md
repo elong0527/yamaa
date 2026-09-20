@@ -12,7 +12,6 @@ applies_to: [root.input, dataset_source, dataset_class, expression.source]
 
 Define a stored field's type and missingness before expressions read it.
 
-
 ## Boundaries
 
 This rule owns the step from a stored field to a bound value. R002 owns how a
@@ -155,21 +154,6 @@ and every other spelling are ordinary string values.
 **R014-18.** An empty field of any declared type is missing rather than a parse
 failure, because it holds no text to parse.
 
-## Rationale
-
-Inference would make a type a property of one extract. A dose field of digits
-is numeric in January and text in February when one result arrives as `<50`.
-The run then fails on a correct expression. A site identifier of
-`007` becomes the number seven, silently rewriting every value the identifier
-identifies. A field complete with dates in a small extract becomes a date. The
-partial value the study permits then fails on arrival. Guessing substitutes a
-reading of the extract for the declaration of the study, differently for every
-extract. A reader that treats a spelling such as `NA` or `.`
-as absence loses `NA` as a region, `.` as a separator, and a collected
-`unknown` as a recorded answer before any rule in this design can see the
-value. A study that records absence with a code maps that code to a result
-where the specification can be read.
-
 ## Errors
 
 - **R014-19.** A `types` entry naming a field the dataset does not have:
@@ -189,3 +173,18 @@ where the specification can be read.
   absence: neither is an implementation option.
 - **R014-25.** Reordering source records while reading, decoding, typing,
   filtering, or assembling parallel batches: fail.
+
+## Rationale
+
+Inference would make a type a property of one extract. A dose field of digits
+is numeric in January and text in February when one result arrives as `<50`.
+The run then fails on a correct expression. A site identifier of
+`007` becomes the number seven, silently rewriting every value the identifier
+identifies. A field complete with dates in a small extract becomes a date. The
+partial value the study permits then fails on arrival. Guessing substitutes a
+reading of the extract for the declaration of the study, differently for every
+extract. A reader that treats a spelling such as `NA` or `.`
+as absence loses `NA` as a region, `.` as a separator, and a collected
+`unknown` as a recorded answer before any rule in this design can see the
+value. A study that records absence with a code maps that code to a result
+where the specification can be read.

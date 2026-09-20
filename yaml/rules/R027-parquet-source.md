@@ -73,16 +73,6 @@ unit conversion, truncation, or rounding is permitted.
 row-group sizing do not alter delivered fields, records, types, or values and
 are ignored. They cannot supply or override a field type.
 
-## Rationale
-
-Parquet is the production container because it preserves types and the
-difference between null and empty text without a side declaration. Restricting
-the source mapping to the types R020 writes makes the round trip closed and
-portable: accepting a host-specific cast would let two runtimes give the same
-file different field types or values. Storage choices that do not change the
-delivered dataset remain free; R020 deliberately does not fix Parquet
-bytes.
-
 ## Errors
 
 - **R027-11.** Bytes that are not one readable Parquet file: fail with
@@ -94,3 +84,13 @@ bytes.
 - **R027-14.** A temporal value outside the calendar or whole-second contract:
   fail with `source_field_value_invalid`, reporting the field, record, and
   stored integer value.
+
+## Rationale
+
+Parquet is the production container because it preserves types and the
+difference between null and empty text without a side declaration. Restricting
+the source mapping to the types R020 writes makes the round trip closed and
+portable: accepting a host-specific cast would let two runtimes give the same
+file different field types or values. Storage choices that do not change the
+delivered dataset remain free; R020 deliberately does not fix Parquet
+bytes.

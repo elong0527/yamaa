@@ -2,8 +2,8 @@
 id: R003
 title: Intermediate
 status: normative
-applies_to: [intermediates, expression.lookup, expression.aggregate, scalar.source]
-
+applies_to: [intermediates, expression.lookup, expression.aggregate,
+  scalar.source]
 ---
 
 # Lookup
@@ -18,12 +18,12 @@ applicable output keys, or the read should be a reusable named lookup.
 Keys are inferred only from the output `keys`, never invented: when no
 applicable key exists, the author declares the match explicitly.
 
-Two explicit forms share one mechanism. A named `intermediates:` entry selects
-one record of a dataset for several columns to read. An inline `lookup:`
-expression looks up one value for one column. Both match, narrow, choose,
-and answer absence the same way.
+Two explicit forms share one mechanism. A named `intermediates:` entry
+selects one input record for several columns. An inline `lookup:` expression
+looks up one value for one column. Both match, narrow, choose, and answer
+absence the same way.
 
-R015 (record lookup) is retired: this rule is its replacement. The old
+R015 (record lookup) is retired: this rule replaces it. The old
 `mapping_from` is retired into the inline `lookup:` expression.
 
 ## Boundaries
@@ -51,9 +51,9 @@ the column that reads through it, so the keys are derived first.
 
 **R003-1.** A dataset-qualified scalar source reads that dataset through
 the implicit join: one value per current row, matched on the applicable
-keys (R003-40), answering absence as a missing result. The qualifier
-naming the current row's own driver is not a join: it reads the driver
-record the row was constructed from.
+keys (R003-40), answering absence as a missing result. The qualifier for
+this row template's input dataset is not a join. It reads the input record
+that built the row.
 
 ```yaml
 derivation:
@@ -120,7 +120,7 @@ Otherwise fail as `unknown_field`.
 Otherwise fail as `unknown_field`.
 
 **R003-8.** Each source/key pair must be mutually comparable under
-R007-31. The match converts no operand. A pair that cannot compare fails
+R011-35. The match converts no operand. A pair that cannot compare fails
 as `incompatible_input_type` under R007-38, reporting both declared
 types. R014-4 gives an undeclared field of a typeless container the type
 `str`; a key typed on one side and defaulted on the other needs repair,
@@ -245,7 +245,7 @@ aggregate names no match and fails as `missing_aggregate_keys`.
 
 **R003-31.** An aggregate's declared `key` columns must exist in the
 relation and its `key_base` variables must be known, or fail as
-`unknown_field`. A pair that cannot compare fails under R007-19.
+`unknown_field`. A pair that cannot compare fails under R011-34.
 
 **R003-32.** A grouped-row aggregate reads its own driver group and
 declares no key pairs: the group is the match.
@@ -276,24 +276,6 @@ one column's handling never answers for another.
 among -- an output column, a chosen lookup record, a group key: fail
 as `prohibited_construct`.
 
-## Rationale
-
-An expression returns one value. Before this rule, three mechanisms
-reached another dataset -- the implicit join, `record_lookups`, and
-`mapping_from` -- with three key derivations and three absence
-vocabularies. A reviewer could not see that two columns reading "the
-same" record agreed, and an edit to one key statement and not the other
-broke the agreement silently.
-
-The unification keeps the implicit join where the match is already
-stated: the output `keys` name the row's identity, so a plain
-`source: DATASET.COLUMN` matching on the applicable keys says nothing
-twice. `record_lookups` and `mapping_from` become the one explicit
-`lookup` for everything else -- an unclear key, a key that differs from
-the applicable output keys, or a reusable named read -- so the
-declaration a reviewer reads is the match the engine runs, whichever
-form states it.
-
 ## Review
 
 **R003-39.** Validation reports the source/key pairs for every lookup
@@ -310,7 +292,7 @@ columns of the dataset. At least one applicable key is required; the
 match is left-row preserving, and a current row with no right-side
 match yields a missing result.
 
-**R003-41.** An inferred key must compare equal on both sides. R007-19
+**R003-41.** An inferred key must compare equal on both sides. R011-34
 performs no implicit conversion, so an applicable key whose left and
 right types are not mutually comparable fails as
 `incompatible_input_type`, reporting both types.
@@ -354,26 +336,25 @@ supplies is never redundant.
 
 ## Row construction reads through the same join
 
-**R003-46.** During ungrouped row construction a scalar source qualified
-with a non-driver dataset joins that dataset on the applicable keys
-(R003-40), matching each key against the same-named field of the row
-template's driver record. Each retained input record builds one
-candidate row (R001-6), so the driver record's fields are the only
-single values the match can read; values that only column derivation
-produces are not available yet. An explicit `lookup:` states the same
-match with declared `key_base`/`key` pairs, and its match variables
-follow the same availability: driver-record fields or same-entry
-columns. The join binds one value per row, which later derivations in
-the same entry read through the bound column; a row-phase `compute`
-still names no qualified cross-dataset identifier (R010-4).
+**R003-46.** During ungrouped row construction, a scalar source qualified
+with another input dataset joins that dataset on the applicable keys
+(R003-40). Each key matches the same-named field of the row template's
+input record. Each retained input record builds one candidate row
+(R001-6). The input record's fields are the only single values the match
+can read. Values produced only by column derivation are not available
+then. An explicit `lookup:` states the same match with declared
+`key_base`/`key` pairs. Its match variables have the same availability:
+input-record fields or columns in the same row template. The join binds
+one value per row. Later derivations in the same row template read that
+value through the bound column. A row-phase `compute` still names no
+qualified cross-dataset identifier (R010-4).
 
-**R003-47.** During grouped row construction the same join matches each
-applicable key against the candidate's group-key value, so every
-applicable key must be a group key of the template (R001-7). A key the
-group does not carry varies within the group and names no single match
-value: fail as `ungrouped_driver_field` (R001-36). A key no driver
-record carries fails as `unknown_field` (R002-27), in either mode.
-
+**R003-47.** During grouped row construction, the same join matches each
+applicable key against the candidate's group-key value. Every applicable
+key must be a group key of the row template (R001-7). A key the group
+does not carry varies within the group and names no single match value:
+fail as `ungrouped_driver_field` (R001-36). A key no input record
+carries fails as `unknown_field` (R002-27), in either mode.
 
 ## Errors
 
@@ -381,10 +362,29 @@ The failure vocabulary, in the order the requirements introduce it:
 `no_applicable_keys` (R003-42, R003-43), `duplicate_identifier` (R003-3),
 `missing_required_field` (R003-4, schema phase, no requirement attached),
 `source_key_length_mismatch` (R003-5), `unknown_field` (R003-6, R003-7,
-R003-10, R003-12, R003-15, R003-22, R003-31, R003-47), `incompatible_input_type`
+R003-10, R003-12, R003-15, R003-22, R003-31, R003-47),
+`incompatible_input_type`
 (R003-8, R003-41), `unpaired_fields` (R003-9), `incomparable_range_types`
 (R003-11), `conflicting_absent_policy` (R003-13), `unmatched_key`
 (R003-14), `phase_boundary` (R003-16), `multiple_matches` (R003-17,
 R003-35), `missing_aggregate_keys` (R003-30), `prohibited_construct`
 (R003-38), `redundant_key_base` (R003-45), and `ungrouped_driver_field`
 (R003-47, under R001-36).
+
+## Rationale
+
+An expression returns one value. Before this rule, three mechanisms
+reached another dataset -- the implicit join, `record_lookups`, and
+`mapping_from` -- with three key derivations and three absence
+vocabularies. A reviewer could not see that two columns reading "the
+same" record agreed, and an edit to one key statement and not the other
+broke the agreement silently.
+
+The unification keeps the implicit join where the match is already
+stated: the output `keys` name the row's identity, so a plain
+`source: DATASET.COLUMN` matching on the applicable keys says nothing
+twice. `record_lookups` and `mapping_from` become the one explicit
+`lookup` for everything else -- an unclear key, a key that differs from
+the applicable output keys, or a reusable named read -- so the
+declaration a reviewer reads is the match the engine runs, whichever
+form states it.

@@ -261,19 +261,6 @@ and order, conditions, and final displayed artifacts must still agree exactly
 across projects; `comparison_decimals` is not a tolerance for structural
 differences.
 
-## Rationale
-
-A specification stays portable by naming a logical contract instead of
-runnable code. The same derivation can run in an R project or a Python
-project, and neither the language choice nor the callable appears in the
-specification. One immutable runtime per project makes execution
-reproducible and reviewable. The digest pins the runtime. Verification runs
-before activation. Exact types allow no implicit conversion,
-signatures are closed, and activation vectors run before any specification
-executes. These rules exist so a project function returns the same scalar
-in both languages. Any change in meaning arrives as a new contract version,
-never as a silent difference.
-
 ## Errors
 
 **R018-33.** No usable `environment.yaml` when implementation validation,
@@ -296,3 +283,16 @@ not converted. **R018-42.** A failed activation vector or numeric comparison:
 **R018-43.** Each failure identifies the logical function, contract version,
 implementation version when available, and original host context when a binding
 was invoked.
+
+## Rationale
+
+A specification stays portable by naming a logical contract instead of
+runnable code. The same derivation can run in an R project or a Python
+project, and neither the language choice nor the callable appears in the
+specification. One immutable runtime per project makes execution
+reproducible and reviewable. The digest pins the runtime. Verification runs
+before activation. Exact types allow no implicit conversion,
+signatures are closed, and activation vectors run before any specification
+executes. These rules exist so a project function returns the same scalar
+in both languages. Any change in meaning arrives as a new contract version,
+never as a silent difference.

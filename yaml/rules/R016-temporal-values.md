@@ -36,7 +36,7 @@ canonical text they apply, exactly as its numeric cells name R010 for the
 every expression, and defers the input and result types of the temporal
 operations to this rule, as it defers `aggregate` to R013. R014 owns which
 stored fields are missing and reaches this grammar through R011's `str` row.
-R008 owns the handler lifecycle whose `missing` and `invalid` fields
+R008 owns the local handlers whose `missing` and `invalid` fields
 `date_impute` and `date_precision` declare. R005 owns when conversion happens
 and R010 owns arithmetic, which no temporal value enters.
 
@@ -281,7 +281,7 @@ compare by the fields above; precision is not one of them. A value completed
 from a year and a month therefore orders against a fully collected one on the
 day it names, wins a `greatest` it is the latest operand of, and satisfies a
 predicate the day satisfies. Every pair of non-missing values of one type stays
-ordered, which is what keeps an `order_by` term total and R007's comparability
+ordered, which is what keeps an `order_by` term total and R011's comparability
 argument intact.
 
 **R016-36.** This is a decision and not an omission, and the imputed value
@@ -301,7 +301,7 @@ specification that needs a supplied day not to reach a classification
 bounds the imputation with `not_before`, or states a verification under
 R009. Neither is a comparison, so neither belongs in this section.
 
-**R016-38.** A temporal value is comparable only with its own type. R007 admits
+**R016-38.** A temporal value is comparable only with its own type. R011-34 admits
 no implicit conversion between operation inputs. A source list or ordering term
 mixing a `datetime` with a `date`, number, or string is an error
 rather than a comparison over a coerced value. Ordering a moment against a day
@@ -463,68 +463,6 @@ drops time fields. A missing source returns a missing date. Any other source
 type is the incompatible-input error R007 defines; in particular, a `date` is
 not accepted as an identity spelling.
 
-## Ingestion
-
-**R016-58.** Every place text becomes a temporal value uses this text form.
-R014 applies R011's `str` row, which reaches the grammar above. A field
-declared `date` or `datetime` in a `types` declaration parses
-exactly as a column conversion parses.
-
-
-**R016-59.** The two paths differ only in what answers a bad value, which R014
-fixes rather than this rule: an ingested value that does not parse is rejected
-before any derivation, so no handler applies. A `str` field converted
-at the column declaring a temporal type fails there, where
-`conversion_failure` can answer. A specification that wants to see a malformed
-value therefore leaves the field `str`, which is what `negative-datetime-zone-
-offset` does.
-
-## Rationale
-
-Each runtime's own parser accepts a wider and a different set of spellings, so
-the lexical form rejects all but one extended shape per type. Portability
-costs exactly the rejected table. Zones and offsets are refused rather than
-normalized because Python orders naive against aware datetimes by raising while
-R has no naive datetime at all, and a CDISC `--DTC` value is local site time
-anyway. Fractions are refused because Python stores whole microseconds while R
-stores a binary64 count of seconds, and whole seconds are exact in both.
-Collected precision travels with the value but takes no part in comparisons, so
-every pair of values of one type stays ordered. A specification that acts on
-imprecision bounds the imputation or states a verification instead.
-
-## Errors
-
-**R016-60.** Text that is not the lexical form above: not a temporal value. For
-a `date` this includes a truncated date, a date carrying a time of day, and the
-basic format; for a `datetime` it additionally includes a zone designator, an
-offset, a fractional second, hour 24, and a leap second. Reaching a temporal
-column, it is the conversion failure R011 defines, handled by
-`conversion_failure` under R008 and otherwise fatal under R005. **R016-61.** A
-date part that is not a date in the calendar, such as `2025-02-30`: the same
-failure. **R016-62.** A year outside `0001` to `9999`: the same failure. The
-four-digit field admits no other year, and that range is also the one Python's
-`datetime` holds. **R016-63.** A conversion the table above marks `fail`,
-including `date` to `datetime` and `datetime` to `date`: fail; choose none.
-**R016-64.** Comparing or ordering a temporal value against another type:
-fail under R007, which owns comparability. **R016-65.** A
-date operation other than `to_date` given a `datetime`: fail rather than widen
-the operation. This includes a `datetime` reaching `date_precision` as a value
-source. **R016-66.** `to_date` given anything other than a `datetime`: fail as
-an incompatible input. A missing `datetime` yields a missing date instead.
-**R016-67.** `date_impute` whose `month` or numeric `day` is outside the
-calendar range, or whose completed value is not a real calendar date: fail.
-Neither can arise from a `day` naming a position in its month. **R016-68.**
-`date_impute` whose `day` is a token that is neither a number nor a declared
-position: rejected where the specification is read, before any data is seen.
-**R016-69.** `date_impute` whose completed value cannot satisfy `not_before`
-within the interval its collected components admit: missing, no failure. Like
-a source below minimum precision, it is neither missing nor invalid
-text, so no R008 handler answers it. **R016-70.** A temporal value used as an
-operand in a `compute` expression: fail under R010, which admits only numeric
-identifiers. **R016-71.** Storing a value no implementation can hold exactly,
-such as a fractional or leap second, is never reached because text is rejected
-first. An implementation must not round to reach such a value.
-
 ## Whole calendar units
 
 **R016-72.** `date_diff` with `unit: day` is the calendar-date difference
@@ -558,8 +496,70 @@ excluding `start`; `inclusive` counts both endpoints and is one greater;
 any other value has no meaning -- an age of 35 does not become 36 --
 and is rejected where the specification is read, before any data is seen.
 
+## Ingestion
+
+**R016-58.** Every place text becomes a temporal value uses this text form.
+R014 applies R011's `str` row, which reaches the grammar above. A field
+declared `date` or `datetime` in a `types` declaration parses
+exactly as a column conversion parses.
+
+
+**R016-59.** The two paths differ only in what answers a bad value, which R014
+fixes rather than this rule: an ingested value that does not parse is rejected
+before any derivation, so no handler applies. A `str` field converted
+at the column declaring a temporal type fails there, where
+`conversion_failure` can answer. A specification that wants to see a malformed
+value therefore leaves the field `str`, which is what `negative-datetime-zone-
+offset` does.
+
+## Errors
+
+**R016-60.** Text that is not the lexical form above: not a temporal value. For
+a `date` this includes a truncated date, a date carrying a time of day, and the
+basic format; for a `datetime` it additionally includes a zone designator, an
+offset, a fractional second, hour 24, and a leap second. Reaching a temporal
+column, it is the conversion failure R011 defines, handled by
+`conversion_failure` under R008 and otherwise fatal under R005. **R016-61.** A
+date part that is not a date in the calendar, such as `2025-02-30`: the same
+failure. **R016-62.** A year outside `0001` to `9999`: the same failure. The
+four-digit field admits no other year, and that range is also the one Python's
+`datetime` holds. **R016-63.** A conversion the table above marks `fail`,
+including `date` to `datetime` and `datetime` to `date`: fail; choose none.
+**R016-64.** Comparing or ordering a temporal value against another type:
+fail under R011-35, reported as the R007-38 incompatible-input error. **R016-65.** A
+date operation other than `to_date` given a `datetime`: fail rather than widen
+the operation. This includes a `datetime` reaching `date_precision` as a value
+source. **R016-66.** `to_date` given anything other than a `datetime`: fail as
+an incompatible input. A missing `datetime` yields a missing date instead.
+**R016-67.** `date_impute` whose `month` or numeric `day` is outside the
+calendar range, or whose completed value is not a real calendar date: fail.
+Neither can arise from a `day` naming a position in its month. **R016-68.**
+`date_impute` whose `day` is a token that is neither a number nor a declared
+position: rejected where the specification is read, before any data is seen.
+**R016-69.** `date_impute` whose completed value cannot satisfy `not_before`
+within the interval its collected components admit: missing, no failure. Like
+a source below minimum precision, it is neither missing nor invalid
+text, so no R008 handler answers it. **R016-70.** A temporal value used as an
+operand in a `compute` expression: fail under R010, which admits only numeric
+identifiers. **R016-71.** Storing a value no implementation can hold exactly,
+such as a fractional or leap second, is never reached because text is rejected
+first. An implementation must not round to reach such a value.
+
 **R016-77.** A `date_diff` with a non-`exclusive` `bounds` beside a
 non-`day` `unit` fails validation with condition `value_not_permitted`,
 naming the offending `bounds` value and the permitted value
 `exclusive`. Like every validation failure, no handler answers it and
 no artifact is accepted.
+
+## Rationale
+
+Each runtime's own parser accepts a wider and a different set of spellings, so
+the lexical form rejects all but one extended shape per type. Portability
+costs exactly the rejected table. Zones and offsets are refused rather than
+normalized because Python orders naive against aware datetimes by raising while
+R has no naive datetime at all, and a CDISC `--DTC` value is local site time
+anyway. Fractions are refused because Python stores whole microseconds while R
+stores a binary64 count of seconds, and whole seconds are exact in both.
+Collected precision travels with the value but takes no part in comparisons, so
+every pair of values of one type stays ordered. A specification that acts on
+imprecision bounds the imputation or states a verification instead.

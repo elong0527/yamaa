@@ -64,7 +64,10 @@ One term per concept across all rules, schema comments, and messages:
   compared with it, and both implementations replay its vectors, so a change
   made anywhere else fails validation. Add a vector for every behavior the
   change decides.
-- Give every rule a stable ID and list it in `rules/README.md`.
+- Give every rule a stable ID and list it in the appropriate logical block
+  of `rules/README.md`. Follow its section order and preserve requirement IDs
+  when reorganizing text; an ownership move retains a numbered reference to
+  the canonical requirement.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.

@@ -91,13 +91,6 @@ Without that handler, the missing value is fatal under R008.
 literal text and replacement values, including an empty string when the
 template itself is empty.
 
-## Rationale
-
-The template language admits only variable references and literal text.
-Brace-pair escaping takes precedence while scanning, so literal braces remain
-expressible. The bare shorthand has no missing handler. A specification uses
-the canonical form to select a replacement explicitly.
-
 ## Errors
 
 **R012-16.** A template that does not parse under the grammar: fail
@@ -110,3 +103,10 @@ or unmatched brace.
 
 **R012-19.** A missing placeholder value without `missing`: fail under
 R008.
+
+## Rationale
+
+The template language admits only variable references and literal text.
+Brace-pair escaping takes precedence while scanning, so literal braces remain
+expressible. The bare shorthand has no missing handler. A specification uses
+the canonical form to select a replacement explicitly.

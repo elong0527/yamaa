@@ -61,16 +61,16 @@ filters after a group reduction. An ungrouped `filter` filters input records.
 Record-driven row templates keep input order. Group-driven row templates
 keep first-occurrence group order.
 
-**R001-10.** The input datasets and the row templates fix the output rows. No operation repeats a candidate a data-dependent number of times.
-No generated index supports that repetition. A source value may decide
-whether a written row template keeps its one candidate. That value cannot
-create more instances of that row template.
+**R001-10.** Input datasets and row templates fix output rows. No
+operation repeats a candidate a data-dependent number of times. No generated
+index supports the repetition. A source value may decide whether a written
+row template keeps one candidate. The source value cannot create more rows.
 
 **R001-11.** When the required artifact has one row per observation,
 administration, or planned event, an input dataset must contain one input
 record per required row. Expected-but-uncollected rows use an explicit
 planning relation at those keys and may be enriched from collected
-relations through record intermediates. Dynamically counted expansion must happen
+relations through record intermediates. Dynamically counted expansion happens
 upstream. The expanded records enter the specification as ordinary input.
 
 **R001-12.** The `keys` state the output row identity, and `keys` must be
@@ -114,7 +114,7 @@ dependencies, then evaluate the keyword. Fields whose declared type contains
 a leaf. YAML mapping order has no execution meaning.
 
 **R001-14.** Window expressions evaluate over the partitions declared by their
-own `group_by`. Aggregate expressions evaluate in the contexts R007 permits.
+own `group_by`. Aggregate expressions evaluate in the contexts R013-3 permits.
 All other expressions return one value per current row.
 
 **R001-15.** During group-driven row construction, a source variable of the row
@@ -169,8 +169,8 @@ prunes, and orders the resolved columns before R001 applies.
 Declaration order is the resolved order.
 
 **R001-29.** The column dependency graph is over columns, not over rows. A
-column that reads another row of its own window partition therefore depends on the
-whole named column. A column that reaches its own value through another row
+column reading another row in its own window partition depends on the whole
+named column. A column that reaches its own value through another row
 is a cycle rather than an iteration. `previous_non_missing` crosses any
 number of missing rows by searching a separate completed source column.
 Conventional carry-forward coalesces the current source with that search
@@ -185,14 +185,6 @@ of the declared type.
 independently of declaration order, and `output.order_by` orders the
 artifact's rows independently of the construction order this rule defines.
 R005 owns both.
-
-## Rationale
-
-Row count changes only during row construction. A reviewer can therefore
-separate row construction from enrichment: the row templates and their input
-datasets fix the row count before any column is derived. Dependency
-inference makes declaration order checkable and shows cycles.
-Evaluation order never follows mapping order or repeated reads of a partition.
 
 ## Errors
 
@@ -224,3 +216,11 @@ Evaluation order never follows mapping order or repeated reads of a partition.
   the keys. Missing results are excluded from the count. A source declaring
   `multiple_matches` keeps one of the records carrying those values instead
   of failing, which R008-12 defines.
+
+## Rationale
+
+Row count changes only during row construction. A reviewer can therefore
+separate row construction from enrichment: the row templates and their input
+datasets fix the row count before any column is derived. Dependency
+inference makes declaration order checkable and shows cycles.
+Evaluation order never follows mapping order or repeated reads of a partition.

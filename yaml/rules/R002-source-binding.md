@@ -45,9 +45,9 @@ resolved specification.
 Declare that source under its own name.
 
 **R002-7.** No keyed construct reaches a sibling record of the output
-dataset. R001 owns what happens when a column reaches its own value
-through the window partition rows of that column. Addressing a sibling record by
-key is open work.
+dataset. R001 owns what happens when a column reaches its own value through
+that column's window partition. Addressing a sibling record by key is open
+work.
 
 ## Source expressions
 
@@ -172,13 +172,6 @@ structured source declares `multiple_matches`, also under R008.
 **R002-26.** A present matched row with a missing `Value` returns missing.
 That row does not invoke the absent-item handler.
 
-## Rationale
-
-Unqualified names address the output dataset. Reusing the output domain
-as a dataset identifier would be ambiguous. Forbidding arbitrary nested
-expressions in variable fields keeps each operation self-contained and
-its dependencies visible.
-
 ## Errors
 
 **R002-27.** An unknown dataset identifier or variable: fail.
@@ -200,3 +193,10 @@ column: fail.
 handled.
 
 **R002-34.** No ODM contextual match: fail unless locally handled.
+
+## Rationale
+
+Unqualified names address the output dataset. Reusing the output domain
+as a dataset identifier would be ambiguous. Forbidding arbitrary nested
+expressions in variable fields keeps each operation self-contained and
+its dependencies visible.

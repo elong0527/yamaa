@@ -165,38 +165,6 @@ record lookup declaring `unmatched: fail` under R015 rejects an expected
 group the data cannot supply. A planning relation at the required keys
 gives every expected group an input record under R001.
 
-## Rationale
-
-An ordered-series assertion would carry its own partition, ordering,
-frame-bound, and missing-value contract for a case no example has, and
-nothing weaker than all four would be portable. The rule admits no frame
-shape until an example needs one that a producer and a consumer cannot
-express. Restating a cross-dataset match as a verification would duplicate
-R015's matching, filtering, and multiple-match semantics inside an assertion
-that runs long after the value the assertion doubts was consumed, so the
-link is asserted where it is produced instead. A `max_length` on a rendered
-number or temporal value would assert a property of R011's rendering rather
-than of the value, so it is declared only on `str` columns. A column that
-admits no value at all is a column the specification should not declare, so
-`max_length` requires a `max` of at least one.
-
-## Errors
-
-- **R009-23.** An unknown verification keyword or field: schema failure.
-- **R009-24.** A duplicate dataset-verification `id`: fail.
-- **R009-25.** `range` or `row_count` with no bound, or with `min > max`:
-  fail.
-- **R009-26.** `max_length` whose `max` is less than one: fail. A column that
-  admits no value at all is a column the specification should not declare.
-- **R009-27.** `all_or_none` with fewer than two distinct columns: fail.
-- **R009-28.** A `row_count` declaring `group_by` without an `id`: fail.
-- **R009-29.** An empty or duplicated `row_count.group_by`: fail.
-- **R009-30.** A verification applied to an incompatible column type: fail.
-- **R009-31.** An unknown column in `unique`, `all_or_none`, `implies`,
-  `assert`, or `row_count.group_by`: fail.
-- **R009-32.** Any `error` verification failure: fail and report it. A
-  `warning` violation follows R009-33 through R009-40 instead.
-
 ## Severity and the violation log
 
 **R009-33.** Every column and dataset verification may declare `severity`
@@ -285,3 +253,35 @@ one row. `CONDITION` is `range_failed`, `REQUIREMENT` is `R009-11`,
 `OFFENDING_KEYS` is
 `[{"STUDYID":"PILOT7","USUBJID":"P7-732"}]`, and `DETAILS` is
 `{"column":"AGE"}`.
+
+## Errors
+
+- **R009-23.** An unknown verification keyword or field: schema failure.
+- **R009-24.** A duplicate dataset-verification `id`: fail.
+- **R009-25.** `range` or `row_count` with no bound, or with `min > max`:
+  fail.
+- **R009-26.** `max_length` whose `max` is less than one: fail. A column that
+  admits no value at all is a column the specification should not declare.
+- **R009-27.** `all_or_none` with fewer than two distinct columns: fail.
+- **R009-28.** A `row_count` declaring `group_by` without an `id`: fail.
+- **R009-29.** An empty or duplicated `row_count.group_by`: fail.
+- **R009-30.** A verification applied to an incompatible column type: fail.
+- **R009-31.** An unknown column in `unique`, `all_or_none`, `implies`,
+  `assert`, or `row_count.group_by`: fail.
+- **R009-32.** Any `error` verification failure: fail and report it. A
+  `warning` violation follows R009-33 through R009-40 instead.
+
+## Rationale
+
+An ordered-series assertion would carry its own partition, ordering,
+frame-bound, and missing-value contract for a case no example has, and
+nothing weaker than all four would be portable. The rule admits no frame
+shape until an example needs one that a producer and a consumer cannot
+express. Restating a cross-dataset match as a verification would duplicate
+R015's matching, filtering, and multiple-match semantics inside an assertion
+that runs long after the value the assertion doubts was consumed, so the
+link is asserted where it is produced instead. A `max_length` on a rendered
+number or temporal value would assert a property of R011's rendering rather
+than of the value, so it is declared only on `str` columns. A column that
+admits no value at all is a column the specification should not declare, so
+`max_length` requires a `max` of at least one.

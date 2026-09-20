@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 
@@ -34,6 +35,13 @@ EXECUTION_SPEC = importlib.util.spec_from_file_location(
 assert EXECUTION_SPEC is not None and EXECUTION_SPEC.loader is not None
 EXECUTION_CHECK = importlib.util.module_from_spec(EXECUTION_SPEC)
 EXECUTION_SPEC.loader.exec_module(EXECUTION_CHECK)
+
+
+RULE_PATH = Path(__file__).parent / 'check_rule_metadata.py'
+RULE_SPEC = importlib.util.spec_from_file_location('check_rule_metadata', RULE_PATH)
+assert RULE_SPEC is not None and RULE_SPEC.loader is not None
+RULE_CHECK = importlib.util.module_from_spec(RULE_SPEC)
+RULE_SPEC.loader.exec_module(RULE_CHECK)
 
 
 class TestYamlLoader(unittest.TestCase):
@@ -1945,6 +1953,88 @@ class TestRuleMetadata(unittest.TestCase):
 
         self.assertEqual(len(errors), 2)
         self.assertTrue(all('normative' in error for error in errors))
+
+
+class TestStableRequirementReferences(unittest.TestCase):
+    def setUp(self):
+        directory = self.enterContext(tempfile.TemporaryDirectory())
+        self.root = Path(directory)
+        self.enterContext(patch.object(RULE_CHECK, 'REPO', self.root))
+        self.rule = self.root / 'R001-rule.md'
+        self.error = self.root / 'error.yaml'
+
+    def check_rule(self, requirements, ending=None):
+        self.rule.write_text(
+            '---\nid: R001\ntitle: Rule\nstatus: normative\n'
+            'applies_to: [root.rows]\n---\n'
+            '# Rule\n\n## Intent\n\nIntent.\n\n'
+            '## Boundaries\n\nBoundary.\n\n## Requirements\n\n'
+            + requirements + '\n\n'
+            + (ending or '## Errors\n\nErrors.\n\n## Rationale\n\nReason.\n')
+        )
+        errors, found = [], set()
+        RULE_CHECK.check_rule(self.rule, errors, found)
+        return errors, found
+
+    def test_reordering_preserves_integer_and_suffix_citations(self):
+        errors, found = self.check_rule(
+            '**R001-12b.** Existing extension.\n\n'
+            '**R001-2.** Moved topic.\n\n'
+            '**R001-12a.** Existing extension.\n\n'
+            '**R001-1.** Original topic.'
+        )
+        for requirement in ('R001-1', 'R001-2', 'R001-12a', 'R001-12b'):
+            self.error.write_text(f'requirement: {requirement}\n')
+            RULE_CHECK.check_error(self.error, found, errors)
+        self.assertEqual(errors, [])
+        self.assertEqual(found, {'R001-1', 'R001-2', 'R001-12a', 'R001-12b'})
+
+    def test_duplicate_requirement_ids_fail_including_suffixes(self):
+        for identifier in ('R001-1', 'R001-12a'):
+            with self.subTest(identifier=identifier):
+                errors, _ = self.check_rule(
+                    f'**{identifier}.** First.\n\n**{identifier}.** Second.'
+                )
+                self.assertTrue(any('duplicate requirements' in e for e in errors))
+
+    def test_foreign_requirement_cannot_satisfy_a_citation(self):
+        errors, found = self.check_rule('**R002-1.** Wrong owner.')
+        self.assertTrue(any('requirements of other rules' in e for e in errors))
+        self.error.write_text('requirement: R002-1\n')
+        citation_errors = []
+        RULE_CHECK.check_error(self.error, found, citation_errors)
+        self.assertTrue(any('names no numbered requirement' in e
+                            for e in citation_errors))
+
+    def test_unresolved_and_malformed_citations_fail(self):
+        _, found = self.check_rule('**R001-1.** Existing requirement.')
+        for identifier in ('R001-2', 'R001-1a', 'R001-0', 'R001-1ab'):
+            with self.subTest(identifier=identifier):
+                self.error.write_text(f'requirement: {identifier}\n')
+                errors = []
+                RULE_CHECK.check_error(self.error, found, errors)
+                self.assertEqual(len(errors), 1)
+
+    def test_numbered_forward_reference_keeps_old_citation_valid(self):
+        errors, found = self.check_rule(
+            '**R001-1.** See R011-35 for the canonical contract.'
+        )
+        self.error.write_text('requirement: R001-1\n')
+        RULE_CHECK.check_error(self.error, found, errors)
+        self.assertEqual(errors, [])
+        self.assertEqual(found, {'R001-1'})
+
+    def test_topics_cannot_follow_errors_and_rationale(self):
+        errors, _ = self.check_rule(
+            '**R001-1.** Existing requirement.',
+            '## Errors\n\nErrors.\n\n## Rationale\n\nReason.\n\n'
+            '## Late topic\n\n**R001-2.** Appended topic.\n',
+        )
+        self.assertTrue(any('end with Errors and Rationale' in e for e in errors))
+
+    def test_rule_without_requirement_ids_fails(self):
+        errors, _ = self.check_rule('Unnumbered contract.')
+        self.assertTrue(any('no numbered requirements' in e for e in errors))
 
 
 class TestSpecificationInheritance(unittest.TestCase):

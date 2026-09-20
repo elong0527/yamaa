@@ -1,10 +1,10 @@
 # Machine-readable grammar for R004's Boolean predicate language.
 #
 # This file is the single source for the closed grammar written in a field
-# typed `sql`. R004's `## Grammar` block is rendered from `productions`, and
-# every implementation's parser is checked against `reserved` and `cases`, so
-# the rule, the R parser, and the Python parser cannot drift apart without
-# failing validation.
+# typed `predicate`. R004's `## Grammar` block is rendered from
+# `productions`, and every implementation's parser is checked against
+# `reserved` and `cases`, so the rule, the R parser, and the Python parser
+# cannot drift apart without failing validation.
 #
 # This contract defines the `name` and `digits` non-terminals the numeric and
 # aggregate grammars import, because a predicate and a formula must never

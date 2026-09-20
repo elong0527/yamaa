@@ -200,34 +200,6 @@ and ingestion fails the run; the replacement is not read.
 number, or size is not the identity, because none of them changes reliably
 when content does.
 
-## Rationale
-
-The written-form checks run before the filesystem is consulted so that a
-malformed path fails identically on every platform and reveals nothing about
-the host. A rooted path is admitted because study code and study data are
-commonly stored apart, but it is admitted as a selection among roots already
-approved rather than as permission to read the host.
-
-The roots come from the study's own configuration as well as from the runner.
-The study authors know where the study data is kept, and requiring them to
-pass that location through a runner protects nothing when they control the
-runner too. The configuration must not travel: it is read once, from the
-entry project, so a layer R017 reaches
-cannot redirect where a study reads from, and a study that runs someone else's
-specification is not handed that specification's idea of what it may open. A
-runner that did not write the study keeps the last word, because it can cap or
-decline what the configuration declares -- which is also where a packaging run
-enforces the portability a submission needs. One key per
-canonical file keeps the single-snapshot identity meaningful: the two spellings
-of one file bind one snapshot instead of observing different bytes. Symbolic
-links are rejected below the anchor because a link there is a second name
-whose target can change between validation and ingestion, and they are
-irrelevant above it because the anchor is canonicalized and opened before any
-specification is read and cannot be swapped afterwards. Error messages name
-only what the specification itself wrote. The checks run before consulting the
-filesystem for the same reason: a rejected specification may be probing for
-host layout.
-
 ## Errors
 
 **R021-24.** A failure names the written path exactly as the specification
@@ -266,3 +238,31 @@ which reports under `ingest`.
   directories, or declares one outside a ceiling the runner named: fail before
   any specification is read. A malformed configuration is a run that was never
   configured, not a run with fewer roots.
+
+## Rationale
+
+The written-form checks run before the filesystem is consulted so that a
+malformed path fails identically on every platform and reveals nothing about
+the host. A rooted path is admitted because study code and study data are
+commonly stored apart, but it is admitted as a selection among roots already
+approved rather than as permission to read the host.
+
+The roots come from the study's own configuration as well as from the runner.
+The study authors know where the study data is kept, and requiring them to
+pass that location through a runner protects nothing when they control the
+runner too. The configuration must not travel: it is read once, from the
+entry project, so a layer R017 reaches
+cannot redirect where a study reads from, and a study that runs someone else's
+specification is not handed that specification's idea of what it may open. A
+runner that did not write the study keeps the last word, because it can cap or
+decline what the configuration declares -- which is also where a packaging run
+enforces the portability a submission needs. One key per
+canonical file keeps the single-snapshot identity meaningful: the two spellings
+of one file bind one snapshot instead of observing different bytes. Symbolic
+links are rejected below the anchor because a link there is a second name
+whose target can change between validation and ingestion, and they are
+irrelevant above it because the anchor is canonicalized and opened before any
+specification is read and cannot be swapped afterwards. Error messages name
+only what the specification itself wrote. The checks run before consulting the
+filesystem for the same reason: a rejected specification may be probing for
+host layout.

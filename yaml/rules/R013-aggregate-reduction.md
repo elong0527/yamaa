@@ -17,10 +17,10 @@ per reducer. Avoid host-language code.
 ## Boundaries
 
 This rule owns the `aggregate_expression` primitive: its grammar, reducer
-vocabulary, key rule, result semantics, and failure conditions. R007 owns the
-three contexts an aggregate is valid in. R003 owns the join that consumes a
-right-side reduction. R004 owns the Boolean `filter`. String reductions use
-R019's text equality and total order.
+vocabulary, evaluation contexts, filter scope, key rule, result semantics,
+and failure conditions. R003 owns the join that consumes a right-side
+reduction, R001 owns scheduling, and R004 owns the Boolean `filter` language.
+String reductions use R019's text equality and total order.
 
 Arithmetic outside a reduction is R010's. R010's operators, precedence,
 function table, numeric types, promotion, and failure conditions apply here
@@ -38,7 +38,7 @@ present.
 **R013-1.** An `aggregate_expression` evaluates records from one relation and
 returns one value per group. The expression never changes row count. R003 joins
 a right-side reduction to constructed rows. An output-row reduction broadcasts
-under R007. A grouped row template asks the expression for one value while R001
+under R013-3. A grouped row template asks the expression for one value while R001
 owns whether that candidate row is appended.
 
 ## Relations and identifiers
@@ -47,8 +47,9 @@ owns whether that candidate row is appended.
 identifier in the same phase. A reducer expression and predicate never disagree
 about a name.
 
-**R013-3.** Every identifier in one expression must name one relation. Three
-forms exist and must not be mixed:
+**R013-3.** Every identifier in one expression must name one relation.
+An aggregate is valid in exactly the following three contexts. The forms
+must not be mixed; every other context is an error:
 
 - **Qualified.** Every identifier names the same declared dataset relation.
   During column derivation the expression reduces that right side before the
@@ -58,19 +59,19 @@ forms exist and must not be mixed:
   the same qualifier relational.
 - **Unqualified.** Every identifier names a current-output column. The
   expression reduces constructed output rows within its `group_by` partition
-  and broadcasts the result, which is R007's second aggregate context.
+  and broadcasts the result to every row in the partition.
 - **Grouped input.** Every identifier is qualified
   to the input dataset of the enclosing grouped row template. The
-  expression reduces only the records of the current input group, which
-  is R007's third aggregate context.
+  expression is a row derivation that reduces only the records of the
+  current input group to one candidate-row value.
 
 **R013-4.** A single expression naming two datasets, or mixing a qualified
 identifier with an unqualified one, is an error. A reduction is not a join. An
 expression combining two dataset relations first binds each relation to a
 column and then combines the results with `compute`. R010 admits a qualified
-identifier only for a record selected by an R015 record lookup. R010 still
+identifier only for a record selected by an R003 named intermediate. R010 still
 rejects an arbitrary dataset-qualified identifier. Every join remains
-under R003 or R015.
+under R003.
 
 **R013-5.** An ODM contextual reference is not available in this grammar. ODM
 item identifiers carry further periods. Bind the reference with a structured
@@ -85,6 +86,14 @@ whole output is not registered: no example needs one. A grouped-row aggregate
 declares no local `group_by`. The enclosing
 `row.group_by` already fixes its current relation and keys.
 
+## Filter scope
+
+**R013-49.** An aggregate `filter` selects records from its evaluation
+context: right-side records for a qualified column derivation, constructed
+output rows for an unqualified reduction, and current input-group records
+for a grouped row derivation. R004 defines predicate evaluation; filtering
+preserves the order of the retained records under R013-15.
+
 ## Row-relative range narrowing
 
 **R013-7.** A qualified aggregate may declare `between` to narrow right-side
@@ -95,7 +104,7 @@ inclusive: `lower <= value` and `value <= upper`. Omitting one bound makes the
 match one-sided without excluding the stated endpoint.
 
 **R013-8.** The value and every stated bound must be mutually comparable under
-R007. A missing current-row value admits no right-side record. The aggregate
+R011-35. A missing current-row value admits no right-side record. The aggregate
 result is missing under the empty-group rule below. A right-side
 record with a missing stated bound is ineligible. A missing cutoff never
 reduces the unrestricted right side.
@@ -267,18 +276,6 @@ independent of that order, while `ONLY` accepts no group in which an order
 could choose among records. A rule that needs one record chosen by value order
 still uses a window or `multiple_matches`, where the value order is declared.
 
-## Rationale
-
-One expression with a closed reducer vocabulary keeps reductions portable.
-Anything outside the table fails validation. No host dialect applies. A
-left-fold `SUM` in relation record order pins binary64 rounding identically in
-R and Python. `MEAN` inherits the fold through its defined division. Missing
-handling is pinned. The target runtimes disagree. An uncollected quantity
-therefore stays missing, and an absent group stays distinguishable from a
-collected zero. `ONLY` rejects rather than chooses. A one-record
-calculation therefore cannot silently depend on order. Choosing by value order
-stays with windows and `multiple_matches`, which declare the value order.
-
 ## Errors
 
 **R013-34.** An `aggregate_expression` that does not parse under this grammar:
@@ -303,3 +300,15 @@ fail. **R013-46.** `MIN` or `MAX` over incomparable values: fail. **R013-47.**
 A window, `CASE`, comparison, Boolean, string, subquery, or host construct:
 fail. **R013-48.** Any R010 failure condition reached through the arithmetic:
 fail, reporting the expression and the column that failed.
+
+## Rationale
+
+One expression with a closed reducer vocabulary keeps reductions portable.
+Anything outside the table fails validation. No host dialect applies. A
+left-fold `SUM` in relation record order pins binary64 rounding identically in
+R and Python. `MEAN` inherits the fold through its defined division. Missing
+handling is pinned. The target runtimes disagree. An uncollected quantity
+therefore stays missing, and an absent group stays distinguishable from a
+collected zero. `ONLY` rejects rather than chooses. A one-record
+calculation therefore cannot silently depend on order. Choosing by value order
+stays with windows and `multiple_matches`, which declare the value order.
