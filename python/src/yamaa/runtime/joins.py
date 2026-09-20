@@ -392,8 +392,9 @@ def join_scalar(
             return ResolvedValue(value=MISSING)
         if len(matches) == 1:
             return ResolvedValue(value=matches[0].values[field])
-        # REQ-0118 and REQ-0140: right-side uniqueness holds unless R008 relaxes
-        # it, because choosing by file order is not a study rule.
+        # REQ-0118 and REQ-0140: right-side uniqueness holds unless the Local
+        # handlers contract relaxes it, because choosing by file order is not
+        # a study rule.
         return FailedResolution(
             condition=RuntimeCondition(
                 phase="join",

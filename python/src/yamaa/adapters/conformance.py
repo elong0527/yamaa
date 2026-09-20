@@ -77,7 +77,8 @@ class ArtifactObservation(_FrozenModel):
     columns: tuple[str, ...]
     types: tuple[str, ...]
     row_count: int = Field(ge=0)
-    # R020's complete bytes split on the U+000A terminator REQ-0723 writes.
+    # The CSV profile contract's complete bytes split on the U+000A terminator
+    # REQ-0723 writes.
     # A missing value and a quoted empty string render differently and are
     # kept apart here; `sha256` below decides equality so that a newline
     # inside a quoted field cannot make this split the deciding view.

@@ -55,9 +55,9 @@ _HEX_DIGITS: Final = frozenset("0123456789abcdefABCDEF")
 class NoMatch:
     """The pattern matched nowhere in the subject.
 
-    REQ-0818 keeps an empty match distinct from no match, and R019 keeps the
-    empty string distinct from missing, so this is its own value rather than
-    either of them.
+    REQ-0818 keeps an empty match distinct from no match, and the Text values
+    contract keeps the empty string distinct from missing, so this is its own
+    value rather than either of them.
     """
 
     __slots__ = ()

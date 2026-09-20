@@ -317,8 +317,9 @@ def ordering_key(value: RuntimeValue) -> object:
 def compare_values(left: RuntimeValue, right: RuntimeValue) -> int:
     """Compare two non-missing values in the order their type owns.
 
-    REQ-0302 gives numeric order to R010, text order to R019, and chronological
-    order to R016, so one comparison serves every ordered operation rather
+    REQ-0302 gives the Numeric values contract numeric order, the Text values
+    contract text order, and the Temporal values contract chronological order,
+    so one comparison serves every ordered operation rather
     than each reimplementing its type's order. Two values of types that are
     not mutually comparable raise, because REQ-0324 refuses to convert an
     operand to make a comparison work.
@@ -494,7 +495,7 @@ class TypedTable(BaseModel):
             if column.type != "float" or series.dtype != pl.Float64:
                 continue
             values = series.to_list()
-            # REQ-0006 through REQ-0006 make this normalization precede every
+            # REQ-0006 and REQ-0008 make this normalization precede every
             # comparison, verification, key check, and artifact operation.
             if any(value is not None and not math.isfinite(value) for value in values):
                 frame = frame.with_columns(

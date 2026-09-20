@@ -389,7 +389,8 @@ def _checked_int(value: int, expr: str) -> int:
 
 
 def _finite(value: float) -> float | object:
-    # REQ-0006 applies R011's non-finite normalization after every operator.
+    # REQ-0006 applies the Types and conversion contract's non-finite
+    # normalization after every operator.
     return value if math.isfinite(value) else MISSING
 
 

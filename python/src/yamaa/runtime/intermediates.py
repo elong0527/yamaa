@@ -81,9 +81,9 @@ def _condition(
 def types_comparable(left: ColumnType, right: ColumnType) -> bool:
     """Return whether two declared types may be compared without conversion.
 
-    REQ-0121 lets `int` and `float` compare through R010's promotion and
-    requires every other type to match exactly, so no operand is converted
-    implicitly to make a range comparison work.
+    REQ-0121 lets `int` and `float` compare through the Numeric values contract's
+    promotion and requires every other type to match exactly, so no operand is
+    converted implicitly to make a range comparison work.
     """
     return left == right or {left, right} <= {"int", "float"}
 

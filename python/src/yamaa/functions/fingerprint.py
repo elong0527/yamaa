@@ -28,10 +28,11 @@ class ContractValueError(ValueError):
 
 
 def function_value_type(value: object) -> str | None:
-    """Return the exact R018 type of one authored value, or None for missing.
+    """Return the exact project-function scalar type of one authored value, or None
+    for missing.
 
-    REQ-0673 runs R011's non-finite normalization first, which is why a
-    non-finite float is missing here rather than a float.
+    REQ-0673 runs the Types and conversion contract's non-finite normalization
+    first, which is why a non-finite float is missing here rather than a float.
     """
     if type(value) is float and not math.isfinite(value):
         return None
@@ -59,9 +60,10 @@ def function_value_type(value: object) -> str | None:
 
 
 def _temporal_text(kind: str, text: str) -> str:
-    """Return the R016 canonical text of one authored temporal literal.
+    """Return the Temporal values contract's canonical text of one authored
+    temporal literal.
 
-    REQ-0672 encodes a temporal value as its R016 canonical text, so the
+    REQ-0672 encodes a temporal value as the contract's canonical text, so the
     encoding goes through the same parser every other temporal value in the
     package does rather than trusting the authored spelling.
     """

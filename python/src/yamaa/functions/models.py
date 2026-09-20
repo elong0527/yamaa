@@ -15,7 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from yamaa.specification.models import ColumnType
 
-# REQ-0677 extends the R011 column vocabulary with `bool` for parameters only.
+# REQ-0677 extends the Types and conversion contract's column vocabulary with
+# `bool` for parameters only.
 FunctionParamType: TypeAlias = Literal[
     "str", "int", "float", "bool", "date", "datetime"
 ]

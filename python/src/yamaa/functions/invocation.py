@@ -121,10 +121,10 @@ class _ResultRejected(ValueError):
 def _host_result(value: HostValue) -> RuntimeValue:
     """Normalize one returned host scalar, or say why it is not one.
 
-    REQ-0686 runs R011's non-finite normalization here, immediately after the
-    host returns and before the contract's result checks, so a returned
-    infinity is a missing result that a contract must have declared rather
-    than a float that slips through.
+    REQ-0686 runs the Types and conversion contract's non-finite normalization
+    here, immediately after the host returns and before the contract's result
+    checks, so a returned infinity is a missing result that a contract must have
+    declared rather than a float that slips through.
     """
     if value is None:
         return MISSING
@@ -166,7 +166,8 @@ def _condition(
     requirement: str,
     context: dict[str, JsonValue],
 ) -> ConditionResult:
-    """Return one fatal R018 condition; REQ-0701 and REQ-0702 admit no handler."""
+    """Return one fatal project-function condition; REQ-0701 and REQ-0702 admit
+    no handler."""
     return ConditionResult(
         condition=RuntimeCondition(
             phase="derivation",

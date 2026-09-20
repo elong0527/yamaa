@@ -219,7 +219,8 @@ class _Parser:
         return node
 
     def _factor(self) -> AggregateAst:
-        # REQ-0476 keeps R010's unary sign, so a sign binds to one primary.
+        # REQ-0476 keeps the Numeric computation contract's unary sign, so a sign
+        # binds to one primary.
         if self._token[0] in {"PLUS", "MINUS"}:
             operator = self._advance()
             return {
@@ -458,9 +459,10 @@ def _fail(
     )
 
 
-# REQ-0480 folds `SUM` with R010's `+`, and REQ-0479 divides with R010's `/`.
-# Both run through the numeric evaluator, so binary64 rounding and integer
-# overflow are R010's behavior rather than a second implementation's.
+# REQ-0480 folds `SUM` with the Numeric computation contract's `+`, and REQ-0479
+# divides with its `/`. Both run through the numeric evaluator, so binary64
+# rounding and integer overflow are the contract's behavior rather than a
+# second implementation's.
 _LEFT: Final[AggregateAst] = {"kind": "identifier", "name": "left"}
 _RIGHT: Final[AggregateAst] = {"kind": "identifier", "name": "right"}
 _ADD: Final[AggregateAst] = {
