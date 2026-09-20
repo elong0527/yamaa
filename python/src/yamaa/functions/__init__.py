@@ -45,6 +45,7 @@ from yamaa.functions.models import (
     ProjectRuntime,
     RuntimeArtifact,
 )
+from yamaa.functions.runner import run_with_project_functions
 
 __all__ = [
     "ACTIVATION_CACHE",
@@ -82,6 +83,7 @@ __all__ = [
     "function_handlers",
     "load_environment",
     "results_match",
+    "run_with_project_functions",
     "validate_calls",
     "verify_artifact",
 ]

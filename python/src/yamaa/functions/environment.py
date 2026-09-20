@@ -28,6 +28,8 @@ from yamaa.functions.models import (
     FunctionContract,
     LoadedEnvironment,
     ProjectEnvironment,
+    SharedFunctionContract,
+    binding_arguments,
 )
 from yamaa.specification._yaml import read_yaml_document
 from yamaa.specification.diagnostics import SpecificationError
@@ -185,7 +187,7 @@ def _check_signature(name: str, contract: FunctionContract) -> None:
                 expected=parameter.type,
                 actual=default_type,
             )
-    mapped = set(contract.binding.args)
+    mapped = set(binding_arguments(contract))
     if mapped != seen:
         raise _invalid(
             "the binding must map the logical signature exactly",
@@ -207,7 +209,7 @@ def _check_binding(name: str, contract: FunctionContract, language: str) -> None
             call=call,
             language=language,
         )
-    host_names = list(contract.binding.args.values())
+    host_names = list(binding_arguments(contract).values())
     if len(set(host_names)) != len(host_names):
         raise _invalid(
             "each logical parameter needs one unique host argument name",
@@ -234,25 +236,121 @@ def _valid_host_name(language: str, name: str) -> bool:
     )
 
 
-def _conformance_path(root: Path, name: str, contract: FunctionContract) -> Path:
-    """Resolve one vector document without leaving the project root."""
-    written = PurePosixPath(contract.conformance)
-    if written.is_absolute() or any(part in (".", "..") for part in written.parts):
+def _local_document_path(root: Path, written: str, *, field: str, name: str) -> Path:
+    """Resolve a project-root-local document without leaving the root."""
+    candidate = PurePosixPath(written)
+    if candidate.is_absolute() or any(part in (".", "..") for part in candidate.parts):
         raise _invalid(
-            "a conformance path must be local and normalized",
+            f"a {field} path must be local and normalized",
             function=f"functions.{name}",
-            conformance=contract.conformance,
+            **{field: written},  # type: ignore[arg-type]
         )
-    candidate = root / Path(contract.conformance)
+    resolved = root / Path(written)
     try:
-        candidate.resolve().relative_to(root.resolve())
+        resolved.resolve().relative_to(root.resolve())
     except ValueError as error:
         raise _invalid(
-            "a conformance path must stay inside the project root",
+            f"a {field} path must stay inside the project root",
             function=f"functions.{name}",
-            conformance=contract.conformance,
+            **{field: written},  # type: ignore[arg-type]
         ) from error
-    return candidate
+    return resolved
+
+
+def _conformance_path(root: Path, name: str, contract: FunctionContract) -> Path:
+    """Resolve one vector document without leaving the project root."""
+    return _local_document_path(
+        root, contract.conformance, field="conformance", name=name
+    )
+
+
+# REQ-0669 names the language-neutral fields one shared contract document
+# carries once for every project implementing the contract.
+_SHARED_CONTRACT_FIELDS = (
+    "contract_version",
+    "description",
+    "comparison_decimals",
+    "may_return_missing",
+    "params",
+    "returns",
+)
+
+
+def _resolve_shared_contracts(
+    document: dict[object, object],
+    root: Path,
+) -> None:
+    """Merge REQ-0669 shared contracts into their function entries in place.
+
+    Runs on the raw environment document before schema normalization, so a
+    merged entry validates exactly like an inline contract. A `contract`
+    reference and inline contract fields together are invalid, as is a
+    reference to a document that does not define the referencing function.
+    """
+    functions = document.get("functions")
+    if not isinstance(functions, dict):
+        return
+    for name, entry in functions.items():
+        if not isinstance(entry, dict):
+            continue
+        reference = entry.get("contract")
+        if reference is None:
+            continue
+        if not isinstance(reference, str):
+            raise _invalid(
+                "a shared contract reference must be a path",
+                function=f"functions.{name}",
+            )
+        inline = [field for field in _SHARED_CONTRACT_FIELDS if field in entry]
+        if inline:
+            raise _invalid(
+                "a function entry must declare its contract inline or name "
+                "a shared contract, not both",
+                function=f"functions.{name}",
+                fields=inline,
+            )
+        path = _local_document_path(root, reference, field="contract", name=str(name))
+        shared_document = _read_document(
+            path,
+            condition="project_environment_invalid",
+            requirement="REQ-0695",
+        )
+        contracts: dict[str, SharedFunctionContract] = {}
+        for contract_name, raw in shared_document.items():
+            if not isinstance(raw, dict):
+                raise _invalid(
+                    "a shared contract document must map names to contracts",
+                    function=f"functions.{name}",
+                    contract=reference,
+                    entry=contract_name,
+                )
+            # A shared contract is a schema fragment: it carries no
+            # schema_version, so it validates against the pydantic model
+            # directly. The schema bundle still checks every merged entry
+            # structurally once the reference is resolved.
+            try:
+                validated = SharedFunctionContract.model_validate(raw, strict=True)
+            except ValidationError as error:
+                raise _invalid(
+                    "a shared contract does not satisfy the model contract",
+                    function=f"functions.{name}",
+                    contract=reference,
+                    entry=contract_name,
+                    paths=[
+                        ".".join(str(member) for member in item["loc"])
+                        for item in error.errors(include_url=False, include_input=False)
+                    ],
+                ) from error
+            contracts[str(contract_name)] = validated
+        if str(name) not in contracts:
+            raise _invalid(
+                "a shared contract document must define the referencing function",
+                function=f"functions.{name}",
+                contract=reference,
+            )
+        merged = contracts[str(name)].model_dump(exclude_unset=True)
+        merged.update({key: value for key, value in entry.items() if key != "contract"})
+        functions[name] = merged
 
 
 def _load_conformance(
@@ -296,6 +394,30 @@ def _load_conformance(
     return vectors, path.read_bytes()
 
 
+def _default_implementation_versions(
+    environment: ProjectEnvironment,
+) -> ProjectEnvironment:
+    """Apply the REQ-0669 default: an omitted implementation version is the
+    environment version, so every later stage reads a plain string."""
+    if all(
+        contract.implementation_version is not None
+        for contract in environment.functions.values()
+    ):
+        return environment
+    return environment.model_copy(
+        update={
+            "functions": {
+                name: contract
+                if contract.implementation_version is not None
+                else contract.model_copy(
+                    update={"implementation_version": environment.version}
+                )
+                for name, contract in environment.functions.items()
+            }
+        }
+    )
+
+
 def load_environment(
     project_root: str | Path,
     schema_root: str | Path,
@@ -320,6 +442,7 @@ def load_environment(
         condition="project_environment_missing",
         requirement="REQ-0694",
     )
+    _resolve_shared_contracts(document, root)
     environment = _model(
         document,
         schema,
@@ -330,6 +453,7 @@ def load_environment(
     assert isinstance(environment, ProjectEnvironment)
     if not environment.functions:
         raise _invalid("an environment must declare at least one function")
+    environment = _default_implementation_versions(environment)
 
     fingerprints: dict[str, str] = {}
     conformance: dict[str, ConformanceDocument] = {}

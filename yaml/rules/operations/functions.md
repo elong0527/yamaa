@@ -96,12 +96,23 @@ contains a runtime-specific callable name.
 **REQ-0669.** A contract declares:
 
 - a `contract_version` identifying its language-neutral behavior;
-- a separate `implementation_version` identifying this project's binding;
+- a separate `implementation_version` identifying this project's binding,
+  defaulting to the environment `version` when omitted;
 - one closed ordered `params` list;
 - one [Types and conversion](../values/types.md) `returns` type;
 - whether an invoked binding `may_return_missing`;
 - `comparison_decimals`, defaulting to four; and
 - one conformance-vector path.
+
+A function entry may name a shared contract document in `contract` instead of
+declaring the language-neutral fields inline. The named document holds
+`contract_version`, `description`, `comparison_decimals`, `may_return_missing`,
+`params`, and `returns` once for every project that implements the contract;
+the entry keeps `implementation_version`, `binding`, and the
+conformance-vector path. A `contract` path is project-root-local, following
+the same local normalized inside-the-root rule as a conformance path.
+Declaring a contract both inline and by reference, or by reference to a
+document that does not define the entry's function name, is invalid.
 
 <a id="req-0670"></a>
 
@@ -224,8 +235,9 @@ therefore does not require `may_return_missing: true`.
 **REQ-0683.** `binding.call` is a statically written fully qualified callable in
 the selected runtime: an R package-qualified name such as `projectbmi::bmi`, or
 a Python module-qualified name such as `orgstats.normal_cdf`. The environment
-also maps every logical parameter name to one unique host argument name. The
-mapping must exactly cover the logical signature. A Python host name is an
+also maps every logical parameter name to one unique host argument name. An
+omitted `binding.args` maps each logical parameter to the same-named host
+argument. The mapping must exactly cover the logical signature. A Python host name is an
 ASCII identifier and not a Python keyword. An R host name is an unquoted
 syntactic R name and not a reserved word, `...`, or a `..n` positional name.
 
@@ -364,8 +376,9 @@ structural constraints come from its schema declaration.
 
 | Field | Meaning |
 | --- | --- |
+| `function_contract_class.contract` | Project-root-local path of a shared contract document; exactly one of this and the inline contract fields (`contract_version`, `description`, `comparison_decimals`, `may_return_missing`, `params`, `returns`) is present. |
 | `function_contract_class.contract_version` | Exact version of the language-neutral logical contract. |
-| `function_contract_class.implementation_version` | Version of the selected language implementation. |
+| `function_contract_class.implementation_version` | Version of the selected language implementation; defaults to the environment `version` when omitted. |
 | `function_contract_class.description` | Human-readable statement of what the function computes. |
 | `function_contract_class.comparison_decimals` | Decimal places used only for cross-project numeric comparison. |
 | `function_contract_class.may_return_missing` | Whether an invoked binding may deliberately return missing. |
@@ -382,7 +395,7 @@ structural constraints come from its schema declaration.
 | Field | Meaning |
 | --- | --- |
 | `function_binding_class.call` | Statically written callable inside the immutable runtime. |
-| `function_binding_class.args` | Complete mapping from logical to host argument names. |
+| `function_binding_class.args` | Complete mapping from logical to host argument names; omitted means each logical parameter maps to the same-named host argument. |
 
 <a id="req-1085"></a>
 

@@ -37,6 +37,7 @@ from yamaa.functions.models import (
     ConformanceDocument,
     FunctionContract,
     LoadedEnvironment,
+    binding_arguments,
 )
 from yamaa.models.values import ConditionResult, RuntimeValue, ValueResult
 
@@ -205,7 +206,7 @@ def _validate_target_signature(
             inspect.Parameter.KEYWORD_ONLY,
         )
     }
-    mapped = set(contract.binding.args.values())
+    mapped = set(binding_arguments(contract).values())
     missing = sorted(mapped - keyword_parameters)
     extra = sorted(keyword_parameters - mapped)
     if unsupported or missing or extra:

@@ -18,7 +18,11 @@ from typing import TypeAlias
 
 from pydantic import JsonValue
 
-from yamaa.functions.models import FunctionContract, FunctionParameter
+from yamaa.functions.models import (
+    FunctionContract,
+    FunctionParameter,
+    binding_arguments,
+)
 from yamaa.io.csv import fixed_point
 from yamaa.models.values import (
     INT64_MAX,
@@ -264,7 +268,7 @@ class BoundFunction:
                 # REQ-0681 and REQ-0682: the binding is not invoked and the
                 # result is missing, which is not a returned missing value.
                 return ValueResult(value=MISSING)
-            host_name = self.contract.binding.args[parameter.name]
+            host_name = binding_arguments(self.contract)[parameter.name]
             arguments[host_name] = _host_argument(value)
 
         try:

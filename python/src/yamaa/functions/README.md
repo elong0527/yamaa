@@ -107,6 +107,22 @@ unrounded result, and rounding for display happens once, later, under
 
 ## Where the boundary of this module is
 
+- **The engine never imports this module.** `yamaa_domain` accepts an
+  optional `dispatcher` -- a generic expression-dispatch hook the engine
+  threads through unchanged -- and the runner in this module builds it from
+  the activated project. Benchmarks use the runner the way they use the
+  engine, with no internal machinery in `run.py`:
+
+  ```python
+  import yamaa
+  from yamaa.functions import run_with_project_functions
+
+  adsl = run_with_project_functions("spec.yaml", project_root="python").output
+  ```
+
+  All project-function orchestration (environment, calls, artifact,
+  activation) lives here, outside the engine; the engine only ever sees a
+  dispatcher.
 - **Static validation owns the coverage obligations.** REQ-0689 has the
   static validator check that each contract's vectors demonstrate `normal`,
   `boundary`, every default, every missing behavior, both values of every
@@ -133,9 +149,18 @@ bmi-python/
   runtime/projectbmi.py   # the pinned code the binding resolves to
 ```
 
-The two roots calculate one contract fingerprint and run byte-identical
-vectors, which is what REQ-0675 and REQ-0690 require of two projects claiming
-one contract. Re-pinning after changing the code is one call:
+The two roots calculate one contract fingerprint and name one shared
+conformance-vector document, which is what REQ-0675 and REQ-0690 require of
+two projects claiming one contract. A contract that needs no renaming writes its `environment.yaml`
+without the two defaulted declarations: an omitted `binding.args` maps each
+logical parameter to the same-named host argument, and an omitted
+`implementation_version` is the environment `version`. When several roots
+implement one contract, each entry names the shared document once in
+`contract` (a project-root-local `contracts.yaml` holding `contract_version`,
+`description`, `comparison_decimals`, `may_return_missing`, `params`, and
+`returns` per function) instead of repeating those fields inline; the entry
+keeps its own `implementation_version`, binding, and conformance path.
+Re-pinning after changing the code is one call:
 
 ```python
 from yamaa.functions import artifact_digest
