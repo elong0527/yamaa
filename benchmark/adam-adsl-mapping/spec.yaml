@@ -113,6 +113,6 @@ verifications:
   - row_count:
       min: 8
       max: 8
-  - predicate:
+  - assert:
       id: numeric-mappings-are-in-range
-      assert: "SEXN >= 0 AND RACEN >= 1"
+      expr: "SEXN >= 0 AND RACEN >= 1"

@@ -45,7 +45,7 @@ expressions:
             required: false
             description: Dataset columns paired by position with key_base; omit to match on the applicable output keys (R003-40).
         - filter:
-            type: sql
+            type: predicate
             required: false
             description: Predicate selecting eligible records before matching.
         - between:

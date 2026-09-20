@@ -19,7 +19,7 @@ vocabulary, numeric types, missing-value behavior, and failure conditions.
 `compute` is the only arithmetic expression and is numeric.
 Strings, dates, comparison, conditional selection, and row-wise extremes over
 non-numeric types stay under R007. A general
-expression string cannot displace the typed registry. The Boolean-valued `sql`
+expression string cannot displace the typed registry. The Boolean-valued `predicate`
 primitive is R004. The two primitives share notation and identifier
 resolution but not type or permitted vocabulary. Reduction over many
 records uses R013's `aggregate_expression`. That primitive reuses this
@@ -35,7 +35,7 @@ subset of SQL.
 
 ## Identifiers
 
-**R010-2.** An identifier uses the `sql` primitive's resolution in the same
+**R010-2.** An identifier uses the `predicate` primitive's resolution in the same
 phase. A formula and a predicate never disagree about a name.
 
 **R010-3.** During column derivation an unqualified identifier is a

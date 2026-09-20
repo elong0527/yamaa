@@ -64,7 +64,7 @@ What can a predicate, formula, template, pattern, or function express?
 
 | ID | Rule | Status | Owns |
 | --- | --- | --- | --- |
-| R004 | [Predicate language](R004-predicate-language.md) | normative | The Boolean `sql` primitive |
+| R004 | [Predicate language](R004-predicate-language.md) | normative | The Boolean `predicate` primitive |
 | R010 | [Scalar numeric computation](R010-scalar-computation.md) | normative | The `numeric_expression` primitive |
 | R012 | [String templates](R012-string-templates.md) | normative | Interpolation grammar, escaping, and evaluation |
 | R022 | [Regular expressions](R022-regular-expressions.md) | normative | The portable pattern contract and normalization, full-match and search behavior per consumer, capture-group numbering |

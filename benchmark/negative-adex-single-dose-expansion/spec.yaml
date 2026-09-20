@@ -90,6 +90,6 @@ rows:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, EXSEQ, ADOSEN]
-  - predicate:
+  - assert:
       id: a-record-is-expanded-into-every-administration-it-holds
-      assert: "NDOSMAX = NDOSE"
+      expr: "NDOSMAX = NDOSE"

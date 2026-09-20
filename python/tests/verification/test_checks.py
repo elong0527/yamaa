@@ -274,7 +274,7 @@ def test_a_collected_empty_string_is_a_value_rather_than_a_missing_one() -> None
     )
 
 
-def test_implies_and_predicate_report_their_business_rule_identity() -> None:
+def test_implies_and_assert_report_their_business_rule_identity() -> None:
     completed = table(
         [("STUDYID", "str"), ("USUBJID", "str"), ("CMNT", "str"), ("CMNTFL", "str")],
         [
@@ -297,9 +297,9 @@ def test_implies_and_predicate_report_their_business_rule_identity() -> None:
             ),
             Expression(
                 root={
-                    "predicate": {
+                    "assert": {
                         "id": "flag-is-yes-or-no",
-                        "assert": "CMNTFL IN ('Y')",
+                        "expr": "CMNTFL IN ('Y')",
                     }
                 }
             ),
@@ -309,12 +309,12 @@ def test_implies_and_predicate_report_their_business_rule_identity() -> None:
 
     assert [failure.condition for failure in failures] == [
         "implication_failed",
-        "predicate_failed",
+        "assert_failed",
     ]
     assert failures[0].context["verification_id"] == "flag-follows-collection"
     assert failures[0].context["keys"] == [{"STUDYID": "CTX", "USUBJID": "CTX-02"}]
     assert failures[1].context["verification_id"] == "flag-is-yes-or-no"
-    assert failures[1].spec_paths == ("verifications[1].predicate",)
+    assert failures[1].spec_paths == ("verifications[1].assert",)
 
 
 def test_grouped_row_count_keeps_a_group_whose_filter_admits_no_row() -> None:
@@ -545,7 +545,7 @@ def test_declaration_defects_are_refused_rather_than_reported_as_data_failures()
 def test_a_predicate_naming_an_absent_column_is_refused_on_an_empty_artifact() -> None:
     empty = table([("STUDYID", "str"), ("USUBJID", "str")], [])
     declaration = Expression(
-        root={"predicate": {"id": "names-a-ghost", "assert": "ABSENT = 1"}}
+        root={"assert": {"id": "names-a-ghost", "expr": "ABSENT = 1"}}
     )
 
     with pytest.raises(DeclarationError) as raised:
@@ -557,7 +557,7 @@ def test_a_predicate_naming_an_absent_column_is_refused_on_an_empty_artifact() -
 
 def test_duplicate_verification_identifiers_are_refused() -> None:
     completed = table([("STUDYID", "str"), ("USUBJID", "str")], [["S", "S-1"]])
-    declaration = {"predicate": {"id": "one-rule", "assert": "USUBJID IS NOT NULL"}}
+    declaration = {"assert": {"id": "one-rule", "expr": "USUBJID IS NOT NULL"}}
 
     with pytest.raises(DeclarationError) as raised:
         check_dataset(
@@ -634,9 +634,9 @@ def test_predicates_receive_typed_resolved_lookup_bindings() -> None:
     )
     declaration = Expression(
         root={
-            "predicate": {
+            "assert": {
                 "id": "lookup-date",
-                "assert": "VISIT.ADT >= DATE '2025-01-01'",
+                "expr": "VISIT.ADT >= DATE '2025-01-01'",
             }
         }
     )
@@ -736,9 +736,9 @@ def test_verify_completed_table_stops_at_the_first_failing_stage() -> None:
             [
                 Expression(
                     root={
-                        "predicate": {
+                        "assert": {
                             "id": "later-invalid-declaration",
-                            "assert": "ABSENT = 1",
+                            "expr": "ABSENT = 1",
                         }
                     }
                 )

@@ -10,7 +10,7 @@ expressions:
 
 aggregate_class:
     - filter:
-        type: sql
+        type: predicate
         description: Predicate selecting records before reduction.
     - between:
         type: aggregate_between_class

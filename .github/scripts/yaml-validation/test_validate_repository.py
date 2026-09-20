@@ -313,9 +313,9 @@ class TestPredicateLanguage(unittest.TestCase):
                 ],
                 'verifications': [
                     {
-                        'predicate': {
+                        'assert': {
                             'id': 'known-age',
-                            'assert': 'MISSING > 0',
+                            'expr': 'MISSING > 0',
                         }
                     }
                 ],
@@ -326,7 +326,7 @@ class TestPredicateLanguage(unittest.TestCase):
             )
 
         self.assertEqual(len(errors), 1)
-        self.assertIn('verifications[0].predicate.assert', errors[0])
+        self.assertIn('verifications[0].assert.expr', errors[0])
         self.assertIn("unknown identifier 'MISSING'", errors[0])
 
     def test_validates_the_predicate_a_source_filter_declares(self):
@@ -3203,7 +3203,7 @@ class TestSpecContracts(unittest.TestCase):
             "verifications": [
                 {"row_count": {}},
                 {"all_or_none": {"id": "complete", "columns": ["USUBJID"]}},
-                {"predicate": {"id": "complete", "assert": "TRUE"}},
+                {"assert": {"id": "complete", "expr": "TRUE"}},
             ],
         }
 
@@ -3291,9 +3291,9 @@ class TestSpecContracts(unittest.TestCase):
                     }
                 },
                 {
-                    "predicate": {
+                    "assert": {
                         "id": "one-row-per-subject",
-                        "assert": "TRUE",
+                        "expr": "TRUE",
                     }
                 },
             ],

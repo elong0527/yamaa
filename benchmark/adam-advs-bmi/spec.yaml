@@ -67,9 +67,9 @@ rows:
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, AVISIT, PARAMCD]
-  - predicate:
+  - assert:
       id: check-height-unit
-      assert: "PARAMCD <> 'HEIGHT' OR PARAM = 'Height (cm)'"
-  - predicate:
+      expr: "PARAMCD <> 'HEIGHT' OR PARAM = 'Height (cm)'"
+  - assert:
       id: check-weight-unit
-      assert: "PARAMCD <> 'WEIGHT' OR PARAM = 'Weight (kg)'"
+      expr: "PARAMCD <> 'WEIGHT' OR PARAM = 'Weight (kg)'"

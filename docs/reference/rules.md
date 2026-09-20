@@ -15,7 +15,7 @@ authoritative text, follow the links.
 | R001 | [Execution model](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R001-execution-model.md) | Phases, grouped row construction, dependency inference, evaluation order |
 | R002 | [Source binding](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R002-source-binding.md) | Dataset declaration, name resolution |
 | R003 | [Intermediate](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R003-intermediate.md) | Cross-dataset reads: the implicit join on applicable keys, named `intermediates`, inline `lookup`, declared-key aggregates |
-| R004 | [Predicate language](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R004-predicate-language.md) | The Boolean `sql` primitive |
+| R004 | [Predicate language](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R004-predicate-language.md) | The Boolean `predicate` primitive |
 | R005 | [Output contract](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R005-output-contract.md) | Column coverage, output membership, the value lifecycle, output identity, artifact row order |
 | R006 | [Compact schema language](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R006-schema-language.md) | Schema notation and structural validation |
 | R007 | [Expression registry](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R007-expression-registry.md) | Registration, nesting, evaluation kinds, ordering, input types |

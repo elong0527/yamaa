@@ -139,7 +139,7 @@ order and detect cycles. Recursively traverse each expression and collect:
 - **R001-20.** variables passed as leaves in `function.args`;
 - **R001-21.** variables referenced by fields whose type contains nested
   `expression`;
-- **R001-22.** current-output identifiers used by an `sql` predicate;
+- **R001-22.** current-output identifiers used by a `predicate` field;
 - **R001-23.** current-output identifiers used by a `numeric_expression`;
 - **R001-24.** identifiers used by an `aggregate_expression`;
 - **R001-25.** variables used as placeholders in a `string_template`.

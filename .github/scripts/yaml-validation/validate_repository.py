@@ -3008,7 +3008,7 @@ def collect_single_type_references(data, type_ref, env, scope=None):
         if kind is None:
             return set()
         return {(kind, data)}
-    if type_ref == 'sql':
+    if type_ref == 'predicate':
         return {
             ('variable', name)
             for name in predicate_identifier_names(data)
@@ -3158,7 +3158,7 @@ def iter_type_reference_paths(data, type_value, env, path, scope=None):
 
 
 EXPRESSION_IDENTIFIER_READERS = {
-    'sql': lambda data: predicate_identifier_names(data),
+    'predicate': lambda data: predicate_identifier_names(data),
     'numeric_expression': lambda data: numeric_expression_identifier_names(
         data
     ),
@@ -5066,7 +5066,7 @@ def validate_spec_contracts(
             path = f"{spec_label}.verifications[{index}].{keyword}"
             if payload.get('severity', 'error') == 'warning':
                 warning_paths.append(f"{path}.severity")
-            if keyword in {'all_or_none', 'implies', 'predicate', 'row_count'}:
+            if keyword in {'all_or_none', 'implies', 'assert', 'row_count'}:
                 verification_id = payload.get('id')
                 if isinstance(verification_id, str):
                     verification_ids.append((verification_id, path))
@@ -5845,7 +5845,7 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
                 continue
             fields = (
                 ('when', 'then') if keyword == 'implies'
-                else ('assert',) if keyword == 'predicate'
+                else ('expr',) if keyword == 'assert'
                 else ('filter',) if keyword == 'row_count'
                 else ()
             )

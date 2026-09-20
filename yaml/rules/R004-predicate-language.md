@@ -2,7 +2,7 @@
 id: R004
 title: Predicate Language
 status: normative
-applies_to: [sql]
+applies_to: [predicate]
 
 ---
 
@@ -10,12 +10,12 @@ applies_to: [sql]
 
 ## Intent
 
-Define the portable Boolean predicate in a `sql` field: grammar,
+Define the portable Boolean predicate in a `predicate` field: grammar,
 literals, comparisons, missing-value behavior, and failures.
 
 ## Boundaries
 
-This rule owns the `sql` primitive completely. R006 owns schema
+This rule owns the `predicate` primitive completely. R006 owns schema
 structure. R011 owns input comparability; R007 owns expression input types. R010 owns the numeric-valued `numeric_expression` primitive.
 R011 owns the column type vocabulary. R016 owns temporal values. R019
 owns text values and their equality and order. R001 owns the phase in
@@ -26,9 +26,9 @@ literals. Neither grammar admits the other's operators or functions.
 
 ## Predicate sites and results
 
-**R004-1.** The `sql` primitive is Boolean-valued. It is used by row,
+**R004-1.** The `predicate` primitive is Boolean-valued. It is used by row,
 aggregate, window, record-lookup, and multiple-match filters; by `case`;
-and by the `predicate` and `implies` verifications.
+and by the `assert` and `implies` verifications.
 
 **R004-2.** A predicate evaluates to `TRUE`, `FALSE`, or `UNKNOWN`. A filter
 retains a row or record only for `TRUE`. A verification holds only for

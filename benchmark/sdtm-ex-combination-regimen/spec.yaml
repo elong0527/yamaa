@@ -68,6 +68,6 @@ verifications:
   - row_count:
       min: 9
       max: 9
-  - predicate:
+  - assert:
       id: every-administration-has-dose-and-unit
-      assert: "EXDOSE IS NOT NULL AND EXDOSU IS NOT NULL"
+      expr: "EXDOSE IS NOT NULL AND EXDOSU IS NOT NULL"

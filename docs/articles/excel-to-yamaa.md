@@ -111,7 +111,7 @@ Going the other way, two of the eleven columns have no YAMAA field at all:
 | Input datasets (usually only in a Comment) | `input:` | Every input is declared and named |
 | Structure: "one record per subject per visit" | `base` plus `rows` templates | Row count comes from these, not from a sentence |
 | Copy the corporate template and edit | `parents:` | Real layering; a change to the parent flows down (R017) |
-| Dataset-level review checks | `verifications:` | `unique`, `row_count`, `all_or_none`, `implies`, `predicate`. A `row_count` may take a `group_by` and a `filter`, which is how "exactly one baseline per subject and parameter" is stated |
+| Dataset-level review checks | `verifications:` | `unique`, `row_count`, `all_or_none`, `implies`, `assert`. A `row_count` may take a `group_by` and a `filter`, which is how "exactly one baseline per subject and parameter" is stated |
 
 ### 2.2 Variable level
 

@@ -76,6 +76,6 @@ verifications:
   - row_count:
       min: 3
       max: 3
-  - predicate:
+  - assert:
       id: randomized-strata-agree
-      assert: "STRAT1R = STRAT1"
+      expr: "STRAT1R = STRAT1"

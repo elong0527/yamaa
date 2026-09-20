@@ -177,6 +177,6 @@ verifications:
   - all_or_none:
       id: traceability-triplet-is-complete
       columns: [SRCDOM, SRCVAR, SRCSEQ]
-  - predicate:
+  - assert:
       id: endpoint-is-not-before-randomization
-      assert: "ADT >= STARTDT"
+      expr: "ADT >= STARTDT"
