@@ -283,6 +283,61 @@ present, over an artifact nothing checks, asserts something no run proves.
 owns that object, the values a binding enforces, and its agreement with an
 `allowed_values` verification.
 
+### Value-level metadata
+
+<a id="req-1162"></a>
+
+**REQ-1162.** A `rows` entry may carry a `submission` map keyed by column name.
+Each entry declares the submission metadata for one value of the row's
+discriminator (see [REQ-1163](metadata.md#req-1163)): the column-level `submission` stays the shared
+declaration for the column, and the row-level entry supplies per-value
+overrides, so a findings domain can give each `--TESTCD` its own codelist,
+origin, or length without repeating the shared metadata. Fields the
+row-level entry leaves absent inherit from the column-level declaration.
+
+<a id="req-1163"></a>
+
+**REQ-1163.** Value-level metadata hangs on the domain's `--TESTCD` column:
+the domain must declare a `<DOMAIN>TESTCD` column. A row template carrying
+`submission` without that column declared has no discriminator to hang
+values on, and the declaration is an error.
+
+<a id="req-1164"></a>
+
+**REQ-1164.** The discriminator must be a declared literal: the row template
+derives `<DOMAIN>TESTCD` as `{literal: <code>}` with a string code. A dynamic
+expression leaves the value unknown until data arrives, and value-level
+metadata is validated without data (see [REQ-0907](metadata.md#req-0907)), so a dynamic
+discriminator fails loudly rather than silently attaching metadata to an
+unknown value.
+
+<a id="req-1165"></a>
+
+**REQ-1165.** Each `submission` key must name a declared column the row
+template or the column declaration derives. A key naming anything else is
+an error, not an ignored declaration.
+
+<a id="req-1166"></a>
+
+**REQ-1166.** [REQ-0856](metadata.md#req-0856) applies per value: the column must be in
+`output.columns`. Metadata for an internal column is an error at row level
+exactly as it is at column level.
+
+<a id="req-1167"></a>
+
+**REQ-1167.** Two row templates may declare submission metadata for the same
+(column, test code) pair only with identical declarations: identical
+declarations describe one value, and conflicting declarations are an error,
+not a last-wins merge.
+
+<a id="req-1168"></a>
+
+**REQ-1168.** [REQ-0897](metadata.md#req-0897) through [REQ-0899](metadata.md#req-0899) apply to each value-level
+entry against the derivation that produces the column's value in that row
+template (the row template's derivation, or the column-level derivation
+when the row template inherits a uniform one): the refutation follows the
+entry, because the origin claim is per value.
+
 ### Origin
 
 <a id="req-0887"></a>
@@ -471,7 +526,8 @@ destinations and carries the `refs` as a space-separated list.
 **REQ-0907.** Every requirement above that does not depend on a family is
 checked when the specification is validated on its own: the vocabularies, the
 required and prohibited field combinations, the length binding in [REQ-0874](metadata.md#req-0874), the
-graph refutations in [REQ-0896](metadata.md#req-0896) through [REQ-0900](metadata.md#req-0900), and the presence of `method` for
+graph refutations in [REQ-0896](metadata.md#req-0896) through [REQ-0900](metadata.md#req-0900), the value-level
+declaration rules in [REQ-1162](metadata.md#req-1162) through [REQ-1168](metadata.md#req-1168), and the presence of `method` for
 a declared `Derived` origin.
 
 <a id="req-0908"></a>

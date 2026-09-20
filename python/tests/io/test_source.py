@@ -157,7 +157,9 @@ def test_loads_parquet_embedded_types_without_inference(tmp_path: Path) -> None:
             "SCORE": 1.5,
             "DATE": dt.date(2025, 1, 2),
             "MOMENT": dt.datetime(2025, 1, 2, 3, 4),  # noqa: DTZ001
-            "TEXT": "",
+            # REQ-1159: the default empty-string convention reads a stored
+            # zero-length string in a str field as the missing value.
+            "TEXT": None,
         },
         {
             "ID": "008",
@@ -168,6 +170,69 @@ def test_loads_parquet_embedded_types_without_inference(tmp_path: Path) -> None:
             "TEXT": None,
         },
     ]
+
+
+def _write_parquet_with_empty_string(tmp_path: Path) -> None:
+    pq.write_table(
+        pa.table(
+            {
+                "ECENDTC": pa.array(["2025-01-01", "", None], type=pa.string()),
+                "ECDOSE": pa.array([50.0, 25.0, 10.0], type=pa.float64()),
+            }
+        ),
+        tmp_path / "ec.parquet",
+    )
+
+
+def test_parquet_empty_string_defaults_to_missing(tmp_path: Path) -> None:
+    _write_parquet_with_empty_string(tmp_path)
+
+    loaded = load_source_table(
+        "EC", DatasetSource(path="ec.parquet"), ProjectResources(tmp_path)
+    )
+
+    assert loaded.table.frame.to_dicts() == [
+        {"ECENDTC": "2025-01-01", "ECDOSE": 50.0},
+        # REQ-1159: the stored empty string reads as missing; the float
+        # column is untouched by the str-only convention (REQ-1160).
+        {"ECENDTC": None, "ECDOSE": 25.0},
+        {"ECENDTC": None, "ECDOSE": 10.0},
+    ]
+
+
+def test_parquet_empty_string_present_keeps_collected_empty(
+    tmp_path: Path,
+) -> None:
+    _write_parquet_with_empty_string(tmp_path)
+
+    loaded = load_source_table(
+        "EC",
+        DatasetSource(path="ec.parquet", empty_string="present"),
+        ProjectResources(tmp_path),
+    )
+
+    assert loaded.table.frame.to_dicts() == [
+        {"ECENDTC": "2025-01-01", "ECDOSE": 50.0},
+        {"ECENDTC": "", "ECDOSE": 25.0},
+        {"ECENDTC": None, "ECDOSE": 10.0},
+    ]
+
+
+def test_csv_rejects_present_empty_string_convention(tmp_path: Path) -> None:
+    (tmp_path / "ec.csv").write_bytes(b"ECENDTC\n2025-01-01\n")
+
+    with pytest.raises(SourceError) as error:
+        load_source_table(
+            "EC",
+            DatasetSource(path="ec.csv", empty_string="present"),
+            ProjectResources(tmp_path),
+        )
+
+    diagnostic = _diagnostic(error.value)
+    assert diagnostic["phase"] == "validation"
+    assert diagnostic["condition"] == "empty_string_present_unsupported"
+    assert diagnostic["requirement"] == "REQ-1161"
+    assert diagnostic["spec_paths"] == ("input.EC.empty_string",)
 
 
 def test_parquet_profile_extension_is_case_insensitive(tmp_path: Path) -> None:

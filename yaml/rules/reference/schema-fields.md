@@ -53,11 +53,13 @@ requirement link for behavior. It is not an additional semantic contract.
 | `row_class.group_by` | `"list[variable]"` | `false` | Absent | -- | [REQ-1056](../execution/rows.md#req-1056) |
 | `row_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1056](../execution/rows.md#req-1056) |
 | `row_class.derivations` | `"dict[identifier, derivation]"` | `true` | Absent | -- | [REQ-1056](../execution/rows.md#req-1056) |
+| `row_class.submission` | `"dict[identifier, submission_column_class]"` | `false` | Absent | -- | [REQ-1056](../execution/rows.md#req-1056) |
 | `variable` | `"str"` | `false` | Absent | `{"pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$"}` | [REQ-1057](../specification/binding.md#req-1057) |
 | `dataset_source` | `["project_path", "dataset_class"]` | `false` | Absent | -- | [REQ-1059](../storage/ingestion.md#req-1059) |
 | `dataset_class.path` | `"project_path"` | `true` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |
 | `dataset_class.types` | `"dict[identifier, column_type]"` | `false` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |
 | `dataset_class.schema` | `"project_path"` | `false` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |
+| `dataset_class.empty_string` | `"str"` | `false` | `"missing"` | `{"values": ["missing", "present"]}` | [REQ-1158](../storage/ingestion.md#req-1158) |
 | `intermediate_id` | `"str"` | `false` | Absent | `{"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}` | [REQ-1050](../operations/lookup.md#req-1050) |
 | `row_id` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1044](../specification/structure.md#req-1044) |
 | `regex` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1058](../specification/binding.md#req-1058) |
@@ -360,7 +362,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `submission_column_class.significant_digits` | `"int"` | `false` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
 | `submission_column_class.display_format` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1131](../submission/metadata.md#req-1131) |
 | `submission_column_class.codelist` | `"identifier"` | `false` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
-| `submission_column_class.inventory_vocabulary` | `"bool"` | `false` | Absent | -- | Schema constraint |
+| `submission_column_class.inventory_vocabulary` | `"bool"` | `false` | Absent | -- | [REQ-1156](../submission/terminology.md#req-1156) |
 | `submission_column_class.origin` | `"submission_origin_class"` | `true` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
 | `submission_column_class.method` | `"submission_method"` | `false` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
 | `submission_column_class.comment` | `"submission_comment"` | `false` | Absent | -- | [REQ-1131](../submission/metadata.md#req-1131) |
@@ -438,7 +440,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `dataset_verifications.row_count.id` | `"verification_id"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.group_by` | `"list[variable]"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.filter` | `"predicate"` | `false` | Absent | -- | Schema constraint |
-| `dataset_verifications.row_count.when` | `"predicate"` | `false` | Absent | -- | Schema constraint |
+| `dataset_verifications.row_count.when` | `"predicate"` | `false` | Absent | -- | [REQ-1154](../execution/verification.md#req-1154) |
 | `dataset_verifications.row_count.min` | `"int"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.max` | `"int"` | `false` | Absent | -- | Schema constraint |
 | `dataset_verifications.row_count.severity` | `"verification_severity"` | `false` | `"error"` | -- | Schema constraint |

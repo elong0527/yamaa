@@ -1164,3 +1164,15 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1155](../execution/verification.md#req-1155) | `execution/verification.md` | Schema prose |
 | [REQ-1156](../submission/terminology.md#req-1156) | `submission/terminology.md` | Schema prose |
 | [REQ-1157](../submission/metadata.md#req-1157) | `submission/metadata.md` | Schema prose |
+| [REQ-1158](../storage/ingestion.md#req-1158) | `storage/ingestion.md` | Schema prose |
+| [REQ-1159](../storage/ingestion.md#req-1159) | `storage/ingestion.md` | Schema prose |
+| [REQ-1160](../storage/ingestion.md#req-1160) | `storage/ingestion.md` | Schema prose |
+| [REQ-1161](../storage/ingestion.md#req-1161) | `storage/ingestion.md` | Schema prose |
+| [REQ-1162](../submission/metadata.md#req-1162) | `submission/metadata.md` | Schema prose |
+| [REQ-1163](../submission/metadata.md#req-1163) | `submission/metadata.md` | Schema prose |
+| [REQ-1164](../submission/metadata.md#req-1164) | `submission/metadata.md` | Schema prose |
+| [REQ-1165](../submission/metadata.md#req-1165) | `submission/metadata.md` | Schema prose |
+| [REQ-1166](../submission/metadata.md#req-1166) | `submission/metadata.md` | Schema prose |
+| [REQ-1167](../submission/metadata.md#req-1167) | `submission/metadata.md` | Schema prose |
+| [REQ-1168](../submission/metadata.md#req-1168) | `submission/metadata.md` | Schema prose |
+| [REQ-1169](../submission/define-xml.md#req-1169) | `submission/define-xml.md` | Schema prose |

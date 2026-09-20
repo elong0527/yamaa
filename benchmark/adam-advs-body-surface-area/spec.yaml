@@ -12,10 +12,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
+    derivation: ADVS_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation: ADVS_RAW.USUBJID
 
   - name: PARAMCD
     type: str
@@ -40,6 +42,7 @@ columns:
   - name: VISIT
     type: str
     label: Visit Name
+    derivation: ADVS_RAW.VISIT
 
   - name: DTYPE
     type: str
@@ -48,22 +51,17 @@ columns:
 rows:
   - id: collected
     derivations:
-      STUDYID: {source: ADVS_RAW.STUDYID}
-      USUBJID: {source: ADVS_RAW.USUBJID}
       PARAMCD: {source: ADVS_RAW.PARAMCD}
       PARAM: {source: ADVS_RAW.PARAM}
       HEIGHT_VAL: {literal: null}
       WEIGHT_VAL: {literal: null}
       AVAL: {source: ADVS_RAW.AVAL}
-      VISIT: {source: ADVS_RAW.VISIT}
       DTYPE: {literal: null}
 
   - id: derived_bsa
     group_by: [ADVS_RAW.STUDYID, ADVS_RAW.USUBJID, ADVS_RAW.VISIT]
     filter: "HEIGHT_VAL IS NOT NULL AND WEIGHT_VAL IS NOT NULL"
     derivations:
-      STUDYID: {source: ADVS_RAW.STUDYID}
-      USUBJID: {source: ADVS_RAW.USUBJID}
       PARAMCD: {literal: BSA}
       PARAM: {literal: Body Surface Area (m^2)}
       HEIGHT_VAL:
@@ -77,7 +75,6 @@ rows:
       AVAL:
         compute:
           expr: "SQRT(WEIGHT_VAL * HEIGHT_VAL / 3600)"
-      VISIT: {source: ADVS_RAW.VISIT}
       DTYPE: {literal: CALCULATION}
 
 verifications:

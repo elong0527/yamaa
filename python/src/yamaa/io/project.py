@@ -51,7 +51,7 @@ class _Anchor:
 
     root: _ApprovedRoot
     key: tuple[str, ...]
-    rooted_segments: tuple[str, ...] | None
+    rooted_segments: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -471,23 +471,51 @@ class ProjectResources:
                 raise ResourceFailure("resource_path_not_regular_file", written_path)
             return _Anchor(matched, (*matched.canonical, *remainder), remainder)
 
-        if self._base_components is None:
+        if self._base_components is None or self._base_root_index is None:
             raise ResourceFailure("resource_path_outside_project", written_path)
 
-        components = list(self._base_components)
+        root = self._roots[self._base_root_index]
+        # Resolve textually against the anchor's canonical segments, so a
+        # ".." that climbs above the anchor keeps resolving from the real
+        # parent directories instead of failing outright (REQ-0778). The
+        # root marker itself is never popped: climbing above the filesystem
+        # root still fails as resource_path_outside_project.
+        absolute = list(root.canonical)
+        relative = list(self._base_components)
         for segment in written_path.split("/"):
             if segment == ".":
                 continue
             if segment == "..":
-                if not components:
+                if relative:
+                    relative.pop()
+                elif len(absolute) > 1:
+                    absolute.pop()
+                else:
                     raise ResourceFailure("resource_path_outside_project", written_path)
-                components.pop()
             else:
-                components.append(segment)
-        if self._base_root_index is None:
+                relative.append(segment)
+        resolved = tuple(absolute) + tuple(relative)
+
+        # Re-anchor at the approved root the resolved location sits under,
+        # longest match winning when one approved root lies inside another
+        # (REQ-0781). The resolved segments derive from the anchor's
+        # canonical spelling, so the comparison is against canonical
+        # spellings. The walk then starts at that root's open descriptor,
+        # exactly as for a rooted path, and a location inside no approved
+        # root fails as resource_path_outside_project.
+        matched: _ApprovedRoot | None = None
+        depth = -1
+        for candidate in self._roots:
+            spelling = candidate.canonical
+            size = len(spelling)
+            if size > depth and resolved[:size] == spelling:
+                matched, depth = candidate, size
+        if matched is None:
             raise ResourceFailure("resource_path_outside_project", written_path)
-        root = self._roots[self._base_root_index]
-        return _Anchor(root, (*root.canonical, *components), None)
+        remainder = resolved[depth:]
+        if not remainder:
+            raise ResourceFailure("resource_path_not_regular_file", written_path)
+        return _Anchor(matched, (*matched.canonical, *remainder), remainder)
 
     def _open_component(
         self,
@@ -546,12 +574,7 @@ class ProjectResources:
 
     def _open_resource(self, written_path: str) -> _OpenedResource:
         anchor = self._anchor(written_path)
-        if anchor.rooted_segments is None:
-            if self._base_components is None:  # Guarded by _anchor.
-                raise AssertionError("unreachable project base")
-            walk = (*self._base_components, *written_path.split("/"))
-        else:
-            walk = anchor.rooted_segments
+        walk = anchor.rooted_segments
 
         directories = [os.dup(anchor.root.descriptor)]
         components: list[str] = []

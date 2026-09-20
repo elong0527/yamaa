@@ -126,9 +126,9 @@ A column cannot mix the two placements. A row-derived column must appear in
 every row template; use `{literal: null}` when its value is deliberately
 missing in one section.
 
-## More Examples
+## More examples
 
 - Derive age groups in ADSL:
   [adam-adsl-age-group](https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html).
 - Derive BMI in ADVS:
-  [adam-advs-body-mass-index](https://elong0527.github.io/yamaa/benchmark/adam-advs-body-mass-index.html).
+  [adam-advs-bmi](https://elong0527.github.io/yamaa/benchmark/adam-advs-bmi.html).

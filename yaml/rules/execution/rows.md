@@ -133,6 +133,7 @@ structural constraints come from its schema declaration.
 | `row_class.group_by` | Grouping keys over input records, producing one candidate row per group; [Execution lifecycle](lifecycle.md) defines grouped construction. |
 | `row_class.filter` | Predicate selecting input records for an ungrouped row template or completed candidate groups for a grouped row template. |
 | `row_class.derivations` | Columns this row template derives; [Specification structure](../specification/structure.md) owns coverage across row templates. |
+| `row_class.submission` | Per-value submission metadata for this template's values, keyed by column; [Submission metadata](../submission/metadata.md) owns the declaration rules. |
 
 ## Error conditions
 

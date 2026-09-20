@@ -97,6 +97,8 @@ class DatasetSource(_StrictModel):
     path: str
     types: dict[str, ColumnType] | None = None
     schema_path: str | None = Field(default=None, alias="schema")
+    # REQ-1158: how a stored empty string in a character field reads.
+    empty_string: Literal["missing", "present"] = "missing"
 
 
 class OrderTerm(_StrictModel):
@@ -224,6 +226,7 @@ class Row(_StrictModel):
     group_by: list[str] | None = None
     filter: str | None = None
     derivations: dict[str, HandledExpression]
+    submission: dict[str, SubmissionColumn] | None = None
 
 
 class Specification(_StrictModel):

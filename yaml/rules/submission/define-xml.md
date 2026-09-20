@@ -559,8 +559,6 @@ specification that tries to declare one is rejected as an unknown field rather
 than generating a document that quietly omits it. That closure is the refusal:
 a construct is either declared and generated, or has nowhere to be written.
 
-- `def:ValueListDef`, `def:WhereClauseDef`, and value-level `def:Origin`:
-  a row-template expansion for per-value `--TESTCD`-style column metadata
 - `arm:AnalysisResultDisplays`: an analysis-results metadata design
 - Split datasets and their `Alias` domain description: a specification that
   produces one dataset in several files
@@ -568,8 +566,6 @@ a construct is either declared and generated, or has nowhere to be written.
   defining non-standard
 - A comment on a standard, codelist, or metadata version: a shared comment
   identifier space
-- Multiple `def:Origin` elements on one column: value-level metadata, which
-  is how Define-XML expresses several provenances
 
 <a id="req-1012"></a>
 
@@ -583,12 +579,26 @@ declared `method.expression` and never from a derivation, for the reason
 
 <a id="req-1013"></a>
 
-**REQ-1013.** Value-level metadata is the most consequential of these. A
-findings domain needs one definition per `--TESTCD` value, and [Specification structure](../specification/structure.md) forbids a
-data-dependent column list, so the construct that would carry it does not
-exist yet. Designing the mapping before that construct exists would fix a
-shape the construct then has to match, which is the failure this deferral
-avoids.
+**REQ-1013.** Value-level metadata now has its construct: a `rows` entry's
+`submission` map (see [REQ-1162](metadata.md#req-1162) through [REQ-1168](metadata.md#req-1168)) declares per-value
+metadata against statically enumerated `--TESTCD` literals. The mapping to
+Define-XML is therefore fixed: for each column carrying value-level
+metadata, the document generates one `def:ValueListDef` per distinct test
+code value, referenced from the column's `ItemRef`; each value's entry
+becomes a per-value `ItemDef` carrying the column-level declaration merged
+with the row-level overrides; each value list entry carries a
+`def:WhereClauseDef` selecting rows whose `<DOMAIN>TESTCD` equals the
+literal code; and each per-value `ItemDef` carries the row-level entry's
+`def:Origin`.
+
+<a id="req-1169"></a>
+
+**REQ-1169.** No generator consumes the row-level `submission` map yet, so a
+study document that includes a specification carrying value-level metadata
+fails loudly under the `Submission` context rather than generating a
+document that quietly omits the per-value definitions. Declared and
+unconsumed is an error; the failure names the row and column whose metadata
+has no generated form.
 
 ### Interface behavior
 

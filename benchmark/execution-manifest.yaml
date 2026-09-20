@@ -624,6 +624,9 @@ examples:
   sdtm-lb-reference-range-indicator:
     status: executable
     runtimes: ['python']
+  sdtm-lb-value-level-metadata:
+    status: executable
+    runtimes: ['python']
   sdtm-relrec-many-to-many:
     status: executable
     runtimes: ['python']
