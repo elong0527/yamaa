@@ -1,4 +1,4 @@
-# Motivation
+# Principles
 
 Two AI-agent sessions read the same prompt to generate SDTM / ADaM datasets.
 Both are sure they understand it. Each writes the code from scratch. The two output datasets disagree.
@@ -65,7 +65,7 @@ These four principles follow from the core principle of one execution:
 - **Extension**: A specification holds no code from R or Python. It has one
   extension point: a named contract. A project function is declared by its
   contract where it is used, and written once, in one language for the
-  project. (R018)
+  project.
 
 Following the principles, the goal is to move most of the AI agents' work into
 building the YAMAA specification with people, where unclear points are cheap
@@ -82,9 +82,8 @@ That is the trade. Unclear points are fixed once, early, by people. The
 alternative is to fix them many times, late, by machines that guess in
 different ways.
 
-## Principles to Working Model
+## Principles to working model
 
 These principles are not rules by themselves. Each one is enforced by the
-[rules](https://elong0527.github.io/yamaa/reference/rules/) and
-demonstrated in the [benchmark](https://elong0527.github.io/yamaa/benchmark/) with minimal,
-visible benchmarks.
+[Rules](rules.md) and demonstrated in the
+[benchmark](../benchmark/index.md) with minimal, visible benchmarks.

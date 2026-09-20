@@ -64,18 +64,18 @@ plugins:
 
 nav:
   - Home: index.md
-  - Introduction:
+  - Start:
+      - Introduction: articles/intro.md
       - Principles: articles/principles.md
       - Derivation: articles/derive.md
-      - Why YAMAA: articles/why-yamaa.md
-      - Excel to YAMAA: articles/excel-to-yamaa.md
-  - Schema:
-      - Schema concepts: articles/schema-concepts.md
-      - Schema reference: reference/schema.md
-  - Rule:
-      - Rules: reference/rules.md
+      - Excel to YAMAA: articles/excel.md
+  - Reference:
+      - Schema introduction: articles/schema-intro.md
+      - Schema reference: articles/schema.md
+      - Rules: articles/rules.md
   - Benchmark:
-      - benchmark/index.md
+      - Reading the examples: articles/benchmark.md
+      - Dashboards: benchmark/index.md
   - Engine:
       - Python engine: https://github.com/elong0527/yamaa/tree/main/python
       - R engine: https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder
