@@ -5,10 +5,12 @@
 [![Docs](https://github.com/elong0527/yamaa/actions/workflows/deploy-docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/main/LICENSE)
 
-YAMAA is a language-neutral YAML specification for reproducible clinical
-trial data pipelines. You write what each dataset contains; the R and Python
-engines execute it the same way, every time, from EDC extraction through
-SDTM and ADaM to define.xml.
+YAMAA is a domain-specific language (DSL) for clinical trial data
+standardization. A YAMAA specification transforms ODM XML data, extracted from
+an EDC system, into SDTM and ADaM datasets following CDISC standards, and on
+to define.xml. YAMAA's rules fix what every item means, so the same
+specification with the same inputs always produces the same dataset, in the R
+engine and in the Python engine alike.
 
 The one principle behind everything:
 
@@ -23,7 +25,7 @@ stage. Nothing is left for the coding stage to guess.
 
 | Component | Purpose | Documentation |
 |---|---|---|
-| Schema | Declares what a specification may contain; anything the schema does not declare is rejected before execution. | [Schema introduction](articles/schema-intro.md), [Schema reference](articles/schema.md) |
+| Schema | Declares the vocabulary of the language: what a specification may contain. Anything the schema does not declare is rejected before execution. | [Schema introduction](articles/schema-intro.md), [Schema reference](articles/schema.md) |
 | Rules | Fix the meaning of every written item, so the R and Python engines execute the same specification in exactly one way. | [Rules](articles/rules.md) |
 | Engine | Runs specifications in Python and R; the same specification with the same inputs produces the same output dataset. | [Python engine](https://github.com/elong0527/yamaa/tree/main/python), [R engine](https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder) |
 | Benchmark | 214 runnable specifications with input data and byte-exact expected outputs. | [Reading the examples](articles/benchmark.md), [Benchmark](benchmark/index.md) |
@@ -60,6 +62,16 @@ columns:
 Read it top to bottom: one input, one driver, two keys, three columns. The
 derivation verbs (`source`, `cut`, `mapping`, `compute`, ...) come from a
 closed registry -- see [Schema introduction](articles/schema-intro.md).
+
+## Where the ODM data comes in
+
+The engine reads the ODM XML extracted from the EDC system -- a plain file or a
+TAR archive -- and projects it into one long-form clinical-item table: one row
+per recorded item, keeping that item's study, event, form and item-group
+context. A specification reads that projection, addresses an item by a
+predicate over `ItemOID`, and derives SDTM and ADaM columns onto the rows it
+constructs. The benchmarks ship the projection directly as a small `odm.csv`,
+so each example stays reviewable by eye.
 
 ## Installation
 

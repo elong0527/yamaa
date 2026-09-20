@@ -1,13 +1,15 @@
 # Introduction
 
-YAMAA is a language-neutral YAML specification for reproducible clinical
-trial data pipelines. You write what each dataset contains; the R and Python
-engines execute it the same way, every time, from EDC extraction through
-SDTM and ADaM to define.xml.
+YAMAA is a domain-specific language (DSL) for clinical trial data
+standardization. A YAMAA specification transforms ODM XML data, extracted from
+an EDC system, into SDTM and ADaM datasets following CDISC standards, and on
+to define.xml. YAMAA's rules fix what every item means, so the same
+specification with the same inputs always produces the same dataset, in the R
+engine and in the Python engine alike.
 
-It is designed for AI-agent and human collaboration: people and agents build
-the specification together at the planning stage, so nothing is left for the
-coding stage to guess.
+The language is designed for AI-agent and human collaboration: people and
+agents build the specification together at the planning stage, so nothing is
+left for the coding stage to guess.
 
 ## Why specifications disagree
 

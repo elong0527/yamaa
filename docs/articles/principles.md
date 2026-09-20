@@ -8,10 +8,11 @@ The agents simply follow different paths through the gaps in the prompt.
 
 YAMAA moves agreement to the planning stage. People and AI agents build the
 specification together. Questions get answered while they are still
-cheap to answer. A YAMAA specification is built to have exactly one execution
-across different programming languages. It covers clinical data work from
-Electronic Data Capture (EDC) extraction through Study Data Tabulation Model
-(SDTM) and Analysis Data Model (ADaM) to define.xml.
+cheap to answer. YAMAA is a domain-specific language whose specifications
+are built to have exactly one execution across different programming
+languages. It covers clinical data work from Electronic Data Capture (EDC)
+extraction through Study Data Tabulation Model (SDTM) and Analysis Data Model
+(ADaM) to define.xml.
 
 ## The core principle
 
