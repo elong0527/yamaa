@@ -1049,3 +1049,220 @@ def test_a_filtered_source_reads_records_without_depending_on_their_keys() -> No
 
     derived = next(column for column in plan.columns if column.column == "A")
     assert derived.dependencies == ()
+
+
+def row_two_dataset_specification(
+    columns: list[Column], rows: list[Row]
+) -> Specification:
+    return Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={
+            "SRC": DatasetSource(path="input/source.csv"),
+            "RIGHT": DatasetSource(path="input/right.csv"),
+        },
+        keys=["K"],
+        output=Output(path="out.csv", columns=[column.name for column in columns]),
+        columns=columns,
+        rows=rows,
+    )
+
+
+def row_tables() -> dict[str, object]:
+    return {
+        "SRC": frame_from_values(
+            (
+                TypedColumn(name="K", type="str"),
+                TypedColumn(name="W", type="float"),
+            ),
+            [["a", 1.0], ["b", 2.0]],
+        ),
+        "RIGHT": frame_from_values(
+            (
+                TypedColumn(name="K", type="str"),
+                TypedColumn(name="V", type="float"),
+            ),
+            [["a", 10.0]],
+        ),
+    }
+
+
+def test_a_row_source_to_another_dataset_joins_on_the_driver_record() -> None:
+    spec = row_two_dataset_specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.K"})),
+            Column(name="V", type="float"),
+        ],
+        [
+            Row(
+                id="r",
+                dataset="SRC",
+                derivations={"V": derivation({"source": "RIGHT.V"})},
+            )
+        ],
+    )
+    plan = plan_execution(spec, row_tables())
+
+    # R003-46: the applicable key matches the driver record's field, so the
+    # planned join states driver-qualified match variables.
+    [row] = plan.rows
+    [derived] = [item for item in row.derivations if item.column == "V"]
+    assert derived.implicit_joins == (
+        ImplicitJoin(dataset="RIGHT", keys=("K",), match_variables=("SRC.K",)),
+    )
+    assert "SRC.K" in derived.dependencies
+    [resolved] = [
+        join
+        for join in plan.resolved_joins
+        if join.spec_path == "rows[0].derivations.V.source"
+    ]
+    assert resolved.dataset == "RIGHT"
+    assert resolved.source == ("SRC.K",)
+    assert resolved.key == ("K",)
+    assert resolved.inferred is True
+
+
+def test_a_row_source_without_applicable_keys_reports_only_no_applicable_keys() -> None:
+    tables = row_tables()
+    tables["RIGHT"] = frame_from_values(
+        (TypedColumn(name="V", type="float"),),
+        [[10.0]],
+    )
+    spec = row_two_dataset_specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.K"})),
+            Column(name="V", type="float"),
+        ],
+        [
+            Row(
+                id="r",
+                dataset="SRC",
+                derivations={"V": derivation({"source": "RIGHT.V"})},
+            )
+        ],
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, tables)
+
+    # R003-42 stands alone: no knock-on phase error follows it.
+    [diagnostic] = raised.value.diagnostics
+    assert diagnostic.condition == "no_applicable_keys"
+    assert diagnostic.requirement == "R003-42"
+    assert diagnostic.spec_paths == ("rows[0].derivations.V.source",)
+
+
+def test_a_row_join_key_missing_from_the_driver_is_reported() -> None:
+    tables = {
+        "SRC": frame_from_values(
+            (TypedColumn(name="W", type="float"),),
+            [[1.0]],
+        ),
+        "RIGHT": row_tables()["RIGHT"],
+    }
+    spec = row_two_dataset_specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"literal": "k"})),
+            Column(name="V", type="float"),
+        ],
+        [
+            Row(
+                id="r",
+                dataset="SRC",
+                derivations={"V": derivation({"source": "RIGHT.V"})},
+            )
+        ],
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, tables)
+
+    [diagnostic] = raised.value.diagnostics
+    assert diagnostic.condition == "unknown_field"
+    assert diagnostic.requirement == "R002-27"
+    assert diagnostic.context == {"identifier": "SRC.K"}
+
+
+def test_a_grouped_row_join_matches_the_group_keys() -> None:
+    spec = row_two_dataset_specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.K"})),
+            Column(name="V", type="float"),
+        ],
+        [
+            Row(
+                id="g",
+                dataset="SRC",
+                group_by=["SRC.K"],
+                derivations={"V": derivation({"source": "RIGHT.V"})},
+            )
+        ],
+    )
+    plan = plan_execution(spec, row_tables())
+
+    # R003-47: the applicable key is a group key, so the join matches it.
+    [row] = plan.rows
+    [derived] = [item for item in row.derivations if item.column == "V"]
+    assert derived.implicit_joins == (
+        ImplicitJoin(dataset="RIGHT", keys=("K",), match_variables=("SRC.K",)),
+    )
+
+
+def test_a_grouped_row_join_needs_group_keys() -> None:
+    spec = row_two_dataset_specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.K"})),
+            Column(name="V", type="float"),
+        ],
+        [
+            Row(
+                id="g",
+                dataset="SRC",
+                group_by=["SRC.W"],
+                derivations={"V": derivation({"source": "RIGHT.V"})},
+            )
+        ],
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, row_tables())
+
+    # R003-47: a key the group does not carry varies within it.
+    [diagnostic] = raised.value.diagnostics
+    assert diagnostic.condition == "ungrouped_driver_field"
+    assert diagnostic.requirement == "R001-36"
+    assert diagnostic.context["identifier"] == "SRC.K"
+
+
+def test_a_row_inline_lookup_matching_driver_fields_is_planned() -> None:
+    spec = row_two_dataset_specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.K"})),
+            Column(name="V", type="float"),
+        ],
+        [
+            Row(
+                id="r",
+                dataset="SRC",
+                derivations={
+                    "V": derivation(
+                        {
+                            "lookup": {
+                                "dataset": "RIGHT",
+                                "key_base": ["SRC.K"],
+                                "key": ["K"],
+                                "value": "V",
+                            }
+                        }
+                    )
+                },
+            )
+        ],
+    )
+
+    # R003-46: an explicit lookup states the same driver-side match.
+    plan_execution(
+        spec,
+        row_tables(),
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )

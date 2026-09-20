@@ -157,6 +157,10 @@ class ImplicitJoin:
     # R003-20 lets a reduction declare keys coarser than the applicable
     # keys, and the join then matches on that instead.
     declared_grain: bool = False
+    # R003-46/R003-47: a row-phase join matches the driver record's (or
+    # group keys') fields rather than completed output columns. `None`
+    # keeps the column-phase meaning: match on `keys` themselves.
+    match_variables: tuple[str, ...] | None = None
 
 
 class PlannedRow(_FrozenModel):
@@ -1523,8 +1527,11 @@ def _validate_qualified_reference(
     author wraps the read in an explicit `intermediate` (R003-42). The current
     row's own datasets need no join: a scalar source qualified with a row
     driver reads the current driver record. During row construction R001-15
-    lets a row derivation read its driver, its group keys, an earlier
-    row-derived column, or an intermediate, and nothing else.
+    lets a row derivation read its driver, group keys, earlier row columns,
+    or an intermediate; R003-46/R003-47 additionally let it read another
+    dataset through a planned join, whose match variables name
+    driver-record fields or group keys, and name relation-internal fields
+    of lookups and source filters directly.
     """
     qualifier = reference.name.split(".", 1)[0]
     if qualifier in intermediates:
@@ -1568,10 +1575,12 @@ def _validate_qualified_reference(
     ):
         # R003-42: the implicit-join pre-pass already recorded why the
         # applicable keys are unclear; nothing more to add here. Row
-        # derivations fall through: R001-15 lets them read their driver,
-        # group keys, earlier row columns, or an intermediate, and nothing else.
+        # derivations fall through to the row-phase check below, which
+        # R003-46/R003-47 extend to planned joins.
         return
-    if row is not None:
+    if row is not None and not _row_join_reference(
+        reference, bound, bindings, drivers, intermediates
+    ):
         _validate_row_phase_reference(
             reference, bound.dataset, next(iter(drivers), None), row, diagnostics
         )
@@ -1589,6 +1598,38 @@ def _validate_qualified_reference(
                 requirement=reference.requirement,
             )
         )
+
+
+def _row_join_reference(
+    reference: _Reference,
+    bound: BoundReference,
+    bindings: BindingPlan,
+    drivers: Collection[str],
+    intermediates: Mapping[str, PlannedIntermediate],
+) -> bool:
+    """Tell whether a row-phase read reaches another dataset legitimately.
+
+    R003-46/R003-47 let a row derivation read a non-driver dataset through
+    a planned implicit join, and name relation-internal fields of inline
+    lookups and source filters directly. Such references skip the row-phase
+    gate; existence and types are still checked. A scalar read the
+    key-inference pre-pass left unannotated already carries its own
+    R003-41/R003-42 diagnostic, so it reports no knock-on phase error;
+    anything else unresolvable (for example an ODM item) still does.
+    """
+    if reference.join_relation is not None:
+        return True
+    if reference.reach in ("declared", "record"):
+        return True
+    qualifier = reference.name.split(".", 1)[0] if "." in reference.name else None
+    return (
+        reference.reach == "scalar"
+        and bound.kind == "dataset"
+        and qualifier is not None
+        and qualifier in bindings.datasets
+        and qualifier not in drivers
+        and qualifier not in intermediates
+    )
 
 
 def _validate_row_phase_reference(
@@ -1820,6 +1861,89 @@ def _resolve_implicit_joins(
     return tuple(annotated)
 
 
+def _row_join_match_variables(
+    references: Sequence[_Reference],
+    *,
+    row: Row,
+    driver: str,
+    bindings: BindingPlan,
+    diagnostics: list[ExecutionDiagnostic],
+) -> tuple[_Reference, ...]:
+    """Point a row-phase implicit join's match at the driver record.
+
+    R003-46/R003-47: the candidate holds single values only for its driver
+    record (ungrouped) or its group keys (grouped), so the inferred
+    applicable keys match the same-named driver fields rather than
+    not-yet-derived output columns.
+    """
+    fields = _dataset_types(bindings, driver)
+    group_fields = (
+        set()
+        if row.group_by is None
+        else {
+            name.split(".", 1)[1]
+            for name in row.group_by
+            if name.startswith(f"{driver}.") and name.count(".") == 1
+        }
+    )
+    rewritten: list[_Reference] = []
+    for reference in references:
+        if (
+            reference.join_relation is None
+            or reference.join_key is None
+            or reference.join_key_base is None
+            or reference.join_relation == driver
+        ):
+            rewritten.append(reference)
+            continue
+        match: list[str] = []
+        for key in reference.join_key:
+            if row.group_by is not None and key not in group_fields:
+                # R003-47: a key the group does not carry varies within it.
+                diagnostics.append(
+                    _diagnostic(
+                        "ungrouped_driver_field",
+                        reference.path,
+                        {
+                            "identifier": f"{driver}.{key}",
+                            "row": row.id,
+                            "dataset": driver,
+                        },
+                        requirement="R001-36",
+                    )
+                )
+                continue
+            if key not in fields:
+                diagnostics.append(
+                    _diagnostic(
+                        "unknown_field",
+                        reference.path,
+                        {"identifier": f"{driver}.{key}"},
+                        requirement="R002-27",
+                    )
+                )
+                continue
+            right = _dataset_types(bindings, reference.join_relation).get(key)
+            if right is not None and not _comparable_types(fields[key], right):
+                # R003-41: an inferred key must compare equal on both sides.
+                diagnostics.append(
+                    _diagnostic(
+                        "incompatible_input_type",
+                        reference.path,
+                        {
+                            "source": f"{driver}.{key}",
+                            "expected": fields[key],
+                            "actual": right,
+                        },
+                        requirement="R003-41",
+                    )
+                )
+                continue
+            match.append(f"{driver}.{key}")
+        rewritten.append(replace(reference, join_key_base=tuple(match)))
+    return tuple(rewritten)
+
+
 def _with_relation_dependencies(
     planned: PlannedDerivation,
     references: Sequence[_Reference],
@@ -1868,9 +1992,18 @@ def _with_relation_dependencies(
             if reference.reach == "scalar":
                 # R003-40: an implicit join the pre-pass inferred from the
                 # applicable keys. The keys were validated there.
+                # R003-46/R003-47: a row-phase join states its driver-side
+                # match variables separately; elsewhere they are the keys.
+                match_variables = reference.join_key_base
                 implicit.append(
                     ImplicitJoin(
-                        dataset=reference.join_relation, keys=reference.join_key_base
+                        dataset=reference.join_relation,
+                        keys=reference.join_key,
+                        match_variables=(
+                            None
+                            if match_variables == reference.join_key
+                            else match_variables
+                        ),
                     )
                 )
             else:
@@ -2878,9 +3011,27 @@ def plan_execution(
                     scope=row_scope,
                     infer_keys=infer_lookup_keys,
                 )
+                annotated = _resolve_implicit_joins(
+                    references,
+                    specification,
+                    bindings,
+                    {driver},
+                    intermediates,
+                    column_types,
+                    diagnostics,
+                )
+                # R003-46/R003-47: a row-phase join matches the driver
+                # record (or the group keys), not output columns.
+                annotated = _row_join_match_variables(
+                    annotated,
+                    row=row,
+                    driver=driver,
+                    bindings=bindings,
+                    diagnostics=diagnostics,
+                )
                 derivations[name] = _with_relation_dependencies(
                     planned,
-                    references,
+                    annotated,
                     specification,
                     bindings,
                     intermediates,
@@ -2890,7 +3041,7 @@ def plan_execution(
                     resolved_joins,
                     inferred_paths=inferred_paths,
                 )
-                row_references[(index, name)] = references
+                row_references[(index, name)] = annotated
 
             row_names = set(derivations)
             if grouped:

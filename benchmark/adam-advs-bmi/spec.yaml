@@ -4,25 +4,29 @@ keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
 input:
   VS:
     path: input/vs.csv
-    types: {VSSEQ: int, VSSTRESN: float}
+    types: {VSSTRESN: float}
   ADSL:
     path: input/adsl.csv
     types: {HEIGHTBL: float}
-intermediates:
-  - id: SUBJECT
-    dataset: ADSL
 output:
   path: advs.csv
-  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVAL, AVISIT, DTYPE]
+  columns: [STUDYID, USUBJID, AVISIT, PARAMCD, PARAM, AVAL]
 
 columns:
   - name: STUDYID
     type: str
     label: Study Identifier
+    derivation: VS.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: AVISIT
+    type: str
+    label: Analysis Visit Name
+    derivation: VS.VISIT
 
   - name: PARAMCD
     type: str
@@ -32,58 +36,37 @@ columns:
     type: str
     label: Parameter
 
-  - name: BASE_HEIGHT_VAL
+  - name: HEIGHTBL
     type: float
-    label: Baseline Height Value
+    label: Baseline Height (cm)
 
   - name: AVAL
     type: float
     label: Analysis Value
 
-  - name: AVISIT
-    type: str
-    label: Analysis Visit Name
-
-  - name: DTYPE
-    type: str
-    label: Derivation Type
-
 rows:
   - id: collected
     dataset: VS
     derivations:
-      STUDYID: {source: VS.STUDYID}
-      USUBJID: {source: VS.USUBJID}
-      PARAMCD: {source: VS.VSTESTCD}
-      PARAM: {source: VS.VSTEST}
-      BASE_HEIGHT_VAL: {literal: null}
-      AVAL: {source: VS.VSSTRESN}
-      AVISIT: {source: VS.VISIT}
-      DTYPE: {literal: null}
+      PARAMCD: VS.VSTESTCD
+      PARAM: VS.VSTEST
+      HEIGHTBL: {literal: null}
+      AVAL: VS.VSSTRESN
 
   - id: derived_bmi
     dataset: VS
     filter: "VS.VSTESTCD = 'WEIGHT' AND VS.VSSTRESN IS NOT NULL"
     derivations:
-      STUDYID: {source: VS.STUDYID}
-      USUBJID: {source: VS.USUBJID}
       PARAMCD: {literal: BMI}
       PARAM: {literal: Body Mass Index (kg/m^2)}
-      BASE_HEIGHT_VAL: {source: SUBJECT.HEIGHTBL}
+      HEIGHTBL: {source: ADSL.HEIGHTBL}
       AVAL:
         compute:
-          expr: >-
-            VS.VSSTRESN /
-            NULLIF(BASE_HEIGHT_VAL * BASE_HEIGHT_VAL / 10000, 0)
-      AVISIT: {source: VS.VISIT}
-      DTYPE: {literal: CALCULATION}
+          expr: "VS.VSSTRESN / NULLIF(HEIGHTBL * HEIGHTBL / 10000, 0)"
 
 verifications:
   - unique:
       columns: [STUDYID, USUBJID, AVISIT, PARAMCD]
-  - predicate:
-      id: no-pre-existing-target
-      assert: "NOT (PARAMCD = 'BMI' AND DTYPE IS NULL)"
   - predicate:
       id: check-height-unit
       assert: "PARAMCD <> 'HEIGHT' OR PARAM = 'Height (cm)'"
