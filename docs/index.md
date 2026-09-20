@@ -38,6 +38,7 @@ The fastest way to explore YAMAA is with an AI agent. For example, ask an agent 
 ## Documentation
 
 - [Principles](articles/principles.md) -- the short answer to "what is YAMAA for": one execution.
+- [Derivation](articles/derive.md) -- keys, rows, and columns: how one specification derives one dataset.
 - [Why YAMAA](articles/why-yamaa.md) -- the argument before the syntax.
 - [Excel to YAMAA](articles/excel-to-yamaa.md) -- translating specifications you already have.
 - [Schema concepts](articles/schema-concepts.md) -- the language itself.

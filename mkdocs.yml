@@ -66,10 +66,10 @@ nav:
   - Home: index.md
   - Guides:
       - Principles: articles/principles.md
+      - Derivation: articles/derive.md
       - Why YAMAA: articles/why-yamaa.md
       - Excel to YAMAA: articles/excel-to-yamaa.md
       - Schema concepts: articles/schema-concepts.md
-      - Benchmark walkthrough: articles/yaml-benchmark-walkthrough.md
   - Benchmark:
       - benchmark/index.md
   - Reference:
