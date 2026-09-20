@@ -13,14 +13,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: LB.STUDYID
+    derivation: LB.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: LB.USUBJID
+    derivation: LB.USUBJID
 
   - name: PARAMCD
     type: str
@@ -33,19 +31,16 @@ columns:
   - name: ADT
     type: date
     label: Analysis Date
-    derivation:
-      source: LB.LBDTC
+    derivation: LB.LBDTC
 
   - name: TRTSDT
     type: date
     label: Date of First Exposure to Treatment
-    derivation:
-      source: ADSL.TRTSDT
+    derivation: ADSL.TRTSDT
   - name: TRT01A
     type: str
     label: Actual Treatment for Period 01
-    derivation:
-      source: ADSL.TRT01A
+    derivation: ADSL.TRT01A
   - name: AVAL
     type: float
     label: Analysis Value

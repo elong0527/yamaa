@@ -21,14 +21,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ODM.StudyOID
+    derivation: ODM.StudyOID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ODM.SubjectKey
+    derivation: ODM.SubjectKey
 
   - name: VISIT
     type: str
@@ -92,8 +90,7 @@ columns:
   - name: LBORRES
     type: str
     label: Result or Finding in Original Units
-    derivation:
-      source: ODM.Value
+    derivation: ODM.Value
     verifications:
       not_missing: {}
 
@@ -104,8 +101,7 @@ columns:
   - name: LBSTRESC
     type: str
     label: Character Result/Finding in Std Format
-    derivation:
-      source: LBORRES
+    derivation: LBORRES
 
   - name: LBSTRESN
     type: float

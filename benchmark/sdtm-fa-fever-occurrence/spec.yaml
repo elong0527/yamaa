@@ -33,17 +33,17 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {source: VS.STUDYID}
+    derivation: VS.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: {source: VS.USUBJID}
+    derivation: VS.USUBJID
 
   - name: FASEQ
     type: int
     label: Sequence Number
-    derivation: {source: VS.VSSEQ}
+    derivation: VS.VSSEQ
 
   - name: FATESTCD
     type: str
@@ -83,12 +83,12 @@ columns:
   - name: FASTRESC
     type: str
     label: Character Result/Finding in Std Format
-    derivation: {source: FAORRES}
+    derivation: FAORRES
 
   - name: VSSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
-    derivation: {source: VS.VSSTRESN}
+    derivation: VS.VSSTRESN
 
 rows:
   - id: fever_occurrence

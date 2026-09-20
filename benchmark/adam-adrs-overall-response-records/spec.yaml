@@ -13,20 +13,17 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: RS.STUDYID
+    derivation: RS.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: RS.USUBJID
+    derivation: RS.USUBJID
 
   - name: RSSEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: RS.RSSEQ
+    derivation: RS.RSSEQ
 
   - name: PARAMCD
     type: str
@@ -43,8 +40,7 @@ columns:
   - name: RSDTC
     type: str
     label: Date/Time of Assessment
-    derivation:
-      source: RS.RSDTC
+    derivation: RS.RSDTC
 
   - name: ADT
     type: date
@@ -60,8 +56,7 @@ columns:
   - name: AVALC
     type: str
     label: Analysis Value (C)
-    derivation:
-      source: RS.RSSTRESC
+    derivation: RS.RSSTRESC
     verifications:
       allowed_values:
         values: [CR, PR, SD, NON-CR/NON-PD, PD, NE]
@@ -87,8 +82,7 @@ columns:
   - name: TRTSDT
     type: date
     label: Date of First Exposure to Treatment
-    derivation:
-      source: ADSL.TRTSDT
+    derivation: ADSL.TRTSDT
   - name: ADY
     type: int
     label: Analysis Relative Day

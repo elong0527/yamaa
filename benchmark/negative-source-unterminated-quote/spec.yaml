@@ -12,17 +12,14 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM.STUDYID
+    derivation: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
+    derivation: DM.USUBJID
 
   - name: CMNT
     type: str
     label: Investigator Comment
-    derivation:
-      source: DM.COMMENT
+    derivation: DM.COMMENT

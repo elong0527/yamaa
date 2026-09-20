@@ -21,14 +21,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DS_RAW.STUDY
+    derivation: DS_RAW.STUDY
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DS_RAW.PATNUM
+    derivation: DS_RAW.PATNUM
 
   - name: DSSEQ
     type: int
@@ -44,8 +42,7 @@ columns:
   - name: DSDECOD
     type: str
     label: Standardized Disposition Term
-    derivation:
-      source: DS_RAW.DSDECOD
+    derivation: DS_RAW.DSDECOD
     verifications:
       - not_missing: {}
       - allowed_values:

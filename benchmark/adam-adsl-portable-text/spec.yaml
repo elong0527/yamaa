@@ -25,20 +25,17 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM.STUDYID
+    derivation: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
+    derivation: DM.USUBJID
 
   - name: RAWTXT
     type: str
     label: Raw Text
-    derivation:
-      source: DM.RAWTXT
+    derivation: DM.RAWTXT
     verifications:
       max_length:
         max: 6
@@ -46,8 +43,7 @@ columns:
   - name: PEERTXT
     type: str
     label: Comparison Text
-    derivation:
-      source: DM.PEERTXT
+    derivation: DM.PEERTXT
 
   - name: UPPERTXT
     type: str

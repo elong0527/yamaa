@@ -12,14 +12,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: LB.STUDYID
+    derivation: LB.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: LB.USUBJID
+    derivation: LB.USUBJID
 
   - name: AVALDOUBLED
     type: float
@@ -31,5 +29,4 @@ columns:
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation:
-      source: LB.AVAL
+    derivation: LB.AVAL

@@ -31,14 +31,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADSL.STUDYID
+    derivation: ADSL.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADSL.USUBJID
+    derivation: ADSL.USUBJID
 
   - name: PARAMCD
     type: str
@@ -55,44 +53,37 @@ columns:
   - name: STARTDT
     type: date
     label: Time-to-Event Origin Date
-    derivation:
-      source: ADSL.RANDDT
+    derivation: ADSL.RANDDT
 
   - name: PDDT
     type: date
     label: Disease Progression Date
-    derivation:
-      source: PROGRESSION.RSDTC
+    derivation: PROGRESSION.RSDTC
 
   - name: PDSEQ
     type: int
     label: Disease Progression Source Sequence Number
-    derivation:
-      source: PROGRESSION.RSSEQ
+    derivation: PROGRESSION.RSSEQ
 
   - name: DEATHDT
     type: date
     label: Death Date
-    derivation:
-      source: DEATH.DSDTC
+    derivation: DEATH.DSDTC
 
   - name: DEATHSEQ
     type: int
     label: Death Source Sequence Number
-    derivation:
-      source: DEATH.DSSEQ
+    derivation: DEATH.DSSEQ
 
   - name: CENSORDT
     type: date
     label: Censoring Date
-    derivation:
-      source: LASTASSESS.RSDTC
+    derivation: LASTASSESS.RSDTC
 
   - name: CENSORSEQ
     type: int
     label: Censoring Source Sequence Number
-    derivation:
-      source: LASTASSESS.RSSEQ
+    derivation: LASTASSESS.RSSEQ
 
   - name: EVENTDT
     type: date

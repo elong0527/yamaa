@@ -14,32 +14,27 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: LB.STUDYID
+    derivation: LB.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: LB.USUBJID
+    derivation: LB.USUBJID
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      source: LB.PARAMCD
+    derivation: LB.PARAMCD
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation:
-      source: LB.AVAL
+    derivation: LB.AVAL
 
   - name: ANRLO
     type: float
     label: Analysis Normal Range Lower Limit
-    derivation:
-      source: LB.ANRLO
+    derivation: LB.ANRLO
 
   - name: R2ANRLO
     type: float

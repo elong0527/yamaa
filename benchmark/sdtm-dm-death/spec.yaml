@@ -32,26 +32,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM_RAW.STUDYID
+    derivation: DM_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM_RAW.USUBJID
+    derivation: DM_RAW.USUBJID
 
   - name: DSDTHDT
     type: date
     label: Death Date from Disposition
-    derivation:
-      source: DTHDS.DSSTDTC
+    derivation: DTHDS.DSSTDTC
 
   - name: AEDTHDT
     type: date
     label: Death Date from Fatal Adverse Event
-    derivation:
-      source: DTHAE.AEENDTC
+    derivation: DTHAE.AEENDTC
 
   - name: DTHDTC
     type: date

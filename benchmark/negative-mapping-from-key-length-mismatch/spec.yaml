@@ -14,32 +14,27 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: LB.STUDYID
+    derivation: LB.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: LB.USUBJID
+    derivation: LB.USUBJID
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      source: LB.LBTESTCD
+    derivation: LB.LBTESTCD
 
   - name: SEX
     type: str
     label: Sex
-    derivation:
-      source: LB.SEX
+    derivation: LB.SEX
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation:
-      source: LB.LBSTRESN
+    derivation: LB.LBSTRESN
 
   - name: ANRHI
     type: float

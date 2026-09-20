@@ -12,26 +12,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM.STUDYID
+    derivation: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
+    derivation: DM.USUBJID
 
   - name: RFSTDTM
     type: datetime
     label: Reference Start Moment
-    derivation:
-      source: DM.RFSTDTC
+    derivation: DM.RFSTDTC
 
   - name: DTHDT
     type: date
     label: Date of Death
-    derivation:
-      source: DM.DTHDT
+    derivation: DM.DTHDT
 
   - name: SURVDD
     type: int

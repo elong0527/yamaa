@@ -18,14 +18,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: EX_RAW.STUDYID
+    derivation: EX_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: EX_RAW.USUBJID
+    derivation: EX_RAW.USUBJID
 
   - name: EXSEQ
     type: int
@@ -39,38 +37,32 @@ columns:
   - name: EXTRT
     type: str
     label: Name of Treatment
-    derivation:
-      source: EX_RAW.EXTRT
+    derivation: EX_RAW.EXTRT
 
   - name: EXDOSE
     type: float
     label: Dose
-    derivation:
-      source: EX_RAW.EXDOSE
+    derivation: EX_RAW.EXDOSE
 
   - name: EXDOSU
     type: str
     label: Dose Units
-    derivation:
-      source: EX_RAW.EXDOSU
+    derivation: EX_RAW.EXDOSU
 
   - name: EXSTDTC
     type: date
     label: Start Date/Time of Treatment
-    derivation:
-      source: EX_RAW.EXSTDTC
+    derivation: EX_RAW.EXSTDTC
 
   - name: EXENDTC
     type: date
     label: End Date/Time of Treatment
-    derivation:
-      source: EX_RAW.EXENDTC
+    derivation: EX_RAW.EXENDTC
 
   - name: EXADJ
     type: str
     label: Reason for Dose Adjustment
-    derivation:
-      source: EX_RAW.EXADJ
+    derivation: EX_RAW.EXADJ
 
 verifications:
   - row_count:

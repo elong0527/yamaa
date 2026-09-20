@@ -18,14 +18,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: BX_RAW.STUDYID
+    derivation: BX_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: BX_RAW.USUBJID
+    derivation: BX_RAW.USUBJID
 
   - name: LBTESTCD
     type: str
@@ -65,14 +63,12 @@ columns:
   - name: LBORRESU
     type: str
     label: Original Units
-    derivation:
-      source: BX_RAW.RESU
+    derivation: BX_RAW.RESU
 
   - name: LBSTRESN
     type: float
     label: Numeric Result/Finding in Standard Units
-    derivation:
-      source: LBORRES
+    derivation: LBORRES
 
   - name: LBSTAT
     type: str

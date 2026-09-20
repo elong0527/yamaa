@@ -14,56 +14,47 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADLBPRE.STUDYID
+    derivation: ADLBPRE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADLBPRE.USUBJID
+    derivation: ADLBPRE.USUBJID
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      source: ADLBPRE.PARAMCD
+    derivation: ADLBPRE.PARAMCD
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation:
-      source: ADLBPRE.PARAM
+    derivation: ADLBPRE.PARAM
 
   - name: ASEQ
     type: int
     label: Analysis Sequence Number
-    derivation:
-      source: ADLBPRE.ASEQ
+    derivation: ADLBPRE.ASEQ
 
   - name: AVISIT
     type: str
     label: Analysis Visit
-    derivation:
-      source: ADLBPRE.AVISIT
+    derivation: ADLBPRE.AVISIT
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation:
-      source: ADLBPRE.AVAL
+    derivation: ADLBPRE.AVAL
 
   - name: ANRLO
     type: float
     label: Analysis Normal Range Lower Limit
-    derivation:
-      source: ADLBPRE.ANRLO
+    derivation: ADLBPRE.ANRLO
 
   - name: ANRHI
     type: float
     label: Analysis Normal Range Upper Limit
-    derivation:
-      source: ADLBPRE.ANRHI
+    derivation: ADLBPRE.ANRHI
 
   - name: ANRIND
     type: str
@@ -88,8 +79,7 @@ columns:
   - name: ABLFL
     type: str
     label: Baseline Record Flag
-    derivation:
-      source: ADLBPRE.ABLFL
+    derivation: ADLBPRE.ABLFL
     verifications:
       allowed_values:
         values: [Y]

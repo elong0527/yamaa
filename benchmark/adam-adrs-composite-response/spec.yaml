@@ -15,14 +15,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADRSPRE.STUDYID
+    derivation: ADRSPRE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADRSPRE.USUBJID
+    derivation: ADRSPRE.USUBJID
 
   - name: PARAMCD
     type: str
@@ -39,25 +37,21 @@ columns:
   - name: AVISIT
     type: str
     label: Analysis Visit
-    derivation:
-      source: ADRSPRE.AVISIT
+    derivation: ADRSPRE.AVISIT
 
   - name: PCHG
     type: float
     label: Percent Change from Baseline
-    derivation:
-      source: ADRSPRE.PCHG
+    derivation: ADRSPRE.PCHG
 
   - name: SAEFL
     type: str
     label: Serious Adverse Event Flag
-    derivation:
-      source: ADSL.SAEFL
+    derivation: ADSL.SAEFL
   - name: DCSREAS
     type: str
     label: Reason for Discontinuation
-    derivation:
-      source: ADSL.DCSREAS
+    derivation: ADSL.DCSREAS
   - name: RULE
     type: str
     label: Decision Rule

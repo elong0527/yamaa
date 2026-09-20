@@ -14,8 +14,7 @@ columns:
   - name: ID
     type: str
     label: Identifier
-    derivation:
-      source: SOURCE.ID
+    derivation: SOURCE.ID
 
   - name: RESULT
     type: float

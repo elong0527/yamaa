@@ -12,26 +12,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: VS.STUDYID
+    derivation: VS.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: VS.USUBJID
+    derivation: VS.USUBJID
 
   - name: VSSEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: VS.VSSEQ
+    derivation: VS.VSSEQ
 
   - name: SYSBP
     type: int
     label: Systolic Blood Pressure
-    derivation:
-      source: VS.SYSBP
+    derivation: VS.SYSBP
 
   - name: PRIORBP
     type: int

@@ -14,14 +14,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADSL.STUDYID
+    derivation: ADSL.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADSL.USUBJID
+    derivation: ADSL.USUBJID
 
   - name: PARAMCD
     type: str
@@ -38,16 +36,14 @@ columns:
   - name: STARTDT
     type: date
     label: Time-to-Event Origin Date
-    derivation:
-      source: ADSL.RESPDT
+    derivation: ADSL.RESPDT
     verifications:
       not_missing: {}
 
   - name: NACTDT
     type: date
     label: New Anti-Cancer Therapy Start Date
-    derivation:
-      source: ADSL.NACTDT
+    derivation: ADSL.NACTDT
 
   - name: PDDT
     type: date

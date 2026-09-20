@@ -15,14 +15,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM.STUDYID
+    derivation: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
+    derivation: DM.USUBJID
 
   - name: METSTATR
     type: str
@@ -55,14 +53,12 @@ columns:
   - name: ECOG0
     type: str
     label: Baseline ECOG Performance Status
-    derivation:
-      source: DM.ECOG0
+    derivation: DM.ECOG0
 
   - name: REGIONUS
     type: str
     label: United States Region
-    derivation:
-      source: DM.REGIONUS
+    derivation: DM.REGIONUS
 
   - name: STRAT1R
     type: str

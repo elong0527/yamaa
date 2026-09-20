@@ -12,38 +12,32 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: CE.STUDYID
+    derivation: CE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: CE.USUBJID
+    derivation: CE.USUBJID
 
   - name: CESEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: CE.CESEQ
+    derivation: CE.CESEQ
 
   - name: CETERM
     type: str
     label: Reported Term for Clinical Event
-    derivation:
-      source: CE.CETERM
+    derivation: CE.CETERM
 
   - name: ASTDT
     type: date
     label: Analysis Start Date
-    derivation:
-      source: CE.ASTDT
+    derivation: CE.ASTDT
 
   - name: ASEV
     type: str
     label: Analysis Severity/Intensity
-    derivation:
-      source: CE.CESEV
+    derivation: CE.CESEV
     verifications:
       allowed_values:
         values: [MILD, MODERATE, SEVERE]
@@ -63,8 +57,7 @@ columns:
   - name: ATOXGRN
     type: int
     label: Analysis Toxicity Grade (N)
-    derivation:
-      source: ASEVN
+    derivation: ASEVN
     verifications:
       allowed_values:
         values: [1, 2, 3]

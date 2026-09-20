@@ -13,8 +13,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: MH_SUPP_RAW.STUDYID
+    derivation: MH_SUPP_RAW.STUDYID
 
   - name: RDOMAIN
     type: str
@@ -25,8 +24,7 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: MH_SUPP_RAW.USUBJID
+    derivation: MH_SUPP_RAW.USUBJID
 
   - name: IDVAR
     type: str

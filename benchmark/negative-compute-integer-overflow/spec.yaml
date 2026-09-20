@@ -12,26 +12,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: LB.STUDYID
+    derivation: LB.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: LB.USUBJID
+    derivation: LB.USUBJID
 
   - name: CELLCNT
     type: int
     label: Cell Concentration
-    derivation:
-      source: LB.CELLCNT
+    derivation: LB.CELLCNT
 
   - name: VOLUML
     type: int
     label: Sample Volume (L)
-    derivation:
-      source: LB.VOLUML
+    derivation: LB.VOLUML
 
   - name: CELLTOT
     type: int

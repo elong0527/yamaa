@@ -20,38 +20,32 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: RAND.STUDYID
+    derivation: RAND.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: RAND.USUBJID
+    derivation: RAND.USUBJID
 
   - name: ARMCD
     type: str
     label: Planned Arm Code
-    derivation:
-      source: RAND.RANDCD
+    derivation: RAND.RANDCD
 
   - name: ARM
     type: str
     label: Description of Planned Arm
-    derivation:
-      source: RAND.RAND
+    derivation: RAND.RAND
 
   - name: SCRNFL
     type: str
     label: Screen Failure Flag as Collected
-    derivation:
-      source: RAND.SCRNFL
+    derivation: RAND.SCRNFL
 
   - name: EXTRT1
     type: str
     label: Treatment Received as Collected
-    derivation:
-      source: EX.EXTRT
+    derivation: EX.EXTRT
   - name: ACTARMCD
     type: str
     label: Actual Arm Code

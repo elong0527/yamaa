@@ -15,20 +15,17 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADSL_RAW.STUDYID
+    derivation: ADSL_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADSL_RAW.USUBJID
+    derivation: ADSL_RAW.USUBJID
 
   - name: TRTSDT
     type: date
     label: Date of First Exposure to Treatment
-    derivation:
-      source: ADSL_RAW.TRTSDT
+    derivation: ADSL_RAW.TRTSDT
     verifications:
       not_missing: {}
 

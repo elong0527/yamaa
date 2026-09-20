@@ -14,32 +14,27 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: OE.STUDYID
+    derivation: OE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: OE.USUBJID
+    derivation: OE.USUBJID
 
   - name: OESEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: OE.OESEQ
+    derivation: OE.OESEQ
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      source: OE.OETESTCD
+    derivation: OE.OETESTCD
 
   - name: OELAT
     type: str
     label: Laterality
-    derivation:
-      source: OE.OELAT
+    derivation: OE.OELAT
     verifications:
       allowed_values:
         values: [LEFT, RIGHT, BILATERAL]
@@ -47,14 +42,12 @@ columns:
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation:
-      source: OE.OESTRESN
+    derivation: OE.OESTRESN
 
   - name: STUDYEYE
     type: str
     label: Study Eye Laterality
-    derivation:
-      source: ADSL.STUDYEYE
+    derivation: ADSL.STUDYEYE
     verifications:
       allowed_values:
         values: [LEFT, RIGHT, BILATERAL]

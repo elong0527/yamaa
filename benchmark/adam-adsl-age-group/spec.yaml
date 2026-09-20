@@ -12,26 +12,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM.STUDYID
+    derivation: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
+    derivation: DM.USUBJID
 
   - name: AGE
     type: int
     label: Age
-    derivation:
-      source: DM.AGE
+    derivation: DM.AGE
 
   - name: AGEU
     type: str
     label: Age Units
-    derivation:
-      source: DM.AGEU
+    derivation: DM.AGEU
 
   - name: AGEGR1
     type: str

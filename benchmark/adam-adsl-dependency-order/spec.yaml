@@ -33,8 +33,7 @@ columns:
   - name: RANDDT
     type: date
     label: Randomization Date
-    derivation:
-      source: DM.RANDDT
+    derivation: DM.RANDDT
 
   - name: RANDFL
     type: str
@@ -72,20 +71,17 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM.STUDYID
+    derivation: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
+    derivation: DM.USUBJID
 
   - name: AGE
     type: int
     label: Age
-    derivation:
-      source: DM.AGE
+    derivation: DM.AGE
 
   - name: AGEGR1
     type: str

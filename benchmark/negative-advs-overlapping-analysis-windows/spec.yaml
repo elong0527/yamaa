@@ -23,32 +23,32 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: {source: ADVSPRE.STUDYID}
+    derivation: ADVSPRE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: {source: ADVSPRE.USUBJID}
+    derivation: ADVSPRE.USUBJID
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: {source: ADVSPRE.PARAMCD}
+    derivation: ADVSPRE.PARAMCD
 
   - name: VSSEQ
     type: int
     label: Sequence Number
-    derivation: {source: ADVSPRE.VSSEQ}
+    derivation: ADVSPRE.VSSEQ
 
   - name: ADY
     type: int
     label: Analysis Relative Day
-    derivation: {source: ADVSPRE.ADY}
+    derivation: ADVSPRE.ADY
 
   - name: AVISIT
     type: str
     label: Analysis Visit
-    derivation: {source: AWIN.AVISIT}
+    derivation: AWIN.AVISIT
 
 verifications:
   - unique:

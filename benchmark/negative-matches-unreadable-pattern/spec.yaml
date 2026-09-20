@@ -12,14 +12,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM.STUDYID
+    derivation: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
+    derivation: DM.USUBJID
 
   - name: SEX
     type: str
@@ -27,5 +25,4 @@ columns:
     verifications:
       - matches:
           pattern: '(?P<code>[MFU])'
-    derivation:
-      source: DM.SEX
+    derivation: DM.SEX

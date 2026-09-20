@@ -12,26 +12,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM.STUDYID
+    derivation: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
+    derivation: DM.USUBJID
 
   - name: BRTHDT
     type: date
     label: Date of Birth
-    derivation:
-      source: DM.BRTHDT
+    derivation: DM.BRTHDT
 
   - name: RANDDT
     type: date
     label: Date of Randomization
-    derivation:
-      source: DM.RANDDT
+    derivation: DM.RANDDT
 
   - name: AAGE
     type: int

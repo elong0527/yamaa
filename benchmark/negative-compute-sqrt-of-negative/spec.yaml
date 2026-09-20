@@ -12,26 +12,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM.STUDYID
+    derivation: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
+    derivation: DM.USUBJID
 
   - name: HEIGHTCM
     type: float
     label: Height (cm)
-    derivation:
-      source: DM.HEIGHTCM
+    derivation: DM.HEIGHTCM
 
   - name: WEIGHTKG
     type: float
     label: Weight (kg)
-    derivation:
-      source: DM.WEIGHTKG
+    derivation: DM.WEIGHTKG
 
   - name: BSA
     type: float

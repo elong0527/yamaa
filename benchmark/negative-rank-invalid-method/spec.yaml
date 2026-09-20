@@ -12,26 +12,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: AE.STUDYID
+    derivation: AE.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: AE.USUBJID
+    derivation: AE.USUBJID
 
   - name: AESEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: AE.AESEQ
+    derivation: AE.AESEQ
 
   - name: AESEV
     type: str
     label: Severity
-    derivation:
-      source: AE.AESEV
+    derivation: AE.AESEV
 
   - name: SEVRANK
     type: int

@@ -13,26 +13,22 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM.STUDYID
+    derivation: DM.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: DM.USUBJID
+    derivation: DM.USUBJID
 
   - name: REVIEWER
     type: str
     label: Reviewer Initials
-    derivation:
-      source: DM.REVIEWER
+    derivation: DM.REVIEWER
 
   - name: CMNT
     type: str
     label: Investigator Comment
-    derivation:
-      source: DM.COMMENT
+    derivation: DM.COMMENT
 
   - name: CMNTFL
     type: str

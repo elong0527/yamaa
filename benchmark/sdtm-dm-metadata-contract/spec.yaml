@@ -36,8 +36,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM_RAW.STUDYID
+    derivation: DM_RAW.STUDYID
     submission:
       core: Req
       role: Identifier
@@ -75,8 +74,7 @@ columns:
   - name: SUBJID
     type: str
     label: Subject Identifier for the Study
-    derivation:
-      source: DM_RAW.SUBJID
+    derivation: DM_RAW.SUBJID
     submission:
       core: Req
       role: Topic
@@ -93,8 +91,7 @@ columns:
   - name: SITEID
     type: str
     label: Study Site Identifier
-    derivation:
-      source: DM_RAW.SITEID
+    derivation: DM_RAW.SITEID
     submission:
       core: Req
       role: Record Qualifier
@@ -108,8 +105,7 @@ columns:
   - name: AGE
     type: int
     label: Age
-    derivation:
-      source: DM_RAW.AGE
+    derivation: DM_RAW.AGE
     submission:
       core: Exp
       role: Record Qualifier
@@ -143,8 +139,7 @@ columns:
   - name: SEX
     type: str
     label: Sex
-    derivation:
-      source: DM_RAW.SEX
+    derivation: DM_RAW.SEX
     submission:
       core: Req
       role: Record Qualifier
@@ -164,8 +159,7 @@ columns:
   - name: COUNTRY
     type: str
     label: Country
-    derivation:
-      source: DM_RAW.COUNTRY
+    derivation: DM_RAW.COUNTRY
     submission:
       core: Req
       role: Record Qualifier

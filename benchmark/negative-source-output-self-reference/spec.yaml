@@ -13,20 +13,17 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: LB.STUDYID
+    derivation: LB.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: LB.USUBJID
+    derivation: LB.USUBJID
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation:
-      source: LB.LBDTC
+    derivation: LB.LBDTC
 
   - name: PARAMCD
     type: str

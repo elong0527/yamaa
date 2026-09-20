@@ -28,44 +28,37 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: PLAN.STUDYID
+    derivation: PLAN.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: PLAN.USUBJID
+    derivation: PLAN.USUBJID
 
   - name: ASEQ
     type: int
     label: Analysis Sequence Number
-    derivation:
-      source: PLAN.ASEQ
+    derivation: PLAN.ASEQ
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      source: PLAN.PARAMCD
+    derivation: PLAN.PARAMCD
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation:
-      source: PLAN.ADT
+    derivation: PLAN.ADT
 
   - name: VSSEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: COLLECTED.VSSEQ
+    derivation: COLLECTED.VSSEQ
 
   - name: AVALCOL
     type: float
     label: Collected Analysis Value
-    derivation:
-      source: COLLECTED.VSSTRESN
+    derivation: COLLECTED.VSSTRESN
 
   - name: AVALPREV
     type: float
@@ -87,8 +80,7 @@ columns:
   - name: TRTSDT
     type: date
     label: Date of First Exposure to Treatment
-    derivation:
-      source: SUBJECT.TRTSDT
+    derivation: SUBJECT.TRTSDT
 
   - name: HGTDT
     type: date

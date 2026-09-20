@@ -14,20 +14,17 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: TRT.STUDYID
+    derivation: TRT.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: TRT.USUBJID
+    derivation: TRT.USUBJID
 
   - name: EXTRT
     type: str
     label: Name of Treatment
-    derivation:
-      source: TRT.EXTRT
+    derivation: TRT.EXTRT
 
   - name: DOSECUM
     type: float

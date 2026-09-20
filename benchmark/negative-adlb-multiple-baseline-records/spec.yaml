@@ -12,38 +12,32 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: ADLBIN.STUDYID
+    derivation: ADLBIN.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: ADLBIN.USUBJID
+    derivation: ADLBIN.USUBJID
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation:
-      source: ADLBIN.PARAMCD
+    derivation: ADLBIN.PARAMCD
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation:
-      source: ADLBIN.ADT
+    derivation: ADLBIN.ADT
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation:
-      source: ADLBIN.AVAL
+    derivation: ADLBIN.AVAL
 
   - name: ABLFL
     type: str
     label: Baseline Record Flag
-    derivation:
-      source: ADLBIN.ABLFL
+    derivation: ADLBIN.ABLFL
     verifications:
       allowed_values:
         values: [Y]

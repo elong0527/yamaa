@@ -14,38 +14,32 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: VS.STUDYID
+    derivation: VS.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation:
-      source: VS.USUBJID
+    derivation: VS.USUBJID
 
   - name: VSSEQ
     type: int
     label: Sequence Number
-    derivation:
-      source: VS.VSSEQ
+    derivation: VS.VSSEQ
 
   - name: SERIES
     type: str
     label: Analysis Series
-    derivation:
-      source: VS.SERIES
+    derivation: VS.SERIES
 
   - name: AVISITN
     type: int
     label: Analysis Visit Number
-    derivation:
-      source: VS.AVISITN
+    derivation: VS.AVISITN
 
   - name: AVALC
     type: str
     label: Analysis Value (C)
-    derivation:
-      source: VS.AVALC
+    derivation: VS.AVALC
 
   - name: PREVAVALC
     type: str

@@ -12,8 +12,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation:
-      source: DM_RAW.STUDYID
+    derivation: DM_RAW.STUDYID
 
   - name: USUBJID
     type: str
@@ -33,11 +32,9 @@ columns:
   - name: SUBJID
     type: str
     label: Subject Identifier for the Study
-    derivation:
-      source: DM_RAW.SUBJID
+    derivation: DM_RAW.SUBJID
 
   - name: SITEID
     type: str
     label: Study Site Identifier
-    derivation:
-      source: DM_RAW.SITEID
+    derivation: DM_RAW.SITEID
