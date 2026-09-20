@@ -1,20 +1,4 @@
----
-title: YAML benchmark walkthrough
----
-
 # A walkthrough of `benchmark/`
-
-> **Audience:** anyone about to write, review, or implement a YAMAA
-> specification.
->
-> **Purpose:** explain what the benchmark suite is, how to read one benchmark,
-> which benchmark to open for which question, and what the negative benchmarks
-> cover.
->
-> For the concepts themselves -- class, type, expression and the verb table --
-> see [Schema concepts](schema-concepts.md).
-
----
 
 ## 1. What the suite is
 

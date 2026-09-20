@@ -1,16 +1,4 @@
----
-title: Excel to YAMAA
----
-
 # Translating an Excel specification
-
-> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Examples walkthrough](yaml-examples-walkthrough.md)
-
-> **Read this if** you have SDTM or ADaM specifications in Excel and want to
-> know what each cell becomes. It maps every column of a Variable sheet, then
-> works nine specifications through in full.
-
----
 
 ## 1. A spec.yaml is one Dataset-sheet row plus a slice of the Variable sheet
 

@@ -1,16 +1,4 @@
----
-title: Schema concepts
----
-
 # The schema: class, type, expression, registry
-
-> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Examples walkthrough](yaml-examples-walkthrough.md)
-
-> **Read this if** you are writing or reviewing a specification and want the
-> language itself: what the four schema words mean, and every derivation verb
-> available.
-
----
 
 ## 1. class, type, expression, registry
 

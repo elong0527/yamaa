@@ -1,131 +1,134 @@
----
-title: Derive model
----
+# Derivation: keys, rows, columns
 
-# KRC: key, row, column - the yamaa derivation model
+## Summary
 
-> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Derive](derive.md) | [Schema concepts](schema-concepts.md) | [Benchmark walkthrough](yaml-benchmark-walkthrough.md)
+One specification produces one dataset:
 
-> **Read this if** you want the engine half of
-> `data_output = derive(data_input, spec)`: what fixes the rows, what appends
-> the columns, and where keys fit.
+> `output_dataset = derive(input_datasets, spec)`
 
----
+YAMAA first constructs the output rows and then derives columns onto those
+rows. Column derivation never changes the row count.
 
-The contract from Principles is one execution: `data_output = derive(data_input, spec)`.
-R001 splits that execution into two phases:
+| Spec field | Question | Answer |
+|---|---|---|
+| `keys:` | What identifies a row? | The ordered columns whose combined values must be present and unique. |
+| `rows:` | Which rows exist? | When present, row templates construct rows from retained input records or groups. |
+| `columns:` | What does each row carry? | Each derivation produces exactly one value per constructed row, in declaration order. |
 
-1. **Row construction** builds the output rows and may change the row count.
-2. **Column derivation** enriches those rows and must not change the row count.
+When `rows` is absent, the distinct key combinations in the default input
+construct the output rows. When `rows` is present, its templates construct the
+rows and `keys` validate their identity.
 
-So there are only three things to keep straight: **key** says what a row is,
-**row** says which rows exist, **column** says what each row carries.
+## Keys identify rows
 
-## 1. Key - what a row is
+`keys:` is always required. It names output columns that together identify
+one row:
 
-`keys` states the output row identity and must be declared (R001-12). Every
-row built later must still satisfy those keys; a repeated key combination
-fails at the output gate.
+```yaml
+domain: ADSL
+keys: [STUDYID, USUBJID]   # one row per subject
+```
 
-The simple case - a specification without `rows` - makes this visible:
+```yaml
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD, ADT, ASEQ]   # one row per analysis record
+```
 
-![Output Dataset with a Key Table plus Column 1 and Column 2. The Key Table holds key columns only, one row per distinct key combination. Each output column is left-joined by keys, and the row count is unchanged.](../diagrams/derive-simple.svg)
+```yaml
+domain: ADAE
+keys: [STUDYID, USUBJID, AESEQ]   # one row per event
+```
 
-Read the diagram left to right:
+Every completed row must have non-missing key values, and no two rows may
+have the same key combination.
 
-- **Key Table**: key columns only, one row per distinct key combination, in
-  first-appearance order over the input records. It is standalone: the input
-  records a key combination was derived from decide its column values, never
-  how many rows the artifact carries (R001-12).
-- **Column 1, Column 2**: each output column attached by keys, like a
-  left join against the Key Table. Deriving a column never adds or removes a
-  row.
+## Without `rows`: distinct keys construct the rows
 
-That is the note under the figure: rows are fixed by the key table, count
-unchanged.
+Omit `rows` when the desired output has one row per distinct key combination
+already represented by the input. The input need not be physically
+one-to-one: several input records may contribute values to the same output
+row.
 
-## 2. Row - which rows exist
+```yaml
+domain: ADSL
+input:
+  DM: source/dm.csv
+keys: [STUDYID, USUBJID]
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: {source: DM.STUDYID}
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: {source: DM.USUBJID}
+  - name: AGE
+    type: int
+    label: Age
+    derivation: {source: DM.AGE}
+```
 
-When `rows` is present, each `rows` entry - each **row template** - is one
-**section**. Sections build their rows separately and concatenate in
-specification order (R001-12a). The full diagram adds this row axis on the
-left:
+![A key table containing one row per distinct key combination, with columns derived onto it without changing its row count.](../diagrams/derive-simple.svg)
 
-![Output dataset with Section 1 and Section 2 on the row axis. Each section builds its rows separately and the sections concatenate in order, still satisfying keys. Key Table and Column 1 are shared across sections, while Column 2 is derived per section. Row count is unchanged by columns.](../diagrams/derive-full.svg)
+Read the diagram from left to right. The **Key Table** contains each distinct
+key combination once, in first-appearance order. **Column 1** and **Column 2**
+attach values to those fixed rows.
 
-Read the diagram top to bottom, then left to right:
+Each column derivation must resolve to exactly one value for a row. Repeated
+copies of the same present value still count as one value; competing present
+values fail instead of forcing YAMAA to choose. A missing result remains the
+row's single missing value.
 
-- **Section 1, Section 2**: each row template keeps input records (record-driven)
-  or input groups (group-driven) through its `filter`, and yields one row per
-  kept record or group. The two blocks stack vertically because sections
-  concatenate in specification order.
-- **Keys still hold**: every built row must match the declared `keys`. A
-  `filter` states which rows the artifact carries, never which input record
-  represents a key combination. If the specification needs one row per key
-  combination with no per-section logic, it omits `rows` and falls back to
-  the key table in Figure 1.
-- **A section is also a window partition**: window-speak for the same row
-  group. Ordering inside the group is what row-relative derivation
-  (`row_number`, `row_value`, `previous_non_missing`, baselines) runs over.
+## With `rows`: templates construct sections
 
-That is the note under the figure: rows fixed by sections, count unchanged.
+Use `rows` when the specification must explicitly construct different kinds
+of output rows. Each entry is a **row template** and builds one **section**.
+Sections concatenate in specification order.
 
-## 3. Column - what each row carries
+![Two row-template sections concatenated vertically, with shared and section-specific columns derived onto the resulting rows.](../diagrams/derive-full.svg)
 
-Each column is one pass over the frozen rows, in declaration order
-(R001-28). For each row the derivation reads its input records and must
-reduce to exactly one scalar: two present values for one key combination is
-an error under R001-44 ("where it would have two, YAMAA fails instead of
-choosing"), unless a handler such as `multiple_matches` keeps one. Missing
-results are still the row's one value but never create a second value.
-Dependencies form a DAG over columns: every dependency must refer to a
-column declared earlier, and cycles fail.
+This partial fragment builds separate HEIGHT and WEIGHT sections from one
+input dataset:
 
-The two figures show the two column shapes:
+```yaml
+input: {VS: source/vs.csv}
 
-- **Figure 1 (simple)**: every column works the same way for all rows - match
-  by key equality plus an optional predicate, reduce to one scalar. Two
-  common reductions are **aggregate** (many-to-one: `SUM`, `COUNT`, `MIN`,
-  `MAX`, `MEAN`, `ONLY`) and **window** (many-to-many within the section:
-  prefix or positional reads of ordered sibling rows).
-- **Figure 2 (full)**: one declaration, two behaviors. **Shared columns**
-  (the tall Key Table and Column 1 blocks spanning both sections) derive at
-  column level with the same logic for all rows. **Section columns** (the
-  split Column 2 blocks, one per section) derive per section under one
-  declaration, in every section. A missing policy (`missing`, `strict`, and
-  the per-expression handlers) is a per-column annotation, not a row
-  manipulation.
+rows:
+  - id: height
+    filter: "VS.PARAMCD = 'HEIGHT'"
+    derivations:
+      PARAMCD: {literal: HEIGHT}
+      AVAL: {source: VS.AVAL}
 
-## In practice
+  - id: weight
+    filter: "VS.PARAMCD = 'WEIGHT'"
+    derivations:
+      PARAMCD: {literal: WEIGHT}
+      AVAL: {source: VS.AVAL}
+```
 
-A DM derivation without `rows`: key expressions over the input records yield
-one row per `(STUDYID, USUBJID)` and freeze. Then one pass per column -
-`SEX` matches each row's input records by key equality plus a predicate and
-reduces to one scalar; `AGE` computes over already-materialized columns.
+The constructed rows must still satisfy `keys`: every key value must be
+present and every key combination unique. Section order is construction
+order; an optional `output.order_by` may independently reorder the finished
+artifact.
 
-A BDS-style derivation with `rows`: Section 1 builds parameter rows from one
-input dataset, Section 2 builds them from another; the sections concatenate
-in specification order and must still satisfy the keys. A shared column such
-as `USUBJID` derives once for all rows, while a section column such as `AVAL`
-derives per section under one declaration. A window ordered by visit date
-within each subject lets February's missing weight read January's
-materialized weight.
+## Columns fill the constructed rows
 
-## Vocabulary
+Columns resolve in declaration order, so a later column may read an earlier
+one. A column may be derived in exactly one of two places:
 
-The working terms of derive: key, row, column, key table, row template,
-section, shared column, section column, partition, window, missing policy.
+- At column level, using the same derivation for every constructed row.
+- At row level, using `derivations` in every row template so each section can
+  supply different logic.
 
-- **Key table**: the diagram label (and R001's term) for the key-columns-only
-  row set used when `rows` is absent.
-- **Row template**: one `rows` entry. **Section** is the same block seen as a
-  row group; **partition** is window-speak for section.
-- **Record** is input side, **row** is output side; **column** is dataset
-  level, **variable** is expression level.
-- **`function`** is the escape hatch for specialized reductions: Derive with
-  an opaque body under a declared contract.
+A column cannot mix the two placements. A row-derived column must appear in
+every row template; use `{literal: null}` when its value is deliberately
+missing in one section.
 
-## Next
+## More Examples
 
-KRC is what the engine does. For what you write - the spec half of the
-contract - read Schema concepts.
+- Derive age groups in ADSL:
+  [adam-adsl-age-group](https://elong0527.github.io/yamaa/benchmark/adam-adsl-age-group.html).
+- Derive BMI in ADVS:
+  [adam-advs-body-mass-index](https://elong0527.github.io/yamaa/benchmark/adam-advs-body-mass-index.html).

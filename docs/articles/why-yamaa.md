@@ -1,15 +1,4 @@
----
-title: Why YAMAA
----
-
 # Why YAMAA looks the way it does
-
-> **YAMAA docs:** [Principles](principles.md) | [Why](why-yamaa.md) | [Excel to YAMAA](excel-to-yamaa.md) | [Schema concepts](schema-concepts.md) | [Benchmark walkthrough](yaml-benchmark-walkthrough.md)
-
-> **Read this if** you want to know what an Excel specification cannot say, why
-> that matters, and what YAMAA refuses to do about it.
-
----
 
 ## 1. The idea in one table
 
