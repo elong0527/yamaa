@@ -67,15 +67,10 @@ columns:
   - name: LBORRES
     type: str
     label: Result or Finding in Original Units
-    derivation: ODM.Value
 
   - name: LBDTC
     type: date
     label: Date/Time of Specimen Collection
-    derivation:
-      source:
-        variable: ODM.IT.LB.LBDTC
-        missing: null
 
   - name: FORMORD
     type: int
@@ -101,8 +96,17 @@ columns:
 
 rows:
   - id: reported-result
-    filter: "ODM.ItemOID = 'IT.LB.RESULT' AND ODM.Value IS NOT NULL"
-    derivations: {}
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID, ODM.FormOID]
+    filter: "LBORRES IS NOT NULL"
+    derivations:
+      LBORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.RESULT'"
+          expr: "ONLY(ODM.Value)"
+      LBDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
+          expr: "ONLY(ODM.Value)"
 
 verifications:
   - row_count:

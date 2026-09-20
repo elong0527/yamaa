@@ -44,7 +44,7 @@ that declares the completed dataset as one of its sources:
 
 ```yaml
 input:
-  ADLBIN: adlb.csv
+  ADLB_RAW: adlb.csv
 ```
 
 The transaminase results are then ordinary records with keys, and the ratio is

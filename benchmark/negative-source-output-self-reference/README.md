@@ -39,7 +39,7 @@ built for the dataset being built:
 ```yaml
 input:
   LB: input/lb.csv
-  ADLBIN: {path: input/adlb.csv, types: {AVAL: float, ADT: date}}
+  ADLB_RAW: {path: input/adlb.csv, types: {AVAL: float, ADT: date}}
 ```
 
 Renaming the declaration alone leaves the read pointing at a name that no
@@ -47,7 +47,7 @@ longer exists, so change where it reads from as well:
 
 ```yaml
 lookup:
-  dataset: ADLBIN
+  dataset: ADLB_RAW
 ```
 
 The read then uses a completed dataset by its own name, which is an ordinary

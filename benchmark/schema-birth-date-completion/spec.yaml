@@ -1,0 +1,99 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: input/adsl.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, DOBTC, DTM, REFDT, DOB_FIRST,
+    DOB_LAST, DOB_PREC_TX, DOB_PREC_DT, DTMDT, DOBDY]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SOURCE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SOURCE.USUBJID
+
+  - name: DOBTC
+    type: str
+    label: Date of Birth (Collected Text)
+    derivation: SOURCE.DOBTC
+
+  - name: DTM
+    type: datetime
+    label: Datetime of Assessment
+    derivation: SOURCE.DTMSTR
+
+  - name: REFDT
+    type: date
+    label: Reference Start Date
+    derivation: SOURCE.REFDTSTR
+
+  - name: DOB_FIRST
+    type: date
+    label: Date of Birth Completed to First Day
+    derivation:
+      date_impute:
+        source: DOBTC
+        month: 6
+        day: first
+        minimum_source_precision: year
+        missing: null
+        invalid: null
+
+  - name: DOB_LAST
+    type: date
+    label: Date of Birth Completed to Last Day
+    derivation:
+      date_impute:
+        source: DOBTC
+        month: 6
+        day: last
+        minimum_source_precision: year
+        missing: null
+        invalid: null
+
+  - name: DOB_PREC_TX
+    type: str
+    label: Date of Birth Precision From Text
+    derivation:
+      date_precision:
+        source: DOBTC
+        missing: null
+        invalid: null
+
+  - name: DOB_PREC_DT
+    type: str
+    label: Date of Birth Precision From Date
+    derivation:
+      date_precision:
+        source: DOB_FIRST
+        missing: null
+
+  - name: DTMDT
+    type: date
+    label: Date of Assessment
+    derivation:
+      to_date:
+        source: DTM
+
+  - name: DOBDY
+    type: int
+    label: Study Day of Birth Completion
+    derivation:
+      study_day:
+        date: DOB_FIRST
+        reference: REFDT
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 5
+      max: 5

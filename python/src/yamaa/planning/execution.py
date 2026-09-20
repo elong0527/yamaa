@@ -3273,12 +3273,13 @@ def plan_execution(
             )
         )
 
+    key_set = set(specification.keys)
     for planned in column_plans:
         if planned.column in cycle_members:
             continue
         for dependency in planned.dependencies:
-            if dependency not in column_positions:
-                continue
+            if dependency in key_set or dependency not in column_positions:
+                continue  # keys predate column derivation (R001-43)
             if column_positions[dependency] >= column_positions[planned.column]:
                 diagnostics.append(
                     _diagnostic(
@@ -3289,7 +3290,6 @@ def plan_execution(
                     )
                 )
 
-    key_set = set(specification.keys)
     planned_by_column = {planned.column: planned for planned in column_plans}
     has_templates = bool(specification.rows)
     for key in specification.keys:

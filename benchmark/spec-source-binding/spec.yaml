@@ -1,0 +1,68 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [USUBJID, ASEQ]
+input:
+  DM: input/dm.csv
+  VS: input/vs.csv
+base: VS
+
+output:
+  path: advs.csv
+  columns: [USUBJID, ASEQ, VSTESTCD, SEX, AGE, AGEGR1, RACE, VSSTRESN, VSSTRESU]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+    derivation: VS.VSSEQ
+
+  - name: VSTESTCD
+    type: str
+    label: Vital Signs Test Short Name
+    derivation: VS.VSTESTCD
+
+  # Another declared dataset is reached through the shared subject key;
+  # a missing value stays blank.
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: DM.SEX
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: DM.AGE
+
+  # The bare name AGE binds to the output column, not to a source dataset.
+  - name: AGEGR1
+    type: str
+    label: Pooled Age Group 1
+    derivation:
+      cut:
+        source: AGE
+        breaks: [65]
+        labels: ['<65', '>=65']
+
+  - name: RACE
+    type: str
+    label: Race
+    derivation: DM.RACE
+
+  - name: VSSTRESN
+    type: float
+    label: Numeric Result in Standard Units
+    derivation: VS.VSSTRESN
+
+  - name: VSSTRESU
+    type: str
+    label: Standard Units
+    derivation: VS.VSSTRESU
+
+verifications:
+  - unique:
+      columns: [USUBJID, ASEQ]
