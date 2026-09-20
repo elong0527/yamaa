@@ -1,21 +1,19 @@
 version: "1.0"
 
 expressions:
-    function: # Calls a logical function once per row when an implementation is supplied.
-        # Vectorization is valid only when equivalent to logical row-wise calls.
-        # R018 defines environment resolution, validation, and invocation.
+    function: # See REQ-1085 in rules/operations/functions.md.
         - name:
             type: identifier
             required: true
-            description: Function name resolved in the project environment.
+            description: See REQ-1085 in rules/operations/functions.md.
         - contract_version:
             type: function_contract_version
             required: true
-            description: Exact logical contract version required from the environment.
+            description: See REQ-1085 in rules/operations/functions.md.
         - args:
             type: "dict[identifier, function_arg]"
             default: {}
-            description: Named arguments passed to the function.
+            description: See REQ-1085 in rules/operations/functions.md.
 
 function_arg:
     type:
@@ -27,4 +25,4 @@ function_arg:
         - function_string_literal_class
         - function_date_literal_class
         - function_datetime_literal_class
-    description: Named variable or scalar literal leaf; arbitrary nesting is not allowed.
+    description: See REQ-1086 in rules/operations/functions.md.

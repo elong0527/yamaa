@@ -349,7 +349,7 @@ def _grouped_filter(
 ) -> bool:
     """Evaluate a grouped template's filter over the completed candidate.
 
-    R001-8 runs it after every row derivation completes, so it corresponds to
+    REQ-0038 runs it after every row derivation completes, so it corresponds to
     filtering after a group reduction rather than selecting driver records.
     """
     if planned.filter_predicate is None:
@@ -401,7 +401,7 @@ def _key_space(
     """Derive the standalone key table over one section's driver records.
 
     Keys evaluate per driver record, then collapse to distinct combinations
-    in first-appearance order (R001-12). Records with a missing key keep one
+    in first-appearance order (REQ-0042). Records with a missing key keep one
     entry each so the missing key still fails at the output gate.
     """
     key_names = list(plan.specification.keys)
@@ -474,7 +474,7 @@ def _construct_rows(
     for planned in plan.rows:
         relation = context.relations[planned.driver]
         if planned.declaration is None:
-            # R001-12: with no template the key table is the output row set.
+            # REQ-0042: with no template the key table is the output row set.
             constructed.extend(
                 _key_grain_candidates(
                     plan, planned, relation, column_types, context, dispatcher, counter
@@ -501,7 +501,7 @@ def _construct_rows(
                 continue
             constructed.append(candidate)
     for position, candidate in enumerate(constructed):
-        # R001-9 fixes where each row was appended, which is the order a
+        # REQ-0039 fixes where each row was appended, which is the order a
         # window falls back to when its own terms tie.
         candidate.output_position = position
     context.rows.extend(constructed)
@@ -517,11 +517,11 @@ def _key_grain_candidates(
     dispatcher: ExpressionDispatcher,
     counter: HandlerCounter,
 ) -> list[CandidateRow]:
-    """Build one candidate per key combination (R001-12).
+    """Build one candidate per key combination (REQ-0042).
 
     With no `rows` template the filter cannot scope feeding records, so every
     driver record of a key combination feeds its single row and a direct read
-    must resolve to one value (R001-44) or the row fails.
+    must resolve to one value (REQ-0075) or the row fails.
     """
     key_names = list(plan.specification.keys)
     key_values, groups, order = _key_space(

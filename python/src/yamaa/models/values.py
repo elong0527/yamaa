@@ -97,8 +97,8 @@ class DateValue(_FrozenModel):
     def __eq__(self, other: object) -> bool:
         """Compare two dates by their fields alone.
 
-        R016-35 keeps collected precision out of every comparison, and
-        R016-10 makes it a property read off the value rather than part of
+        REQ-0573 keeps collected precision out of every comparison, and
+        REQ-0548 makes it a property read off the value rather than part of
         its identity. Equality is that comparison, so a completed date and a
         collected one naming the same day are one value wherever a join
         matches, a partition groups, or a dictionary keys.
@@ -179,7 +179,9 @@ class RuntimeCondition(_FrozenModel):
     condition: str = Field(min_length=1)
     context: dict[str, JsonValue] = Field(default_factory=dict)
     applicable_handler: HandlerName | None = None
-    requirement: str | None = Field(default=None, pattern=r"^R[0-9]{3}-[0-9]+$")
+    requirement: str | None = Field(
+        default=None, pattern=r"^(?:REQ-[0-9]{4,}|R[0-9]{3}-[1-9][0-9]*[a-z]?)$"
+    )
     # The payload field the condition is about, relative to the operation, so
     # a reported path names `str_extract.group` rather than `str_extract`.
     path_suffix: str | None = Field(default=None, min_length=1)
@@ -188,7 +190,7 @@ class RuntimeCondition(_FrozenModel):
 class HandlerObservation(_FrozenModel):
     """One handler that fired inside a nested expression.
 
-    R008-20 counts every handler path, and R007-3 lets `case` and
+    REQ-0361 counts every handler path, and REQ-0290 lets `case` and
     `str_concat` nest an expression that owns handlers of its own. The path
     is relative to the payload of the operation that returned this result,
     so the caller that knows the specification path can complete it.
@@ -315,10 +317,10 @@ def ordering_key(value: RuntimeValue) -> object:
 def compare_values(left: RuntimeValue, right: RuntimeValue) -> int:
     """Compare two non-missing values in the order their type owns.
 
-    R007-17 gives numeric order to R010, text order to R019, and chronological
+    REQ-0302 gives numeric order to R010, text order to R019, and chronological
     order to R016, so one comparison serves every ordered operation rather
     than each reimplementing its type's order. Two values of types that are
-    not mutually comparable raise, because R007-39 refuses to convert an
+    not mutually comparable raise, because REQ-0324 refuses to convert an
     operand to make a comparison work.
     """
     if not values_comparable(left, right):
@@ -400,13 +402,13 @@ def convert_value(value: object, target: ColumnType) -> EvaluationResult:
             return ValueResult(value=_float_text(source))
         if isinstance(source, (DateValue, DateTimeValue)):
             return ValueResult(value=source.to_text())
-        return _conversion_failure(source, target, "R011-30")
+        return _conversion_failure(source, target, "REQ-0013")
 
     if target == "float" and isinstance(source, str):
         if _NON_FINITE.fullmatch(source):
             return ValueResult(value=MISSING)
         if _NUMBER.fullmatch(source) is None:
-            return _conversion_failure(source, target, "R011-30")
+            return _conversion_failure(source, target, "REQ-0013")
         try:
             parsed_float = float(source)
         except OverflowError:
@@ -419,7 +421,7 @@ def convert_value(value: object, target: ColumnType) -> EvaluationResult:
         try:
             parsed = _parse_number(source)
         except ValueError:
-            return _conversion_failure(source, target, "R011-30")
+            return _conversion_failure(source, target, "REQ-0013")
         if parsed is MISSING:
             return ValueResult(value=MISSING)
         source = parsed
@@ -428,35 +430,35 @@ def convert_value(value: object, target: ColumnType) -> EvaluationResult:
         if type(source) is int:
             if INT64_MIN <= source <= INT64_MAX:
                 return ValueResult(value=source)
-            return _conversion_failure(source, target, "R011-31")
+            return _conversion_failure(source, target, "REQ-0021")
         if type(source) is float:
             if not source.is_integer():
-                return _conversion_failure(source, target, "R011-32")
+                return _conversion_failure(source, target, "REQ-0021")
             if not INT64_MIN <= source <= INT64_MAX:
-                return _conversion_failure(source, target, "R011-31")
+                return _conversion_failure(source, target, "REQ-0021")
             return ValueResult(value=int(source))
-        return _conversion_failure(source, target, "R011-30")
+        return _conversion_failure(source, target, "REQ-0013")
 
     if target == "float":
         if type(source) is int and INT64_MIN <= source <= INT64_MAX:
             return ValueResult(value=float(source))
         if type(source) is float:
             return ValueResult(value=source)
-        return _conversion_failure(source, target, "R011-30")
+        return _conversion_failure(source, target, "REQ-0013")
 
     if target == "date" and isinstance(source, str):
         try:
             return ValueResult(value=DateValue.parse(source))
         except ValueError:
-            return _conversion_failure(source, target, "R016-60")
+            return _conversion_failure(source, target, "REQ-0601")
 
     if target == "datetime" and isinstance(source, str):
         try:
             return ValueResult(value=DateTimeValue.parse(source))
         except ValueError:
-            return _conversion_failure(source, target, "R016-60")
+            return _conversion_failure(source, target, "REQ-0601")
 
-    return _conversion_failure(source, target, "R011-30")
+    return _conversion_failure(source, target, "REQ-0013")
 
 
 class TypedColumn(_FrozenModel):
@@ -492,7 +494,7 @@ class TypedTable(BaseModel):
             if column.type != "float" or series.dtype != pl.Float64:
                 continue
             values = series.to_list()
-            # R011-9 through R011-15 make this normalization precede every
+            # REQ-0006 through REQ-0006 make this normalization precede every
             # comparison, verification, key check, and artifact operation.
             if any(value is not None and not math.isfinite(value) for value in values):
                 frame = frame.with_columns(

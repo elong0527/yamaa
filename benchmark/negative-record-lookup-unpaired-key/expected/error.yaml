@@ -2,7 +2,7 @@ phase: validation
 condition: source_key_length_mismatch
 spec_paths:
   - intermediates[0]
-requirement: R003-5
+requirement: REQ-0115
 context:
   key_base:
     - LBTESTCD

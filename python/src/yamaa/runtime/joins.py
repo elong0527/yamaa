@@ -76,7 +76,7 @@ def partition_key(
     values: Mapping[str, RuntimeValue],
     fields: Sequence[str],
 ) -> PartitionKey:
-    """Return the grouping key R001-7 and R007-6 partition on.
+    """Return the grouping key REQ-0037 and REQ-0293 partition on.
 
     Missing equals missing for grouping, so a record whose grouping value was
     never collected joins the other records that share that absence rather
@@ -91,7 +91,7 @@ def partition_records(
 ) -> dict[PartitionKey, tuple[IndexedRecord, ...]]:
     """Partition records by equality on `fields`, in first-occurrence order.
 
-    R001-8 orders groups by the position of their first record and keeps
+    REQ-0038 orders groups by the position of their first record and keeps
     driver order inside a group, which is what an insertion-ordered mapping
     of appended records is.
     """
@@ -108,7 +108,7 @@ def order_records(
     """Order records by R007's terms, breaking every remaining tie by position.
 
     Each term carries its own direction and its own missing placement, and
-    R007-15 keeps `nulls` from flipping with `direction`. R007-16 makes the
+    REQ-0300 keeps `nulls` from flipping with `direction`. REQ-0301 makes the
     result total by falling back to record order, so no ordered selection
     has an undefined case.
     """
@@ -178,7 +178,7 @@ class RelationIndex:
     ) -> tuple[IndexedRecord, ...]:
         """Return the records equal on every field, in record order.
 
-        R003-13 keeps a right record with a missing key out of every match,
+        REQ-0123 keeps a right record with a missing key out of every match,
         and a left row carrying a missing key reaches nothing for the same
         reason: an uncollected identifier is not an identity two rows share.
         """
@@ -218,7 +218,7 @@ def applicable_keys(
 ) -> tuple[str, ...]:
     """Return the output keys the right side also carries, in `keys` order.
 
-    R003-3 defines the applicable keys and R003-6 fixes their order, so the
+    REQ-0113 defines the applicable keys and REQ-0116 fixes their order, so the
     join a reviewer reads in `keys` is the join that runs.
     """
     return tuple(key for key in output_keys if relation.has(key))
@@ -227,7 +227,7 @@ def applicable_keys(
 class RecordResolver:
     """Expose exactly one right-side record to a predicate.
 
-    R003-22 makes a right-side `filter` a predicate over right-side records
+    REQ-0132 makes a right-side `filter` a predicate over right-side records
     only, so a resolver that could also reach the current row would let one
     silently correlate.
     """
@@ -350,7 +350,7 @@ def select_record(
             "validation",
             "incompatible_input_type",
             {"source": error.variable, "types": sorted(set(error.types))},
-            requirement="R007-39",
+            requirement="REQ-0324",
         )
     return ordered[0] if keep == "first" else ordered[-1]
 
@@ -368,7 +368,7 @@ def join_scalar(
 
     The join is many-to-one: it copies a value onto matched rows, answers
     missing where nothing matched, and refuses to choose among several
-    matches unless the specification declared how. R003-21 lets the source
+    matches unless the specification declared how. REQ-0131 lets the source
     say which of the matched records it may read at all.
     """
     if not relation.has(field):
@@ -388,11 +388,11 @@ def join_scalar(
         matches = selected
     if multiple_matches is None:
         if not matches:
-            # R003-11 and R003-36: an absent right-side record is missing.
+            # REQ-0121 and REQ-0146: an absent right-side record is missing.
             return ResolvedValue(value=MISSING)
         if len(matches) == 1:
             return ResolvedValue(value=matches[0].values[field])
-        # R003-8 and R003-30: right-side uniqueness holds unless R008 relaxes
+        # REQ-0118 and REQ-0140: right-side uniqueness holds unless R008 relaxes
         # it, because choosing by file order is not a study rule.
         return FailedResolution(
             condition=RuntimeCondition(
@@ -402,7 +402,7 @@ def join_scalar(
                     "dataset": relation.dataset,
                     "match_count": len(matches),
                 },
-                requirement="R003-35",
+                requirement="REQ-0145",
                 applicable_handler="multiple_matches",
             )
         )
@@ -421,11 +421,11 @@ def join_scalar(
     if isinstance(terms, ConditionResult):
         return FailedResolution(condition=terms.condition)
     if not matches:
-        # R008-14: filtering to no surviving record is an ordinary absent
+        # REQ-0355: filtering to no surviving record is an ordinary absent
         # match under R003 rather than a handled condition.
         return ResolvedValue(value=MISSING)
     if len(matches) == 1:
-        # R008-15: the handler counts only the rows where it had to choose.
+        # REQ-0356: the handler counts only the rows where it had to choose.
         return ResolvedValue(value=matches[0].values[field])
     chosen = select_record(matches, terms, selection.keep)
     if isinstance(chosen, ConditionResult):
@@ -443,7 +443,7 @@ def _parsed(predicate: str | None) -> PredicateAst | None | ConditionResult:
             "validation",
             "invalid_predicate",
             {"predicate": predicate, "position": error.position},
-            requirement="R004-31",
+            requirement="REQ-0188",
         )
 
 

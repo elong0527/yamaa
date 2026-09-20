@@ -49,7 +49,7 @@ def test_first_available_without_a_default_returns_missing() -> None:
 
 
 def test_first_available_retains_the_selected_value_type() -> None:
-    # R007-33: a selection expression does not convert what it selects.
+    # REQ-0316: a selection expression does not convert what it selects.
     result = _evaluate(
         {"first_available": {"sources": ["A", "B"]}}, {"A": MISSING, "B": 7}
     )
@@ -59,7 +59,7 @@ def test_first_available_retains_the_selected_value_type() -> None:
 
 
 def test_first_available_default_is_not_a_handler_path() -> None:
-    # R008-1 does not list `first_available.default`, so it fires no handler count.
+    # REQ-0342 does not list `first_available.default`, so it fires no handler count.
     result = _evaluate(
         {"first_available": {"sources": ["A"], "default": "UNKNOWN"}}, {"A": MISSING}
     )
@@ -85,14 +85,14 @@ def test_first_available_default_is_not_a_handler_path() -> None:
 def test_the_row_wise_extremes_use_each_type_own_order(
     operation: str, values: dict[str, object], expected: object
 ) -> None:
-    # R019-8 orders text by scalar value, so upper case sorts before lower.
+    # REQ-0026 orders text by scalar value, so upper case sorts before lower.
     result = _evaluate({operation: {"sources": ["A", "B", "C"]}}, values)
 
     assert result == ValueResult(value=expected)
 
 
 def test_int_and_float_sources_are_mutually_comparable() -> None:
-    # R007-31: R010 promotes them, so the pair is comparable by construction.
+    # REQ-0005: R010 promotes them, so the pair is comparable by construction.
     result = _evaluate({"greatest": {"sources": ["A", "B"]}}, {"A": 2, "B": 2.5})
 
     assert result == ValueResult(value=2.5)
@@ -108,7 +108,7 @@ def test_incomparable_sources_fail_rather_than_coerce_an_operand(
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "incomparable_sources"
-    assert result.condition.requirement == "R007-39"
+    assert result.condition.requirement == "REQ-0324"
     assert result.condition.context == {
         "sources": ["ADT", "DAY"],
         "types": ["date", "int"],
@@ -187,7 +187,7 @@ def test_a_branch_predicate_outside_the_grammar_names_its_branch() -> None:
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "invalid_predicate"
-    assert result.condition.requirement == "R004-31"
+    assert result.condition.requirement == "REQ-0188"
     assert result.condition.path_suffix == "[0].when"
 
 
@@ -261,7 +261,7 @@ def test_cut_refuses_a_non_numeric_source() -> None:
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "incompatible_input_type"
-    assert result.condition.requirement == "R007-22"
+    assert result.condition.requirement == "REQ-0306"
     assert result.condition.path_suffix == "source"
     assert result.condition.context == {
         "source": "AGE",

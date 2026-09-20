@@ -15,7 +15,7 @@ Execution behavior is defined by the schema's adjacent operation descriptions
 and the shared normative rules in
 [`../yaml/rules/README.md`](../yaml/rules/README.md); dataset declarations,
 variable references, and ODM contextual lookups by
-[R002](../yaml/rules/R002-source-binding.md). Example READMEs describe data,
+[R002](../yaml/rules/specification/binding.md). Example READMEs describe data,
 not the specification; [`agents.md`](agents.md) states that contract.
 
 `odm.csv` is a tabular projection of ODM clinical data, not an ODM exchange

@@ -2,7 +2,7 @@ phase: verification
 condition: matches_failed
 spec_paths:
   - columns.SEX.verifications[0].matches
-requirement: R009-13
+requirement: REQ-0379
 context:
   column: SEX
   failure_count: 1

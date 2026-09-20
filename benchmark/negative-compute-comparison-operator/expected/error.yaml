@@ -2,7 +2,7 @@ phase: validation
 condition: prohibited_construct
 spec_paths:
   - columns.HIFL.derivation.compute.expr
-requirement: R010-37
+requirement: REQ-0441
 context:
   expr: "AVAL > ANRHI"
   construct: comparison

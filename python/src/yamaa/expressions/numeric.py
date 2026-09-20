@@ -39,7 +39,7 @@ from yamaa.models import (
 NumericAst: TypeAlias = dict[str, Any]
 Token: TypeAlias = tuple[str, str, int, int]
 
-# R010-9 closes the function table; `None` is an unbounded maximum.
+# REQ-0415 closes the function table; `None` is an unbounded maximum.
 FUNCTION_ARITIES: dict[str, tuple[int, int | None]] = {
     "ABS": (1, 1),
     "CEIL": (1, 1),
@@ -98,7 +98,7 @@ class NumericError(ValueError):
         position: int,
         *,
         condition: str = "invalid_numeric_expression",
-        requirement: str = "R010-35",
+        requirement: str = "REQ-0439",
         context: dict[str, JsonValue] | None = None,
     ) -> None:
         super().__init__(f"{message} at character {position + 1}")
@@ -162,7 +162,7 @@ def _prohibited_construct(construct: str, position: int) -> NumericError:
         f"a {construct} construct is not permitted in a numeric expression",
         position,
         condition="prohibited_construct",
-        requirement="R010-37",
+        requirement="REQ-0441",
         context={"construct": construct},
     )
 
@@ -177,7 +177,7 @@ def _prohibited_function(
         message,
         position,
         condition="prohibited_function",
-        requirement="R010-36",
+        requirement="REQ-0440",
         context={"function": name, **context},
     )
 
@@ -229,7 +229,7 @@ class _Parser:
         return node
 
     def _factor(self) -> NumericAst:
-        # R010-8 binds a sign to one primary, so `--A` is outside the grammar.
+        # REQ-0414 binds a sign to one primary, so `--A` is outside the grammar.
         if self._token[0] in {"PLUS", "MINUS"}:
             operator = self._advance()
             return {
@@ -378,7 +378,7 @@ def _checked_int(value: int, expr: str) -> int:
         return value
     raise _fail(
         "integer_overflow",
-        "R010-30",
+        "REQ-0434",
         {
             "expr": expr,
             "value": str(value),
@@ -389,7 +389,7 @@ def _checked_int(value: int, expr: str) -> int:
 
 
 def _finite(value: float) -> float | object:
-    # R010-24 applies R011's non-finite normalization after every operator.
+    # REQ-0006 applies R011's non-finite normalization after every operator.
     return value if math.isfinite(value) else MISSING
 
 
@@ -409,10 +409,10 @@ def _binary(node: NumericAst, expr: str, resolver: Resolver) -> object:
         return MISSING
 
     if operator == "/":
-        # R010-16: division always returns float and never truncates.
+        # REQ-0421: division always returns float and never truncates.
         divisor = float(right)  # type: ignore[arg-type]
         if divisor == 0.0:
-            raise _fail("division_by_zero", "R010-26", {"expr": expr})
+            raise _fail("division_by_zero", "REQ-0430", {"expr": expr})
         return _finite(float(left) / divisor)  # type: ignore[arg-type]
 
     if type(left) is int and type(right) is int:
@@ -433,7 +433,7 @@ def _binary(node: NumericAst, expr: str, resolver: Resolver) -> object:
 
 def _modulo(left: object, right: object, expr: str) -> object:
     if float(right) == 0.0:  # type: ignore[arg-type]
-        raise _fail("division_by_zero", "R010-26", {"expr": expr})
+        raise _fail("division_by_zero", "REQ-0430", {"expr": expr})
     if type(left) is int and type(right) is int:
         remainder = abs(left) % abs(right)
         return -remainder if left < 0 else remainder
@@ -446,13 +446,13 @@ def _power(left: object, right: object, expr: str) -> object:
     if base == 0.0 and exponent < 0.0:
         raise _fail(
             "invalid_power",
-            "R010-29",
+            "REQ-0433",
             {"expr": expr, "base": base, "exponent": exponent},
         )
     if base < 0.0 and not exponent.is_integer():
         raise _fail(
             "invalid_power",
-            "R010-29",
+            "REQ-0433",
             {"expr": expr, "base": base, "exponent": exponent},
         )
     try:
@@ -469,7 +469,7 @@ def _numbers_equal(left: object, right: object) -> bool:
 
 
 def _extreme(arguments: list[object], *, largest: bool) -> object:
-    """Return the largest or smallest non-NULL argument, promoted (R010-19)."""
+    """Return the largest or smallest non-NULL argument, promoted (REQ-0424)."""
     present = [value for value in arguments if not _is_missing(value)]
     if not present:
         return MISSING
@@ -503,7 +503,7 @@ def _call(node: NumericAst, expr: str, resolver: Resolver) -> object:
             return _finite(float(left))  # type: ignore[arg-type]
         return left
 
-    # R010-22: every remaining function propagates a missing argument.
+    # REQ-0427: every remaining function propagates a missing argument.
     if any(_is_missing(value) for value in arguments):
         return MISSING
 
@@ -525,7 +525,7 @@ def _call(node: NumericAst, expr: str, resolver: Resolver) -> object:
         return _finite(float(math.trunc(value)))  # type: ignore[arg-type]
     if name == "SQRT":
         if float(value) < 0.0:  # type: ignore[arg-type]
-            raise _fail("sqrt_of_negative", "R010-27", {"expr": expr})
+            raise _fail("sqrt_of_negative", "REQ-0431", {"expr": expr})
         return _finite(math.sqrt(float(value)))  # type: ignore[arg-type]
     if name == "EXP":
         try:
@@ -534,7 +534,7 @@ def _call(node: NumericAst, expr: str, resolver: Resolver) -> object:
             return MISSING
     if name == "LN":
         if float(value) <= 0.0:  # type: ignore[arg-type]
-            raise _fail("ln_of_nonpositive", "R010-28", {"expr": expr})
+            raise _fail("ln_of_nonpositive", "REQ-0432", {"expr": expr})
         return _finite(math.log(float(value)))  # type: ignore[arg-type]
     raise AssertionError(f"unhandled R010 function {name!r}")
 
@@ -547,7 +547,7 @@ def _identifier(node: NumericAst, expr: str, resolver: Resolver) -> object:
     if isinstance(resolved, AbsentValue):
         raise _fail(
             "unknown_field",
-            "R010-39",
+            "REQ-0443",
             {"expr": expr, "identifier": name},
             phase="validation",
         )
@@ -561,10 +561,10 @@ def _identifier(node: NumericAst, expr: str, resolver: Resolver) -> object:
         return MISSING
     actual = runtime_type_name(value)
     if actual not in {"int", "float"}:
-        # R010-21 and R007-19: bind a string to a numeric column first.
+        # REQ-0426 and REQ-0004: bind a string to a numeric column first.
         raise _fail(
             "incompatible_input_type",
-            "R010-40",
+            "REQ-0444",
             {
                 "expr": expr,
                 "source": name,
@@ -622,7 +622,7 @@ def _compute(payload: object, resolver: Resolver) -> EvaluationResult:
             "validation",
             "invalid_field_type",
             {"operation": "compute", "expected": "a mapping"},
-            requirement="R007-36",
+            requirement="REQ-0321",
         )
     expr = payload.get("expr")
     if not isinstance(expr, str):
@@ -630,7 +630,7 @@ def _compute(payload: object, resolver: Resolver) -> EvaluationResult:
             "validation",
             "invalid_field_type",
             {"operation": "compute", "expected": "a numeric expression"},
-            requirement="R007-36",
+            requirement="REQ-0321",
         )
     try:
         ast = parse_numeric_cached(expr)

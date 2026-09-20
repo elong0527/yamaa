@@ -1,87 +1,66 @@
 # YAML derivation specification
 
-This folder defines a language-agnostic specification for ODM-to-SDTM and
+This folder defines the language-agnostic specification for ODM-to-SDTM and
 SDTM-to-ADaM derivations. The design is under active development.
 
 ## Start here
 
-The [rule index](rules/README.md) organizes the specification into eight
-logical blocks. Read the block relevant to the work, then follow its owning
-rules and schema entries.
+The [contract index](rules/README.md) organizes the language by semantic owner:
 
 | Block | Subject |
 | --- | --- |
-| [1. Specification structure](rules/README.md#1-specification-structure) | Schema notation and inheritance |
-| [2. Inputs and binding](rules/README.md#2-inputs-and-binding) | Resources, CSV and Parquet, ingestion, name resolution |
-| [3. Values and types](rules/README.md#3-values-and-types) | Conversion, comparison, text, temporal values |
-| [4. Execution and handling](rules/README.md#4-execution-and-handling) | Dependencies, evaluation, ordering, local handlers |
-| [5. Matching and reduction](rules/README.md#5-matching-and-reduction) | Joins, intermediates, lookups, aggregates |
-| [6. Expression languages and extensions](rules/README.md#6-expression-languages-and-extensions) | Predicates, computation, templates, regex, functions |
-| [7. Validation and output](rules/README.md#7-validation-and-output) | Result contracts, verifications, serialization |
-| [8. Submission documentation](rules/README.md#8-submission-documentation) | Metadata, terminology, Define-XML |
+| [Specification](rules/README.md#specification) | Structure, composition, and binding |
+| [Values](rules/README.md#values) | Types, numbers, text, and temporal values |
+| [Execution](rules/README.md#execution) | Lifecycle, rows, ordering, handlers, and verification |
+| [Operations](rules/README.md#operations) | Expressions, languages, lookup, windows, and functions |
+| [Storage](rules/README.md#storage) | Resources, ingestion, CSV, Parquet, and publication |
+| [Submission](rules/README.md#submission) | Metadata, terminology, and Define-XML |
+| [Reference](rules/README.md#reference) | Schema notation for maintainers |
 
 ## Sources of authority
 
-The schema defines structure and operation-local behavior through adjacent
-comments and parameter descriptions. Descriptions do not themselves perform
-validation. Rule files define shared behavior. Examples demonstrate both
-without redefining them. The [design notes](design-notes.md) explain design
-choices and are non-normative.
+Schemas own structure, defaults, and structural constraints. Indexed contracts
+own shared and operation-local behavior. Schema descriptions link to the owning
+requirement. Examples demonstrate those contracts without redefining them.
+The [design notes](design-notes.md) and [migration record](rule-migration.md)
+are non-normative.
 
-A [replacement rule set](rules-next/README.md) is being drafted under
-[issue #606](https://github.com/elong0527/yamaa/issues/606). Its contracts
-and migration map are non-normative until the reviewed cutover.
-
-Closed grammars are defined once in [grammar/](grammar/README.md). Their rule
-blocks are generated views checked against the grammar files; both
-implementations replay the same vectors.
+Closed grammars are defined once in [grammar/](grammar/README.md). Their
+contract blocks are generated views checked against those files; R and Python
+replay the same parser vectors.
 
 ## Contents
 
 | Location | Purpose |
 | --- | --- |
-| [schema.yaml](schema.yaml) | Specification entry point and shared structure |
-| [schema_environment.yaml](schema_environment.yaml) | Separate project function environment entry point |
-| [schema_define.yaml](schema_define.yaml) | Separate study-document entry point |
-| [schema_metadata.yaml](schema_metadata.yaml) | Governed submission metadata |
-| [schema_derivation.yaml](schema_derivation.yaml) | Expression modules and derivation wrappers |
-| [schema_verification.yaml](schema_verification.yaml) | Column and dataset verification registries |
-| [schema_function.yaml](schema_function.yaml) | Project function calls |
-| [rules/](rules/README.md) | Shared normative contracts, grouped by subject |
-| [../benchmark/](../benchmark/README.md) | Specifications, inputs, exact expected outputs, and the validation manifest |
-| [conformance/](conformance/) | Language-wide fixtures shared by implementations |
+| [schema.yaml](schema.yaml) | Specification entry point |
+| [schema_environment.yaml](schema_environment.yaml) | Project function environment entry point |
+| [schema_define.yaml](schema_define.yaml) | Study-document entry point |
+| [rules/](rules/README.md) | Normative contracts |
+| [Schema fields](rules/reference/schema-fields.md) | Generated shapes, defaults, and semantic links |
+| [Requirement index](rules/reference/requirements.md) | Canonical IDs and historical aliases |
+| [benchmark/](../benchmark/README.md) | Specifications, inputs, and expected outcomes |
+| [conformance/](conformance/) | Shared language fixtures |
 | [grammar/](grammar/README.md) | Closed grammars and parser vectors |
-| [agents.md](agents.md) | Agent discovery and maintenance instructions |
+| [agents.md](agents.md) | Maintenance instructions |
 
 ## Execution overview
 
-This is a reading guide; the linked rules define the actual contracts.
-
-1. Resolve inherited specifications under
-   [R017](rules/R017-specification-inheritance.md) and validate their
-   structure under [R006](rules/R006-schema-language.md).
-2. Resolve resources, decode source records, and bind names using the
-   [input contracts](rules/README.md#2-inputs-and-binding).
-3. Construct rows and derive columns in
-   [R001](rules/R001-execution-model.md) dependency order. Each value follows
-   the [R005 lifecycle](rules/R005-output-contract.md#derivation-lifecycle),
-   with handlers under [R008](rules/R008-local-handlers.md).
-4. Check the completed result, apply artifact ordering, and serialize it
-   using the [output contracts](rules/README.md#7-validation-and-output).
-
-Submission-document generation is a separate workflow under
-[R026](rules/R026-define-xml.md); it composes resolved specifications and
-metadata without running their derivations.
+The [lifecycle](rules/execution/lifecycle.md) owns execution order. Read it
+first when implementing a runner, then follow the contract for each stage.
+[Define-XML generation](rules/submission/define-xml.md) is a separate workflow
+that composes specifications and metadata without running their derivations.
 
 ## Review workflow
 
-1. Read [R006](rules/R006-schema-language.md) for schema notation, then the
-   relevant entry point and its transitive schema includes.
-2. Review the owning rules in the [rule index](rules/README.md).
-3. Review a positive example, its input data, and its expected output.
-4. Add or update examples when behavior changes, including negative examples
-   for error conditions.
-5. Require R and Python to produce equivalent outputs and errors.
+1. Read the [schema notation](rules/reference/schema-language.md), the relevant
+   schema entry point, and its transitive includes.
+2. Read the owning contracts and their dependencies.
+3. Inspect representative positive and negative specifications, input data,
+   and expected outcomes.
+4. Update fixtures when behavior changes and require equivalent R/Python
+   outcomes within their implemented coverage.
+5. Run repository, migration, grammar, documentation, and conformance checks.
 
-Unspecified behavior is an unresolved design question or a proposed rule;
-implementations must not infer it.
+Unspecified behavior remains an explicit design question. Implementations
+must not infer a new contract from a host default.

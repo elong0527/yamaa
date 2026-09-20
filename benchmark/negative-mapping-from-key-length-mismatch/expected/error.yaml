@@ -2,7 +2,7 @@ phase: validation
 condition: source_key_length_mismatch
 spec_paths:
   - columns.ANRHI.derivation.lookup
-requirement: R007-48
+requirement: REQ-0333
 context:
   key_base:
     - PARAMCD

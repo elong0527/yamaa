@@ -1,6 +1,6 @@
 """Execute one specification against one explicitly selected project root.
 
-R018-2 gives this stage its shape: the root comes from the runner, not from
+REQ-0663 gives this stage its shape: the root comes from the runner, not from
 the specification, and everything the project claims is settled before a
 source is read. Resolution, call validation, artifact verification, and the
 activation vectors all run first; only then is the ordinary executor asked
@@ -35,7 +35,7 @@ from yamaa.specification.models import Specification
 
 
 def _call_paths(specification: Specification) -> tuple[str, ...]:
-    """Return the paths R018-43 anchors an environment-wide failure to."""
+    """Return the paths REQ-0704 anchors an environment-wide failure to."""
     return tuple(
         dict.fromkeys(
             f"{call.spec_path}.name" for call in function_calls(specification)
@@ -59,7 +59,7 @@ def activate_project_functions(
     paths = _call_paths(specification)
     try:
         environment = load_environment(Path(project_root), schema_root)
-        # R018-6 first: a runner that cannot run this project at all says so
+        # REQ-0667 first: a runner that cannot run this project at all says so
         # before holding the specification to contracts it will never reach.
         check_runner_language(environment.environment)
         diagnostics: Sequence[ExecutionDiagnostic] = validate_calls(
@@ -86,7 +86,7 @@ def execute_with_project_functions(
 
     A failure before activation completes is returned as an execution
     failure carrying the same diagnostics any other stage reports, and the
-    source provider is never called: R018-30 keeps study data behind a
+    source provider is never called: REQ-0691 keeps study data behind a
     passing activation.
     """
     try:

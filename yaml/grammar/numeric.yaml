@@ -11,7 +11,7 @@
 schema_version: "1.0"
 contract: numeric
 contract_version: "1.0.0"
-rule: R010
+rule: operations/computation
 start: expr
 productions:
   - name: expr

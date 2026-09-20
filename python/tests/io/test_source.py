@@ -87,7 +87,7 @@ def test_loads_ordered_typed_polars_table_without_inference(tmp_path: Path) -> N
 
 def test_a_date_below_day_precision_stores_the_day_it_names() -> None:
     # Ingestion never produces one, because R011 admits only the complete
-    # R016 forms, but `date_impute` does. R016-32 makes collected precision
+    # R016 forms, but `date_impute` does. REQ-0570 makes collected precision
     # unobservable outside the derivation, so the column carries the fields
     # and a specification needing the precision derives it from
     # `date_precision` instead.
@@ -199,7 +199,7 @@ def test_parquet_rejects_inline_types_before_snapshot_bytes_are_read(
         "phase": "validation",
         "condition": "redundant_field_type",
         "spec_paths": ("input.DM.types.ID",),
-        "requirement": "R014-20",
+        "requirement": "REQ-0533",
         "context": {"dataset": "DM", "field": "ID", "type": "str"},
     }
     assert resources.capture_reads == 0
@@ -218,7 +218,7 @@ def test_parquet_rejects_an_unsupported_embedded_type(tmp_path: Path) -> None:
         "phase": "ingest",
         "condition": "source_field_type_unsupported",
         "spec_paths": ("input.DM.path",),
-        "requirement": "R027-13",
+        "requirement": "REQ-1040",
         "context": {
             "dataset": "DM",
             "path": "dm.parquet",
@@ -258,7 +258,7 @@ def test_parquet_rejects_invalid_field_names(
         "phase": "ingest",
         "condition": condition,
         "spec_paths": ("input.DM.path",),
-        "requirement": "R027-12",
+        "requirement": "REQ-1039",
         "context": {
             "dataset": "DM",
             "path": "dm.parquet",
@@ -283,7 +283,7 @@ def test_parquet_rejects_a_datetime_below_whole_seconds(tmp_path: Path) -> None:
         "phase": "ingest",
         "condition": "source_field_value_invalid",
         "spec_paths": ("input.DM.path",),
-        "requirement": "R027-14",
+        "requirement": "REQ-1041",
         "context": {
             "dataset": "DM",
             "path": "dm.parquet",
@@ -306,7 +306,7 @@ def test_parquet_rejects_invalid_container_bytes(tmp_path: Path) -> None:
         "phase": "ingest",
         "condition": "source_parquet_invalid",
         "spec_paths": ("input.DM.path",),
-        "requirement": "R027-11",
+        "requirement": "REQ-1038",
         "context": {"dataset": "DM", "path": "dm.parquet"},
     }
 
@@ -324,7 +324,7 @@ def test_parquet_rejects_an_empty_schema(tmp_path: Path) -> None:
         "phase": "ingest",
         "condition": "source_parquet_invalid",
         "spec_paths": ("input.DM.path",),
-        "requirement": "R027-11",
+        "requirement": "REQ-1038",
         "context": {"dataset": "DM", "path": "dm.parquet"},
     }
 
@@ -399,42 +399,42 @@ def test_quoted_empty_is_missing_for_a_non_string_type(tmp_path: Path) -> None:
             "LBREF",
             "/shared/reference/lbref.csv",
             "resource_path_not_relative",
-            "R021-15",
+            "REQ-0781",
         ),
         (
             "negative-dataset-path-directory",
             "LBREF",
             "input/lbref",
             "resource_path_not_regular_file",
-            "R021-19",
+            "REQ-0785",
         ),
         (
             "negative-dataset-path-missing",
             "LBREF",
             "input/lbref.csv",
             "resource_path_missing",
-            "R021-19",
+            "REQ-0785",
         ),
         (
             "negative-dataset-path-parent-escape",
             "LBREF",
             "../reference/lbref.csv",
             "resource_path_outside_project",
-            "R021-18",
+            "REQ-0784",
         ),
         (
             "negative-dataset-path-symlink",
             "LBREF",
             "input/lbref.csv",
             "resource_path_symlink",
-            "R021-17",
+            "REQ-0783",
         ),
         (
             "negative-dataset-path-url",
             "LBREF",
             "https://reference.example.org/limits/lbref.csv",
             "resource_path_uri_scheme",
-            "R021-9",
+            "REQ-0775",
         ),
     ],
 )
@@ -473,31 +473,31 @@ def test_committed_symlink_fixture_is_a_real_symlink() -> None:
         (
             "negative-source-duplicate-field-name",
             "source_field_name_duplicate",
-            "R023-22",
+            "REQ-0851",
             {"record": 1, "field": "SEX"},
         ),
         (
             "negative-source-empty-field-name",
             "source_field_name_empty",
-            "R023-22",
+            "REQ-0851",
             {"record": 1, "field": 4},
         ),
         (
             "negative-source-invalid-text",
             "invalid_text",
-            "R019-21",
+            "REQ-0029",
             {"record": 3, "field": 3},
         ),
         (
             "negative-source-record-width",
             "source_record_width",
-            "R023-22",
+            "REQ-0851",
             {"record": 3, "field": 5},
         ),
         (
             "negative-source-unterminated-quote",
             "source_quote_unterminated",
-            "R023-22",
+            "REQ-0851",
             {"record": 3, "field": 3},
         ),
     ],
@@ -533,7 +533,7 @@ def test_unknown_profile_fails_before_snapshot_bytes_are_read() -> None:
         "phase": "validation",
         "condition": "source_profile_unknown",
         "spec_paths": ("input.DM.path",),
-        "requirement": "R023-23",
+        "requirement": "REQ-0852",
         "context": {"dataset": "DM", "path": "input/dm.txt"},
     }
     assert resources.capture_reads == 0
@@ -582,7 +582,7 @@ def test_typed_parse_fixtures_are_ingestion_failures(
         "phase": "ingest",
         "condition": "field_parse_failed",
         "spec_paths": (f"input.{dataset}.types.{field}",),
-        "requirement": "R014-23",
+        "requirement": "REQ-0536",
         "context": {
             "dataset": dataset,
             "field": field,
@@ -606,7 +606,7 @@ def test_unknown_typed_field_fails_in_validation(tmp_path: Path) -> None:
         "phase": "validation",
         "condition": "unknown_field",
         "spec_paths": ("input.DM.types.AGEYRS",),
-        "requirement": "R014-19",
+        "requirement": "REQ-0532",
         "context": {"dataset": "DM", "field": "AGEYRS"},
     }
 
@@ -654,7 +654,7 @@ def test_producer_link_path_failure_precedes_workflow_resolution(
         "phase": "validation",
         "condition": "resource_path_missing",
         "spec_paths": ("input.DM.path",),
-        "requirement": "R021-19",
+        "requirement": "REQ-0785",
         "context": {"dataset": "DM", "path": "missing.csv"},
     }
 
@@ -679,7 +679,7 @@ def test_producer_link_with_inline_types_reports_redundant_type(
         "phase": "validation",
         "condition": "redundant_field_type",
         "spec_paths": ("input.DM.types.ID",),
-        "requirement": "R014-10",
+        "requirement": "REQ-0523",
         "context": {"dataset": "DM", "field": "ID", "type": "str"},
     }
 

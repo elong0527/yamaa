@@ -1,9 +1,9 @@
 """Resolve and verify the one immutable runtime a project pins.
 
-R018-5 makes the artifact digest the identity of everything callable: a
+REQ-0666 makes the artifact digest the identity of everything callable: a
 binding is resolved inside the verified artifact and nowhere else, so a
 global library, the process search path, the working directory, or an
-ambient installation cannot answer for project code. R018-6 verifies that
+ambient installation cannot answer for project code. REQ-0667 verifies that
 digest before activation, which is why nothing here imports anything until
 the bytes on disk hash to what the environment declared.
 """
@@ -151,7 +151,7 @@ def artifact_digest(root: Path) -> str:
     The identity is a hash over a manifest of every file the artifact
     carries: its path relative to the artifact root, then the hash of its
     bytes. Renaming a file, reordering a directory, or changing one byte of
-    one file therefore produces a different artifact, which is what R018-30
+    one file therefore produces a different artifact, which is what REQ-0691
     needs in order to invalidate an activation.
     """
     manifest = hashlib.sha256()
@@ -186,7 +186,7 @@ class LoadedArtifact:
         if not module_path or not attribute:
             raise FunctionFailure(
                 "project_environment_invalid",
-                "R018-34",
+                "REQ-0695",
                 {"reason": "a binding call must be module-qualified", "call": call},
             )
         module = self._import(module_path, call)
@@ -194,7 +194,7 @@ class LoadedArtifact:
         if target is None or not callable(target):
             raise FunctionFailure(
                 "project_environment_invalid",
-                "R018-34",
+                "REQ-0695",
                 {
                     "reason": "the artifact declares no such callable",
                     "call": call,
@@ -213,7 +213,7 @@ class LoadedArtifact:
             if qualified == missing or qualified.startswith(f"{missing}."):
                 raise FunctionFailure(
                     "project_environment_invalid",
-                    "R018-34",
+                    "REQ-0695",
                     {
                         "reason": "the artifact contains no such module",
                         "call": call,
@@ -222,13 +222,13 @@ class LoadedArtifact:
                 ) from error
             raise self._host_failure(call, error) from error
         except Exception as error:
-            # Host code raised while being imported, which R018-40 owns.
+            # Host code raised while being imported, which REQ-0701 owns.
             raise self._host_failure(call, error) from error
 
     def _host_failure(self, call: str, error: BaseException) -> FunctionFailure:
         return FunctionFailure(
             "function_call_failed",
-            "R018-40",
+            "REQ-0701",
             {
                 "call": call,
                 "artifact": self.reference,
@@ -247,7 +247,7 @@ class LoadedArtifact:
         module = importlib.util.module_from_spec(specification)
         # The search path is exactly this artifact, so an import inside it
         # reaches the artifact's own modules and the process search path
-        # answers for nothing R018-5 pins.
+        # answers for nothing REQ-0666 pins.
         module.__path__ = [str(self.root)]
         sys.modules[package] = module
         return package
@@ -265,7 +265,7 @@ def verify_artifact(
     except (ArtifactUnavailable, OSError) as error:
         raise FunctionFailure(
             "runtime_artifact_mismatch",
-            "R018-36",
+            "REQ-0697",
             {
                 "reason": "the pinned artifact could not be read",
                 "artifact": declared.reference,
@@ -275,7 +275,7 @@ def verify_artifact(
     if computed != declared.digest:
         raise FunctionFailure(
             "runtime_artifact_mismatch",
-            "R018-36",
+            "REQ-0697",
             {
                 "artifact": declared.reference,
                 "declared": declared.digest,

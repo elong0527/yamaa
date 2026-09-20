@@ -1,17 +1,8 @@
 #!/usr/bin/env python3
-"""Enforce rule metadata structure in CI (issue #168).
+"""Check canonical contracts and resolve new or historical benchmark citations.
 
-Each yaml/rules/RNNN-*.md file must carry minimal frontmatter
-(id, title, status, applies_to), the required section headings
-(Intent, Boundaries, Errors, Rationale), and unique, stable requirement
-IDs of the form **RNNN-n.** or **RNNN-na.** independent of document order.
-Existing IDs remain valid when sections move. The depends_on
-and supersedes fields are retired: the former was a cyclic graph the
-validator never checked, the latter never had a schema.
-
-Every benchmark/negative-*/expected/error.yaml must cite the
-pinned requirement as `requirement: RNNN-n`, and the cited ID must
-exist in the owning rule.
+The legacy check_rule helper remains available for archived-contract tooling.
+The repository gate reads the recursive canonical index and migration map.
 """
 
 import re
@@ -30,7 +21,7 @@ EXAMPLES = REPO / "benchmark"
 ALLOWED_KEYS = {"id", "title", "status", "applies_to"}
 REQUIRED_SECTIONS = ("Intent", "Boundaries", "Errors", "Rationale")
 REQUIREMENT = re.compile(r"\*\*(R[0-9]{3}-[1-9][0-9]*[a-z]?)\.\*\*")
-CITATION = re.compile(r"R[0-9]{3}-[1-9][0-9]*[a-z]?$")
+CITATION = re.compile(r"(?:REQ-[0-9]{4,}|R[0-9]{3}-[1-9][0-9]*[a-z]?)$")
 
 
 def frontmatter(path):
@@ -90,7 +81,7 @@ def check_error(path, requirements, errors):
         # requirement number; the rule documents them without one.
         return
     if not isinstance(cited, str) or CITATION.fullmatch(cited) is None:
-        errors.append(f"ERROR: {label}: requirement must cite RNNN-n")
+        errors.append(f"ERROR: {label}: requirement must cite REQ-NNNN or a legacy alias")
     elif cited not in requirements:
         errors.append(f"ERROR: {label}: {cited} names no numbered requirement")
 
@@ -98,8 +89,11 @@ def check_error(path, requirements, errors):
 def main():
     errors = []
     requirements = set()
-    for path in sorted(RULES.glob("R[0-9]*.md")):
-        check_rule(path, errors, requirements)
+    from check_rule_rewrite import check, load_migration
+    errors.extend(check(REPO)[0])
+    migration = load_migration(REPO)
+    requirements.update(migration["requirements"])
+    requirements.update(migration["sources"])
     for path in sorted(EXAMPLES.glob("negative-*/expected/error.yaml")):
         check_error(path, requirements, errors)
     for error in errors:

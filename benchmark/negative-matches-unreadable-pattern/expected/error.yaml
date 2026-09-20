@@ -2,6 +2,6 @@ phase: validation
 condition: invalid_regex
 spec_paths:
   - columns.SEX.verifications[0].matches.pattern
-requirement: R022-27
+requirement: REQ-0827
 context:
   pattern: '(?P<code>[MFU])'

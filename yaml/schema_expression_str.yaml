@@ -1,62 +1,62 @@
 version: "1.0"
 
 expressions:
-    str_extract: # Extracts one regular-expression match group from a string.
+    str_extract: # See REQ-1111 in rules/operations/text.md.
         - source:
             type: variable
             required: true
-            description: String variable to search.
+            description: See REQ-1111 in rules/operations/text.md.
         - pattern:
             type: regex
             required: true
-            description: Regular expression searched in source under R022.
+            description: See REQ-1111 in rules/operations/text.md.
         - group:
             type: int
             default: 0
-            description: Match group to return; 0 is the full match.
+            description: See REQ-1111 in rules/operations/text.md.
         - missing:
             type: literal_value
-            description: Value returned when source is missing.
+            description: See REQ-1111 in rules/operations/text.md.
         - no_match:
             type: literal_value
-            description: Value returned when pattern does not match source.
-    str_concat: # Concatenates string expression results in order.
+            description: See REQ-1111 in rules/operations/text.md.
+    str_concat: # See REQ-1112 in rules/operations/text.md.
         - sources:
             type: "list[expression]"
             required: true
-            description: Expressions to concatenate in order.
+            description: See REQ-1112 in rules/operations/text.md.
         - missing:
             type: literal_value
-            description: Value returned when any source is missing.
-    str_template: # Interpolates string variables under R012.
+            description: See REQ-1112 in rules/operations/text.md.
+    str_template: # See REQ-1113 in rules/operations/text.md.
         type: [string_template, str_template_class]
-        description: Portable string template, concise or with missing handling.
-    str_upper: # Converts ASCII a-z to A-Z and preserves every other scalar.
+        description: See REQ-1113 in rules/operations/text.md.
+    str_upper: # See REQ-1114 in rules/operations/text.md.
         - source:
             type: variable
             required: true
-            description: String variable whose ASCII letters are uppercased under R019.
+            description: See REQ-1114 in rules/operations/text.md.
         - missing:
             type: literal_value
-            description: Value returned when source is missing.
-    str_lower: # Converts ASCII A-Z to a-z and preserves every other scalar.
+            description: See REQ-1114 in rules/operations/text.md.
+    str_lower: # See REQ-1115 in rules/operations/text.md.
         - source:
             type: variable
             required: true
-            description: String variable whose ASCII letters are lowercased under R019.
+            description: See REQ-1115 in rules/operations/text.md.
         - missing:
             type: literal_value
-            description: Value returned when source is missing.
+            description: See REQ-1115 in rules/operations/text.md.
 
 string_template:
     type: str
-    description: Template string defined by R012.
+    description: See REQ-1116 in rules/operations/text.md.
 
 str_template_class:
     - template:
         type: string_template
         required: true
-        description: Text containing literal content and braced variables.
+        description: See REQ-1117 in rules/operations/text.md.
     - missing:
         type: literal_value
-        description: Value returned when any placeholder value is missing.
+        description: See REQ-1117 in rules/operations/text.md.

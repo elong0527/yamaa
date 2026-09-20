@@ -49,7 +49,7 @@ from yamaa.specification.models import OrderTerm
 class IntermediateOutcome:
     """What one current row got from an intermediate.
 
-    A selected record and a decided absence stay distinct: R003-14 keeps a
+    A selected record and a decided absence stay distinct: REQ-0124 keeps a
     matched record whose value is missing different from a match that never
     happened, which answers with the declared `missing` literal instead.
     """
@@ -81,7 +81,7 @@ def _condition(
 def types_comparable(left: ColumnType, right: ColumnType) -> bool:
     """Return whether two declared types may be compared without conversion.
 
-    R003-11 lets `int` and `float` compare through R010's promotion and
+    REQ-0121 lets `int` and `float` compare through R010's promotion and
     requires every other type to match exactly, so no operand is converted
     implicitly to make a range comparison work.
     """
@@ -108,7 +108,7 @@ class IntermediateSelector:
     ) -> tuple[IndexedRecord, ...] | ConditionResult:
         """Apply the intermediate's `filter` once for the whole run.
 
-        R003-10 makes the filter a predicate over the intermediate's own dataset,
+        REQ-0120 makes the filter a predicate over the intermediate's own dataset,
         so which records are eligible does not vary by current row and the
         predicate is evaluated once per record rather than once per row.
         """
@@ -176,12 +176,12 @@ def _select_eligible(
     if len(narrowed) == 1:
         return IntermediateOutcome(record=narrowed[0])
     if plan.keep is None:
-        # R003-17: more than one surviving record with nothing to choose
+        # REQ-0127: more than one surviving record with nothing to choose
         # by is the unhandled multiple match the rule refuses.
         return IntermediateOutcome(
             condition=_condition(
                 "multiple_matches",
-                "R003-17",
+                "REQ-0127",
                 {
                     "intermediate": plan.identifier,
                     "dataset": plan.dataset,
@@ -206,12 +206,12 @@ def _absent(
     plan: PlannedIntermediate,
     values: Sequence[RuntimeValue],
 ) -> IntermediateOutcome:
-    """Answer an intermediate that yields nothing under R003-14."""
+    """Answer an intermediate that yields nothing under REQ-0124."""
     if plan.strict:
         return IntermediateOutcome(
             condition=_condition(
                 "unmatched_key",
-                "R003-14",
+                "REQ-0124",
                 {
                     "intermediate": plan.identifier,
                     "dataset": plan.dataset,
@@ -239,7 +239,7 @@ def _narrowed(
     for record in matched:
         lower = record.values[plan.between_lower]
         upper = record.values[plan.between_upper]
-        # R003-18: both endpoints are inclusive, and a record missing a
+        # REQ-0128: both endpoints are inclusive, and a record missing a
         # stated bound is ineligible rather than open.
         if lower is MISSING or upper is MISSING:
             continue
@@ -250,7 +250,7 @@ def _narrowed(
             return IntermediateOutcome(
                 condition=_condition(
                     "incomparable_range_types",
-                    "R003-11",
+                    "REQ-0121",
                     {
                         "intermediate": plan.identifier,
                         "value_type": runtime_type_name(value),
@@ -270,7 +270,7 @@ def _matched_key(
 ) -> dict[str, JsonValue]:
     """Return the fields the intermediate matched on and the values it matched with.
 
-    R003-33 keeps one vocabulary for every intermediate failure, so an unmatched
+    REQ-0143 keeps one vocabulary for every intermediate failure, so an unmatched
     key and an unhandled multiple match report the match the same way and
     leave `keys` to the output row the failure belongs to.
     """
@@ -371,7 +371,7 @@ def evaluate_intermediate(
                     "operation": "lookup",
                     "expected": "key_base, key, and value",
                 },
-                requirement="R007-36",
+                requirement="REQ-0321",
             )
         )
     if not relation.has(value_field) or any(not relation.has(key) for key in keys):
@@ -407,7 +407,7 @@ def evaluate_intermediate(
                         "operation": "lookup",
                         "expected": "between value, lower, and upper",
                     },
-                    requirement="R007-36",
+                    requirement="REQ-0321",
                 )
             )
         between_value, between_lower, between_upper = (str(bound) for bound in bounds)

@@ -1,6 +1,6 @@
 version: "1.0"
 
-# Types shared by specification and project-environment schema entry points.
+# See REQ-1150 in rules/values/types.md.
 
 column_type:
     type: str
@@ -8,8 +8,7 @@ column_type:
 
 literal_value:
     type: [str, int, float, bool, "null"]
-    description: Scalar literal after R011 normalizes any non-finite float to
-        missing.
+    description: See REQ-1149 in rules/values/types.md.
 
 path:
     type: str
@@ -18,20 +17,17 @@ path:
 project_path:
     type: str
     min_length: 1
-    description: Stored resource a run reads; R021 fixes its written form and
-        confines it to a root the runner approved.
+    description: See REQ-1151 in rules/storage/resources.md.
 
 identifier:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Single-token identifier; the field's own description states
-        which namespace it names (a declared dataset, a declared column,
-        a standard, a document, a function, or similar).
+    description: See REQ-1046 in rules/specification/structure.md.
 
 function_contract_version:
     type: str
     min_length: 1
-    description: Exact logical contract version required by a function call.
+    description: See REQ-1087 in rules/operations/functions.md.
 
 function_param_type:
     type: str

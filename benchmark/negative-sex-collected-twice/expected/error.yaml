@@ -2,7 +2,7 @@ phase: derivation
 condition: multiple_values_per_key
 spec_paths:
   - columns.SEX.derivation.mapping
-requirement: R001-44
+requirement: REQ-0075
 context:
   identifier: ODM.Value
   value_count: 2

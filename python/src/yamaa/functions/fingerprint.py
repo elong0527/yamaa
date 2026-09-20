@@ -1,8 +1,8 @@
-"""The R018-10 contract identity two projects must agree on.
+"""The REQ-0671 contract identity two projects must agree on.
 
 A logical contract is claimed by name and version, but a name is not an
 agreement: two projects claim the same contract only when the fingerprint
-calculated here is identical. R018-14 keeps the language, the artifact, the
+calculated here is identical. REQ-0675 keeps the language, the artifact, the
 binding, the description, and the implementation version out of that
 payload, so an R project and a Python project implementing one behavior
 agree while a project that quietly changed a parameter does not.
@@ -30,7 +30,7 @@ class ContractValueError(ValueError):
 def function_value_type(value: object) -> str | None:
     """Return the exact R018 type of one authored value, or None for missing.
 
-    R018-12 runs R011's non-finite normalization first, which is why a
+    REQ-0673 runs R011's non-finite normalization first, which is why a
     non-finite float is missing here rather than a float.
     """
     if type(value) is float and not math.isfinite(value):
@@ -61,7 +61,7 @@ def function_value_type(value: object) -> str | None:
 def _temporal_text(kind: str, text: str) -> str:
     """Return the R016 canonical text of one authored temporal literal.
 
-    R018-11 encodes a temporal value as its R016 canonical text, so the
+    REQ-0672 encodes a temporal value as its R016 canonical text, so the
     encoding goes through the same parser every other temporal value in the
     package does rather than trusting the authored spelling.
     """
@@ -70,7 +70,7 @@ def _temporal_text(kind: str, text: str) -> str:
 
 
 def canonical_function_value(value: object, declared_type: str) -> CanonicalValue:
-    """Encode one value under R018-11 without losing its logical type."""
+    """Encode one value under REQ-0672 without losing its logical type."""
     actual = function_value_type(value)
     if actual is None:
         return {"type": "missing"}
@@ -91,7 +91,7 @@ def canonical_function_value(value: object, declared_type: str) -> CanonicalValu
 
 
 def _canonical_parameter(parameter: FunctionParameter) -> dict[str, object]:
-    """Encode one parameter under R018-11 in its declared position."""
+    """Encode one parameter under REQ-0672 in its declared position."""
     default: dict[str, object] = {"present": parameter.has_default}
     if parameter.has_default:
         default["value"] = canonical_function_value(parameter.default, parameter.type)
@@ -105,7 +105,7 @@ def _canonical_parameter(parameter: FunctionParameter) -> dict[str, object]:
 
 
 def contract_fingerprint(name: str, contract: FunctionContract) -> str:
-    """Return the `sha256:`-prefixed R018-10 identity of one contract."""
+    """Return the `sha256:`-prefixed REQ-0671 identity of one contract."""
     payload = {
         "format": "yamaa-r018-contract-v1",
         "name": name,
@@ -113,7 +113,7 @@ def contract_fingerprint(name: str, contract: FunctionContract) -> str:
         "params": [_canonical_parameter(parameter) for parameter in contract.params],
         "returns": contract.returns,
         "may_return_missing": contract.may_return_missing,
-        # R018-13 spells the comparison precision as a base-10 string, which
+        # REQ-0674 spells the comparison precision as a base-10 string, which
         # is also why the payload below carries no JSON number at all.
         "comparison_decimals": str(contract.comparison_decimals),
     }

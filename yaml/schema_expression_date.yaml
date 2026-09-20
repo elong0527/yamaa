@@ -1,121 +1,79 @@
 version: "1.0"
 
 expressions:
-    date_diff: # Counts whole calendar units between two dates.
-        # Which endpoints the count includes is declared by bounds. A missing
-        # start or end yields a missing result, so no guarding predicate is
-        # needed.
+    date_diff: # See REQ-1104 in rules/operations/temporal.md.
         - start:
             type: variable
             required: true
-            description: Starting date.
+            description: See REQ-1104 in rules/operations/temporal.md.
         - end:
             type: variable
             required: true
-            description: Ending date; an earlier date produces a negative result.
+            description: See REQ-1104 in rules/operations/temporal.md.
         - unit:
             type: str
             required: true
             values: [day, week, month, year]
-            description: Calendar unit counted between the dates.
+            description: See REQ-1104 in rules/operations/temporal.md.
         - bounds:
             type: str
             default: exclusive
             values: [exclusive, inclusive, between]
-            description: >-
-              Endpoints counted. exclusive counts from start to end excluding
-              start; inclusive counts both endpoints and is one greater;
-              between counts neither and is one smaller. The three values
-              are defined only with unit day; with unit week, month, or
-              year bounds must be absent or exclusive, and any other value
-              fails validation under R016.
-    date_impute: # Completes a truncated ISO 8601 date and returns a date.
-        # A complete source date is returned unchanged; a source carrying only a
-        # year, or a year and month, is completed from month and day unless
-        # minimum_source_precision forbids supplying that much information. A
-        # day token is resolved after month is fixed, so it names a day in the
-        # month the completed date lands in. not_before is applied last, to the
-        # completed date alone: a date already on or after the bound stands, and
-        # otherwise the result is the earliest day the collected text still
-        # admits that satisfies the bound. When the collected text admits no
-        # such day the result is missing, invoking no handler.
-        # A source that is not an ISO 8601 date or an ISO 8601 date prefix is an
-        # invalid value, distinct from a missing one; both yield no date unless
-        # a handler is declared. R016 governs the resulting date.
+            description: See REQ-1104 in rules/operations/temporal.md.
+    date_impute: # See REQ-1105 in rules/operations/temporal.md.
         - source:
             type: variable
             required: true
-            description: ISO 8601 date text, complete or truncated to year or month.
+            description: See REQ-1105 in rules/operations/temporal.md.
         - month:
             type: int
             required: true
-            description: Month used when the source carries only a year, 1 to 12.
+            description: See REQ-1105 in rules/operations/temporal.md.
         - day:
             type: [int, day_rule]
             required: true
-            description: >-
-              Day used when the source carries no day: an integer from 1 to 31,
-              or first or last resolved against the month the date lands in.
+            description: See REQ-1105 in rules/operations/temporal.md.
         - minimum_source_precision:
             type: str
             default: year
             values: [year, month]
-            description: >-
-              Least precision the collected source must carry before imputation;
-              month leaves a year-only source missing instead of supplying both
-              month and day.
+            description: See REQ-1105 in rules/operations/temporal.md.
         - not_before:
             type: variable
-            description: >-
-              Date the completed value must not precede; it moves only the
-              components imputation supplied, and never a collected date.
+            description: See REQ-1105 in rules/operations/temporal.md.
         - missing:
             type: literal_value
-            description: Result when the source value is missing.
+            description: See REQ-1105 in rules/operations/temporal.md.
         - invalid:
             type: literal_value
-            description: Result when the source is not an ISO 8601 date or date prefix.
-    date_precision: # Returns how much of a date its source carries.
-        # D for a complete date, M for a year and month, and Y for a year alone.
-        # Collected text reports what the text carries and a date reports the
-        # collected precision that value carries, so a specification records
-        # what date_impute supplied by reading either the same source or the
-        # completed date itself. Invalid text and a missing source behave as
-        # they do there; a date source is never invalid. A datetime is an error
-        # here as in every date operation. R016 governs both source kinds.
+            description: See REQ-1105 in rules/operations/temporal.md.
+    date_precision: # See REQ-1106 in rules/operations/temporal.md.
         - source:
             type: variable
             required: true
-            description: >-
-              ISO 8601 date text, complete or truncated to year or month, or a
-              date whose collected precision is reported.
+            description: See REQ-1106 in rules/operations/temporal.md.
         - missing:
             type: literal_value
-            description: Result when the source value is missing.
+            description: See REQ-1106 in rules/operations/temporal.md.
         - invalid:
             type: literal_value
-            description: Result when the source is not an ISO 8601 date or date prefix.
-    to_date: # Extracts the calendar date from a datetime.
-        # A missing datetime yields a missing date. Other source types are an
-        # incompatible input error under R016.
+            description: See REQ-1106 in rules/operations/temporal.md.
+    to_date: # See REQ-1107 in rules/operations/temporal.md.
         - source:
             type: variable
             required: true
-            description: Datetime whose calendar date is returned.
-    study_day: # Returns the CDISC study day of a date against a reference date.
-        # The reference date is day 1 and there is no day zero: a date on or
-        # after the reference counts forward from 1, and an earlier date counts
-        # back from -1. A missing date or reference yields a missing result.
+            description: See REQ-1107 in rules/operations/temporal.md.
+    study_day: # See REQ-1108 in rules/operations/temporal.md.
         - date:
             type: variable
             required: true
-            description: Date whose study day is returned.
+            description: See REQ-1108 in rules/operations/temporal.md.
         - reference:
             type: variable
             required: true
-            description: Reference start date, which is study day 1.
+            description: See REQ-1108 in rules/operations/temporal.md.
 
 day_rule:
     type: str
     values: [first, last]
-    description: Day resolved against the month the completed date lands in.
+    description: See REQ-1109 in rules/operations/temporal.md.

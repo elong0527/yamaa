@@ -88,7 +88,7 @@ def test_producer_contract_rejects_reordered_missing_and_extra_headers(
 
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "producer_contract_mismatch"
-    assert diagnostic.requirement == "R014-22"
+    assert diagnostic.requirement == "REQ-0535"
     assert diagnostic.context == {
         "dataset": "DM",
         "expected": ["ID", "AGE"],
@@ -129,7 +129,7 @@ def test_producer_contract_rejects_a_parquet_type_mismatch(
 
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "producer_contract_mismatch"
-    assert diagnostic.requirement == "R014-22"
+    assert diagnostic.requirement == "REQ-0535"
     assert diagnostic.context == {
         "dataset": "DM",
         "field": "AGE",
@@ -242,7 +242,7 @@ columns:
 
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "producer_workflow_cycle"
-    assert diagnostic.requirement == "R014-21"
+    assert diagnostic.requirement == "REQ-0534"
 
 
 def test_inline_types_conflict_with_producer_before_sources_are_read() -> None:
@@ -256,7 +256,7 @@ def test_inline_types_conflict_with_producer_before_sources_are_read() -> None:
         "phase": "validation",
         "condition": "redundant_field_type",
         "spec_paths": ["input.DM.types.RANDDT"],
-        "requirement": "R014-10",
+        "requirement": "REQ-0523",
         "context": {"dataset": "DM", "field": "RANDDT", "type": "date"},
     }
     assert resources.capture_reads == 0

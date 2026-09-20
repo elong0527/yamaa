@@ -2,6 +2,6 @@ phase: validation
 condition: inheritance_cycle
 spec_paths:
   - parents
-requirement: R017-42
+requirement: REQ-0655
 context:
   reason: parent_chain_returns_to_entry

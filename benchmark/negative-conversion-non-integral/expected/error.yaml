@@ -2,7 +2,7 @@ phase: convert
 condition: conversion_failed
 spec_paths:
   - columns.AVAL
-requirement: R011-32
+requirement: REQ-0021
 context:
   from: float
   to: int

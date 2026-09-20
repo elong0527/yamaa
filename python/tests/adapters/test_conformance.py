@@ -113,7 +113,7 @@ class TestSupportedPair:
             "str",
         )
         assert artifact.row_count == 4
-        # A missing AGE renders as no characters at all (R020-17).
+        # A missing AGE renders as no characters at all (REQ-0731).
         assert artifact.records[3] == (
             "DM,STUDY01,003,003,U,,,,Not assigned to treatment arm"
         )
@@ -139,7 +139,7 @@ class TestSupportedPair:
         assert report.diagnostics[0].phase == "validation"
         assert report.diagnostics[0].condition == "value_not_permitted"
         assert report.diagnostics[0].spec_paths == ("columns.AVAL.type",)
-        assert report.diagnostics[0].requirement == "R011-29"
+        assert report.diagnostics[0].requirement == "REQ-0012"
         assert compare_example(report, EXAMPLES / NEGATIVE).passed
 
     def test_expected_kind_reads_the_committed_artifact(self) -> None:
@@ -225,7 +225,7 @@ class TestDiagnosticMutations:
             ("phase", "execution", "diagnostic.phase"),
             ("condition", "value_out_of_range", "diagnostic.condition"),
             ("spec_paths", ["columns.LBSEQ.type"], "diagnostic.spec_paths"),
-            ("requirement", "R011-30", "diagnostic.requirement"),
+            ("requirement", "REQ-0013", "diagnostic.requirement"),
         ],
     )
     def test_a_changed_contract_field_fails(

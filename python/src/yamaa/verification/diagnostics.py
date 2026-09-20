@@ -6,7 +6,7 @@ from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
-# R009-7 lets an implementation bound how many offending keys it prints so
+# REQ-0373 lets an implementation bound how many offending keys it prints so
 # long as the bound never changes pass or fail. The count beside them is
 # always the whole count.
 REPORTED_KEYS = 5
@@ -28,7 +28,7 @@ class VerificationFailure(BaseModel):
     phase: Literal["output", "verification"]
     condition: str = Field(min_length=1)
     spec_paths: tuple[str, ...] = Field(min_length=1)
-    requirement: str = Field(pattern=r"^R[0-9]{3}-[0-9]+$")
+    requirement: str = Field(pattern=r"^(?:REQ-[0-9]{4,}|R[0-9]{3}-[1-9][0-9]*[a-z]?)$")
     context: dict[str, JsonValue]
     severity: VerificationSeverity = Field(default="error", exclude=True)
     offending_keys: tuple[dict[str, JsonValue], ...] = Field(default=(), exclude=True)

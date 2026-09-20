@@ -2,7 +2,7 @@
 
 `first_available`, `greatest`, `least`, and `case` select one already-computed value
 rather than compute a new one, so each retains the selected value's type
-(R007-33). `cut` is the one operation here that produces a new string.
+(REQ-0316). `cut` is the one operation here that produces a new string.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ def _invalid_payload(operation: str, expected: str) -> ConditionResult:
         "validation",
         "invalid_field_type",
         {"operation": operation, "expected": expected},
-        requirement="R007-36",
+        requirement="REQ-0321",
     )
 
 
@@ -84,7 +84,7 @@ def _resolve(
             "validation",
             "unknown_field",
             {"identifier": variable},
-            requirement="R002-27",
+            requirement="REQ-0103",
             field=field,
         )
     assert isinstance(resolved, ResolvedValue)
@@ -142,7 +142,7 @@ def _extreme(operation: str, *, largest: bool) -> ExpressionHandler:
             values.append(resolved.value)
 
         present = [value for value in values if value is not MISSING]
-        # R007-26 and R007-39: a mixed `sources` list fails rather than
+        # REQ-0310 and REQ-0324: a mixed `sources` list fails rather than
         # coercing one operand into the other's type.
         for other in present[1:]:
             if not values_comparable(present[0], other):
@@ -153,7 +153,7 @@ def _extreme(operation: str, *, largest: bool) -> ExpressionHandler:
                         "sources": [str(name) for name in sources],
                         "types": [runtime_type_name(value) for value in values],
                     },
-                    requirement="R007-39",
+                    requirement="REQ-0324",
                 )
         if not present:
             return ValueResult(value=MISSING)
@@ -165,7 +165,7 @@ def _extreme(operation: str, *, largest: bool) -> ExpressionHandler:
 
 def _case(dispatcher: NestedDispatcher) -> ExpressionHandler:
     def handler(payload: object, resolver: Resolver) -> EvaluationResult:
-        # R007-54: a non-empty list of when/then items with an optional
+        # REQ-0339: a non-empty list of when/then items with an optional
         # single trailing otherwise item.
         if not isinstance(payload, Sequence) or isinstance(payload, (str, bytes)):
             return _invalid_payload("case", "a list of when/then items")
@@ -192,7 +192,7 @@ def _case(dispatcher: NestedDispatcher) -> ExpressionHandler:
                     "validation",
                     "invalid_predicate",
                     {"predicate": when, "position": error.position},
-                    requirement="R004-31",
+                    requirement="REQ-0188",
                     field=f"[{index}].when",
                 )
             decided = evaluate_predicate(ast, resolver)
@@ -276,7 +276,7 @@ def _cut(payload: object, resolver: Resolver) -> EvaluationResult:
             "missing_input",
             {"variable": str(variable)},
             applicable_handler="missing",
-            requirement="R007-49",
+            requirement="REQ-0334",
         )
     actual = runtime_type_name(value)
     if actual not in {"int", "float"}:
@@ -284,7 +284,7 @@ def _cut(payload: object, resolver: Resolver) -> EvaluationResult:
             "validation",
             "incompatible_input_type",
             {"source": str(variable), "expected": "numeric", "actual": actual},
-            requirement="R007-22",
+            requirement="REQ-0306",
             field="source",
         )
 

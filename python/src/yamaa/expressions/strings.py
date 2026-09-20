@@ -55,7 +55,7 @@ class TemplateError(ValueError):
     """A string template is outside the closed R012 grammar."""
 
     condition = "invalid_string_template"
-    requirement = "R012-16"
+    requirement = "REQ-0461"
 
     def __init__(self, reason: str, position: int, placeholder: str | None) -> None:
         super().__init__(f"{reason} at character {position + 1}")
@@ -86,7 +86,7 @@ def parse_template(text: str) -> tuple[TemplatePart, ...]:
             literal.clear()
 
     while index < length:
-        # R012-8: a brace pair takes precedence over a single brace.
+        # REQ-0453: a brace pair takes precedence over a single brace.
         if text.startswith("{{", index) or text.startswith("}}", index):
             literal.append(text[index])
             index += 2
@@ -123,7 +123,7 @@ def parse_template_cached(text: str) -> tuple[TemplatePart, ...]:
 
 
 def template_identifiers(parts: Sequence[TemplatePart]) -> tuple[str, ...]:
-    """Return each placeholder once, in first-seen order (R012-11)."""
+    """Return each placeholder once, in first-seen order (REQ-0456)."""
     return tuple(
         dict.fromkeys(part["name"] for part in parts if part["kind"] == "placeholder")
     )
@@ -134,7 +134,7 @@ def _invalid_payload(operation: str, expected: str) -> ConditionResult:
         "validation",
         "invalid_field_type",
         {"operation": operation, "expected": expected},
-        requirement="R007-36",
+        requirement="REQ-0321",
     )
 
 
@@ -144,7 +144,7 @@ def _resolve_string(
     operation: str,
     field: str = "source",
 ) -> ValueResult | ConditionResult:
-    """Resolve one `variable` input and hold R007-24 to a string."""
+    """Resolve one `variable` input and hold REQ-0308 to a string."""
     if not isinstance(variable, str):
         return _invalid_payload(operation, "a variable name")
     resolved = resolver.resolve(variable)
@@ -155,7 +155,7 @@ def _resolve_string(
             "validation",
             "unknown_field",
             {"identifier": variable},
-            requirement="R002-27",
+            requirement="REQ-0103",
             field=field,
         )
     assert isinstance(resolved, ResolvedValue)
@@ -174,7 +174,7 @@ def _resolve_string(
             "expected": "str",
             "actual": runtime_type_name(value),
         },
-        requirement="R007-24",
+        requirement="REQ-0308",
         field=field,
     )
 
@@ -187,7 +187,7 @@ def _missing_input(payload: Mapping[object, object], variable: str) -> Evaluatio
         "missing_input",
         {"variable": variable},
         applicable_handler="missing",
-        requirement="R007-49",
+        requirement="REQ-0334",
     )
 
 
@@ -231,7 +231,7 @@ def _str_extract(payload: object, resolver: Resolver) -> EvaluationResult:
             "validation",
             "regex_group_out_of_range",
             {"group": group, "group_count": declared, "pattern": pattern},
-            requirement="R022-28",
+            requirement="REQ-0828",
             field="group",
         )
 
@@ -247,16 +247,16 @@ def _str_extract(payload: object, resolver: Resolver) -> EvaluationResult:
     if extracted is NO_MATCH:
         if "no_match" in payload:
             return handler_value(payload, "no_match")
-        # R008-6: the subject is present but the pattern reached nothing.
+        # REQ-0347: the subject is present but the pattern reached nothing.
         return expression_condition(
             "mapping",
             "unmatched_pattern",
             {"value": subject, "pattern": pattern},
             applicable_handler="no_match",
-            requirement="R007-49",
+            requirement="REQ-0334",
         )
     if extracted is None:
-        # R022-22: the match did not enter a declared group, so the result is
+        # REQ-0817: the match did not enter a declared group, so the result is
         # missing and `no_match` deliberately does not apply.
         return ValueResult(value=MISSING)
     assert isinstance(extracted, str)
@@ -291,7 +291,7 @@ def _template(payload: object, resolver: Resolver) -> EvaluationResult:
         if not isinstance(resolved, ValueResult):
             return resolved
         if resolved.value is MISSING:
-            # R012-14: one missing placeholder answers the whole template.
+            # REQ-0459: one missing placeholder answers the whole template.
             return _missing_input(payload, name)
         assert isinstance(resolved.value, str)
         rendered.append(resolved.value)
@@ -332,7 +332,7 @@ def _concat(dispatcher: NestedDispatcher) -> ExpressionHandler:
                         "expected": "str",
                         "actual": runtime_type_name(value),
                     },
-                    requirement="R007-24",
+                    requirement="REQ-0308",
                     field=f"sources[{index}]",
                 )
             rendered.append(value)

@@ -1,92 +1,85 @@
 version: "1.0"
 
 expressions:
-    mapping: # Looks up a string source in an inline dictionary.
-        # Case-insensitive lookup folds ASCII a-z to A-Z under R019; folded keys
-        # must be unique.
+    mapping: # See REQ-1110 in rules/operations/text.md.
         - source:
             type: filtered_source
             required: true
-            description: String variable used as the dictionary key.
+            description: See REQ-1110 in rules/operations/text.md.
         - dict:
             type: "dict[str, literal_value]"
             required: true
-            description: Source-value to result-value dictionary.
+            description: See REQ-1110 in rules/operations/text.md.
         - case_sensitive:
             type: bool
             default: true
-            description: Compare exactly when true; use R019 ASCII folding when false.
+            description: See REQ-1110 in rules/operations/text.md.
         - missing:
             type: literal_value
-            description: Value returned when source is missing.
+            description: See REQ-1110 in rules/operations/text.md.
         - unmapped:
             type: literal_value
-            description: Value returned when source has no dictionary entry.
-    lookup: # Looks up one value in a declared dataset by explicit key pairs.
-        # Key_base and key lists pair by position, have equal length, and form a
-        # unique combined dataset key. Pair order does not change the result.
-        # Either list may be omitted: an omitted key is inferred from the
-        # applicable output keys (R003-40), and an omitted key_base defaults to
-        # the key names. Key_base must not repeat the key names (R003-45).
+            description: See REQ-1110 in rules/operations/text.md.
+    lookup: # See REQ-1055 in rules/operations/lookup.md.
         - value:
             type: identifier
             required: true
-            description: Dataset column returned by the lookup.
+            description: See REQ-1055 in rules/operations/lookup.md.
         - dataset:
             type: identifier
             required: true
-            description: Declared dataset containing the lookup table.
+            description: See REQ-1055 in rules/operations/lookup.md.
         - key_base:
             type: [variable, "list[variable]"]
             required: false
-            description: One or more current-row lookup values; omit when they name the same columns as key. Must not repeat the key names (R003-45).
+            description: See REQ-1055 in rules/operations/lookup.md.
         - key:
             type: [identifier, "list[identifier]"]
             required: false
-            description: Dataset columns paired by position with key_base; omit to match on the applicable output keys (R003-40).
+            description: See REQ-1055 in rules/operations/lookup.md.
         - filter:
             type: predicate
             required: false
-            description: Predicate selecting eligible records before matching.
+            description: See REQ-1055 in rules/operations/lookup.md.
         - between:
             type: intermediate_between_class
             required: false
-            description: Current-row value matched inclusively against lower and upper dataset bounds.
+            description: See REQ-1055 in rules/operations/lookup.md.
         - order_by:
             type: "list[order_by_term]"
             required: false
-            description: Terms ordering eligible records; declared with keep.
+            description: See REQ-1055 in rules/operations/lookup.md.
         - keep:
             type: str
             required: false
             values: [first, last]
-            description: Ordered record to retain; declared with order_by.
+            description: See REQ-1055 in rules/operations/lookup.md.
         - missing:
             type: literal_value
             required: false
-            description: Value returned when the lookup yields nothing; defaults to missing.
+            description: See REQ-1055 in rules/operations/lookup.md.
         - strict:
             type: bool
             required: false
             default: false
-            description: Fail when the lookup yields nothing.
-    cut: # Assigns a numeric source to one of the labeled break intervals.
+            description: See REQ-1055 in rules/operations/lookup.md.
+    cut: # See REQ-1118 in rules/operations/computation.md.
         - source:
             type: variable
             required: true
-            description: Numeric variable to classify.
+            description: See REQ-1118 in rules/operations/computation.md.
         - breaks:
             type: "list[float]"
             required: true
-            description: Ascending interval boundaries.
+            description: See REQ-1118 in rules/operations/computation.md.
         - labels:
             type: "list[str]"
             required: true
-            description: One label per interval; exactly one more than breaks.
+            description: See REQ-1118 in rules/operations/computation.md.
         - right:
             type: bool
             default: false
-            description: Right-closed/left-open; false is left-closed/right-open.
+            description: See REQ-1118 in rules/operations/computation.md.
         - missing:
             type: literal_value
-            description: Value returned when source is missing.
+            description: See REQ-1118 in rules/operations/computation.md.

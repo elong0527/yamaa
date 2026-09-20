@@ -194,7 +194,7 @@ def test_warning_without_violation_log_fails_before_source_ingestion() -> None:
     assert isinstance(result, ExecutionFailure)
     assert result.diagnostics[0].condition == "missing_violation_log"
     assert result.diagnostics[0].spec_paths == ("output.violation_log",)
-    assert result.diagnostics[0].requirement == "R009-35"
+    assert result.diagnostics[0].requirement == "REQ-0391"
     assert not provider_called
 
 
@@ -441,7 +441,7 @@ def test_key_grain_without_rows_rejects_multiple_values_per_key() -> None:
     assert diagnostic.phase == "derivation"
     assert diagnostic.condition == "multiple_values_per_key"
     assert diagnostic.spec_paths == ("columns.VALUE.derivation.source",)
-    assert diagnostic.requirement == "R001-44"
+    assert diagnostic.requirement == "REQ-0075"
     assert diagnostic.context["identifier"] == "SRC.X"
     assert diagnostic.context["value_count"] == 2
     assert diagnostic.context["keys"] == [{"GRP": "one"}]
@@ -500,7 +500,7 @@ def test_invalid_column_type_fails_before_any_source_is_ingested() -> None:
         "phase": "validation",
         "condition": "value_not_permitted",
         "spec_paths": ["columns.AVAL.type"],
-        "requirement": "R011-29",
+        "requirement": "REQ-0012",
         "context": {
             "value": "number",
             "permitted": ["str", "int", "float", "date", "datetime"],
@@ -561,7 +561,7 @@ def test_source_provider_diagnostics_enter_the_execution_result() -> None:
 
 
 # Committed key contracts: how many rows a specification emits is the
-# declared keys' answer (R001-12), so the two ways a key combination can
+# declared keys' answer (REQ-0042), so the two ways a key combination can
 # still come out wrong each keep an example pinning the error it raises.
 # test_examples.py compares every negative example's `requirement`; these
 # two also pin the phase, condition, spec paths and reported keys, which is

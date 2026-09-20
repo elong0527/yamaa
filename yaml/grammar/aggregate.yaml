@@ -15,7 +15,7 @@
 schema_version: "1.0"
 contract: aggregate
 contract_version: "1.0.0"
-rule: R013
+rule: operations/aggregation
 start: expr
 productions:
   - name: expr

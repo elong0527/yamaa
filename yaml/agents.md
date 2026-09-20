@@ -8,35 +8,36 @@ SDTM, and ADaM datasets.
 Before reviewing, implementing, or modifying this design:
 
 1. Read `README.md` for scope and navigation.
-2. Read `rules/R006-schema-language.md` for the notation used by the schema.
+2. Read `rules/reference/schema-language.md` for the notation used by the schema.
 3. Read `schema.yaml` and follow every transitive `includes` entry needed for
    the derivation or verification vocabulary in scope.
 4. Read `rules/README.md` and every rule applicable to the fields in scope.
 5. Read the relevant example specification, README, input data, and expected
    output under `../benchmark/`.
 
-Schema comments and descriptions are authoritative for operation-local
-behavior; indexed rule files are normative for shared behavior. Example
-READMEs explain examples but do not override either. Proposed rules remain
-outside the rule index until their contracts and example coverage are complete.
+Schemas own shape, defaults, and structural constraints. Indexed contracts
+own shared and operation-local semantics. Schema descriptions link to their
+owning requirement and do not define additional behavior. Example READMEs do
+not override either. Proposals remain outside the normative index until their
+contracts and example coverage are complete.
 
 ## Terminology
 
 One term per concept across all rules, schema comments, and messages:
 
 - **specification** - the YAML file under review. `study` and `document` stay
-  project-level (R021, R024, R026), never names for the YAML.
+  project-level (resources and submission contracts), never names for the YAML.
 - **input dataset** / **output dataset** - state the role whenever it matters.
   Bare `dataset` appears only as a key name. `table` means a documentation
   table, never data.
 - **row template** - one `rows` entry, building a group of output rows. Bare
-  `template` means a string template (R012).
+  `template` means a string template (text operations).
 - **record** - input side (a file or input dataset row). **row** - output side
   (an output record under construction or built).
-- **column** - dataset level. **field** - file and schema level (R014, R023).
-  **variable** - an expression-level name (R006).
+- **column** - dataset level. **field** - file and schema level (ingestion and format profiles).
+  **variable** - an expression-level name (schema language).
 - **path notation** - `row.dataset`, `root.input`, `expression.source`
-  (R002 style). Never `row_class.` or `root_class.`.
+  (binding notation). Never `row_class.` or `root_class.`.
 - **driver** - banned from normative text, schema descriptions, and
   user-facing messages. Use input dataset or `row.dataset`.
 
@@ -64,10 +65,10 @@ One term per concept across all rules, schema comments, and messages:
   compared with it, and both implementations replay its vectors, so a change
   made anywhere else fails validation. Add a vector for every behavior the
   change decides.
-- Give every rule a stable ID and list it in the appropriate logical block
-  of `rules/README.md`. Follow its section order and preserve requirement IDs
-  when reorganizing text; an ownership move retains a numbered reference to
-  the canonical requirement.
+- Give every requirement a permanent global `REQ-NNNN` ID and list its
+  owning contract in `rules/README.md`. Preserve IDs across moves; update
+  `rules/migration.yaml` and regenerate the reference tables. Keep legacy
+  aliases in that map rather than in duplicate normative paragraphs.
 - Keep repository-authored source ASCII-only. Spell non-ASCII characters by
   code point in rules, documentation, schemas, specifications, and tests;
   literal Unicode belongs only in input and expected-output data fixtures.
@@ -84,8 +85,8 @@ One term per concept across all rules, schema comments, and messages:
   A file that departs from its profile belongs only in a negative example that
   declares the condition it provokes.
 - Do not duplicate normative behavior across schema definitions, rules, or
-  examples. Keep operation-local behavior beside its schema entry and shared
-  behavior in the applicable rule.
+  examples. Keep all behavior in its owning contract and link to it from schema
+  descriptions. Generate field tables with `generate_rule_reference.py`.
 - Do not infer unspecified behavior. Record it as an unresolved design question
   or propose a new rule.
 - Update or add examples whenever a normative rule changes behavior.

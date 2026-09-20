@@ -2,7 +2,7 @@ phase: validation
 condition: incomparable_sources
 spec_paths:
   - columns.FSTALVDT.derivation.least
-requirement: R007-39
+requirement: REQ-0324
 context:
   sources: [DTHDT, LSTVSDY]
   types: [date, int]

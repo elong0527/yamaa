@@ -2,7 +2,7 @@
 
 R022 pins no engine: the rule text plus the conformance fixtures are the
 contract (version 2.0.0), and each consumer normalizes its host library to
-it (R022-30 through R022-34). This module is the Python consumer. It checks
+it (REQ-0822 through REQ-0826). This module is the Python consumer. It checks
 every pattern against the portable grammar, translates the pattern onto the
 standard library `re` module, and compiles with `re.ASCII` so `\\d`, `\\w`,
 and `\\b` keep their ASCII meaning however the host behaves. Keeping the
@@ -17,7 +17,7 @@ import string
 from functools import lru_cache
 from typing import Final, TypeAlias
 
-# R022-5 versions the portable contract with the rule text and the fixtures.
+# REQ-0800 versions the portable contract with the rule text and the fixtures.
 REGEX_CONTRACT_VERSION: Final = "2.0.0"
 # The host library this consumer normalizes, for a failure to report.
 REGEX_HOST_LIBRARY: Final = "re"
@@ -25,7 +25,7 @@ REGEX_HOST_LIBRARY: Final = "re"
 # The compiled pattern type, so a consumer need not import the host library.
 Regex: TypeAlias = re.Pattern[str]
 
-# R022-31: the ECMA-262 `WhiteSpace` plus `LineTerminator` set, spelled as
+# REQ-0823: the ECMA-262 `WhiteSpace` plus `LineTerminator` set, spelled as
 # `re` source. `U+0085` is not in the set, even though some host libraries
 # include it in `\\s`.
 _WHITESPACE_CLASS: Final = (
@@ -38,7 +38,7 @@ _WHITESPACE_IN_CLASS: Final = (
     "\\t\\n\\v\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029"
     "\\u202f\\u205f\\u3000\\ufeff"
 )
-# R022-32: `.` matches every scalar except these four line terminators.
+# REQ-0824: `.` matches every scalar except these four line terminators.
 _DOT_REPLACEMENT: Final = "[^\\r\\n\\u2028\\u2029]"
 
 # Escapes the contract admits after a backslash besides the translations
@@ -46,7 +46,7 @@ _DOT_REPLACEMENT: Final = "[^\\r\\n\\u2028\\u2029]"
 # NUL. Hex, code point, punctuation, and backreference escapes are checked
 # where they are read.
 _SIMPLE_ESCAPES: Final = frozenset("dDsSwWbBnrtfv0")
-# `\\` plus one of these is an ordinary scalar (R022-34).
+# `\\` plus one of these is an ordinary scalar (REQ-0826).
 _ESCAPABLE_PUNCTUATION: Final = frozenset(string.punctuation)
 
 _HEX_DIGITS: Final = frozenset("0123456789abcdefABCDEF")
@@ -55,7 +55,7 @@ _HEX_DIGITS: Final = frozenset("0123456789abcdefABCDEF")
 class NoMatch:
     """The pattern matched nowhere in the subject.
 
-    R022-23 keeps an empty match distinct from no match, and R019 keeps the
+    REQ-0818 keeps an empty match distinct from no match, and R019 keeps the
     empty string distinct from missing, so this is its own value rather than
     either of them.
     """
@@ -73,7 +73,7 @@ class RegexError(ValueError):
     """A pattern the portable contract rejects."""
 
     condition = "invalid_regex"
-    requirement = "R022-27"
+    requirement = "REQ-0827"
 
     def __init__(self, pattern: str, reason: str) -> None:
         super().__init__(f"the R022 contract rejects {pattern!r}: {reason}")
@@ -85,7 +85,7 @@ class RegexGroupError(ValueError):
     """A `str_extract.group` the pattern does not declare."""
 
     condition = "regex_group_out_of_range"
-    requirement = "R022-28"
+    requirement = "REQ-0828"
 
     def __init__(self, pattern: str, group: int, group_count: int) -> None:
         super().__init__(
@@ -236,10 +236,10 @@ def _normalize(pattern: str) -> str:
     """Check `pattern` against the portable grammar and translate it.
 
     The result is `re` source with the contract semantics: ASCII-only
-    classes (R022-30, via the `re.ASCII` flag at compile time), the
-    ECMA-262 whitespace set (R022-31), scalar dot and end-only `$`
-    (R022-32), and expanded code point escapes (R022-33). Anything the
-    grammar excludes (R022-34) fails here with `RegexError`, before the
+    classes (REQ-0822, via the `re.ASCII` flag at compile time), the
+    ECMA-262 whitespace set (REQ-0823), scalar dot and end-only `$`
+    (REQ-0824), and expanded code point escapes (REQ-0825). Anything the
+    grammar excludes (REQ-0826) fails here with `RegexError`, before the
     host library ever sees the pattern.
     """
     output: list[str] = []
@@ -477,7 +477,7 @@ def _compile_translated(translated: str) -> re.Pattern[str]:
 
 @lru_cache(maxsize=512)
 def compile_pattern(pattern: str) -> re.Pattern[str]:
-    """Compile one pattern source through the portable contract (R022-30..34)."""
+    """Compile one pattern source through the portable contract (REQ-0822..34)."""
     try:
         return _compile_translated(_normalize(pattern))
     except re.error as error:
@@ -503,7 +503,7 @@ def search(pattern: str, subject: str) -> bool:
 
 @lru_cache(maxsize=512)
 def capture_group_count(pattern: str) -> int:
-    """Count the capturing groups an accepted pattern declares (R022-20).
+    """Count the capturing groups an accepted pattern declares (REQ-0815).
 
     The host library answers an out-of-range group index exactly as it
     answers a group the match did not enter, so the count is read from the

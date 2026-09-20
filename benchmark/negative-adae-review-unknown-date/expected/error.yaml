@@ -2,6 +2,6 @@ phase: validation
 condition: unknown_field
 spec_paths:
   - columns.REVIEWFL.derivation.case[0].when
-requirement: R004-32
+requirement: REQ-0189
 context:
   identifier: UNKNOWNDT

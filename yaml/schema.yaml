@@ -1,8 +1,6 @@
 version: "1.0"
 
-# R006 defines this notation: classes, descriptors, type expressions, and
-# registries. Every field description here documents the field and does not
-# validate it.
+# See REQ-1045 in rules/specification/structure.md.
 
 includes:
     - schema_shared.yaml
@@ -14,234 +12,229 @@ root_class:
     - schema_version:
         type: str
         required: true
-        description: Schema bundle this specification is written against; R006 requires an exact match.
+        description: See REQ-1042 in rules/specification/structure.md.
     - domain:
         type: identifier
         required: true
-        description: Name of the output dataset this specification derives.
+        description: See REQ-1042 in rules/specification/structure.md.
     - keys:
         type: "list[identifier]"
         required: true
-        description: Output columns identifying a row; R005 defines the identity they assert.
+        description: See REQ-1042 in rules/specification/structure.md.
     - input:
         type: "dict[identifier, dataset_source]"
         required: true
-        description: Source datasets readable by this specification, each under the name it is read through.
+        description: See REQ-1042 in rules/specification/structure.md.
     - base:
         type: identifier
         required: false
-        description: Input dataset whose records build output rows when rows is absent; R001 states when it is required.
+        description: See REQ-1042 in rules/specification/structure.md.
     - parents:
         type: [path, "list[path]"]
         required: false
-        description: Ordered local specification layers resolved under R017 before validation and execution.
+        description: See REQ-1042 in rules/specification/structure.md.
     - intermediates:
         type: "list[intermediate_class]"
         required: false
-        description: Named dataset lookups several columns read through <lookup-id>.<column>; R003 defines them.
+        description: See REQ-1042 in rules/specification/structure.md.
     - output:
         type: output_class
         required: true
-        description: Artifact presentation independent of dependency-ordered declarations; R005 defines it.
+        description: See REQ-1042 in rules/specification/structure.md.
     - columns:
         type: "list[column_class]"
         required: true
-        description: Columns in the dependency order R001 requires; output.columns controls artifact order.
+        description: See REQ-1042 in rules/specification/structure.md.
     - rows:
         type: "list[row_class]"
         required: false
-        description: Row templates constructing output rows from
-            input records or groups; R001 evaluates them.
+        description: See REQ-1042 in rules/specification/structure.md.
     - verifications:
         type: [dataset_verification, "list[dataset_verification]"]
         required: false
-        description: Assertions over the completed dataset; R009 defines them.
+        description: See REQ-1042 in rules/specification/structure.md.
     - submission:
         type: submission_dataset_class
         required: false
-        description: Governed dataset metadata a submission document is generated from; R024 defines it.
+        description: See REQ-1042 in rules/specification/structure.md.
     - metadata:
         type: "dict[str, str]"
         required: false
-        description: Free-form annotations carried with the specification; R024 reserves the key names it governs.
+        description: See REQ-1042 in rules/specification/structure.md.
 
 output_class:
     - path:
         type: path
         required: true
-        description: File this specification produces; R020 selects the serialization profile from its extension.
+        description: See REQ-1047 in rules/storage/publication.md.
     - decimals:
         type: int
         required: false
-        description: Fixed display digits for every float column of a csv artifact; R020 defines the rounding and rejects it for parquet.
+        description: See REQ-1047 in rules/storage/publication.md.
     - columns:
         type: "list[identifier]"
         required: true
-        description: Declared columns selected for the artifact, in the order R005 requires.
+        description: See REQ-1047 in rules/storage/publication.md.
     - violation_log:
         type: path
         required: false
-        description: Sidecar dataset recording warning-level verification violations; R009 fixes its schema and R020 serializes it.
+        description: See REQ-1047 in rules/storage/publication.md.
     - order_by:
         type: "list[order_by_term]"
         required: false
-        description: Terms ordering artifact rows after every verification; omission keeps R001 construction order.
+        description: See REQ-1047 in rules/storage/publication.md.
 
 intermediate_class:
     - id:
         type: intermediate_id
         required: true
-        description: Name through which the looked-up record is read.
+        description: See REQ-1048 in rules/operations/lookup.md.
     - dataset:
         type: identifier
         required: true
-        description: Declared dataset the record is selected from.
+        description: See REQ-1048 in rules/operations/lookup.md.
     - key:
         type: [identifier, "list[identifier]"]
         required: false
-        description: Dataset columns paired by position with key_base; omit to match on the applicable output keys (R003-40).
+        description: See REQ-1048 in rules/operations/lookup.md.
     - key_base:
         type: [variable, "list[variable]"]
         required: false
-        description: Current-row values paired by position with key; omit when they name the same columns as key. Must not repeat the key names (R003-45).
+        description: See REQ-1048 in rules/operations/lookup.md.
     - between:
         type: intermediate_between_class
         required: false
-        description: Current-row value matched inclusively against lower and upper dataset bounds.
+        description: See REQ-1048 in rules/operations/lookup.md.
     - filter:
         type: predicate
         required: false
-        description: Predicate selecting eligible records before matching.
+        description: See REQ-1048 in rules/operations/lookup.md.
     - order_by:
         type: "list[order_by_term]"
         required: false
-        description: Terms ordering eligible records; declared with keep.
+        description: See REQ-1048 in rules/operations/lookup.md.
     - keep:
         type: str
         required: false
         values: [first, last]
-        description: Ordered record to retain; declared with order_by.
+        description: See REQ-1048 in rules/operations/lookup.md.
     - columns:
         type: "list[identifier]"
         required: false
-        description: Dataset columns the lookup may read; defaults to every dataset column.
+        description: See REQ-1048 in rules/operations/lookup.md.
     - missing:
         type: literal_value
         required: false
-        description: Value returned when the lookup yields nothing; defaults to missing.
+        description: See REQ-1048 in rules/operations/lookup.md.
     - strict:
         type: bool
         required: false
         default: false
-        description: Fail when the lookup yields nothing.
+        description: See REQ-1048 in rules/operations/lookup.md.
 
 intermediate_between_class:
     - value:
         type: variable
         required: true
-        description: Value read from the current row.
+        description: See REQ-1049 in rules/operations/lookup.md.
     - lower:
         type: identifier
         required: true
-        description: Dataset column whose value is an inclusive lower bound.
+        description: See REQ-1049 in rules/operations/lookup.md.
     - upper:
         type: identifier
         required: true
-        description: Dataset column whose value is an inclusive upper bound.
+        description: See REQ-1049 in rules/operations/lookup.md.
 
 column_class:
     - name:
         type: identifier
         required: true
-        description: Column name this specification declares.
+        description: See REQ-1043 in rules/specification/structure.md.
     - type:
         type: column_type
         required: true
-        description: Declared data type this column must carry in the completed dataset.
+        description: See REQ-1043 in rules/specification/structure.md.
     - label:
         type: str
         required: false
-        description: Descriptive text carried with the column for a reader of the dataset.
+        description: See REQ-1043 in rules/specification/structure.md.
     - derivation:
         type: derivation
         required: false
-        description: How the column's value is produced; R005 owns where a column may be derived.
+        description: See REQ-1043 in rules/specification/structure.md.
     - verifications:
         type: [column_verification, "list[column_verification]"]
         required: false
-        description: Assertions over this column's completed values; R009 defines them.
+        description: See REQ-1043 in rules/specification/structure.md.
     - submission:
         type: submission_column_class
         required: false
-        description: Governed column metadata a submission document is generated from; R024 defines it.
+        description: See REQ-1043 in rules/specification/structure.md.
     - metadata:
         type: "dict[str, str]"
         required: false
-        description: Free-form annotations carried with the column; R024 reserves the key names it governs.
+        description: See REQ-1043 in rules/specification/structure.md.
 
 row_class:
     - id:
         type: row_id
         required: true
-        description: Identifier of this row template, unique within rows.
+        description: See REQ-1056 in rules/execution/rows.md.
     - dataset:
         type: identifier
         required: false
-        description: Input dataset whose records build this entry's output rows; required when more than one dataset is declared.
+        description: See REQ-1056 in rules/execution/rows.md.
     - group_by:
         type: "list[variable]"
         required: false
-        description: Grouping keys over input records, producing
-            one candidate row per group; R001 defines grouped construction.
+        description: See REQ-1056 in rules/execution/rows.md.
     - filter:
         type: predicate
         required: false
-        description: Predicate selecting input records for an ungrouped
-            row template or completed candidate groups for a grouped row
-            template.
+        description: See REQ-1056 in rules/execution/rows.md.
     - derivations:
         type: "dict[identifier, derivation]"
         required: true
-        description: Columns this row template derives; R005 owns
-            coverage across row templates.
+        description: See REQ-1056 in rules/execution/rows.md.
 
 variable:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$'
-    description: Qualified source variable or unqualified current-output column.
+    description: See REQ-1057 in rules/specification/binding.md.
 
 dataset_source:
     type: [project_path, dataset_class]
-    description: Path to the dataset, or a path with its producing specification or field types.
+    description: See REQ-1059 in rules/storage/ingestion.md.
 
 dataset_class:
     - path:
         type: project_path
         required: true
-        description: Source data path, relative to the specification or rooted at an approved data root and confined by R021; R023 selects the source profile from its extension.
+        description: See REQ-1060 in rules/storage/ingestion.md.
     - types:
         type: "dict[identifier, column_type]"
         required: false
-        description: Type each named field carries; R014 types the rest.
+        description: See REQ-1060 in rules/storage/ingestion.md.
     - schema:
         type: project_path
         required: false
-        description: Producing specification whose output contract supplies the source fields and types; R014 defines the workflow edge.
+        description: See REQ-1060 in rules/storage/ingestion.md.
 
 intermediate_id:
     type: str
     pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
-    description: Identifier of a lookup, unique among dataset identifiers, other lookups, and the output domain.
+    description: See REQ-1050 in rules/operations/lookup.md.
 
 row_id:
     type: str
     min_length: 1
-    description: Identifier of a row template, unique within rows.
+    description: See REQ-1044 in rules/specification/structure.md.
 
 regex:
     type: str
     min_length: 1
-    description: Regular expression applied to a string value under R022.
+    description: See REQ-1058 in rules/specification/binding.md.
 
 predicate:
     type: str

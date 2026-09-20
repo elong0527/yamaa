@@ -1,6 +1,6 @@
 """Resolve exactly one `environment.yaml` at one selected project root.
 
-R018-2 gives the runner one explicitly selected root and R018-3 validates
+REQ-0663 gives the runner one explicitly selected root and REQ-0664 validates
 what it finds there independently of any specification: a specification can
 neither name this file nor change what it says. Everything this module
 produces -- the contracts, their fingerprints, and the vector documents --
@@ -47,7 +47,7 @@ _R_NAME = re.compile(r"(?:[A-Za-z][A-Za-z0-9._]*|\.(?![0-9])[A-Za-z0-9._]+)")
 _R_POSITIONAL = re.compile(r"\.\.[0-9]+")
 _R_CALL = re.compile(r"[A-Za-z][A-Za-z0-9._]*:::?[A-Za-z._][A-Za-z0-9._]*")
 
-# R018-22 refuses an R host argument name that names something else in the
+# REQ-0683 refuses an R host argument name that names something else in the
 # language the binding is written in.
 _R_RESERVED = frozenset(
     {
@@ -75,16 +75,16 @@ _R_RESERVED = frozenset(
 
 
 def _invalid(reason: str, **context: object) -> FunctionFailure:
-    """Return the R018-34 failure every malformed declaration reports as."""
+    """Return the REQ-0695 failure every malformed declaration reports as."""
     return FunctionFailure(
         "project_environment_invalid",
-        "R018-34",
+        "REQ-0695",
         {"reason": reason, **context},  # type: ignore[arg-type]
     )
 
 
 def environment_schema(schema_root: str | Path) -> SchemaBundle:
-    """Load the bundle R018-3 validates a project environment against."""
+    """Load the bundle REQ-0664 validates a project environment against."""
     return load_schema_bundle(
         schema_root,
         entry_name=_ENVIRONMENT_SCHEMA,
@@ -154,7 +154,7 @@ def _model(
 
 
 def _check_signature(name: str, contract: FunctionContract) -> None:
-    """Check what R018-15 and R018-22 require of one closed signature."""
+    """Check what REQ-0676 and REQ-0683 require of one closed signature."""
     path = f"functions.{name}"
     seen: set[str] = set()
     for parameter in contract.params:
@@ -196,7 +196,7 @@ def _check_signature(name: str, contract: FunctionContract) -> None:
 
 
 def _check_binding(name: str, contract: FunctionContract, language: str) -> None:
-    """Check the statically written callable and host names of R018-22."""
+    """Check the statically written callable and host names of REQ-0683."""
     path = f"functions.{name}"
     call = contract.binding.call
     pattern = _PYTHON_CALL if language == "python" else _R_CALL
@@ -265,7 +265,7 @@ def _load_conformance(
     document = _read_document(
         path,
         condition="project_environment_invalid",
-        requirement="R018-34",
+        requirement="REQ-0695",
     )
     vectors = _model(
         document,
@@ -304,21 +304,21 @@ def load_environment(
 ) -> LoadedEnvironment:
     """Load and validate the environment at one explicitly selected root.
 
-    R018-3 fails here -- before any code is activated or executed -- when the
+    REQ-0664 fails here -- before any code is activated or executed -- when the
     environment is missing, unreadable, structurally invalid, or ambiguous.
     """
     root = Path(project_root)
     if not root.is_dir():
         raise FunctionFailure(
             "project_environment_missing",
-            "R018-33",
+            "REQ-0694",
             {"reason": "the selected project root is not a directory"},
         )
     schema = bundle if bundle is not None else environment_schema(schema_root)
     document = _read_document(
         root / ENVIRONMENT_NAME,
         condition="project_environment_missing",
-        requirement="R018-33",
+        requirement="REQ-0694",
     )
     environment = _model(
         document,
@@ -347,7 +347,7 @@ def load_environment(
             ) from error
         vectors, content = _load_conformance(root, name, contract, schema)
         conformance[name] = vectors
-        # R018-30 caches on the complete vector content, so the identity
+        # REQ-0691 caches on the complete vector content, so the identity
         # covers the bytes of every document rather than its declared path.
         digest.update(f"{name}\n{len(content)}\n".encode())
         digest.update(content)
@@ -362,11 +362,11 @@ def load_environment(
 
 
 def check_runner_language(environment: ProjectEnvironment) -> None:
-    """Reject a project whose runtime this runner cannot execute (R018-6)."""
+    """Reject a project whose runtime this runner cannot execute (REQ-0667)."""
     if environment.runtime.language != "python":
         raise FunctionFailure(
             "runner_language_mismatch",
-            "R018-35",
+            "REQ-0696",
             {"runner": "python", "declared": environment.runtime.language},
         )
 

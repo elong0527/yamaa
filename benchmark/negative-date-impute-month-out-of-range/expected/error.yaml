@@ -2,6 +2,6 @@ phase: validation
 condition: month_out_of_range
 spec_paths:
   - columns.ASTDT.derivation.date_impute.month
-requirement: R016-67
+requirement: REQ-0608
 context:
   month: 15

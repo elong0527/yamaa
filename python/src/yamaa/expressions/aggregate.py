@@ -46,7 +46,7 @@ from yamaa.models import (
 AggregateAst: TypeAlias = dict[str, Any]
 _Token: TypeAlias = tuple[str, str, int, int]
 
-# R013-12 closes the reducer table. The flag says which reducer may take the
+# REQ-0477 closes the reducer table. The flag says which reducer may take the
 # record star, and `COUNT` is the one that does: it counts records where the
 # others count values.
 REDUCERS: Final[dict[str, bool]] = {
@@ -80,7 +80,7 @@ class AggregateError(ValueError):
         position: int,
         *,
         condition: str = "invalid_aggregate_expression",
-        requirement: str = "R013-34",
+        requirement: str = "REQ-0499",
         context: dict[str, JsonValue] | None = None,
     ) -> None:
         super().__init__(f"{message} at character {position + 1}")
@@ -95,7 +95,7 @@ def _prohibited_construct(construct: str, position: int) -> AggregateError:
         f"a {construct} construct is not permitted in an aggregate expression",
         position,
         condition="prohibited_construct",
-        requirement="R013-47",
+        requirement="REQ-0512",
         context={"construct": construct},
     )
 
@@ -110,7 +110,7 @@ def _prohibited_function(
         message,
         position,
         condition="prohibited_function",
-        requirement="R013-35",
+        requirement="REQ-0500",
         context={"function": name, **context},
     )
 
@@ -219,7 +219,7 @@ class _Parser:
         return node
 
     def _factor(self) -> AggregateAst:
-        # R013-11 keeps R010's unary sign, so a sign binds to one primary.
+        # REQ-0476 keeps R010's unary sign, so a sign binds to one primary.
         if self._token[0] in {"PLUS", "MINUS"}:
             operator = self._advance()
             return {
@@ -284,12 +284,12 @@ class _Parser:
         close = self._advance()
         inner = _first_reduction(argument)
         if inner is not None:
-            # R013-18: reductions do not nest, and the failure names both.
+            # REQ-0483: reductions do not nest, and the failure names both.
             raise AggregateError(
                 f"reducer {name!r} contains reducer {inner['name']!r}",
                 name_token[2],
                 condition="nested_reduction",
-                requirement="R013-37",
+                requirement="REQ-0502",
                 context={"outer": name, "inner": inner["name"]},
             )
         return {
@@ -402,7 +402,7 @@ def aggregate_star_datasets(ast: AggregateAst) -> tuple[str, ...]:
 
 
 def ungrouped_identifiers(ast: AggregateAst) -> tuple[str, ...]:
-    """Return the identifiers R013-20 requires the enclosing `group_by` to declare.
+    """Return the identifiers REQ-0485 requires the enclosing `group_by` to declare.
 
     A value that varies within the group gives the expression no single
     answer, so every identifier a reduction does not enclose must be grouped
@@ -425,7 +425,7 @@ def ungrouped_identifiers(ast: AggregateAst) -> tuple[str, ...]:
 
 
 def is_single_reduction(ast: AggregateAst) -> bool:
-    """Return whether the whole expression is one reduction (R013-22)."""
+    """Return whether the whole expression is one reduction (REQ-0487)."""
     return ast["kind"] == "reduction"
 
 
@@ -458,7 +458,7 @@ def _fail(
     )
 
 
-# R013-15 folds `SUM` with R010's `+`, and R013-14 divides with R010's `/`.
+# REQ-0480 folds `SUM` with R010's `+`, and REQ-0479 divides with R010's `/`.
 # Both run through the numeric evaluator, so binary64 rounding and integer
 # overflow are R010's behavior rather than a second implementation's.
 _LEFT: Final[AggregateAst] = {"kind": "identifier", "name": "left"}
@@ -502,10 +502,10 @@ def _numeric_or_fail(
 ) -> RuntimeValue:
     if runtime_type_name(value) in {"int", "float"}:
         return value
-    # R013-45: a non-numeric argument fails rather than being coerced.
+    # REQ-0510: a non-numeric argument fails rather than being coerced.
     raise _fail(
         "incompatible_input_type",
-        "R013-45",
+        "REQ-0510",
         {
             "expr": expr,
             "reducer": reducer,
@@ -533,11 +533,11 @@ def _extreme(
     for other in values[1:]:
         if values_comparable(values[0], other):
             continue
-        # R013-46: a column mixing incomparable types has no order, and
+        # REQ-0511: a column mixing incomparable types has no order, and
         # inventing one would make the result implementation-defined.
         raise _fail(
             "incomparable_sources",
-            "R013-46",
+            "REQ-0511",
             {
                 "expr": expr,
                 "sources": [source],
@@ -564,7 +564,7 @@ def _argument_value(
     """Read one record's contribution to a reduction.
 
     A bare identifier keeps whatever type its column carries, because
-    R013-24 lets `COUNT`, `MIN`, `MAX`, and `ONLY` reduce any type. An
+    REQ-0489 lets `COUNT`, `MIN`, `MAX`, and `ONLY` reduce any type. An
     argument that computes is R010 arithmetic and fails on a non-numeric
     operand where that arithmetic already lives.
     """
@@ -573,7 +573,7 @@ def _argument_value(
         if name not in record:
             raise _fail(
                 "unknown_field",
-                "R013-41",
+                "REQ-0506",
                 {"expr": expr, "identifier": name},
                 phase="validation",
                 path_suffix="expr",
@@ -597,27 +597,27 @@ def _reduce(
     phase: ConditionPhase,
     context: Mapping[str, JsonValue],
 ) -> RuntimeValue:
-    """Reduce one relation's records to the value R013-27 pins for it."""
+    """Reduce one relation's records to the value REQ-0492 pins for it."""
     reducer = node["name"]
     argument = node["argument"]
     source = argument.get("name") or argument.get("dataset") or expr
 
     if argument["kind"] == "star":
-        # R013-19: the record star counts records and names no column.
+        # REQ-0484: the record star counts records and names no column.
         return len(records) if records else MISSING
     if not records:
-        # R013-27: no record in the group leaves every reducer missing.
+        # REQ-0492: no record in the group leaves every reducer missing.
         return MISSING
 
     values = [_argument_value(argument, expr, record) for record in records]
 
     if reducer == "ONLY":
-        # R013-17: `ONLY` counts records rather than values, and R013-29
+        # REQ-0482: `ONLY` counts records rather than values, and REQ-0494
         # makes more than one a failure rather than a missing-value case.
         if len(records) > 1:
             raise _fail(
                 "aggregate_multiple_records",
-                "R013-36",
+                "REQ-0501",
                 {
                     "expr": expr,
                     "reducer": reducer,
@@ -630,7 +630,7 @@ def _reduce(
 
     present = [value for value in values if value is not MISSING]
     if reducer == "COUNT":
-        # R013-27: the records exist, so an all-missing group counts zero.
+        # REQ-0492: the records exist, so an all-missing group counts zero.
         return len(present)
     if not present:
         return MISSING
@@ -647,7 +647,7 @@ def _reduce(
         )
     if reducer == "SUM":
         return total
-    # R013-30: `MEAN` answers missing above before it divides, so an
+    # REQ-0495: `MEAN` answers missing above before it divides, so an
     # all-missing group never reaches a division by zero.
     return _arithmetic(_DIVIDE, total, len(present), expr)
 
@@ -685,10 +685,10 @@ def evaluate_aggregate(
     """Reduce the supplied records to the one value this expression names.
 
     `records` are the eligible records of one relation, already narrowed and
-    already in relation order, because R013-33 makes a reduction read that
+    already in relation order, because REQ-0498 makes a reduction read that
     order rather than impose one of its own. Each maps an identifier as the
     expression writes it to that record's value. `grouped` holds the
-    identifiers the enclosing `group_by` declares, which R013-21 makes constant
+    identifiers the enclosing `group_by` declares, which REQ-0486 makes constant
     within the group.
     """
     reported = dict(context or {})
@@ -702,11 +702,11 @@ def evaluate_aggregate(
         return failure.condition
 
     if ast["kind"] == "reduction":
-        # R013-22: a single reduction retains its own result type, whatever
+        # REQ-0487: a single reduction retains its own result type, whatever
         # that type is, so no numeric contract applies to the whole result.
         return ValueResult(value=reductions[ast["text"]])
 
-    # R013-23: an expression using any operator or function is numeric, and
+    # REQ-0488: an expression using any operator or function is numeric, and
     # every reduction and grouped identifier in it must be too, which is
     # exactly what R010's evaluator already requires of an identifier.
     values: dict[str, object] = {**dict(grouped or {}), **reductions}

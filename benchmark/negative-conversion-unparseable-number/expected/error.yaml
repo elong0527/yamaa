@@ -2,7 +2,7 @@ phase: convert
 condition: conversion_failed
 spec_paths:
   - columns.AVAL
-requirement: R011-30
+requirement: REQ-0013
 context:
   from: str
   to: float

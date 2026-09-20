@@ -67,13 +67,13 @@ def _condition(
 def test_only_a_date_or_a_date_prefix_carries_a_precision(
     text: str, expected: str | None
 ) -> None:
-    # R016-42: the collected text is prefix truncation only, and R016-46
+    # REQ-0578: the collected text is prefix truncation only, and REQ-0582
     # gives a day without its month no representation to describe.
     assert collected_precision(text) == expected
 
 
 def test_precision_is_read_from_a_value_or_from_the_text_it_came_from() -> None:
-    # R016-45: reading the date binds a flag to the value it describes.
+    # REQ-0581: reading the date binds a flag to the value it describes.
     assert (
         _value("date_precision", {"source": "S"}, {"S": date("2025-02-28", "month")})
         == "M"
@@ -83,7 +83,7 @@ def test_precision_is_read_from_a_value_or_from_the_text_it_came_from() -> None:
 
 
 def test_a_datetime_is_not_a_date_precision_source() -> None:
-    # R016-65: a datetime reaching a date operation is an error, not a widening.
+    # REQ-0606: a datetime reaching a date operation is an error, not a widening.
     condition = _condition(
         "date_precision",
         {"source": "S"},
@@ -94,7 +94,7 @@ def test_a_datetime_is_not_a_date_precision_source() -> None:
 
 
 def test_the_two_absences_stay_apart_and_each_may_be_answered() -> None:
-    # R016-52: text that is not a date is a different defect from an
+    # REQ-0588: text that is not a date is a different defect from an
     # uncollected value, and a specification may answer them differently.
     missing = _condition("date_precision", {"source": "S"}, {"S": MISSING})
     invalid = _condition("date_precision", {"source": "S"}, {"S": "UNKNOWN"})
@@ -120,7 +120,7 @@ def impute(source: object, **extra: object) -> dict[str, object]:
 
 
 def test_a_complete_source_is_returned_unchanged_whatever_the_bound_says() -> None:
-    # R016-50: it supplied nothing for the bound to move.
+    # REQ-0586: it supplied nothing for the bound to move.
     value = _value(
         "date_impute",
         impute(None, not_before="B"),
@@ -132,7 +132,7 @@ def test_a_complete_source_is_returned_unchanged_whatever_the_bound_says() -> No
 
 
 def test_a_truncated_source_is_completed_and_keeps_its_collected_precision() -> None:
-    # R016-43: which components were supplied is a property of the value.
+    # REQ-0579: which components were supplied is a property of the value.
     month = _value("date_impute", impute(None), {"S": "2025-01"})
     year = _value("date_impute", impute(None), {"S": "2025"})
 
@@ -143,7 +143,7 @@ def test_a_truncated_source_is_completed_and_keeps_its_collected_precision() -> 
 
 
 def test_a_source_below_the_declared_minimum_is_missing_and_fires_no_handler() -> None:
-    # R016-47: neither a missing source nor invalid text.
+    # REQ-0583: neither a missing source nor invalid text.
     value = _value(
         "date_impute",
         impute(None, minimum_source_precision="month", missing="X", invalid="X"),
@@ -160,7 +160,7 @@ def test_a_source_below_the_declared_minimum_is_missing_and_fires_no_handler() -
 def test_last_names_the_day_the_month_actually_ends_on(
     year: int, expected: str
 ) -> None:
-    # R016-48: `last` resolves against the month the completed date lands in,
+    # REQ-0584: `last` resolves against the month the completed date lands in,
     # so a February is 28 or 29 according to the year.
     value = _value(
         "date_impute", {"source": "S", "month": 2, "day": "last"}, {"S": f"{year}-02"}
@@ -176,7 +176,7 @@ def test_first_names_the_day_the_month_begins_with() -> None:
 
 
 def test_a_completed_value_that_is_not_a_calendar_date_fails() -> None:
-    # R016-56: the completed value must be a real calendar date.
+    # REQ-0592: the completed value must be a real calendar date.
     condition = _condition(
         "date_impute", {"source": "S", "month": 2, "day": 30}, {"S": "2025-02"}
     )
@@ -185,7 +185,7 @@ def test_a_completed_value_that_is_not_a_calendar_date_fails() -> None:
 
 
 def test_a_month_outside_the_calendar_fails_even_when_it_is_unused() -> None:
-    # R016-56: the range checks still apply when a component is not used, so
+    # REQ-0592: the range checks still apply when a component is not used, so
     # a specification cannot hide an invalid literal behind a policy.
     condition = _condition(
         "date_impute", {"source": "S", "month": 13, "day": 15}, {"S": "2025-01-05"}
@@ -195,7 +195,7 @@ def test_a_month_outside_the_calendar_fails_even_when_it_is_unused() -> None:
 
 
 def test_the_bound_moves_the_result_only_inside_the_interval_it_admits() -> None:
-    # R016-49: the bound invents no more than it must, and a year-only source
+    # REQ-0585: the bound invents no more than it must, and a year-only source
     # admits the whole of its year.
     inside = _value(
         "date_impute",
@@ -213,7 +213,7 @@ def test_the_bound_moves_the_result_only_inside_the_interval_it_admits() -> None
 
 
 def test_an_interval_admitting_no_day_on_or_after_the_bound_is_missing() -> None:
-    # R016-69: missing, not a failure, and no handler answers it.
+    # REQ-0610: missing, not a failure, and no handler answers it.
     value = _value(
         "date_impute",
         impute(None, not_before="B", missing="X", invalid="X"),
@@ -270,7 +270,7 @@ def test_a_missing_operand_yields_a_missing_study_day() -> None:
         ("2025-01-01", "2025-01-11", "day", "between", 9),
         ("2025-01-01", "2025-01-15", "week", "exclusive", 2),
         ("2025-01-01", "2025-01-07", "week", "exclusive", 0),
-        # R016-73's three pinned boundary cases.
+        # REQ-0595's three pinned boundary cases.
         ("2025-01-31", "2025-02-28", "month", "exclusive", 1),
         ("2024-02-29", "2025-02-28", "month", "exclusive", 12),
         ("2024-02-29", "2025-02-28", "year", "exclusive", 1),
@@ -293,7 +293,7 @@ def test_whole_calendar_units_count_what_r016_pins(
 def test_an_earlier_end_negates_the_count_with_the_operands_exchanged(
     unit: str,
 ) -> None:
-    # R016-75: no unit rounds toward negative infinity.
+    # REQ-0597: no unit rounds toward negative infinity.
     forward = whole_units(date("2024-02-29"), date("2025-04-30"), unit)
     backward = whole_units(date("2025-04-30"), date("2024-02-29"), unit)
 
@@ -302,7 +302,7 @@ def test_an_earlier_end_negates_the_count_with_the_operands_exchanged(
 
 
 def test_a_february_29_anniversary_falls_on_february_28_in_a_common_year() -> None:
-    # R016-74: the case an age computation meets every leap year.
+    # REQ-0596: the case an age computation meets every leap year.
     assert whole_units(date("2024-02-29"), date("2025-02-28"), "year") == 1
     assert whole_units(date("2024-02-29"), date("2025-02-27"), "year") == 0
 
@@ -312,7 +312,7 @@ def test_a_february_29_anniversary_falls_on_february_28_in_a_common_year() -> No
 def test_bounds_beyond_days_is_rejected_rather_than_reinterpreted(
     unit: str, bounds: str
 ) -> None:
-    # R016-76 and R016-77: an age of 35 does not become 36.
+    # REQ-0598 and REQ-0613: an age of 35 does not become 36.
     condition = _condition(
         "date_diff",
         {"start": "S", "end": "E", "unit": unit, "bounds": bounds},
@@ -320,7 +320,7 @@ def test_bounds_beyond_days_is_rejected_rather_than_reinterpreted(
     )
 
     assert condition.condition.condition == "value_not_permitted"
-    assert condition.condition.requirement == "R016-77"
+    assert condition.condition.requirement == "REQ-0613"
     assert condition.condition.context["value"] == bounds
     assert condition.condition.context["permitted"] == ["exclusive"]
 
@@ -337,7 +337,7 @@ def test_a_missing_endpoint_needs_no_guarding_predicate() -> None:
 
 
 def test_a_datetime_endpoint_fails_rather_than_widening_the_operation() -> None:
-    # R016-55: `unit: day` between two moments could defend 1 or 0.
+    # REQ-0591: `unit: day` between two moments could defend 1 or 0.
     condition = _condition(
         "date_diff",
         {"start": "S", "end": "E", "unit": "day"},
@@ -356,12 +356,12 @@ def test_to_date_copies_the_calendar_fields_and_drops_the_time() -> None:
     )
 
     assert value == date("2025-01-12")
-    # R016-8: `to_date` produces a value collected to the day.
+    # REQ-0546: `to_date` produces a value collected to the day.
     assert value.collected_precision == "day"
 
 
 def test_to_date_refuses_a_date_as_an_identity_spelling() -> None:
-    # R016-66.
+    # REQ-0607.
     condition = _condition("to_date", {"source": "S"}, {"S": date("2025-01-12")})
 
     assert condition.condition.condition == "incompatible_input_type"
@@ -372,7 +372,7 @@ def test_a_missing_datetime_yields_a_missing_date() -> None:
 
 
 def test_collected_precision_takes_no_part_in_equality_or_grouping() -> None:
-    # R016-35: two values compare by their fields, and precision is not one
+    # REQ-0573: two values compare by their fields, and precision is not one
     # of them. A join matches and a partition groups by that equality, so a
     # completed date and a collected one naming the same day are one key.
     collected = date("2025-01-15")
@@ -381,6 +381,6 @@ def test_collected_precision_takes_no_part_in_equality_or_grouping() -> None:
     assert collected == imputed
     assert hash(collected) == hash(imputed)
     assert {collected: "one"}[imputed] == "one"
-    # R016-10: the property is still read off the value that carries it.
+    # REQ-0548: the property is still read off the value that carries it.
     assert imputed.collected_precision == "month"
     assert collected != date("2025-01-16")

@@ -226,7 +226,7 @@ def test_key_validation_reproduces_the_committed_missing_and_duplicate_contracts
         "phase": "output",
         "condition": "missing_key",
         "spec_paths": ["keys[3]"],
-        "requirement": "R005-51",
+        "requirement": "REQ-0240",
         "context": {
             "column": "AVISIT",
             "missing_count": 1,
@@ -244,7 +244,7 @@ def test_key_validation_reproduces_the_committed_missing_and_duplicate_contracts
         "phase": "output",
         "condition": "duplicate_key",
         "spec_paths": ["keys"],
-        "requirement": "R005-51",
+        "requirement": "REQ-0240",
         "context": {
             "duplicate_count": 1,
             "keys": [{"STUDYID": "PILOT7", "USUBJID": "P7-722"}],
@@ -427,12 +427,12 @@ def test_matches_searches_with_the_portable_contract_rather_than_a_host_dialect(
     )
 
     assert failures[0].condition == "matches_failed"
-    assert failures[0].requirement == "R009-13"
+    assert failures[0].requirement == "REQ-0379"
     assert failures[0].context["keys"] == [{"STUDYID": "S", "USUBJID": "S-1"}]
 
 
 def test_matches_rejects_a_unicode_property_pattern() -> None:
-    # R022-34: property escapes are outside the portable grammar, so the
+    # REQ-0826: property escapes are outside the portable grammar, so the
     # pattern fails validation rather than searching.
     completed = table(
         [("STUDYID", "str"), ("USUBJID", "str"), ("TEXT", "str")],
@@ -486,7 +486,7 @@ def test_allowed_values_and_missing_values_follow_their_declared_type() -> None:
             column("FLAG", "int", {"allowed_values": {"values": [True]}}),
             KEYS,
         )
-    assert raised.value.requirement == "R009-30"
+    assert raised.value.requirement == "REQ-0404"
 
 
 def test_declaration_defects_are_refused_rather_than_reported_as_data_failures() -> (
@@ -505,11 +505,11 @@ def test_declaration_defects_are_refused_rather_than_reported_as_data_failures()
                 column("AGE", "int", {"range": {"min": 100, "max": 18}}),
                 KEYS,
             )
-        assert reversed_range.value.requirement == "R009-25"
+        assert reversed_range.value.requirement == "REQ-0399"
 
     with pytest.raises(DeclarationError) as no_bound:
         check_dataset(completed, [Expression(root={"row_count": {}})], KEYS)
-    assert no_bound.value.requirement == "R009-25"
+    assert no_bound.value.requirement == "REQ-0399"
 
     with pytest.raises(DeclarationError) as grouped:
         check_dataset(
@@ -518,7 +518,7 @@ def test_declaration_defects_are_refused_rather_than_reported_as_data_failures()
             KEYS,
         )
     assert grouped.value.condition == "missing_verification_id"
-    assert grouped.value.requirement == "R009-28"
+    assert grouped.value.requirement == "REQ-0402"
 
     with pytest.raises(DeclarationError) as unknown:
         check_dataset(
@@ -530,7 +530,7 @@ def test_declaration_defects_are_refused_rather_than_reported_as_data_failures()
         check_column(
             completed, column("AGE", "int", {"matches": {"pattern": "^1$"}}), KEYS
         )
-    assert untyped.value.requirement == "R009-30"
+    assert untyped.value.requirement == "REQ-0404"
 
     with pytest.raises(DeclarationError) as unreadable:
         check_column(
@@ -567,7 +567,7 @@ def test_duplicate_verification_identifiers_are_refused() -> None:
         )
 
     assert raised.value.condition == "duplicate_identifier"
-    assert raised.value.requirement == "R009-24"
+    assert raised.value.requirement == "REQ-0398"
 
 
 def test_an_unevaluable_predicate_fails_instead_of_satisfying_a_verification() -> None:
@@ -623,7 +623,7 @@ def test_implication_validates_its_consequent_without_short_circuiting(
         )
 
     assert raised.value.condition == "incompatible_input_type"
-    assert raised.value.requirement == "R004-33"
+    assert raised.value.requirement == "REQ-0190"
     assert raised.value.spec_path == "verifications[0].implies.then"
 
 

@@ -2,7 +2,7 @@ phase: validation
 condition: incompatible_input_type
 spec_paths:
   - columns.ASTDT2.derivation.to_date.source
-requirement: R016-66
+requirement: REQ-0607
 context:
   source: ASTDT
   expected: datetime

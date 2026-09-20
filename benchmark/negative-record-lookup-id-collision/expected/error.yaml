@@ -3,6 +3,6 @@ condition: duplicate_identifier
 spec_paths:
   - intermediates[0].id
   - input.EX
-requirement: R003-3
+requirement: REQ-0113
 context:
   identifier: EX
