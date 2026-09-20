@@ -241,7 +241,7 @@ validation with `non_ascii_source` and report the file and position.
 
 Representative specifications, input data, and expected outcomes:
 
-- [sdtm-dm-reference-dates](../../benchmarks/sdtm-dm-reference-dates/README.md).
+- [sdtm-dm-dates](../../benchmarks/sdtm-dm-dates/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

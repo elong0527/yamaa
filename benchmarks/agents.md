@@ -84,7 +84,7 @@ refusing the R one.
 
 Only code inside the pinned artifact answers for a binding, the host
 standard library included, so a `runtime/` module carries the arithmetic it
-needs rather than importing it. `adam-advs-growth-percentile` is the worked
+needs rather than importing it. `adam-advs-percentiles` is the worked
 example.
 
 An expected failure before a dataset is completed replaces the CSV with
@@ -106,9 +106,9 @@ dataset. Reserve this layout for benchmarks whose point is the layering itself;
 a single specification with shared parents keeps `spec.yaml`.
 
 Name the directory for what it derives, not for the construct it uses:
-`sdtm-vs-visit-study-day`, not `sdtm-vs-mapping-from`. The exception is an
+`sdtm-vs-study-day`, not `sdtm-vs-mapping-from`. The exception is an
 benchmark whose subject is the specification language itself: name it `spec-*`
-(`spec-inheritance`), and the gallery lists it under its own Specification
+(`schema-inheritance`), and the gallery lists it under its own Specification
 category rather than a data domain.
 
 ## The README describes data, not the specification
@@ -213,7 +213,7 @@ following a link out of the repository.
   `output.columns`; it stays available to dependents and to verifications.
 - Use `rows` when row construction changes the row count. A specification whose
   input already maps one-to-one to its output usually needs columns, not row
-  templates. `sdtm-vs-unit-standardization` is the deliberate exception, and it
+  templates. `sdtm-vs-units` is the deliberate exception, and it
   reorders its output to get per-test separation.
 - Add `row.group_by` only when one candidate row must be constructed from a
   driver group. In that mode aggregate row derivations summarize the group and
@@ -258,7 +258,7 @@ lifecycle could not complete. A failure involving several authored units names
 each one once, in specification order. Do not add a parent or an absent field
 merely because changing it would be another possible repair.
 
-When the [schema language](../rules/reference/schema-language.md) makes
+When the [schema language](../yaml/rules/reference/schema-language.md) makes
 a scalar and a one-field class interchangeable shorthand, the
 path names the operation: it is the narrowest authored unit shared by both
 spellings, and normalization must not invent a deeper location.
@@ -281,7 +281,7 @@ the same point say so the same way. Whole-run evaluation failures use:
 | `verification` | a declared assertion |
 
 A condition that an operation could have answered locally uses the stage in
-the [local-handlers contract](../rules/execution/handlers.md):
+the [local-handlers contract](../yaml/rules/execution/handlers.md):
 
 | Phase | Rejects |
 |---|---|
@@ -393,6 +393,6 @@ zero, and folding it into `date_diff` would have allowed `unit: week` with it.
 
 After registering one, update every place that enumerates the vocabulary: the
 input-shape audit in `../yaml/README.md`, the owning operation contract's type
-behavior, and the [local-handlers contract](../rules/execution/handlers.md)
+behavior, and the [local-handlers contract](../yaml/rules/execution/handlers.md)
 if it declares handlers. Then delete the gap it closed from its work item in the
 issue tracker, and close the work item when its last gap closes.

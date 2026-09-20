@@ -272,8 +272,8 @@ artifact, and the previous one is unchanged.
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-keys-internal-column](../../benchmarks/negative-keys-internal-column/README.md).
-- [negative-output-duplicate-subject](../../benchmarks/negative-output-duplicate-subject/README.md).
+- [negative-keys-internal](../../benchmarks/negative-keys-internal/README.md).
+- [negative-output-duplicate](../../benchmarks/negative-output-duplicate/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

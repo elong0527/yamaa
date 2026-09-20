@@ -370,9 +370,9 @@ invalid YAML or a prohibited YAML feature;
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-literal-non-scalar](../../benchmarks/negative-literal-non-scalar/README.md).
-- [negative-rank-invalid-method](../../benchmarks/negative-rank-invalid-method/README.md).
-- [negative-row-number-numeric-filter](../../benchmarks/negative-row-number-numeric-filter/README.md).
+- [negative-literal-structure](../../benchmarks/negative-literal-structure/README.md).
+- [negative-rank-bad-method](../../benchmarks/negative-rank-bad-method/README.md).
+- [negative-row-number-filter](../../benchmarks/negative-row-number-filter/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

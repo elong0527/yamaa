@@ -264,10 +264,10 @@ violation log.
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-adlb-computed-parameter](../../benchmarks/negative-adlb-computed-parameter/README.md).
-- [negative-column-forward-reference](../../benchmarks/negative-column-forward-reference/README.md).
-- [negative-first-available-self-reference](../../benchmarks/negative-first-available-self-reference/README.md).
-- [negative-keys-conflicting-values](../../benchmarks/negative-keys-conflicting-values/README.md).
+- [negative-adlb-computed-param](../../benchmarks/negative-adlb-computed-param/README.md).
+- [negative-forward-reference](../../benchmarks/negative-forward-reference/README.md).
+- [negative-first-available-self](../../benchmarks/negative-first-available-self/README.md).
+- [negative-keys-conflict](../../benchmarks/negative-keys-conflict/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

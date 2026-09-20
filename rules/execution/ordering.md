@@ -166,8 +166,8 @@ report it.
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-output-order-repeated-term](../../benchmarks/negative-output-order-repeated-term/README.md).
-- [negative-output-order-unknown-column](../../benchmarks/negative-output-order-unknown-column/README.md).
+- [negative-order-repeated](../../benchmarks/negative-order-repeated/README.md).
+- [negative-order-unknown-column](../../benchmarks/negative-order-unknown-column/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

@@ -185,11 +185,11 @@ that are not mutually comparable: fail rather than convert an operand.
 
 Representative specifications, input data, and expected outcomes:
 
-- [adam-adsl-non-finite-values](../../benchmarks/adam-adsl-non-finite-values/README.md).
-- [negative-column-type-unknown](../../benchmarks/negative-column-type-unknown/README.md).
-- [negative-conversion-unparseable-number](../../benchmarks/negative-conversion-unparseable-number/README.md).
-- [negative-greatest-incomparable-sources](../../benchmarks/negative-greatest-incomparable-sources/README.md).
-- [negative-least-incomparable-sources](../../benchmarks/negative-least-incomparable-sources/README.md).
+- [adam-adsl-non-finite](../../benchmarks/adam-adsl-non-finite/README.md).
+- [negative-ambiguous-type](../../benchmarks/negative-ambiguous-type/README.md).
+- [negative-number-below-limit](../../benchmarks/negative-number-below-limit/README.md).
+- [negative-greatest-mixed](../../benchmarks/negative-greatest-mixed/README.md).
+- [negative-least-mixed](../../benchmarks/negative-least-mixed/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

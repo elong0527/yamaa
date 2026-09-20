@@ -341,10 +341,10 @@ condition is decided while the snapshot is read and reports under the
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-adsl-randomization-date-retyped](../../benchmarks/negative-adsl-randomization-date-retyped/README.md).
-- [negative-ingest-unparseable-field](../../benchmarks/negative-ingest-unparseable-field/README.md).
-- [negative-source-missing-sentinel](../../benchmarks/negative-source-missing-sentinel/README.md).
-- [negative-source-unknown-profile](../../benchmarks/negative-source-unknown-profile/README.md).
+- [negative-redefined-date](../../benchmarks/negative-redefined-date/README.md).
+- [negative-ingest-unit](../../benchmarks/negative-ingest-unit/README.md).
+- [negative-source-na-age](../../benchmarks/negative-source-na-age/README.md).
+- [negative-source-unknown-format](../../benchmarks/negative-source-unknown-format/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

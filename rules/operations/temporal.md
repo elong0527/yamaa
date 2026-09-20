@@ -357,10 +357,10 @@ no artifact is accepted.
 Representative specifications, input data, and expected outcomes:
 
 - [adam-adae-partial-dates](../../benchmarks/adam-adae-partial-dates/README.md).
-- [negative-date-diff-bounds-unit](../../benchmarks/negative-date-diff-bounds-unit/README.md).
-- [negative-date-diff-datetime-endpoints](../../benchmarks/negative-date-diff-datetime-endpoints/README.md).
-- [negative-date-impute-invalid-source](../../benchmarks/negative-date-impute-invalid-source/README.md).
-- [negative-date-impute-month-out-of-range](../../benchmarks/negative-date-impute-month-out-of-range/README.md).
+- [negative-date-diff-units](../../benchmarks/negative-date-diff-units/README.md).
+- [negative-date-diff-endpoints](../../benchmarks/negative-date-diff-endpoints/README.md).
+- [negative-impute-bad-source](../../benchmarks/negative-impute-bad-source/README.md).
+- [negative-impute-bad-month](../../benchmarks/negative-impute-bad-month/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

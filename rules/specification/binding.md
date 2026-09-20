@@ -299,8 +299,8 @@ handled.
 
 Representative specifications, input data, and expected outcomes:
 
-- [adam-adsl-portable-text](../../benchmarks/adam-adsl-portable-text/README.md).
-- [negative-source-output-self-reference](../../benchmarks/negative-source-output-self-reference/README.md).
+- [adam-adsl-text](../../benchmarks/adam-adsl-text/README.md).
+- [negative-source-self-reference](../../benchmarks/negative-source-self-reference/README.md).
 - [negative-source-undeclared-field](../../benchmarks/negative-source-undeclared-field/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records

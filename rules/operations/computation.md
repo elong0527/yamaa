@@ -348,10 +348,10 @@ expression and the operation that failed.
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-compute-aggregate-function](../../benchmarks/negative-compute-aggregate-function/README.md).
-- [negative-compute-comparison-operator](../../benchmarks/negative-compute-comparison-operator/README.md).
-- [negative-compute-division-by-zero](../../benchmarks/negative-compute-division-by-zero/README.md).
-- [negative-compute-ln-of-zero](../../benchmarks/negative-compute-ln-of-zero/README.md).
+- [negative-row-aggregate](../../benchmarks/negative-row-aggregate/README.md).
+- [negative-formula-flag](../../benchmarks/negative-formula-flag/README.md).
+- [negative-zero-division](../../benchmarks/negative-zero-division/README.md).
+- [negative-log-zero](../../benchmarks/negative-log-zero/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

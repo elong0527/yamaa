@@ -65,7 +65,7 @@ def _index(
 
 
 def test_form_scoped_fixture_resolves_only_the_current_form() -> None:
-    root = REPOSITORY / "benchmarks/odm-form-scoped-item-resolution"
+    root = REPOSITORY / "benchmarks/odm-form-items"
     loaded_spec = load_specification(root / "spec.yaml", REPOSITORY / "yaml")
     sources = load_source_tables(
         loaded_spec.specification.input,
@@ -102,7 +102,7 @@ def test_form_scoped_fixture_resolves_only_the_current_form() -> None:
 
 
 def test_a_committed_fixture_resolves_one_item_per_form_without_dropping_rows() -> None:
-    root = REPOSITORY / "benchmarks/odm-form-scoped-item-resolution"
+    root = REPOSITORY / "benchmarks/odm-form-items"
     loaded_spec = load_specification(root / "spec.yaml", REPOSITORY / "yaml")
     sources = load_source_tables(
         loaded_spec.specification.input,

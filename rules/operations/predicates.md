@@ -297,9 +297,9 @@ override those behaviors to match these rules or evaluate the grammar itself.
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-adae-review-condition-arithmetic](../../benchmarks/negative-adae-review-condition-arithmetic/README.md).
-- [negative-adae-review-text-date](../../benchmarks/negative-adae-review-text-date/README.md).
-- [negative-adae-review-unknown-date](../../benchmarks/negative-adae-review-unknown-date/README.md).
+- [negative-review-arithmetic](../../benchmarks/negative-review-arithmetic/README.md).
+- [negative-review-date-text](../../benchmarks/negative-review-date-text/README.md).
+- [negative-review-unknown-date](../../benchmarks/negative-review-unknown-date/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

@@ -245,10 +245,10 @@ with no `when`/`then` item, more than one `otherwise` item, or an
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-baseline-flag-tied-date](../../benchmarks/negative-baseline-flag-tied-date/README.md).
-- [negative-baseline-value-multiple-flags](../../benchmarks/negative-baseline-value-multiple-flags/README.md).
-- [negative-previous-non-missing-non-variable-source](../../benchmarks/negative-previous-non-missing-non-variable-source/README.md).
-- [negative-variable-nested-expression](../../benchmarks/negative-variable-nested-expression/README.md).
+- [negative-tied-baseline](../../benchmarks/negative-tied-baseline/README.md).
+- [negative-multiple-baselines](../../benchmarks/negative-multiple-baselines/README.md).
+- [negative-previous-fixed](../../benchmarks/negative-previous-fixed/README.md).
+- [negative-variable-nested](../../benchmarks/negative-variable-nested/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared
