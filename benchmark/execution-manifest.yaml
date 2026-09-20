@@ -121,9 +121,8 @@ examples:
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
   adam-adlb-reported-precision:
-    status: blocked
-    blocked_by: "#101"
-    reason: no yaml executor in R or Python yet
+    status: executable
+    runtimes: ['python']
   adam-adlb-shift-and-criteria:
     status: blocked
     blocked_by: "#101"
