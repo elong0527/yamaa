@@ -30,7 +30,7 @@ from yamaa.specification import SpecificationError, load_specification
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
-EXAMPLES = REPOSITORY_ROOT / "benchmark"
+EXAMPLES = REPOSITORY_ROOT / "benchmarks"
 
 # Committed examples whose join, lookup, aggregate, and grouped-row work this
 # component now performs end to end.

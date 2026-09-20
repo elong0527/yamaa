@@ -3137,9 +3137,9 @@ def example_migration_label(spec_path):
     if spec_path is None:
         return None
     parts = Path(spec_path).resolve().parts
-    if 'benchmark' not in parts:
+    if 'benchmarks' not in parts:
         return None
-    index = len(parts) - 1 - parts[::-1].index('benchmark')
+    index = len(parts) - 1 - parts[::-1].index('benchmarks')
     return '/'.join(parts[index + 1:])
 
 
@@ -4366,7 +4366,7 @@ def validate_project_environment(
 def validate_repository_function_fingerprints(root, schema_env):
     """Require one logical contract per name/version across project roots."""
     errors = []
-    examples_dir = root / 'benchmark'
+    examples_dir = root / 'benchmarks'
     if not examples_dir.is_dir() or schema_env is None:
         return errors
     seen = {}
@@ -8164,7 +8164,7 @@ def validate_expected_resolved_fixture(
 
 
 def load_validation_manifest(root: Path):
-    path = root / 'benchmark' / 'validation-manifest.yaml'
+    path = root / 'benchmarks' / 'validation-manifest.yaml'
     if not path.is_file():
         if not validation_phase_contracts(root):
             return {'version': '1.0', 'fixtures': {}}, []
@@ -8181,7 +8181,7 @@ def load_validation_manifest(root: Path):
 
 def validation_phase_contracts(root: Path):
     contracts = {}
-    examples_dir = root / 'benchmark'
+    examples_dir = root / 'benchmarks'
     if not examples_dir.is_dir():
         return contracts
     for example_dir in sorted(examples_dir.glob('negative-*')):
@@ -8203,7 +8203,7 @@ def validation_phase_contracts(root: Path):
 
 def validate_validation_manifest(root: Path, manifest):
     errors = []
-    label = 'benchmark/validation-manifest.yaml'
+    label = 'benchmarks/validation-manifest.yaml'
     if not isinstance(manifest, dict):
         return [f"ERROR: {label}: expected a mapping"]
     if manifest.get('version') != '1.0':
@@ -8346,7 +8346,7 @@ def validate_registered_fixture_diagnostics(
                 matches[expected_path].append(diagnostic)
                 expected_ids.add(id(diagnostic))
 
-    manifest_path = f"benchmark/validation-manifest.yaml.fixtures.{name}"
+    manifest_path = f"benchmarks/validation-manifest.yaml.fixtures.{name}"
     if 'blocked_by' in entry:
         if all(matches.values()):
             return [
@@ -8386,7 +8386,7 @@ def validate_examples_structure(root: Path, env, warnings=None, manifest=None):
     if env is None:
         return errors
 
-    examples_dir = root / 'benchmark'
+    examples_dir = root / 'benchmarks'
     if not examples_dir.exists():
         return errors
 
@@ -8526,7 +8526,7 @@ def load_condition_registry(root: Path):
     relative_path = Path('yaml/conditions.yaml')
     path = root / relative_path
     if not path.is_file():
-        examples_dir = root / 'benchmark'
+        examples_dir = root / 'benchmarks'
         if not examples_dir.is_dir() or not any(
             examples_dir.glob('negative-*/expected/error.yaml')
         ):
@@ -8602,7 +8602,7 @@ def validate_condition_registry(root: Path, registry):
                 f"ERROR: {path}.phases: expected unique sorted phases"
             )
 
-    examples_dir = root / 'benchmark'
+    examples_dir = root / 'benchmarks'
     if not examples_dir.is_dir():
         return errors
     for error_path in sorted(
@@ -8706,7 +8706,7 @@ def spec_path_exists(spec, path):
 
 def validate_expected_error_contracts(root: Path):
     errors = []
-    examples_dir = root / 'benchmark'
+    examples_dir = root / 'benchmarks'
     if not examples_dir.exists():
         return errors
     for ex_dir in sorted(examples_dir.glob('negative-*')):
@@ -9082,7 +9082,7 @@ def validate_csv_shapes(root: Path):
     reports means the example has stopped failing the way it claims to.
     """
     errors = []
-    examples_dir = root / 'benchmark'
+    examples_dir = root / 'benchmarks'
     if not examples_dir.exists():
         return errors
     for example_dir in sorted(
@@ -9731,7 +9731,7 @@ def validate_grammar_contract(root: Path, contract: str):
 
     errors.extend(grammar_vocabulary_errors(contract, document, label))
 
-    rule_path = root / 'yaml' / 'rules' / f'{rule_id}.md'
+    rule_path = root / 'rules' / f'{rule_id}.md'
     if not rule_path.is_file():
         errors.append(f"ERROR: {label}: rule {rule_id} has no file")
     else:
@@ -10092,7 +10092,7 @@ def check_yaml_files(root: Path):
 def validate_examples_csv(root: Path, env=None):
     errors = []
     warnings = []
-    examples_dir = root / 'benchmark'
+    examples_dir = root / 'benchmarks'
     if not examples_dir.exists():
         return errors, warnings
     if env is None:
@@ -10217,7 +10217,7 @@ def validate_examples_define_documents(root: Path):
     unnoticed.
     """
     errors = []
-    documents = sorted((root / 'benchmark').glob('*/define.yaml'))
+    documents = sorted((root / 'benchmarks').glob('*/define.yaml'))
     if not documents:
         return errors
 
@@ -10243,7 +10243,7 @@ def validate_examples_define_documents(root: Path):
 
 def validate_examples_layout(root: Path):
     errors = []
-    examples_dir = root / 'benchmark'
+    examples_dir = root / 'benchmarks'
     if not examples_dir.exists():
         return errors
 

@@ -20,7 +20,7 @@ from yamaa.verification import (
     verify_completed_table,
 )
 
-EXAMPLES = Path(__file__).parents[3] / "benchmark"
+EXAMPLES = Path(__file__).parents[3] / "benchmarks"
 
 
 def table(

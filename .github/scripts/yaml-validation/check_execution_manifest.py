@@ -18,7 +18,7 @@ from validate_repository import UniqueKeyLoader
 
 
 ROOT = Path(__file__).resolve().parents[3]
-EXAMPLES = ROOT / "benchmark"
+EXAMPLES = ROOT / "benchmarks"
 MANIFEST = EXAMPLES / "execution-manifest.yaml"
 BLOCKED_BY_PATTERN = re.compile(r"#[1-9][0-9]*")
 

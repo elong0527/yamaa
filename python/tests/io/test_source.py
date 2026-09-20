@@ -395,7 +395,7 @@ def test_parquet_rejects_an_empty_schema(tmp_path: Path) -> None:
 
 
 def test_adae_fixture_treats_bare_and_quoted_empty_as_missing() -> None:
-    root = REPOSITORY / "benchmark/adam-adae-string-handlers"
+    root = REPOSITORY / "benchmarks/adam-adae-string-handlers"
 
     loaded = load_source_table(
         "AE",
@@ -510,7 +510,7 @@ def test_path_fixtures_report_exact_diagnostics(
     condition: str,
     requirement: str,
 ) -> None:
-    root = REPOSITORY / "benchmark" / example
+    root = REPOSITORY / "benchmarks" / example
     with pytest.raises(SourceError) as raised:
         load_source_table(
             dataset,
@@ -528,7 +528,7 @@ def test_path_fixtures_report_exact_diagnostics(
 
 
 def test_committed_symlink_fixture_is_a_real_symlink() -> None:
-    path = REPOSITORY / "benchmark/negative-dataset-path-symlink/input/lbref.csv"
+    path = REPOSITORY / "benchmarks/negative-dataset-path-symlink/input/lbref.csv"
     assert path.is_symlink()
 
 
@@ -573,7 +573,7 @@ def test_csv_fixtures_report_exact_diagnostics(
     requirement: str,
     context: dict[str, object],
 ) -> None:
-    root = REPOSITORY / "benchmark" / example
+    root = REPOSITORY / "benchmarks" / example
     path = "input/dm.csv"
     with pytest.raises(SourceError) as raised:
         load_source_table("DM", DatasetSource(path=path), ProjectResources(root))
@@ -588,7 +588,7 @@ def test_csv_fixtures_report_exact_diagnostics(
 
 
 def test_unknown_profile_fails_before_snapshot_bytes_are_read() -> None:
-    root = REPOSITORY / "benchmark/negative-source-unknown-profile"
+    root = REPOSITORY / "benchmarks/negative-source-unknown-profile"
     resources = ProjectResources(root)
 
     with pytest.raises(SourceError) as raised:
@@ -633,7 +633,7 @@ def test_all_source_declarations_validate_before_any_snapshot_read(
 def test_typed_parse_fixtures_are_ingestion_failures(
     example: str, field: str, target: str, value: str
 ) -> None:
-    root = REPOSITORY / "benchmark" / example
+    root = REPOSITORY / "benchmarks" / example
     path = "input/dm.csv" if field == "AGE" else "input/ex.csv"
     dataset = "DM" if field == "AGE" else "EX"
     with pytest.raises(SourceError) as raised:

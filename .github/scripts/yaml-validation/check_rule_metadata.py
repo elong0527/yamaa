@@ -16,8 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from editorial import rule_identity_errors
 
 REPO = Path(__file__).resolve().parents[3]
-RULES = REPO / "yaml" / "rules"
-EXAMPLES = REPO / "benchmark"
+RULES = REPO / "rules"
+EXAMPLES = REPO / "benchmarks"
 ALLOWED_KEYS = {"id", "title", "status", "applies_to"}
 REQUIRED_SECTIONS = ("Intent", "Boundaries", "Errors", "Rationale")
 REQUIREMENT = re.compile(r"\*\*(R[0-9]{3}-[1-9][0-9]*[a-z]?)\.\*\*")

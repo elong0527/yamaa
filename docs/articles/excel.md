@@ -3,7 +3,7 @@
 ## 1. A spec.yaml is one Dataset-sheet row plus a slice of the Variable sheet
 
 Here is the same specification written twice. It is
-[`adam-adsl-bmi-compute`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-bmi-compute), which reads a subject-level source and
+[`adam-adsl-bmi-compute`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adsl-bmi-compute), which reads a subject-level source and
 adds one derived variable.
 
 **As you would write it today.** A Dataset sheet row:
@@ -129,7 +129,7 @@ Excel has one Codelist column. YAMAA separates by where the vocabulary lives:
 | Situation | YAMAA | Example |
 |---|---|---|
 | Short vocabulary, written in the spec | `mapping` | `M -> M, F -> F` |
-| Vocabulary is an external file (MedDRA, WHODrug, a reference-range table) | `lookup` | [`sdtm-ae-dictionary-coding`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-ae-dictionary-coding) |
+| Vocabulary is an external file (MedDRA, WHODrug, a reference-range table) | `lookup` | [`sdtm-ae-dictionary-coding`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-ae-dictionary-coding) |
 | No translation, only a **check** that the value is one of these | `allowed_values` | `values: [M, F, U]` |
 | Numeric banding (AGEGR1, BMI categories) | `cut` | [Example 1](#example-1-direct-mapping-a-codelist-and-numeric-banding) |
 
@@ -147,19 +147,19 @@ own derivation. `AVAL` is the standard case -- alanine aminotransferase where
 | "this PARAM is derived from another PARAM" | Another row template with its own `literal` PARAMCD |
 | "one collected record yields several analysis records" | Several row templates, appended in order |
 
-See [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-bds) in [More examples](#more-examples) below.
+See [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adlb-bds) in [More examples](#more-examples) below.
 
 ---
 
 ## 3. Worked equivalences
 
 Three full walkthroughs. Each shows the Excel rows, then the YAML, then what
-actually differs. All are real directories under `benchmark/` with fixed
+actually differs. All are real directories under `benchmarks/` with fixed
 expected output.
 
 ### Example 1: direct mapping, a codelist, and numeric banding
 
-*Source: [`adam-adsl-mapping`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-mapping)*
+*Source: [`adam-adsl-mapping`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adsl-mapping)*
 
 Excel:
 
@@ -210,7 +210,7 @@ What changed:
 
 ### Example 2: a Comment sentence becomes `compute`
 
-*Source: [`adam-adsl-bmi-compute`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-bmi-compute)*
+*Source: [`adam-adsl-bmi-compute`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adsl-bmi-compute)*
 
 | Variable | Type | Origin | Comment |
 |---|---|---|---|
@@ -244,7 +244,7 @@ What changed:
 
 ### Example 3: Predecessor and the declared-key lookup
 
-*Source: [`adam-adae-treatment-emergent`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adae-treatment-emergent)*
+*Source: [`adam-adae-treatment-emergent`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adae-treatment-emergent)*
 
 Excel:
 
@@ -288,9 +288,9 @@ benchmark for the full side-by-side:
 
 | Example | What it shows |
 |---|---|
-| [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-bds) | VLM and BDS: one row template per PARAMCD, then `baseline_flag` / `baseline_value` / `row_number` as columns |
-| [`adam-adex-cumulative-dose`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adex-cumulative-dose) | `aggregate: "SUM(EX.EXDOSE)"` reducing by the applicable keys; a CSV field entering arithmetic must declare its type |
-| [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adae-partial-dates) | `date_impute` beside `date_precision` reading the same source; `missing` and `invalid` are separate defects |
-| [`sdtm-dm-metadata-contract`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-metadata-contract) | `metadata` vs `verifications`: Length becomes both `metadata.length` (for define.xml) and a `max_length` check |
-| [`sdtm-ae-dictionary-coding`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-ae-dictionary-coding) | Coding against MedDRA with `lookup`; named `intermediates` when several columns must come from one record |
-| [`spec-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmark/spec-inheritance) | Corporate, compound and study layers via `parents:` -- real layering instead of copying the template |
+| [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adlb-bds) | VLM and BDS: one row template per PARAMCD, then `baseline_flag` / `baseline_value` / `row_number` as columns |
+| [`adam-adex-cumulative-dose`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adex-cumulative-dose) | `aggregate: "SUM(EX.EXDOSE)"` reducing by the applicable keys; a CSV field entering arithmetic must declare its type |
+| [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adae-partial-dates) | `date_impute` beside `date_precision` reading the same source; `missing` and `invalid` are separate defects |
+| [`sdtm-dm-metadata-contract`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-metadata-contract) | `metadata` vs `verifications`: Length becomes both `metadata.length` (for define.xml) and a `max_length` check |
+| [`sdtm-ae-dictionary-coding`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-ae-dictionary-coding) | Coding against MedDRA with `lookup`; named `intermediates` when several columns must come from one record |
+| [`spec-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmarks/spec-inheritance) | Corporate, compound and study layers via `parents:` -- real layering instead of copying the template |

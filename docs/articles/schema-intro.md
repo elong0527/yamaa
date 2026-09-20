@@ -82,5 +82,5 @@ fails. Schema descriptions link to their owning requirement and add no
 new meaning.
 
 That split is the whole reading order: the schema tells you what you
-can write, the rules tell you what it means, and `benchmark/` shows a
+can write, the rules tell you what it means, and `benchmarks/` shows a
 runnable specification that proves both.

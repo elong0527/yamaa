@@ -87,7 +87,7 @@ titled `COMMENT_TERM_PREFIX` plus the benchmark directory name
 (`data-mapping="specific"`), so the thread follows the benchmark directory rather
 than the page URL; renaming the directory starts a new thread unless the
 discussion is retitled to match. The prefix is still `yaml/examples/`, the
-directory name from before the move to `benchmark/`, because changing it
+directory name from before the move to `benchmarks/`, because changing it
 would orphan every comment posted so far. The comment widget is the only
 part of a page that needs the network; without it, or without JavaScript,
 the rest of the page works as before and a link points to Discussions.

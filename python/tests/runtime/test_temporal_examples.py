@@ -26,7 +26,7 @@ from yamaa.specification import load_specification
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
-EXAMPLES = REPOSITORY_ROOT / "benchmark"
+EXAMPLES = REPOSITORY_ROOT / "benchmarks"
 
 # The fully defined goldens this component executes, including every
 # positive fixture anchor #221 names.

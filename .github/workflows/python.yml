@@ -55,9 +55,9 @@ jobs:
       - name: Run the conformance suite
         run: >-
           uv run --project python --no-sync python -m yamaa.adapters.conformance
-          $(ls -d benchmark/*/ | xargs -n1 basename)
+          $(ls -d benchmarks/*/ | xargs -n1 basename)
           --run-dir "${{ runner.temp }}/conformance"
-          --examples-root benchmark
+          --examples-root benchmarks
 
       - name: Upload conformance reports
         if: always()

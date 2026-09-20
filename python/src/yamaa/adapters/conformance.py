@@ -689,7 +689,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--examples-root",
         type=Path,
-        default=Path("benchmark"),
+        default=Path("benchmarks"),
         help="directory holding the committed examples",
     )
     parser.add_argument(

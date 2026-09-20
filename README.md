@@ -14,9 +14,9 @@ benchmark.
 | Component | Purpose | Repository |
 |---|---|---|
 | Schema | Declares the vocabulary of the language: what a specification may contain. Anything the schema does not declare is rejected before execution. | [`yaml/`](yaml/) |
-| Rules | Fix the meaning of every written item, so the R and Python engines execute the same specification in exactly one way. | [`yaml/rules/`](yaml/rules/) |
+| Rules | Fix the meaning of every written item, so the R and Python engines execute the same specification in exactly one way. | [`rules/`](rules/) |
 | Engine | Runs specifications in Python and R; the same specification with the same inputs produces the same output dataset. | [`python/`](python/), [`R/`](R/) |
-| Benchmark | Runnable specifications with input data and byte-exact expected outputs. | [`benchmark/`](benchmark/) |
+| Benchmark | Runnable specifications with input data and byte-exact expected outputs. | [`benchmarks/`](benchmarks/) |
 
 ## From ODM XML to SDTM and ADaM
 
@@ -35,19 +35,19 @@ Reusable templates flow from the organization level through the compound and
 study levels. Approved study specifications then drive deterministic, validated
 builds while preserving metadata lineage. Their ordered, shallow composition
 and minimal resolved form are defined by
-[specification composition](yaml/rules/specification/composition.md).
+[specification composition](rules/specification/composition.md).
 
 ## Repository
 
 - [`yaml/`](yaml/) - schemas and execution rules
-- [`benchmark/`](benchmark/) - runnable examples with exact expected output
+- [`benchmarks/`](benchmarks/) - runnable examples with exact expected output
 - [`R/`](R/) - R implementation and workflows
 - [`python/`](python/) - Python implementation
 - [`docs/`](docs/) - diagrams and assets
 
 ## Example
 
-The specification is deterministic by design and supports SQL expressions. More realistic examples are available in the [`benchmark/`](benchmark/) directory.
+The specification is deterministic by design and supports SQL expressions. More realistic examples are available in the [`benchmarks/`](benchmarks/) directory.
 
 ```yaml
 - name: BMI

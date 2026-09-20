@@ -21,7 +21,7 @@ from yamaa.specification.schema import load_schema_bundle
 
 REPOSITORY = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY / "yaml"
-EXAMPLES = REPOSITORY / "benchmark"
+EXAMPLES = REPOSITORY / "benchmarks"
 
 
 def test_two_stage_workflow_completes_producer_before_consumer_ingestion() -> None:

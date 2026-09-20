@@ -138,7 +138,7 @@ def is_readme_badge_line(text: str) -> bool:
 
 def validate_example_readmes(root: Path):
     errors = []
-    examples_dir = root / "benchmark"
+    examples_dir = root / "benchmarks"
     if not examples_dir.exists():
         return errors
     for ex_dir in sorted(examples_dir.iterdir()):
@@ -223,11 +223,11 @@ def rule_identity_errors(meta: dict, stem: str, label: str) -> list[str]:
 
 
 def validate_rule_metadata(root: Path):
-    if (root / 'yaml/rules/migration.yaml').is_file():
+    if (root / 'rules/migration.yaml').is_file():
         from check_rule_rewrite import check
         return check(root)[0]
     errors = []
-    rules_dir = root / "yaml" / "rules"
+    rules_dir = root / "rules"
     index_path = rules_dir / "README.md"
     if not rules_dir.is_dir() or not index_path.is_file():
         return errors
@@ -261,7 +261,7 @@ def validate_rule_metadata(root: Path):
             errors.append(f"ERROR: {label}: rule is absent from rules/README.md")
         elif index_row.group(1).strip() != "normative":
             errors.append(
-                f"ERROR: yaml/rules/README.md: {expected_id} status must be 'normative'"
+                f"ERROR: rules/README.md: {expected_id} status must be 'normative'"
             )
 
     return errors
@@ -296,7 +296,7 @@ def is_unicode_fixture_csv(relative: Path):
     return (
         relative.suffix.lower() == ".csv"
         and len(parts) >= 4
-        and parts[0] == "benchmark"
+        and parts[0] == "benchmarks"
         and parts[2] in {"input", "expected"}
     )
 
@@ -369,7 +369,7 @@ def validate_unicode_scalars(value, path):
 
 def validate_examples_index(root: Path):
     errors = []
-    examples_dir = root / "benchmark"
+    examples_dir = root / "benchmarks"
     index_file = examples_dir / "README.md"
     if not index_file.exists():
         return errors
@@ -439,7 +439,7 @@ def validate_examples_index(root: Path):
 
 def validate_examples_badges(root: Path):
     errors = []
-    examples_dir = root / "benchmark"
+    examples_dir = root / "benchmarks"
     if not examples_dir.exists():
         return errors
 
@@ -485,7 +485,7 @@ def validate_examples_readme_presence(root: Path):
     specification-validity gate, so a prose gap cannot mask a spec verdict.
     """
     errors = []
-    examples_dir = root / "benchmark"
+    examples_dir = root / "benchmarks"
     if not examples_dir.exists():
         return errors
 
