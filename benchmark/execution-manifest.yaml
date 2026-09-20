@@ -606,6 +606,9 @@ examples:
   sdtm-ex-combination-regimen:
     status: executable
     runtimes: ['python']
+  sdtm-ex-dose-intervals:
+    status: executable
+    runtimes: ['python']
   sdtm-fa-fever-occurrence:
     status: executable
     runtimes: ['python']
@@ -643,8 +646,5 @@ examples:
     status: executable
     runtimes: ['python']
   spec-inheritance:
-    status: executable
-    runtimes: ['python']
-  spec-source-binding:
     status: executable
     runtimes: ['python']
