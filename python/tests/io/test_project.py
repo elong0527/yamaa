@@ -190,7 +190,7 @@ def test_a_relative_traversal_out_and_back_into_the_root_shares_a_snapshot(
     escaped = resources.capture(f"../{tmp_path.name}/input/dm.csv")
     direct = resources.capture("input/dm.csv")
 
-    assert escaped.sha256 == direct.sha256
+    assert escaped.content == direct.content
     assert escaped is direct
     assert resources.capture_reads == 1
 
@@ -236,7 +236,7 @@ def test_dot_segments_resolve_within_root(tmp_path: Path) -> None:
     (tmp_path / "dm.csv").write_text("ID\n001\n")
     resources = ProjectResources(tmp_path)
 
-    assert resources.capture("./dm.csv").sha256 == resources.capture("dm.csv").sha256
+    assert resources.capture("./dm.csv").content == resources.capture("dm.csv").content
 
 
 def test_parent_traversal_within_root_shares_snapshot(tmp_path: Path) -> None:
@@ -245,8 +245,8 @@ def test_parent_traversal_within_root_shares_snapshot(tmp_path: Path) -> None:
     resources = ProjectResources(tmp_path)
 
     assert (
-        resources.capture("input/../input/dm.csv").sha256
-        == resources.capture("input/dm.csv").sha256
+        resources.capture("input/../input/dm.csv").content
+        == resources.capture("input/dm.csv").content
     )
     assert resources.capture_reads == 1
 

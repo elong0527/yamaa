@@ -25,12 +25,17 @@ benchmark dashboards. They are separate files on purpose -- a dashboard opens
 from disk with no network request -- but they are meant to render as one site.
 Change a color or a bar treatment in one and change it in the other.
 
-## Editing a benchmark runtime file changes a pinned digest
+## No content hashing
 
-Files under `benchmark/*/python/runtime/` and
-`python/tests/projects/*/runtime/` are hashed into the `runtime.artifact.digest`
-of the sibling `environment.yaml`. Editing one -- even a comment -- fails
-execution with `runtime_artifact_mismatch` until the digest is updated.
-Recompute it with `yamaa.functions.artifact.artifact_digest(Path(runtime_dir))`
-and write the new value into every `environment.yaml` that recorded the old one
-(the same artifact can be pinned from more than one place).
+The repository does not hash content. A runtime artifact is pinned by
+`runtime.artifact.reference` alone, a contract fingerprint is its canonical
+RFC 8785 JSON rather than a hash of it, the activation cache key is the
+joined identities themselves, and a resource snapshot compares the bytes it
+already holds. `migration.yaml` records provenance without digests.
+
+Do not reintroduce SHA-256 (or any digest field) to give something an
+identity. Compare the canonical form directly, and keep the bytes when
+equality has to be decided on bytes.
+
+The one exception is `python/uv.lock`, whose hashes belong to the packaging
+tool and are not the repository's own provenance.

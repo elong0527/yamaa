@@ -108,10 +108,9 @@ class SharedFunctionContract(_StrictModel):
 
 
 class RuntimeArtifact(_StrictModel):
-    """The immutable runtime REQ-0666 pins by verified content identity."""
+    """The runtime REQ-0666 pins, named by its reference."""
 
     reference: str = Field(min_length=1)
-    digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
 class ProjectRuntime(_StrictModel):
@@ -152,7 +151,7 @@ class LoadedEnvironment(_StrictModel):
     """One environment, its vectors, and the identities activation caches.
 
     REQ-0691 caches activation for the exact combination of environment
-    version, artifact digest, every contract fingerprint, every
+    version, artifact reference, every contract fingerprint, every
     implementation version, and the complete vector-content identity. The
     last two are read off this object, so nothing recomputes them from a
     document that may since have changed on disk.
@@ -164,7 +163,7 @@ class LoadedEnvironment(_StrictModel):
     environment: ProjectEnvironment
     conformance: dict[str, ConformanceDocument]
     fingerprints: dict[str, str]
-    vector_identity: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    vector_identity: str
 
 
 __all__ = [

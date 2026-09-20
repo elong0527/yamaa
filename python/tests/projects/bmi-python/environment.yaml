@@ -5,7 +5,6 @@ runtime:
   language: python
   artifact:
     reference: org.example/yamaa/bmi-python:1.0.0
-    digest: sha256:7871ca72b894d687e2bcfe3931cb73cc55e080cd6af79e77b0ffaff77177db42
 
 functions:
   bmi:

@@ -1411,10 +1411,7 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
             'version': '2026.1',
             'runtime': {
                 'language': 'r',
-                'artifact': {
-                    'reference': 'org.example/test-r:2026.1',
-                    'digest': 'sha256:' + ('0' * 64),
-                },
+                'artifact': {'reference': 'org.example/test-r:2026.1'},
             },
             'functions': {'test_value': contract or self.contract()},
         }
@@ -1788,8 +1785,15 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
 
         self.assertEqual(
             fingerprint,
-            'sha256:7ef6d151e88fe84544f0afbeedaa2239'
-            '2b6ccb74683bb5c4437e57868d8c1bfe',
+            '{"comparison_decimals":"4","contract_version":"1.0.0",'
+            '"format":"yamaa-r018-contract-v1","may_return_missing":false,'
+            '"name":"score","params":[{"accepts_missing":false,"default":'
+            '{"present":true,"value":{"type":"float",'
+            '"value":"3ff0000000000000"}},"name":"threshold",'
+            '"required":false,"type":"float"},{"accepts_missing":true,'
+            '"default":{"present":true,"value":{"type":"bool",'
+            '"value":true}},"name":"enabled","required":false,'
+            '"type":"bool"}],"returns":"float"}',
         )
         self.assertEqual(
             VALIDATOR.canonical_function_value(1.0, 'float'),
@@ -1902,7 +1906,7 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
         fingerprint = VALIDATOR.function_contract_fingerprint(
             'cutoff', contract
         )
-        self.assertTrue(fingerprint.startswith('sha256:'))
+        self.assertTrue(fingerprint.startswith('{"comparison_decimals"'))
         self.assertEqual(
             VALIDATOR.canonical_function_value(
                 {'date': '2020-01-01'}, 'date'

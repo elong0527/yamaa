@@ -236,8 +236,8 @@ observe different bytes.
 <a id="req-0788"></a>
 
 **REQ-0788.** An implementation reads the snapshot through the handle opened
-while validating, or records the SHA-256 of the validated bytes and verifies
-that digest before ingestion. The implementation does not re-resolve the
+while validating, or records the validated bytes and verifies that the bytes
+are unchanged before ingestion. The implementation does not re-resolve the
 written path and read its later target. Content that changes between validation
 and ingestion fails the run; the replacement is not read.
 
