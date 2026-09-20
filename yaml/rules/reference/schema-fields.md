@@ -141,7 +141,8 @@ requirement link for behavior. It is not an additional semantic contract.
 | --- | --- | --- | --- | --- | --- |
 | `derivation` | `["str", "expression", "handled_expression_class"]` | `false` | Absent | -- | Schema constraint |
 | `handled_expression_class.value` | `"expression"` | `true` | Absent | -- | Schema constraint |
-| `handled_expression_class.conversion_failure` | `"literal_value"` | `false` | Absent | -- | Schema constraint |
+| `handled_expression_class.missing` | `"literal_value"` | `false` | Absent | -- | Schema constraint |
+| `handled_expression_class.strict` | `"bool"` | `false` | Absent | -- | Schema constraint |
 
 ## schema_environment.yaml
 
@@ -215,7 +216,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.source` | `["variable", "source_binding_class"]` | `false` | Absent | -- | [REQ-1093](../operations/expressions.md#req-1093) |
 | `expressions.literal` | `"literal_value"` | `false` | Absent | -- | [REQ-1094](../operations/expressions.md#req-1094) |
 | `expressions.first_available.sources` | `"list[filtered_source]"` | `true` | Absent | -- | [REQ-1095](../operations/expressions.md#req-1095) |
-| `expressions.first_available.default` | `"literal_value"` | `false` | Absent | -- | [REQ-1095](../operations/expressions.md#req-1095) |
+| `expressions.first_available.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1095](../operations/expressions.md#req-1095) |
 | `expressions.greatest.sources` | `"list[variable]"` | `true` | Absent | -- | [REQ-1096](../operations/expressions.md#req-1096) |
 | `expressions.least.sources` | `"list[variable]"` | `true` | Absent | -- | [REQ-1097](../operations/expressions.md#req-1097) |
 | `expressions.case` | `"list[case_item_class]"` | `false` | Absent | -- | [REQ-1098](../operations/expressions.md#req-1098) |
@@ -268,7 +269,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.mapping.dict` | `"dict[str, literal_value]"` | `true` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.mapping.case_sensitive` | `"bool"` | `false` | `true` | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.mapping.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
-| `expressions.mapping.unmapped` | `"literal_value"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
+| `expressions.mapping.strict` | `"bool"` | `false` | Absent | -- | [REQ-1110](../operations/text.md#req-1110) |
 | `expressions.lookup.value` | `"identifier"` | `true` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
 | `expressions.lookup.dataset` | `"identifier"` | `true` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |
 | `expressions.lookup.key_base` | `["variable", "list[variable]"]` | `false` | Absent | -- | [REQ-1055](../operations/lookup.md#req-1055) |

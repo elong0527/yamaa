@@ -27,4 +27,7 @@ columns:
   - name: ASTDT
     type: date
     label: Analysis Start Date
-    derivation: AE.AESTDTC
+    derivation:
+      value:
+        source: AE.AESTDTC
+      strict: true

@@ -21,7 +21,7 @@ columns:
   - name: ANRIND
     derivation:
       mapping:
-        unmapped: null
+        missing: null
   - name: PARCAT1
     derivation:
       literal: CHEMISTRY

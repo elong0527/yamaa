@@ -40,7 +40,7 @@ columns:
           USA: North America
           CAN: North America
           DEU: Europe
-        unmapped: Rest of World
+        missing: Rest of World
     verifications:
       allowed_values:
         values: [North America, Europe, Rest of World]

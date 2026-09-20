@@ -114,8 +114,7 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
         == (DM_EXAMPLE / "expected/dm.csv").read_bytes()
     )
     assert [(item.spec_path, item.count) for item in result.handler_counts] == [
-        ("columns.SEX.derivation.mapping.missing", 1),
-        ("columns.SEX.derivation.mapping.unmapped", 1),
+        ("columns.SEX.derivation.mapping.missing", 2),
     ]
 
 

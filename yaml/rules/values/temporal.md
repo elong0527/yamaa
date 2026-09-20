@@ -389,7 +389,7 @@ exactly as a column conversion parses.
 fixes rather than this contract: an ingested value that does not parse is rejected
 before any derivation, so no handler applies. A `str` field converted
 at the column declaring a temporal type fails there, where
-`conversion_failure` can answer. A specification that wants to see a malformed
+`missing` can answer. A specification that wants to see a malformed
 value therefore leaves the field `str`, which is what `negative-datetime-zone-
 offset` does.
 
@@ -402,7 +402,7 @@ a `date` this includes a truncated date, a date carrying a time of day, and the
 basic format; for a `datetime` it additionally includes a zone designator, an
 offset, a fractional second, hour 24, and a leap second. Reaching a temporal
 column, it is the conversion failure [Types and conversion](types.md) defines, handled by
-`conversion_failure` under [Local handlers](../execution/handlers.md) and otherwise fatal under [Execution lifecycle](../execution/lifecycle.md).
+`missing` under [Local handlers](../execution/handlers.md) and otherwise fatal under [Execution lifecycle](../execution/lifecycle.md).
 
 <a id="req-0602"></a>
 
