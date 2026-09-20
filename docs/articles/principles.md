@@ -20,7 +20,7 @@ Electronic Data Capture (EDC) extraction through Study Data Tabulation Model
 
 Think of execution as a function:
 
-*`data_output = derive(data_input, spec)`*
+*`output_dataset = derive(input_datasets, spec)`*
 
 Datasets go in and out. *derive* is the derivation engine.
 
