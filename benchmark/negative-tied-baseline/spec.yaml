@@ -62,8 +62,7 @@ columns:
     type: float
     label: Baseline Value
     derivation:
-      baseline_value:
-        window:
-          group_by: [STUDYID, USUBJID, PARAMCD]
-        value: AVAL
-        flag: ABLFL
+      aggregate:
+        filter: "ABLFL = 'Y'"
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        expr: "ONLY(AVAL)"

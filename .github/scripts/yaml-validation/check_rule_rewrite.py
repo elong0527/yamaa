@@ -75,9 +75,12 @@ def check(root):
         errors.append(
             "migration.yaml: baseline must retain all 1071 source requirements"
         )
-    if len(prose) != 332:
+    # 332 at the semantic cutover; 328 after baseline_value retired (#661),
+    # its 4 schema prose entries going with it. The legacy sources above
+    # stay untouched.
+    if len(prose) != 328:
         errors.append(
-            "migration.yaml: baseline must retain all 332 schema prose entries"
+            "migration.yaml: baseline must retain all 328 schema prose entries"
         )
     # Post-rewrite requirements register provenance in the addenda. The
     # baseline above stays immutable; the duplicate check below rejects an
