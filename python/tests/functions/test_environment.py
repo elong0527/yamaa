@@ -251,6 +251,157 @@ def test_a_vector_document_naming_another_contract_is_invalid(
     assert failure.context["expected"] == ["bmi", "1.0.0"]
 
 
+# REQ-0669 lets several projects name one shared contract document instead of
+# repeating its language-neutral fields. The block below is the inline
+# spelling the fixture writes; the reference spelling keeps the entry's own
+# implementation version, binding, and conformance path.
+_INLINE_CONTRACT_BLOCK = """\
+    contract_version: "1.0.0"
+    implementation_version: "1.0.0"
+    description: Calculate body mass index from kilograms and centimetres.
+    comparison_decimals: 4
+    may_return_missing: false
+    params:
+      - name: weight_kg
+        type: float
+        accepts_missing: false
+      - name: height_cm
+        type: float
+        accepts_missing: false
+      - name: cm_per_m
+        type: int
+        required: false
+        default: 100
+        accepts_missing: false
+    returns: float
+"""
+
+_REFERENCE_BLOCK = """\
+    contract: contracts.yaml
+    implementation_version: "1.0.0"
+    comparison_decimals: 4
+    may_return_missing: false
+"""
+
+_SHARED_CONTRACTS = """\
+bmi:
+  contract_version: "1.0.0"
+  description: Calculate body mass index from kilograms and centimetres.
+  params:
+    - name: weight_kg
+      type: float
+      accepts_missing: false
+    - name: height_cm
+      type: float
+      accepts_missing: false
+    - name: cm_per_m
+      type: int
+      required: false
+      default: 100
+      accepts_missing: false
+  returns: float
+"""
+
+
+def _shared_contract_project(bmi_project) -> None:
+    """Point the written project's contract at a shared contracts document."""
+    (bmi_project.path / "contracts.yaml").write_text(_SHARED_CONTRACTS, "utf-8")
+    bmi_project.edit_environment(_INLINE_CONTRACT_BLOCK, _REFERENCE_BLOCK)
+
+
+def test_a_shared_contract_reference_loads_the_named_contract(
+    bmi_project, repository
+) -> None:
+    _shared_contract_project(bmi_project)
+    loaded = load_environment(bmi_project.path, repository.schema)
+
+    contract = loaded.environment.functions["bmi"]
+    assert contract.contract_version == "1.0.0"
+    assert (
+        contract.description
+        == "Calculate body mass index from kilograms and centimetres."
+    )
+    assert [parameter.name for parameter in contract.params] == [
+        "weight_kg",
+        "height_cm",
+        "cm_per_m",
+    ]
+    assert contract.returns == "float"
+    assert contract.binding.call == "projectbmi.bmi"
+    assert contract.implementation_version == "1.0.0"
+
+
+def test_a_shared_contract_reference_keeps_the_contract_identity(
+    bmi_project, repository
+) -> None:
+    # The reference is only a spelling: the merged contract fingerprints
+    # exactly like the inline declaration it replaces.
+    inline = load_environment(bmi_project.path, repository.schema)
+    _shared_contract_project(bmi_project)
+    shared = load_environment(bmi_project.path, repository.schema)
+
+    assert shared.fingerprints["bmi"] == inline.fingerprints["bmi"]
+
+
+def test_a_contract_declared_both_inline_and_by_reference_is_invalid(
+    bmi_project, repository
+) -> None:
+    (bmi_project.path / "contracts.yaml").write_text(_SHARED_CONTRACTS, "utf-8")
+    bmi_project.edit_environment(
+        '    contract_version: "1.0.0"',
+        '    contract: contracts.yaml\n    contract_version: "1.0.0"',
+    )
+
+    failure = _failure(bmi_project.path, repository.schema)
+
+    assert failure.condition == "project_environment_invalid"
+
+
+def test_a_contract_with_no_fields_and_no_reference_is_invalid(
+    bmi_project, repository
+) -> None:
+    bmi_project.edit_environment(
+        _INLINE_CONTRACT_BLOCK,
+        '    implementation_version: "1.0.0"\n',
+    )
+
+    failure = _failure(bmi_project.path, repository.schema)
+
+    assert failure.condition == "project_environment_invalid"
+
+
+def test_a_shared_contract_path_leaving_the_root_is_invalid(
+    bmi_project, repository
+) -> None:
+    _shared_contract_project(bmi_project)
+    bmi_project.edit_environment(
+        "    contract: contracts.yaml",
+        "    contract: ../contracts.yaml",
+    )
+
+    failure = _failure(bmi_project.path, repository.schema)
+
+    assert failure.condition == "project_environment_invalid"
+
+
+def test_a_shared_contract_document_missing_the_function_is_invalid(
+    bmi_project, repository
+) -> None:
+    _shared_contract_project(bmi_project)
+    (bmi_project.path / "contracts.yaml").write_text(
+        "other:\n"
+        '  contract_version: "1.0.0"\n'
+        "  description: Another function.\n"
+        "  params: []\n"
+        "  returns: float\n",
+        "utf-8",
+    )
+
+    failure = _failure(bmi_project.path, repository.schema)
+
+    assert failure.condition == "project_environment_invalid"
+
+
 def test_an_r_environment_loads_for_inspection_without_a_python_runner(
     repository,
 ) -> None:

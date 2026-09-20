@@ -104,6 +104,16 @@ contains a runtime-specific callable name.
 - `comparison_decimals`, defaulting to four; and
 - one conformance-vector path.
 
+A function entry may name a shared contract document in `contract` instead of
+declaring the language-neutral fields inline. The named document holds
+`contract_version`, `description`, `params`, and `returns` once for every
+project that implements the contract; the entry keeps `implementation_version`,
+`comparison_decimals`, `may_return_missing`, `binding`, and the
+conformance-vector path. A `contract` path is project-root-local, following
+the same local normalized inside-the-root rule as a conformance path.
+Declaring a contract both inline and by reference, or by reference to a
+document that does not define the entry's function name, is invalid.
+
 <a id="req-0670"></a>
 
 **REQ-0670.** Changing meaning, parameter order or names, parameter types,
@@ -366,6 +376,7 @@ structural constraints come from its schema declaration.
 
 | Field | Meaning |
 | --- | --- |
+| `function_contract_class.contract` | Project-root-local path of a shared contract document; exactly one of this and the inline contract fields (`contract_version`, `description`, `params`, `returns`) is present. |
 | `function_contract_class.contract_version` | Exact version of the language-neutral logical contract. |
 | `function_contract_class.implementation_version` | Version of the selected language implementation; defaults to the environment `version` when omitted. |
 | `function_contract_class.description` | Human-readable statement of what the function computes. |

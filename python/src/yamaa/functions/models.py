@@ -71,7 +71,9 @@ class FunctionContract(_StrictModel):
 
     REQ-0669 defaults an omitted `implementation_version` to the
     environment `version`; `load_environment` resolves that default so
-    every later stage reads a plain string.
+    every later stage reads a plain string. A contract named through
+    `contract` is merged from its shared document before this model is
+    built, so this model only ever describes a complete inline contract.
     """
 
     contract_version: str = Field(min_length=1)
@@ -87,6 +89,20 @@ class FunctionContract(_StrictModel):
     @property
     def parameters(self) -> dict[str, FunctionParameter]:
         return {parameter.name: parameter for parameter in self.params}
+
+
+class SharedFunctionContract(_StrictModel):
+    """The language-neutral half of a contract, shared across projects.
+
+    REQ-0669 lets several project environments name one shared contract
+    document instead of repeating these fields; each environment keeps its
+    own `implementation_version`, `binding`, and conformance-vector path.
+    """
+
+    contract_version: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    params: list[FunctionParameter]
+    returns: ColumnType
 
 
 class RuntimeArtifact(_StrictModel):
@@ -161,5 +177,6 @@ __all__ = [
     "ProjectRuntime",
     "RuntimeArtifact",
     "RuntimeLanguage",
+    "SharedFunctionContract",
     "binding_arguments",
 ]
