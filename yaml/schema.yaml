@@ -197,6 +197,10 @@ row_class:
         type: "dict[identifier, derivation]"
         required: true
         description: See REQ-1056 in rules/execution/rows.md.
+    - submission:
+        type: "dict[identifier, submission_column_class]"
+        required: false
+        description: See REQ-1056 in rules/execution/rows.md.
 
 variable:
     type: str

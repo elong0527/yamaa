@@ -226,6 +226,7 @@ class Row(_StrictModel):
     group_by: list[str] | None = None
     filter: str | None = None
     derivations: dict[str, HandledExpression]
+    submission: dict[str, SubmissionColumn] | None = None
 
 
 class Specification(_StrictModel):

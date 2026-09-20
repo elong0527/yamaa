@@ -1,0 +1,128 @@
+schema_version: "1.0"
+domain: LB
+keys: [STUDYID, USUBJID, LBSEQ]
+input:
+  ODM: input/odm.csv
+
+output:
+  path: lb.csv
+  columns: [DOMAIN, STUDYID, USUBJID, LBSEQ, LBTESTCD, LBTEST, LBORRES, LBORRESU, LBSTRESN, LBSTRESU, LBDTC]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: LB
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: LBTESTCD
+    type: str
+    label: Lab Test or Examination Short Name
+
+  - name: LBTEST
+    type: str
+    label: Lab Test or Examination Name
+
+  - name: LBORRES
+    type: str
+    label: Result or Finding in Original Units
+
+  - name: LBORRESU
+    type: str
+    label: Original Units
+    derivation:
+      literal: mg/dL
+    submission:
+      origin:
+        type: Assigned
+      codelist: CL_LBORRESU
+
+  - name: LBSTRESN
+    type: float
+    label: Numeric Result/Finding in Standard Units
+
+  - name: LBSTRESU
+    type: str
+    label: Standard Units
+
+  - name: LBDTC
+    type: date
+    label: Date/Time of Specimen Collection
+
+  - name: LBSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      row_number:
+        window:
+          group_by: [STUDYID, USUBJID]
+          order_by: [LBDTC, LBTESTCD]
+
+rows:
+  - id: glucose
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
+    filter: "LBORRES IS NOT NULL"
+    derivations:
+      LBTESTCD:
+        literal: GLUC
+      LBTEST:
+        literal: Glucose
+      LBORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.GLUC'"
+          expr: "ONLY(ODM.Value)"
+      LBDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
+          expr: "ONLY(ODM.Value)"
+      LBSTRESN:
+        value:
+          source: LBORRES
+        conversion_failure: null
+      LBSTRESU:
+        literal: mg/dL
+    submission:
+      LBORRESU:
+        origin:
+          type: Assigned
+          source: Vendor
+        codelist: CL_GLUCOSE
+
+  - id: creatinine
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
+    filter: "LBORRES IS NOT NULL"
+    derivations:
+      LBTESTCD:
+        literal: CREAT
+      LBTEST:
+        literal: Creatinine
+      LBORRES:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.CREAT'"
+          expr: "ONLY(ODM.Value)"
+      LBDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
+          expr: "ONLY(ODM.Value)"
+      LBSTRESN:
+        value:
+          source: LBORRES
+        conversion_failure: null
+      LBSTRESU:
+        literal: mg/dL
+    submission:
+      LBORRESU:
+        origin:
+          type: Assigned
+          source: Investigator
+        codelist: CL_CREATININE
