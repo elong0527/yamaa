@@ -4,5 +4,5 @@ spec_paths:
   - columns.VISITSEQ.derivation.row_number.window.filter
 requirement: REQ-0287
 context:
-  expected: str
+  expected: predicate
   actual: int

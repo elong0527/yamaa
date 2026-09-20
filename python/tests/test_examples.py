@@ -8,6 +8,7 @@ import pytest
 from polars.testing import assert_frame_equal
 
 from yamaa import yamaa_domain
+from yamaa.functions import execute_with_project_functions, select_project_root
 from yamaa.io import ProjectResources, load_source_tables
 from yamaa.io.csv import fixed_point
 from yamaa.planning import ExecutionDiagnostic
@@ -26,16 +27,11 @@ from yamaa.specification._yaml import read_yaml_document
 EXAMPLES = Path(__file__).parents[2] / "benchmark"
 SCHEMA_ROOT = EXAMPLES.parent / "yaml"
 
-KNOWN_REQUIREMENT_GAPS = {
-    "negative-function-contract-mismatch": ("REQ-0699", None),
-}
+KNOWN_REQUIREMENT_GAPS: dict[str, tuple[str | None, str | None]] = {}
 
-KNOWN_SPEC_PATH_GAPS = {
-    "negative-function-contract-mismatch": (
-        ("columns.RESULT.derivation.function.contract_version",),
-        None,
-    ),
-}
+KNOWN_SPEC_PATH_GAPS: dict[
+    str, tuple[tuple[str, ...] | None, tuple[str, ...] | None]
+] = {}
 
 
 def positive_runners() -> tuple[Path, ...]:
@@ -71,6 +67,16 @@ def entry_spec(example: Path) -> Path:
     return entries[0] if entries else specs[0]
 
 
+def positive_examples() -> tuple[Path, ...]:
+    return tuple(
+        example
+        for example in sorted(EXAMPLES.iterdir())
+        if example.is_dir()
+        and list(example.glob("spec*.yaml"))
+        and not (example / "expected/error.yaml").exists()
+    )
+
+
 def negative_contracts() -> tuple[Path, ...]:
     return tuple(sorted(EXAMPLES.glob("negative-*/expected/error.yaml")))
 
@@ -83,10 +89,20 @@ def _negative_diagnostic(
     except SpecificationError as error:
         return error.diagnostics[0]
     resources = ProjectResources(example)
-    result = execute_with_source_provider(
-        loaded.specification,
-        lambda datasets: load_source_tables(datasets, resources),
-    )
+
+    def provide(datasets):
+        return load_source_tables(datasets, resources)
+
+    # REQ-0663: the runner selects the project root, so a negative example
+    # that commits one is executed against it rather than reported as an
+    # unimplemented call.
+    project_root = select_project_root(example)
+    if project_root is None:
+        result = execute_with_source_provider(loaded.specification, provide)
+    else:
+        result = execute_with_project_functions(
+            loaded.specification, provide, project_root, SCHEMA_ROOT
+        )
     if isinstance(result, ExecutionUnsupported):
         return None
     assert isinstance(result, ExecutionFailure)
@@ -214,3 +230,20 @@ def test_positive_example_outputs_match_expected_csvs(
         actual = outputs[name]
         committed = pl.read_csv(expected_path, schema=actual.schema)
         assert_frame_equal(actual, committed, check_exact=True)
+
+
+def test_every_positive_example_carries_a_runner() -> None:
+    """A positive benchmark that executes commits the snippet that runs it.
+
+    `benchmark/agents.md` makes `run.py` the mark of a benchmark whose entry
+    executes and matches its artifact. Every positive benchmark does, so a
+    missing runner is a benchmark that stopped executing rather than one
+    nobody wrote a runner for.
+    """
+    missing = [
+        example.name
+        for example in positive_examples()
+        if not (example / "run.py").is_file()
+    ]
+
+    assert missing == []

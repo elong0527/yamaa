@@ -41,6 +41,9 @@ from yamaa.specification.schema import (
 )
 
 ENVIRONMENT_NAME = "environment.yaml"
+
+# The only language this runner can execute (REQ-0667).
+RUNNER_LANGUAGE = "python"
 _ENVIRONMENT_SCHEMA = "schema_environment.yaml"
 
 _PYTHON_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -485,19 +488,44 @@ def load_environment(
     )
 
 
+def select_project_root(
+    directory: Path,
+    language: str = RUNNER_LANGUAGE,
+) -> Path | None:
+    """Return the project root a runner of `language` selects under here.
+
+    REQ-0663 has the runner choose the root rather than the specification,
+    and this is the rule this runner chooses by: a `<language>/` root when
+    the directory offers one for the language the runner speaks, otherwise
+    the directory itself when it holds an environment. One environment
+    declares one language, which is why a benchmark demonstrating a contract
+    in two of them keeps a directory per language. A directory with neither
+    selects no project, which keeps the specification portable rather than
+    broken.
+    """
+    candidate = directory / language
+    if (candidate / ENVIRONMENT_NAME).is_file():
+        return candidate
+    if (directory / ENVIRONMENT_NAME).is_file():
+        return directory
+    return None
+
+
 def check_runner_language(environment: ProjectEnvironment) -> None:
     """Reject a project whose runtime this runner cannot execute (REQ-0667)."""
-    if environment.runtime.language != "python":
+    if environment.runtime.language != RUNNER_LANGUAGE:
         raise FunctionFailure(
             "runner_language_mismatch",
             "REQ-0696",
-            {"runner": "python", "declared": environment.runtime.language},
+            {"runner": RUNNER_LANGUAGE, "declared": environment.runtime.language},
         )
 
 
 __all__ = [
     "ENVIRONMENT_NAME",
+    "RUNNER_LANGUAGE",
     "check_runner_language",
     "environment_schema",
     "load_environment",
+    "select_project_root",
 ]

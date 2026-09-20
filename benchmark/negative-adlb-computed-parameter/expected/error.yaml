@@ -5,4 +5,4 @@ spec_paths:
   - columns.AVAL.derivation.case
 requirement: REQ-0072
 context:
-  cycle: [AVAL, ALTVAL, AVAL]
+  cycle: [ALTVAL, AVAL, ALTVAL]

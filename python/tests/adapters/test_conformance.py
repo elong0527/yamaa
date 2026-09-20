@@ -31,7 +31,9 @@ SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
 EXAMPLES = REPOSITORY_ROOT / "benchmark"
 POSITIVE = "sdtm-dm-basic"
 NEGATIVE = "negative-column-type-unknown"
-UNSUPPORTED = "adam-adsl-bmi-function"
+# A specification that calls a project function; with the project root it
+# carries removed, the call is a logical one no implementation answers.
+PORTABLE = "adam-adsl-bmi-function"
 
 # What the engine reports for every handler path sdtm-dm-basic declares.
 POSITIVE_HANDLERS = (
@@ -402,13 +404,28 @@ class TestUnsupportedAndMissingPrerequisites:
     def test_an_unsupported_positive_example_fails_rather_than_skips(
         self, tmp_path: Path
     ) -> None:
-        report = run(EXAMPLES / UNSUPPORTED, tmp_path)
-        verdict = compare_example(report, EXAMPLES / UNSUPPORTED)
+        # With no project root to select, the call is a logical one no
+        # implementation answers, which is unsupported rather than a result.
+        # A positive example must still execute, so it fails here.
+        example = copy_example(PORTABLE, tmp_path)
+        shutil.rmtree(example / "python")
+        (example / "environment.yaml").unlink()
+
+        report = run(example, tmp_path)
+        verdict = compare_example(report, example)
 
         assert report.outcome == "unsupported"
         assert report.unsupported[0].operation == "function"
         assert not verdict.passed
         assert kinds(verdict) == {"outcome"}
+
+    def test_a_selected_project_root_executes_the_call(self, tmp_path: Path) -> None:
+        # The same example with its `python/` root in place: this runner
+        # selects the root for the language it speaks and runs it.
+        report = run(EXAMPLES / PORTABLE, tmp_path)
+
+        assert report.outcome == "success", report
+        assert compare_example(report, EXAMPLES / PORTABLE).passed
 
     @pytest.mark.parametrize("outcome", ["unsupported", "error", "success"])
     def test_only_a_semantic_failure_satisfies_a_negative_example(

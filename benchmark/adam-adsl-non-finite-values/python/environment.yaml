@@ -1,0 +1,15 @@
+schema_version: "1.0"
+version: "1.0.0"
+
+runtime:
+  language: python
+  artifact:
+    reference: org.example/yamaa/numeric-constants-python:1.0.0
+    digest: sha256:ab47d69a240e97610b8480d5d1447fc493925c1fd0c3996a574b18b7c4ba1c32
+
+functions:
+  numeric_constant:
+    contract: contracts.yaml
+    binding:
+      call: projectconstants.numeric_constant
+    conformance: conformance/numeric_constant.yaml

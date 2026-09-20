@@ -25,30 +25,67 @@ tracker, one work item per root cause.
         expected/define.xml                         # when the entry generates a document
         expected/resolved[_<variant>].yaml          # single-entry inheritance
         expected/spec_resolved.yaml                 # multi-level inheritance: resolution of the entry chain
-        run.py                                      # when the entry spec executes: run it
+        environment.yaml                            # when the entry calls a project function
+        <language>/                                 # a second project root, for another runtime:
+                                                    # environment.yaml, the shared contracts and
+                                                    # vectors, and the runtime it resolves in
+        run.py                                      # run the entry spec
 
-A positive benchmark whose entry specification executes and matches its
-committed artifact carries `run.py`,
-the three-line snippet that runs it:
+Every positive benchmark carries `run.py`, the three-line snippet that runs
+its entry specification:
 
     import yamaa
 
     <domain> = yamaa.yamaa_domain("<entry spec>").output
     <domain>
 
+A benchmark whose entry calls a project function names the root that
+implements it, because the runner chooses the root and the specification
+cannot:
+
+    import yamaa
+    from yamaa.functions import run_with_project_functions
+
+    <domain> = run_with_project_functions("<entry spec>", project_root="python").output
+    <domain>
+
 The variable is the domain in lowercase (for example `adsl`), and the entry
 spec is `spec.yaml`, or the file no other file parents for multi-level
 benchmarks. Negative benchmarks carry no `run.py`: the entry is expected to
-fail, so there is no artifact to bind. A positive benchmark whose entry does
-not execute under the engine, or executes but differs from its committed
-artifact (an unimplemented function, a validation error, a stale spec, a
-drifted golden), carries none either; its missing `run.py` marks it as not
-yet runnable, not as an oversight.
+fail, so there is no artifact to bind.
+
+A positive benchmark without a runner is a benchmark that stopped executing,
+not one nobody wrote a runner for, and
+`test_every_positive_example_carries_a_runner` fails on it. Whatever broke --
+an unimplemented operation, a validation error, a stale spec, a drifted
+golden -- is what gets fixed; the runner stays.
 
 Use `spec.yaml` for one specification. Use one or more `spec_<variant>.yaml`
 files when the benchmark intentionally demonstrates a runtime or design variant
 over shared inputs and an expected artifact. Do not mix the base filename with
 variants.
+
+## A benchmark that needs project code
+
+A `function` call names a logical contract and a project supplies the code,
+so a benchmark that uses one carries the project roots that implement it.
+One environment declares one language, so a benchmark demonstrating a
+contract in more than one runtime keeps a second root beside the spec, in a
+directory named for its language. The contract document and the conformance
+vectors are shared between them: two roots claiming one contract calculate
+one fingerprint and run byte-identical vectors, and nothing in `spec.yaml`
+changes between them.
+
+A runner selects the root for the language it speaks -- `select_project_root`
+states the rule, and `run.py` names it outright. `adam-adsl-bmi-function`
+carries both roots, and
+`test_the_committed_r_project_root_is_refused_by_this_runner` is the runner
+refusing the R one.
+
+Only code inside the pinned artifact answers for a binding, the host
+standard library included, so a `runtime/` module carries the arithmetic it
+needs rather than importing it. `adam-advs-growth-percentile` is the worked
+example.
 
 An expected failure before a dataset is completed replaces the CSV with
 `expected/error.yaml`, unless the intended artifact is useful as a forward

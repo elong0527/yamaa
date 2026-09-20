@@ -1,0 +1,34 @@
+schema_version: "1.0"
+function: numeric_constant
+contract_version: "1.0.0"
+cases:
+  - id: unit
+    covers: [normal, numeric-comparison]
+    args:
+      kind: one
+    result: 1.0
+  - id: zero-boundary
+    covers: [boundary]
+    args:
+      kind: zero
+    result: 0.0
+  - id: positive-infinity-is-not-a-value
+    covers: [nullable-output]
+    args:
+      kind: positive-infinity
+    result: null
+  - id: negative-infinity-is-not-a-value
+    covers: [nullable-output]
+    args:
+      kind: negative-infinity
+    result: null
+  - id: not-a-number-is-not-a-value
+    covers: [nullable-output]
+    args:
+      kind: nan
+    result: null
+  - id: missing-kind-short-circuits
+    covers: [short-circuit-missing:kind]
+    args:
+      kind: null
+    result: null

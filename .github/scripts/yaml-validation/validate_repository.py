@@ -5544,12 +5544,60 @@ def validate_spec_functions(spec, spec_label, spec_path, schema_env):
                 ):
                     calls.append((payload, path, expected))
 
-    environment_path = spec_path.parent / 'environment.yaml'
-    if not environment_path.exists():
+    environment_paths = project_environment_paths(spec_path)
+    if not environment_paths:
         # A portable specification can declare logical calls before a project
         # supplies their implementation. R018 requires this environment when
         # project code is validated, activated, or executed.
         return []
+    # Every root is held to the same calls, so a call that fails against two
+    # of them reports one finding rather than one per root; a finding only
+    # one root produces still stands on its own.
+    return list(
+        dict.fromkeys(
+            error
+            for environment_path in environment_paths
+            for error in validate_spec_functions_against(
+                spec,
+                spec_label,
+                spec_path,
+                schema_env,
+                calls,
+                column_types,
+                environment_path,
+            )
+        )
+    )
+
+
+def project_environment_paths(spec_path):
+    """Return every project root a benchmark offers for one specification.
+
+    A project keeps `environment.yaml` beside the specification it
+    implements. A benchmark demonstrating one logical contract in more than
+    one runtime language keeps a root per language beside it as
+    `<language>/`, because one environment declares one language. Every root
+    present must provide the contracts the specification calls.
+    """
+    beside = spec_path.parent / 'environment.yaml'
+    found = [beside] if beside.exists() else []
+    for language in ('python', 'r'):
+        candidate = spec_path.parent / language / 'environment.yaml'
+        if candidate.exists():
+            found.append(candidate)
+    return found
+
+
+def validate_spec_functions_against(
+    spec,
+    spec_label,
+    spec_path,
+    schema_env,
+    calls,
+    column_types,
+    environment_path,
+):
+    """Validate one specification's calls against one project root."""
     if not environment_path.is_file():
         return [
             f"ERROR: {spec_label}: project environment path is not a file: "
