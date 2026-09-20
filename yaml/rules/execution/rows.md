@@ -107,6 +107,16 @@ which input record represents a key combination. A row template that keeps
 one of several input records with one key combination still writes one row
 per key combination. The specification omits `rows` instead.
 
+<a id="req-1162"></a>
+
+**REQ-1162.** A root `filter` is the filter-only row template lifted to
+root: it selects base input records for row construction when `rows` is
+absent, before the [REQ-0042](rows.md#req-0042) distinct-keys step. It reads
+the base driver: the declared `base`, or the single declared dataset when
+`base` is omitted. Its scope matches an ungrouped row template's `filter`.
+Like any row template filter, it states which rows the artifact carries,
+never which input the column derivations read.
+
 ### Expression evaluation
 
 <a id="req-0047"></a>
@@ -166,6 +176,12 @@ structural constraints come from its schema declaration.
 **REQ-0068.** An ungrouped `row.filter` naming an output column, or a grouped
   `row.filter` naming a qualified variable or a column not derived by that
   row template: fail.
+
+<a id="req-1163"></a>
+
+**REQ-1163.** A root `filter` declared together with `rows`: fail. The
+  filter is the filter-only row template; explicit row templates and the
+  lifted filter cannot both drive row construction.
 
 ## Conformance examples
 

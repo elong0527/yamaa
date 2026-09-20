@@ -1168,3 +1168,5 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1159](../storage/ingestion.md#req-1159) | `storage/ingestion.md` | Schema prose |
 | [REQ-1160](../storage/ingestion.md#req-1160) | `storage/ingestion.md` | Schema prose |
 | [REQ-1161](../storage/ingestion.md#req-1161) | `storage/ingestion.md` | Schema prose |
+| [REQ-1162](../execution/rows.md#req-1162) | `execution/rows.md` | Schema prose |
+| [REQ-1163](../execution/rows.md#req-1163) | `execution/rows.md` | Schema prose |

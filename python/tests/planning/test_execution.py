@@ -1266,3 +1266,51 @@ def test_a_row_inline_lookup_matching_driver_fields_is_planned() -> None:
         row_tables(),
         supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
     )
+
+
+def test_a_root_filter_is_the_filter_only_row_template() -> None:
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+        ]
+    ).model_copy(update={"filter": "SRC.X <> 'two'"})
+
+    plan = plan_execution(spec, {"SRC": source_table()})
+
+    (row_plan,) = plan.rows
+    assert row_plan.declaration is None
+    assert row_plan.driver == "SRC"
+    assert row_plan.filter_path == "filter"
+    assert row_plan.filter_predicate is not None
+
+
+def test_a_root_filter_declared_with_rows_fails() -> None:
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+        ],
+        rows=[Row(id="all", derivations={})],
+    ).model_copy(update={"filter": "SRC.X <> 'two'"})
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": source_table()})
+
+    (diagnostic,) = raised.value.diagnostics
+    assert diagnostic.condition == "conflicting_row_construction"
+    assert diagnostic.requirement == "REQ-1163"
+    assert diagnostic.spec_paths == ("filter", "rows")
+
+
+def test_a_root_filter_naming_an_unqualified_variable_fails() -> None:
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
+        ]
+    ).model_copy(update={"filter": "X <> 'two'"})
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": source_table()})
+
+    (diagnostic,) = raised.value.diagnostics
+    assert diagnostic.condition == "phase_boundary"
+    assert diagnostic.spec_paths == ("filter",)

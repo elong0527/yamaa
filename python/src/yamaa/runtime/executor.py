@@ -519,14 +519,22 @@ def _key_grain_candidates(
 ) -> list[CandidateRow]:
     """Build one candidate per key combination (REQ-0042).
 
-    With no `rows` template the filter cannot scope feeding records, so every
-    driver record of a key combination feeds its single row and a direct read
-    must resolve to one value (REQ-0075) or the row fails.
+    With no `rows` template a root `filter` scopes the feeding records
+    before the distinct-keys step (REQ-1162); every retained driver record
+    of a key combination feeds its single row and a direct read must resolve
+    to one value (REQ-0075) or the row fails.
     """
     key_names = list(plan.specification.keys)
+    driver_rows = [dict(record.values) for record in relation.records]
+    if planned.filter_predicate is not None:
+        driver_rows = [
+            values
+            for values in driver_rows
+            if _evaluate_row_filter(planned, context.bindings, values)
+        ]
     key_values, groups, order = _key_space(
         plan,
-        [dict(record.values) for record in relation.records],
+        driver_rows,
         planned.driver,
         column_types,
         context,

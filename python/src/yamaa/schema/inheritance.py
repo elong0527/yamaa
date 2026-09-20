@@ -960,6 +960,10 @@ def _prune(document: dict[str, object], bundle: SchemaBundle) -> dict[str, objec
                 result["verifications"], root_fields["verifications"]["type"], bundle
             )
         )
+    if "filter" in result:
+        initial.update(
+            _references(result["filter"], root_fields["filter"]["type"], bundle)
+        )
     row_fields = class_fields(bundle, "row_class")
     for row in rows:
         if not isinstance(row, dict):

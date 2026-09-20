@@ -163,7 +163,8 @@ structural constraints come from its schema declaration.
 | `root_class.intermediates` | Named dataset lookups several columns read through <lookup-id>.<column>; [Lookup and joins](../operations/lookup.md) defines them. |
 | `root_class.output` | Artifact presentation independent of dependency-ordered declarations; [Artifact publication](../storage/publication.md) defines it. |
 | `root_class.columns` | Columns in the dependency order [Execution lifecycle](../execution/lifecycle.md) requires; output.columns controls artifact order. |
-| `root_class.rows` | Row templates constructing output rows from input records or groups; [Row construction](../execution/rows.md) evaluates them. |
+| `root_class.rows` | Row templates constructing output rows from input records or groups; [Row construction](../execution/rows.md) evaluates them. Mutually exclusive with `root_class.filter`. |
+| `root_class.filter` | Predicate selecting base input records for row construction when `rows` is absent; the filter-only row template lifted to root. Mutually exclusive with `root_class.rows`; [Row construction](../execution/rows.md) defines the driver it reads. |
 | `root_class.verifications` | Assertions over the completed dataset; [Verification](../execution/verification.md) defines them. |
 | `root_class.submission` | Governed dataset metadata a submission document is generated from; [Submission metadata](../submission/metadata.md) defines it. |
 | `root_class.metadata` | Free-form annotations carried with the specification; [Submission metadata](../submission/metadata.md) reserves the key names it governs. |

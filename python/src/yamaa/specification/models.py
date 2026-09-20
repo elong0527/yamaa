@@ -239,6 +239,7 @@ class Specification(_StrictModel):
     output: Output
     columns: list[Column]
     rows: list[Row] | None = None
+    filter: str | None = None
     verifications: list[Expression] | None = None
     submission: SubmissionDataset | None = None
     metadata: dict[str, str] | None = None
