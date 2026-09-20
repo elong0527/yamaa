@@ -4774,7 +4774,7 @@ class TestDatasetPathExamples(unittest.TestCase):
 
     def test_each_example_reports_its_declared_condition(self):
         examples = sorted(
-            (self.root / "benchmark").glob("negative-dataset-path-*")
+            (self.root / "benchmark").glob("negative-path-*")
         )
         self.assertEqual(len(examples), 6)
 
