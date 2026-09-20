@@ -4067,7 +4067,10 @@ def validate_project_environment(
                     f"ERROR: {contract_path}.binding.call: callable {call!r} "
                     f"is not fully qualified for runtime {language!r}"
                 )
-            binding_args = binding.get('args')
+            # R018-22 reads an omitted `args` as the identity mapping, so
+            # the checks below run against the host names the binding will
+            # actually be called with rather than skipping the contract.
+            binding_args = binding.get('args', {name: name for name in names})
             if isinstance(binding_args, dict):
                 missing = sorted(set(names) - set(binding_args))
                 extra = sorted(set(binding_args) - set(names))

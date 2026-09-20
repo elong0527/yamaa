@@ -111,8 +111,9 @@ unrounded result, and rounding for display happens once, later, under
   static validator check that each contract's vectors demonstrate `normal`,
   `boundary`, every default, every missing behavior, both values of every
   Boolean parameter, `nullable-output`, and `numeric-comparison`. This
-  module validates that a vector document is structurally sound and
-  identifies its own contract, and then runs every case in it.
+  module validates that a vector document is structurally sound -- the
+  `functions` entry that names it is what identifies the contract it
+  activates -- and then runs every case in it.
 - **The fingerprint is shared.** R018-10 is implemented here and in
   `.github/scripts/yaml-validation/validate_repository.py`, and the tests
   check the two produce the same bytes for the same contract. A contract

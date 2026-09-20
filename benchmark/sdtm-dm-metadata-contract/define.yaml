@@ -20,6 +20,7 @@ metadata_version:
 
 standards:
   - id: SDTMIG
+    name: SDTMIG
     type: IG
     version: "3.4"
     status: Final

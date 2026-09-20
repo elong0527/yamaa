@@ -100,7 +100,7 @@ study_class:
         type: str
         required: false
         min_length: 1
-        description: Name of the study; omitted, the id is the name.
+        description: Name of the study; defaults to the id.
     - description:
         type: str
         required: true
@@ -135,8 +135,8 @@ standard_class:
         description: Name datasets and codelists refer to this standard by.
     - name:
         type: standard_name
-        required: false
-        description: Published standard name; omitted, the id is the published name.
+        required: true
+        description: Published standard name.
     - type:
         type: str
         required: true

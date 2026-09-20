@@ -1706,6 +1706,39 @@ class TestProjectFunctionEnvironment(unittest.TestCase):
         )
         self.assertFalse(VALIDATOR.valid_host_argument_name('r', 'function'))
 
+    def test_omitted_binding_args_still_checks_host_argument_names(self):
+        # R018-22 reads an omitted `args` as the identity mapping, so a
+        # logical name that is not a host name of the runtime language has
+        # to fail here too, not only when the engine loads the environment.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            contract = self.contract()
+            contract['params'][0]['name'] = 'class'
+            contract['binding'] = {'call': 'projectstats.test_value'}
+            document, environment_path = self.write_project(root, contract)
+            document['runtime']['language'] = 'python'
+            vectors = root / 'conformance' / 'test-value.yaml'
+            vectors.write_text(
+                vectors.read_text(encoding='utf-8')
+                .replace('x: ', 'class: ')
+                .replace('missing:x]', 'missing:class]'),
+                encoding='utf-8',
+            )
+
+            errors = VALIDATOR.validate_project_environment(
+                document,
+                'environment.yaml',
+                environment_path,
+                self.environment_schema,
+            )
+
+        expected = (
+            "ERROR: environment.yaml.functions.test_value.binding.args."
+            "class: host argument 'class' is not a valid non-reserved "
+            "python name"
+        )
+        self.assertEqual(errors, [expected])
+
     def test_repository_compares_same_name_and_version_fingerprints(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

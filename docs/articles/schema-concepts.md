@@ -491,7 +491,6 @@ functions:
     returns: float
     binding:
       call: projectbmi::bmi            # a statically written qualified callable
-      args: {weight_kg: weight_kg, height_cm: height_cm, cm_per_m: cm_per_m}
     conformance: conformance/bmi.yaml  # vectors that must pass at activation
 ```
 
@@ -512,6 +511,10 @@ Semantics worth stating out loud:
 - **Signatures are closed and named** -- no positional parameters, no varargs,
   no arbitrary keyword bag. Every optional parameter declares a `default` in
   the environment.
+- **A binding's `args` defaults to the identity mapping.** The environment
+  declares `binding.args` only when the host signature spells a parameter
+  differently; omitting it maps every logical name to itself, which is why
+  the example above carries no `args`.
 - **`args` cannot nest an expression.** An argument is a variable name; an
   `int`, `float`, `bool` or missing scalar; or one of three explicit literal
   forms: `{literal: text}`, `{date: YYYY-MM-DD}`, `{datetime: ...}`. To pass a

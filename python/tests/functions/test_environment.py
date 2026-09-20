@@ -238,6 +238,8 @@ def test_a_vector_document_carrying_a_contract_identity_is_invalid(
 
     assert failure.condition == "project_environment_invalid"
     assert failure.requirement == "R018-34"
+    assert failure.context["paths"] == ["function", "contract_version"]
+    assert failure.context["conditions"] == ["unknown_field"] * 2
 
 
 def test_an_r_environment_loads_for_inspection_without_a_python_runner(
