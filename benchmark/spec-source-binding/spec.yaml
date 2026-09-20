@@ -1,6 +1,6 @@
 schema_version: "1.0"
 domain: ADVS
-keys: [USUBJID, VSTESTCD]
+keys: [USUBJID, VSTESTCD, ASEQ]
 input:
   DM: input/dm.csv
   VS: input/vs.csv
@@ -8,7 +8,7 @@ base: VS
 
 output:
   path: advs.csv
-  columns: [USUBJID, VSTESTCD, SEX, AGE, AGEGR1, RACE, ASEQ, VSSTRESN, VSSTRESU]
+  columns: [USUBJID, VSTESTCD, ASEQ, SEX, AGE, AGEGR1, RACE, VSSTRESN, VSSTRESU]
 
 columns:
   - name: USUBJID
@@ -65,4 +65,4 @@ columns:
 
 verifications:
   - unique:
-      columns: [USUBJID, VSTESTCD]
+      columns: [USUBJID, VSTESTCD, ASEQ]

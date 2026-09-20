@@ -8,12 +8,15 @@ reads its named dataset, and a bare name reads the output columns.
 **Input:** one `spec.yaml` declaring two datasets. `VS` carries the
 vital-signs records that drive the output rows: subject (`USUBJID`),
 test (`VSTESTCD`), sequence (`VSSEQ`), result (`VSSTRESN`), and units
-(`VSSTRESU`). `DM` carries one row per subject with sex, age, and race.
+(`VSSTRESU`). Each subject's sequence starts at 1, the SDTM way.
+`DM` carries one row per subject with sex, age, and race.
 
 **Bindings:**
 
 - `VS.USUBJID`, `VS.VSTESTCD`, `VS.VSSEQ`, `VS.VSSTRESN`, and
   `VS.VSSTRESU` read the current vital-signs record straight through;
+  the sequence restarts at 1 for each subject and survives into
+  `ADVS` as `ASEQ`, a key beside subject and test;
 - `DM.SEX`, `DM.AGE`, and `DM.RACE` reach the demographics dataset
   through the shared subject key, and a missing race stays blank;
 - `AGEGR1` groups the already-derived `AGE` into `<65` and `>=65`;
