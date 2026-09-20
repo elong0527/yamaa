@@ -84,8 +84,6 @@ Going the other way, two of the eleven columns have no YAMAA field:
 
 ---
 
----
-
 ## 2. The full mapping table
 
 ### 2.1 Dataset level
@@ -131,9 +129,9 @@ Excel has one Codelist column. YAMAA separates by where the vocabulary lives:
 | Situation | YAMAA | Example |
 |---|---|---|
 | Short vocabulary, written in the spec | `mapping` | `M -> M, F -> F` |
-| Vocabulary is an external file (MedDRA, WHODrug, a reference-range table) | `lookup` | Example 8 |
+| Vocabulary is an external file (MedDRA, WHODrug, a reference-range table) | `lookup` | [`sdtm-ae-dictionary-coding`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-ae-dictionary-coding) |
 | No translation, only a **check** that the value is one of these | `allowed_values` | `values: [M, F, U]` |
-| Numeric banding (AGEGR1, BMI categories) | `cut` | Example 1 |
+| Numeric banding (AGEGR1, BMI categories) | `cut` | [Example 1](#example-1-direct-mapping-a-codelist-and-numeric-banding) |
 
 ### 2.4 Value-level metadata
 
@@ -149,9 +147,7 @@ own derivation. `AVAL` is the standard case -- alanine aminotransferase where
 | "this PARAM is derived from another PARAM" | Another row template with its own `literal` PARAMCD |
 | "one collected record yields several analysis records" | Several row templates, appended in order |
 
-See example 4 below.
-
----
+See [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-bds) in [More examples](#more-examples) below.
 
 ---
 

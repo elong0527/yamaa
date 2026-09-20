@@ -2,14 +2,14 @@
 
 ## What the suite is
 
-`benchmark/` holds **213 directories**. Each one is a complete, runnable
+`benchmark/` holds **214 directories**. Each one is a complete, runnable
 specification with its input data and the exact output an implementation must
 reproduce:
 
 | Group | Count | What it is |
 |---|---|---|
 | `adam-*` | 76 | ADaM derivations |
-| `sdtm-*` | 22 | SDTM derivations |
+| `sdtm-*` | 23 | SDTM derivations |
 | `negative-*` | 109 | Specifications the design **must reject**, with the exact error |
 | `odm-*` | 1 | An ODM resolution behavior |
 | `schema-*`, `spec-*` | 5 | Schema and inheritance behaviors |
