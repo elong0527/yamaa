@@ -109,17 +109,15 @@ unrounded result, and rounding for display happens once, later, under
 
 - **The engine never imports this module.** `yamaa_domain` accepts an
   optional `dispatcher` -- a generic expression-dispatch hook the engine
-  threads through unchanged -- and the runner builds it from the activated
-  project:
+  threads through unchanged -- and the runner in this module builds it from
+  the activated project. Benchmarks use the runner the way they use the
+  engine, with no internal machinery in `run.py`:
 
   ```python
   import yamaa
-  from yamaa.functions import activate_project_functions, function_dispatcher
-  from yamaa.specification import load_specification
+  from yamaa.functions import run_with_project_functions
 
-  specification = load_specification("spec.yaml", "../yaml").specification
-  activated = activate_project_functions(specification, "python", "../yaml")
-  adsl = yamaa.yamaa_domain("spec.yaml", dispatcher=function_dispatcher(activated)).output
+  adsl = run_with_project_functions("spec.yaml", project_root="python").output
   ```
 
   All R018 orchestration (environment, calls, artifact, activation) lives
