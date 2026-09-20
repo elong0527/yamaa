@@ -16,7 +16,7 @@ explained in [Schema introduction](schema-intro.md).
 | [`schema_expression_core.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_core.yaml) | Core expressions: `source`, `literal`, `first_available`, `case` |
 | [`schema_expression_mapping.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_mapping.yaml) | Vocabulary mapping: `mapping`, `lookup`, `cut` |
 | [`schema_expression_str.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_str.yaml) | String expressions: `str_extract`, `str_concat`, `str_template`, `str_upper`, `str_lower` |
-| [`schema_expression_numeric.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_numeric.yaml) | The closed `compute` grammar (Numeric computation) |
+| [`schema_expression_numeric.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_numeric.yaml) | Numeric expressions: the closed `compute` grammar (Numeric computation) and `round_half_away_from_zero` |
 | [`schema_expression_aggregate.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_aggregate.yaml) | The `aggregate` reducers (Aggregation) |
 | [`schema_expression_date.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_date.yaml) | Temporal expressions: `date_diff`, `study_day`, `date_impute`, `date_precision` (Temporal operations) |
 | [`schema_expression_window.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_expression_window.yaml) | Window expressions over constructed output rows: `row_number`, `rank`, `row_value`, `previous_non_missing`, `baseline_flag`, `baseline_value` |

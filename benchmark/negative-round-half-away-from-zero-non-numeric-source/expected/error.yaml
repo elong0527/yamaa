@@ -1,0 +1,9 @@
+phase: validation
+condition: incompatible_input_type
+spec_paths:
+  - columns.RNDVAL.derivation.round_half_away_from_zero.source
+requirement: REQ-0418
+context:
+  source: SEX
+  expected: numeric
+  actual: str

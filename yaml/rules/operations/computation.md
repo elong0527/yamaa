@@ -166,15 +166,24 @@ vocabulary requires amending the table in [REQ-0415](computation.md#req-0415).
 **REQ-0417.** `LOG` is excluded because its base differs between dialects.
 Write `LN(x)` or `LN(x) / LN(b)`.
 
-#### There is no rounding function
+#### One rounding with fixed tie behavior
 
 <a id="req-0418"></a>
 
-**REQ-0418.** A derivation must not round. `ROUND` is absent, not merely
-discouraged, and a specification cannot round a value. Analysis datasets carry
-computed values at full precision. Reporting decides the displayed places. [Types and conversion](../values/types.md)
-has the same rule at conversion, where a non-integral value fails rather than
-being truncated.
+**REQ-0418.** `round_half_away_from_zero` is the one rounding the language
+admits, and its tie behavior is fixed: a value exactly halfway between two
+candidates, or within `sqrt(2^-52) * 10^-digits` below such a tie, rounds
+half away from zero. The name states the mode so a specification can never
+silently mean banker's rounding; this is the SAS `ROUND` and metalite
+`round_half_away_from_zero` behavior that ADaM analysis values use. No other
+rounding exists: the `compute` grammar gains no `ROUND`, and a derivation
+must not round by any other spelling. The source must be numeric; a
+non-numeric source is an `incompatible_input_type` validation error. Missing
+stays missing. A value that rounds to zero returns positive zero, never
+negative zero. Analysis datasets otherwise carry computed values at full
+precision; reporting decides the displayed places. [Types and
+conversion](../values/types.md) has the same rule at conversion, where a
+non-integral value fails rather than being truncated.
 
 <a id="req-0419"></a>
 
@@ -304,6 +313,17 @@ structural constraints come from its schema declaration.
 | --- | --- |
 | `Scope` | [Numeric computation](computation.md) defines the closed numeric grammar, types, and failure conditions. |
 
+<a id="req-1172"></a>
+
+**REQ-1172.** The `expressions.round_half_away_from_zero` interface has the following meanings. Shape, defaults, and
+structural constraints come from its schema declaration.
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.round_half_away_from_zero.source` | Numeric variable to round. |
+| `expressions.round_half_away_from_zero.digits` | Integer decimal places; negative rounds left of the decimal point. |
+| `Result` | The source rounded to `digits` places with ties half away from zero; a float. |
+
 ## Error conditions
 
 <a id="req-0335"></a>
@@ -348,10 +368,10 @@ expression and the operation that failed.
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-row-aggregate](../../../benchmark/negative-row-aggregate/README.md).
-- [negative-formula-flag](../../../benchmark/negative-formula-flag/README.md).
-- [negative-zero-division](../../../benchmark/negative-zero-division/README.md).
-- [negative-log-zero](../../../benchmark/negative-log-zero/README.md).
+- [negative-compute-aggregate-function](../../../benchmark/negative-compute-aggregate-function/README.md).
+- [negative-compute-comparison-operator](../../../benchmark/negative-compute-comparison-operator/README.md).
+- [negative-compute-division-by-zero](../../../benchmark/negative-compute-division-by-zero/README.md).
+- [negative-compute-ln-of-zero](../../../benchmark/negative-compute-ln-of-zero/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

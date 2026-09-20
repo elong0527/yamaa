@@ -8,6 +8,15 @@ expressions:
             type: numeric_expression
             required: true
             description: See REQ-1119 in rules/operations/computation.md.
+    round_half_away_from_zero: # See REQ-1172 in rules/operations/computation.md.
+        - source:
+            type: variable
+            required: true
+            description: See REQ-1172 in rules/operations/computation.md.
+        - digits:
+            type: int
+            required: true
+            description: See REQ-1172 in rules/operations/computation.md.
 
 numeric_expression:
     type: str

@@ -1128,6 +1128,7 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1119](../operations/computation.md#req-1119) | `operations/computation.md` | Schema prose |
 | [REQ-1120](../operations/computation.md#req-1120) | `operations/computation.md` | Schema prose |
 | [REQ-1121](../operations/computation.md#req-1121) | `operations/computation.md` | Schema prose |
+| [REQ-1172](../operations/computation.md#req-1172) | `operations/computation.md` | Schema prose |
 | [REQ-1122](../operations/windows.md#req-1122) | `operations/windows.md` | Schema prose |
 | [REQ-1123](../operations/windows.md#req-1123) | `operations/windows.md` | Schema prose |
 | [REQ-1124](../operations/windows.md#req-1124) | `operations/windows.md` | Schema prose |
