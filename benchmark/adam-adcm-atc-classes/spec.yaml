@@ -1,0 +1,120 @@
+schema_version: "1.0"
+domain: ADCM
+keys: [STUDYID, USUBJID, CMSEQ, PATHSEQ]
+input:
+  PATHS: {path: input/atc_paths.csv, types: {CMSEQ: int, PATHSEQ: int}}
+  CM: {path: input/cm.csv, types: {CMSEQ: int}}
+  ADSL: input/adsl.csv
+base: PATHS
+
+output:
+  path: adcm.csv
+  columns: [STUDYID, USUBJID, CMSEQ, CMTRT, CMDECOD, PATHSEQ, ATC1, ATC2, ATC3, ATC4, ATC1CD, ATC2CD, ATC3CD, ATC4CD, TRTSDT, TRTEDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation:
+      source: PATHS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      source: PATHS.USUBJID
+
+  - name: CMSEQ
+    type: int
+    label: Sequence Number
+    derivation:
+      source: PATHS.CMSEQ
+
+  - name: CMTRT
+    type: str
+    label: Reported Name of Drug, Medication, or Therapy
+    derivation:
+      source: CM.CMTRT
+
+  - name: CMDECOD
+    type: str
+    label: Standardized Medication Name
+    derivation:
+      source: CM.CMDECOD
+
+  - name: PATHSEQ
+    type: int
+    label: ATC Path Sequence Number
+    derivation:
+      source: PATHS.PATHSEQ
+
+  - name: ATC1
+    type: str
+    label: ATC Level 1 Name
+    derivation:
+      source: PATHS.ATC1
+
+  - name: ATC2
+    type: str
+    label: ATC Level 2 Name
+    derivation:
+      source: PATHS.ATC2
+
+  - name: ATC3
+    type: str
+    label: ATC Level 3 Name
+    derivation:
+      source: PATHS.ATC3
+
+  - name: ATC4
+    type: str
+    label: ATC Level 4 Name
+    derivation:
+      source: PATHS.ATC4
+
+  - name: ATC1CD
+    type: str
+    label: ATC Level 1 Code
+    derivation:
+      source: PATHS.ATC1CD
+
+  - name: ATC2CD
+    type: str
+    label: ATC Level 2 Code
+    derivation:
+      source: PATHS.ATC2CD
+
+  - name: ATC3CD
+    type: str
+    label: ATC Level 3 Code
+    derivation:
+      source: PATHS.ATC3CD
+
+  - name: ATC4CD
+    type: str
+    label: ATC Level 4 Code
+    derivation:
+      source: PATHS.ATC4CD
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation:
+      source: ADSL.TRTSDT
+
+  - name: TRTEDT
+    type: date
+    label: Date of Last Exposure to Treatment
+    derivation:
+      source: ADSL.TRTEDT
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID, CMSEQ, PATHSEQ]
+  - row_count:
+      min: 4
+      max: 4
+  - implies:
+      id: coded-path-has-standard-name
+      when: "ATC1 IS NOT NULL"
+      then: "CMDECOD IS NOT NULL"
