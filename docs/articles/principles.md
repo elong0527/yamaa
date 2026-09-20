@@ -85,5 +85,5 @@ different ways.
 ## Principles to working model
 
 These principles are not rules by themselves. Each one is enforced by the
-[Rules](../reference/rules.md) and demonstrated in the
+[Rules](rules.md) and demonstrated in the
 [benchmark](../benchmark/index.md) with minimal, visible benchmarks.

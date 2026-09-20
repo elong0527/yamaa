@@ -4,7 +4,7 @@ The schema bundle lives in [`yaml/`](https://github.com/elong0527/yamaa/tree/mai
 A specification declares which schema version it targets (`schema_version`), and
 structural validation rejects anything the schema does not declare. The four
 words you need to read these files -- class, type, expression, registry -- are
-explained in [Spec anatomy](../articles/spec-anatomy.md).
+explained in [Schema introduction](schema-intro.md).
 
 ## Schema files
 
@@ -27,6 +27,6 @@ explained in [Spec anatomy](../articles/spec-anatomy.md).
 | [`schema_define.yaml`](https://github.com/elong0527/yamaa/blob/main/yaml/schema_define.yaml) | Define-XML composition inputs (Define-XML) |
 
 The derivation verbs in full, with what each one is for, are tabulated in
-[Spec anatomy](../articles/spec-anatomy.md#the-verb-table). The
+[Schema introduction](schema-intro.md#the-derivation-vocabulary). The
 execution semantics behind them are owned by the
 [derivation contracts](rules.md).

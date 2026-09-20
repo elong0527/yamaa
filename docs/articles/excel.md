@@ -114,7 +114,7 @@ Going the other way, two of the eleven columns have no YAMAA field:
 | `Origin` = Assigned | `literal: DM` | |
 | `Origin` = Collected (CRF / eDT) | `source: {variable: ODM.Value, filter: "ODM.ItemOID = 'IT.DM.AGE'"}` | The `filter` says which collected records the value comes from |
 | `Origin` = Predecessor | `source: ADSL.TRTSDT` | A qualified cross-dataset name performs a declared-key `lookup` (Lookup and joins) |
-| `Origin` = Derived | a specific expression | See [the verb table](spec-anatomy.md#the-verb-table) |
+| `Origin` = Derived | a specific expression | See [the derivation vocabulary](schema-intro.md#the-derivation-vocabulary) |
 | `Core` (Req / Exp / Perm) | `column.metadata` | Conformance classification; it says nothing about derivation |
 | `Conversion Definition` | `derivation:` | From a sentence a person reads to an expression a machine runs |
 | `Variable Order` | `columns` order **and** `output.columns` | One Excel column doing two jobs |
