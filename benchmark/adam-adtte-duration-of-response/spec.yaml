@@ -6,6 +6,7 @@ input:
   ADRS_RAW: input/adrs_raw.csv
   DS: input/ds.csv
 
+base: ADSL
 output:
   path: adtte.csv
   columns: [STUDYID, USUBJID, PARAMCD, PARAM, STARTDT, ADT, AVAL, CNSR, EVNTDESC, CNSDTDSC, SRCDOM, SRCVAR, SRCSEQ]
@@ -226,11 +227,7 @@ columns:
           then:
             source: LASTVLSEQ
 
-rows:
-  - id: responder
-    dataset: ADSL
-    filter: "ADSL.RESPDT IS NOT NULL"
-    derivations: {}
+filter: "ADSL.RESPDT IS NOT NULL"
 
 verifications:
   - unique:

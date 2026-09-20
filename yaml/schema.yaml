@@ -49,6 +49,10 @@ root_class:
         type: "list[row_class]"
         required: false
         description: See REQ-1042 in rules/specification/structure.md.
+    - filter:
+        type: predicate
+        required: false
+        description: See REQ-1042 in rules/specification/structure.md.
     - verifications:
         type: [dataset_verification, "list[dataset_verification]"]
         required: false
@@ -196,6 +200,10 @@ row_class:
     - derivations:
         type: "dict[identifier, derivation]"
         required: true
+        description: See REQ-1056 in rules/execution/rows.md.
+    - submission:
+        type: "dict[identifier, submission_column_class]"
+        required: false
         description: See REQ-1056 in rules/execution/rows.md.
 
 variable:

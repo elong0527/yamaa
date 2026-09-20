@@ -213,3 +213,16 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
   .panel { break-inside: avoid; }
   .datasets { gap: 16px; }
 }
+
+/* Mapping spec review section */
+.mapping-panel { margin: 26px 0 22px; }
+.mapping-body { padding: 6px 18px 18px; }
+.mapping-tablist { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 0 4px; }
+.mapping-tab { appearance: none; border: 1px solid var(--line); background: #f3f7fb; color: #24384d; border-radius: 6px; padding: 8px 14px; font-size: 14px; font-weight: 550; cursor: pointer; }
+.mapping-tab:hover { border-color: var(--brand); color: var(--brand); }
+.mapping-tab[aria-selected="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
+.mapping-pane { padding-top: 10px; }
+.mapping-pane[hidden] { display: none; }
+.mapping-scroll { max-height: 560px; }
+.mapping-table td { white-space: normal; vertical-align: top; height: auto; }
+.mapping-table td:first-child, .mapping-table th:first-child { white-space: nowrap; }

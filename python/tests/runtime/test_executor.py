@@ -669,3 +669,32 @@ def test_key_plan_sees_earlier_key_values() -> None:
 
     assert isinstance(result, ExecutionSuccess)
     assert result.artifact.frame.rows() == [("one", "one"), ("two", "two")]
+
+
+def test_a_root_filter_keeps_only_matching_driver_records() -> None:
+    def derive(expression):
+        return HandledExpression(value=Expression(root=expression))
+
+    specification = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={"SRC": DatasetSource(path="input/source.csv")},
+        base="SRC",
+        keys=["X"],
+        output=Output(path="out.csv", columns=["X"]),
+        columns=[
+            Column(name="X", type="str", derivation=derive({"source": "SRC.X"})),
+        ],
+        filter="SRC.X <> 'two'",
+    )
+    sources = {
+        "SRC": TypedTable(
+            columns=(TypedColumn(name="X", type="str"),),
+            frame=pl.DataFrame({"X": ["one", "two", "three"]}, schema={"X": pl.String}),
+        )
+    }
+
+    result = execute_specification(specification, sources)
+
+    assert isinstance(result, ExecutionSuccess)
+    assert result.artifact.frame.rows() == [("one",), ("three",)]

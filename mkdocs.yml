@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
 site_name: yamaa
-site_description: A language-neutral YAML specification for reproducible clinical trial data pipelines
+site_description: A domain-specific language for clinical trial data standardization, from ODM XML to SDTM and ADaM
 site_url: https://elong0527.github.io/yamaa/
 repo_url: https://github.com/elong0527/yamaa
 repo_name: elong0527/yamaa

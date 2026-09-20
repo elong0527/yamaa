@@ -3361,6 +3361,15 @@ def prune_inheritance_collections(spec, env):
                 ('root_class', 'verifications'),
             )
         )
+    if 'filter' in pruned and 'filter' in root_fields:
+        references.update(
+            collect_descriptor_references(
+                pruned['filter'],
+                root_fields['filter'],
+                env,
+                ('root_class', 'filter'),
+            )
+        )
 
     row_fields = schema_class_fields(env, 'row_class')
     for row in row_entries:
