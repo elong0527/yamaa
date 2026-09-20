@@ -119,11 +119,8 @@ and `NULL` are case-insensitive; identifiers are not.
 - `LEAST(x, ...)`: smallest non-`NULL` argument, or `NULL` if all are
   `NULL`.
 - `NULLIF(x, y)`: `NULL` when `x = y`, otherwise `x`.
-- `COALESCE(x, ...)`: first non-`NULL` argument, or `NULL` if all are
-  `NULL`.
 
-**R010-10.** `GREATEST` and `LEAST` require at least two arguments;
-`COALESCE` requires at least one. Any other function name, any operator
+**R010-10.** `GREATEST` and `LEAST` require at least two arguments. Any other function name, any operator
 outside the grammar, any string literal, any comparison or Boolean operator,
 any `CASE`, any aggregate function, any window function or `OVER`, any
 subquery, and any host-language call are validation errors. Widening the
@@ -160,7 +157,7 @@ operand returns `float`.
 `type: int` to get an integer. R005 converts the completed result
 and R011 defines that conversion.
 
-**R010-19.** `ABS`, `GREATEST`, `LEAST`, `MOD`, `NULLIF`, and `COALESCE`
+**R010-19.** `ABS`, `GREATEST`, `LEAST`, `MOD`, and `NULLIF`
 return the promoted type of their arguments: `int` when every argument is
 `int`, otherwise `float`.
 
@@ -177,7 +174,7 @@ converted by binding it to a numeric column first.
 ## Missing values
 
 **R010-22.** `NULL` propagates. A `NULL` argument to an operator or function
-produces a `NULL` result, except `COALESCE`, `NULLIF`, `GREATEST`, and `LEAST`,
+produces a `NULL` result, except `NULLIF`, `GREATEST`, and `LEAST`,
 whose argument-level behavior is defined in the R010-9 table.
 
 **R010-23.** A `compute` derivation therefore needs no guarding predicate to

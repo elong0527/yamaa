@@ -54,7 +54,6 @@ vocabulary:
     GREATEST: {min_arguments: 2, max_arguments: null}
     LEAST: {min_arguments: 2, max_arguments: null}
     NULLIF: {min_arguments: 2, max_arguments: 2}
-    COALESCE: {min_arguments: 1, max_arguments: null}
 # A spelling the grammar reserves for a construct it does not admit, so the
 # failure names the construct rather than a stray token.
 prohibited:
@@ -159,10 +158,10 @@ cases:
     condition: invalid_numeric_expression
   - id: a-variadic-function-takes-more-than-its-minimum
     covers: [call, vocabulary]
-    text: "COALESCE(A, B, 0)"
+    text: "GREATEST(A, B, 0)"
     parse: accept
     identifiers: [A, B]
-    shape: (call COALESCE (id A) (id B) (int 0))
+    shape: (call GREATEST (id A) (id B) (int 0))
   - id: null-is-an-argument-rather-than-a-name
     covers: [call, null-literal]
     text: "NULLIF(A, NULL)"
@@ -171,10 +170,10 @@ cases:
     shape: (call NULLIF (id A) null)
   - id: null-is-case-insensitive
     covers: [null-literal, keyword-case]
-    text: "COALESCE(null, 0)"
+    text: "NULLIF(null, 0)"
     parse: accept
     identifiers: []
-    shape: (call COALESCE null (int 0))
+    shape: (call NULLIF null (int 0))
   - id: an-integer-literal-has-no-fraction-or-exponent
     covers: [literal]
     text: "A + 42"
@@ -244,9 +243,9 @@ cases:
     text: "ABS(A, B)"
     parse: reject
     condition: prohibited_function
-  - id: coalesce-requires-an-argument
+  - id: coalesce-is-not-in-the-vocabulary
     covers: [vocabulary, rejection]
-    text: "COALESCE()"
+    text: "COALESCE(A, B)"
     parse: reject
     condition: prohibited_function
   - id: a-comparison-is-not-a-numeric-expression

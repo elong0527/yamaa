@@ -151,7 +151,6 @@ def test_the_committed_bmi_formula_reproduces_its_committed_doubles() -> None:
         ("LEAST(1, 2, 3)", 1),
         ("GREATEST(1, 2.5)", 2.5),
         ("NULLIF(1, 2)", 1),
-        ("COALESCE(3, 4)", 3),
     ],
 )
 def test_every_permitted_function_returns_its_declared_type(
@@ -187,8 +186,6 @@ def test_missing_propagates_through_every_operator(text: str) -> None:
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
-        ("COALESCE(A, 2)", 2),
-        ("COALESCE(A, B)", MISSING),
         ("GREATEST(A, 2)", 2),
         ("GREATEST(A, B)", MISSING),
         ("LEAST(A, 2)", 2),
@@ -197,10 +194,10 @@ def test_missing_propagates_through_every_operator(text: str) -> None:
         ("NULLIF(2, 2)", MISSING),
     ],
 )
-def test_the_four_argument_level_functions_answer_missing_themselves(
+def test_the_three_argument_level_functions_answer_missing_themselves(
     text: str, expected: object
 ) -> None:
-    # R010-22 excepts exactly COALESCE, NULLIF, GREATEST, and LEAST.
+    # R010-22 excepts exactly NULLIF, GREATEST, and LEAST.
     assert _value(text, {"A": MISSING, "B": MISSING}) == expected
 
 

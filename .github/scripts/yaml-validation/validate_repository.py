@@ -637,7 +637,6 @@ NUMERIC_FUNCTION_ARITIES = {
     'GREATEST': (2, None),
     'LEAST': (2, None),
     'NULLIF': (2, 2),
-    'COALESCE': (1, None),
 }
 
 

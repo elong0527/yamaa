@@ -53,7 +53,6 @@ FUNCTION_ARITIES: dict[str, tuple[int, int | None]] = {
     "GREATEST": (2, None),
     "LEAST": (2, None),
     "NULLIF": (2, 2),
-    "COALESCE": (1, None),
 }
 
 # A spelling R010 reserves for a construct the grammar does not admit, so the
@@ -483,11 +482,6 @@ def _call(node: NumericAst, expr: str, resolver: Resolver) -> object:
     name = node["name"]
     arguments = [_evaluate(argument, expr, resolver) for argument in node["arguments"]]
 
-    if name == "COALESCE":
-        for value in arguments:
-            if not _is_missing(value):
-                return value
-        return MISSING
     if name in {"GREATEST", "LEAST"}:
         return _extreme(arguments, largest=name == "GREATEST")
     if name == "NULLIF":

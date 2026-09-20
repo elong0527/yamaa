@@ -531,7 +531,6 @@ class TestNumericExpressionLanguage(unittest.TestCase):
             'ABS(A)', 'CEIL(A)', 'FLOOR(A)', 'TRUNC(A)', 'SQRT(A)',
             'POWER(A, 2)', 'EXP(A)', 'LN(A)', 'MOD(A, 2)',
             'GREATEST(A, B)', 'LEAST(A, B)', 'NULLIF(A, B)',
-            'COALESCE(NULL, A, B)',
         ]
         resolver = VALIDATOR.numeric_identifier_resolver(
             unqualified={'A': 'int', 'B': 'float'}
@@ -551,7 +550,7 @@ class TestNumericExpressionLanguage(unittest.TestCase):
             unqualified={'A': 'float'}
         )
         for expression in (
-            'ABS()', 'POWER(A)', 'GREATEST(A)', 'COALESCE()'
+            'ABS()', 'POWER(A)', 'GREATEST(A)'
         ):
             with self.subTest(expression=expression):
                 errors = VALIDATOR.validate_numeric_expression_at(
@@ -559,6 +558,16 @@ class TestNumericExpressionLanguage(unittest.TestCase):
                 )
                 self.assertEqual(len(errors), 1)
                 self.assertEqual(errors[0].condition, 'prohibited_function')
+
+    def test_rejects_coalesce_as_removed_from_the_vocabulary(self):
+        resolver = VALIDATOR.numeric_identifier_resolver(
+            unqualified={'A': 'int', 'B': 'int'}
+        )
+        errors = VALIDATOR.validate_numeric_expression_at(
+            'COALESCE(A, B)', 'spec.compute.expr', resolver
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].condition, 'prohibited_function')
 
     def test_does_not_execute_runtime_failure_conditions(self):
         resolver = VALIDATOR.numeric_identifier_resolver()

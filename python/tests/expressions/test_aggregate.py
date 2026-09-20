@@ -237,7 +237,6 @@ def test_arithmetic_over_reductions_uses_r010_promotion_and_division() -> None:
 
 def test_a_missing_reduction_propagates_through_an_operator() -> None:
     assert _value("SUM(A) + COUNT(A)", []) is MISSING
-    assert _value("COALESCE(SUM(A), 0)", []) == 0
 
 
 def test_min_and_max_order_dates_chronologically() -> None:

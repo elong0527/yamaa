@@ -140,16 +140,16 @@ cases:
     shape: (reduce SUM (call ABS (id A)))
   - id: a-function-may-take-a-reduction
     covers: [call, reduction]
-    text: "COALESCE(SUM(A), 0)"
+    text: "NULLIF(SUM(A), 0)"
     parse: accept
     identifiers: [A]
-    shape: (call COALESCE (reduce SUM (id A)) (int 0))
+    shape: (call NULLIF (reduce SUM (id A)) (int 0))
   - id: a-literal-and-null-are-primaries
     covers: [literal, null-literal]
-    text: "COALESCE(SUM(A), NULL, 1.5)"
+    text: "GREATEST(SUM(A), NULL, 1.5)"
     parse: accept
     identifiers: [A]
-    shape: (call COALESCE (reduce SUM (id A)) null (float 1.5))
+    shape: (call GREATEST (reduce SUM (id A)) null (float 1.5))
   - id: reductions-do-not-nest
     covers: [reduction, rejection]
     text: "MAX(SUM(EX.EXDOSE))"
