@@ -1521,6 +1521,7 @@ def _validate_qualified_reference(
     *,
     intermediates: Mapping[str, PlannedIntermediate] = {},
     row: Row | None = None,
+    grouped_by_driver: Mapping[str, Sequence[tuple[str, ...]]] | None = None,
 ) -> None:
     """Check one qualified name against the relation it reaches.
 
@@ -1585,6 +1586,13 @@ def _validate_qualified_reference(
     ):
         _validate_row_phase_reference(
             reference, bound.dataset, next(iter(drivers), None), row, diagnostics
+        )
+    if row is None and grouped_by_driver is not None:
+        # REQ-0107: a column-level derivation reads every constructed row, so
+        # a scalar source of a grouped template's driver must name a variable
+        # in the group_by of every grouped template that dataset drives.
+        _validate_column_phase_group_key(
+            reference, bound, grouped_by_driver, diagnostics
         )
     actual = _bound_type(bound, bindings, column_types)
     if reference.expected_type is not None and actual != reference.expected_type:
@@ -1671,6 +1679,38 @@ def _validate_row_phase_reference(
                 requirement="REQ-0067",
             )
         )
+
+
+def _validate_column_phase_group_key(
+    reference: _Reference,
+    bound: BoundReference,
+    grouped_by_driver: Mapping[str, Sequence[tuple[str, ...]]],
+    diagnostics: list[ExecutionDiagnostic],
+) -> None:
+    """Fail a column-level scalar source that is not a group key (REQ-0107).
+
+    A column-level derivation is evaluated for every constructed row, so a
+    scalar read of a grouped template's driver dataset is only meaningful
+    when the variable is a group key of every grouped template that dataset
+    drives. Anything else varies within the group and resolves to nothing at
+    runtime, which previously failed silently.
+    """
+    if bound.kind != "dataset" or reference.reach != "scalar":
+        return
+    templates = grouped_by_driver.get(bound.dataset or "")
+    if not templates:
+        return
+    for group_by in templates:
+        if reference.name not in group_by:
+            diagnostics.append(
+                _diagnostic(
+                    "ungrouped_driver_field",
+                    reference.path,
+                    {"identifier": reference.name, "dataset": bound.dataset},
+                    requirement="REQ-0107",
+                )
+            )
+            return
 
 
 def _validate_intermediate_reference(
@@ -3191,6 +3231,12 @@ def plan_execution(
 
     column_plans: list[PlannedDerivation] = []
     drivers = {plan.driver for plan in row_plans}
+    # REQ-0107: the group_by of every grouped template, keyed by driver
+    # dataset, so column-level scalar sources can be checked against them.
+    grouped_by_driver: dict[str, list[tuple[str, ...]]] = {}
+    for plan in row_plans:
+        if plan.group_variables:
+            grouped_by_driver.setdefault(plan.driver, []).append(plan.group_variables)
     for column in specification.columns:
         if column.derivation is None:
             continue
@@ -3236,6 +3282,7 @@ def plan_execution(
                     column_types,
                     diagnostics,
                     intermediates=intermediates,
+                    grouped_by_driver=grouped_by_driver,
                 )
             elif reference.name not in column_types:
                 diagnostics.append(
