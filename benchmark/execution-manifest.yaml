@@ -606,6 +606,9 @@ examples:
   sdtm-ex-combination-regimen:
     status: executable
     runtimes: ['python']
+  sdtm-ex-dose-intervals:
+    status: executable
+    runtimes: ['python']
   sdtm-fa-fever-occurrence:
     status: executable
     runtimes: ['python']
