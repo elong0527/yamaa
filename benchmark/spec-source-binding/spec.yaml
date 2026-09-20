@@ -8,7 +8,7 @@ base: VS
 
 output:
   path: advs.csv
-  columns: [USUBJID, VSTESTCD, SEX, AGE, AGEGR1, RACE, VSSTRESN, VSSTRESU]
+  columns: [USUBJID, VSTESTCD, SEX, AGE, AGEGR1, RACE, ASEQ, VSSTRESN, VSSTRESU]
 
 columns:
   - name: USUBJID
@@ -47,6 +47,11 @@ columns:
     type: str
     label: Race
     derivation: DM.RACE
+
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+    derivation: VS.VSSEQ
 
   - name: VSSTRESN
     type: float
