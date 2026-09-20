@@ -121,7 +121,7 @@ no expression or field names, no `output.columns`, and none of the words
     + `date_diff` with `bounds: between`
 
     - A subject who never entered period two has no exposure records there
-    + Its period-two right side is empty after filtering, which R003 treats as
+    + Its period-two right side is empty after filtering, treated as
       an absent match
 
 A positive benchmark with alternative specs may add a final `## Specification
@@ -221,7 +221,8 @@ lifecycle could not complete. A failure involving several authored units names
 each one once, in specification order. Do not add a parent or an absent field
 merely because changing it would be another possible repair.
 
-When R006 makes a scalar and a one-field class interchangeable shorthand, the
+When the [schema language](../yaml/rules/reference/schema-language.md) makes
+a scalar and a one-field class interchangeable shorthand, the
 path names the operation: it is the narrowest authored unit shared by both
 spellings, and normalization must not invent a deeper location.
 
@@ -242,8 +243,8 @@ the same point say so the same way. Whole-run evaluation failures use:
 | `output` | output identity, once every column holds its final value |
 | `verification` | a declared assertion |
 
-A condition that an operation could have answered locally uses the stage R008
-gives it:
+A condition that an operation could have answered locally uses the stage in
+the [local-handlers contract](../yaml/rules/execution/handlers.md):
 
 | Phase | Rejects |
 |---|---|
@@ -354,6 +355,7 @@ entry when it does not: `study_day` returns an ordinal on a calendar with no
 zero, and folding it into `date_diff` would have allowed `unit: week` with it.
 
 After registering one, update every place that enumerates the vocabulary: the
-input-shape audit in `../yaml/README.md`, R007's type behavior, and R008 if it
-declares handlers. Then delete the gap it closed from its work item in the
+input-shape audit in `../yaml/README.md`, the owning operation contract's type
+behavior, and the [local-handlers contract](../yaml/rules/execution/handlers.md)
+if it declares handlers. Then delete the gap it closed from its work item in the
 issue tracker, and close the work item when its last gap closes.
