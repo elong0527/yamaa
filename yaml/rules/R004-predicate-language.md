@@ -15,11 +15,11 @@ literals, comparisons, missing-value behavior, and failures.
 
 ## Boundaries
 
-This rule owns the `predicate` primitive completely. R006 owns schema
-structure. R011 owns input comparability; R007 owns expression input types. R010 owns the numeric-valued `numeric_expression` primitive.
-R011 owns the column type vocabulary. R016 owns temporal values. R019
-owns text values and their equality and order. R001 owns the phase in
-which a predicate runs and the names available in that phase.
+This rule owns the `predicate` primitive. R006 owns schema structure. R011
+owns input comparability and column type vocabulary. R007 owns expression
+input types. R010 owns `numeric_expression`. R016 owns temporal values.
+R019 owns text equality and order. R001 owns predicate timing and available
+names.
 
 The predicate and numeric primitives share identifier notation and numeric
 literals. Neither grammar admits the other's operators or functions.
@@ -173,7 +173,7 @@ summary:
 - **R004-24.** aggregate, record-lookup, and multiple-match filters see
   records of their owning right-side dataset;
 - **R004-25.** a window filter sees completed output columns;
-- **R004-26.** a verification sees completed output columns and record intermediates
+- **R004-26.** a verification sees completed columns and record intermediates
   resolved for the completed row; and
 - **R004-27.** a `case` sees the values available to its enclosing
   derivation.
