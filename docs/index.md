@@ -9,9 +9,23 @@ title: YAMAA documentation
 [![Docs](https://github.com/elong0527/yamaa/actions/workflows/deploy-docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/main/LICENSE)
 
-Language-neutral YAML specification for reproducible clinical trial data pipelines.
+YAMAA is designed for AI-agent and human collaboration on clinical data standardization. YAMAA has four components: schema, rules, engine and benchmark. 
 
-Designed for AI-agent and human collaboration on clinical data standardization, following our [core principles](articles/principles.md). Engines in Python and R run YAMAA specifications, and minimal visible benchmarks demonstrate them in real cases.
+The core is a language-neutral YAML schema for reproducible clinical trial data pipelines that transform ODM data into SDTM and ADaM datasets following CDISC standards.
+
+| Component | Purpose | Documentation |
+|---|---|---|
+| Schema | Declares what a specification may contain; anything the schema does not declare is rejected before execution. | [Schema concepts](articles/schema-concepts.md), [Schema reference](reference/schema.md) |
+| Rules | Fix the meaning of every written item, so the R and Python engines execute the same specification in exactly one way. | [Rules](reference/rules.md) |
+| Engine | Runs specifications in Python and R; the same specification with the same inputs produces the same output dataset. | [Python engine](https://github.com/elong0527/yamaa/tree/main/python), [R engine](https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder) |
+| Benchmark | Runnable specifications with input data and byte-exact expected outputs | [Benchmark](benchmark/index.md) |
+
+## Agentic exploration
+
+The fastest way to explore YAMAA is with an AI agent. For example, ask an agent to:
+
+- assess whether one ADaM dataset derivation can be migrated to a YAMAA specification, and run it with a language engine;
+- explain the design of YAMAA from https://github.com/elong0527/yamaa.
 
 ## Installation
 
@@ -27,22 +41,6 @@ R engine:
 # install.packages("devtools")
 devtools::install_github("elong0527/yamaa", subdir = "R/cdiscbuilder")
 ```
-
-## Agentic exploration
-
-The fastest way to explore YAMAA is with an AI agent. For example, ask an agent to:
-
-- assess whether one ADaM dataset derivation can be migrated to a YAMAA specification, and run it with a language engine;
-- explain the design of YAMAA from https://github.com/elong0527/yamaa.
-
-## Documentation
-
-- [Principles](articles/principles.md) -- the short answer to "what is YAMAA for": one execution.
-- [Derivation](articles/derive.md) -- keys, rows, and columns: how one specification derives one dataset.
-- [Why YAMAA](articles/why-yamaa.md) -- the argument before the syntax.
-- [Excel to YAMAA](articles/excel-to-yamaa.md) -- translating specifications you already have.
-- [Schema concepts](articles/schema-concepts.md) -- the language itself.
-- [Benchmark](benchmark/index.md) -- every benchmark, input against output.
 
 ## License
 
