@@ -54,42 +54,8 @@ engines cannot read the same spec in two ways.
 
 One specification produces one dataset. YAMAA first constructs the output
 rows, then derives columns onto those rows. **Column derivation never changes
-the row count.**
-
-| Spec field | Question | Answer |
-|---|---|---|
-| `keys:` | What identifies a row? | The ordered columns whose combined values must be present and unique. |
-| `rows:` | Which rows exist? | Row templates construct rows from retained input records or groups. |
-| `columns:` | What does each row carry? | Each derivation produces exactly one value per constructed row, in declaration order. |
-
-When `rows` is absent, the distinct key combinations in the input construct
-the output rows:
-
-```yaml
-domain: ADSL
-keys: [STUDYID, USUBJID]   # one row per subject
-```
-
-![A key table containing one row per distinct key combination, with columns derived onto it without changing its row count.](../diagrams/derive-simple.svg)
-
-When `rows` is present, each template builds one section and sections
-concatenate in specification order:
-
-```yaml
-rows:
-  - id: height
-    filter: "VS.PARAMCD = 'HEIGHT'"
-    derivations:
-      PARAMCD: {literal: HEIGHT}
-      AVAL: {source: VS.AVAL}
-  - id: weight
-    filter: "VS.PARAMCD = 'WEIGHT'"
-    derivations:
-      PARAMCD: {literal: WEIGHT}
-      AVAL: {source: VS.AVAL}
-```
-
-![Two row-template sections concatenated vertically, with shared and section-specific columns derived onto the resulting rows.](../diagrams/derive-full.svg)
+the row count.** See [Derivation](derive.md) for the full keys / rows /
+columns walkthrough with diagrams.
 
 A column may be derived at column level (one derivation for every row) or at
 row level (in **every** row template, so each section can differ) -- never

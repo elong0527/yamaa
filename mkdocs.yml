@@ -66,6 +66,8 @@ nav:
   - Home: index.md
   - Start:
       - Core concepts: articles/concepts.md
+      - Principles: articles/principles.md
+      - Derivation: articles/derive.md
       - Spec anatomy: articles/spec-anatomy.md
       - Excel to YAMAA: articles/excel-to-yamaa.md
   - Examples:
