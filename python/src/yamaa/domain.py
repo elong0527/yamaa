@@ -212,8 +212,18 @@ def yamaa_domain(
     project_root: str | Path | None = None,
     data_roots: Iterable[str | Path] | None = None,
     read_project_configuration: bool = True,
+    function_root: str | Path | None = None,
 ) -> DomainRun:
-    """Load, validate, and execute one domain specification exactly once."""
+    """Load, validate, and execute one domain specification exactly once.
+
+    ``function_root`` selects the project root R018-2 requires when the
+    specification calls project functions: the runner names it, the
+    environment is validated and activated before any source is read, and
+    the workflow executes on the activated dispatcher. Without it, a
+    specification calling project functions reports ``function`` as an
+    unimplemented operation (R018-1); a specification without calls runs
+    the ordinary path and ignores the root.
+    """
     entry = Path(entry_path)
     if not entry.is_file():
         raise FileNotFoundError(f"domain specification is not a file: {entry}")
@@ -244,7 +254,35 @@ def yamaa_domain(
     entry_node = next(
         node for node in workflow.nodes if node.entry_path == workflow.entry_path
     )
-    execution = execute_workflow(workflow, resources)
+    dispatcher = None
+    if function_root is not None:
+        # Imported lazily so the function boundary stays out of the
+        # ordinary path when the specification calls no project code.
+        from yamaa.functions import (
+            activate_project_functions,
+            function_calls,
+            function_dispatcher,
+        )
+        from yamaa.functions.errors import FunctionActivationError
+
+        if function_calls(entry_node.resolved.specification):
+            try:
+                activated = activate_project_functions(
+                    entry_node.resolved.specification, function_root, selected_schema
+                )
+            except FunctionActivationError as error:
+                result = ExecutionFailure(
+                    diagnostics=error.diagnostics, handler_counts=()
+                )
+                return DomainRun(
+                    entry,
+                    entry_node.resolved.specification,
+                    {},
+                    result,
+                    _issues_frame(_diagnostic_rows(result.diagnostics)),
+                )
+            dispatcher = function_dispatcher(activated)
+    execution = execute_workflow(workflow, resources, dispatcher=dispatcher)
     sources = dict(execution.sources.get(workflow.entry_path, {}))
     result = execution.result
     return DomainRun(

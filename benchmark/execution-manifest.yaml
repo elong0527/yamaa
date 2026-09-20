@@ -135,9 +135,8 @@ examples:
     status: executable
     runtimes: ['python']
   adam-adsl-bmi-function:
-    status: blocked
-    blocked_by: "#101"
-    reason: requires function operation not yet supported in Python
+    status: executable
+    runtimes: ['python']
   adam-adsl-completion-flag:
     status: executable
     runtimes: ['python']
