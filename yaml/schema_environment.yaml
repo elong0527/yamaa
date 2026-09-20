@@ -45,18 +45,17 @@ runtime_artifact_class:
         description: See REQ-1082 in rules/operations/functions.md.
 
 function_contract_class:
+    - contract:
+        type: path
     - contract_version:
         type: function_contract_version
-        required: true
         description: See REQ-1083 in rules/operations/functions.md.
     - implementation_version:
         type: str
-        required: true
         min_length: 1
         description: See REQ-1083 in rules/operations/functions.md.
     - description:
         type: str
-        required: true
         min_length: 1
         description: See REQ-1083 in rules/operations/functions.md.
     - comparison_decimals:
@@ -69,11 +68,9 @@ function_contract_class:
         description: See REQ-1083 in rules/operations/functions.md.
     - params:
         type: "list[function_parameter_class]"
-        required: true
         description: See REQ-1083 in rules/operations/functions.md.
     - returns:
         type: column_type
-        required: true
         description: See REQ-1083 in rules/operations/functions.md.
     - binding:
         type: function_binding_class
@@ -83,6 +80,27 @@ function_contract_class:
         type: path
         required: true
         description: See REQ-1083 in rules/operations/functions.md.
+
+shared_function_contract_class:
+    - contract_version:
+        type: function_contract_version
+        required: true
+    - description:
+        type: str
+        required: true
+        min_length: 1
+    - comparison_decimals:
+        type: int
+        default: 4
+    - may_return_missing:
+        type: bool
+        default: false
+    - params:
+        type: "list[function_parameter_class]"
+        required: true
+    - returns:
+        type: column_type
+        required: true
 
 function_parameter_class:
     - name: {type: identifier, required: true}
@@ -98,7 +116,6 @@ function_binding_class:
         description: See REQ-1084 in rules/operations/functions.md.
     - args:
         type: "dict[identifier, host_argument_name]"
-        required: true
         description: See REQ-1084 in rules/operations/functions.md.
 
 function_conformance_class:

@@ -49,17 +49,35 @@ class FunctionParameter(_StrictModel):
 
 
 class FunctionBinding(_StrictModel):
-    """The one callable a project supplies for a logical contract."""
+    """The one callable a project supplies for a logical contract.
+
+    REQ-0683 lets `args` stay unwritten when every host argument carries
+    its logical parameter's name; `binding_arguments` reads that default.
+    """
 
     call: str = Field(min_length=1)
-    args: dict[str, str]
+    args: dict[str, str] | None = None
+
+
+def binding_arguments(contract: FunctionContract) -> dict[str, str]:
+    """Return the effective logical-to-host argument mapping (REQ-0683)."""
+    if contract.binding.args is not None:
+        return dict(contract.binding.args)
+    return {parameter.name: parameter.name for parameter in contract.params}
 
 
 class FunctionContract(_StrictModel):
-    """One logical contract and the singular binding implementing it."""
+    """One logical contract and the singular binding implementing it.
+
+    REQ-0669 defaults an omitted `implementation_version` to the
+    environment `version`; `load_environment` resolves that default so
+    every later stage reads a plain string. A contract named through
+    `contract` is merged from its shared document before this model is
+    built, so this model only ever describes a complete inline contract.
+    """
 
     contract_version: str = Field(min_length=1)
-    implementation_version: str = Field(min_length=1)
+    implementation_version: str | None = Field(default=None, min_length=1)
     description: str = Field(min_length=1)
     comparison_decimals: int = 4
     may_return_missing: bool = False
@@ -71,6 +89,22 @@ class FunctionContract(_StrictModel):
     @property
     def parameters(self) -> dict[str, FunctionParameter]:
         return {parameter.name: parameter for parameter in self.params}
+
+
+class SharedFunctionContract(_StrictModel):
+    """The language-neutral half of a contract, shared across projects.
+
+    REQ-0669 lets several project environments name one shared contract
+    document instead of repeating these fields; each environment keeps its
+    own `implementation_version`, `binding`, and conformance-vector path.
+    """
+
+    contract_version: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    comparison_decimals: int = 4
+    may_return_missing: bool = False
+    params: list[FunctionParameter]
+    returns: ColumnType
 
 
 class RuntimeArtifact(_StrictModel):
@@ -145,4 +179,6 @@ __all__ = [
     "ProjectRuntime",
     "RuntimeArtifact",
     "RuntimeLanguage",
+    "SharedFunctionContract",
+    "binding_arguments",
 ]

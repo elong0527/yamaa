@@ -16,6 +16,7 @@ import pytest
 import yaml
 
 from yamaa.functions import FunctionFailure, contract_fingerprint, load_environment
+from yamaa.functions.models import binding_arguments
 
 
 def _failure(root: Path, schema: Path) -> FunctionFailure:
@@ -172,6 +173,41 @@ def test_a_host_argument_name_that_is_a_keyword_is_invalid(
     assert failure.context["host_argument"] == "class"
 
 
+def test_an_omitted_binding_args_maps_each_parameter_to_itself(
+    bmi_project, repository
+) -> None:
+    # REQ-0683: when every host argument carries its logical parameter's
+    # name, the mapping stays unwritten.
+    bmi_project.edit_environment(
+        "      args:\n"
+        "        weight_kg: weight_kg\n"
+        "        height_cm: height_cm\n"
+        "        cm_per_m: cm_per_m\n",
+        "",
+    )
+
+    loaded = load_environment(bmi_project.path, repository.schema)
+
+    assert binding_arguments(loaded.environment.functions["bmi"]) == {
+        "weight_kg": "weight_kg",
+        "height_cm": "height_cm",
+        "cm_per_m": "cm_per_m",
+    }
+
+
+def test_an_omitted_implementation_version_defaults_to_the_environment_version(
+    bmi_project, repository
+) -> None:
+    # REQ-0669: a project that versions its implementation with its
+    # environment writes the version once.
+    bmi_project.edit_environment('    implementation_version: "1.0.0"\n', "")
+
+    loaded = load_environment(bmi_project.path, repository.schema)
+
+    contract = loaded.environment.functions["bmi"]
+    assert contract.implementation_version == loaded.environment.version
+
+
 def test_a_binding_that_is_not_module_qualified_is_invalid(project, repository) -> None:
     # REQ-0684 refuses a computed or bare callable name; REQ-0683 requires a
     # statically written module-qualified one.
@@ -215,6 +251,190 @@ def test_a_vector_document_naming_another_contract_is_invalid(
     assert failure.context["expected"] == ["bmi", "1.0.0"]
 
 
+# REQ-0669 lets several projects name one shared contract document instead of
+# repeating its language-neutral fields. The block below is the inline
+# spelling the fixture writes; the reference spelling keeps the entry's own
+# implementation version, binding, and conformance path.
+_INLINE_CONTRACT_BLOCK = """\
+    contract_version: "1.0.0"
+    implementation_version: "1.0.0"
+    description: Calculate body mass index from kilograms and centimetres.
+    comparison_decimals: 4
+    may_return_missing: false
+    params:
+      - name: weight_kg
+        type: float
+        accepts_missing: false
+      - name: height_cm
+        type: float
+        accepts_missing: false
+      - name: cm_per_m
+        type: int
+        required: false
+        default: 100
+        accepts_missing: false
+    returns: float
+"""
+
+_REFERENCE_BLOCK = """\
+    contract: contracts.yaml
+    implementation_version: "1.0.0"
+"""
+
+_SHARED_CONTRACTS = """\
+bmi:
+  contract_version: "1.0.0"
+  description: Calculate body mass index from kilograms and centimetres.
+  comparison_decimals: 4
+  may_return_missing: false
+  params:
+    - name: weight_kg
+      type: float
+      accepts_missing: false
+    - name: height_cm
+      type: float
+      accepts_missing: false
+    - name: cm_per_m
+      type: int
+      required: false
+      default: 100
+      accepts_missing: false
+  returns: float
+"""
+
+
+def _shared_contract_project(bmi_project) -> None:
+    """Point the written project's contract at a shared contracts document."""
+    (bmi_project.path / "contracts.yaml").write_text(_SHARED_CONTRACTS, "utf-8")
+    bmi_project.edit_environment(_INLINE_CONTRACT_BLOCK, _REFERENCE_BLOCK)
+
+
+def test_a_shared_contract_reference_loads_the_named_contract(
+    bmi_project, repository
+) -> None:
+    _shared_contract_project(bmi_project)
+    loaded = load_environment(bmi_project.path, repository.schema)
+
+    contract = loaded.environment.functions["bmi"]
+    assert contract.contract_version == "1.0.0"
+    assert (
+        contract.description
+        == "Calculate body mass index from kilograms and centimetres."
+    )
+    assert [parameter.name for parameter in contract.params] == [
+        "weight_kg",
+        "height_cm",
+        "cm_per_m",
+    ]
+    assert contract.returns == "float"
+    assert contract.binding.call == "projectbmi.bmi"
+    assert contract.implementation_version == "1.0.0"
+
+
+def test_a_shared_contract_reference_keeps_the_contract_identity(
+    bmi_project, repository
+) -> None:
+    # The reference is only a spelling: the merged contract fingerprints
+    # exactly like the inline declaration it replaces.
+    inline = load_environment(bmi_project.path, repository.schema)
+    _shared_contract_project(bmi_project)
+    shared = load_environment(bmi_project.path, repository.schema)
+
+    assert shared.fingerprints["bmi"] == inline.fingerprints["bmi"]
+
+
+def test_a_contract_declared_both_inline_and_by_reference_is_invalid(
+    bmi_project, repository
+) -> None:
+    (bmi_project.path / "contracts.yaml").write_text(_SHARED_CONTRACTS, "utf-8")
+    bmi_project.edit_environment(
+        '    contract_version: "1.0.0"',
+        '    contract: contracts.yaml\n    contract_version: "1.0.0"',
+    )
+
+    failure = _failure(bmi_project.path, repository.schema)
+
+    assert failure.condition == "project_environment_invalid"
+
+
+def test_a_shared_contract_carries_comparison_and_missing_semantics(
+    bmi_project, repository
+) -> None:
+    # REQ-0669: comparison_decimals and may_return_missing are logical
+    # contract fields, so the shared document may declare them once.
+    _shared_contract_project(bmi_project)
+    (bmi_project.path / "contracts.yaml").write_text(
+        _SHARED_CONTRACTS.replace(
+            "  comparison_decimals: 4\n", "  comparison_decimals: 6\n"
+        ).replace("  may_return_missing: false\n", "  may_return_missing: true\n"),
+        "utf-8",
+    )
+    loaded = load_environment(bmi_project.path, repository.schema)
+
+    contract = loaded.environment.functions["bmi"]
+    assert contract.comparison_decimals == 6
+    assert contract.may_return_missing is True
+
+
+def test_comparison_decimals_in_the_entry_and_the_reference_is_invalid(
+    bmi_project, repository
+) -> None:
+    _shared_contract_project(bmi_project)
+    bmi_project.edit_environment(
+        '    implementation_version: "1.0.0"',
+        '    implementation_version: "1.0.0"\n    comparison_decimals: 4',
+    )
+
+    failure = _failure(bmi_project.path, repository.schema)
+
+    assert failure.condition == "project_environment_invalid"
+
+
+def test_a_contract_with_no_fields_and_no_reference_is_invalid(
+    bmi_project, repository
+) -> None:
+    bmi_project.edit_environment(
+        _INLINE_CONTRACT_BLOCK,
+        '    implementation_version: "1.0.0"\n',
+    )
+
+    failure = _failure(bmi_project.path, repository.schema)
+
+    assert failure.condition == "project_environment_invalid"
+
+
+def test_a_shared_contract_path_leaving_the_root_is_invalid(
+    bmi_project, repository
+) -> None:
+    _shared_contract_project(bmi_project)
+    bmi_project.edit_environment(
+        "    contract: contracts.yaml",
+        "    contract: ../contracts.yaml",
+    )
+
+    failure = _failure(bmi_project.path, repository.schema)
+
+    assert failure.condition == "project_environment_invalid"
+
+
+def test_a_shared_contract_document_missing_the_function_is_invalid(
+    bmi_project, repository
+) -> None:
+    _shared_contract_project(bmi_project)
+    (bmi_project.path / "contracts.yaml").write_text(
+        "other:\n"
+        '  contract_version: "1.0.0"\n'
+        "  description: Another function.\n"
+        "  params: []\n"
+        "  returns: float\n",
+        "utf-8",
+    )
+
+    failure = _failure(bmi_project.path, repository.schema)
+
+    assert failure.condition == "project_environment_invalid"
+
+
 def test_an_r_environment_loads_for_inspection_without_a_python_runner(
     repository,
 ) -> None:
@@ -229,14 +449,23 @@ def test_an_r_environment_loads_for_inspection_without_a_python_runner(
 def test_the_python_root_and_the_r_root_claim_one_contract(repository) -> None:
     # REQ-0675: two projects claim the same logical contract only when their
     # calculated fingerprints are identical. REQ-0690 adds that they run the
-    # same vector content, which is why the documents compare byte for byte.
+    # same vector content; inside the benchmark tree both roots name one
+    # shared conformance document.
     python_root = load_environment(repository.bmi_project, repository.schema)
     r_root = load_environment(repository.bmi_example, repository.schema)
 
     assert python_root.fingerprints["bmi"] == r_root.fingerprints["bmi"]
-    assert (repository.bmi_project / "conformance/bmi.yaml").read_bytes() == (
-        repository.bmi_example / "conformance/bmi.yaml"
-    ).read_bytes()
+    python_vectors = (
+        repository.bmi_project / python_root.environment.functions["bmi"].conformance
+    )
+    r_vectors = repository.bmi_example / r_root.environment.functions["bmi"].conformance
+    assert python_vectors.is_file()
+    assert r_vectors.is_file()
+    assert python_vectors.read_bytes() == r_vectors.read_bytes()
+    r_conformance = r_root.environment.functions["bmi"].conformance
+    assert (repository.bmi_example / r_conformance).resolve() == (
+        repository.bmi_example / "python/conformance/bmi.yaml"
+    ).resolve()
 
 
 def test_the_repository_validator_calculates_the_same_fingerprint(
@@ -259,9 +488,16 @@ def test_the_repository_validator_calculates_the_same_fingerprint(
         document = yaml.safe_load(
             (repository.bmi_project / "environment.yaml").read_text("utf-8")
         )
-        expected = module.function_contract_fingerprint(
-            "bmi", document["functions"]["bmi"]
+        # The committed environment names its contract by reference, so the
+        # raw entry is merged with the shared document exactly as the
+        # validator's own resolver does before fingerprinting.
+        shared = yaml.safe_load(
+            (repository.bmi_project / "contracts.yaml").read_text("utf-8")
         )
+        entry = document["functions"]["bmi"]
+        merged = dict(shared["bmi"])
+        merged.update({k: v for k, v in entry.items() if k != "contract"})
+        expected = module.function_contract_fingerprint("bmi", merged)
     finally:
         del sys.modules[specification.name]
 

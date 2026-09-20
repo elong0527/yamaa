@@ -3962,6 +3962,109 @@ def validate_function_arguments(
     return errors
 
 
+def _resolve_shared_function_contract(
+    name, contract, contract_path, env_dir, schema_env, errors
+):
+    """Resolve a REQ-0669 shared contract reference for repository validation.
+
+    Returns the effective contract dict (shared fields merged under the
+    entry's own fields), or None when resolution failed; every failure
+    appends an error.
+    """
+    required_inline = ('contract_version', 'description', 'params', 'returns')
+    shareable_fields = required_inline + (
+        'comparison_decimals', 'may_return_missing',
+    )
+    reference = contract.get('contract')
+    if reference is None:
+        missing = [field for field in required_inline if field not in contract]
+        if missing:
+            errors.append(
+                f"ERROR: {contract_path}: function entry must declare its "
+                f"contract inline or name a shared contract; missing "
+                f"{', '.join(missing)}"
+            )
+            return None
+        return contract
+    if not isinstance(reference, str):
+        errors.append(
+            f"ERROR: {contract_path}.contract: shared contract reference "
+            "must be a path"
+        )
+        return None
+    inline = [field for field in shareable_fields if field in contract]
+    if inline:
+        errors.append(
+            f"ERROR: {contract_path}: function entry must declare its "
+            f"contract inline or name a shared contract, not both "
+            f"({', '.join(inline)} also present)"
+        )
+        return None
+    written = PurePosixPath(reference)
+    if written.is_absolute() or any(part in ('.', '..') for part in written.parts):
+        errors.append(
+            f"ERROR: {contract_path}.contract: shared contract path must be "
+            "local and normalized"
+        )
+        return None
+    candidate = (env_dir / reference).resolve()
+    try:
+        candidate.relative_to(env_dir.resolve())
+    except ValueError:
+        errors.append(
+            f"ERROR: {contract_path}.contract: shared contract path must "
+            "stay inside the project root"
+        )
+        return None
+    if not candidate.is_file():
+        errors.append(
+            f"ERROR: {contract_path}.contract: shared contract document "
+            f"{reference!r} does not exist"
+        )
+        return None
+    try:
+        shared_document = yaml.safe_load(candidate.read_text(encoding='utf-8'))
+    except yaml.YAMLError as exc:
+        errors.append(
+            f"ERROR: {contract_path}.contract: cannot parse shared contract "
+            f"document {reference!r}: {exc}"
+        )
+        return None
+    if not isinstance(shared_document, dict):
+        errors.append(
+            f"ERROR: {contract_path}.contract: shared contract document "
+            f"{reference!r} must map function names to contracts"
+        )
+        return None
+    for contract_name, shared_contract in shared_document.items():
+        if not isinstance(shared_contract, dict):
+            errors.append(
+                f"ERROR: {contract_path}.contract: shared contract "
+                f"{contract_name!r} in {reference!r} must be a mapping"
+            )
+            return None
+        shared_errors = validate_type(
+            shared_contract,
+            ['shared_function_contract_class'],
+            schema_env,
+            f"{contract_path}.contract",
+        )
+        if shared_errors:
+            errors.extend(shared_errors)
+            return None
+    if name not in shared_document:
+        errors.append(
+            f"ERROR: {contract_path}.contract: shared contract document "
+            f"{reference!r} does not define {name!r}"
+        )
+        return None
+    merged = dict(shared_document[name])
+    for key, value in contract.items():
+        if key != 'contract':
+            merged[key] = value
+    return merged
+
+
 def validate_project_environment(
     document, label, environment_path, schema_env
 ):
@@ -4006,6 +4109,11 @@ def validate_project_environment(
         if not isinstance(contract, dict):
             continue
         contract_path = f"{label}.functions.{name}"
+        contract = _resolve_shared_function_contract(
+            name, contract, contract_path, environment_path.parent, schema_env, errors
+        )
+        if contract is None:
+            continue
         try:
             function_contract_fingerprint(name, contract)
         except (TypeError, ValueError, UnicodeError, struct.error) as exc:
@@ -4074,6 +4182,10 @@ def validate_project_environment(
                     f"is not fully qualified for runtime {language!r}"
                 )
             binding_args = binding.get('args')
+            if binding_args is None:
+                # REQ-0683: an omitted mapping names each logical parameter
+                # for its host argument.
+                binding_args = {name: name for name in names}
             if isinstance(binding_args, dict):
                 missing = sorted(set(names) - set(binding_args))
                 extra = sorted(set(binding_args) - set(names))
@@ -4263,6 +4375,20 @@ def validate_repository_function_fingerprints(root, schema_env):
         ):
             continue
         for name, contract in document['functions'].items():
+            if not isinstance(contract, dict):
+                continue
+            # Resolution failures are reported by per-environment
+            # validation; this pass only compares identities.
+            contract = _resolve_shared_function_contract(
+                name,
+                contract,
+                f"{environment_path}.functions.{name}",
+                environment_path.parent,
+                schema_env,
+                [],
+            )
+            if contract is None:
+                continue
             try:
                 fingerprint = function_contract_fingerprint(name, contract)
             except (TypeError, ValueError, UnicodeError, struct.error):
@@ -5462,6 +5588,23 @@ def validate_spec_functions(spec, spec_label, spec_path, schema_env):
     functions = project_environment.get('functions')
     if not isinstance(functions, dict):
         return errors
+    # Resolve REQ-0669 shared contracts for the checks below; resolution
+    # failures were already reported by validate_project_environment above.
+    resolved_functions = {}
+    for function_name, function_contract in functions.items():
+        if not isinstance(function_contract, dict):
+            continue
+        resolved = _resolve_shared_function_contract(
+            function_name,
+            function_contract,
+            f"{environment_path}.functions.{function_name}",
+            environment_path.parent,
+            environment_schema,
+            [],
+        )
+        if resolved is not None:
+            resolved_functions[function_name] = resolved
+    functions = resolved_functions
 
     datasets = dataset_type_catalog(spec, spec_path, schema_env)
     intermediates = {}

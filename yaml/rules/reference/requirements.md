@@ -1159,3 +1159,8 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1150](../values/types.md#req-1150) | `values/types.md` | Schema prose |
 | [REQ-1151](../storage/resources.md#req-1151) | `storage/resources.md` | Schema prose |
 | [REQ-1152](../execution/verification.md#req-1152) | `execution/verification.md` | Schema prose |
+| [REQ-1153](../execution/verification.md#req-1153) | `execution/verification.md` | Schema prose |
+| [REQ-1154](../execution/verification.md#req-1154) | `execution/verification.md` | Schema prose |
+| [REQ-1155](../execution/verification.md#req-1155) | `execution/verification.md` | Schema prose |
+| [REQ-1156](../submission/terminology.md#req-1156) | `submission/terminology.md` | Schema prose |
+| [REQ-1157](../submission/metadata.md#req-1157) | `submission/metadata.md` | Schema prose |

@@ -1,0 +1,13 @@
+bmi:
+  contract_version: "1.0.0"
+  description: Calculate body mass index from kilograms and centimetres.
+  params:
+    - name: weight_kg
+      type: float
+    - name: height_cm
+      type: float
+    - name: cm_per_m
+      type: int
+      required: false
+      default: 100
+  returns: float

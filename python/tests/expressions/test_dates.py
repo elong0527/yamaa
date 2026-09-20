@@ -360,6 +360,21 @@ def test_to_date_copies_the_calendar_fields_and_drops_the_time() -> None:
     assert value.collected_precision == "day"
 
 
+def test_to_date_parses_iso_date_text() -> None:
+    # REQ-0607: complete ISO date text parses directly.
+    value = _value("to_date", {"source": "S"}, {"S": "2013-02-12"})
+
+    assert value == date("2013-02-12")
+
+
+def test_to_date_rejects_text_that_is_not_a_complete_date() -> None:
+    # REQ-0607: partial or non-date text is invalid date text.
+    for text in ["2013-02", "not a date", ""]:
+        condition = _condition("to_date", {"source": "S"}, {"S": text})
+
+        assert condition.condition.condition == "invalid_date_text"
+
+
 def test_to_date_refuses_a_date_as_an_identity_spelling() -> None:
     # REQ-0607.
     condition = _condition("to_date", {"source": "S"}, {"S": date("2025-01-12")})

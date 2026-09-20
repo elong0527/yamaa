@@ -9,6 +9,7 @@ from pathlib import Path
 
 import polars as pl
 
+from yamaa.expressions import ExpressionDispatcher
 from yamaa.io import (
     ArtifactTarget,
     LoadedDataset,
@@ -212,8 +213,17 @@ def yamaa_domain(
     project_root: str | Path | None = None,
     data_roots: Iterable[str | Path] | None = None,
     read_project_configuration: bool = True,
+    dispatcher: ExpressionDispatcher | None = None,
 ) -> DomainRun:
-    """Load, validate, and execute one domain specification exactly once."""
+    """Load, validate, and execute one domain specification exactly once.
+
+    ``dispatcher`` is a generic expression-dispatch hook the engine threads
+    through unchanged: extensions that evaluate operations the core language
+    does not implement (project functions, for example) build the dispatcher
+    and hand it in. The engine itself never imports or orchestrates such an
+    extension. Without it, a specification calling project functions reports
+    ``function`` as an unimplemented operation (R018-1).
+    """
     entry = Path(entry_path)
     if not entry.is_file():
         raise FileNotFoundError(f"domain specification is not a file: {entry}")
@@ -244,7 +254,7 @@ def yamaa_domain(
     entry_node = next(
         node for node in workflow.nodes if node.entry_path == workflow.entry_path
     )
-    execution = execute_workflow(workflow, resources)
+    execution = execute_workflow(workflow, resources, dispatcher=dispatcher)
     sources = dict(execution.sources.get(workflow.entry_path, {}))
     result = execution.result
     return DomainRun(
