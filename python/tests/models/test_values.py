@@ -19,6 +19,27 @@ from yamaa.models import (
     normalize_runtime_value,
     runtime_type_name,
 )
+from yamaa.models.values import RuntimeCondition
+
+
+@pytest.mark.parametrize("requirement", ["REQ-0005", "R011-35", "R001-12a"])
+def test_diagnostics_accept_canonical_and_historical_citations(
+    requirement: str,
+) -> None:
+    condition = RuntimeCondition(
+        phase="validation", condition="incompatible_input_type", requirement=requirement
+    )
+    assert condition.requirement == requirement
+
+
+@pytest.mark.parametrize("requirement", ["REQ-x", "REQ-1", "R001-0", "R001-12ab"])
+def test_diagnostics_reject_malformed_citations(requirement: str) -> None:
+    with pytest.raises(ValidationError):
+        RuntimeCondition(
+            phase="validation",
+            condition="incompatible_input_type",
+            requirement=requirement,
+        )
 
 
 def _value(result: object) -> object:

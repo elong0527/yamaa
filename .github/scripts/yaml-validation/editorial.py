@@ -85,8 +85,8 @@ def example_spec_paths(example_dir: Path):
 
 
 README_FORBIDDEN_PATTERN = re.compile(
-    r"\b(?:derivation|schema|handler|verification)s?\b"
-    r"|R0[0-9][0-9]|output\.columns",
+    r'\b(?:derivation|schema|handler|verification)s?\b'
+    r'|R0[0-9][0-9]|REQ-[0-9]+|output\.columns',
     re.IGNORECASE,
 )
 README_KEY_COLUMNS = {
@@ -223,6 +223,9 @@ def rule_identity_errors(meta: dict, stem: str, label: str) -> list[str]:
 
 
 def validate_rule_metadata(root: Path):
+    if (root / 'yaml/rules/migration.yaml').is_file():
+        from check_rule_rewrite import check
+        return check(root)[0]
     errors = []
     rules_dir = root / "yaml" / "rules"
     index_path = rules_dir / "README.md"

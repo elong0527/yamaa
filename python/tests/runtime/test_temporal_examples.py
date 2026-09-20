@@ -2,7 +2,7 @@
 
 Every case runs the real public API end to end. Reading `expected/` happens
 here, in the test, and never in runtime code. Serialized equality alone
-cannot prove collected precision, because R016-32 keeps precision out of the
+cannot prove collected precision, because REQ-0570 keeps precision out of the
 artifact on purpose, so the precision-sensitive assertions read the values.
 """
 
@@ -110,7 +110,7 @@ def _partial_dates() -> list[dict[str, object]]:
 
 
 def test_an_imputed_date_stores_the_day_it_names_and_reports_its_precision() -> None:
-    # R016-32 keeps collected precision out of the artifact, so the CSV match
+    # REQ-0570 keeps collected precision out of the artifact, so the CSV match
     # above cannot prove it. The derived precision column is where a
     # specification carries it past that boundary, which is what this reads.
     rows = _partial_dates()
@@ -126,7 +126,7 @@ def test_an_imputed_date_stores_the_day_it_names_and_reports_its_precision() -> 
 
 
 def test_a_bound_moves_a_supplied_day_and_never_a_collected_one() -> None:
-    # R016-49 and R016-50.
+    # REQ-0585 and REQ-0586.
     rows = {row["AETERM"]: row for row in _partial_dates()}
 
     # A month-precision source clamped forward to the treatment start.
@@ -140,7 +140,7 @@ def test_a_bound_moves_a_supplied_day_and_never_a_collected_one() -> None:
 
 
 def test_a_source_below_the_declared_minimum_precision_stays_missing() -> None:
-    # R016-47: a year-only source under `minimum_source_precision: month`.
+    # REQ-0583: a year-only source under `minimum_source_precision: month`.
     rows = {row["AETERM"]: row for row in _partial_dates()}
 
     assert rows["ECZEMA FLARE"]["AESTDTC"] == "2025"
@@ -149,7 +149,7 @@ def test_a_source_below_the_declared_minimum_precision_stays_missing() -> None:
 
 
 def test_an_imputed_date_still_answers_the_comparisons_it_reaches() -> None:
-    # R016-37: an imputed start still decides whether an event is treatment
+    # REQ-0575: an imputed start still decides whether an event is treatment
     # emergent, and precision does not stop it.
     rows = {row["AETERM"]: row for row in _partial_dates()}
 
@@ -167,7 +167,7 @@ def test_repeated_execution_produces_an_identical_temporal_artifact() -> None:
 
 
 def test_a_completed_date_and_a_collected_one_are_one_partition_key() -> None:
-    # R016-35 keeps precision out of every comparison, so a window or a join
+    # REQ-0573 keeps precision out of every comparison, so a window or a join
     # that groups on a date does not split an imputed value from a collected
     # one naming the same day.
     collected = DateValue.parse("2025-01-15")

@@ -2,7 +2,7 @@ phase: validation
 condition: unpaired_fields
 spec_paths:
   - intermediates[0]
-requirement: R003-9
+requirement: REQ-0119
 context:
   intermediate: DOSING
   declared:

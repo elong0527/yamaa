@@ -66,8 +66,8 @@ class Resolver(Protocol):
 class SelectedSourceResolver(Protocol):
     """Optional resolver extension for a source that states how it selects.
 
-    R003-21 lets a structured source narrow the right-side records it may
-    read, and R008-12 lets it choose among the survivors. Both reach the
+    REQ-0131 lets a structured source narrow the right-side records it may
+    read, and REQ-0353 lets it choose among the survivors. Both reach the
     records through the same call, because the filter decides what the
     selection is applied to.
     """
@@ -240,7 +240,7 @@ def _source(payload: object, resolver: Resolver) -> EvaluationResult:
         "missing_input",
         {"variable": variable},
         "missing",
-        requirement="R007-49",
+        requirement="REQ-0334",
     )
 
 
@@ -296,7 +296,7 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
                 "validation",
                 "ambiguous_dictionary",
                 {"folded_key": folded_key, "entries": collisions[folded_key]},
-                requirement="R019-22",
+                requirement="REQ-0714",
                 field="dict",
             )
 
@@ -323,7 +323,7 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
             "missing_input",
             {"variable": variable},
             "missing",
-            requirement="R007-49",
+            requirement="REQ-0334",
         )
     if not isinstance(value, str):
         return expression_condition(
@@ -346,7 +346,7 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
         "unmapped_value",
         {"source": variable, "value": value},
         "unmapped",
-        requirement="R007-49",
+        requirement="REQ-0334",
     )
 
 
@@ -373,10 +373,10 @@ def evaluate_nested(
     resolver: Resolver,
     prefix: str,
 ) -> tuple[EvaluationResult, tuple[HandlerObservation, ...]]:
-    """Evaluate one expression R007-3 permits an operation to nest.
+    """Evaluate one expression REQ-0290 permits an operation to nest.
 
     The handler paths a nested expression fires are rebased under `prefix`,
-    so the caller that knows the specification path can report every R008-20
+    so the caller that knows the specification path can report every REQ-0361
     count without the nested operation knowing where it sits.
     """
     if not isinstance(expression, Mapping) or len(expression) != 1:
@@ -385,7 +385,7 @@ def evaluate_nested(
                 "validation",
                 "invalid_field_type",
                 {"field": prefix, "expected": "one expression operation"},
-                requirement="R007-36",
+                requirement="REQ-0321",
             ),
             (),
         )
@@ -435,7 +435,7 @@ def relational_handler(operation: str) -> ExpressionHandler:
                 "validation",
                 "invalid_field_type",
                 {"operation": operation, "expected": "a mapping"},
-                requirement="R007-36",
+                requirement="REQ-0321",
             )
         resolve_relation = getattr(resolver, "resolve_relation", None)
         if not callable(resolve_relation):

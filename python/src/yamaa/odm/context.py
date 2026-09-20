@@ -97,10 +97,10 @@ def _ordered(value: RuntimeValue) -> object:
 def _distinct_values(readings: Iterable[object]) -> list[RuntimeValue]:
     """Collapse repeated readings of one value, in first-appearance order.
 
-    R001-12b counts the values a derivation yields for one key combination,
+    REQ-0044 counts the values a derivation yields for one key combination,
     not the records carrying them, so a field constant over a subject's
     records reads as that single value. Each runtime type owns that identity
-    and hashes it -- R016-35 keeps collected precision out of a date's -- so
+    and hashes it -- REQ-0573 keeps collected precision out of a date's -- so
     a value is held beside its type name: that separates a number from a flag
     carrying it, and keeps a key combination covering the whole input from
     comparing every reading against every other one.
@@ -140,7 +140,7 @@ def select_one(
     variable: str,
     field_name: str,
 ) -> Resolution:
-    """Order the eligible records and keep the one R008-13 declares.
+    """Order the eligible records and keep the one REQ-0354 declares.
 
     The records reach one value, so the selection is over records the
     specification already narrowed: a single one is that value and fires no
@@ -273,7 +273,7 @@ class OdmItemIndex:
         selection: MultipleMatchSelection,
         variable: str,
     ) -> Resolution:
-        """Order the eligible contextual matches and keep one (R008-13)."""
+        """Order the eligible contextual matches and keep one (REQ-0354)."""
         return select_one(
             self.dataset, self.fields, matches, selection, variable, "Value"
         )
@@ -297,7 +297,7 @@ class OdmItemIndex:
         ) + (item_oid,)
         matches = list(self._records.get(key, ()))
         if not matches:
-            # R002-24: no contextual match is an absent item, which the
+            # REQ-0100: no contextual match is an absent item, which the
             # `missing` handler answers.
             return AbsentValue(variable=variable)
         if selector is not None:
@@ -305,7 +305,7 @@ class OdmItemIndex:
             if isinstance(eligible, FailedResolution):
                 return eligible
             if not eligible:
-                # R008-14: the item exists and the filter selected none of
+                # REQ-0355: the item exists and the filter selected none of
                 # its records, which is an absent match rather than an
                 # absent item.
                 return ResolvedValue(value=MISSING)
@@ -378,7 +378,7 @@ class BindingIndex:
 
         ``feeding_rows`` carries every driver record of the current key
         combination and section. A plain dataset field read collects one
-        value across them under R001-12b: no value is missing, repeated
+        value across them under REQ-0044: no value is missing, repeated
         readings of one value are that value, and two values disagreeing
         fail. Record intermediates keep using the single ``source_rows`` record
         as their ODM context.
@@ -447,8 +447,8 @@ class RuntimeContext:
                 return _failure("validation", "unknown_field", {"identifier": variable})
             feeding = self._feeding_rows.get(bound.dataset, [row])
             if selector is not None:
-                # R003-21: the filter states which of the records this row
-                # reaches the source may read, before R001-12b counts values.
+                # REQ-0131: the filter states which of the records this row
+                # reaches the source may read, before REQ-0044 counts values.
                 eligible = self._eligible(bound.dataset, selector, feeding)
                 if isinstance(eligible, FailedResolution):
                     return eligible
@@ -469,19 +469,19 @@ class RuntimeContext:
                 return ResolvedValue(value=runtime_value(row[bound.field]))
             if len(present) > 1:
                 if multiple_matches is not None:
-                    # R008-12: the specification says which of the records it
+                    # REQ-0353: the specification says which of the records it
                     # keeps, so the disagreement is answered rather than fatal.
                     return self._select(
                         bound.dataset, bound.field, carrying, multiple_matches
                     )
-                # R001-12b counts values, not the records carrying them: a
+                # REQ-0044 counts values, not the records carrying them: a
                 # field constant over a subject's records is one value, two
                 # records disagreeing are two.
                 return _failure(
                     "derivation",
                     "multiple_values_per_key",
                     {"identifier": variable, "value_count": len(present)},
-                    requirement="R001-44",
+                    requirement="REQ-0075",
                 )
             return ResolvedValue(value=present[0])
 
@@ -500,7 +500,7 @@ class RuntimeContext:
         records: Sequence[Mapping[str, object]],
         multiple_matches: Mapping[str, object],
     ) -> Resolution:
-        """Keep one of the records this key combination carries (R008-13)."""
+        """Keep one of the records this key combination carries (REQ-0354)."""
         try:
             selection = MultipleMatchSelection.model_validate(
                 dict(multiple_matches), strict=True

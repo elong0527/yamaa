@@ -3,7 +3,7 @@
 A failure is discovered where R018 places it -- resolving a root, verifying
 an artifact, running a vector, invoking a binding -- and only the caller
 knows which specification text demanded that work. `FunctionFailure` carries
-the portable identity R018-33 through R018-42 fixes; `anchor` attaches the
+the portable identity REQ-0694 through REQ-0703 fixes; `anchor` attaches the
 specification paths, and `FunctionActivationError` carries the finished
 diagnostics to the runner.
 """
@@ -17,7 +17,7 @@ from pydantic import JsonValue
 from yamaa.models.values import ConditionPhase
 from yamaa.planning import ExecutionDiagnostic
 
-# R018-43: every failure names the specification text that required an
+# REQ-0704: every failure names the specification text that required an
 # implementation stage. A project root selected for a specification that
 # calls no function anchors at the document root instead.
 SPECIFICATION_ROOT = "$"

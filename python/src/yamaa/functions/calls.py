@@ -1,6 +1,6 @@
 """Read every logical call a specification writes, and check it can be met.
 
-R018-1 lets a portable specification name a logical contract long before any
+REQ-0662 lets a portable specification name a logical contract long before any
 project implements it, so nothing here runs until a runner selects a project
 root. Once one is selected, this is the implementation stage: the calls are
 read out of the specification with the paths a reviewer sees, and each is
@@ -138,14 +138,14 @@ def _argument_diagnostics(
     contract: FunctionContract,
     catalog: _TypeCatalog,
 ) -> list[ExecutionDiagnostic]:
-    """Hold one call to the closed, exactly typed signature of R018-15."""
+    """Hold one call to the closed, exactly typed signature of REQ-0676."""
     diagnostics: list[ExecutionDiagnostic] = []
     parameters = contract.parameters
     for name in sorted(set(call.args) - set(parameters)):
         diagnostics.append(
             _diagnostic(
                 "invalid_function_argument",
-                "R018-39",
+                "REQ-0700",
                 f"{call.spec_path}.args.{name}",
                 {"function": call.name, "reason": "unknown argument"},
             )
@@ -157,7 +157,7 @@ def _argument_diagnostics(
                 diagnostics.append(
                     _diagnostic(
                         "invalid_function_argument",
-                        "R018-39",
+                        "REQ-0700",
                         path,
                         {
                             "function": call.name,
@@ -168,14 +168,14 @@ def _argument_diagnostics(
             continue
         value = call.args[name]
         if isinstance(value, str):
-            # R018-18: a plain string names a variable, and R018-17 admits
+            # REQ-0679: a plain string names a variable, and REQ-0678 admits
             # no conversion between its declared type and the parameter's.
             actual = catalog.resolve(value)
             if actual is not None and actual != parameter.type:
                 diagnostics.append(
                     _diagnostic(
                         "invalid_function_argument",
-                        "R018-39",
+                        "REQ-0700",
                         path,
                         {
                             "function": call.name,
@@ -190,7 +190,7 @@ def _argument_diagnostics(
         if isinstance(value, Mapping) and set(value) == {"literal"}:
             literal = value["literal"]
         if literal is None:
-            # R018-20 makes an explicit missing valid authoring: a
+            # REQ-0681 makes an explicit missing valid authoring: a
             # non-accepting parameter short-circuits rather than failing.
             continue
         actual_literal = function_value_type(literal)
@@ -198,7 +198,7 @@ def _argument_diagnostics(
             diagnostics.append(
                 _diagnostic(
                     "invalid_function_argument",
-                    "R018-39",
+                    "REQ-0700",
                     path,
                     {
                         "function": call.name,
@@ -223,7 +223,7 @@ def validate_calls(
             diagnostics.append(
                 _diagnostic(
                     "unknown_project_function",
-                    "R018-37",
+                    "REQ-0698",
                     f"{call.spec_path}.name",
                     {
                         "function": call.name,
@@ -236,7 +236,7 @@ def validate_calls(
             diagnostics.append(
                 _diagnostic(
                     "function_contract_mismatch",
-                    "R018-38",
+                    "REQ-0699",
                     f"{call.spec_path}.contract_version",
                     {
                         "function": call.name,

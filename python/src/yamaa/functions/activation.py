@@ -1,10 +1,10 @@
 """Run every activation vector before any specification may execute.
 
-R018-30 is an ordering rule, not a reporting one: the vectors are what
+REQ-0691 is an ordering rule, not a reporting one: the vectors are what
 establish that this project's code still means what its contract says, so
 they run against the verified artifact first and a failure among them stops
 the run before a single study row reaches a binding. Success is cached only
-for the exact combination of identities R018-30 lists, and each of those is
+for the exact combination of identities REQ-0691 lists, and each of those is
 read off the loaded environment rather than recomputed here.
 """
 
@@ -37,12 +37,13 @@ from yamaa.functions.models import (
     ConformanceDocument,
     FunctionContract,
     LoadedEnvironment,
+    binding_arguments,
 )
 from yamaa.models.values import ConditionResult, RuntimeValue, ValueResult
 
 
 class ActivationCache:
-    """The R018-30 record of which exact pinned identity already passed.
+    """The REQ-0691 record of which exact pinned identity already passed.
 
     The key covers the environment version, the artifact digest, every
     contract fingerprint, every implementation version, and the complete
@@ -89,7 +90,7 @@ class ActivatedEnvironment:
     artifact: LoadedArtifact
     functions: Mapping[str, BoundFunction]
     # Whether this activation ran the vectors or was answered by the cache
-    # R018-30 permits. A run never depends on it; it is how a caller sees
+    # REQ-0691 permits. A run never depends on it; it is how a caller sees
     # that a changed identity really did activate again.
     vectors_executed: bool = field(default=True)
 
@@ -105,7 +106,7 @@ def _conformance_failure(
 ) -> FunctionFailure:
     return FunctionFailure(
         "function_conformance_failed",
-        "R018-42",
+        "REQ-0703",
         {"function": name, "case": case.id, "reason": reason, **context},
     )
 
@@ -120,7 +121,7 @@ def _run_case(bound: BoundFunction, case: ConformanceCase) -> None:
     except AuthoredValueError as error:
         raise FunctionFailure(
             "project_environment_invalid",
-            "R018-34",
+            "REQ-0695",
             {
                 "reason": "a vector case carries a value of no scalar type",
                 "function": bound.name,
@@ -177,7 +178,7 @@ def _validate_target_signature(
     except Exception as error:
         raise FunctionFailure(
             "project_environment_invalid",
-            "R018-34",
+            "REQ-0695",
             {
                 **identity,
                 "reason": "the Python callable signature could not be inspected",
@@ -205,13 +206,13 @@ def _validate_target_signature(
             inspect.Parameter.KEYWORD_ONLY,
         )
     }
-    mapped = set(contract.binding.args.values())
+    mapped = set(binding_arguments(contract).values())
     missing = sorted(mapped - keyword_parameters)
     extra = sorted(keyword_parameters - mapped)
     if unsupported or missing or extra:
         raise FunctionFailure(
             "project_environment_invalid",
-            "R018-34",
+            "REQ-0695",
             {
                 **identity,
                 "reason": "the Python callable signature must match binding.args",
@@ -270,8 +271,8 @@ def activate(
     """Verify this runner may run the project, then activate its bindings.
 
     The language and the artifact are checked before any code is loaded
-    (R018-6), every binding is resolved inside that artifact (R018-5), and
-    the vectors run last (R018-30) -- after which the environment is ready
+    (REQ-0667), every binding is resolved inside that artifact (REQ-0666), and
+    the vectors run last (REQ-0691) -- after which the environment is ready
     for a specification and not before.
     """
     environment = loaded.environment

@@ -36,11 +36,11 @@ from yamaa.specification.models import Output
 
 ArtifactProfile: TypeAlias = DatasetProfile
 
-# R020-46 reports the offending rows by key. The count beside them is the
+# REQ-0763 reports the offending rows by key. The count beside them is the
 # whole count, so a bound on how many are printed never changes a failure.
 REPORTED_KEYS = 5
 
-# R020-23 stores a date as days and a datetime as microseconds from the
+# REQ-0737 stores a date as days and a datetime as microseconds from the
 # epoch. R016's calendar bounds the values either may carry.
 _EPOCH = dt.date(1970, 1, 1).toordinal()
 _MIN_DAY = dt.date(dt.MINYEAR, 1, 1).toordinal() - _EPOCH
@@ -57,7 +57,7 @@ class ArtifactDiagnostic(BaseModel):
     phase: Literal["validation", "output"]
     condition: str = Field(min_length=1)
     spec_paths: tuple[str, ...] = Field(min_length=1)
-    requirement: str = Field(pattern=r"^R[0-9]{3}-[0-9]+$")
+    requirement: str = Field(pattern=r"^(?:REQ-[0-9]{4,}|R[0-9]{3}-[1-9][0-9]*[a-z]?)$")
     context: dict[str, JsonValue]
 
 
@@ -115,7 +115,7 @@ def artifact_profile(path: str) -> ArtifactProfile:
                     "validation",
                     "unknown_artifact_profile",
                     "output.path",
-                    "R020-43",
+                    "REQ-0760",
                     {"path": path, "permitted": sorted(DATASET_PROFILES)},
                 )
             ]
@@ -135,7 +135,7 @@ def _declaration_diagnostics(
                 "validation",
                 "unknown_artifact_profile",
                 "output.path",
-                "R020-43",
+                "REQ-0760",
                 {"path": output.path, "permitted": sorted(DATASET_PROFILES)},
             )
         )
@@ -146,7 +146,7 @@ def _declaration_diagnostics(
                     "validation",
                     "invalid_field_type",
                     "output.decimals",
-                    "R020-44",
+                    "REQ-0761",
                     {"expected": "a non-negative integer", "actual": output.decimals},
                 )
             )
@@ -156,7 +156,7 @@ def _declaration_diagnostics(
                     "validation",
                     "decimals_not_applicable",
                     "output.decimals",
-                    "R020-45",
+                    "REQ-0762",
                     {"path": output.path, "profile": profile},
                 )
             )
@@ -170,28 +170,32 @@ def _declaration_diagnostics(
                     "validation",
                     "duplicate_identifier",
                     path,
-                    "R005-45",
+                    "REQ-0234",
                     {"column": name},
                 )
             )
         elif name not in declared:
             diagnostics.append(
                 _diagnostic(
-                    "validation", "undeclared_column", path, "R005-45", {"column": name}
+                    "validation",
+                    "undeclared_column",
+                    path,
+                    "REQ-0234",
+                    {"column": name},
                 )
             )
         seen.add(name)
 
     for position, name in enumerate(keys):
         if name in declared and name not in seen:
-            # R005-16: a key identifies rows in the artifact, so an internal
+            # REQ-0207: a key identifies rows in the artifact, so an internal
             # column cannot be one even though it is derived like any other.
             diagnostics.append(
                 _diagnostic(
                     "validation",
                     "internal_column_in_keys",
                     f"keys[{position}]",
-                    "R005-44",
+                    "REQ-0233",
                     {"column": name},
                 )
             )
@@ -205,19 +209,19 @@ def _declaration_diagnostics(
                     "validation",
                     "duplicate_order_term",
                     path,
-                    "R005-48",
+                    "REQ-0237",
                     {"column": term.variable},
                 )
             )
         elif term.variable not in declared:
-            # R005-34 admits an internal column here, so membership is the
+            # REQ-0223 admits an internal column here, so membership is the
             # declared set rather than the artifact's own columns.
             diagnostics.append(
                 _diagnostic(
                     "validation",
                     "undeclared_column",
                     path,
-                    "R005-47",
+                    "REQ-0236",
                     {"column": term.variable},
                 )
             )
@@ -228,14 +232,14 @@ def _declaration_diagnostics(
 def _unwritable(
     table: TypedTable, names: Sequence[str], keys: Sequence[str]
 ) -> list[ArtifactDiagnostic]:
-    """Report stored values no profile may carry (R020-46).
+    """Report stored values no profile may carry (REQ-0763).
 
     A `str` column holds well-formed text and an `int` column is stored
     `Int64`, so each carries the signed 64-bit bound its host column owns.
     The typed-table boundary normalizes non-finite floats under R011. This
     defensive check still refuses one in a table whose validation was
     bypassed, while temporal host columns can hold a date outside the
-    calendar or a `datetime` finer than the whole second R020-25 writes.
+    calendar or a `datetime` finer than the whole second REQ-0739 writes.
     Each is read here rather than repaired on the way out.
 
     A temporal column is read as the count its profile stores rather than
@@ -256,7 +260,7 @@ def _unwritable(
                     "output",
                     "unwritable_value",
                     f"columns.{name}.type",
-                    "R020-46",
+                    "REQ-0763",
                     {
                         "column": name,
                         "type": declared[name],
@@ -296,7 +300,7 @@ def _unwritable(
                     "output",
                     "unwritable_value",
                     f"columns.{name}",
-                    "R020-46",
+                    "REQ-0763",
                     {
                         "column": name,
                         "type": declared[name],
@@ -356,13 +360,13 @@ def _json(value: object) -> JsonValue:
 def _ordered_frame(frame: pl.DataFrame, output: Output) -> pl.DataFrame:
     terms = output.order_by or ()
     if not terms:
-        # R005-32: an artifact whose specification declares no order keeps
+        # REQ-0222: an artifact whose specification declares no order keeps
         # the construction order R001 produced.
         return frame
     return frame.sort(
         by=[term.variable for term in terms],
         descending=[term.direction == "desc" for term in terms],
-        # R007-15: `nulls` states where missing values sit outright and does
+        # REQ-0300: `nulls` states where missing values sit outright and does
         # not flip with `direction`.
         nulls_last=[term.nulls == "last" for term in terms],
         maintain_order=True,
@@ -392,7 +396,7 @@ def build_artifact(table: TypedTable, output: Output, keys: Sequence[str]) -> Ar
 
 
 def _text(value: RuntimeValue, decimals: int | None) -> str | None:
-    """Return one field's text, or None for a missing value (R020-17, R020-18)."""
+    """Return one field's text, or None for a missing value (REQ-0731, REQ-0732)."""
     if value is MISSING:
         return None
     if isinstance(value, str):

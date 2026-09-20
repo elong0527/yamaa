@@ -21,12 +21,12 @@ _URI_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _DRIVE_ROOT = re.compile(r"^[A-Za-z]:/")
 
 _RESOURCE_REQUIREMENTS = {
-    "resource_path_uri_scheme": "R021-9",
-    "resource_path_not_relative": "R021-15",
-    "resource_path_symlink": "R021-17",
-    "resource_path_outside_project": "R021-18",
-    "resource_path_missing": "R021-19",
-    "resource_path_not_regular_file": "R021-19",
+    "resource_path_uri_scheme": "REQ-0775",
+    "resource_path_not_relative": "REQ-0781",
+    "resource_path_symlink": "REQ-0783",
+    "resource_path_outside_project": "REQ-0784",
+    "resource_path_missing": "REQ-0785",
+    "resource_path_not_regular_file": "REQ-0785",
 }
 
 PROJECT_CONFIGURATION_NAME = "yamaa-project.yaml"
@@ -102,7 +102,7 @@ class ResourceFailure(ValueError):
 def rooted_project_segments(written_path: str) -> tuple[str, ...] | None:
     """Split a rooted written path into its marker and segments, or None.
 
-    R021-7 spells a rooted path with a leading separator or with one ASCII
+    REQ-0773 spells a rooted path with a leading separator or with one ASCII
     letter and ``:/``. The marker leads the returned segments so that a path
     rooted one way never matches a root spelled the other way.
     """
@@ -120,9 +120,9 @@ def rooted_project_segments(written_path: str) -> tuple[str, ...] | None:
 def classify_project_path(written_path: str) -> str | None:
     """Return the first written-form condition from R021, if any.
 
-    R021-25 fixes the order: a scheme (R021-9), then a backslash (R021-10),
-    then an empty segment (R021-11), then a dot segment in a rooted path
-    (R021-12). Nothing here consults the filesystem.
+    REQ-0791 fixes the order: a scheme (REQ-0775), then a backslash (REQ-0776),
+    then an empty segment (REQ-0777), then a dot segment in a rooted path
+    (REQ-0778). Nothing here consults the filesystem.
     """
     segments = rooted_project_segments(written_path)
     if segments is None and _URI_SCHEME.match(written_path):
@@ -143,7 +143,7 @@ def _directory_spelling(candidate: str | Path) -> tuple[str, ...] | None:
 
 
 class ProjectConfigurationError(ValueError):
-    """A project configuration a run cannot be started from (R021-29)."""
+    """A project configuration a run cannot be started from (REQ-0795)."""
 
 
 @dataclass(frozen=True)
@@ -166,7 +166,7 @@ def _existing_directory(candidate: str | Path, label: str) -> Path:
 
 
 def find_project_configuration(entry_file: str | Path) -> Path | None:
-    """Walk up from an entry file to its project configuration (R021-2).
+    """Walk up from an entry file to its project configuration (REQ-0768).
 
     The file marks the project root by sitting at it, so the first one found
     on the way up names the root. A run that finds none is a run whose study
@@ -224,7 +224,7 @@ def _declared_data_roots(configuration: Path, project_root: Path) -> tuple[Path,
                 "existing directory"
             ) from error
         # The spelling the study wrote is kept, not its canonical form: a
-        # rooted path repeats that spelling, and R021-15 matches it there.
+        # rooted path repeats that spelling, and REQ-0781 matches it there.
         roots.append(candidate)
     return tuple(roots)
 
@@ -239,10 +239,10 @@ def approve_roots(
     """Select every root one run may read from, before any specification.
 
     The project root is where the configuration sits unless the runner names
-    one outright (R021-1). Data roots come from that configuration and from
-    the runner (R021-3). A runner that names data roots makes them the
+    one outright (REQ-0767). Data roots come from that configuration and from
+    the runner (REQ-0769). A runner that names data roots makes them the
     ceiling every declared root must resolve inside, and a packaging run
-    declines the configuration's roots entirely (R021-5).
+    declines the configuration's roots entirely (REQ-0771).
     """
     if project_root is not None:
         # A runner that names the root takes the configuration sitting at it,
@@ -396,8 +396,8 @@ class ProjectResources:
     def _approve(self, written: str | Path, resolved: Path) -> _ApprovedRoot:
         """Open one approved root and record the spellings that name it.
 
-        R021-3 canonicalizes and opens a root when it is selected, so
-        R021-17 can exempt the anchor: nothing above this descriptor can be
+        REQ-0769 canonicalizes and opens a root when it is selected, so
+        REQ-0783 can exempt the anchor: nothing above this descriptor can be
         swapped between validation and ingestion.
         """
         descriptor = -1
@@ -450,7 +450,7 @@ class ProjectResources:
         return (status.st_dev, status.st_ino, stat.S_IFMT(status.st_mode))
 
     def _anchor(self, written_path: str) -> _Anchor:
-        """Choose the approved root a written path resolves from (R021-15)."""
+        """Choose the approved root a written path resolves from (REQ-0781)."""
         condition = classify_project_path(written_path)
         if condition is not None:
             raise ResourceFailure(condition, written_path)

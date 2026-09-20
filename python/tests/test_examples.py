@@ -27,7 +27,7 @@ EXAMPLES = Path(__file__).parents[2] / "benchmark"
 SCHEMA_ROOT = EXAMPLES.parent / "yaml"
 
 KNOWN_REQUIREMENT_GAPS = {
-    "negative-function-contract-mismatch": ("R018-38", None),
+    "negative-function-contract-mismatch": ("REQ-0699", None),
 }
 
 KNOWN_SPEC_PATH_GAPS = {

@@ -83,7 +83,7 @@ def load_schema_bundle(
     """Load one closed schema bundle rooted at an entry document.
 
     The repository publishes two entry points over the same shared
-    declarations: `schema.yaml` for a specification and, under R018-3,
+    declarations: `schema.yaml` for a specification and, under REQ-0664,
     `schema_environment.yaml` for a project environment validated
     independently of any specification.
     """
@@ -480,7 +480,7 @@ def _invalid_type(
     path: str,
     expected: str,
     value: object,
-    requirement: str | None = "R006-46",
+    requirement: str | None = "REQ-0287",
 ) -> ValidationDiagnostic:
     return _diagnostic(
         path,
@@ -542,7 +542,7 @@ def _validate_constraints(
     value: object,
     descriptor: dict[str, Any],
     path: str,
-    requirement: str = "R006-46",
+    requirement: str = "REQ-0287",
 ) -> list[ValidationDiagnostic]:
     diagnostics: list[ValidationDiagnostic] = []
     permitted = descriptor.get("values")
@@ -565,7 +565,7 @@ def _validate_constraints(
                     path,
                     "invalid_regex",
                     {"pattern": pattern, "reason": error.reason},
-                    "R022-27",
+                    "REQ-0827",
                 )
             )
         else:
@@ -797,7 +797,7 @@ def _validate_single(
             and diagnostics
             and not isinstance(value, (str, dict))
         ):
-            # R007-58: a bare derivation is either a string source reference
+            # REQ-0320: a bare derivation is either a string source reference
             # or a mapping. Name the dict form so the fix is obvious.
             return [
                 _diagnostic(
@@ -811,7 +811,7 @@ def _validate_single(
                             "as {literal: ...}"
                         ),
                     },
-                    "R007-58",
+                    "REQ-0320",
                 )
             ]
         has_matching_outer_type = any(
@@ -823,14 +823,14 @@ def _validate_single(
             and not has_matching_outer_type
             and all(item.condition == "invalid_field_type" for item in diagnostics)
         ):
-            requirement = "R007-37" if type_name == "variable" else "R006-46"
+            requirement = "REQ-0322" if type_name == "variable" else "REQ-0287"
             return [_invalid_type(path, type_name, value, requirement)]
         if diagnostics:
             return diagnostics
         requirement = {
-            "column_type": "R011-29",
-            "day_rule": "R016-68",
-        }.get(type_name, "R006-46")
+            "column_type": "REQ-0012",
+            "day_rule": "REQ-0609",
+        }.get(type_name, "REQ-0287")
         return _validate_constraints(value, alias, path, requirement)
 
     return [_diagnostic(path, "unknown_schema_type", {"type": type_name})]
@@ -987,9 +987,9 @@ def _normalize_single(
             return copy.deepcopy(value)
         nested_active = active | {normalization_key}
         if type_name == "derivation":
-            # R007-57: a bare derivation string is the source shorthand.
+            # REQ-0319: a bare derivation string is the source shorthand.
             # Expand it to the dict form, then dispatch on the remaining
-            # union members so the registry and the R006-25
+            # union members so the registry and the REQ-0266
             # handled-expression expansion apply unchanged. The "str" member
             # exists for validation; normalization never dispatches on it.
             if isinstance(value, str):

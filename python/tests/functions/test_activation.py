@@ -1,7 +1,7 @@
 """Activate a pinned project, and keep study data behind that activation.
 
-R018-30 puts the vectors before every specification, R018-6 puts the
-language and the artifact before the vectors, and R018-40 and R018-41 say
+REQ-0691 puts the vectors before every specification, REQ-0667 puts the
+language and the artifact before the vectors, and REQ-0701 and REQ-0702 say
 what happens when the code a run does reach misbehaves. Each case here runs
 real pinned Python: the recording variant of the project's own code reports
 what the binding was actually called with, in the order it was called.
@@ -35,7 +35,7 @@ from yamaa.specification import load_specification
 # missing value to a non-accepting parameter and are short-circuited.
 INVOKED_VECTORS = [(70.0, 175.0, 100), (80.0, 200.0, 100), (0.0, 175.0, 100)]
 # The study rows of `adam-adsl-bmi-function` that reach the binding. The
-# fourth subject has no height, so R018-20 answers it without a call.
+# fourth subject has no height, so REQ-0681 answers it without a call.
 STUDY_ROWS = [(81.0, 180.0, 100), (64.0, 160.0, 100), (45.0, 150.0, 100)]
 
 
@@ -88,7 +88,7 @@ def recording_project(project, repository):
 def test_every_vector_runs_before_any_study_value_reaches_the_binding(
     recording_project, repository
 ) -> None:
-    # R018-30: activation runs all vectors before any specification may
+    # REQ-0691: activation runs all vectors before any specification may
     # execute, so the order the binding itself observes is vectors first.
     activated = _activate(recording_project, repository)
     after_activation = _calls(activated)
@@ -97,7 +97,7 @@ def test_every_vector_runs_before_any_study_value_reaches_the_binding(
 
     assert after_activation == INVOKED_VECTORS
     assert isinstance(result, ExecutionSuccess), result
-    # The run activates the same unchanged project, which R018-30 lets the
+    # The run activates the same unchanged project, which REQ-0691 lets the
     # cache answer, so the study rows follow one pass of the vectors.
     assert _calls(activated) == INVOKED_VECTORS + STUDY_ROWS
 
@@ -105,7 +105,7 @@ def test_every_vector_runs_before_any_study_value_reaches_the_binding(
 def test_a_missing_non_accepting_argument_never_reaches_the_binding(
     recording_project, repository
 ) -> None:
-    # R018-20 and R018-21: the call is not invoked, its result is missing,
+    # REQ-0681 and REQ-0682: the call is not invoked, its result is missing,
     # and that missing is not one the contract had to declare.
     activated = _activate(recording_project, repository)
 
@@ -119,7 +119,7 @@ def test_a_missing_non_accepting_argument_never_reaches_the_binding(
 def test_a_failing_vector_stops_the_run_before_any_study_data(
     project, repository
 ) -> None:
-    # R018-42: a vector failure is the whole point of running them first.
+    # REQ-0703: a vector failure is the whole point of running them first.
     project.write_code(
         RECORDING_CODE.replace("(height_cm / cm_per_m) ** 2", "height_cm")
     )
@@ -132,7 +132,7 @@ def test_a_failing_vector_stops_the_run_before_any_study_data(
     assert isinstance(result, ExecutionFailure), result
     diagnostic = result.diagnostics[0]
     assert diagnostic.condition == "function_conformance_failed"
-    assert diagnostic.requirement == "R018-42"
+    assert diagnostic.requirement == "REQ-0703"
     assert diagnostic.context["case"] == "explicit-scale"
     assert reached == []
 
@@ -140,7 +140,7 @@ def test_a_failing_vector_stops_the_run_before_any_study_data(
 def test_a_mismatched_digest_is_refused_before_the_code_is_read(
     recording_project, repository
 ) -> None:
-    # R018-6 verifies the artifact before activation, so nothing inside it
+    # REQ-0667 verifies the artifact before activation, so nothing inside it
     # is imported when the bytes are not the ones that were pinned.
     recording_project.write_code(RECORDING_CODE + "\nEXTRA = 1\n")
 
@@ -148,7 +148,7 @@ def test_a_mismatched_digest_is_refused_before_the_code_is_read(
 
     diagnostic = failure.diagnostics[0]
     assert diagnostic.condition == "runtime_artifact_mismatch"
-    assert diagnostic.requirement == "R018-36"
+    assert diagnostic.requirement == "REQ-0697"
     assert diagnostic.context["declared"] != diagnostic.context["computed"]
     assert not [name for name in sys.modules if name.startswith("_yamaa_artifact_")]
 
@@ -156,7 +156,7 @@ def test_a_mismatched_digest_is_refused_before_the_code_is_read(
 def test_a_runner_that_does_not_support_the_language_refuses_the_project(
     project, repository
 ) -> None:
-    # R018-6 and R018-35: this runner is Python, and an R project is not
+    # REQ-0667 and REQ-0696: this runner is Python, and an R project is not
     # something it may quietly run.
     project.write_code(RECORDING_CODE)
     project.write_vectors(repository.vectors)
@@ -170,7 +170,7 @@ def test_a_runner_that_does_not_support_the_language_refuses_the_project(
 
 
 def test_the_language_is_settled_before_the_calls_are(project, repository) -> None:
-    # R018-6 puts the runner language first, so a project this runner cannot
+    # REQ-0667 puts the runner language first, so a project this runner cannot
     # execute is refused as that rather than as a contract it never reaches.
     project.write_code(RECORDING_CODE)
     project.write_vectors(
@@ -208,7 +208,7 @@ def test_a_binding_loads_without_an_ambient_import_machinery(
 def test_a_binding_is_resolved_inside_the_artifact_and_nowhere_else(
     project, repository
 ) -> None:
-    # R018-5: an installed package on the process search path is not a
+    # REQ-0666: an installed package on the process search path is not a
     # fallback, even when it does have the callable the binding names.
     project.write_code(RECORDING_CODE)
     project.write_vectors(repository.vectors)
@@ -283,7 +283,7 @@ def test_a_python_callable_requires_the_exact_mapped_signature(
 
     diagnostic = failure.diagnostics[0]
     assert diagnostic.condition == "project_environment_invalid"
-    assert diagnostic.requirement == "R018-34"
+    assert diagnostic.requirement == "REQ-0695"
     assert diagnostic.context["unsupported"] == unsupported
     assert diagnostic.context["missing"] == missing
     assert diagnostic.context["extra"] == extra
@@ -309,7 +309,7 @@ def test_signature_metadata_cannot_conceal_concrete_variadics(
 
     diagnostic = failure.diagnostics[0]
     assert diagnostic.condition == "project_environment_invalid"
-    assert diagnostic.requirement == "R018-34"
+    assert diagnostic.requirement == "REQ-0695"
     assert diagnostic.context["unsupported"] == [
         {"name": "values", "kind": "var_positional"},
         {"name": "named", "kind": "var_keyword"},
@@ -346,7 +346,7 @@ bmi = BMI()
 
     diagnostic = failure.diagnostics[0]
     assert diagnostic.condition == "project_environment_invalid"
-    assert diagnostic.requirement == "R018-34"
+    assert diagnostic.requirement == "REQ-0695"
     assert diagnostic.context["reason"] == (
         "the Python callable signature could not be inspected"
     )
@@ -381,7 +381,7 @@ def test_an_absolute_transitive_import_cannot_use_ambient_code(
 
     diagnostic = failure.diagnostics[0]
     assert diagnostic.condition == "function_call_failed"
-    assert diagnostic.requirement == "R018-40"
+    assert diagnostic.requirement == "REQ-0701"
     assert diagnostic.context["host_error"] == "ImportError"
 
 
@@ -401,7 +401,7 @@ def test_a_relative_transitive_import_resolves_inside_the_artifact(
 def test_an_unchanged_project_activates_once_and_a_repinned_one_again(
     recording_project, repository
 ) -> None:
-    # R018-30 caches success for exactly one combination of identities, so
+    # REQ-0691 caches success for exactly one combination of identities, so
     # an unchanged project skips the vectors and a new artifact does not.
     first = _activate(recording_project, repository)
     second = _activate(recording_project, repository)
@@ -417,7 +417,7 @@ def test_an_unchanged_project_activates_once_and_a_repinned_one_again(
 
 
 def test_changed_vector_content_activates_again(recording_project, repository) -> None:
-    # The vectors are not part of the artifact, so R018-30 names their
+    # The vectors are not part of the artifact, so REQ-0691 names their
     # content separately: editing a case is a different activation.
     _activate(recording_project, repository)
     recording_project.write_vectors(
@@ -428,7 +428,7 @@ def test_changed_vector_content_activates_again(recording_project, repository) -
 
 
 def test_a_host_exception_during_a_study_row_is_fatal(project, repository) -> None:
-    # R018-40: fatal, with no R008 local fallback. The vectors pass, so
+    # REQ-0701: fatal, with no R008 local fallback. The vectors pass, so
     # this is the run reaching a row the vectors did not describe.
     project.write_code(
         RECORDING_CODE.replace(
@@ -446,7 +446,7 @@ def test_a_host_exception_during_a_study_row_is_fatal(project, repository) -> No
     assert isinstance(result, ExecutionFailure), result
     diagnostic = result.diagnostics[0]
     assert diagnostic.condition == "function_call_failed"
-    assert diagnostic.requirement == "R018-40"
+    assert diagnostic.requirement == "REQ-0701"
     assert diagnostic.phase == "derivation"
     assert diagnostic.context["host_error"] == "ZeroDivisionError"
     assert diagnostic.context["function"] == "bmi"
@@ -465,7 +465,7 @@ def test_a_host_exception_during_a_study_row_is_fatal(project, repository) -> No
 def test_a_result_outside_the_declared_type_is_fatal(
     project, repository, returned, expected_context
 ) -> None:
-    # R018-25: a binding returns one scalar of the declared exact type, and
+    # REQ-0686: a binding returns one scalar of the declared exact type, and
     # R005 conversion is not a repair mechanism for anything else.
     project.write_code(
         RECORDING_CODE.replace(
@@ -481,13 +481,13 @@ def test_a_result_outside_the_declared_type_is_fatal(
     assert isinstance(result, ExecutionFailure), result
     diagnostic = result.diagnostics[0]
     assert diagnostic.condition == "invalid_function_result"
-    assert diagnostic.requirement == "R018-41"
+    assert diagnostic.requirement == "REQ-0702"
     assert expected_context.items() <= diagnostic.context.items()
 
 
 @pytest.mark.parametrize("returned", ["None", "float('inf')"], ids=["none", "infinity"])
 def test_an_undeclared_missing_result_is_fatal(project, repository, returned) -> None:
-    # R018-25: R011's non-finite normalization runs first, so a returned
+    # REQ-0686: R011's non-finite normalization runs first, so a returned
     # infinity is a missing result a contract still has to declare.
     project.write_code(
         RECORDING_CODE.replace(
@@ -526,7 +526,7 @@ def test_a_declared_nullable_binding_may_return_missing(project, repository) -> 
 def test_an_accepting_parameter_receives_the_host_missing_scalar(
     project, repository
 ) -> None:
-    # R018-20: a missing value for an accepting parameter is passed to the
+    # REQ-0681: a missing value for an accepting parameter is passed to the
     # binding as the host runtime's canonical missing scalar.
     project.write_code(
         RECORDING_CODE.replace(
@@ -594,7 +594,7 @@ def test_the_activation_cache_is_not_consulted_when_a_caller_declines_it(
 def test_a_result_compares_under_the_contract_precision(
     actual, expected, decimals, matches
 ) -> None:
-    # R018-31 compares temporary decimal copies at the contract's
-    # precision, with an exact decimal tie going away from zero. R018-32
+    # REQ-0692 compares temporary decimal copies at the contract's
+    # precision, with an exact decimal tie going away from zero. REQ-0693
     # keeps that off the value, which is why this takes copies of both.
     assert results_match(actual, expected, decimals) is matches

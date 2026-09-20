@@ -37,7 +37,9 @@ class SourceDiagnostic(_FrozenModel):
     phase: Literal["validation", "ingest"]
     condition: str = Field(min_length=1)
     spec_paths: tuple[str, ...] = Field(min_length=1)
-    requirement: str | None = Field(default=None, pattern=r"^R[0-9]{3}-[0-9]+$")
+    requirement: str | None = Field(
+        default=None, pattern=r"^(?:REQ-[0-9]{4,}|R[0-9]{3}-[1-9][0-9]*[a-z]?)$"
+    )
     context: dict[str, JsonValue]
 
 
@@ -118,7 +120,7 @@ def _profile_diagnostic(dataset: str, written_path: str) -> SourceDiagnostic:
         phase="validation",
         condition="source_profile_unknown",
         spec_paths=(f"input.{dataset}.path",),
-        requirement="R023-23",
+        requirement="REQ-0852",
         context={"dataset": dataset, "path": written_path},
     )
 
@@ -154,7 +156,7 @@ def _validate_producer_names(
                     f"input.{dataset}.schema",
                     f"input.{dataset}.path",
                 ),
-                requirement="R014-22",
+                requirement="REQ-0535",
                 context={
                     "dataset": dataset,
                     "expected": list(expected),
@@ -189,7 +191,7 @@ def _field_types(
                         phase="validation",
                         condition="unknown_field",
                         spec_paths=(f"input.{dataset}.types.{field}",),
-                        requirement="R014-19",
+                        requirement="REQ-0532",
                         context={"dataset": dataset, "field": field},
                     )
                 ]
@@ -215,7 +217,7 @@ def _parse_field(
                     phase="ingest",
                     condition="field_parse_failed",
                     spec_paths=(f"input.{dataset}.types.{name}",),
-                    requirement="R014-23",
+                    requirement="REQ-0536",
                     context={
                         "dataset": dataset,
                         "field": name,
@@ -263,7 +265,7 @@ def _validate_parquet_contract(
                 f"input.{dataset}.schema",
                 f"input.{dataset}.path",
             ),
-            requirement="R014-22",
+            requirement="REQ-0535",
             context={
                 "dataset": dataset,
                 "field": actual.name,
@@ -298,7 +300,7 @@ def load_source_tables(
                     phase="validation",
                     condition="redundant_field_type",
                     spec_paths=(f"input.{dataset}.types.{field}",),
-                    requirement="R014-10",
+                    requirement="REQ-0523",
                     context={
                         "dataset": dataset,
                         "field": field,
@@ -313,7 +315,7 @@ def load_source_tables(
                     phase="validation",
                     condition="redundant_field_type",
                     spec_paths=(f"input.{dataset}.types.{field}",),
-                    requirement="R014-20",
+                    requirement="REQ-0533",
                     context={
                         "dataset": dataset,
                         "field": field,

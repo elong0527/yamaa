@@ -2,51 +2,81 @@
 title: Rules
 ---
 
-# Rules (R001-R027)
+# Derivation contracts
 
-The normative derivation rules live in
-[`yaml/rules/`](https://github.com/elong0527/yamaa/tree/main/yaml/rules) --
-one file per rule, each owning its topic completely. Rule IDs are stable and
-do not change when files are renamed. This page is an index only; for the
-authoritative text, follow the links.
+Every contract indexed below is normative. Files have one semantic owner;
+requirements use permanent global IDs independent of that owner's filename.
+The schema owns shape, defaults, and structural constraints. Contracts own
+shared and operation-local behavior. Examples demonstrate the contracts.
 
-| ID | Rule | Owns |
-|---|---|---|
-| R001 | [Execution model](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R001-execution-model.md) | Phases, grouped row construction, dependency inference, evaluation order |
-| R002 | [Source binding](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R002-source-binding.md) | Dataset declaration, name resolution |
-| R003 | [Intermediate](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R003-intermediate.md) | Cross-dataset reads: the implicit join on applicable keys, named `intermediates`, inline `lookup`, declared-key aggregates |
-| R004 | [Predicate language](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R004-predicate-language.md) | The Boolean `predicate` primitive |
-| R005 | [Output contract](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R005-output-contract.md) | Column coverage, output membership, the value lifecycle, output identity, artifact row order |
-| R006 | [Compact schema language](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R006-schema-language.md) | Schema notation and structural validation |
-| R007 | [Expression registry](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R007-expression-registry.md) | Registration, nesting, evaluation kinds, ordering, input types |
-| R008 | [Local error handlers](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R008-local-handlers.md) | The handler lifecycle |
-| R009 | [Verifications](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R009-verifications.md) | What each assertion means, including group cardinality, and when it runs |
-| R010 | [Scalar numeric computation](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R010-scalar-computation.md) | The `numeric_expression` primitive |
-| R011 | [Column types](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R011-column-types.md) | The `column_type` vocabulary, non-finite normalization, and conversion |
-| R012 | [String templates](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R012-string-templates.md) | Interpolation grammar, escaping, and evaluation |
-| R013 | [Aggregate reduction](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R013-aggregate-reduction.md) | The `aggregate_expression` primitive: reducers, row-relative narrowing, the key rule, and empty-group results |
-| R014 | [Source-format ingestion](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R014-source-ingestion.md) | Missing recognition and field typing at the source |
-| R016 | [Temporal values](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R016-temporal-values.md) | The `date` and `datetime` values: lexical form, zone and precision model, comparison, canonical text, and the operations over them |
-| R017 | [Specification inheritance](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R017-specification-inheritance.md) | Parent resolution, layer composition, pruning, and resolved order |
-| R018 | [Project function environment](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R018-project-function-environment.md) | Project resolution, logical function contracts, singular runtime binding, activation conformance |
-| R019 | [Text values](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R019-text-values.md) | ASCII source, Unicode data, casing, equality, normalization, total order |
-| R020 | [Artifact serialization](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R020-artifact-serialization.md) | The `parquet` and `csv` profiles, display precision, and publication |
-| R021 | [Project resource resolution](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R021-project-resource-resolution.md) | The approved project root, written path form, readable file kinds, content identity |
-| R022 | [Regular expressions](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R022-regular-expressions.md) | The pinned engine and flag set, full-match and search behavior per consumer, capture-group numbering |
-| R023 | [Source profile selection and delimited source profile](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R023-delimited-source.md) | Source-profile selection and the `csv` source syntax: encoding, records and fields, header shape, and delivered quoting |
-| R024 | [Submission metadata](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R024-submission-metadata.md) | Governed dataset and column metadata: standard families, data type, length, core and mandatory, origin and what the graph refutes, methods, comments |
-| R025 | [Controlled terminology](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R025-controlled-terminology.md) | The codelist object: identity, values, extensibility, external form, what a binding enforces, and agreement with `allowed_values` |
-| R026 | [Define-XML 2.1 composition and serialization](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R026-define-xml.md) | The study document, composition, generated identifiers, element mapping and order, bytes, publication, and the deferred constructs |
-| R027 | [Parquet source profile](https://github.com/elong0527/yamaa/blob/main/yaml/rules/R027-parquet-source.md) | The self-describing field mapping, order, values, and errors of a `parquet` source |
+Read the relevant block, then follow its dependencies. The blocks are reading
+order, not execution phases; [execution/lifecycle](https://github.com/elong0527/yamaa/blob/main/yaml/rules/execution/lifecycle.md)
+owns the sequence of a run.
 
-A rule owns its topic completely. A cross-reference names the owning rule and
-stops; it does not restate that rule's content. Normative keywords follow
-RFC 2119: `must` states an absolute requirement, `must not` an absolute
-prohibition, `should` a strong recommendation with a reason required to depart
-from it, and `may` a truly optional behavior.
+## Specification
 
-For worked precedents of each rule in action, see the
-[examples walkthrough](../articles/yaml-examples-walkthrough.md), which maps
-constructs and questions to runnable examples, and the
-[benchmark](../benchmark/index.md), which shows each one's input against its
-output.
+| Contract | Status | Owns |
+| --- | --- | --- |
+| [Specification structure](https://github.com/elong0527/yamaa/blob/main/yaml/rules/specification/structure.md) | normative | Declare identifiers, columns, derivation coverage, and source notation. |
+| [Specification composition](https://github.com/elong0527/yamaa/blob/main/yaml/rules/specification/composition.md) | normative | Resolve inherited layers into one minimal, ordered specification. |
+| [Name binding](https://github.com/elong0527/yamaa/blob/main/yaml/rules/specification/binding.md) | normative | Resolve input datasets, current-output columns, and contextual ODM references. |
+
+## Values
+
+| Contract | Status | Owns |
+| --- | --- | --- |
+| [Types and conversion](https://github.com/elong0527/yamaa/blob/main/yaml/rules/values/types.md) | normative | Define column types, missing normalization, compatibility, and conversion. |
+| [Numeric values](https://github.com/elong0527/yamaa/blob/main/yaml/rules/values/numbers.md) | normative | Define numeric representation, promotion, conversion, and overflow. |
+| [Text values](https://github.com/elong0527/yamaa/blob/main/yaml/rules/values/text.md) | normative | Define Unicode scalar identity, preservation, equality, and order. |
+| [Temporal values](https://github.com/elong0527/yamaa/blob/main/yaml/rules/values/temporal.md) | normative | Define dates, local civil datetimes, precision, canonical text, and order. |
+
+## Execution
+
+| Contract | Status | Owns |
+| --- | --- | --- |
+| [Execution lifecycle](https://github.com/elong0527/yamaa/blob/main/yaml/rules/execution/lifecycle.md) | normative | Sequence resolution, row construction, dependency evaluation, value completion, and output checks. |
+| [Row construction](https://github.com/elong0527/yamaa/blob/main/yaml/rules/execution/rows.md) | normative | Construct output rows from declared input records or groups. |
+| [Ordering](https://github.com/elong0527/yamaa/blob/main/yaml/rules/execution/ordering.md) | normative | Apply ordering terms, missing placement, stable ties, and final artifact order. |
+| [Local handlers](https://github.com/elong0527/yamaa/blob/main/yaml/rules/execution/handlers.md) | normative | Handle conditions at their expression or conversion site and report substitutions. |
+| [Verification](https://github.com/elong0527/yamaa/blob/main/yaml/rules/execution/verification.md) | normative | Apply assertions, severity, grouped counts, and warning logs to completed values. |
+
+## Operations
+
+| Contract | Status | Owns |
+| --- | --- | --- |
+| [Expression evaluation](https://github.com/elong0527/yamaa/blob/main/yaml/rules/operations/expressions.md) | normative | Register and dispatch expressions, restrict nesting, and define scalar selection. |
+| [Predicates](https://github.com/elong0527/yamaa/blob/main/yaml/rules/operations/predicates.md) | normative | Evaluate the closed Boolean language using three-valued logic. |
+| [Numeric computation](https://github.com/elong0527/yamaa/blob/main/yaml/rules/operations/computation.md) | normative | Evaluate written arithmetic formulas without reassociation or presentation rounding. |
+| [Aggregation](https://github.com/elong0527/yamaa/blob/main/yaml/rules/operations/aggregation.md) | normative | Reduce eligible records in one of the three permitted key scopes. |
+| [Lookup and joins](https://github.com/elong0527/yamaa/blob/main/yaml/rules/operations/lookup.md) | normative | Match declared keys, narrow records, select a result, and answer absence. |
+| [Windows](https://github.com/elong0527/yamaa/blob/main/yaml/rules/operations/windows.md) | normative | Partition completed output rows and compute ranks, neighbors, and baseline selections. |
+| [Text operations](https://github.com/elong0527/yamaa/blob/main/yaml/rules/operations/text.md) | normative | Apply casing, inline mapping, templates, and portable regular expressions. |
+| [Temporal operations](https://github.com/elong0527/yamaa/blob/main/yaml/rules/operations/temporal.md) | normative | Compute calendar differences, study days, date completion, and precision. |
+| [Project functions](https://github.com/elong0527/yamaa/blob/main/yaml/rules/operations/functions.md) | normative | Resolve immutable runtimes and validate function inputs, results, and activation conformance. |
+
+## Storage
+
+| Contract | Status | Owns |
+| --- | --- | --- |
+| [Resource resolution](https://github.com/elong0527/yamaa/blob/main/yaml/rules/storage/resources.md) | normative | Confine declared source paths and read one immutable snapshot per physical file. |
+| [Source ingestion](https://github.com/elong0527/yamaa/blob/main/yaml/rules/storage/ingestion.md) | normative | Select input profiles and assign source field types without inferring values. |
+| [CSV profile](https://github.com/elong0527/yamaa/blob/main/yaml/rules/storage/csv.md) | normative | Read admitted CSV spellings and write canonical CSV bytes and display precision. |
+| [Parquet profile](https://github.com/elong0527/yamaa/blob/main/yaml/rules/storage/parquet.md) | normative | Read and write the closed Parquet field and value mapping. |
+| [Artifact publication](https://github.com/elong0527/yamaa/blob/main/yaml/rules/storage/publication.md) | normative | Select artifact columns and profiles and publish complete files atomically. |
+
+## Submission
+
+| Contract | Status | Owns |
+| --- | --- | --- |
+| [Submission metadata](https://github.com/elong0527/yamaa/blob/main/yaml/rules/submission/metadata.md) | normative | Govern dataset and column metadata, origin, methods, and document references. |
+| [Controlled terminology](https://github.com/elong0527/yamaa/blob/main/yaml/rules/submission/terminology.md) | normative | Declare codelists once and validate their bindings and allowed values. |
+| [Define-XML](https://github.com/elong0527/yamaa/blob/main/yaml/rules/submission/define-xml.md) | normative | Compose study metadata into deterministic Define-XML 2.1 documents. |
+
+## Reference
+
+| Contract | Status | Owns |
+| --- | --- | --- |
+| [Schema language](https://github.com/elong0527/yamaa/blob/main/yaml/rules/reference/schema-language.md) | normative | Define schema notation, registries, constraints, and canonical shorthand expansion. |
+
+
+[Requirement and compatibility index](https://github.com/elong0527/yamaa/blob/main/yaml/rules/reference/requirements.md).

@@ -33,7 +33,7 @@ class ArtifactTarget:
         if not candidate.parent.is_dir():
             raise ValueError("an artifact target sits in an existing directory")
         if candidate.is_symlink():
-            # R020-38 replaces the target itself, so a link would publish
+            # REQ-0752 replaces the target itself, so a link would publish
             # somewhere the caller did not name.
             raise ValueError("an artifact target is not a symbolic link")
         if candidate.exists() and not candidate.is_file():
@@ -51,11 +51,11 @@ class ArtifactTarget:
 def publish_artifact(target: ArtifactTarget, artifact: Artifact) -> Path:
     """Replace the permitted target with one complete artifact, atomically.
 
-    R020-41 publishes once, after the whole artifact is complete, so the
-    bytes are rendered before the target is touched at all. R020-38 then
+    REQ-0755 publishes once, after the whole artifact is complete, so the
+    bytes are rendered before the target is touched at all. REQ-0752 then
     writes them into a temporary regular file in the target's own
     directory, flushes it to the filesystem, and replaces the target with
-    it, and R020-40 leaves the previous artifact in place and removes the
+    it, and REQ-0754 leaves the previous artifact in place and removes the
     temporary file when any of that fails.
     """
     if target.profile != artifact.profile:
@@ -89,7 +89,7 @@ def publish_artifact(target: ArtifactTarget, artifact: Artifact) -> Path:
                     phase="output",
                     condition="publication_failed",
                     spec_paths=("output.path",),
-                    requirement="R020-47",
+                    requirement="REQ-0764",
                     context={"target": str(target.path), "reason": str(error)},
                 )
             ]

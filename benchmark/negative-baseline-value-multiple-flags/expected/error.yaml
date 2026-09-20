@@ -2,7 +2,7 @@ phase: derivation
 condition: ambiguous_baseline
 spec_paths:
   - columns.BAVL.derivation.baseline_value
-requirement: R007-37
+requirement: REQ-0322
 context:
   column: BAVL
   flag_count: 2

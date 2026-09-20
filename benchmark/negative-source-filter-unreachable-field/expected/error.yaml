@@ -2,7 +2,7 @@ phase: validation
 condition: unknown_field
 spec_paths:
   - columns.AGE.derivation.source.filter
-requirement: R003-22
+requirement: REQ-0132
 context:
   identifier: USUBJID
   dataset: ODM

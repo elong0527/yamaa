@@ -2,7 +2,7 @@ phase: join
 condition: multiple_matches
 spec_paths:
   - intermediates[0]
-requirement: R003-17
+requirement: REQ-0127
 context:
   intermediate: AWIN
   dataset: AWINDOW

@@ -30,7 +30,7 @@ contract: regex
 contract_version: "2.0.0"
 portable_contract:
   grammar: "ECMA-262 Pattern with the Unicode flag set, without property escapes and without variable-length lookbehind"
-  normalization: "R022-30 through R022-34 over the host library: ASCII-only \\d and \\w, the ECMA-262 \\s set, scalar dot, end-only $, \\u{...} expansion, and rejection of (?P<...>), inline flags, \\p{...}, malformed escapes, and variable-length lookbehind"
+  normalization: "REQ-0822 through REQ-0826 over the host library: ASCII-only \\d and \\w, the ECMA-262 \\s set, scalar dot, end-only $, \\u{...} expansion, and rejection of (?P<...>), inline flags, \\p{...}, malformed escapes, and variable-length lookbehind"
 cases:
   - id: ascii-digit-class-rejects-arabic-indic-digit
     covers: [unicode, escaping, dialect]

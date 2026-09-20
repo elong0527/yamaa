@@ -49,7 +49,7 @@ def test_committed_column_composition_example_matches_resolved_artifact() -> Non
     )
 
     assert resolved.document == expected
-    # R017-3 keeps provenance at the leaf, because the composed ANRIND
+    # REQ-0616 keeps provenance at the leaf, because the composed ANRIND
     # dictionary and AVAL annotations come from three different layers.
     assert (
         resolved.provenance["columns.ANRIND.derivation.value.mapping.dict.L"].file
@@ -239,7 +239,7 @@ rows:
         tmp_path / "spec.yaml", load_schema_bundle(SCHEMA_ROOT)
     )
 
-    # R017-17 composes only a columns member. A rows member field is still
+    # REQ-0630 composes only a columns member. A rows member field is still
     # replaced whole, so the inherited entry and the inherited
     # case_sensitive are both gone rather than composed.
     assert resolved.document["rows"][0]["derivations"]["CODE"] == {
@@ -437,6 +437,6 @@ def test_a_column_reading_an_intermediate_depends_on_its_key_base() -> None:
     }
     column = {"name": "V", "type": "float", "derivation": {"source": "LOOK.V"}}
 
-    # R001-18: the intermediate's match values are dependencies of every
+    # REQ-0050: the intermediate's match values are dependencies of every
     # column that reads it, so R017 orders MATCHKEY before V.
     assert _column_dependencies(column, [], intermediates, bundle) == {"MATCHKEY"}

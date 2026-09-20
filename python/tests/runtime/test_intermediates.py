@@ -85,7 +85,7 @@ def test_keeping_first_reads_the_other_end_of_the_same_order() -> None:
 
 
 def test_a_tie_on_every_term_is_resolved_by_record_order() -> None:
-    # R003-25: remaining ties are resolved by record order, which makes the
+    # REQ-0135: remaining ties are resolved by record order, which makes the
     # selection total rather than dependent on the sort's stability.
     tied = relation(
         "EX",
@@ -111,20 +111,20 @@ def test_a_tie_on_every_term_is_resolved_by_record_order() -> None:
 
 
 def test_several_surviving_records_with_no_order_fail() -> None:
-    # R003-17: an unhandled multiple match under R003.
+    # REQ-0127: an unhandled multiple match under R003.
     outcome = selector(explicit_keys()).select(
         "LASTEX", {"STUDYID": "CATH", "USUBJID": "S1"}
     )
 
     assert outcome.condition is not None
     assert outcome.condition.condition.condition == "multiple_matches"
-    assert outcome.condition.condition.requirement == "R003-17"
+    assert outcome.condition.condition.requirement == "REQ-0127"
     assert outcome.condition.condition.context["match_count"] == 3
     assert outcome.spec_path == "intermediates[0]"
 
 
 def test_matching_on_explicit_keys_answers_an_absent_record_with_missing() -> None:
-    # R003-19: R003 treats an absent right-side record as ordinary missing.
+    # REQ-0129: R003 treats an absent right-side record as ordinary missing.
     outcome = selector(explicit_keys()).select(
         "LASTEX", {"STUDYID": "CATH", "USUBJID": "S9"}
     )
@@ -146,18 +146,18 @@ def declared(strict: bool = True, **extra: object) -> PlannedIntermediate:
 
 
 def test_a_declared_key_with_no_record_is_fatal_and_names_the_key() -> None:
-    # R003-14: R007 makes an unmatched lookup key fatal unless the
+    # REQ-0124: R007 makes an unmatched lookup key fatal unless the
     # specification answers for it.
     outcome = selector(declared()).select("REFRANGE", {"SUBJECT": "S9"})
 
     assert outcome.condition is not None
     assert outcome.condition.condition.condition == "unmatched_key"
-    assert outcome.condition.condition.requirement == "R003-14"
+    assert outcome.condition.condition.requirement == "REQ-0124"
     assert outcome.condition.condition.context["intermediate_key"] == {"USUBJID": "S9"}
 
 
 def test_an_unhandled_multiple_match_names_the_key_it_matched_on() -> None:
-    # R003-33: one vocabulary for every record lookup failure, so a multiple
+    # REQ-0143: one vocabulary for every record lookup failure, so a multiple
     # match names its match under `key` and `lookup_key` the way an unmatched
     # key does and leaves `keys` to the offending output row.
     outcome = selector(declared()).select("REFRANGE", {"SUBJECT": "S1"})
@@ -187,7 +187,7 @@ def test_a_missing_match_value_is_answered_before_a_record_is_looked_for() -> No
 
     assert fatal.condition is not None
     assert fatal.condition.condition.condition == "unmatched_key"
-    assert fatal.condition.condition.requirement == "R003-14"
+    assert fatal.condition.condition.requirement == "REQ-0124"
     assert answered.condition is None
     assert answered.record is None
 
@@ -234,7 +234,7 @@ def test_a_closed_range_includes_both_stated_endpoints() -> None:
 
 
 def test_a_record_missing_a_stated_bound_is_ineligible() -> None:
-    # R003-11: an open range is not admitted by omission of the value.
+    # REQ-0121: an open range is not admitted by omission of the value.
     outcome = epoch_selector().select("EPOCHDEF", {"STUDYID": "CATH", "ADY": 60})
 
     assert outcome.record is None
@@ -255,7 +255,7 @@ def test_a_missing_range_value_is_an_absence_not_an_unmatched_key() -> None:
 
 
 def test_declared_types_decide_whether_a_range_can_be_compared() -> None:
-    # R003-11: int and float compare through R010's promotion; every other
+    # REQ-0121: int and float compare through R010's promotion; every other
     # type must match exactly.
     assert types_comparable("int", "float")
     assert types_comparable("date", "date")

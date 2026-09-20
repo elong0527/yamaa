@@ -4,10 +4,10 @@ The language admits four closed grammars. Each one is defined once, here:
 
 | Contract | Rule | Written in |
 |---|---|---|
-| [`predicate.yaml`](predicate.yaml) | [R004](../rules/R004-predicate-language.md) | a field typed `predicate` |
-| [`numeric.yaml`](numeric.yaml) | [R010](../rules/R010-scalar-computation.md) | `compute.expr` |
-| [`string-template.yaml`](string-template.yaml) | [R012](../rules/R012-string-templates.md) | `str_template.template` |
-| [`aggregate.yaml`](aggregate.yaml) | [R013](../rules/R013-aggregate-reduction.md) | `aggregate.expr` |
+| [`predicate.yaml`](predicate.yaml) | [R004](../rules/operations/predicates.md) | a field typed `predicate` |
+| [`numeric.yaml`](numeric.yaml) | [R010](../rules/operations/computation.md) | `compute.expr` |
+| [`string-template.yaml`](string-template.yaml) | [R012](../rules/operations/text.md) | `str_template.template` |
+| [`aggregate.yaml`](aggregate.yaml) | [R013](../rules/operations/aggregation.md) | `aggregate.expr` |
 
 A grammar written in prose, in an R parser, and in a Python parser is three
 copies that can disagree. These files are the one source all three are read

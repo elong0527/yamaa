@@ -1,11 +1,11 @@
 """Cross the host boundary once, for one logical row.
 
-R018-24 invokes a binding once per logical row with nothing but its declared
-arguments, and R018-25 fixes what may come back. Both directions of that
+REQ-0685 invokes a binding once per logical row with nothing but its declared
+arguments, and REQ-0686 fixes what may come back. Both directions of that
 boundary live here: an authored value becomes a runtime value, a runtime
 value becomes a host scalar, and whatever the host returns is checked
 against the contract before any other stage sees it. A short-circuit under
-R018-20 never reaches the host at all.
+REQ-0681 never reaches the host at all.
 """
 
 from __future__ import annotations
@@ -18,7 +18,11 @@ from typing import TypeAlias
 
 from pydantic import JsonValue
 
-from yamaa.functions.models import FunctionContract, FunctionParameter
+from yamaa.functions.models import (
+    FunctionContract,
+    FunctionParameter,
+    binding_arguments,
+)
 from yamaa.io.csv import fixed_point
 from yamaa.models.values import (
     INT64_MAX,
@@ -43,7 +47,7 @@ class AuthoredValueError(ValueError):
 def runtime_value(authored: JsonValue) -> RuntimeValue:
     """Return the runtime value one authored R018 scalar names.
 
-    R018-18 writes a temporal value as a tagged single-key mapping so that
+    REQ-0679 writes a temporal value as a tagged single-key mapping so that
     it stays a typed value rather than becoming text; everything else is
     the YAML scalar itself, with R011's non-finite normalization applied.
     """
@@ -93,7 +97,7 @@ def value_type(value: RuntimeValue) -> str | None:
 def _host_argument(value: RuntimeValue) -> HostValue:
     """Return the host scalar one runtime value is passed to a binding as."""
     if value is MISSING:
-        # R018-20 passes the host runtime's canonical missing scalar.
+        # REQ-0681 passes the host runtime's canonical missing scalar.
         return None
     if isinstance(value, DateValue):
         return dt.date(value.year, value.month, value.day)
@@ -121,10 +125,10 @@ class _ResultRejected(ValueError):
 def _host_result(value: HostValue) -> RuntimeValue:
     """Normalize one returned host scalar, or say why it is not one.
 
-    R018-25 runs R011's non-finite normalization here, immediately after the
-    host returns and before the contract's result checks, so a returned
-    infinity is a missing result that a contract must have declared rather
-    than a float that slips through.
+    REQ-0686 runs the Types and conversion contract's non-finite normalization
+    here, immediately after the host returns and before the contract's result
+    checks, so a returned infinity is a missing result that a contract must have
+    declared rather than a float that slips through.
     """
     if value is None:
         return MISSING
@@ -166,7 +170,8 @@ def _condition(
     requirement: str,
     context: dict[str, JsonValue],
 ) -> ConditionResult:
-    """Return one fatal R018 condition; R018-40 and R018-41 admit no handler."""
+    """Return one fatal project-function condition; REQ-0701 and REQ-0702 admit
+    no handler."""
     return ConditionResult(
         condition=RuntimeCondition(
             phase="derivation",
@@ -179,10 +184,10 @@ def _condition(
 
 
 def results_match(actual: RuntimeValue, expected: RuntimeValue, decimals: int) -> bool:
-    """Compare one result with its expectation under R018-31.
+    """Compare one result with its expectation under REQ-0692.
 
     A float compares through temporary decimal copies at the contract's
-    precision; R018-32 keeps that comparison off the value itself, so the
+    precision; REQ-0693 keeps that comparison off the value itself, so the
     caller still holds the unrounded result. Every other type compares by
     its own equality, which for text is R019's.
     """
@@ -204,7 +209,7 @@ class BoundFunction:
     target: Callable[..., object]
 
     def _identity(self) -> dict[str, JsonValue]:
-        """Return what R018-43 requires every failure of this call to name."""
+        """Return what REQ-0704 requires every failure of this call to name."""
         return {
             "function": self.name,
             "contract_version": self.contract.contract_version,
@@ -220,21 +225,21 @@ class BoundFunction:
             if parameter.required:
                 return _condition(
                     "invalid_function_argument",
-                    "R018-39",
+                    "REQ-0700",
                     {
                         **self._identity(),
                         "parameter": parameter.name,
                         "reason": "a required argument was not supplied",
                     },
                 )
-            # R018-20: omitting an optional argument selects its default.
+            # REQ-0681: omitting an optional argument selects its default.
             return runtime_value(parameter.default)
         value = supplied[parameter.name]
         declared = value_type(value)
         if declared is not None and declared != parameter.type:
             return _condition(
                 "invalid_function_argument",
-                "R018-39",
+                "REQ-0700",
                 {
                     **self._identity(),
                     "parameter": parameter.name,
@@ -245,12 +250,12 @@ class BoundFunction:
         return value
 
     def invoke(self, supplied: Mapping[str, RuntimeValue]) -> EvaluationResult:
-        """Apply R018-20, then invoke this binding once for one logical row."""
+        """Apply REQ-0681, then invoke this binding once for one logical row."""
         unknown = sorted(set(supplied) - set(self.contract.parameters))
         if unknown:
             return _condition(
                 "invalid_function_argument",
-                "R018-39",
+                "REQ-0700",
                 {**self._identity(), "unknown": unknown},
             )
 
@@ -260,20 +265,20 @@ class BoundFunction:
             if isinstance(value, ConditionResult):
                 return value
             if value is MISSING and not parameter.accepts_missing:
-                # R018-20 and R018-21: the binding is not invoked and the
+                # REQ-0681 and REQ-0682: the binding is not invoked and the
                 # result is missing, which is not a returned missing value.
                 return ValueResult(value=MISSING)
-            host_name = self.contract.binding.args[parameter.name]
+            host_name = binding_arguments(self.contract)[parameter.name]
             arguments[host_name] = _host_argument(value)
 
         try:
             returned = self.target(**arguments)
-        # R018-40 is exactly this: whatever the host raised is fatal, and a
+        # REQ-0701 is exactly this: whatever the host raised is fatal, and a
         # runner that let one class of host failure through would be wrong.
         except Exception as error:  # noqa: BLE001
             return _condition(
                 "function_call_failed",
-                "R018-40",
+                "REQ-0701",
                 {
                     **self._identity(),
                     "call": self.contract.binding.call,
@@ -290,14 +295,14 @@ class BoundFunction:
         except _ResultRejected as rejected:
             return _condition(
                 "invalid_function_result",
-                "R018-41",
+                "REQ-0702",
                 {**self._identity(), "reason": rejected.reason, **rejected.context},
             )
         if value is MISSING:
             if not self.contract.may_return_missing:
                 return _condition(
                     "invalid_function_result",
-                    "R018-41",
+                    "REQ-0702",
                     {
                         **self._identity(),
                         "reason": "an invoked binding returned an undeclared missing",
@@ -308,7 +313,7 @@ class BoundFunction:
         if declared != self.contract.returns:
             return _condition(
                 "invalid_function_result",
-                "R018-41",
+                "REQ-0702",
                 {
                     **self._identity(),
                     "expected": self.contract.returns,

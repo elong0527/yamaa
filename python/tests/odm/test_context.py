@@ -125,7 +125,7 @@ def test_a_committed_fixture_resolves_one_item_per_form_without_dropping_rows() 
         evaluate_expression(collected, index.context({"ODM": row})) for row in rows
     ]
 
-    # R002-23: each result reads the collection date of its own form, and the
+    # REQ-0099: each result reads the collection date of its own form, and the
     # form that collected no date answers through its declared handler.
     assert dates == [
         ValueResult(value="2025-01-02"),
@@ -383,7 +383,7 @@ def test_order_terms_are_validated_when_filter_leaves_one_survivor() -> None:
 
 
 def test_a_filter_selecting_no_contextual_match_is_not_an_absent_item() -> None:
-    # R002-24 answers an item the context does not carry, and R008-14 keeps a
+    # REQ-0100 answers an item the context does not carry, and REQ-0355 keeps a
     # filtered-away record out of that handler: the item was collected.
     table = _table(
         ["StudyOID", "ItemOID", "Value", "Include"],
@@ -488,9 +488,9 @@ def test_index_batching_preserves_source_order_tie_breaks() -> None:
 
 
 def test_one_value_on_several_records_of_a_key_reads_as_that_value() -> None:
-    # R001-12b counts values, not records: the visit date is collected on
+    # REQ-0044 counts values, not records: the visit date is collected on
     # every item record of the subject, and two datings of one day are one
-    # value under R016-35.
+    # value under REQ-0573.
     table = _table(
         ["StudyOID", "SubjectKey", "VISITDT", "ItemOID", "Value"],
         [
@@ -523,7 +523,7 @@ def test_two_values_on_the_records_of_a_key_fail_and_count_the_values() -> None:
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "multiple_values_per_key"
-    assert result.condition.requirement == "R001-44"
+    assert result.condition.requirement == "REQ-0075"
     assert result.condition.context == {
         "identifier": "ODM.VISITDT",
         "value_count": 2,
@@ -542,7 +542,7 @@ def _collected_items() -> TypedTable:
 
 
 def test_a_filter_selects_which_records_of_the_key_a_source_reads() -> None:
-    # R003-21: the records of one key carry three collected values, and the
+    # REQ-0131: the records of one key carry three collected values, and the
     # filter is what leaves the derivation the one it asks for.
     table = _collected_items()
     feeding = runtime_rows(table)
@@ -589,7 +589,7 @@ def test_a_filter_leaving_two_values_fails_as_that_count() -> None:
 
 
 def test_a_filter_selecting_no_record_is_missing_and_fires_no_handler() -> None:
-    # R008-14: the subject was not asked this item, which is an absent match.
+    # REQ-0355: the subject was not asked this item, which is an absent match.
     table = _collected_items()
     feeding = runtime_rows(table)
     context = _index(table).context({"ODM": feeding[0]}, feeding_rows={"ODM": feeding})

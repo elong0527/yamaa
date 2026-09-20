@@ -43,28 +43,8 @@ vectors make that extension reproducible. R018 owns the extension boundary.
 
 ## Ownership migration
 
-The rule reorganization groups the existing files into eight reading blocks.
-It changes neither the YAML surface nor execution behavior. Files and existing
-requirement IDs are retained. The index includes the R003 intermediate
-contract and R027 Parquet profile; R015 remains retired. Requirements moved
-between owners leave short numbered references, so existing examples and
-error reports still resolve. New references should use the canonical owner
-below.
-
-| Existing reference | Canonical owner | Subject |
-| --- | --- | --- |
-| R007-19 | R011-34 | Input compatibility and no implicit input conversion |
-| R007-31 | R011-35 | Runtime-type comparability |
-| R007-8 | R013-3 | Permitted aggregate contexts; R007 retains aggregate registration |
-| R007-9, R007-10 | R013-3, R013-6 | Unqualified and grouped-input aggregate contexts |
-| R007-11 | R013-3, R013-9, R013-49 | Aggregate context and filter scope; R007 retains window filter scope |
-
-The value-stage sequence remains in R005; R008 owns handler behavior. R023's
-boundary description now agrees with the existing R014-16 and R023-21
-contracts: quoting is not delivered as part of an ingested value.
-
-Requirement identifiers are permanent references rather than document
-positions. The metadata checker accepts existing letter suffixes, rejects
-duplicate identifiers, and resolves example citations independently of section
-order. It also checks that rules begin with Intent and Boundaries and end
-with Errors and Rationale.
+The former numbered-file layout has been replaced by semantic blocks and
+global requirement IDs. See the [migration record](rule-migration.md) for
+cutover decisions and the [requirement index](rules/reference/requirements.md)
+for the complete legacy-to-canonical mapping. No forwarding contracts remain
+in the normative text.

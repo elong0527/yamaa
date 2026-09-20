@@ -2,7 +2,7 @@ phase: validation
 condition: incompatible_input_type
 spec_paths:
   - columns.SITE.derivation.str_lower.source
-requirement: R007-24
+requirement: REQ-0308
 context:
   source: SITENUM
   expected: str

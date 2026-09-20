@@ -1990,7 +1990,7 @@ INHERITANCE_KEYED_COLLECTIONS = {
     'rows': ('list', 'id', 'row_class'),
 }
 
-# R017-17 composes a matching column member by each field's declared kind.
+# REQ-0630 composes a matching column member by each field's declared kind.
 # Every other keyed collection still replaces a present member field whole.
 INHERITANCE_COMPOSING_COLLECTIONS = frozenset({'columns'})
 
@@ -2132,7 +2132,7 @@ def normalize_single_type_value(data, type_ref, env, fragment=False):
                 )
             return {keyword: payload}
         if type_ref == 'derivation' and isinstance(data, str):
-            # R007-57: a bare derivation string is the source shorthand.
+            # REQ-0319: a bare derivation string is the source shorthand.
             # Expand it before the union dispatch so the registry and the
             # handled-expression expansion apply unchanged, mirroring the
             # engine's parse-time normalization.
@@ -2370,8 +2370,8 @@ def _rebase_local_path(value, layer_path, entry_path):
         return value
     written = Path(value)
     if rooted_project_segments(value) is not None or written.is_absolute():
-        # R021-14: a rooted path resolves against the approved root it names,
-        # and R021-15 reads that written form, so rebasing leaves it alone.
+        # REQ-0780: a rooted path resolves against the approved root it names,
+        # and REQ-0781 reads that written form, so rebasing leaves it alone.
         return value
     target = (layer_path.parent / written).resolve()
     try:
@@ -2503,7 +2503,7 @@ def _compose_value(
     A class composes field by field, a mapping key by key, and a registry
     value only when both name one keyword.  Every other kind, including every
     list, replaces.  A null here is an R006 value, never a clearing marker:
-    R017-20 keeps the marker at the two composition boundaries above.
+    REQ-0633 keeps the marker at the two composition boundaries above.
     """
     member = _composing_member(accumulated, incoming, type_value, env)
     if member is None:
@@ -3119,9 +3119,9 @@ def _apply_reference(
     return changed
 
 
-# R002-20..R002-26 address an ODM item by hiding its ItemOID in the
+# REQ-0096..REQ-0102 address an ODM item by hiding its ItemOID in the
 # variable name. #517 replaced that with a source `filter` over the records
-# a source reads (R003-21), and #506 removes the contextual form from the
+# a source reads (REQ-0131), and #506 removes the contextual form from the
 # language. These specifications are the migration #506 still owes; a
 # specification written from now on must use the filtered form instead.
 ODM_CONTEXTUAL_REFERENCE_MIGRATION = {
@@ -3255,9 +3255,9 @@ def _iter_inline_class_reference_paths(data, fields, env, path, scope=None):
 def validate_retired_odm_item_references(spec, spec_label, spec_path, env):
     """Reject an ODM contextual item reference outside the #506 migration.
 
-    A long-form ODM relation carries `ItemOID` and `Value`, and R002-20
+    A long-form ODM relation carries `ItemOID` and `Value`, and REQ-0096
     reads any other suffix on it as a complete ItemOID resolved against the
-    row's ODM context. R003-21 states the replacement: read `Value` under a
+    row's ODM context. REQ-0131 states the replacement: read `Value` under a
     source `filter` on `ItemOID`, so the record the source reaches is
     written where a reviewer can see it.
     """
@@ -3283,8 +3283,8 @@ def validate_retired_odm_item_references(spec, spec_label, spec_path, env):
             continue
         errors.append(
             f"ERROR: {path}: retired_construct: {name!r} addresses an ODM "
-            f"item through the variable name (R002-20); read {dataset}.Value "
-            f"under a source filter on ItemOID instead (R003-21, #506)"
+            f"item through the variable name (REQ-0096); read {dataset}.Value "
+            f"under a source filter on ItemOID instead (REQ-0131, #506)"
         )
     return sorted(set(errors))
 
@@ -3664,8 +3664,8 @@ def example_entry_specs(example_dir: Path):
 def valid_temporal_literal(kind, text):
     """True when text is a valid R016 temporal literal for kind.
 
-    R018-11 permits a tagged temporal form (``{"date": "2020-01-01"}``)
-    for a contract default, and R018-18 permits it for a call argument.
+    REQ-0672 permits a tagged temporal form (``{"date": "2020-01-01"}``)
+    for a contract default, and REQ-0679 permits it for a call argument.
     The verdict comes from the runtime's strict parsers (``DateValue`` /
     ``DateTimeValue``, already imported for the csv-profile checks), so
     the lexical rule is read from the one implementation: ``YYYY-MM-DD``
@@ -4074,6 +4074,10 @@ def validate_project_environment(
                     f"is not fully qualified for runtime {language!r}"
                 )
             binding_args = binding.get('args')
+            if binding_args is None:
+                # REQ-0683: an omitted mapping names each logical parameter
+                # for its host argument.
+                binding_args = {name: name for name in names}
             if isinstance(binding_args, dict):
                 missing = sorted(set(names) - set(binding_args))
                 extra = sorted(set(binding_args) - set(names))
@@ -4601,8 +4605,8 @@ PROJECT_CONFIGURATION_FIELDS = {'version', 'data_roots'}
 def read_project_configuration(project_root, label=None):
     """Return (data_roots, errors) for the configuration at a named root.
 
-    R021-2 gives a runner that names the root the configuration sitting at
-    that root and no other. R021-29 fails a configuration a run cannot start
+    REQ-0768 gives a runner that names the root the configuration sitting at
+    that root and no other. REQ-0795 fails a configuration a run cannot start
     from; a root that holds none is a study that declared nothing.
     """
     directory = Path(project_root)
@@ -4654,7 +4658,7 @@ def read_project_configuration(project_root, label=None):
             )
             continue
         # The spelling the study wrote is kept, not its canonical form: a
-        # rooted path repeats that spelling, and R021-15 matches it there.
+        # rooted path repeats that spelling, and REQ-0781 matches it there.
         roots.append(candidate)
     return tuple(roots), errors
 
@@ -4684,7 +4688,7 @@ def validate_project_configurations(root: Path):
 def rooted_project_segments(written):
     """Split a rooted written path into its marker and segments, or None.
 
-    R021-7 spells a rooted path with a leading separator or with one ASCII
+    REQ-0773 spells a rooted path with a leading separator or with one ASCII
     letter and ':/'. The marker leads the returned segments, so a path rooted
     one way never repeats a root spelled the other way.
     """
@@ -4704,9 +4708,9 @@ def rooted_project_segments(written):
 def classify_written_project_path(written):
     """Return the R021 condition a written project path violates, if any.
 
-    R021-25 fixes the order: a scheme (R021-9), then a backslash (R021-10),
-    then an empty segment (R021-11), then a dot segment in a rooted path
-    (R021-12). Nothing here consults the filesystem.
+    REQ-0791 fixes the order: a scheme (REQ-0775), then a backslash (REQ-0776),
+    then an empty segment (REQ-0777), then a dot segment in a rooted path
+    (REQ-0778). Nothing here consults the filesystem.
     """
     if not isinstance(written, str):
         return 'resource_path_not_normalized'
@@ -4773,7 +4777,7 @@ def resolve_project_path(written, base_dir, project_root, data_roots=()):
 
     segments = rooted_project_segments(written)
     if segments is not None:
-        # R021-15: a rooted path is anchored at the approved root whose
+        # REQ-0781: a rooted path is anchored at the approved root whose
         # leading segments it repeats, and the anchor is canonical, so the
         # link a platform puts in front of a system directory is resolved
         # once here rather than rejected below.
@@ -4982,7 +4986,7 @@ def validate_spec_contracts(
                 continue
             path = f"{spec_label}.intermediates[{index}]"
             # `order_by` and `keep` pair with each other; `source`/`key`
-            # pairing is checked below now that both are optional (R003-43).
+            # pairing is checked below now that both are optional (REQ-0153).
             if ('order_by' in intermediate) != ('keep' in intermediate):
                 has_order = 'order_by' in intermediate
                 errors.append(
@@ -5004,7 +5008,7 @@ def validate_spec_contracts(
                 and isinstance(keys, list)
             ):
                 if sources == keys:
-                    # R003-45: key_base must not repeat the key names.
+                    # REQ-0155: key_base must not repeat the key names.
                     errors.append(
                         validation_diagnostic(
                             path,
@@ -5033,7 +5037,7 @@ def validate_spec_contracts(
                     )
             dataset = intermediate.get('dataset')
             if keys is None and isinstance(dataset, str):
-                # R003-43: an omitted key is inferred from the output keys
+                # REQ-0153: an omitted key is inferred from the output keys
                 # that name a column of the intermediate dataset.
                 fields = catalog.get(dataset, {})
                 applicable = [key for key in root_keys if key in fields]
@@ -5592,7 +5596,7 @@ def aggregate_filter_resolver(payload, default_resolver, datasets):
 def source_filter_errors(payload, path, datasets):
     """Check a source `filter` against the right-side records it selects.
 
-    R003-22 keeps the predicate inside the dataset the source reads, so it
+    REQ-0132 keeps the predicate inside the dataset the source reads, so it
     resolves against that dataset's fields alone and never against the
     output columns the reading derivation may name.
     """
@@ -5605,7 +5609,7 @@ def source_filter_errors(payload, path, datasets):
         else None
     )
     if qualifier is None:
-        # R003-39: an unqualified source reads one completed output column,
+        # REQ-0149: an unqualified source reads one completed output column,
         # so the predicate has no records to select among.
         return [
             validation_diagnostic(
@@ -6782,7 +6786,7 @@ def validate_expression_static_semantics(expression, path, context):
         order_by = window.get('order_by') if isinstance(window, dict) else None
         operation_path = f"{path}.{keyword}"
         if keyword in window_order_required and not order_by:
-            # R007-54: without a declared order the window has no positions
+            # REQ-0339: without a declared order the window has no positions
             # to number or to move along.
             errors.append(
                 validation_diagnostic(
@@ -6793,7 +6797,7 @@ def validate_expression_static_semantics(expression, path, context):
                 )
             )
         elif keyword in window_order_forbidden and order_by:
-            # R007-55: the baseline row is located by date and flag, not by
+            # REQ-0340: the baseline row is located by date and flag, not by
             # a declared order, so a declared order would be silently ignored.
             errors.append(
                 validation_diagnostic(
@@ -6862,14 +6866,14 @@ def validate_expression_static_semantics(expression, path, context):
         sources = normalize_scalar_list(payload.get('key_base'))
         keys = normalize_scalar_list(payload.get('key'))
         operation_path = f"{path}.lookup"
-        # R003-45: only flag if BOTH were explicitly written (not inferred).
+        # REQ-0155: only flag if BOTH were explicitly written (not inferred).
         # If either was omitted, the inference/defaulting is not redundant.
         if (
             payload.get('key_base') is not None
             and payload.get('key') is not None
             and sources == keys
         ):
-            # R003-45: key_base must not repeat the key names.
+            # REQ-0155: key_base must not repeat the key names.
             return [
                 validation_diagnostic(
                     operation_path,
@@ -7450,7 +7454,7 @@ def derivation_primary_path(spec, spec_label, name):
             derivation = column.get('derivation')
             path = f"{spec_label}.columns.{name}.derivation"
             if isinstance(derivation, str):
-                # R007-57: a bare string desugars to {source: string} before
+                # REQ-0319: a bare string desugars to {source: string} before
                 # any path is computed, so diagnostics name the source.
                 derivation = {'source': derivation}
             if isinstance(derivation, dict) and 'value' in derivation:
@@ -7542,11 +7546,11 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
                 'resolver': predicate_resolver(
                     unqualified=row_output,
                     qualified={
-                        # R003-46/R003-47: a row derivation reads another
+                        # REQ-0156/REQ-0157: a row derivation reads another
                         # dataset through the row-phase join, so binding
                         # accepts every input dataset here. Formula and
                         # predicate scopes stay driver-only in their own
-                        # validators (R010-4, R001-26).
+                        # validators (REQ-0410, REQ-0058).
                         **datasets,
                         **intermediates,
                         **(
@@ -7638,7 +7642,7 @@ def prepare_spec_document(spec, spec_label, spec_path, env):
     else:
         resolved, errors, provenance = copy.deepcopy(spec), [], {}
     if isinstance(resolved, dict):
-        # R007-57: the engine desugars a bare-string derivation to
+        # REQ-0319: the engine desugars a bare-string derivation to
         # {source: string} before anything else runs. The repository
         # validator works on the same normalized shape so its paths and
         # reference walkers agree with engine diagnostics.
@@ -8440,7 +8444,7 @@ def validate_condition_registry(root: Path, registry):
 
 
 def _desugar_bare_derivations(node):
-    """Apply the R007-57 bare-string derivation shorthand to a raw spec dict.
+    """Apply the REQ-0319 bare-string derivation shorthand to a raw spec dict.
 
     Contracts record diagnostic paths against the normalized form, where a
     bare `derivation:` string has already become `{'source': value}` and a
@@ -8924,10 +8928,10 @@ def validate_csv_shapes(root: Path):
 # quietly disagreeing at run time.
 GRAMMAR_DIR = PurePosixPath('yaml/grammar')
 GRAMMAR_CONTRACTS = {
-    'predicate': 'R004',
-    'numeric': 'R010',
-    'string-template': 'R012',
-    'aggregate': 'R013',
+    'predicate': 'operations/predicates',
+    'numeric': 'operations/computation',
+    'string-template': 'operations/text',
+    'aggregate': 'operations/aggregation',
 }
 GRAMMAR_DOCUMENT_KEYS = {
     'schema_version', 'contract', 'contract_version', 'rule', 'start',
@@ -9178,7 +9182,7 @@ def render_grammar_block(productions):
 
 def rule_grammar_block(text):
     """Return the grammar block written in a rule's Grammar section."""
-    section = re.search(r'\n## Grammar\n(.*?)(?=\n## |\Z)', text, re.DOTALL)
+    section = re.search(r'\n#{2,3} (?:Templates: )?Grammar\n(.*?)(?=\n#{2,3} |\Z)', text, re.DOTALL)
     if section is None:
         return None
     block = re.search(r'```text\n(.*?)\n```', section.group(1), re.DOTALL)
@@ -9531,10 +9535,8 @@ def validate_grammar_contract(root: Path, contract: str):
 
     errors.extend(grammar_vocabulary_errors(contract, document, label))
 
-    rule_path = next(
-        iter(sorted((root / 'yaml' / 'rules').glob(f'{rule_id}-*.md'))), None
-    )
-    if rule_path is None:
+    rule_path = root / 'yaml' / 'rules' / f'{rule_id}.md'
+    if not rule_path.is_file():
         errors.append(f"ERROR: {label}: rule {rule_id} has no file")
     else:
         block = rule_grammar_block(rule_path.read_text(encoding='utf-8'))

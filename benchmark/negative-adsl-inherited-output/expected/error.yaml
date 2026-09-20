@@ -2,6 +2,6 @@ phase: validation
 condition: missing_entry_output
 spec_paths:
   - parents
-requirement: R017-44
+requirement: REQ-0657
 context:
   inherited_columns: [USUBJID]

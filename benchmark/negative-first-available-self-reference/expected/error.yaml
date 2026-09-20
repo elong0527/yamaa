@@ -2,6 +2,6 @@ phase: validation
 condition: dependency_cycle
 spec_paths:
   - columns.SEVAL.derivation.first_available
-requirement: R001-41
+requirement: REQ-0072
 context:
   cycle: [SEVAL, SEVAL]

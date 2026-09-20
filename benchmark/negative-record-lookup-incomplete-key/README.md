@@ -34,6 +34,6 @@ intermediates:
     key: [LBTESTCD, SEX]
 ```
 
-R003-14 gives an incomplete key and a complete key the table does not
+REQ-0124 gives an incomplete key and a complete key the table does not
 contain the one absence policy: both yield nothing, and `strict:` decides
 whether that fails or answers `missing:`.

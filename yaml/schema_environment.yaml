@@ -7,82 +7,81 @@ environment_class:
     - schema_version:
         type: str
         required: true
-        description: Schema bundle this environment is written against.
+        description: See REQ-1080 in rules/operations/functions.md.
     - version:
         type: str
         required: true
         min_length: 1
-        description: Version of the complete project-environment content.
+        description: See REQ-1080 in rules/operations/functions.md.
     - runtime:
         type: project_runtime_class
         required: true
-        description: One language and immutable artifact used by every binding.
+        description: See REQ-1080 in rules/operations/functions.md.
     - functions:
         type: "dict[identifier, function_contract_class]"
         required: true
-        description: Logical contracts and singular bindings available to specifications.
+        description: See REQ-1080 in rules/operations/functions.md.
 
 project_runtime_class:
     - language:
         type: str
         required: true
         values: [r, python]
-        description: Sole implementation language selected by the project.
+        description: See REQ-1081 in rules/operations/functions.md.
     - artifact:
         type: runtime_artifact_class
         required: true
-        description: Immutable runtime containing project code and dependencies.
+        description: See REQ-1081 in rules/operations/functions.md.
 
 runtime_artifact_class:
     - reference:
         type: str
         required: true
         min_length: 1
-        description: Organization-resolvable name of the immutable runtime artifact.
+        description: See REQ-1082 in rules/operations/functions.md.
     - digest:
         type: artifact_digest
         required: true
-        description: Content identity verified before environment activation.
+        description: See REQ-1082 in rules/operations/functions.md.
 
 function_contract_class:
     - contract_version:
         type: function_contract_version
         required: true
-        description: Exact version of the language-neutral logical contract.
+        description: See REQ-1083 in rules/operations/functions.md.
     - implementation_version:
         type: str
-        required: true
         min_length: 1
-        description: Version of the selected language implementation.
+        description: See REQ-1083 in rules/operations/functions.md.
     - description:
         type: str
         required: true
         min_length: 1
-        description: Human-readable statement of what the function computes.
+        description: See REQ-1083 in rules/operations/functions.md.
     - comparison_decimals:
         type: int
         default: 4
-        description: Decimal places used only for cross-project numeric comparison.
+        description: See REQ-1083 in rules/operations/functions.md.
     - may_return_missing:
         type: bool
         default: false
-        description: Whether an invoked binding may deliberately return missing.
+        description: See REQ-1083 in rules/operations/functions.md.
     - params:
         type: "list[function_parameter_class]"
         required: true
-        description: Closed ordered logical signature.
+        description: See REQ-1083 in rules/operations/functions.md.
     - returns:
         type: column_type
         required: true
-        description: Scalar R011 type returned before column conversion.
+        description: See REQ-1083 in rules/operations/functions.md.
     - binding:
         type: function_binding_class
         required: true
-        description: Sole callable binding in the project runtime language.
+        description: See REQ-1083 in rules/operations/functions.md.
     - conformance:
         type: path
         required: true
-        description: Language-neutral vectors required for environment activation.
+        description: See REQ-1083 in rules/operations/functions.md.
 
 function_parameter_class:
     - name: {type: identifier, required: true}
@@ -95,11 +94,10 @@ function_binding_class:
     - call:
         type: qualified_callable
         required: true
-        description: Statically written callable inside the immutable runtime.
+        description: See REQ-1084 in rules/operations/functions.md.
     - args:
         type: "dict[identifier, host_argument_name]"
-        required: true
-        description: Complete mapping from logical to host argument names.
+        description: See REQ-1084 in rules/operations/functions.md.
 
 function_conformance_class:
     - schema_version: {type: str, required: true}

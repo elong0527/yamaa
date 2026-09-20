@@ -5,8 +5,8 @@ double quotes escape, surrounding whitespace is preserved, and a field
 with no characters is missing whether it was bare or quoted.
 
 Writing follows R020, which is not the same contract read backwards.
-R020-14 fixes the quoted set exactly rather than as a minimum, and
-R020-17 writes a collected empty string as two quote characters where the
+REQ-0728 fixes the quoted set exactly rather than as a minimum, and
+REQ-0731 writes a collected empty string as two quote characters where the
 reader above admits no such distinction. The two live here together so
 that departure is visible in one file rather than inferred across two.
 
@@ -26,11 +26,11 @@ from collections.abc import Iterable, Sequence
 from typing import NamedTuple
 
 _CSV_REQUIREMENTS = {
-    "invalid_text": "R019-21",
-    "source_field_name_duplicate": "R023-22",
-    "source_field_name_empty": "R023-22",
-    "source_record_width": "R023-22",
-    "source_quote_unterminated": "R023-22",
+    "invalid_text": "REQ-0029",
+    "source_field_name_duplicate": "REQ-0851",
+    "source_field_name_empty": "REQ-0851",
+    "source_record_width": "REQ-0851",
+    "source_quote_unterminated": "REQ-0851",
 }
 
 
@@ -198,13 +198,13 @@ def parse_csv(content: bytes) -> CsvSource:
     )
 
 
-# R020-14 states the quoting condition exactly rather than as a minimum,
+# REQ-0728 states the quoting condition exactly rather than as a minimum,
 # so two runtimes quote the same fields.
 _QUOTED = ('"', ",", "\r", "\n")
 
 
 def quote_field(text: str) -> str:
-    """Quote one artifact field exactly when R020-14 says it is quoted."""
+    """Quote one artifact field exactly when REQ-0728 says it is quoted."""
     if text == "" or any(character in text for character in _QUOTED):
         return '"' + text.replace('"', '""') + '"'
     return text
@@ -213,7 +213,7 @@ def quote_field(text: str) -> str:
 def fixed_point(value: float, decimals: int) -> str:
     """Round one binary64 value to `decimals` places, exactly and once.
 
-    R020-33 rounds the exact decimal value every binary64 is, with a tie
+    REQ-0747 rounds the exact decimal value every binary64 is, with a tie
     going away from zero. `Decimal(value)` is that exact value, and
     `ROUND_HALF_UP` is the away-from-zero tie both `round` builtins and
     the C formatting beneath them decide the other way. The context is
@@ -230,7 +230,7 @@ def fixed_point(value: float, decimals: int) -> str:
             rounding=decimal.ROUND_HALF_UP,
         )
     text = format(quantized, "f")
-    # R020-33: a value that rounds to zero is written without a sign.
+    # REQ-0747: a value that rounds to zero is written without a sign.
     return text[1:] if quantized == 0 and text.startswith("-") else text
 
 
@@ -241,13 +241,13 @@ def render_records(
     """Render an artifact's header and fields to the exact R020 bytes.
 
     A field is the text its value carries, or `None` for a missing value,
-    which R020-17 writes as no characters at all.
+    which REQ-0731 writes as no characters at all.
     """
     lines = [",".join(quote_field(name) for name in names)]
     lines.extend(
         ",".join("" if field is None else quote_field(field) for field in record)
         for record in records
     )
-    # R020-9: U+000A terminates every record, including the last, and
-    # R020-13 keeps the header record of an artifact that holds no row.
+    # REQ-0723: U+000A terminates every record, including the last, and
+    # REQ-0727 keeps the header record of an artifact that holds no row.
     return "".join(f"{line}\n" for line in lines).encode("utf-8")

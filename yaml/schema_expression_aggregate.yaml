@@ -1,51 +1,50 @@
 version: "1.0"
 
-# R013 defines the reducer grammar, the results it pins, and its failures.
+# See REQ-1091 in rules/operations/aggregation.md.
 
 expressions:
-    # Reduces one relation or the current input group to one value
-    # under R013.
+# See REQ-1092 in rules/operations/aggregation.md.
     aggregate:
         type: [aggregate_expression, aggregate_class]
 
 aggregate_class:
     - filter:
         type: predicate
-        description: Predicate selecting records before reduction.
+        description: See REQ-1088 in rules/operations/aggregation.md.
     - between:
         type: aggregate_between_class
-        description: Current-row value matched inclusively against one or two columns of a qualified right-side relation.
+        description: See REQ-1088 in rules/operations/aggregation.md.
     - group_by:
         type: "list[variable]"
-        description: Grouping keys of an ordinary right-side or output-row reduction; omit when the enclosing grouped row owns the keys.
+        description: See REQ-1088 in rules/operations/aggregation.md.
     - key:
         type: [identifier, "list[identifier]"]
         required: false
-        description: Dataset columns matched against key_base; omit to match on the applicable output keys (R003-40) when the expression reads a qualified dataset relation.
+        description: See REQ-1088 in rules/operations/aggregation.md.
     - key_base:
         type: [variable, "list[variable]"]
         required: false
-        description: Current-row variables paired by position with key; omit when they name the same columns as key. Must not repeat the key names (R003-45).
+        description: See REQ-1088 in rules/operations/aggregation.md.
     - expr:
         type: aggregate_expression
         required: true
-        description: Closed reducer expression over the records of one relation.
+        description: See REQ-1088 in rules/operations/aggregation.md.
 
 aggregate_expression:
     type: str
     min_length: 1
-    description: Reducer expression in the portable grammar defined by R013.
+    description: See REQ-1089 in rules/operations/aggregation.md.
 
 aggregate_between_class:
     - value:
         type: variable
         required: true
-        description: Value read from the current row.
+        description: See REQ-1090 in rules/operations/aggregation.md.
     - lower:
         type: variable
         required: false
-        description: Qualified right-side variable serving as an inclusive lower bound.
+        description: See REQ-1090 in rules/operations/aggregation.md.
     - upper:
         type: variable
         required: false
-        description: Qualified right-side variable serving as an inclusive upper bound.
+        description: See REQ-1090 in rules/operations/aggregation.md.

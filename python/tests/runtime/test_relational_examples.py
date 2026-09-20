@@ -37,7 +37,7 @@ EXAMPLES = REPOSITORY_ROOT / "benchmark"
 ARTIFACT_EXAMPLES = [
     "sdtm-dm-reference-dates",
     "adam-adlb-mean",
-    # R003-9 matches on the applicable keys as the two sides declare them, so
+    # REQ-0119 matches on the applicable keys as the two sides declare them, so
     # a sequence number joins once both sides say it is one.
     "adam-adae-event-severity",
     # #217 could only gate this one on `row_number`; PY-14 supplies the
@@ -56,7 +56,7 @@ ERROR_EXAMPLES = [
     "negative-record-lookup-incomplete-key",
     "negative-record-lookup-id-collision",
     "negative-record-lookup-incomparable-range",
-    # R003-33: an unhandled multiple match names the lookup's match under
+    # REQ-0143: an unhandled multiple match names the lookup's match under
     # `key` and `lookup_key` and the offending output row under `keys`, the
     # way an unmatched key already did.
     "negative-query-slot-overflow",
@@ -122,7 +122,7 @@ def test_a_committed_error_contract_is_reproduced(name: str) -> None:
 
 
 def test_a_right_side_orphan_creates_no_row_and_studies_stay_apart() -> None:
-    # R003-12 preserves left row count and order, so an exposure record whose
+    # REQ-0122 preserves left row count and order, so an exposure record whose
     # subject is absent from DM contributes to no row and creates none, and a
     # subject id reused under a second study reads only its own records.
     result = _run(EXAMPLES / "sdtm-dm-reference-dates")
@@ -162,7 +162,7 @@ def _lb_table(chunks: list[list[list[object]]]) -> TypedTable:
 
 
 def test_a_different_input_batch_size_changes_no_value_and_no_row_order() -> None:
-    # R013-15 folds SUM in relation record order, so a relation delivered as
+    # REQ-0480 folds SUM in relation record order, so a relation delivered as
     # several batches must reduce exactly as the same records delivered as one.
     directory = EXAMPLES / "adam-adlb-mean"
     specification = load_specification(
@@ -352,7 +352,7 @@ def test_one_scalar_study_exercises_every_relational_operation(
 def test_that_study_reports_the_selection_handler_only_where_it_chose(
     relational_study: Path,
 ) -> None:
-    # R008-15: the handler count reports only the records where more than one
+    # REQ-0356: the handler count reports only the records where more than one
     # match survived the filter, so the single-match subject is not counted.
     result = _run(relational_study)
 
@@ -492,7 +492,7 @@ def test_range_narrowing_and_a_coarser_grain_reach_their_own_records(
 def test_a_missing_cutoff_never_reduces_the_unrestricted_right_side(
     range_study: Path,
 ) -> None:
-    # R003-14: a missing current-row value leaves the lookup with nothing to
+    # REQ-0124: a missing current-row value leaves the lookup with nothing to
     # match, so the absent policy (default missing) answers without narrowing.
     (range_study / "input/vs.csv").write_text(
         "STUDYID,USUBJID,VSSEQ,ADY,AVAL\nS1,P1,1,,120\n", encoding="utf-8"
@@ -522,7 +522,7 @@ def test_a_missing_cutoff_never_reduces_the_unrestricted_right_side(
 def test_one_stated_bound_narrows_on_that_side_alone(
     tmp_path: Path, bound: str, expected: list[float]
 ) -> None:
-    # R003-25 and R013-7: omitting one bound makes the match one-sided; it
+    # REQ-0135 and REQ-0472: omitting one bound makes the match one-sided; it
     # does not exclude the stated endpoint and it does not open both ends.
     (tmp_path / "input").mkdir()
     (tmp_path / "spec.yaml").write_text(
@@ -633,8 +633,8 @@ columns:
 
 # Row-phase reads reach other datasets through the same join the column
 # phase uses: a bare source joins on the applicable keys against the
-# driver record (R003-46), including in a grouped template whose group
-# keys carry the match (R003-47), and an explicit lookup states
+# driver record (REQ-0156), including in a grouped template whose group
+# keys carry the match (REQ-0157), and an explicit lookup states
 # driver-side match variables.
 _ROW_JOIN_SPEC = """\
 schema_version: "1.0"
@@ -734,3 +734,50 @@ def test_row_phase_reads_reach_other_datasets(row_join_study: Path) -> None:
 
     assert isinstance(result, ExecutionSuccess), result
     assert render_csv(result.artifact).decode("utf-8") == _ROW_JOIN_EXPECTED
+
+
+@pytest.mark.parametrize("predicate", ["AVAL >= 0", "TRUE"])
+def test_grouped_filter_precedes_whole_column_verification(
+    tmp_path: Path, predicate: str
+) -> None:
+    # The lifecycle completes expression/conversion before the grouped filter;
+    # whole-column verification sees only candidates retained by that filter.
+    (tmp_path / "dm.csv").write_text("USUBJID,AGE\nS1,-1\nS2,7\n")
+    (tmp_path / "spec.yaml").write_text(
+        textwrap.dedent(
+            f"""\
+            schema_version: "1.0"
+            domain: ADSL
+            keys: [USUBJID]
+            input:
+              DM: {{path: dm.csv, types: {{AGE: int}}}}
+            output:
+              path: adsl.csv
+              columns: [USUBJID, AVAL]
+            rows:
+              - id: subject
+                dataset: DM
+                group_by: [DM.USUBJID]
+                filter: "{predicate}"
+                derivations:
+                  USUBJID: {{source: DM.USUBJID}}
+                  AVAL: {{aggregate: "SUM(DM.AGE)"}}
+            columns:
+              - name: USUBJID
+                type: str
+              - name: AVAL
+                type: int
+                verifications:
+                  range: {{min: 0}}
+            """
+        )
+    )
+
+    result = _run(tmp_path)
+
+    if predicate == "TRUE":
+        assert isinstance(result, ExecutionFailure), result
+        assert result.diagnostics[0].phase == "verification"
+    else:
+        assert isinstance(result, ExecutionSuccess), result
+        assert result.artifact.frame.to_dicts() == [{"USUBJID": "S2", "AVAL": 7}]

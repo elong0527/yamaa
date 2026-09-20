@@ -123,7 +123,7 @@ def test_a_rejected_run_reads_no_study_data(repository) -> None:
 
 
 def test_the_committed_r_project_root_is_refused_by_this_runner(repository) -> None:
-    # R018-6: the same example, with the project root that implements it in
+    # REQ-0667: the same example, with the project root that implements it in
     # R. A Python runner does not run it and does not pretend to.
     result = _run(repository, "adam-adsl-bmi-function", repository.bmi_example)
 
@@ -134,7 +134,7 @@ def test_the_committed_r_project_root_is_refused_by_this_runner(repository) -> N
 def test_the_specification_stays_portable_with_no_project_selected(
     repository,
 ) -> None:
-    # R018-1: a portable specification may declare a logical call before a
+    # REQ-0662: a portable specification may declare a logical call before a
     # project implements it, so executing without a selected root reports
     # an unimplemented operation rather than inventing a result.
     specification = _specification(repository, "adam-adsl-bmi-function")
@@ -169,7 +169,7 @@ def test_repeated_execution_produces_an_identical_artifact(repository) -> None:
 def test_every_failure_names_the_call_that_required_an_implementation(
     repository, example, condition
 ) -> None:
-    # R018-43: a failure is reported against the specification text that
+    # REQ-0704: a failure is reported against the specification text that
     # asked for project code, whichever stage discovered it.
     result = _run(repository, example, repository.examples / example)
 

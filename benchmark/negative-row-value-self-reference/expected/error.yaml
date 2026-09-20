@@ -3,6 +3,6 @@ condition: dependency_cycle
 spec_paths:
   - columns.AVALF.derivation.first_available
   - columns.PRIORF.derivation.row_value
-requirement: R001-41
+requirement: REQ-0072
 context:
   cycle: [AVALF, PRIORF, AVALF]

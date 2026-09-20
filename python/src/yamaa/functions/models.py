@@ -1,6 +1,6 @@
 """Strict models for one project function environment and its vectors.
 
-R018-3 validates an environment independently of any specification, so these
+REQ-0664 validates an environment independently of any specification, so these
 models describe the environment document alone: one immutable runtime, the
 logical contracts it implements, and the singular binding each contract has.
 Nothing here reads a specification, resolves a callable, or runs a vector.
@@ -15,7 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from yamaa.specification.models import ColumnType
 
-# R018-16 extends the R011 column vocabulary with `bool` for parameters only.
+# REQ-0677 extends the Types and conversion contract's column vocabulary with
+# `bool` for parameters only.
 FunctionParamType: TypeAlias = Literal[
     "str", "int", "float", "bool", "date", "datetime"
 ]
@@ -30,7 +31,7 @@ class _StrictModel(BaseModel):
 class FunctionParameter(_StrictModel):
     """One entry of a closed, ordered, named logical signature.
 
-    R018-11 distinguishes an absent default from a present one, so `default`
+    REQ-0672 distinguishes an absent default from a present one, so `default`
     is read through `model_fields_set` rather than by comparing it to
     ``None``: a parameter defaulting to missing is not a parameter with no
     default.
@@ -48,17 +49,33 @@ class FunctionParameter(_StrictModel):
 
 
 class FunctionBinding(_StrictModel):
-    """The one callable a project supplies for a logical contract."""
+    """The one callable a project supplies for a logical contract.
+
+    REQ-0683 lets `args` stay unwritten when every host argument carries
+    its logical parameter's name; `binding_arguments` reads that default.
+    """
 
     call: str = Field(min_length=1)
-    args: dict[str, str]
+    args: dict[str, str] | None = None
+
+
+def binding_arguments(contract: FunctionContract) -> dict[str, str]:
+    """Return the effective logical-to-host argument mapping (REQ-0683)."""
+    if contract.binding.args is not None:
+        return dict(contract.binding.args)
+    return {parameter.name: parameter.name for parameter in contract.params}
 
 
 class FunctionContract(_StrictModel):
-    """One logical contract and the singular binding implementing it."""
+    """One logical contract and the singular binding implementing it.
+
+    REQ-0669 defaults an omitted `implementation_version` to the
+    environment `version`; `load_environment` resolves that default so
+    every later stage reads a plain string.
+    """
 
     contract_version: str = Field(min_length=1)
-    implementation_version: str = Field(min_length=1)
+    implementation_version: str | None = Field(default=None, min_length=1)
     description: str = Field(min_length=1)
     comparison_decimals: int = 4
     may_return_missing: bool = False
@@ -73,14 +90,14 @@ class FunctionContract(_StrictModel):
 
 
 class RuntimeArtifact(_StrictModel):
-    """The immutable runtime R018-5 pins by verified content identity."""
+    """The immutable runtime REQ-0666 pins by verified content identity."""
 
     reference: str = Field(min_length=1)
     digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
 class ProjectRuntime(_StrictModel):
-    """One language and one artifact, shared by every binding (R018-4)."""
+    """One language and one artifact, shared by every binding (REQ-0665)."""
 
     language: RuntimeLanguage
     artifact: RuntimeArtifact
@@ -116,7 +133,7 @@ class ConformanceDocument(_StrictModel):
 class LoadedEnvironment(_StrictModel):
     """One environment, its vectors, and the identities activation caches.
 
-    R018-30 caches activation for the exact combination of environment
+    REQ-0691 caches activation for the exact combination of environment
     version, artifact digest, every contract fingerprint, every
     implementation version, and the complete vector-content identity. The
     last two are read off this object, so nothing recomputes them from a
@@ -144,4 +161,5 @@ __all__ = [
     "ProjectRuntime",
     "RuntimeArtifact",
     "RuntimeLanguage",
+    "binding_arguments",
 ]

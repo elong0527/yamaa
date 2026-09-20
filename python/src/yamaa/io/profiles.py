@@ -7,7 +7,7 @@ from typing import Literal, TypeAlias
 
 DatasetProfile: TypeAlias = Literal["csv", "parquet"]
 
-# R020-2 and R023-1 intentionally use the same closed extension mapping so
+# REQ-0716 and REQ-0830 intentionally use the same closed extension mapping so
 # an artifact can be consumed under the profile that produced it.
 DATASET_PROFILES: dict[str, DatasetProfile] = {
     ".csv": "csv",

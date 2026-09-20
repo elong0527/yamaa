@@ -87,7 +87,7 @@ def test_template_parser_matches_the_shared_r012_contract(
 
 
 def test_the_portable_contract_is_the_one_the_fixtures_name() -> None:
-    # R022-26: the fixtures and this consumer must name one contract, or a
+    # REQ-0821: the fixtures and this consumer must name one contract, or a
     # replay proves nothing about the contract the language pins.
     assert CONFORMANCE["contract"] == "regex"
     assert CONFORMANCE["contract_version"] == REGEX_CONTRACT_VERSION == "2.0.0"
@@ -133,7 +133,7 @@ def test_every_shared_regex_vector_replays_in_all_three_consumers(
     assert isinstance(pattern, str)
 
     if case.get("invalid") is True:
-        # R022-27: one rejection, identically, in all three consumers.
+        # REQ-0827: one rejection, identically, in all three consumers.
         with pytest.raises(RegexError):
             compile_pattern(pattern)
         with pytest.raises(RegexError):
@@ -198,7 +198,7 @@ def test_capture_groups_are_numbered_by_opening_parenthesis(
 
 
 def test_a_group_the_match_did_not_enter_is_missing_rather_than_no_match() -> None:
-    # R022-22: the pattern matched, so `no_match` deliberately does not apply.
+    # REQ-0817: the pattern matched, so `no_match` deliberately does not apply.
     result = evaluate_expression(
         {
             "str_extract": {
@@ -215,7 +215,7 @@ def test_a_group_the_match_did_not_enter_is_missing_rather_than_no_match() -> No
 
 
 def test_an_empty_match_returns_the_empty_string_rather_than_missing() -> None:
-    # R022-23 and R019 keep the empty string and missing distinct.
+    # REQ-0818 and R019 keep the empty string and missing distinct.
     result = evaluate_expression(
         {"str_extract": {"source": "SUBJECT", "pattern": "a*", "group": 0}},
         MappingResolver({"SUBJECT": "xyz"}),
@@ -230,7 +230,7 @@ def test_a_group_outside_the_pattern_fails_validation(group: int) -> None:
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "regex_group_out_of_range"
-    assert result.condition.requirement == "R022-28"
+    assert result.condition.requirement == "REQ-0828"
     assert result.condition.path_suffix == "group"
     assert result.condition.context["group_count"] == 1
 
@@ -242,7 +242,7 @@ def test_a_group_outside_the_pattern_fails_validation(group: int) -> None:
         ("str_lower", "ABCz", "abcz"),
         ("str_upper", "a1!_", "A1!_"),
         ("str_lower", "A1!_", "a1!_"),
-        # R019-13: no one-to-many mapping, so scalar count is preserved.
+        # REQ-0708: no one-to-many mapping, so scalar count is preserved.
         ("str_upper", "\u00df", "\u00df"),
         ("str_lower", "\u0130", "\u0130"),
         ("str_upper", "\u00e9", "\u00e9"),
@@ -267,7 +267,7 @@ def test_casing_is_the_ascii_substitution_and_nothing_else(
 def test_ascii_casing_leaves_every_non_ascii_scalar_alone(value: str) -> None:
     assert ascii_upper(value) == value
     assert ascii_lower(value) == value
-    # A host routine changes each of these, which is why R019-13 forbids
+    # A host routine changes each of these, which is why REQ-0708 forbids
     # inheriting one: it would fold, expand, or retitle the scalar.
     assert value.upper() != value or value.lower() != value
 
@@ -307,11 +307,11 @@ def test_an_undeclared_missing_handler_is_fatal(operation: str) -> None:
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "missing_input"
     assert result.condition.applicable_handler == "missing"
-    assert result.condition.requirement == "R007-49"
+    assert result.condition.requirement == "REQ-0334"
 
 
 def test_an_unhandled_no_match_is_distinct_from_an_unhandled_missing() -> None:
-    # R008-6: `no_match` fires only when the input is present, so the two
+    # REQ-0347: `no_match` fires only when the input is present, so the two
     # conditions stay distinct rather than collapsing into one.
     result = _extract("^CATH-", "SUBJECT-0003", 0)
 
@@ -334,7 +334,7 @@ def test_a_non_string_source_is_refused_rather_than_converted(
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "incompatible_input_type"
-    assert result.condition.requirement == "R007-24"
+    assert result.condition.requirement == "REQ-0308"
     assert result.condition.context == {
         "source": "VALUE",
         "expected": "str",
@@ -365,7 +365,7 @@ def test_a_template_interpolates_exactly_what_it_scans(
 
 
 def test_the_bare_template_shorthand_carries_no_missing_handler() -> None:
-    # R012-3: the shorthand expands to `{template: ...}` and adds nothing.
+    # REQ-0448: the shorthand expands to `{template: ...}` and adds nothing.
     rendered = evaluate_expression(
         {"str_template": "{SITE}"}, MappingResolver({"SITE": "UCSD"})
     )
@@ -395,7 +395,7 @@ def test_a_template_outside_the_grammar_names_its_placeholder() -> None:
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "invalid_string_template"
-    assert result.condition.requirement == "R012-16"
+    assert result.condition.requirement == "REQ-0461"
     assert result.condition.context == {
         "reason": "invalid_placeholder",
         "placeholder": "A + B",
@@ -416,7 +416,7 @@ def test_concatenation_places_literals_beside_sources() -> None:
 
 
 def test_a_handler_inside_a_nested_source_is_observed_at_its_own_path() -> None:
-    # R008-20 counts every handler path, including one R007-3 lets nest.
+    # REQ-0361 counts every handler path, including one REQ-0290 lets nest.
     result = evaluate_expression(
         {
             "str_concat": {

@@ -59,7 +59,7 @@ def test_an_extension_outside_the_mapping_names_no_profile(path: str) -> None:
 
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "unknown_artifact_profile"
-    assert diagnostic.requirement == "R020-43"
+    assert diagnostic.requirement == "REQ-0760"
     assert diagnostic.context["path"] == path
 
 
@@ -122,7 +122,7 @@ def test_a_negative_display_precision_is_refused() -> None:
 
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "invalid_field_type"
-    assert diagnostic.requirement == "R020-44"
+    assert diagnostic.requirement == "REQ-0761"
 
 
 def test_a_column_stored_outside_its_declared_host_type_is_unwritable() -> None:
@@ -181,9 +181,9 @@ def test_a_datetime_below_whole_seconds_is_unwritable() -> None:
 
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "unwritable_value"
-    assert diagnostic.requirement == "R020-46"
+    assert diagnostic.requirement == "REQ-0763"
     assert diagnostic.context["keys"] == [{"USUBJID": "S-1"}]
-    # R020-23 stores a datetime as microseconds from the epoch, and the
+    # REQ-0737 stores a datetime as microseconds from the epoch, and the
     # stored count is what the diagnostic reports.
     assert diagnostic.context["value"] == 1577934245500000
 

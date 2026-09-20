@@ -43,7 +43,7 @@ def _invalid(reason: str, **context: object) -> ConditionResult:
 
 
 def _argument(value: object, resolver: Resolver) -> RuntimeValue | ConditionResult:
-    """Resolve one R018-18 argument leaf to the value the binding receives."""
+    """Resolve one REQ-0679 argument leaf to the value the binding receives."""
     if isinstance(value, str):
         resolved = resolver.resolve(value)
         if isinstance(resolved, FailedResolution):
@@ -51,7 +51,7 @@ def _argument(value: object, resolver: Resolver) -> RuntimeValue | ConditionResu
         if isinstance(resolved, AbsentValue):
             # The planner validated this name against the specification, so
             # a context that does not carry it here reaches no value, which
-            # R018-20 answers the same way it answers any missing argument.
+            # REQ-0681 answers the same way it answers any missing argument.
             return MISSING
         assert isinstance(resolved, ResolvedValue)
         normalized = normalize_runtime_value(resolved.value)
@@ -91,7 +91,7 @@ def function_handlers(
                 "validation",
                 "unknown_project_function",
                 {"function": name},
-                requirement="R018-37",
+                requirement="REQ-0698",
                 field="name",
             )
         if bound.contract.contract_version != requested:
@@ -103,7 +103,7 @@ def function_handlers(
                     "requested": requested,
                     "available": bound.contract.contract_version,
                 },
-                requirement="R018-38",
+                requirement="REQ-0699",
                 field="contract_version",
             )
 

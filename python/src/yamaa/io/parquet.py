@@ -1,6 +1,6 @@
 """The R020 parquet profile: one typed container two runtimes read alike.
 
-R020-28 does not fix these bytes, so nothing here tries to: the schema,
+REQ-0742 does not fix these bytes, so nothing here tries to: the schema,
 the column order, the row order, the nulls, and the values are what two
 runtimes must agree on, and each is written explicitly rather than left to
 a writer's default.
@@ -24,9 +24,9 @@ if TYPE_CHECKING:  # `artifact` renders through this module, so the
     # dependency runs one way at runtime and both ways in annotations.
     from yamaa.io.artifact import Artifact
 
-# R020-20 maps each declared type to exactly one physical and logical type.
+# REQ-0734 maps each declared type to exactly one physical and logical type.
 # A `datetime` is a reading on a wall clock, so its Timestamp carries no
-# zone and is not adjusted to UTC (R020-24).
+# zone and is not adjusted to UTC (REQ-0738).
 _ARROW: dict[ColumnType, pa.DataType] = {
     "str": pa.string(),
     "int": pa.int64(),
@@ -42,11 +42,11 @@ _MIN_MICROSECOND = _MIN_DAY * 86_400 * 1_000_000
 _MAX_MICROSECOND = (_MAX_DAY * 86_400 + 86_399) * 1_000_000
 
 _PARQUET_REQUIREMENTS = {
-    "source_parquet_invalid": "R027-11",
-    "source_field_name_empty": "R027-12",
-    "source_field_name_duplicate": "R027-12",
-    "source_field_type_unsupported": "R027-13",
-    "source_field_value_invalid": "R027-14",
+    "source_parquet_invalid": "REQ-1038",
+    "source_field_name_empty": "REQ-1039",
+    "source_field_name_duplicate": "REQ-1039",
+    "source_field_type_unsupported": "REQ-1040",
+    "source_field_value_invalid": "REQ-1041",
 }
 
 
@@ -64,7 +64,7 @@ def parquet_schema(artifact: Artifact) -> pa.Schema:
     """Return the artifact's fields, in `output.columns` order, all optional."""
     return pa.schema(
         [
-            # R020-21: every field is optional, because every column type
+            # REQ-0735: every field is optional, because every column type
             # admits a missing value.
             pa.field(column.name, _ARROW[column.type], nullable=True)
             for column in artifact.columns
@@ -79,7 +79,7 @@ def render_parquet(artifact: Artifact) -> bytes:
     pq.write_table(
         table,
         buffer,
-        # R020-27: uncompressed pages, and no key-value metadata of the
+        # REQ-0741: uncompressed pages, and no key-value metadata of the
         # implementation's own. `store_schema` would add the writer's Arrow
         # schema beside the Parquet one this rule already fixes.
         compression="none",
@@ -92,7 +92,7 @@ def _read_source(content: bytes) -> tuple[pa.Table, Any]:
     try:
         source = pq.ParquetFile(
             io.BytesIO(content),
-            # R027-10: Arrow extension metadata cannot override the closed
+            # REQ-1037: Arrow extension metadata cannot override the closed
             # physical/logical type mapping below.
             arrow_extensions_enabled=False,
         )
@@ -203,5 +203,5 @@ def parse_parquet(content: bytes) -> TypedTable:
 
 
 def read_parquet(content: bytes) -> pa.Table:
-    """Read artifact bytes back, for the comparison R020-26 requires."""
+    """Read artifact bytes back, for the comparison REQ-0740 requires."""
     return _read_source(content)[0]

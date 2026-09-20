@@ -25,9 +25,10 @@ from yamaa.specification.models import ColumnType, Expression
 
 ResolverFactory = Callable[[Mapping[str, object]], Resolver]
 
-# Which R008 handler fields each registered operation offers. R008-21 makes a
-# handler on an operation that does not register it a schema failure, so this
-# map is the one place a new operation declares its handler paths.
+# Which handler fields the Local handlers contract gives each registered
+# operation. REQ-0362 makes a handler on an operation that does not register
+# it a schema failure, so this map is the one place a new operation declares
+# its handler paths.
 DECLARED_HANDLERS: dict[str, tuple[HandlerName, ...]] = {
     "source": ("missing", "multiple_matches"),
     "intermediate": ("missing", "multiple_matches"),
@@ -83,7 +84,7 @@ class HandlerCounter:
         payload: object,
         operation_path: str,
     ) -> None:
-        # R007-3 lets these fields nest an expression that owns handlers of
+        # REQ-0290 lets these fields nest an expression that owns handlers of
         # its own, so their paths are registered too. `case` takes a list
         # payload; every other operation takes a mapping.
         if operation == "case":
