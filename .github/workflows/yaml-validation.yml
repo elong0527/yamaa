@@ -61,6 +61,11 @@ jobs:
         run: |
           uv run --project python --no-sync python .github/scripts/yaml-validation/check_documentation.py
 
+      - name: Check rule rewrite traceability
+        run: |
+          uv run --project python --no-sync python .github/scripts/yaml-validation/test_rule_rewrite.py
+          uv run --project python --no-sync python .github/scripts/yaml-validation/check_rule_rewrite.py
+
       - name: Check validation blocker issues
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

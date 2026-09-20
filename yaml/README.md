@@ -28,6 +28,10 @@ validation. Rule files define shared behavior. Examples demonstrate both
 without redefining them. The [design notes](design-notes.md) explain design
 choices and are non-normative.
 
+A [replacement rule set](rules-next/README.md) is being drafted under
+[issue #606](https://github.com/elong0527/yamaa/issues/606). Its contracts
+and migration map are non-normative until the reviewed cutover.
+
 Closed grammars are defined once in [grammar/](grammar/README.md). Their rule
 blocks are generated views checked against the grammar files; both
 implementations replay the same vectors.
