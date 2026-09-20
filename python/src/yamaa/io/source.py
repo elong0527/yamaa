@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Literal
 
+import polars as pl
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from yamaa.io.csv import CsvProfileFailure, CsvSource, parse_csv
@@ -231,6 +232,22 @@ def _parse_field(
     return None if converted.value is MISSING else converted.value
 
 
+def _empty_strings_to_missing(table: TypedTable) -> TypedTable:
+    """Map stored empty strings to missing in `str` columns (REQ-1159).
+
+    The Parquet profile keeps a zero-length string distinct from null
+    (REQ-1034); the input-side convention decides what the engine sees.
+    """
+    names = [column.name for column in table.columns if column.type == "str"]
+    if not names:
+        return table
+    frame = table.frame.with_columns(
+        pl.when(pl.col(name) == "").then(None).otherwise(pl.col(name)).alias(name)
+        for name in names
+    )
+    return TypedTable(columns=table.columns, frame=frame)
+
+
 def _build_table(
     dataset: str,
     source: DatasetSource,
@@ -324,6 +341,16 @@ def load_source_tables(
                 )
                 for field, value in source.types.items()
             )
+        if profile == "csv" and source.empty_string == "present":
+            diagnostics.append(
+                SourceDiagnostic(
+                    phase="validation",
+                    condition="empty_string_present_unsupported",
+                    spec_paths=(f"input.{dataset}.empty_string",),
+                    requirement="REQ-1161",
+                    context={"dataset": dataset, "path": source.path},
+                )
+            )
         try:
             if dataset in snapshots:
                 resources.validate_location(source.path)
@@ -364,6 +391,8 @@ def load_source_tables(
                     parse_parquet(snapshot.content),
                     contracts.get(dataset),
                 )
+                if source.empty_string == "missing":
+                    table = _empty_strings_to_missing(table)
         except ResourceFailure as failure:
             diagnostics.append(_path_diagnostic(dataset, source.path, failure))
             continue
