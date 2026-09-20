@@ -284,7 +284,7 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
-  adam-advs-body-mass-index:
+  adam-advs-bmi:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
