@@ -1,6 +1,6 @@
 "use strict";
 
-// Tabbed "Mapping spec" section: switch the visible sheet pane.
+// Tabbed "Derived Excel Specification" section: switch the visible sheet pane.
 // Without this script every pane stays visible, so the section degrades to
 // stacked tables.
 (function () {
