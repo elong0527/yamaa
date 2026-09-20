@@ -55,6 +55,10 @@ evaluation or admit new inputs. Undefined integer-widening tie behavior is
 not expanded by this editorial cutover: the existing nearest-binary64 wording
 is retained. A stronger policy requires a separate semantic decision.
 
+The upstream readability edits in #614 and #617 are carried into their new
+contract owners. The fixed baseline inventory remains unchanged so that its
+provenance continues to describe the original source snapshot.
+
 ## Validation and limits
 
 The migration check rejects missing source entries, duplicate definitions,

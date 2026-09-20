@@ -28,14 +28,14 @@ This contract owns the requirements below. Related contracts:
 
 ## Requirements
 
-### An ordered frame is not a shape this contract has
+### This contract has no ordered-frame assertion
 
 <a id="req-0367"></a>
 
-**REQ-0367.** State an ordered-series assertion as a derivation followed by
-a row-wise assertion in this contract. Use exactly one of three forms: the
-adjacent row, a partition or its history up to the current row, or a derived
-property at coarser keys or from an upstream specification.
+**REQ-0367.** State an ordered-series assertion as a derivation followed by a
+row-wise assertion in this contract. Use exactly one of three forms: the adjacent
+row, a partition or its history up to the current row, or a derived property at
+coarser keys or from an upstream specification.
 
 - **The adjacent row.** `row_value` under [Windows](../operations/windows.md) places another row's value on
   the row and `assert` compares the two.
@@ -46,10 +46,10 @@ property at coarser keys or from an upstream specification.
   under [Aggregation](../operations/aggregation.md) reduces a source relation, and its `between` narrowing keeps only
   the records at or before a current-row value, so a cumulative property of
   collected values reaches the row it must be asserted about.
-- **A derived property at coarser keys or from an upstream specification.** The specification that
+- **A derived property at coarser keys or upstream.** The specification that
   derives it publishes it, and [Source ingestion](../storage/ingestion.md)'s producing-specification link makes it an
-  ordinary source field of the specification that asserts over it, which is
-  the same split every other change of keys already uses.
+  ordinary source field of the specification that asserts over it. This is the
+  same split every other change of keys already uses.
 
 <a id="req-0368"></a>
 
@@ -63,9 +63,9 @@ needs that shape and the shape cannot be written as a producer and a consumer.
 **REQ-0369.** A supplemental qualifier record pointing at its parent domain
 record, like every other cross-dataset link, is asserted by the derivation
 that produces the link rather than by a verification over the finished
-artifact. a lookup's `strict: true` rejects a value matching no record, and a
-`lookup` result carried by a column declaring `not_missing` does the
-same; `sdtm-suppmh-parent-linkage` links `IDVARVAL` to its medical-history
+artifact. A `lookup`'s `strict: true` rejects a value matching no record, and a
+`lookup` result carried by a `not_missing` column does the same.
+`sdtm-suppmh-parent-linkage` links `IDVARVAL` to its medical-history
 record that way.
 
 <a id="req-0370"></a>

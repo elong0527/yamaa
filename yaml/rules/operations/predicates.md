@@ -233,7 +233,7 @@ summary:
 
 <a id="req-0183"></a>
 
-**REQ-0183.** a verification sees completed output columns and record intermediates
+**REQ-0183.** a verification sees completed columns and record intermediates
   resolved for the completed row; and
 
 <a id="req-0184"></a>

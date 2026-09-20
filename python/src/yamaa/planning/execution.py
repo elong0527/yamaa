@@ -605,7 +605,7 @@ def _filtered_source_references(
         or dataset in scope.intermediates
         or (dataset == scope.grouped_driver)
     ):
-        # R003-35a: an output column, a chosen intermediate record, and a group key
+        # REQ-0148: an output column, a chosen intermediate record, and a group key
         # are each one value, so a filter has no records to select among.
         return [
             _diagnostic(
@@ -3279,7 +3279,7 @@ def plan_execution(
             continue
         for dependency in planned.dependencies:
             if dependency in key_set or dependency not in column_positions:
-                continue  # keys predate column derivation (R001-43)
+                continue  # keys predate column derivation (REQ-0074)
             if column_positions[dependency] >= column_positions[planned.column]:
                 diagnostics.append(
                     _diagnostic(

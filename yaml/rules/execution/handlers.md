@@ -155,10 +155,10 @@ what each reducer returns for such a group.
 
 <a id="req-0358"></a>
 
-**REQ-0358.** A derivation with conversion handling uses `value`
-to hold its normal expression. A bare expression is the [Schema language](../reference/schema-language.md) shorthand
-for that wrapper, so every derivation carries its expression in `value`
-once expanded.
+**REQ-0358.** A derivation with conversion handling uses `value` for its normal
+expression. A bare expression is the [Schema language](../reference/schema-language.md)
+shorthand for that wrapper. After expansion, every derivation carries its
+expression in `value`.
 
 <a id="req-0359"></a>
 

@@ -101,10 +101,10 @@ engine's.
 
 <a id="req-0301"></a>
 
-**REQ-0301.** Terms apply in order, each with its own direction and
-placement. Records equal on every term preserve row-template order and then
-base-record order. The result is total: ordering has no
-undefined case and a row's neighbours are determined.
+**REQ-0301.** Terms apply in order. Each has its own direction and placement.
+Records equal on every term preserve row-template order and then base-record
+order. Ordering is total. It has no undefined case. A row's neighbours are
+determined.
 
 <a id="req-0302"></a>
 
