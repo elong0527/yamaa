@@ -1,6 +1,6 @@
 # Introduction
 
-YAMAA is a language-neutral YAML specification for reproducible clinical
+yamaa is a language-neutral YAML specification for reproducible clinical
 trial data pipelines. You write what each dataset contains; the R and Python
 engines execute it the same way, every time, from EDC extraction through
 SDTM and ADaM to define.xml.
@@ -24,22 +24,22 @@ understood it. Their programs disagree -- not from misreading, but because
 the specification never reached the point they disagreed on: what missing
 means, what a duplicate means, how dates compare.
 
-YAMAA writes each layer into a different kind of file:
+yamaa writes each layer into a different kind of file:
 
-| Layer of YAMAA | File |
+| Layer of yamaa | File |
 |---|---|
 | **Structure** | `yaml/schema*.yaml` -- what a specification may contain |
 | **Algorithm** | your `spec.yaml` -- one specification produces one dataset |
 | **Semantics** | `yaml/rules/` -- normative contracts for every written item |
 | **Worked proof** | `benchmark/` -- 214 runnable specifications with byte-exact expected outputs |
 
-In one sentence: **an Excel spec is written to be understood; a YAMAA spec is
+In one sentence: **an Excel spec is written to be understood; a yamaa spec is
 written to be executed the same way twice.**
 
 ## One execution
 
-> **A YAMAA specification has exactly one execution. Where it would have two,
-> YAMAA fails instead of choosing.**
+> **A yamaa specification has exactly one execution. Where it would have two,
+> yamaa fails instead of choosing.**
 
 Think of execution as a function:
 
@@ -61,7 +61,7 @@ agreement to the planning stage.
 
 ## What a specification looks like
 
-One specification produces one dataset. YAMAA first constructs the output
+One specification produces one dataset. yamaa first constructs the output
 rows, then derives columns onto those rows. **Column derivation never changes
 the row count.** See [Derivation](derive.md) for the full keys / rows /
 columns walkthrough.
@@ -86,5 +86,5 @@ answered in writing.
 
 - Why one execution: [Principles](principles.md).
 - How rows and columns work: [Derivation](derive.md).
-- Coming from Excel specs: [Excel to YAMAA](excel.md).
+- Coming from Excel specs: [Excel to yamaa](excel.md).
 - How to read a runnable example: [Reading the examples](benchmark.md).

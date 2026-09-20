@@ -1,4 +1,4 @@
-# YAMAA Python
+# yamaa Python
 
 The Python package currently provides general CDISC ODM helpers. It uses
 Pydantic for public data contracts and Polars for tabular data operations.

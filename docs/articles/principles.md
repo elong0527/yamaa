@@ -6,17 +6,17 @@ Both are sure they understand it. Each writes the code from scratch. The two out
 This disagreement is usually not a misreading.
 The agents simply follow different paths through the gaps in the prompt.
 
-YAMAA moves agreement to the planning stage. People and AI agents build the
+yamaa moves agreement to the planning stage. People and AI agents build the
 specification together. Questions get answered while they are still
-cheap to answer. A YAMAA specification is built to have exactly one execution
+cheap to answer. A yamaa specification is built to have exactly one execution
 across different programming languages. It covers clinical data work from
 Electronic Data Capture (EDC) extraction through Study Data Tabulation Model
 (SDTM) and Analysis Data Model (ADaM) to define.xml.
 
 ## The core principle
 
-> **A YAMAA specification has exactly one execution. Where it would have two,
-> YAMAA fails instead of choosing.**
+> **A yamaa specification has exactly one execution. Where it would have two,
+> yamaa fails instead of choosing.**
 
 Think of execution as a function:
 
@@ -24,7 +24,7 @@ Think of execution as a function:
 
 Datasets go in and out. *derive* is the derivation engine.
 
-The whole design of YAMAA is a contract between people and AI agents. The
+The whole design of yamaa is a contract between people and AI agents. The
 input datasets are given. The contract covers two things:
 
 - **spec**: the closed vocabulary. It says what you can write, and nothing
@@ -41,8 +41,8 @@ AI coding session can ask for clarification. But an AI agent working on its own 
 only the documents in front of it. There is no colleague to ask.
 
 So for people, one execution prevents arguments. For AI, it does a bigger
-job. The YAMAA language forces every question to be answered during planning,
-because the YAMAA specification should be the one place where people agree on what to build.
+job. The yamaa language forces every question to be answered during planning,
+because the yamaa specification should be the one place where people agree on what to build.
 
 This is also why the vocabulary is closed. The typical AI failure is confident
 invention: text that reads well but runs wrong, and then needs heavy review.
@@ -68,12 +68,12 @@ These four principles follow from the core principle of one execution:
   project.
 
 Following the principles, the goal is to move most of the AI agents' work into
-building the YAMAA specification with people, where unclear points are cheap
+building the yamaa specification with people, where unclear points are cheap
 to fix.
 
 ## Cost and benefit
 
-Using YAMAA means accepting a contract between people and AI agents. The cost
+Using yamaa means accepting a contract between people and AI agents. The cost
 is real, and it is paid early. Every unclear point above is answered while the
 specification is being written, by the people who can answer it, at the
 planning stage. The goal: no open questions left for the coding stage.

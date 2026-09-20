@@ -2728,13 +2728,13 @@
       "updated": 1788102712306,
       "link": null,
       "locked": false,
-      "text": "YAMAA Architecture",
+      "text": "yamaa Architecture",
       "fontSize": 36,
       "fontFamily": 5,
       "textAlign": "left",
       "verticalAlign": "top",
       "containerId": null,
-      "originalText": "YAMAA Architecture",
+      "originalText": "yamaa Architecture",
       "autoResize": true,
       "lineHeight": 1.25
     }

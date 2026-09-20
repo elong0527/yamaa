@@ -1,4 +1,4 @@
-"""Strict Pydantic models for normalized YAMAA specifications."""
+"""Strict Pydantic models for normalized yamaa specifications."""
 
 from __future__ import annotations
 

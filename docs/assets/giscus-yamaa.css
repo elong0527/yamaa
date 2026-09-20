@@ -1,5 +1,5 @@
 /*
- * YAMAA's giscus theme builds on the official light theme and intentionally
+ * yamaa's giscus theme builds on the official light theme and intentionally
  * exposes only GitHub's +1 and -1 reactions. giscus loads this stylesheet
  * inside its iframe through its supported custom-theme configuration.
  */

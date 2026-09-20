@@ -93,7 +93,7 @@ for a `dataset_class` with no `types`.
 <a id="req-0520"></a>
 
 **REQ-0520.** `dataset_class.schema` makes a stored artifact carry the output
-contract and workflow provenance of the Yamaa specification that produces it.
+contract and workflow provenance of the yamaa specification that produces it.
 `schema` is a `project_path` resolved like `dataset_class.path`, so [Resource resolution](resources.md)
 confines both. The referenced document is a complete specification validated
 against the same `root_class` in `schema.yaml`. There is no second
@@ -276,7 +276,7 @@ structural constraints come from its schema declaration.
 <a id="req-0534"></a>
 
 **REQ-0534.** A document named by `schema` that does not validate as a
-  complete Yamaa specification, or whose producer dependency creates a cycle:
+  complete yamaa specification, or whose producer dependency creates a cycle:
   fail.
 
 <a id="req-0535"></a>

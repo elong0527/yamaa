@@ -1,19 +1,19 @@
-# YAMAA <img src="assets/logo.jpeg" align="right" width="120" alt="YAMAA logo" />
+# yamaa <img src="assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
 
 [![Python tests](https://github.com/elong0527/yamaa/actions/workflows/python.yml/badge.svg)](https://github.com/elong0527/yamaa/actions/workflows/python.yml)
 [![YAML validation](https://github.com/elong0527/yamaa/actions/workflows/yaml-validation.yml/badge.svg)](https://github.com/elong0527/yamaa/actions/workflows/yaml-validation.yml)
 [![Docs](https://github.com/elong0527/yamaa/actions/workflows/deploy-docs.yml/badge.svg)](https://elong0527.github.io/yamaa/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/elong0527/yamaa/blob/main/LICENSE)
 
-YAMAA is a language-neutral YAML specification for reproducible clinical
+yamaa is a language-neutral YAML specification for reproducible clinical
 trial data pipelines. You write what each dataset contains; the R and Python
 engines execute it the same way, every time, from EDC extraction through
 SDTM and ADaM to define.xml.
 
 The one principle behind everything:
 
-> **A YAMAA specification has exactly one execution. Where it would have two,
-> YAMAA fails instead of choosing.**
+> **A yamaa specification has exactly one execution. Where it would have two,
+> yamaa fails instead of choosing.**
 
 That is what makes it safe to hand a specification to an AI agent: every
 question gets answered while it is still cheap to answer, at the planning
@@ -79,7 +79,7 @@ devtools::install_github("elong0527/yamaa", subdir = "R/cdiscbuilder")
 ## Where to go next
 
 - New here? [Introduction](articles/intro.md) explains the model in five minutes.
-- Coming from Excel specs? [Excel to YAMAA](articles/excel.md) translates what you already know.
+- Coming from Excel specs? [Excel to yamaa](articles/excel.md) translates what you already know.
 - Want worked examples? [Reading the examples](articles/benchmark.md) shows how to read the 214 benchmarks.
 
 ## License

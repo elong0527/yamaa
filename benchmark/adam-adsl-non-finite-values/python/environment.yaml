@@ -5,7 +5,7 @@ runtime:
   language: python
   artifact:
     reference: org.example/yamaa/numeric-constants-python:1.0.0
-    digest: sha256:ab47d69a240e97610b8480d5d1447fc493925c1fd0c3996a574b18b7c4ba1c32
+    digest: sha256:a49db70644d4f23295f2e543576f72f84560da26e0505541c7629f6812167eb4
 
 functions:
   numeric_constant:

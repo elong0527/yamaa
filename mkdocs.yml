@@ -1,11 +1,11 @@
 # yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
-site_name: YAMAA
+site_name: yamaa
 site_description: A language-neutral YAML specification for reproducible clinical trial data pipelines
 site_url: https://elong0527.github.io/yamaa/
 repo_url: https://github.com/elong0527/yamaa
 repo_name: elong0527/yamaa
 edit_uri: edit/main/docs/
-copyright: Copyright &copy; 2026 YAMAA authors
+copyright: Copyright &copy; 2026 yamaa authors
 
 docs_dir: docs
 site_dir: site
@@ -68,7 +68,7 @@ nav:
       - Introduction: articles/intro.md
       - Principles: articles/principles.md
       - Derivation: articles/derive.md
-      - Excel to YAMAA: articles/excel.md
+      - Excel to yamaa: articles/excel.md
   - Reference:
       - Schema introduction: articles/schema-intro.md
       - Schema reference: articles/schema.md

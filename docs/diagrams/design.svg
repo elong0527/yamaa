@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 730" role="img" aria-labelledby="title description">
-  <title id="title">YAMAA design</title>
+  <title id="title">yamaa design</title>
   <desc id="description">Organization and compound templates are inherited by approved study specifications. EDC data is extracted to ODM XML. Version-controlled builders use the specifications and source metadata to generate and validate SDTM datasets, ADaM datasets, and a TLF package.</desc>
 
   <defs>
@@ -27,7 +27,7 @@
   </defs>
 
   <rect width="1280" height="730" fill="#ffffff" />
-  <text class="heading" x="640" y="38" text-anchor="middle">YAMAA design</text>
+  <text class="heading" x="640" y="38" text-anchor="middle">yamaa design</text>
   <text class="section" x="24" y="78">DESIGN TIME  -  INHERITANCE AND APPROVED SPECIFICATIONS</text>
 
   <text class="scope" x="24" y="108">SCOPE</text>

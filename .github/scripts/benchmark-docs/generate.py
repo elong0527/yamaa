@@ -347,7 +347,7 @@ def benchmark_category(name, title, spec):
         return "Specification", title
     category, separator, heading = title.partition(": ")
     if not separator:
-        return str(spec.get("domain", "YAMAA benchmark")), title
+        return str(spec.get("domain", "yamaa benchmark")), title
     return category, heading
 
 

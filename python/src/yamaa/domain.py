@@ -1,4 +1,4 @@
-"""User-facing execution of one YAMAA domain specification."""
+"""User-facing execution of one yamaa domain specification."""
 
 from __future__ import annotations
 
@@ -122,7 +122,7 @@ def _discover_schema_root(entry_path: Path) -> Path:
             seen.add(resolved)
             if (resolved / "schema.yaml").is_file():
                 return resolved
-    raise ValueError("cannot find the YAMAA schema bundle; pass schema_root explicitly")
+    raise ValueError("cannot find the yamaa schema bundle; pass schema_root explicitly")
 
 
 class DomainRunError(RuntimeError):
