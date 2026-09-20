@@ -8,7 +8,7 @@ reads its named dataset, and a bare name reads the output columns.
 **Input:** one `spec.yaml` declaring two datasets. `VS` carries the
 vital-signs records that drive the output rows: subject (`USUBJID`),
 sequence (`VSSEQ`), test (`VSTESTCD`), result (`VSSTRESN`), and units
-(`VSSTRESU`). Each subject's sequence starts at 1, the SDTM way.
+(`VSSTRESU`). In this example, each subject's sequence starts at 1.
 `DM` carries one row per subject with sex, age, and race.
 
 **Bindings:**
