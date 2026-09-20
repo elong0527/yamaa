@@ -520,7 +520,7 @@ def _key_grain_candidates(
     """Build one candidate per key combination (REQ-0042).
 
     With no `rows` template a root `filter` scopes the feeding records
-    before the distinct-keys step (REQ-1162); every retained driver record
+    before the distinct-keys step (REQ-1170); every retained driver record
     of a key combination feeds its single row and a direct read must resolve
     to one value (REQ-0075) or the row fails.
     """

@@ -98,6 +98,10 @@ another dataset follows [Lookup and joins](../operations/lookup.md).
 input record. A qualified reference to the input dataset of the row
 template is scalar only when the exact variable appears in the enclosing
 `row.group_by`. That reference then returns the key value of that group.
+A column-level derivation reads each constructed row, so the same holds
+there: a qualified reference to a row template's input dataset is scalar
+only when the exact variable appears in the `group_by` of every grouped
+row template driven by that dataset.
 
 <a id="req-0087"></a>
 
@@ -271,8 +275,11 @@ condition.
 
 <a id="req-0107"></a>
 
-**REQ-0107.** A scalar source in a grouped row naming a source variable
-absent from that row's `group_by`: fail.
+**REQ-0107.** A scalar source naming a source variable absent from the
+`group_by` of the grouped row template that builds the row it reads:
+fail. At column level the source is read by every constructed row, so the
+variable must appear in the `group_by` of every grouped row template
+driven by its dataset.
 
 <a id="req-0108"></a>
 

@@ -107,9 +107,9 @@ which input record represents a key combination. A row template that keeps
 one of several input records with one key combination still writes one row
 per key combination. The specification omits `rows` instead.
 
-<a id="req-1162"></a>
+<a id="req-1170"></a>
 
-**REQ-1162.** A root `filter` is the filter-only row template lifted to
+**REQ-1170.** A root `filter` is the filter-only row template lifted to
 root: it selects base input records for row construction when `rows` is
 absent, before the [REQ-0042](rows.md#req-0042) distinct-keys step. It reads
 the base driver: the declared `base`, or the single declared dataset when
@@ -143,6 +143,7 @@ structural constraints come from its schema declaration.
 | `row_class.group_by` | Grouping keys over input records, producing one candidate row per group; [Execution lifecycle](lifecycle.md) defines grouped construction. |
 | `row_class.filter` | Predicate selecting input records for an ungrouped row template or completed candidate groups for a grouped row template. |
 | `row_class.derivations` | Columns this row template derives; [Specification structure](../specification/structure.md) owns coverage across row templates. |
+| `row_class.submission` | Per-value submission metadata for this template's values, keyed by column; [Submission metadata](../submission/metadata.md) owns the declaration rules. |
 
 ## Error conditions
 
@@ -177,9 +178,9 @@ structural constraints come from its schema declaration.
   `row.filter` naming a qualified variable or a column not derived by that
   row template: fail.
 
-<a id="req-1163"></a>
+<a id="req-1171"></a>
 
-**REQ-1163.** A root `filter` declared together with `rows`: fail. The
+**REQ-1171.** A root `filter` declared together with `rows`: fail. The
   filter is the filter-only row template; explicit row templates and the
   lifted filter cannot both drive row construction.
 

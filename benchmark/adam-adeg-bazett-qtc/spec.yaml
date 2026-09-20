@@ -12,10 +12,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
+    derivation: ADEG_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation: ADEG_RAW.USUBJID
 
   - name: PARAMCD
     type: str
@@ -28,6 +30,7 @@ columns:
   - name: AVISIT
     type: str
     label: Analysis Visit
+    derivation: ADEG_RAW.AVISIT
 
   - name: QTVAL
     type: float
@@ -60,11 +63,8 @@ columns:
 rows:
   - id: collected
     derivations:
-      STUDYID: {source: ADEG_RAW.STUDYID}
-      USUBJID: {source: ADEG_RAW.USUBJID}
       PARAMCD: {source: ADEG_RAW.PARAMCD}
       PARAM: {source: ADEG_RAW.PARAM}
-      AVISIT: {source: ADEG_RAW.AVISIT}
       QTVAL: {literal: null}
       RRVAL: {literal: null}
       QTUNIT: {literal: null}
@@ -79,11 +79,8 @@ rows:
       QTVAL IS NOT NULL
       AND RRVAL IS NOT NULL
     derivations:
-      STUDYID: {source: ADEG_RAW.STUDYID}
-      USUBJID: {source: ADEG_RAW.USUBJID}
       PARAMCD: {literal: QTCBR}
       PARAM: {literal: "QTcB - Bazett's Correction Formula Rederived (ms)"}
-      AVISIT: {source: ADEG_RAW.AVISIT}
       QTVAL:
         aggregate:
           filter: "ADEG_RAW.PARAMCD = 'QT'"

@@ -54,6 +54,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `row_class.group_by` | `"list[variable]"` | `false` | Absent | -- | [REQ-1056](../execution/rows.md#req-1056) |
 | `row_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1056](../execution/rows.md#req-1056) |
 | `row_class.derivations` | `"dict[identifier, derivation]"` | `true` | Absent | -- | [REQ-1056](../execution/rows.md#req-1056) |
+| `row_class.submission` | `"dict[identifier, submission_column_class]"` | `false` | Absent | -- | [REQ-1056](../execution/rows.md#req-1056) |
 | `variable` | `"str"` | `false` | Absent | `{"pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$"}` | [REQ-1057](../specification/binding.md#req-1057) |
 | `dataset_source` | `["project_path", "dataset_class"]` | `false` | Absent | -- | [REQ-1059](../storage/ingestion.md#req-1059) |
 | `dataset_class.path` | `"project_path"` | `true` | Absent | -- | [REQ-1060](../storage/ingestion.md#req-1060) |

@@ -12,10 +12,12 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
+    derivation: ADLB_RAW.USUBJID
 
   - name: VISIT
     type: str
     label: Visit Name
+    derivation: ADLB_RAW.VISIT
 
   - name: PARAMCD
     type: str
@@ -48,8 +50,6 @@ columns:
 rows:
   - id: collected
     derivations:
-      USUBJID: {source: ADLB_RAW.USUBJID}
-      VISIT: {source: ADLB_RAW.VISIT}
       PARAMCD: {source: ADLB_RAW.PARAMCD}
       PARAM: {source: ADLB_RAW.PARAM}
       WBCVAL: {literal: null}
@@ -65,8 +65,6 @@ rows:
       AND LYMLEVAL IS NOT NULL
       AND EXISTING_ABS_COUNT IS NULL
     derivations:
-      USUBJID: {source: ADLB_RAW.USUBJID}
-      VISIT: {source: ADLB_RAW.VISIT}
       PARAMCD: {literal: LYMPH}
       PARAM: {literal: Lymphocytes Abs (10^9/L)}
       WBCVAL:

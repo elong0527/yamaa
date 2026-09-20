@@ -1228,10 +1228,75 @@ def test_a_grouped_row_join_needs_group_keys() -> None:
         plan_execution(spec, row_tables())
 
     # REQ-0157: a key the group does not carry varies within it.
+    # REQ-0107: the column-level key echo is not a group key either.
+    assert [
+        (diagnostic.condition, diagnostic.requirement)
+        for diagnostic in raised.value.diagnostics
+    ] == [
+        ("ungrouped_driver_field", "REQ-0067"),
+        ("ungrouped_driver_field", "REQ-0107"),
+    ]
+    assert raised.value.diagnostics[0].context["identifier"] == "SRC.K"
+    assert raised.value.diagnostics[1].context["identifier"] == "SRC.K"
+
+
+def test_a_column_level_non_key_source_on_a_grouped_row_fails() -> None:
+    source = frame_from_values(
+        (
+            TypedColumn(name="K", type="str"),
+            TypedColumn(name="W", type="float"),
+        ),
+        [["a", 1.0], ["a", 2.0]],
+    )
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.K"})),
+            Column(name="W", type="float", derivation=derivation({"source": "SRC.W"})),
+        ],
+        [
+            Row(
+                id="g",
+                group_by=["SRC.K"],
+                derivations={},
+            )
+        ],
+    )
+
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(spec, {"SRC": source})
+
+    # REQ-0107: a column-level derivation reads every constructed row, so a
+    # scalar source of a grouped driver must name a group key.
     [diagnostic] = raised.value.diagnostics
     assert diagnostic.condition == "ungrouped_driver_field"
-    assert diagnostic.requirement == "REQ-0067"
-    assert diagnostic.context["identifier"] == "SRC.K"
+    assert diagnostic.requirement == "REQ-0107"
+    assert diagnostic.context["identifier"] == "SRC.W"
+
+
+def test_a_column_level_group_key_echo_on_a_grouped_row_plans() -> None:
+    source = frame_from_values(
+        (
+            TypedColumn(name="K", type="str"),
+            TypedColumn(name="W", type="float"),
+        ),
+        [["a", 1.0], ["a", 2.0]],
+    )
+    spec = specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.K"})),
+        ],
+        [
+            Row(
+                id="g",
+                group_by=["SRC.K"],
+                derivations={},
+            )
+        ],
+    )
+
+    plan = plan_execution(spec, {"SRC": source})
+
+    assert [planned.column for planned in plan.columns] == ["K"]
 
 
 def test_a_row_inline_lookup_matching_driver_fields_is_planned() -> None:
@@ -1297,7 +1362,7 @@ def test_a_root_filter_declared_with_rows_fails() -> None:
 
     (diagnostic,) = raised.value.diagnostics
     assert diagnostic.condition == "conflicting_row_construction"
-    assert diagnostic.requirement == "REQ-1163"
+    assert diagnostic.requirement == "REQ-1171"
     assert diagnostic.spec_paths == ("filter", "rows")
 
 
