@@ -129,7 +129,7 @@ Excel has one Codelist column. yamaa separates by where the vocabulary lives:
 | Situation | yamaa | Example |
 |---|---|---|
 | Short vocabulary, written in the spec | `mapping` | `M -> M, F -> F` |
-| Vocabulary is an external file (MedDRA, WHODrug, a reference-range table) | `lookup` | [`sdtm-ae-dictionary-coding`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-ae-dictionary-coding) |
+| Vocabulary is an external file (MedDRA, WHODrug, a reference-range table) | `lookup` | [`sdtm-ae-coding`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-ae-coding) |
 | No translation, only a **check** that the value is one of these | `allowed_values` | `values: [M, F, U]` |
 | Numeric banding (AGEGR1, BMI categories) | `cut` | [Example 1](#example-1-direct-mapping-a-codelist-and-numeric-banding) |
 
@@ -159,7 +159,7 @@ expected output.
 
 ### Example 1: direct mapping, a codelist, and numeric banding
 
-*Source: [`adam-adsl-mapping`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-mapping)*
+*Source: [`adam-adsl-demographics`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adsl-demographics)*
 
 Excel:
 
@@ -291,6 +291,6 @@ benchmark for the full side-by-side:
 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-bds) | VLM and BDS: one row template per PARAMCD, then `baseline_flag` / `baseline_value` / `row_number` as columns |
 | [`adam-adex-cumulative-dose`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adex-cumulative-dose) | `aggregate: "SUM(EX.EXDOSE)"` reducing by the applicable keys; a CSV field entering arithmetic must declare its type |
 | [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adae-partial-dates) | `date_impute` beside `date_precision` reading the same source; `missing` and `invalid` are separate defects |
-| [`sdtm-dm-metadata-contract`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-metadata-contract) | `metadata` vs `verifications`: Length becomes both `metadata.length` (for define.xml) and a `max_length` check |
-| [`sdtm-ae-dictionary-coding`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-ae-dictionary-coding) | Coding against MedDRA with `lookup`; named `intermediates` when several columns must come from one record |
-| [`spec-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmark/spec-inheritance) | Corporate, compound and study layers via `parents:` -- real layering instead of copying the template |
+| [`sdtm-dm-metadata`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-metadata) | `metadata` vs `verifications`: Length becomes both `metadata.length` (for define.xml) and a `max_length` check |
+| [`sdtm-ae-coding`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-ae-coding) | Coding against MedDRA with `lookup`; named `intermediates` when several columns must come from one record |
+| [`schema-inheritance`](https://github.com/elong0527/yamaa/tree/main/benchmark/schema-inheritance) | Corporate, compound and study layers via `parents:` -- real layering instead of copying the template |

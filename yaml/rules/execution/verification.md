@@ -39,7 +39,7 @@ coarser keys or from an upstream specification.
 
 - **The adjacent row.** `row_value` under [Windows](../operations/windows.md) places another row's value on
   the row and `assert` compares the two.
-  `negative-adrs-partial-response-after-complete-response` uses
+  `negative-pr-after-cr` uses
   the immediately preceding assessment, so it rejects a partial response next
   to a complete one and passes the same fault with an assessment in between.
 - **A partition, or its history up to the current row.** A qualified aggregate
@@ -65,7 +65,7 @@ record, like every other cross-dataset link, is asserted by the derivation
 that produces the link rather than by a verification over the finished
 artifact. A `lookup`'s `strict: true` rejects a value matching no record, and a
 `lookup` result carried by a `not_missing` column does the same.
-`sdtm-suppmh-parent-linkage` links `IDVARVAL` to its medical-history
+`sdtm-suppmh-linkage` links `IDVARVAL` to its medical-history
 record that way.
 
 <a id="req-0370"></a>
@@ -402,10 +402,10 @@ structural constraints come from its schema declaration.
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-adam-adeg-pre-existing-rrr](../../../benchmark/negative-adam-adeg-pre-existing-rrr/README.md).
-- [negative-adam-adsl-stratification-reconciliation](../../../benchmark/negative-adam-adsl-stratification-reconciliation/README.md).
-- [negative-adex-single-dose-expansion](../../../benchmark/negative-adex-single-dose-expansion/README.md).
-- [negative-adlb-multiple-baseline-records](../../../benchmark/negative-adlb-multiple-baseline-records/README.md).
+- [negative-adeg-rrr](../../../benchmark/negative-adeg-rrr/README.md).
+- [negative-strata-mismatch](../../../benchmark/negative-strata-mismatch/README.md).
+- [negative-dose-expansion](../../../benchmark/negative-dose-expansion/README.md).
+- [negative-adlb-two-baselines](../../../benchmark/negative-adlb-two-baselines/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

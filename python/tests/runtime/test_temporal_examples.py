@@ -32,31 +32,31 @@ EXAMPLES = REPOSITORY_ROOT / "benchmark"
 # positive fixture anchor #221 names.
 ARTIFACT_EXAMPLES = [
     "adam-adae-partial-dates",
-    "adam-advs-analysis-visit",
+    "adam-advs-windows",
     "adam-adae-treatment-emergent",
     "adam-adlb-bds",
-    "adam-advs-once-measured-carry-forward",
+    "adam-advs-carryforward",
     "adam-adae-worst-severity",
     "adam-adsl-analysis-age",
-    "adam-adsl-duration-weeks-months",
-    "adam-advs-prior-character-result",
+    "adam-adsl-duration",
+    "adam-advs-prior-result",
     "adam-adae-severity-rank",
-    "sdtm-vs-visit-study-day",
+    "sdtm-vs-study-day",
 ]
 
 # Committed error contracts this component reproduces field for field.
 ERROR_EXAMPLES = [
-    "negative-date-impute-nonexistent-day",
-    "negative-date-impute-month-out-of-range",
-    "negative-date-impute-invalid-source",
-    "negative-date-precision-invalid-source",
-    "negative-study-day-datetime-input",
-    "negative-to-date-date-source",
-    "negative-date-diff-bounds-unit",
-    "negative-date-diff-datetime-endpoints",
-    "negative-baseline-flag-tied-date",
-    "negative-baseline-value-multiple-flags",
-    "negative-row-value-zero-offset",
+    "negative-impute-bad-day",
+    "negative-impute-bad-month",
+    "negative-impute-bad-source",
+    "negative-precision-bad-source",
+    "negative-study-day-datetime",
+    "negative-date-conversion",
+    "negative-date-diff-units",
+    "negative-date-diff-endpoints",
+    "negative-tied-baseline",
+    "negative-multiple-baselines",
+    "negative-row-no-prior",
 ]
 
 

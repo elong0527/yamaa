@@ -69,7 +69,7 @@ def test_save_uses_the_requested_extension_without_changing_output(
 
 
 def test_invalid_specification_is_available_through_issues() -> None:
-    pilot = yamaa_domain(EXAMPLES / "negative-column-type-unknown/spec.yaml")
+    pilot = yamaa_domain(EXAMPLES / "negative-ambiguous-type/spec.yaml")
 
     assert pilot.spec is None
     assert pilot.inputs == {}
@@ -91,7 +91,7 @@ def test_invalid_specification_is_available_through_issues() -> None:
 
 
 def test_preflight_issues_prevent_input_loading() -> None:
-    pilot = yamaa_domain(EXAMPLES / "negative-source-output-self-reference/spec.yaml")
+    pilot = yamaa_domain(EXAMPLES / "negative-source-self-reference/spec.yaml")
 
     assert pilot.spec is not None
     assert pilot.inputs == {}
@@ -103,7 +103,7 @@ def test_preflight_issues_prevent_input_loading() -> None:
 
 
 def test_a_repeated_subject_row_fails_at_the_output_gate() -> None:
-    pilot = yamaa_domain(EXAMPLES / "negative-output-duplicate-subject/spec.yaml")
+    pilot = yamaa_domain(EXAMPLES / "negative-output-duplicate/spec.yaml")
 
     assert pilot.spec is not None
     assert pilot.output is None
@@ -118,7 +118,7 @@ def test_a_repeated_subject_row_fails_at_the_output_gate() -> None:
 
 
 def test_two_values_for_one_key_fail_where_the_column_is_read() -> None:
-    pilot = yamaa_domain(EXAMPLES / "negative-keys-conflicting-values/spec.yaml")
+    pilot = yamaa_domain(EXAMPLES / "negative-keys-conflict/spec.yaml")
 
     assert pilot.spec is not None
     assert pilot.output is None
@@ -135,11 +135,11 @@ def test_two_values_for_one_key_fail_where_the_column_is_read() -> None:
 
 def test_sequence_keys_derive_from_base_before_unique_logic() -> None:
     expectations = {
-        "sdtm-ds-disposition-sequence": (
+        "sdtm-ds-sequence": (
             "DSSEQ",
             [2, 1, 1, 1, 1, 1, 2],
         ),
-        "sdtm-ex-combination-regimen": (
+        "sdtm-ex-combination": (
             "EXSEQ",
             [2, 3, 1, 5, 6, 4, 3, 2, 1],
         ),
@@ -153,7 +153,7 @@ def test_sequence_keys_derive_from_base_before_unique_logic() -> None:
 
 
 def test_key_reading_non_key_output_fails_at_validation() -> None:
-    pilot = yamaa_domain(EXAMPLES / "negative-keys-missing-value/spec.yaml")
+    pilot = yamaa_domain(EXAMPLES / "negative-keys-missing/spec.yaml")
 
     assert pilot.spec is not None
     assert pilot.output is None
