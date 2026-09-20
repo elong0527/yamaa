@@ -29,6 +29,14 @@ def cell(value):
 def generated(root):
     migration = load_migration(root)
     prose = {entry["source"]: entry["target"] for entry in migration["schema_prose"]}
+    # Post-rewrite requirements register provenance in the addenda; the
+    # generated field table links those contracts the same way.
+    prose.update(
+        {
+            entry["source"]: entry["target"]
+            for entry in migration.get("provenance_addenda", [])
+        }
+    )
     fields = [
         "# Schema fields",
         "",

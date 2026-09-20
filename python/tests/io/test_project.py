@@ -147,7 +147,9 @@ def test_rooted_path_naming_an_approved_root_itself_is_not_a_regular_file(
     assert raised.value.condition == "resource_path_not_regular_file"
 
 
-def test_an_approved_data_root_admits_no_relative_escape(tmp_path: Path) -> None:
+def test_a_relative_traversal_into_an_approved_data_root_is_admitted(
+    tmp_path: Path,
+) -> None:
     project = tmp_path / "project"
     project.mkdir()
     store = tmp_path / "store"
@@ -155,10 +157,42 @@ def test_an_approved_data_root_admits_no_relative_escape(tmp_path: Path) -> None
     (store / "lbref.csv").write_bytes(b"LBTESTCD\nALT\n")
     resources = ProjectResources(project, data_roots=[store])
 
+    escaped = resources.capture("../store/lbref.csv")
+    absolute = resources.capture(rooted(store, "lbref.csv"))
+
+    assert escaped.content == b"LBTESTCD\nALT\n"
+    assert escaped is absolute
+    assert resources.capture_reads == 1
+
+
+def test_a_relative_traversal_above_every_approved_root_is_outside_project(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    store = tmp_path / "store"
+    store.mkdir()
+    resources = ProjectResources(project, data_roots=[store])
+
     with pytest.raises(ResourceFailure) as raised:
-        resources.capture("../store/lbref.csv")
+        resources.capture("../../elsewhere/lbref.csv")
 
     assert raised.value.condition == "resource_path_outside_project"
+
+
+def test_a_relative_traversal_out_and_back_into_the_root_shares_a_snapshot(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "dm.csv").write_bytes(b"ID\n001\n")
+    resources = ProjectResources(tmp_path)
+
+    escaped = resources.capture(f"../{tmp_path.name}/input/dm.csv")
+    direct = resources.capture("input/dm.csv")
+
+    assert escaped.sha256 == direct.sha256
+    assert escaped is direct
+    assert resources.capture_reads == 1
 
 
 def test_one_snapshot_for_a_relative_and_an_unresolved_rooted_spelling(

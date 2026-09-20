@@ -195,6 +195,36 @@ and every other spelling are ordinary string values.
 **REQ-0531.** An empty field of any declared type is missing rather than a parse
 failure, because it holds no text to parse.
 
+### Empty-string convention
+
+<a id="req-1158"></a>
+
+**REQ-1158.** Each input dataset declares its empty-string convention as
+`dataset_class.empty_string`: `missing` or `present`. An omitted declaration
+means `missing`.
+
+<a id="req-1159"></a>
+
+**REQ-1159.** Under `missing`, a stored zero-length string in a `str` field is
+the missing value: it is recognized before typing, per REQ-0528, and no
+derivation ever sees it as a value. Under `present`, the same stored value is
+the collected empty string, a present `str` value that handlers answer for
+like any other string. The container profiles keep their own distinction -- a
+Parquet null and a zero-length string remain distinct under REQ-1034 -- and
+the convention applies at ingestion, after the profile decodes.
+
+<a id="req-1160"></a>
+
+**REQ-1160.** The convention applies to `str` fields only. An empty field of
+any other declared type is missing under REQ-0529 and REQ-0531; a typed
+container admits no zero-length string outside `str`.
+
+<a id="req-1161"></a>
+
+**REQ-1161.** A delimited source must not declare `present`: the delimited
+profile admits no empty string (REQ-0529), so the declaration names a behavior
+the container cannot honor. The declaration fails validation.
+
 ### A stored artifact carries its profile
 
 <a id="req-0751"></a>
