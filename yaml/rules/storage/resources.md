@@ -87,9 +87,9 @@ did not write, while a study run by its own authors approves its own data.
 [Specification composition](../specification/composition.md) reaches contributes declarations that are read against the same approved
 roots. A layer stored outside the project root contributes a `project_path`
 that [Specification composition](../specification/composition.md) rebases to the entry file, and the rebased form must satisfy this
-rule; a relative path from such a layer therefore cannot reach a readable
-source, while a rooted path it writes is decided against the approved roots
-like any other.
+contract; a relative path from such a layer reaches a readable source only
+when the rebased form resolves inside an approved root, while a rooted path
+it writes is decided against the approved roots like any other.
 
 ### The written form
 
@@ -137,11 +137,14 @@ identically on every platform and reveals nothing about the host.
   before the filesystem is consulted. A traversal that stays inside the
   approved project root names one file by one spelling, because the canonical
   resolved path below is the snapshot identity. A traversal that climbs
-  above the entry directory's depth within that root fails as
-  `resource_path_outside_project`. An escape fails identically on every
-  platform whether or not anything exists where it points. A rooted path
-  writes neither, because it already names its location and a dot segment
-  there would only obscure which approved root it names.
+  above the anchor keeps resolving textually against the anchor's canonical
+  segments and is re-anchored at the approved root the resolved location sits
+  under ([REQ-0781](resources.md#req-0781)), so an explicitly approved data
+  root is reachable by a relative spelling. A traversal that resolves inside
+  no approved root fails as `resource_path_outside_project`. An escape fails
+  identically on every platform whether or not anything exists where it
+  points. A rooted path writes neither, because it already names its location
+  and a dot segment there would only obscure which approved root it names.
 
 <a id="req-0779"></a>
 
@@ -162,7 +165,13 @@ because this contract reads that written form.
 <a id="req-0781"></a>
 
 **REQ-0781.** Every resolution has an **anchor**. A relative path is anchored
-at the approved project root. A rooted path is anchored at the approved root
+at the approved root the writing layer's directory sits under -- the approved
+project root when the layer is inside it. A traversal that climbs above that
+root is re-anchored at the approved root whose canonical leading segments the
+resolved location repeats, the longest match winning when one approved root
+lies inside another, exactly as for a rooted path. A traversal that resolves
+inside no approved root fails as `resource_path_outside_project`: it reaches
+no location this run approved. A rooted path is anchored at the approved root
 whose leading segments it repeats -- either the spelling the runner used or
 that root's canonical spelling, compared segment by segment before the
 filesystem is consulted, the longest match winning when one approved root lies
@@ -267,7 +276,7 @@ are the values a rejected specification is probing for.
 | `resource_path_uri_scheme` | a URI scheme, including `file:` and `https:` |
 | `resource_path_not_normalized` | a form [REQ-0776](resources.md#req-0776) through [REQ-0778](resources.md#req-0778) rejects |
 | `resource_path_not_relative` | a rooted path that names no approved root |
-| `resource_path_outside_project` | a path that resolves outside its anchor |
+| `resource_path_outside_project` | a traversal that resolves inside no approved root |
 | `resource_path_symlink` | a symbolic link at any component below the anchor |
 | `resource_path_missing` | a path that reaches no entry |
 | `resource_path_not_regular_file` | a directory, FIFO, socket, or device |
