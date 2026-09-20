@@ -11,7 +11,7 @@ from yamaa.specification import SpecificationError, load_specification
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
-EXAMPLE = REPOSITORY_ROOT / "benchmark" / "sdtm-dm-metadata-contract"
+EXAMPLE = REPOSITORY_ROOT / "benchmark" / "sdtm-dm-metadata"
 
 
 def test_loads_metadata_contract_submission() -> None:

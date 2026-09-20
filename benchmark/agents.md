@@ -84,7 +84,7 @@ refusing the R one.
 
 Only code inside the pinned artifact answers for a binding, the host
 standard library included, so a `runtime/` module carries the arithmetic it
-needs rather than importing it. `adam-advs-growth-percentile` is the worked
+needs rather than importing it. `adam-advs-percentiles` is the worked
 example.
 
 An expected failure before a dataset is completed replaces the CSV with
@@ -106,9 +106,9 @@ dataset. Reserve this layout for benchmarks whose point is the layering itself;
 a single specification with shared parents keeps `spec.yaml`.
 
 Name the directory for what it derives, not for the construct it uses:
-`sdtm-vs-visit-study-day`, not `sdtm-vs-mapping-from`. The exception is an
+`sdtm-vs-study-day`, not `sdtm-vs-mapping-from`. The exception is an
 benchmark whose subject is the specification language itself: name it `spec-*`
-(`spec-inheritance`), and the gallery lists it under its own Specification
+(`schema-inheritance`), and the gallery lists it under its own Specification
 category rather than a data domain.
 
 ## The README describes data, not the specification
@@ -213,7 +213,7 @@ following a link out of the repository.
   `output.columns`; it stays available to dependents and to verifications.
 - Use `rows` when row construction changes the row count. A specification whose
   input already maps one-to-one to its output usually needs columns, not row
-  templates. `sdtm-vs-unit-standardization` is the deliberate exception, and it
+  templates. `sdtm-vs-units` is the deliberate exception, and it
   reorders its output to get per-test separation.
 - Add `row.group_by` only when one candidate row must be constructed from a
   driver group. In that mode aggregate row derivations summarize the group and
