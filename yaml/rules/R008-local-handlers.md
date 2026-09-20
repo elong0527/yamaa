@@ -11,8 +11,8 @@ applies_to: [source.missing, source.filter, source.multiple_matches,
 
 ## Intent
 
-Handle expected defects at the expression or result stage that encounters each
-defect. Handlers are not conditional mapping. Use `case`. There is no
+Handle expected defects at the expression or result stage where each defect
+occurs. Handlers are not conditional mapping. Use `case`. There is no
 standalone handler registry. Closed expression and derivation schemas determine
 which handlers are legal.
 
@@ -119,10 +119,9 @@ what each reducer returns for such a group.
 
 ## Result handlers
 
-**R008-17.** A derivation with conversion handling uses `value`
-to hold its normal expression. A bare expression is the R006 shorthand
-for that wrapper, so every derivation carries its expression in `value`
-once expanded.
+**R008-17.** A derivation with conversion handling uses `value` for its normal
+expression. A bare expression is the R006 shorthand for that wrapper. After
+expansion, every derivation carries its expression in `value`.
 
 **R008-18.** `conversion_failure` supplies a literal replacement only
 when conversion to the declared column type fails. Convert the replacement

@@ -31,12 +31,12 @@ Verifications reach across rows only in deliberately fixed ways. `unique` and
 one question per group. `all_or_none`, `implies`, and `assert` see one
 completed output row. No verification compares rows by order.
 
-## An ordered frame is not a shape this rule has
+## This rule has no ordered-frame assertion
 
-**R009-1.** State an ordered-series assertion as a derivation followed by
-a row-wise assertion in this rule. Use exactly one of three forms: the
-adjacent row, a partition or its history up to the current row, or a derived
-property at coarser keys or from an upstream specification.
+**R009-1.** State an ordered-series assertion as a derivation followed by a
+row-wise assertion in this rule. Use exactly one of three forms: the adjacent
+row, a partition or its history up to the current row, or a derived property at
+coarser keys or from an upstream specification.
 
 - **The adjacent row.** `row_value` under R007 places another row's value on
   the row and `assert` compares the two.
@@ -47,10 +47,10 @@ property at coarser keys or from an upstream specification.
   under R013 reduces a source relation, and its `between` narrowing keeps only
   the records at or before a current-row value, so a cumulative property of
   collected values reaches the row it must be asserted about.
-- **A derived property at coarser keys or from an upstream specification.** The specification that
+- **A derived property at coarser keys or upstream.** The specification that
   derives it publishes it, and R014's producing-specification link makes it an
-  ordinary source field of the specification that asserts over it, which is
-  the same split every other change of keys already uses.
+  ordinary source field of the specification that asserts over it. This is the
+  same split every other change of keys already uses.
 
 **R009-2.** A frame assertion enters this vocabulary only when an example
 needs that shape and the shape cannot be written as a producer and a consumer.
@@ -60,9 +60,9 @@ needs that shape and the shape cannot be written as a producer and a consumer.
 **R009-3.** A supplemental qualifier record pointing at its parent domain
 record, like every other cross-dataset link, is asserted by the derivation
 that produces the link rather than by a verification over the finished
-artifact. a lookup's `strict: true` rejects a value matching no record, and a
-`lookup` result carried by a column declaring `not_missing` does the
-same; `sdtm-suppmh-parent-linkage` links `IDVARVAL` to its medical-history
+artifact. A `lookup`'s `strict: true` rejects a value matching no record, and a
+`lookup` result carried by a `not_missing` column does the same.
+`sdtm-suppmh-parent-linkage` links `IDVARVAL` to its medical-history
 record that way.
 
 **R009-4.** The claim that every parent record has a supplemental record is
