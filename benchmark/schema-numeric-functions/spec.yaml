@@ -1,0 +1,99 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  SOURCE: input/adsl.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, AVAL, BVAL, CVAL, CEILVAL, FLOORVAL,
+    TRUNCVAL, EXPVAL, MODVAL, GREATESTVAL, LEASTVAL, COALESCEVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SOURCE.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SOURCE.USUBJID
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: SOURCE.AVAL
+
+  - name: BVAL
+    type: int
+    label: Secondary Analysis Value
+    derivation: SOURCE.BVAL
+
+  - name: CVAL
+    type: int
+    label: Tertiary Analysis Value
+    derivation: SOURCE.CVAL
+
+  - name: CEILVAL
+    type: int
+    label: Ceiling of Analysis Value
+    derivation:
+      compute:
+        expr: "CEIL(AVAL)"
+
+  - name: FLOORVAL
+    type: int
+    label: Floor of Analysis Value
+    derivation:
+      compute:
+        expr: "FLOOR(AVAL)"
+
+  - name: TRUNCVAL
+    type: int
+    label: Truncation of Analysis Value
+    derivation:
+      compute:
+        expr: "TRUNC(AVAL)"
+
+  - name: EXPVAL
+    type: float
+    label: Exponential of Analysis Value
+    derivation:
+      compute:
+        expr: "EXP(AVAL)"
+
+  - name: MODVAL
+    type: int
+    label: Remainder of Secondary Value Divided by Three
+    derivation:
+      compute:
+        expr: "MOD(BVAL, 3)"
+
+  - name: GREATESTVAL
+    type: int
+    label: Largest of Secondary, Tertiary, and Zero
+    derivation:
+      compute:
+        expr: "GREATEST(BVAL, CVAL, 0)"
+
+  - name: LEASTVAL
+    type: int
+    label: Smallest of Secondary, Tertiary, and Zero
+    derivation:
+      compute:
+        expr: "LEAST(BVAL, CVAL, 0)"
+
+  - name: COALESCEVAL
+    type: int
+    label: First Present Value Among Tertiary and Secondary
+    derivation:
+      compute:
+        expr: "COALESCE(CVAL, BVAL)"
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 5
+      max: 5
