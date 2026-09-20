@@ -1,0 +1,77 @@
+schema_version: "1.0"
+domain: ADLB
+keys:
+  - USUBJID
+  - PARAMCD
+input:
+  LB:
+    path: input/lb.csv
+    types:
+      USUBJID: str
+      LBTESTCD: str
+      LBSTRESN: float
+      LBNRIND: str
+base: LB
+output:
+  path: adlb.csv
+  columns:
+    - USUBJID
+    - PARAMCD
+    - AVAL
+    - ANRIND
+    - PARCAT1
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation:
+      value:
+        source:
+          variable: LB.USUBJID
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation:
+      value:
+        source:
+          variable: LB.LBTESTCD
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      value:
+        case:
+          - when: USUBJID = '01' AND PARAMCD = 'AST'
+            then:
+              literal: 31.0
+          - otherwise:
+              source:
+                variable: LB.LBSTRESN
+    verifications:
+      - not_missing:
+          severity: error
+    metadata:
+      analysis_role: analysis-value
+      source_system: central-laboratory
+      review_status: adjudicated
+  - name: ANRIND
+    type: str
+    label: Analysis Reference Range Indicator
+    derivation:
+      value:
+        mapping:
+          source: LB.LBNRIND
+          dict:
+            N: NORMAL
+            H: HIGH
+            L: LOW
+          case_sensitive: false
+          missing: null
+  - name: PARCAT1
+    type: str
+    label: Parameter Category
+    derivation:
+      value:
+        literal: CHEMISTRY
+metadata:
+  scope: study

@@ -155,8 +155,8 @@ structural constraints come from its schema declaration.
 | Field | Meaning |
 | --- | --- |
 | `expressions.first_available.sources` | Variables to test in order. |
-| `expressions.first_available.default` | Value returned when every source is missing. |
-| `Result` | Returns the value of the first source that is not missing. When every source is missing, returns the declared default, or missing when no default is declared. |
+| `expressions.first_available.missing` | Value returned when every source is missing. |
+| `Result` | Returns the value of the first source that is not missing. When every source is missing, returns the declared `missing`, or missing when none is declared. |
 
 <a id="req-1096"></a>
 
@@ -245,10 +245,10 @@ with no `when`/`then` item, more than one `otherwise` item, or an
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-baseline-flag-tied-date](../../../benchmark/negative-baseline-flag-tied-date/README.md).
-- [negative-baseline-value-multiple-flags](../../../benchmark/negative-baseline-value-multiple-flags/README.md).
-- [negative-previous-non-missing-non-variable-source](../../../benchmark/negative-previous-non-missing-non-variable-source/README.md).
-- [negative-variable-nested-expression](../../../benchmark/negative-variable-nested-expression/README.md).
+- [negative-tied-baseline](../../../benchmark/negative-tied-baseline/README.md).
+- [negative-multiple-baselines](../../../benchmark/negative-multiple-baselines/README.md).
+- [negative-previous-fixed](../../../benchmark/negative-previous-fixed/README.md).
+- [negative-variable-nested](../../../benchmark/negative-variable-nested/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

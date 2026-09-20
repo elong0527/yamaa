@@ -439,8 +439,8 @@ structural constraints come from its schema declaration.
 | `expressions.mapping.source` | String variable used as the dictionary key. |
 | `expressions.mapping.dict` | Source-value to result-value dictionary. |
 | `expressions.mapping.case_sensitive` | Compare exactly when true; use [Text values](../values/text.md) ASCII folding when false. |
-| `expressions.mapping.missing` | Value returned when source is missing. |
-| `expressions.mapping.unmapped` | Value returned when source has no dictionary entry. |
+| `expressions.mapping.missing` | Value returned when the source is missing or has no dictionary entry. |
+| `expressions.mapping.strict` | When true, a missing source or a source with no dictionary entry is an error instead of returning `missing`. Defaults to false. |
 | `Result` | Looks up a string source in an inline dictionary. Case-insensitive lookup folds ASCII a-z to A-Z under [Text values](../values/text.md); folded keys must be unique. |
 
 <a id="req-1111"></a>
@@ -581,11 +581,11 @@ validation with `ambiguous_dictionary`.
 
 Representative specifications, input data, and expected outcomes:
 
-- [adam-adsl-portable-text](../../../benchmark/adam-adsl-portable-text/README.md).
-- [negative-adsl-subject-reference](../../../benchmark/negative-adsl-subject-reference/README.md).
-- [negative-mapping-case-fold-collision](../../../benchmark/negative-mapping-case-fold-collision/README.md).
-- [negative-matches-unreadable-pattern](../../../benchmark/negative-matches-unreadable-pattern/README.md).
-- [negative-str-extract-undeclared-group](../../../benchmark/negative-str-extract-undeclared-group/README.md).
+- [adam-adsl-text](../../../benchmark/adam-adsl-text/README.md).
+- [negative-subject-reference](../../../benchmark/negative-subject-reference/README.md).
+- [negative-mapping-case-collision](../../../benchmark/negative-mapping-case-collision/README.md).
+- [negative-matches-bad-pattern](../../../benchmark/negative-matches-bad-pattern/README.md).
+- [negative-str-uncaptured-group](../../../benchmark/negative-str-uncaptured-group/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

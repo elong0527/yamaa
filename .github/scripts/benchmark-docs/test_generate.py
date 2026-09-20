@@ -14,7 +14,7 @@ HERE = Path(__file__).resolve().parent
 module_spec = importlib.util.spec_from_file_location("generate", HERE / "generate.py")
 generate = importlib.util.module_from_spec(module_spec)
 module_spec.loader.exec_module(generate)
-BENCHMARK = generate.BENCHMARKS / "adam-adae-death-outcome"
+BENCHMARK = generate.BENCHMARKS / "adam-adae-death"
 
 
 class DashboardContent(HTMLParser):
@@ -99,11 +99,11 @@ class DashboardTests(unittest.TestCase):
         self.assertTrue(all("hidden" not in pane for pane in content.file_panes))
 
     def test_readme_taxonomy_moves_above_title_and_short_summary_is_one_column(self):
-        benchmark = generate.BENCHMARKS / "adam-adae-serious-event-listing"
+        benchmark = generate.BENCHMARKS / "adam-adae-serious-listing"
         page = generate.render_benchmark(benchmark).decode("ascii")
         header, _, summary = page.partition('<section id="readme"')
         self.assertIn('<p class="eyebrow">ADaM.ADAE</p>', header)
-        self.assertIn("<h1>Serious event listing</h1>", header)
+        self.assertIn("<h1>Serious Event Listing</h1>", header)
         self.assertNotIn("text-transform: uppercase", page)
         self.assertIn('<div class="prose prose-short"', summary)
         self.assertNotIn("Standard:", summary.partition("</section>")[0])
@@ -196,7 +196,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(readme, "<p>Body.</p>\n")
 
     def test_negative_fixture_is_shown_without_repair(self):
-        benchmark = generate.BENCHMARKS / "negative-source-record-width"
+        benchmark = generate.BENCHMARKS / "negative-source-extra-field"
         page = generate.render_benchmark(benchmark).decode("ascii")
         self.assertIn("raw CSV", page)
         self.assertIn("No artifact is produced", page)
@@ -205,7 +205,7 @@ class DashboardTests(unittest.TestCase):
         )
 
     def test_negative_failure_has_banner_and_own_section(self):
-        benchmark = generate.BENCHMARKS / "negative-output-duplicate-subject"
+        benchmark = generate.BENCHMARKS / "negative-output-duplicate"
         page = generate.render_benchmark(benchmark).decode("ascii")
         self.assertIn(
             '<div class="result-rejected"><dt>result</dt><dd>Rejected</dd></div>', page
@@ -216,7 +216,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("<div><dt>phase</dt><dd>output</dd></div>", page)
         self.assertIn("<div><dt>requirement</dt><dd>REQ-0240</dd></div>", page)
         self.assertIn("<details><summary>expected/error.yaml</summary>", page)
-        base = "https://github.com/elong0527/yamaa/edit/main/benchmark/negative-output-duplicate-subject"
+        base = "https://github.com/elong0527/yamaa/edit/main/benchmark/negative-output-duplicate"
         self.assertIn(
             '<h2 id="expected-failure-heading">Expected failure</h2>'
             f'<a class="edit-button" href="{base}/expected/error.yaml">Edit</a>',
@@ -276,7 +276,7 @@ class DashboardTests(unittest.TestCase):
         page = generate.render_benchmark(BENCHMARK).decode("ascii")
         self.assertEqual(page.count('src="https://giscus.app/client.js"'), 1)
         self.assertIn(
-            'data-mapping="specific" data-term="yaml/examples/adam-adae-death-outcome" data-strict="1"',
+            'data-mapping="specific" data-term="yaml/examples/adam-adae-death" data-strict="1"',
             page,
         )
         self.assertIn('data-repo="elong0527/yamaa"', page)
@@ -312,7 +312,7 @@ class DashboardTests(unittest.TestCase):
             page,
         )
         self.assertNotIn('id="code-select"', page)
-        codeless = generate.BENCHMARKS / "negative-column-type-unknown"
+        codeless = generate.BENCHMARKS / "negative-ambiguous-type"
         plain = generate.render_benchmark(codeless).decode("ascii")
         self.assertNotIn('id="code"', plain)
 
@@ -332,7 +332,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('id="code-pane-figure-r" data-filename="figure.R" hidden>', panel)
 
     def test_multi_level_spec_renders_panes_with_resolved_default(self):
-        benchmark = generate.BENCHMARKS / "spec-inheritance"
+        benchmark = generate.BENCHMARKS / "schema-inheritance"
         entry, chain = generate.benchmark_entry(benchmark)
         self.assertEqual(entry.name, "spec_study.yaml")
         self.assertEqual(
@@ -352,7 +352,7 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertIn("Choose specification document", page)
         self.assertIn('<span class="panel-caption">4 spec files</span>', page)
-        base = "https://github.com/elong0527/yamaa/edit/main/benchmark/spec-inheritance"
+        base = "https://github.com/elong0527/yamaa/edit/main/benchmark/schema-inheritance"
         for path in [
             "spec_organization.yaml",
             "spec_compound.yaml",
@@ -364,7 +364,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("edit.href = active.dataset.editUrl", page)
         self.assertNotIn('aria-label="expected/spec_resolved.yaml"', page)
         self.assertNotIn('id="section-select"', page)
-        base = "https://github.com/elong0527/yamaa/edit/main/benchmark/spec-inheritance"
+        base = "https://github.com/elong0527/yamaa/edit/main/benchmark/schema-inheritance"
         for target in (
             "spec_organization.yaml",
             "spec_compound.yaml",
@@ -382,8 +382,8 @@ class DashboardTests(unittest.TestCase):
             page,
         )
 
-    def test_spec_prefixed_benchmark_gets_its_own_gallery_category(self):
-        benchmark = generate.BENCHMARKS / "spec-inheritance"
+    def test_schema_prefixed_benchmark_gets_its_own_gallery_category(self):
+        benchmark = generate.BENCHMARKS / "schema-inheritance"
         title, category = generate.describe_benchmark(benchmark)
         self.assertEqual(title, "Spec Inheritance")
         self.assertEqual(category, "Specification")
@@ -393,7 +393,7 @@ class DashboardTests(unittest.TestCase):
             "ascii"
         )
         self.assertNotIn("badge/Dashboard", page)
-        self.assertIn("Create DM from EDC extract", page)
+        self.assertIn("Basic Demographics", page)
 
     def test_readme_lifecycle_extracts_state_and_badge_url(self):
         text = (
@@ -441,7 +441,7 @@ class DashboardTests(unittest.TestCase):
             finalized,
         )
         draft = generate.render_benchmark(
-            generate.BENCHMARKS / "adam-adlb-order-sensitive-sum"
+            generate.BENCHMARKS / "adam-adlb-ordered-sum"
         ).decode("ascii")
         self.assertIn(
             '<img src="https://img.shields.io/badge/Lifecycle-draft-lightgrey"', draft

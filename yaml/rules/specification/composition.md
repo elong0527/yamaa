@@ -196,7 +196,7 @@ A schema default is materialized on the composed value rather than on each
 contribution, so a later layer that never mentions a field cannot replace what
 an earlier layer wrote there with this bundle's default. Thus a child may
 change only `AVAL.label`, add one key to an inherited `AVAL.metadata`, or add
-`conversion_failure` to an inherited `AVAL.derivation` without restating the expression,
+`missing` to an inherited `AVAL.derivation` without restating the expression,
 while a child derivation naming a different expression keyword replaces the
 whole derivation.
 
@@ -223,7 +223,7 @@ field, and composing a `columns` member does not move that boundary. Below it a
 null keeps its [Schema language](../reference/schema-language.md) meaning at every depth composition reaches. In particular,
 `derivation: {literal: null}` replaces the derivation with a literal missing
 value; the replacement does not clear `derivation`. Likewise
-`source.missing`, `mapping.unmapped`, and `conversion_failure` declare the
+`source.missing`, `mapping.missing`, and a result wrapper's `missing` declare the
 missing value [Local handlers](../execution/handlers.md) substitutes, which [REQ-0344](../execution/handlers.md#req-0344) distinguishes from omitting the
 field. A layer therefore clears a whole member field and restates what it
 keeps; it does not remove one key of an inherited mapping or one field of an
@@ -425,11 +425,11 @@ constraint, with contributing provenance included in the diagnostic.
 
 Representative specifications, input data, and expected outcomes:
 
-- [spec-inheritance](../../../benchmark/spec-inheritance/README.md).
-- [negative-adsl-cyclic-parent](../../../benchmark/negative-adsl-cyclic-parent/README.md).
-- [negative-adsl-inherited-output](../../../benchmark/negative-adsl-inherited-output/README.md).
-- [negative-adsl-invalid-parent-clear](../../../benchmark/negative-adsl-invalid-parent-clear/README.md).
-- [negative-adsl-parent-version-mismatch](../../../benchmark/negative-adsl-parent-version-mismatch/README.md).
+- [schema-inheritance](../../../benchmark/schema-inheritance/README.md).
+- [negative-cyclic-parent](../../../benchmark/negative-cyclic-parent/README.md).
+- [negative-inherited-output](../../../benchmark/negative-inherited-output/README.md).
+- [negative-property-clear](../../../benchmark/negative-property-clear/README.md).
+- [negative-version-mismatch](../../../benchmark/negative-version-mismatch/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

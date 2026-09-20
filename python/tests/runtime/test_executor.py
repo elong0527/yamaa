@@ -39,7 +39,7 @@ REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
 EXAMPLES = REPOSITORY_ROOT / "benchmark"
 DM_EXAMPLE = EXAMPLES / "sdtm-dm-basic"
-WARNING_EXAMPLE = EXAMPLES / "adam-adsl-age-quality-review"
+WARNING_EXAMPLE = EXAMPLES / "adam-adsl-age-quality"
 
 
 def dm_inputs() -> tuple[object, dict[str, object]]:
@@ -114,8 +114,7 @@ def test_the_basic_dm_specification_derives_four_ordered_typed_rows() -> None:
         == (DM_EXAMPLE / "expected/dm.csv").read_bytes()
     )
     assert [(item.spec_path, item.count) for item in result.handler_counts] == [
-        ("columns.SEX.derivation.mapping.missing", 1),
-        ("columns.SEX.derivation.mapping.unmapped", 1),
+        ("columns.SEX.derivation.mapping.missing", 2),
     ]
 
 
@@ -490,7 +489,7 @@ def test_valid_but_unimplemented_operations_have_unsupported_status() -> None:
 
 
 def test_invalid_column_type_fails_before_any_source_is_ingested() -> None:
-    example = EXAMPLES / "negative-column-type-unknown"
+    example = EXAMPLES / "negative-ambiguous-type"
     resources = ProjectResources(example)
 
     with pytest.raises(SpecificationError) as raised:
@@ -510,7 +509,7 @@ def test_invalid_column_type_fails_before_any_source_is_ingested() -> None:
 
 
 def test_output_dataset_self_reference_fails_before_ingestion() -> None:
-    example = EXAMPLES / "negative-source-output-self-reference"
+    example = EXAMPLES / "negative-source-self-reference"
     resources = ProjectResources(example)
     specification = load_specification(example / "spec.yaml", SCHEMA_ROOT).specification
     provider_called = False
@@ -568,7 +567,7 @@ def test_source_provider_diagnostics_enter_the_execution_result() -> None:
 # what tells the output gate and the derivation failure apart.
 @pytest.mark.parametrize(
     "name",
-    ["negative-output-duplicate-subject", "negative-keys-conflicting-values"],
+    ["negative-output-duplicate", "negative-keys-conflict"],
 )
 def test_a_committed_grain_error_contract_is_reproduced(name: str) -> None:
     directory = EXAMPLES / name

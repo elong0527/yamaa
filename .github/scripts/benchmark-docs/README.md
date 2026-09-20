@@ -25,7 +25,7 @@ previous and next links of the full gallery, and the gallery itself is left
 untouched:
 
 ```sh
-uv run --with-requirements .github/scripts/benchmark-docs/requirements.txt python .github/scripts/benchmark-docs/generate.py adam-adae-death-outcome
+uv run --with-requirements .github/scripts/benchmark-docs/requirements.txt python .github/scripts/benchmark-docs/generate.py adam-adae-death
 ```
 
 With no benchmark names, regenerate the dashboards already present in

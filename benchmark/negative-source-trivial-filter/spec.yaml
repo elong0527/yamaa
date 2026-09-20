@@ -1,0 +1,45 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+
+input:
+  ODM: input/odm.csv
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, ARM, ACTARM]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: DM
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: ODM.StudyOID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: ODM.SubjectKey
+
+  - name: ARM
+    type: str
+    label: Description of Planned Arm
+    derivation:
+      first_available:
+        sources:
+          - filter: ODM.ItemOID = 'IT.DM.ARM'
+            variable: ODM.Value
+        missing: Unassigned
+
+  - name: ACTARM
+    type: str
+    label: Description of Actual Arm
+    derivation:
+      source:
+        filter: ODM.ItemOID = 'IT.DM.ARM'
+        variable: ARM

@@ -1,0 +1,33 @@
+schema_version: "1.0"
+domain: ADLB
+keys: [STUDYID, USUBJID, PARAMCD]
+input:
+  LB: input/lb.csv
+
+output:
+  path: adlb.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: LB.USUBJID
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: LB.LBTESTCD
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      value:
+        source: LB.LBSTRESC
+      strict: true

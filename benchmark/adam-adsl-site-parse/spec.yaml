@@ -1,0 +1,63 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID]
+input:
+  DM: input/dm.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, SUBJID, SITEIDP, SITEID, SUBJREF]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: DM.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  - name: SUBJID
+    type: str
+    label: Subject Identifier for the Study
+    derivation: DM.SUBJID
+
+  - name: SITEIDP
+    type: str
+    label: Parsed Study Site Identifier
+    derivation:
+      str_extract:
+        source: USUBJID
+        pattern: '^CATH-([^-]+)-[0-9]{4}$'
+        group: 1
+        missing: null
+        no_match: null
+
+  - name: SITEID
+    type: str
+    label: Study Site Identifier
+    derivation:
+      first_available:
+        sources: [SITEIDP, DM.SITEID]
+        missing: UNKNOWN
+    verifications:
+      not_missing: {}
+
+  - name: SUBJREF
+    type: str
+    label: Subject Display Reference
+    derivation:
+      str_template:
+        template: "{SITEID}:{SUBJID}"
+        missing: UNKNOWN
+    verifications:
+      not_missing: {}
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 4
+      max: 4

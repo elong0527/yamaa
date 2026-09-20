@@ -30,22 +30,18 @@ REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
 EXAMPLES = REPOSITORY_ROOT / "benchmark"
 POSITIVE = "sdtm-dm-basic"
-NEGATIVE = "negative-column-type-unknown"
+NEGATIVE = "negative-ambiguous-type"
 # A specification that calls a project function; with the project root it
 # carries removed, the call is a logical one no implementation answers.
 PORTABLE = "adam-adsl-bmi-function"
 
 # What the engine reports for every handler path sdtm-dm-basic declares.
+# The one `missing` handler answers both the missing and the unlisted input.
 POSITIVE_HANDLERS = (
     HandlerObservation(
         spec_path="columns.SEX.derivation.mapping.missing",
         handler="missing",
-        count=1,
-    ),
-    HandlerObservation(
-        spec_path="columns.SEX.derivation.mapping.unmapped",
-        handler="unmapped",
-        count=1,
+        count=2,
     ),
 )
 
@@ -271,7 +267,7 @@ class TestHandlerCountMutations:
 
     def test_a_drifted_count_fails(self, tmp_path: Path) -> None:
         required = list(POSITIVE_HANDLERS)
-        required[0] = required[0].model_copy(update={"count": 2})
+        required[0] = required[0].model_copy(update={"count": 3})
 
         verdict = compare_example(
             run(EXAMPLES / POSITIVE, tmp_path),

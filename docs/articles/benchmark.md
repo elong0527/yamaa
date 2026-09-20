@@ -75,11 +75,10 @@ records come out.
           variable: ODM.Value
         dict: {Male: M, Female: F}
         missing: U
-        unmapped: U
 ```
 
 Now the README's sentences have addresses. "Not collected and not recognised
-both become U" is `missing: U` beside `unmapped: U`.
+both become U" is the one `missing: U` knob answering both conditions.
 
 **Step 5 -- `expected/dm.csv`.** Confirm your reading against the artifact.
 
@@ -101,13 +100,13 @@ After those three, pick by the question you have:
 | How do I build one record per collected result? | `sdtm-lb-findings` |
 | How does one collected record become several analysis records? | `adam-adlb-bds` -- two row templates sharing a filter |
 | How do I carry ADSL values onto every event? | `adam-adae-treatment-emergent` -- cross-dataset `source` on the applicable keys |
-| How do I make several columns read **one** record? | `adam-adae-death-outcome` -- a named `intermediates` entry |
+| How do I make several columns read **one** record? | `adam-adae-death` -- a named `intermediates` entry |
 | How do I flag the baseline record and broadcast its value? | `adam-adlb-bds` -- `baseline_flag` then `baseline_value` |
 | How do I total a subject's exposure records? | `adam-adex-cumulative-dose` -- `aggregate: "SUM(EX.EXDOSE)"` |
 | How do I impute a partial date and flag what was imputed? | `adam-adae-partial-dates` -- `date_impute` beside `date_precision` |
-| How do I translate one value into three vocabularies? | `adam-adsl-mapping` -- three `mapping` expressions over one source |
-| Where does define.xml metadata go, and what gets enforced? | `sdtm-dm-metadata-contract` -- `metadata` for documentation, `verifications` for enforcement |
-| How do corporate, compound and study layers compose? | `spec-inheritance` -- three levels, `expected/spec_resolved.yaml` records the outcome |
+| How do I translate one value into three vocabularies? | `adam-adsl-demographics` -- three `mapping` expressions over one source |
+| Where does define.xml metadata go, and what gets enforced? | `sdtm-dm-metadata` -- `metadata` for documentation, `verifications` for enforcement |
+| How do corporate, compound and study layers compose? | `schema-inheritance` -- three levels, `expected/spec_resolved.yaml` records the outcome |
 | When should a calculation leave the specification? | `adam-adsl-bmi-function` vs `adam-adsl-bmi-compute` -- closed expression vs versioned project function |
 
 The full construct-by-construct index lives in the suite's own
@@ -129,10 +128,10 @@ Reading them by family is faster than reading them alphabetically:
 |---|---|
 | `negative-compute-*` | The closed `compute` grammar: no aggregates, no comparisons, no division by zero |
 | `negative-date-impute-*`, `negative-datetime-*` | Every unusable temporal input has one defined outcome |
-| `negative-record-lookup-*`, `negative-source-duplicate-right-key` | Matching must be complete, paired, unique, and ordered when it chooses |
+| `negative-record-lookup-*`, `negative-source-duplicate-key` | Matching must be complete, paired, unique, and ordered when it chooses |
 | `negative-keys-*`, `negative-output-*` | Keys are an assertion, not documentation |
-| `negative-adsl-*parent*`, `negative-adsl-inherited-output` | Inheritance failures: cycles, version mismatches, remote paths, who owns `output` |
-| `negative-adex-single-dose-expansion`, `negative-adlb-computed-parameter` | Where the language deliberately stops, and what to do upstream instead |
+| `negative-adsl-*parent*`, `negative-inherited-output` | Inheritance failures: cycles, version mismatches, remote paths, who owns `output` |
+| `negative-dose-expansion`, `negative-adlb-computed-param` | Where the language deliberately stops, and what to do upstream instead |
 
 An example that **cannot express something** is recorded as a design finding in
 the issue tracker, so the last family is also the honest inventory of what the

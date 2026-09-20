@@ -1,0 +1,33 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [STUDYID, USUBJID, VSSEQ]
+input:
+  VS: input/vs.csv
+
+output:
+  path: advs.csv
+  columns: [STUDYID, USUBJID, VSSEQ, SEVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: VS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: VS.USUBJID
+
+  - name: VSSEQ
+    type: int
+    label: Sequence Number
+    derivation: VS.VSSEQ
+
+  - name: SEVAL
+    type: int
+    label: Severity Value
+    derivation:
+      first_available:
+        sources: [VS.SEVAL, SEVAL]
+        missing: 0

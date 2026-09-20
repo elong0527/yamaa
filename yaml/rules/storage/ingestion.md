@@ -165,7 +165,7 @@ after parsing as numbers.
 <a id="req-0527"></a>
 
 **REQ-0527.** An ingestion failure is not a conversion failure.
-`conversion_failure` is declared on a column and answers for a value the
+`missing` is declared on a result wrapper and answers for a value the
 derivation produced, as [Execution lifecycle](../execution/lifecycle.md) and [Local handlers](../execution/handlers.md) define. A stored value that does not
 match its field's declared type is rejected before any derivation runs. No
 handler answers for the rejected value. A specification that wants to see such
@@ -341,10 +341,10 @@ condition is decided while the snapshot is read and reports under the
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-adsl-randomization-date-retyped](../../../benchmark/negative-adsl-randomization-date-retyped/README.md).
-- [negative-ingest-unparseable-field](../../../benchmark/negative-ingest-unparseable-field/README.md).
-- [negative-source-missing-sentinel](../../../benchmark/negative-source-missing-sentinel/README.md).
-- [negative-source-unknown-profile](../../../benchmark/negative-source-unknown-profile/README.md).
+- [negative-redefined-date](../../../benchmark/negative-redefined-date/README.md).
+- [negative-ingest-unit](../../../benchmark/negative-ingest-unit/README.md).
+- [negative-source-na-age](../../../benchmark/negative-source-na-age/README.md).
+- [negative-source-unknown-format](../../../benchmark/negative-source-unknown-format/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

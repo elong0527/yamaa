@@ -107,7 +107,7 @@ contract allows missing through `may_return_missing: true`.
 
 **REQ-0009.** At [Execution lifecycle](../execution/lifecycle.md)'s conversion stage, implementations must apply the
 matrix below deterministically. A missing result stays missing without
-attempting conversion and must not trigger `conversion_failure`.
+attempting conversion and must not trigger the `missing` handler.
 
 <a id="req-0010"></a>
 
@@ -165,8 +165,8 @@ schema validation under [Schema language](../reference/schema-language.md)'s `va
 <a id="req-0013"></a>
 
 **REQ-0013.** A `fail` cell, unsuccessful parse, or undefined conversion must
-raise conversion failure. Apply the [Local handlers](../execution/handlers.md) `conversion_failure` handler when
-declared; otherwise the failure is fatal under [Execution lifecycle](../execution/lifecycle.md). Implementations must
+raise conversion failure. Apply the [Local handlers](../execution/handlers.md) `missing` handler when
+declared, unless `strict: true`; otherwise the failure is fatal under [Execution lifecycle](../execution/lifecycle.md). Implementations must
 not select an unspecified representation or silently substitute missing.
 Numeric range and integrality failures are defined by [REQ-0021](numbers.md#req-0021).
 
@@ -185,11 +185,11 @@ that are not mutually comparable: fail rather than convert an operand.
 
 Representative specifications, input data, and expected outcomes:
 
-- [adam-adsl-non-finite-values](../../../benchmark/adam-adsl-non-finite-values/README.md).
-- [negative-column-type-unknown](../../../benchmark/negative-column-type-unknown/README.md).
-- [negative-conversion-unparseable-number](../../../benchmark/negative-conversion-unparseable-number/README.md).
-- [negative-greatest-incomparable-sources](../../../benchmark/negative-greatest-incomparable-sources/README.md).
-- [negative-least-incomparable-sources](../../../benchmark/negative-least-incomparable-sources/README.md).
+- [adam-adsl-non-finite](../../../benchmark/adam-adsl-non-finite/README.md).
+- [negative-ambiguous-type](../../../benchmark/negative-ambiguous-type/README.md).
+- [negative-number-below-limit](../../../benchmark/negative-number-below-limit/README.md).
+- [negative-greatest-mixed](../../../benchmark/negative-greatest-mixed/README.md).
+- [negative-least-mixed](../../../benchmark/negative-least-mixed/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

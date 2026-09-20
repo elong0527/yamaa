@@ -1,0 +1,114 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  RAND: input/rand.csv
+  EX: input/ex.csv
+base: RAND
+
+output:
+  path: dm.csv
+  columns: [DOMAIN, STUDYID, USUBJID, ARMCD, ARM, ACTARMCD, ACTARM, ARMNRS, ACTARMUD]
+
+columns:
+  - name: DOMAIN
+    type: str
+    label: Domain Abbreviation
+    derivation:
+      literal: DM
+
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: RAND.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: RAND.USUBJID
+
+  - name: ARMCD
+    type: str
+    label: Planned Arm Code
+    derivation: RAND.RANDCD
+
+  - name: ARM
+    type: str
+    label: Description of Planned Arm
+    derivation: RAND.RAND
+
+  - name: SCRNFL
+    type: str
+    label: Screen Failure Flag as Collected
+    derivation: RAND.SCRNFL
+
+  - name: EXTRT1
+    type: str
+    label: Treatment Received as Collected
+    derivation: EX.EXTRT
+  - name: ACTARMCD
+    type: str
+    label: Actual Arm Code
+    derivation:
+      mapping:
+        source: EXTRT1
+        dict:
+          PLACEBO: PBO
+          VITAMIN D3: TRT
+        missing: null
+
+  - name: ACTARM
+    type: str
+    label: Description of Actual Arm
+    derivation:
+      mapping:
+        source: EXTRT1
+        dict:
+          PLACEBO: Placebo
+          VITAMIN D3: Vitamin D3
+        missing: null
+
+  - name: ACTARMUD
+    type: str
+    label: Description of Unplanned Actual Arm
+    derivation:
+      case:
+        - when: "EXTRT1 IS NOT NULL AND ACTARMCD IS NULL"
+          then:
+            source: EXTRT1
+
+  - name: ARMNRS
+    type: str
+    label: Reason Arm and/or Actual Arm is Null
+    derivation:
+      case:
+        - when: "ARMCD IS NULL AND ACTARMCD IS NULL AND SCRNFL = 'Y'"
+          then:
+            literal: SCREEN FAILURE
+        - when: "ARMCD IS NULL AND ACTARMCD IS NULL"
+          then:
+            literal: NOT ASSIGNED
+        - when: "ARMCD IS NOT NULL AND ACTARMCD IS NULL AND ACTARMUD IS NULL"
+          then:
+            literal: NOT TREATED
+
+verifications:
+  - unique:
+      columns: [STUDYID, USUBJID]
+  - row_count:
+      min: 6
+      max: 6
+  - all_or_none:
+      id: planned-arm-completeness
+      columns: [ARMCD, ARM]
+  - all_or_none:
+      id: actual-arm-completeness
+      columns: [ACTARMCD, ACTARM]
+  - implies:
+      id: unplanned-treatment-leaves-actual-arm-blank
+      when: "ACTARMUD IS NOT NULL"
+      then: "ACTARMCD IS NULL"
+  - implies:
+      id: null-arm-reason-marks-a-null-arm
+      when: "ARMNRS IS NOT NULL"
+      then: "ARMCD IS NULL OR ACTARMCD IS NULL"

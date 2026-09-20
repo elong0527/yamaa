@@ -237,7 +237,8 @@ or row ID: fail.
 
 <a id="req-0239"></a>
 
-**REQ-0239.** A conversion failure with no `conversion_failure` handler:
+**REQ-0239.** A conversion failure with no `missing` on the result wrapper
+and without `strict: true`:
 fail.
 
 <a id="req-0240"></a>
@@ -272,8 +273,8 @@ artifact, and the previous one is unchanged.
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-keys-internal-column](../../../benchmark/negative-keys-internal-column/README.md).
-- [negative-output-duplicate-subject](../../../benchmark/negative-output-duplicate-subject/README.md).
+- [negative-keys-internal](../../../benchmark/negative-keys-internal/README.md).
+- [negative-output-duplicate](../../../benchmark/negative-output-duplicate/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared
