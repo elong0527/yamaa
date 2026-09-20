@@ -2,16 +2,15 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/spec-source-binding.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Goal:** show how each source reference in a derivation resolves:
-a qualified name reads its named dataset, and a bare name reads the
-output columns.
+**Goal:** show how each source reference resolves: a qualified name
+reads its named dataset, and a bare name reads the output columns.
 
 **Input:** one `spec.yaml` declaring two datasets. `VS` carries the
 vital-signs records that drive the output rows: subject (`USUBJID`),
 test (`VSTESTCD`), sequence (`VSSEQ`), result (`VSSTRESN`), and units
 (`VSSTRESU`). `DM` carries one row per subject with sex, age, and race.
 
-**Derivations:**
+**Bindings:**
 
 - `VS.USUBJID`, `VS.VSTESTCD`, `VS.VSSEQ`, `VS.VSSTRESN`, and
   `VS.VSSTRESU` read the current vital-signs record straight through;
@@ -22,7 +21,7 @@ test (`VSTESTCD`), sequence (`VSSEQ`), result (`VSSTRESN`), and units
 
 **Note:** a qualified reference always names the dataset it reads, so
 `DM` and `VS` may carry same-named variables without colliding; a bare
-name always addresses the output columns, so a derivation can build on
+name always addresses the output columns, so one column can build on
 an earlier column.
 
 **Standard:** ADaM | **Domain:** ADVS
