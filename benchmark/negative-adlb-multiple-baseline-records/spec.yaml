@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD, ADT]
 input:
-  ADLBIN: {path: input/adlb_pre.csv, types: {AVAL: float, ADT: date}}
+  ADLB_RAW: {path: input/adlb_raw.csv, types: {AVAL: float, ADT: date}}
 
 output:
   path: adlb.csv
@@ -12,32 +12,32 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADLBIN.STUDYID
+    derivation: ADLB_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADLBIN.USUBJID
+    derivation: ADLB_RAW.USUBJID
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: ADLBIN.PARAMCD
+    derivation: ADLB_RAW.PARAMCD
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation: ADLBIN.ADT
+    derivation: ADLB_RAW.ADT
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation: ADLBIN.AVAL
+    derivation: ADLB_RAW.AVAL
 
   - name: ABLFL
     type: str
     label: Baseline Record Flag
-    derivation: ADLBIN.ABLFL
+    derivation: ADLB_RAW.ABLFL
     verifications:
       allowed_values:
         values: [Y]

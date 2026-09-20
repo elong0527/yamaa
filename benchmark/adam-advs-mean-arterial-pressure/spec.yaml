@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADVS
 keys: [STUDYID, USUBJID, VISIT, PARAMCD]
 input:
-  ADVSIN: {path: input/advs.csv, types: {AVAL: float}}
+  ADVS_RAW: {path: input/advs.csv, types: {AVAL: float}}
 
 output:
   path: advs.csv
@@ -48,36 +48,36 @@ columns:
 rows:
   - id: collected
     derivations:
-      STUDYID: {source: ADVSIN.STUDYID}
-      USUBJID: {source: ADVSIN.USUBJID}
-      PARAMCD: {source: ADVSIN.PARAMCD}
-      PARAM: {source: ADVSIN.PARAM}
+      STUDYID: {source: ADVS_RAW.STUDYID}
+      USUBJID: {source: ADVS_RAW.USUBJID}
+      PARAMCD: {source: ADVS_RAW.PARAMCD}
+      PARAM: {source: ADVS_RAW.PARAM}
       SYSBP_VAL: {literal: null}
       DIABP_VAL: {literal: null}
-      AVAL: {source: ADVSIN.AVAL}
-      VISIT: {source: ADVSIN.VISIT}
+      AVAL: {source: ADVS_RAW.AVAL}
+      VISIT: {source: ADVS_RAW.VISIT}
       DTYPE: {literal: null}
 
   - id: derived_map
-    group_by: [ADVSIN.STUDYID, ADVSIN.USUBJID, ADVSIN.VISIT]
+    group_by: [ADVS_RAW.STUDYID, ADVS_RAW.USUBJID, ADVS_RAW.VISIT]
     filter: "SYSBP_VAL IS NOT NULL AND DIABP_VAL IS NOT NULL"
     derivations:
-      STUDYID: {source: ADVSIN.STUDYID}
-      USUBJID: {source: ADVSIN.USUBJID}
+      STUDYID: {source: ADVS_RAW.STUDYID}
+      USUBJID: {source: ADVS_RAW.USUBJID}
       PARAMCD: {literal: MAP}
       PARAM: {literal: Mean Arterial Pressure (mmHg)}
       SYSBP_VAL:
         aggregate:
-          filter: "ADVSIN.PARAMCD = 'SYSBP'"
-          expr: "ONLY(ADVSIN.AVAL)"
+          filter: "ADVS_RAW.PARAMCD = 'SYSBP'"
+          expr: "ONLY(ADVS_RAW.AVAL)"
       DIABP_VAL:
         aggregate:
-          filter: "ADVSIN.PARAMCD = 'DIABP'"
-          expr: "ONLY(ADVSIN.AVAL)"
+          filter: "ADVS_RAW.PARAMCD = 'DIABP'"
+          expr: "ONLY(ADVS_RAW.AVAL)"
       AVAL:
         compute:
           expr: "(2 * DIABP_VAL + SYSBP_VAL) / 3"
-      VISIT: {source: ADVSIN.VISIT}
+      VISIT: {source: ADVS_RAW.VISIT}
       DTYPE: {literal: CALCULATION}
 
 verifications:

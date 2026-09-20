@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADLB
 keys: [USUBJID, VISIT, PARAMCD]
 input:
-  ADLBIN: {path: input/adlb.csv, types: {AVAL: float}}
+  ADLB_RAW: {path: input/adlb.csv, types: {AVAL: float}}
 
 output:
   path: adlb.csv
@@ -48,39 +48,39 @@ columns:
 rows:
   - id: collected
     derivations:
-      USUBJID: {source: ADLBIN.USUBJID}
-      VISIT: {source: ADLBIN.VISIT}
-      PARAMCD: {source: ADLBIN.PARAMCD}
-      PARAM: {source: ADLBIN.PARAM}
+      USUBJID: {source: ADLB_RAW.USUBJID}
+      VISIT: {source: ADLB_RAW.VISIT}
+      PARAMCD: {source: ADLB_RAW.PARAMCD}
+      PARAM: {source: ADLB_RAW.PARAM}
       WBCVAL: {literal: null}
       LYMLEVAL: {literal: null}
       EXISTING_ABS_COUNT: {literal: null}
-      AVAL: {source: ADLBIN.AVAL}
+      AVAL: {source: ADLB_RAW.AVAL}
       DTYPE: {literal: null}
 
   - id: derived_lymph
-    group_by: [ADLBIN.USUBJID, ADLBIN.VISIT]
+    group_by: [ADLB_RAW.USUBJID, ADLB_RAW.VISIT]
     filter: >-
       WBCVAL IS NOT NULL
       AND LYMLEVAL IS NOT NULL
       AND EXISTING_ABS_COUNT IS NULL
     derivations:
-      USUBJID: {source: ADLBIN.USUBJID}
-      VISIT: {source: ADLBIN.VISIT}
+      USUBJID: {source: ADLB_RAW.USUBJID}
+      VISIT: {source: ADLB_RAW.VISIT}
       PARAMCD: {literal: LYMPH}
       PARAM: {literal: Lymphocytes Abs (10^9/L)}
       WBCVAL:
         aggregate:
-          filter: "ADLBIN.PARAMCD = 'WBC'"
-          expr: "ONLY(ADLBIN.AVAL)"
+          filter: "ADLB_RAW.PARAMCD = 'WBC'"
+          expr: "ONLY(ADLB_RAW.AVAL)"
       LYMLEVAL:
         aggregate:
-          filter: "ADLBIN.PARAMCD = 'LYMLE'"
-          expr: "ONLY(ADLBIN.AVAL)"
+          filter: "ADLB_RAW.PARAMCD = 'LYMLE'"
+          expr: "ONLY(ADLB_RAW.AVAL)"
       EXISTING_ABS_COUNT:
         aggregate:
-          filter: "ADLBIN.PARAMCD = 'LYMPH'"
-          expr: "COUNT(ADLBIN.*)"
+          filter: "ADLB_RAW.PARAMCD = 'LYMPH'"
+          expr: "COUNT(ADLB_RAW.*)"
       AVAL:
         compute:
           expr: "WBCVAL * LYMLEVAL"
