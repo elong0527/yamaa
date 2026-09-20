@@ -35,4 +35,3 @@ columns:
           PR: PARTIAL RESPONSE
           SD: STABLE DISEASE
           PD: PROGRESSIVE DISEASE
-        strict: true

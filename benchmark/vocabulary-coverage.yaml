@@ -9,7 +9,6 @@ version: "1.0"
 coverage:
   aggregate: [negative-sum-non-numeric]
   baseline_flag: [negative-tied-baseline]
-  baseline_value: [negative-multiple-baselines]
   case: [negative-review-arithmetic]
   first_available: [negative-first-available-self]
   compute: [negative-formula-flag]

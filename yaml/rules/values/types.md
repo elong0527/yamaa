@@ -107,7 +107,7 @@ contract allows missing through `may_return_missing: true`.
 
 **REQ-0009.** At [Execution lifecycle](../execution/lifecycle.md)'s conversion stage, implementations must apply the
 matrix below deterministically. A missing result stays missing without
-attempting conversion and must not trigger the `missing` handler.
+attempting conversion and must not trigger `conversion_failure`.
 
 <a id="req-0010"></a>
 
@@ -165,8 +165,8 @@ schema validation under [Schema language](../reference/schema-language.md)'s `va
 <a id="req-0013"></a>
 
 **REQ-0013.** A `fail` cell, unsuccessful parse, or undefined conversion must
-raise conversion failure. Apply the [Local handlers](../execution/handlers.md) `missing` handler when
-declared, unless `strict: true`; otherwise the failure is fatal under [Execution lifecycle](../execution/lifecycle.md). Implementations must
+raise conversion failure. Apply the [Local handlers](../execution/handlers.md) `conversion_failure` handler when
+declared; otherwise the failure is fatal under [Execution lifecycle](../execution/lifecycle.md). Implementations must
 not select an unspecified representation or silently substitute missing.
 Numeric range and integrality failures are defined by [REQ-0021](numbers.md#req-0021).
 

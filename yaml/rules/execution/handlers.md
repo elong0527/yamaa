@@ -38,14 +38,15 @@ unless its behavior says otherwise:
 |---|---|---|
 | bind | `source.missing` | Absent source variable or ODM item |
 | join | `source.multiple_matches` | Choose one `source.filter` result |
-| mapping | `missing` | Missing input, or non-missing value with no mapping |
+| mapping | `missing` | Missing mapping input |
+| mapping | `unmapped` | Non-missing value with no mapping |
 | cut | `missing` | Missing numeric input |
 | extract | `missing` | Missing string input |
 | extract | `no_match` | Non-missing string does not match |
 | template | `missing` | Any placeholder value is missing |
 | impute | `date_impute.missing`, `date_precision.missing` | See [Temporal values](../values/temporal.md) |
 | impute | `date_impute.invalid`, `date_precision.invalid` | See [Temporal values](../values/temporal.md) |
-| convert | `missing` | Failed output conversion |
+| convert | `conversion_failure` | Failed output conversion |
 
 <a id="req-0343"></a>
 
@@ -55,8 +56,7 @@ handler value is a literal.
 <a id="req-0344"></a>
 
 **REQ-0344.** Omitting an applicable handler field makes its condition
-fatal, except where the owning rule gives the omission a `strict: false`
-default; there `strict: true` restores the fatal behavior.
+fatal.
 
 ### What `missing` means, by stage
 
@@ -70,14 +70,13 @@ when the variable exists and holds a missing value.
 <a id="req-0346"></a>
 
 **REQ-0346.** On every other expression, `missing` applies when the named
-**input value is missing**. On `mapping` it additionally applies when a
-non-missing input has no dictionary entry; see [REQ-1110](../operations/text.md#req-1110).
+**input value is missing**.
 
 ### Present but unusable
 
 <a id="req-0347"></a>
 
-**REQ-0347.** `no_match` and `invalid` fire only when every
+**REQ-0347.** `unmapped`, `no_match`, and `invalid` fire only when every
 input is present.
 
 <a id="req-0348"></a>
@@ -163,11 +162,11 @@ expression in `value`.
 
 <a id="req-0359"></a>
 
-**REQ-0359.** `missing` on a result wrapper supplies a literal replacement only
+**REQ-0359.** `conversion_failure` supplies a literal replacement only
 when conversion to the declared column type fails. Convert the replacement
 to that same column type. [Types and conversion](../values/types.md) defines which
 conversions fail and states that a missing input is not converted at
-all, so `missing` never fires for one.
+all, so `conversion_failure` never fires for one.
 
 ### Dependencies and audit
 
@@ -194,7 +193,7 @@ schema failure.
 
 <a id="req-0363"></a>
 
-**REQ-0363.** A result wrapper with no `missing` and without `strict: true`: fail.
+**REQ-0363.** A result wrapper with no `conversion_failure`: fail.
 
 <a id="req-0364"></a>
 

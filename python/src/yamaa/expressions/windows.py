@@ -202,30 +202,6 @@ def baseline_flag(
     return ValueResult(value="Y" if partition.current == latest else MISSING)
 
 
-def baseline_value(
-    partition: Partition,
-    value: str,
-    flag: str,
-) -> WindowResult:
-    """Broadcast the value from the one row the flag marks."""
-    flagged = [
-        index for index, row in enumerate(partition.rows) if _read(row, flag) == "Y"
-    ]
-    if not flagged:
-        return _missing()
-    if len(flagged) > 1:
-        return _condition(
-            "ambiguous_baseline",
-            {
-                "operation": "baseline_value",
-                "flag": flag,
-                "flag_count": len(flagged),
-            },
-            requirement="REQ-0322",
-        )
-    return ValueResult(value=_read(partition.rows[flagged[0]], value))
-
-
 def _rendered(value: RuntimeValue) -> JsonValue:
     """Render one value for a structured diagnostic context."""
     text = getattr(value, "to_text", None)
@@ -247,7 +223,6 @@ WINDOW_OPERATIONS: tuple[str, ...] = (
     "row_value",
     "previous_non_missing",
     "baseline_flag",
-    "baseline_value",
 )
 
 
@@ -255,7 +230,7 @@ def window_spec(payload: Mapping[str, object]) -> Mapping[str, object]:
     """Return the window_spec the payload declares; absent means an empty one.
 
     R007 nests partitioning, ordering, and filtering under `window:` so the
-    six window expressions share one definition instead of repeating the
+    five window expressions share one definition instead of repeating the
     same three fields. Every reader of those fields goes through here.
     """
     window = payload.get("window")
@@ -296,9 +271,7 @@ def evaluate_window(
             str(payload.get("date")),
             str(payload.get("reference_date")),
         )
-    return baseline_value(
-        partition, str(payload.get("value")), str(payload.get("flag"))
-    )
+    raise ValueError(f"unknown window operation: {operation}")
 
 
 def _order_variables(payload: Mapping[str, object]) -> tuple[str, ...]:

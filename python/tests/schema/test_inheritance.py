@@ -112,7 +112,7 @@ columns:
     derivation:
       mapping:
         dict: {B: Beta}
-        missing: null
+        unmapped: null
     verifications:
       - not_missing: {}
     metadata: {origin_note: study, reviewed: "yes"}
@@ -134,7 +134,7 @@ columns:
                 "source": "SRC.CODE",
                 "dict": {"A": "Alpha", "B": "Beta"},
                 "case_sensitive": False,
-                "missing": None,
+                "unmapped": None,
             }
         }
     }

@@ -27,7 +27,4 @@ columns:
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation:
-      value:
-        source: LB.LBSTRESC
-      strict: true
+    derivation: LB.LBSTRESC

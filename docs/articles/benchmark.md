@@ -75,10 +75,11 @@ records come out.
           variable: ODM.Value
         dict: {Male: M, Female: F}
         missing: U
+        unmapped: U
 ```
 
 Now the README's sentences have addresses. "Not collected and not recognised
-both become U" is the one `missing: U` knob answering both conditions.
+both become U" is `missing: U` beside `unmapped: U`.
 
 **Step 5 -- `expected/dm.csv`.** Confirm your reading against the artifact.
 
@@ -101,7 +102,7 @@ After those three, pick by the question you have:
 | How does one collected record become several analysis records? | `adam-adlb-bds` -- two row templates sharing a filter |
 | How do I carry ADSL values onto every event? | `adam-adae-treatment-emergent` -- cross-dataset `source` on the applicable keys |
 | How do I make several columns read **one** record? | `adam-adae-death` -- a named `intermediates` entry |
-| How do I flag the baseline record and broadcast its value? | `adam-adlb-bds` -- `baseline_flag` then `baseline_value` |
+| How do I flag the baseline record and broadcast its value? | `adam-adlb-bds` -- `baseline_flag` then `aggregate` with `filter: "ABLFL = 'Y'"` and `expr: "ONLY(AVAL)"` |
 | How do I total a subject's exposure records? | `adam-adex-cumulative-dose` -- `aggregate: "SUM(EX.EXDOSE)"` |
 | How do I impute a partial date and flag what was imputed? | `adam-adae-partial-dates` -- `date_impute` beside `date_precision` |
 | How do I translate one value into three vocabularies? | `adam-adsl-demographics` -- three `mapping` expressions over one source |

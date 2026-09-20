@@ -12,7 +12,7 @@ expressions:
             type: "list[filtered_source]"
             required: true
             description: See REQ-1095 in rules/operations/expressions.md.
-        - missing:
+        - default:
             type: literal_value
             description: See REQ-1095 in rules/operations/expressions.md.
     greatest: # See REQ-1096 in rules/operations/expressions.md.

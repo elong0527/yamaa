@@ -29,7 +29,7 @@ missing numeric value, handle the failed conversion explicitly:
 derivation:
   value:
     source: LB.LBSTRESC
-  missing:
+  conversion_failure: null
 ```
 
 If the study uses a numeric substitution for values below the assay limit,

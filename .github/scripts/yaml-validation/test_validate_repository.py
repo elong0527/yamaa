@@ -823,16 +823,15 @@ class TestStaticSemanticContracts(unittest.TestCase):
             )
             self.assertEqual(ordered, [])
 
-    def test_window_order_by_forbidden_on_baselines(self):
-        for operation in ('baseline_flag', 'baseline_value'):
-            errors = self.validate(
-                {operation: {'window': {'order_by': ['B']}}}
-            )
-            self.assertEqual(len(errors), 1)
-            self.assertEqual(errors[0].condition, 'window_order_by_forbidden')
+    def test_window_order_by_forbidden_on_baseline_flag(self):
+        errors = self.validate(
+            {'baseline_flag': {'window': {'order_by': ['B']}}}
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].condition, 'window_order_by_forbidden')
 
-            unordered = self.validate({operation: {}})
-            self.assertEqual(unordered, [])
+        unordered = self.validate({'baseline_flag': {}})
+        self.assertEqual(unordered, [])
 
     def test_mapping_extreme_window_and_cut_contracts(self):
         collision = self.validate({
@@ -1176,7 +1175,10 @@ class TestConditionRegistry(unittest.TestCase):
             [
                 'ERROR: benchmark/negative-adlb-duplicate-wbc/'
                 'expected/error.yaml.condition: unregistered condition '
-                "'aggregate_multiple_records'"
+                "'aggregate_multiple_records'",
+                'ERROR: benchmark/negative-multiple-baselines/'
+                'expected/error.yaml.condition: unregistered condition '
+                "'aggregate_multiple_records'",
             ],
         )
 

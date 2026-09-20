@@ -119,7 +119,7 @@ Going the other way, two of the eleven columns have no yamaa field:
 | `Comments for Define` | `column.metadata` | Free key-value, never validated, for define generation |
 | Variable-level review checks | `column.verifications` | `not_missing`, `allowed_values`, `range`, `max_length`, `matches` |
 | "if not collected then U" | the `missing:` handler | |
-| "if not in codelist then 99" | the `missing:` handler (same knob) | |
+| "if not in codelist then 99" | the `unmapped:` handler | |
 | "subject X was corrected to 99" | a `case` branch | |
 
 ### 2.3 Codelist splits into three constructs
@@ -185,6 +185,7 @@ yamaa:
         case_sensitive: false
         dict: {M: M, F: F, U: U}
         missing: U
+        unmapped: U
 
   - name: AGEGR1
     type: str
@@ -200,9 +201,9 @@ yamaa:
 What changed:
 
 - Excel packs "if not collected -> U" and "if unrecognised -> U" into one
-  sentence. YAMAA answers both with the one `missing` handler. Two
-  conditions stay two conditions, one knob answers both; `strict: true`
-  makes either one fail instead.
+  sentence. yamaa splits them into `missing` and `unmapped` and requires
+  **both to be written**, even when the answer is the same. Two conditions stay
+  two conditions.
 - The codelist *name* (`SEX`, `AGEGR1`) has no single home. The translation
   lives in `mapping.dict`, the check lives in `allowed_values`, and the name
   itself goes in `column.metadata.codelist` if you generate define.xml.
@@ -287,7 +288,7 @@ benchmark for the full side-by-side:
 
 | Example | What it shows |
 |---|---|
-| [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-bds) | VLM and BDS: one row template per PARAMCD, then `baseline_flag` / `baseline_value` / `row_number` as columns |
+| [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-bds) | VLM and BDS: one row template per PARAMCD, then `baseline_flag` / `aggregate`-with-`filter` / `row_number` as columns |
 | [`adam-adex-cumulative-dose`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adex-cumulative-dose) | `aggregate: "SUM(EX.EXDOSE)"` reducing by the applicable keys; a CSV field entering arithmetic must declare its type |
 | [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adae-partial-dates) | `date_impute` beside `date_precision` reading the same source; `missing` and `invalid` are separate defects |
 | [`sdtm-dm-metadata`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-metadata) | `metadata` vs `verifications`: Length becomes both `metadata.length` (for define.xml) and a `max_length` check |

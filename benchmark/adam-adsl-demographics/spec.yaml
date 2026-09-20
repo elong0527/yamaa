@@ -37,6 +37,7 @@ columns:
           F: F
           U: U
         missing: U
+        unmapped: U
 
   - name: SEXN
     type: int
@@ -50,6 +51,7 @@ columns:
           F: 2
           U: 0
         missing: 0
+        unmapped: 0
 
   - name: SEXDECOD
     type: str
@@ -63,6 +65,7 @@ columns:
           F: Female
           U: Unknown
         missing: Unknown
+        unmapped: Unknown
 
   - name: RACE
     type: str
@@ -80,6 +83,7 @@ columns:
           BLACK OR AFRICAN AMERICAN: 2
           ASIAN: 3
         missing: 99
+        unmapped: 99
 
   - name: AGE
     type: int
@@ -91,7 +95,7 @@ columns:
     derivation:
       value:
         source: DM.AGE
-      missing:
+      conversion_failure: null
 
   - name: AGEGR1
     type: str

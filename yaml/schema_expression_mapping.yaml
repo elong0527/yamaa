@@ -17,9 +17,8 @@ expressions:
         - missing:
             type: literal_value
             description: See REQ-1110 in rules/operations/text.md.
-        - strict:
-            type: bool
-            required: false
+        - unmapped:
+            type: literal_value
             description: See REQ-1110 in rules/operations/text.md.
     lookup: # See REQ-1055 in rules/operations/lookup.md.
         - value:

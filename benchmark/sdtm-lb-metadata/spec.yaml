@@ -88,7 +88,7 @@ rows:
       LBSTRESN:
         value:
           source: LBORRES
-        missing:
+        conversion_failure: null
       LBSTRESU:
         literal: mg/dL
     submission:
@@ -117,7 +117,7 @@ rows:
       LBSTRESN:
         value:
           source: LBORRES
-        missing:
+        conversion_failure: null
       LBSTRESU:
         literal: mg/dL
     submission:

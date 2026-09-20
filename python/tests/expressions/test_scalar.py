@@ -34,13 +34,13 @@ def test_first_available_returns_the_first_non_missing_source(
 ) -> None:
     # R019 keeps the empty string distinct from missing, and zero is a value.
     result = _evaluate(
-        {"first_available": {"sources": ["A", "B"], "missing": "UNKNOWN"}}, values
+        {"first_available": {"sources": ["A", "B"], "default": "UNKNOWN"}}, values
     )
 
     assert result == ValueResult(value=expected)
 
 
-def test_first_available_without_missing_returns_missing() -> None:
+def test_first_available_without_a_default_returns_missing() -> None:
     result = _evaluate(
         {"first_available": {"sources": ["A", "B"]}}, {"A": MISSING, "B": MISSING}
     )
@@ -58,10 +58,10 @@ def test_first_available_retains_the_selected_value_type() -> None:
     assert type(result.value) is int
 
 
-def test_first_available_missing_is_not_a_handler_path() -> None:
-    # REQ-0342 does not list `first_available.missing`, so it fires no handler count.
+def test_first_available_default_is_not_a_handler_path() -> None:
+    # REQ-0342 does not list `first_available.default`, so it fires no handler count.
     result = _evaluate(
-        {"first_available": {"sources": ["A"], "missing": "UNKNOWN"}}, {"A": MISSING}
+        {"first_available": {"sources": ["A"], "default": "UNKNOWN"}}, {"A": MISSING}
     )
 
     assert result == ValueResult(value="UNKNOWN", handled_by=None)

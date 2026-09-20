@@ -59,15 +59,3 @@ expressions:
         - window:
             type: window_spec
             description: See REQ-1127 in rules/operations/windows.md.
-    baseline_value: # See REQ-1128 in rules/operations/windows.md.
-        - value:
-            type: variable
-            required: true
-            description: See REQ-1128 in rules/operations/windows.md.
-        - flag:
-            type: variable
-            required: true
-            description: See REQ-1128 in rules/operations/windows.md.
-        - window:
-            type: window_spec
-            description: See REQ-1128 in rules/operations/windows.md.

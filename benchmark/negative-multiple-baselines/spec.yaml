@@ -6,7 +6,7 @@ input:
 
 output:
   path: adlb.csv
-  columns: [STUDYID, USUBJID, VISIT, LBSTRESN, BAVL]
+  columns: [STUDYID, USUBJID, VISIT, LBSTRESN, LBBLFL, BAVL]
 
 columns:
   - name: STUDYID
@@ -29,12 +29,16 @@ columns:
     label: Numeric Result
     derivation: LB.LBSTRESN
 
+  - name: LBBLFL
+    type: str
+    label: Baseline Flag
+    derivation: LB.LBBLFL
+
   - name: BAVL
     type: float
     label: Baseline Value
     derivation:
-      baseline_value:
-        window:
-          group_by: [STUDYID, USUBJID]
-        value: LBSTRESN
-        flag: LB.LBBLFL
+      aggregate:
+        filter: "LBBLFL = 'Y'"
+        group_by: [STUDYID, USUBJID]
+        expr: "ONLY(LBSTRESN)"

@@ -301,7 +301,7 @@ def _diagnostic(
 
 def expression_path(path: str, derivation: HandledExpression) -> str:
     """Recover the authored bare-expression path where normalization permits it."""
-    handled = {"missing", "strict"} & derivation.model_fields_set
+    handled = {"conversion_failure"} & derivation.model_fields_set
     return f"{path}.value" if handled else path
 
 
@@ -869,22 +869,18 @@ _WINDOW_VARIABLES: dict[str, tuple[str, ...]] = {
     "row_value": ("source",),
     "previous_non_missing": ("source",),
     "baseline_flag": ("date", "reference_date"),
-    "baseline_value": ("value", "flag"),
 }
 
 # REQ-0340: these windows number or move along declared positions, so they
-# require window.order_by. REQ-0341: the baseline windows locate their row
-# by date and flag instead, so a declared order_by is rejected.
+# require window.order_by. REQ-0341: the baseline window locates its row
+# by date instead, so a declared order_by is rejected.
 _WINDOW_ORDER_BY_REQUIRED: tuple[str, ...] = (
     "row_number",
     "rank",
     "row_value",
     "previous_non_missing",
 )
-_WINDOW_ORDER_BY_FORBIDDEN: tuple[str, ...] = (
-    "baseline_flag",
-    "baseline_value",
-)
+_WINDOW_ORDER_BY_FORBIDDEN: tuple[str, ...] = ("baseline_flag",)
 
 
 def _window_references(
