@@ -46,6 +46,31 @@ def positive_runners() -> tuple[Path, ...]:
     )
 
 
+def entry_spec(example: Path) -> Path:
+    """The specification a benchmark's run.py executes.
+
+    Mirrors the dashboard's entry resolution: `spec.yaml` when present,
+    otherwise the `spec_*.yaml` file no other file names as a parent.
+    """
+    single = example / "spec.yaml"
+    if single.exists():
+        return single
+    specs = sorted(example.glob("spec_*.yaml"))
+    parented = set()
+    for path in specs:
+        document = read_yaml_document(path)
+        parents = document.get("parents", []) if isinstance(document, dict) else []
+        if isinstance(parents, str):
+            parents = [parents]
+        parented.update(
+            Path(parent).name
+            for parent in parents
+            if isinstance(parent, str) and parent
+        )
+    entries = [path for path in specs if path.name not in parented]
+    return entries[0] if entries else specs[0]
+
+
 def negative_contracts() -> tuple[Path, ...]:
     return tuple(sorted(EXAMPLES.glob("negative-*/expected/error.yaml")))
 
@@ -157,7 +182,7 @@ def test_positive_example_outputs_match_expected_csvs(
         if not name.startswith("_") and isinstance(value, pl.DataFrame)
     }
 
-    specification = load_specification(example / "spec.yaml", SCHEMA_ROOT).specification
+    specification = load_specification(entry_spec(example), SCHEMA_ROOT).specification
     if specification.output.decimals is not None:
         # R020 rounds every float column once, at write, half away from
         # zero; the committed CSV carries those reported values while the
@@ -176,7 +201,7 @@ def test_positive_example_outputs_match_expected_csvs(
         log_stem = Path(declared_log).stem
         assert set(outputs) == set(expected) - {log_stem}
         actual_log = yamaa_domain(
-            example / "spec.yaml", schema_root=SCHEMA_ROOT
+            entry_spec(example), schema_root=SCHEMA_ROOT
         ).violation_log
         assert actual_log is not None
         committed_log = pl.read_csv(expected[log_stem], schema=actual_log.schema)
