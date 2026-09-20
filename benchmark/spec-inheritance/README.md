@@ -23,15 +23,6 @@ Parents resolve depth-first, left to right, with later levels
 winning; the chain resolves to `expected/spec_resolved.yaml`, the
 default view in the specification dropdown.
 
-**Columns:** every output column traces to one source variable.
-
-| Column  | Label                      | Type  | Source      |
-|---------|----------------------------|-------|-------------|
-| USUBJID | Unique Subject Identifier  | str   | LB.USUBJID  |
-| PARAMCD | Parameter Code             | str   | LB.LBTESTCD |
-| AVAL    | Analysis Value             | float | LB.LBSTRESN |
-| AVALU   | Standardized Analysis Unit | str   | LB.LBSTRESU |
-
 **Assumptions:**
 
 1. Inheritance Definition: three levels share one mapping. The
