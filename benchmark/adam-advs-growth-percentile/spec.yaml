@@ -2,17 +2,17 @@ schema_version: "1.0"
 domain: ADVS
 keys: [STUDYID, USUBJID, AVISIT, PARAMCD]
 input:
-  ADVSPRE:
-    path: input/advs_pre.csv
+  ADVS_RAW:
+    path: input/advs_raw.csv
     types: {AGE: int}
   LMS:
     path: input/lms_ref.csv
     types: {L: float, M: float, S: float, AGE: int}
-base: ADVSPRE
+base: ADVS_RAW
 intermediates:
   - id: GROWTH
     dataset: LMS
-    key_base: [ADVSPRE.PARAMCD, ADVSPRE.SEX, ADVSPRE.AGE]
+    key_base: [ADVS_RAW.PARAMCD, ADVS_RAW.SEX, ADVS_RAW.AGE]
     key: [PARAMCD, SEX, AGE]
 
 output:
@@ -23,32 +23,32 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADVSPRE.STUDYID
+    derivation: ADVS_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADVSPRE.USUBJID
+    derivation: ADVS_RAW.USUBJID
 
   - name: AVISIT
     type: str
     label: Analysis Visit
-    derivation: ADVSPRE.AVISIT
+    derivation: ADVS_RAW.AVISIT
 
   - name: AVALSRC
     type: float
     label: Source Analysis Value
-    derivation: ADVSPRE.AVAL
+    derivation: ADVS_RAW.AVAL
 
   - name: PARAMCD
     type: str
     label: Parameter Code
     derivation:
       case:
-        - when: "ADVSPRE.PARAMCD = 'BMI'"
+        - when: "ADVS_RAW.PARAMCD = 'BMI'"
           then:
             literal: BMIPCTL
-        - when: "ADVSPRE.PARAMCD = 'WEIGHT'"
+        - when: "ADVS_RAW.PARAMCD = 'WEIGHT'"
           then:
             literal: WGTPCTL
     verifications:

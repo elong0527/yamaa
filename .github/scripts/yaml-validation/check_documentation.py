@@ -8,7 +8,7 @@ without masking (or being masked by) a spec verdict:
 - validate_examples_readme_presence: every example has a README and every
   negative README carries its '## How to fix' section;
 - validate_examples_badges: every example README places its Dashboard
-  badge line right after the title;
+  badge line, followed by a lifecycle badge, right after the title;
 - validate_example_readmes: line width, schema-vocabulary-free data
   contracts, heading structure, described expected columns;
 - validate_examples_index: the examples index table matches directories;

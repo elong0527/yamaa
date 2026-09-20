@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADTR
 keys: [STUDYID, USUBJID, AVISIT]
 input:
-  ADTRPRE:
-    path: input/adtr_pre.csv
+  ADTR_RAW:
+    path: input/adtr_raw.csv
     types: {AVISITN: int, ADT: date, AVAL: float, NMEAS: int, NTARGET: int}
 
 output:
@@ -14,57 +14,57 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADTRPRE.STUDYID
+    derivation: ADTR_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADTRPRE.USUBJID
+    derivation: ADTR_RAW.USUBJID
 
   - name: AVISIT
     type: str
     label: Analysis Visit
-    derivation: ADTRPRE.AVISIT
+    derivation: ADTR_RAW.AVISIT
 
   - name: AVISITN
     type: int
     label: Analysis Visit (N)
-    derivation: ADTRPRE.AVISITN
+    derivation: ADTR_RAW.AVISITN
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation: ADTRPRE.ADT
+    derivation: ADTR_RAW.ADT
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: ADTRPRE.PARAMCD
+    derivation: ADTR_RAW.PARAMCD
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation: ADTRPRE.PARAM
+    derivation: ADTR_RAW.PARAM
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation: ADTRPRE.AVAL
+    derivation: ADTR_RAW.AVAL
 
   - name: NMEAS
     type: int
     label: Number of Measured Target Lesions
-    derivation: ADTRPRE.NMEAS
+    derivation: ADTR_RAW.NMEAS
 
   - name: NTARGET
     type: int
     label: Number of Target Lesions
-    derivation: ADTRPRE.NTARGET
+    derivation: ADTR_RAW.NTARGET
 
   - name: ANL01FL
     type: str
     label: Analysis Record Flag 01
-    derivation: ADTRPRE.ANL01FL
+    derivation: ADTR_RAW.ANL01FL
     verifications:
       allowed_values:
         values: [Y]
@@ -74,12 +74,12 @@ columns:
     label: Nadir Sum of Target Lesion Diameters
     derivation:
       aggregate:
-        filter: "ADTRPRE.ANL01FL = 'Y'"
+        filter: "ADTR_RAW.ANL01FL = 'Y'"
         between:
           value: ADT
-          lower: ADTRPRE.ADT
-        group_by: [ADTRPRE.STUDYID, ADTRPRE.USUBJID]
-        expr: "MIN(ADTRPRE.AVAL)"
+          lower: ADTR_RAW.ADT
+        group_by: [ADTR_RAW.STUDYID, ADTR_RAW.USUBJID]
+        expr: "MIN(ADTR_RAW.AVAL)"
 
         key: [STUDYID, USUBJID]
 verifications:

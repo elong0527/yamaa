@@ -3,7 +3,7 @@ domain: ADTTE
 keys: [STUDYID, USUBJID, PARAMCD]
 input:
   ADSL: input/adsl.csv
-  ADRSPRE: input/adrs_pre.csv
+  ADRS_RAW: input/adrs_raw.csv
   DS: input/ds.csv
 
 output:
@@ -50,18 +50,18 @@ columns:
     label: Disease Progression Date
     derivation:
       aggregate:
-        filter: "ADRSPRE.AVALC = 'PD'"
-        expr: "MIN(ADRSPRE.ADT)"
+        filter: "ADRS_RAW.AVALC = 'PD'"
+        expr: "MIN(ADRS_RAW.ADT)"
 
   - name: PDSEQ
     type: int
     label: Disease Progression Source Sequence Number
     derivation:
       source:
-        variable: ADRSPRE.ASEQ
-        filter: "ADRSPRE.AVALC = 'PD'"
+        variable: ADRS_RAW.ASEQ
+        filter: "ADRS_RAW.AVALC = 'PD'"
         multiple_matches:
-          order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
+          order_by: [ADRS_RAW.ADT, ADRS_RAW.ASEQ]
           keep: first
   - name: DEATHDT
     type: date
@@ -86,18 +86,18 @@ columns:
     label: Last Valid Assessment Date
     derivation:
       aggregate:
-        filter: "ADRSPRE.AVALC <> 'NE'"
-        expr: "MAX(ADRSPRE.ADT)"
+        filter: "ADRS_RAW.AVALC <> 'NE'"
+        expr: "MAX(ADRS_RAW.ADT)"
 
   - name: LASTVLSEQ
     type: int
     label: Last Valid Assessment Sequence Number
     derivation:
       source:
-        variable: ADRSPRE.ASEQ
-        filter: "ADRSPRE.AVALC <> 'NE'"
+        variable: ADRS_RAW.ASEQ
+        filter: "ADRS_RAW.AVALC <> 'NE'"
         multiple_matches:
-          order_by: [ADRSPRE.ADT, ADRSPRE.ASEQ]
+          order_by: [ADRS_RAW.ADT, ADRS_RAW.ASEQ]
           keep: last
   - name: EVENTALLDT
     type: date

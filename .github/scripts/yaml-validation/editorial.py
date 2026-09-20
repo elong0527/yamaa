@@ -427,9 +427,7 @@ def validate_examples_badges(root: Path):
             badge_ok = False
             if len(lines) >= 3:
                 stripped = lines[2].strip()
-                if stripped == expected_badge:
-                    badge_ok = True
-                elif stripped.startswith(expected_badge + ' '):
+                if stripped.startswith(expected_badge + ' '):
                     rest = stripped[len(expected_badge) + 1:]
                     badge_ok = bool(
                         LIFECYCLE_BADGE_PATTERN.fullmatch(rest)
@@ -437,7 +435,8 @@ def validate_examples_badges(root: Path):
             if not badge_ok:
                 errors.append(
                     f"ERROR: {rel}/README.md must place '{expected_badge}' "
-                    "right after the title"
+                    "followed by a lifecycle badge (draft, reviewed, or "
+                    "finalized) right after the title"
                 )
 
     return errors

@@ -2,8 +2,8 @@ schema_version: "1.0"
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD, ASEQ]
 input:
-  ADLBPRE:
-    path: input/adlb_pre.csv
+  ADLB_RAW:
+    path: input/adlb_raw.csv
     types: {ASEQ: int, AVAL: float, ANRLO: float, ANRHI: float}
 
 output:
@@ -14,47 +14,47 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADLBPRE.STUDYID
+    derivation: ADLB_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADLBPRE.USUBJID
+    derivation: ADLB_RAW.USUBJID
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: ADLBPRE.PARAMCD
+    derivation: ADLB_RAW.PARAMCD
 
   - name: PARAM
     type: str
     label: Parameter
-    derivation: ADLBPRE.PARAM
+    derivation: ADLB_RAW.PARAM
 
   - name: ASEQ
     type: int
     label: Analysis Sequence Number
-    derivation: ADLBPRE.ASEQ
+    derivation: ADLB_RAW.ASEQ
 
   - name: AVISIT
     type: str
     label: Analysis Visit
-    derivation: ADLBPRE.AVISIT
+    derivation: ADLB_RAW.AVISIT
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation: ADLBPRE.AVAL
+    derivation: ADLB_RAW.AVAL
 
   - name: ANRLO
     type: float
     label: Analysis Normal Range Lower Limit
-    derivation: ADLBPRE.ANRLO
+    derivation: ADLB_RAW.ANRLO
 
   - name: ANRHI
     type: float
     label: Analysis Normal Range Upper Limit
-    derivation: ADLBPRE.ANRHI
+    derivation: ADLB_RAW.ANRHI
 
   - name: ANRIND
     type: str
@@ -79,7 +79,7 @@ columns:
   - name: ABLFL
     type: str
     label: Baseline Record Flag
-    derivation: ADLBPRE.ABLFL
+    derivation: ADLB_RAW.ABLFL
     verifications:
       allowed_values:
         values: [Y]

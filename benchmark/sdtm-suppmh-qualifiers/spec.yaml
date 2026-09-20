@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: SUPPMH
 keys: [STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM]
 input:
-  MH_PRE: input/mh_pre.csv
+  MH_RAW: input/mh_raw.csv
 
 output:
   path: suppmh.csv
@@ -13,7 +13,7 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: MH_PRE.STUDYID
+    derivation: MH_RAW.STUDYID
 
   - name: RDOMAIN
     type: str
@@ -24,7 +24,7 @@ columns:
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: MH_PRE.USUBJID
+    derivation: MH_RAW.USUBJID
 
   - name: IDVAR
     type: str
@@ -35,7 +35,7 @@ columns:
   - name: IDVARVAL
     type: str
     label: Identifying Variable Value
-    derivation: MH_PRE.MHSEQ
+    derivation: MH_RAW.MHSEQ
     verifications:
       not_missing: {}
 
@@ -72,24 +72,24 @@ columns:
 
 rows:
   - id: family_history
-    filter: "MH_PRE.MHFAMHX IS NOT NULL"
+    filter: "MH_RAW.MHFAMHX IS NOT NULL"
     derivations:
       QNAM:
         literal: MHFAMHX
       QLABEL:
         literal: Family History
       QVAL:
-        source: MH_PRE.MHFAMHX
+        source: MH_RAW.MHFAMHX
 
   - id: medical_record_confirmation
-    filter: "MH_PRE.MHCONF IS NOT NULL"
+    filter: "MH_RAW.MHCONF IS NOT NULL"
     derivations:
       QNAM:
         literal: MHCONF
       QLABEL:
         literal: Confirmed by Medical Records
       QVAL:
-        source: MH_PRE.MHCONF
+        source: MH_RAW.MHCONF
 
 verifications:
   - unique:

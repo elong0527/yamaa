@@ -1,6 +1,6 @@
 # Derive AGE from a birth date
 
-[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-birth-date-age.html)
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-birth-date-age.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
 **Goal:** derive **AGE** in completed years at the sponsor's reference date
 (informed consent, **RFICDTC**) from the collected birth date, keeping
@@ -16,15 +16,10 @@ carry **BRTHDT** (birth date as collected) and **RFICDTC** rows.
 - **AGE**: whole calendar years between the birth date and the informed
   consent date, using anniversary arithmetic: the birthday falling after the
   reference date's month and day subtracts one year. A February 29 birthday
-  keeps its anniversary on February 28 in a common year.
-- **AGEU**: `YEARS` whenever **AGE** is present.
+  keeps its anniversary on February 28 in a common year. A year-month or
+  year-only birth date cannot give completed years, so **AGE** stays missing.
+- **AGEU**: `YEARS` whenever **AGE** is present, missing otherwise.
 
-**Partial dates:** a year-month or year-only birth date cannot give completed
-years, so **AGE** and **AGEU** stay missing while **BRTHDTC** keeps the
-truncated text. A missing birth date leaves all three missing.
-
-**Subjects:** 001 was born before the consent-date anniversary (40), 002 after
-it (39), 003 reported year and month only, 004 year only, and 005 reported no
-birth date at all.
+**Note:** a missing birth date leaves all three variables missing.
 
 **Standard:** SDTM | **Domain:** DM

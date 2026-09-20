@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADLB
 keys: [STUDYID, USUBJID, PARAMCD, LBSEQ]
 input:
-  ADLBPRE: input/adlb_pre.csv
+  ADLB_RAW: input/adlb_raw.csv
 
 output:
   path: adlb.csv
@@ -12,37 +12,37 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADLBPRE.STUDYID
+    derivation: ADLB_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADLBPRE.USUBJID
+    derivation: ADLB_RAW.USUBJID
 
   - name: PARAMCD
     type: str
     label: Parameter Code
-    derivation: ADLBPRE.PARAMCD
+    derivation: ADLB_RAW.PARAMCD
 
   - name: LBSEQ
     type: int
     label: Sequence Number
-    derivation: ADLBPRE.LBSEQ
+    derivation: ADLB_RAW.LBSEQ
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation: ADLBPRE.ADT
+    derivation: ADLB_RAW.ADT
 
   - name: ADY
     type: int
     label: Analysis Relative Day
-    derivation: ADLBPRE.ADY
+    derivation: ADLB_RAW.ADY
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation: ADLBPRE.AVAL
+    derivation: ADLB_RAW.AVAL
 
   - name: AVISIT
     type: str

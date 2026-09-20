@@ -2,9 +2,9 @@ schema_version: "1.0"
 domain: ADSL
 keys: [STUDYID, USUBJID]
 input:
-  ADSLPRE: input/adsl_pre.csv
+  ADSL_RAW: input/adsl_raw.csv
   DS: input/ds.csv
-base: ADSLPRE
+base: ADSL_RAW
 intermediates:
   - id: COMPLT
     dataset: DS
@@ -18,17 +18,17 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADSLPRE.STUDYID
+    derivation: ADSL_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADSLPRE.USUBJID
+    derivation: ADSL_RAW.USUBJID
 
   - name: TRTSDT
     type: date
     label: Date of First Exposure to Treatment
-    derivation: ADSLPRE.TRTSDT
+    derivation: ADSL_RAW.TRTSDT
 
   - name: COMPREC
     type: str

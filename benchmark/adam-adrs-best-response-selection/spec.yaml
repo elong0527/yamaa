@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADRS
 keys: [STUDYID, USUBJID, ASEQ]
 input:
-  ADRSPRE: input/adrs_pre.csv
+  ADRS_RAW: input/adrs_raw.csv
 
 output:
   path: adrs.csv
@@ -12,32 +12,32 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADRSPRE.STUDYID
+    derivation: ADRS_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADRSPRE.USUBJID
+    derivation: ADRS_RAW.USUBJID
 
   - name: ASEQ
     type: int
     label: Sequence Number
-    derivation: ADRSPRE.ASEQ
+    derivation: ADRS_RAW.ASEQ
 
   - name: ADT
     type: date
     label: Analysis Date
-    derivation: ADRSPRE.ADT
+    derivation: ADRS_RAW.ADT
 
   - name: RANDDY
     type: int
     label: Analysis Day Relative to Randomization
-    derivation: ADRSPRE.RANDDY
+    derivation: ADRS_RAW.RANDDY
 
   - name: AVALC
     type: str
     label: Analysis Value (C)
-    derivation: ADRSPRE.AVALC
+    derivation: ADRS_RAW.AVALC
 
   - name: BORCAT
     type: str

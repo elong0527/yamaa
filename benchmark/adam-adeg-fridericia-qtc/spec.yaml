@@ -2,7 +2,7 @@ schema_version: "1.0"
 domain: ADEG
 keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
-  ADEG_IN: {path: input/adeg.csv, types: {AVAL: float}}
+  ADEG_RAW: {path: input/adeg.csv, types: {AVAL: float}}
 
 output:
   path: adeg.csv
@@ -12,12 +12,12 @@ columns:
   - name: STUDYID
     type: str
     label: Study Identifier
-    derivation: ADEG_IN.STUDYID
+    derivation: ADEG_RAW.STUDYID
 
   - name: USUBJID
     type: str
     label: Unique Subject Identifier
-    derivation: ADEG_IN.USUBJID
+    derivation: ADEG_RAW.USUBJID
 
   - name: PARAMCD
     type: str
@@ -30,7 +30,7 @@ columns:
   - name: AVISIT
     type: str
     label: Analysis Visit
-    derivation: ADEG_IN.AVISIT
+    derivation: ADEG_RAW.AVISIT
 
   - name: QTVAL
     type: float
@@ -52,19 +52,19 @@ rows:
   - id: original
     derivations:
       PARAMCD:
-        source: ADEG_IN.PARAMCD
+        source: ADEG_RAW.PARAMCD
       PARAM:
-        source: ADEG_IN.PARAM
+        source: ADEG_RAW.PARAM
       AVAL:
-        source: ADEG_IN.AVAL
+        source: ADEG_RAW.AVAL
       QTVAL:
         literal: null
       RRVAL:
         literal: null
       AVALU:
-        source: ADEG_IN.AVALU
+        source: ADEG_RAW.AVALU
   - id: qtcfr
-    group_by: [ADEG_IN.STUDYID, ADEG_IN.USUBJID, ADEG_IN.AVISIT]
+    group_by: [ADEG_RAW.STUDYID, ADEG_RAW.USUBJID, ADEG_RAW.AVISIT]
     filter: "QTVAL IS NOT NULL AND RRVAL IS NOT NULL"
     derivations:
       PARAMCD:
@@ -73,12 +73,12 @@ rows:
         literal: "QTcF - Fridericia's Correction Formula Rederived (ms)"
       QTVAL:
         aggregate:
-          filter: "ADEG_IN.PARAMCD = 'QT'"
-          expr: "ONLY(ADEG_IN.AVAL)"
+          filter: "ADEG_RAW.PARAMCD = 'QT'"
+          expr: "ONLY(ADEG_RAW.AVAL)"
       RRVAL:
         aggregate:
-          filter: "ADEG_IN.PARAMCD = 'RR'"
-          expr: "ONLY(ADEG_IN.AVAL)"
+          filter: "ADEG_RAW.PARAMCD = 'RR'"
+          expr: "ONLY(ADEG_RAW.AVAL)"
       AVAL:
         compute:
           expr: "QTVAL / POWER(RRVAL / 1000, 1 / 3)"
