@@ -175,6 +175,22 @@ unreferenced codelist is rejected rather than emitted, because the codelist
 would put terminology into a submission that no column carries. The
 usual cause is a binding that misspells its identifier.
 
+### Study-inventory vocabulary
+
+<a id="req-1156"></a>
+
+**REQ-1156.** A column carrying submission metadata may declare
+`inventory_vocabulary`. Every non-missing value of such a column must equal
+the name of a dataset the study document declares. The admitted values are
+the study's dataset inventory, which no static list can enumerate; that is
+what distinguishes this vocabulary from a codelist, whose values
+[REQ-0931](terminology.md#req-0931) requires be listed or deferred to a dictionary. Missing
+values pass, exactly as [REQ-0937](terminology.md#req-0937) treats missing values; a column
+that also prohibits absence declares `not_missing`. Enforcement runs where
+[Verification](../execution/verification.md) runs a column verification, over the
+completed column, and fails the same way. The ADaM `SRCDOM` column, whose
+values name the source SDTM domain or ADaM dataset, binds this vocabulary.
+
 ### Interface behavior
 
 <a id="req-1076"></a>
