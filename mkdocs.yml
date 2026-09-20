@@ -65,17 +65,16 @@ plugins:
 nav:
   - Home: index.md
   - Start:
-      - Core concepts: articles/concepts.md
+      - Concepts: articles/concepts.md
       - Principles: articles/principles.md
       - Derivation: articles/derive.md
-      - Spec anatomy: articles/spec-anatomy.md
       - Excel to YAMAA: articles/excel-to-yamaa.md
-  - Examples:
-      - Reading the examples: articles/examples.md
   - Reference:
       - Schema reference: reference/schema.md
+      - Spec anatomy: articles/spec-anatomy.md
       - Rules: reference/rules.md
   - Benchmark:
+      - Reading the examples: articles/examples.md
       - benchmark/index.md
   - Engine:
       - Python engine: https://github.com/elong0527/yamaa/tree/main/python
