@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-adex-single-dose-expansion.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** build an administration record for each administration
 in a collected exposure (EX) record, carrying the collected
 record's sequence number and `EXTRT`, `EXDOSE`, `EXDOSU`,

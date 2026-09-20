@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-advs-growth-percentile.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** add a growth-percentile record for each collected body
 measurement, holding the percentile in `AVAL`. A body mass index
 (`BMI`) becomes `BMIPCTL`, named `BMI-for-Age Percentile`, and a

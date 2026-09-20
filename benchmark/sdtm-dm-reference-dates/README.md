@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-reference-dates.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** build one record per enrolled subject carrying informed
 consent date (`RFICDTC`), first and last exposure dates (`RFXSTDTC`,
 `RFXENDTC`), reference start date (`RFSTDTC`), and reference end

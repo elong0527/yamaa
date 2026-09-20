@@ -14,7 +14,7 @@ HERE = Path(__file__).resolve().parent
 module_spec = importlib.util.spec_from_file_location("generate", HERE / "generate.py")
 generate = importlib.util.module_from_spec(module_spec)
 module_spec.loader.exec_module(generate)
-EXAMPLE = generate.EXAMPLES / "adam-adae-death-outcome"
+BENCHMARK = generate.BENCHMARKS / "adam-adae-death-outcome"
 
 
 class DashboardContent(HTMLParser):
@@ -59,16 +59,16 @@ class DashboardContent(HTMLParser):
 
 class DashboardTests(unittest.TestCase):
     def test_source_values_and_yaml_are_exact(self):
-        content = DashboardContent(generate.render_example(EXAMPLE).decode("ascii"))
+        content = DashboardContent(generate.render_benchmark(BENCHMARK).decode("ascii"))
         expected_cells = []
         for relative in ["input/ae.csv", "input/dm.csv", "expected/adae.csv"]:
-            path = EXAMPLE / relative
+            path = BENCHMARK / relative
             with path.open(newline="") as stream:
                 rows = list(csv.reader(stream))
             expected_cells.extend(value for row in rows[1:] for value in row)
         self.assertEqual(content.cells, expected_cells)
-        spec_lines = (EXAMPLE / "spec.yaml").read_text().splitlines()
-        run_lines = (EXAMPLE / "run.py").read_text().splitlines()
+        spec_lines = (BENCHMARK / "spec.yaml").read_text().splitlines()
+        run_lines = (BENCHMARK / "run.py").read_text().splitlines()
         self.assertEqual(content.code, spec_lines + run_lines)
         self.assertEqual(content.sections, ["readme", "specification", "inputs", "outputs", "code", "comments"])
         self.assertEqual(content.downloads, [])
@@ -77,8 +77,8 @@ class DashboardTests(unittest.TestCase):
         self.assertTrue(all("hidden" not in pane for pane in content.file_panes))
 
     def test_readme_taxonomy_moves_above_title_and_short_summary_is_one_column(self):
-        example = generate.EXAMPLES / "adam-adae-serious-event-listing"
-        page = generate.render_example(example).decode("ascii")
+        benchmark = generate.BENCHMARKS / "adam-adae-serious-event-listing"
+        page = generate.render_benchmark(benchmark).decode("ascii")
         header, _, summary = page.partition('<section id="readme"')
         self.assertIn('<p class="eyebrow">ADaM.ADAE</p>', header)
         self.assertIn('<h1>Serious event listing</h1>', header)
@@ -86,47 +86,47 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('<div class="prose prose-short"', summary)
         self.assertNotIn("Standard:", summary.partition("</section>")[0])
         self.assertNotIn("Domain:", summary.partition("</section>")[0])
-        self.assertEqual(generate.readme_body_line_count(example.joinpath("README.md").read_text()), 10)
+        self.assertEqual(generate.readme_body_line_count(benchmark.joinpath("README.md").read_text()), 10)
 
     def test_long_summary_keeps_multicolumn_class(self):
-        example = generate.EXAMPLES / "adam-adae-query-flags"
+        benchmark = generate.BENCHMARKS / "adam-adae-query-flags"
         self.assertGreater(
-            generate.readme_body_line_count(example.joinpath("README.md").read_text()),
+            generate.readme_body_line_count(benchmark.joinpath("README.md").read_text()),
             10,
         )
-        page = generate.render_example(example).decode("ascii")
+        page = generate.render_benchmark(benchmark).decode("ascii")
         self.assertIn('<div class="prose" aria-label="README content">', page)
         self.assertNotIn('<div class="prose prose-short"', page)
 
     def test_bytes_do_not_depend_on_checkout_location_or_mtime(self):
-        original = generate.render_example(EXAMPLE)
+        original = generate.render_benchmark(BENCHMARK)
         with tempfile.TemporaryDirectory() as directory:
-            copied = Path(directory) / EXAMPLE.name
-            shutil.copytree(EXAMPLE, copied)
+            copied = Path(directory) / BENCHMARK.name
+            shutil.copytree(BENCHMARK, copied)
             for path in copied.rglob("*"):
                 if path.is_file():
                     path.touch()
-            self.assertEqual(generate.render_example(copied), original)
-        self.assertEqual(generate.render_example(EXAMPLE), original)
+            self.assertEqual(generate.render_benchmark(copied), original)
+        self.assertEqual(generate.render_benchmark(BENCHMARK), original)
 
     def test_source_edits_change_page_and_check_does_not_write(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
-            copied = folder / EXAMPLE.name
-            shutil.copytree(EXAMPLE, copied)
+            copied = folder / BENCHMARK.name
+            shutil.copytree(BENCHMARK, copied)
             (copied / "README.md").write_text((copied / "README.md").read_text() + "\nAdditional explanation.\n")
-            self.assertNotEqual(generate.render_example(copied), generate.render_example(EXAMPLE))
+            self.assertNotEqual(generate.render_benchmark(copied), generate.render_benchmark(BENCHMARK))
             output = folder / "output"
             output.mkdir()
-            page = output / (EXAMPLE.name + ".html")
-            command = [sys.executable, str(HERE / "generate.py"), EXAMPLE.name, "--check", "--output-dir", str(output)]
+            page = output / (BENCHMARK.name + ".html")
+            command = [sys.executable, str(HERE / "generate.py"), BENCHMARK.name, "--check", "--output-dir", str(output)]
             self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
             self.assertFalse(page.exists())
-            complete = sorted(path.name for path in generate.EXAMPLES.iterdir() if generate.example_has_spec(path) and (path / "README.md").is_file())
-            index = complete.index(EXAMPLE.name)
+            complete = sorted(path.name for path in generate.BENCHMARKS.iterdir() if generate.benchmark_has_spec(path) and (path / "README.md").is_file())
+            index = complete.index(BENCHMARK.name)
             previous = complete[index - 1] if index else None
             following = complete[index + 1] if index + 1 < len(complete) else None
-            page.write_bytes(generate.render_example(EXAMPLE, previous, following))
+            page.write_bytes(generate.render_benchmark(BENCHMARK, previous, following))
             self.assertEqual(subprocess.run(command, capture_output=True).returncode, 0)
             page.write_bytes(b"outdated page")
             self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
@@ -137,27 +137,27 @@ class DashboardTests(unittest.TestCase):
         rendered = generate.render_table(["TEXT"], [[value]], "quoted.csv", set(), {})
         self.assertNotIn("<script>", rendered)
         self.assertEqual(DashboardContent(rendered).cells, [value])
-        _, readme = generate.render_readme('# Example\n\n<script>alert("unsafe")</script>\n\n[File](input/ae.csv)', "https://example.org/fixture")
+        _, readme = generate.render_readme('# Benchmark\n\n<script>alert("unsafe")</script>\n\n[File](input/ae.csv)', "https://benchmark.org/fixture")
         self.assertNotIn("<script>", readme)
-        self.assertIn('href="https://example.org/fixture/input/ae.csv"', readme)
+        self.assertIn('href="https://benchmark.org/fixture/input/ae.csv"', readme)
 
     def test_readme_taxonomy_is_metadata_not_summary_content(self):
-        source = "# Example\n\nBody.\n\n**Standard:** ADaM | **Domain:** ADAE\n"
+        source = "# Benchmark\n\nBody.\n\n**Standard:** ADaM | **Domain:** ADAE\n"
         self.assertEqual(generate.readme_taxonomy(source), ("ADaM", "ADAE"))
-        title, readme = generate.render_readme(source, "https://example.org/fixture")
-        self.assertEqual(title, "Example")
+        title, readme = generate.render_readme(source, "https://benchmark.org/fixture")
+        self.assertEqual(title, "Benchmark")
         self.assertEqual(readme, "<p>Body.</p>\n")
 
     def test_negative_fixture_is_shown_without_repair(self):
-        example = generate.EXAMPLES / "negative-source-record-width"
-        page = generate.render_example(example).decode("ascii")
+        benchmark = generate.BENCHMARKS / "negative-source-record-width"
+        page = generate.render_benchmark(benchmark).decode("ascii")
         self.assertIn("raw CSV", page)
         self.assertIn("No artifact is produced", page)
-        self.assertIn(generate.escape((example / "expected/error.yaml").read_text()), page)
+        self.assertIn(generate.escape((benchmark / "expected/error.yaml").read_text()), page)
 
     def test_negative_failure_has_banner_and_own_section(self):
-        example = generate.EXAMPLES / "negative-output-duplicate-subject"
-        page = generate.render_example(example).decode("ascii")
+        benchmark = generate.BENCHMARKS / "negative-output-duplicate-subject"
+        page = generate.render_benchmark(benchmark).decode("ascii")
         self.assertIn('<div class="result-rejected"><dt>result</dt><dd>Rejected</dd></div>', page)
         self.assertIn('id="expected-failure"', page)
         self.assertIn('<h2 id="outputs-heading">Unexpected Output</h2>', page)
@@ -185,7 +185,7 @@ class DashboardTests(unittest.TestCase):
             [pane["aria-label"] for pane in content.file_panes],
             ["input/dm.csv", "expected/adsl.csv"],
         )
-        positive = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
+        positive = generate.render_benchmark(generate.BENCHMARKS / "sdtm-dm-basic").decode("ascii")
         self.assertNotIn('class="result-rejected"', positive)
         self.assertNotIn('id="expected-failure"', positive)
         self.assertIn('<h2 id="outputs-heading">Expected output</h2>', positive)
@@ -197,7 +197,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(generate.subject_key({"STUDYID": "STUDY-A"}), "")
 
     def test_specification_controls_are_generated(self):
-        page = generate.render_example(EXAMPLE).decode("ascii")
+        page = generate.render_benchmark(BENCHMARK).decode("ascii")
         self.assertIn('<span>Hide Spec</span>', page)
         self.assertIn('role="separator" aria-label="Resize specification panel"', page)
         self.assertIn('aria-valuenow="740"', page)
@@ -213,8 +213,8 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn('id="section-select"', page)
         self.assertNotIn("Jump to section", page)
 
-    def test_comments_map_to_a_stable_discussion_per_example(self):
-        page = generate.render_example(EXAMPLE).decode("ascii")
+    def test_comments_map_to_a_stable_discussion_per_benchmark(self):
+        page = generate.render_benchmark(BENCHMARK).decode("ascii")
         self.assertEqual(page.count('src="https://giscus.app/client.js"'), 1)
         self.assertIn('data-mapping="specific" data-term="yaml/examples/adam-adae-death-outcome" data-strict="1"', page)
         self.assertIn('data-repo="elong0527/yamaa"', page)
@@ -222,7 +222,7 @@ class DashboardTests(unittest.TestCase):
             'data-theme="https://elong0527.github.io/yamaa/assets/giscus-yamaa.css?v=3"',
             page,
         )
-        other = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
+        other = generate.render_benchmark(generate.BENCHMARKS / "sdtm-dm-basic").decode("ascii")
         self.assertIn('data-term="yaml/examples/sdtm-dm-basic"', other)
 
     def test_giscus_theme_limits_reactions_to_thumbs_with_counts(self):
@@ -237,9 +237,9 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("transform: none !important", theme)
         self.assertIn(".gsc-social-reaction-summary-item-count", theme)
 
-    def test_code_panel_lists_example_scripts(self):
-        example = generate.EXAMPLES / "sdtm-dm-basic"
-        page = generate.render_example(example).decode("ascii")
+    def test_code_panel_lists_benchmark_scripts(self):
+        benchmark = generate.BENCHMARKS / "sdtm-dm-basic"
+        page = generate.render_benchmark(benchmark).decode("ascii")
         self.assertIn('id="code"', page)
         self.assertIn('data-filename="run.py"', page)
         self.assertIn("import yamaa", page)
@@ -248,8 +248,8 @@ class DashboardTests(unittest.TestCase):
             page,
         )
         self.assertNotIn('id="code-select"', page)
-        codeless = generate.EXAMPLES / "negative-column-type-unknown"
-        plain = generate.render_example(codeless).decode("ascii")
+        codeless = generate.BENCHMARKS / "negative-column-type-unknown"
+        plain = generate.render_benchmark(codeless).decode("ascii")
         self.assertNotIn('id="code"', plain)
 
     def test_code_panel_switches_between_files(self):
@@ -266,14 +266,14 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('id="code-pane-figure-r" data-filename="figure.R" hidden>', panel)
 
     def test_multi_level_spec_renders_panes_with_resolved_default(self):
-        example = generate.EXAMPLES / "spec-inheritance"
-        entry, chain = generate.example_entry(example)
+        benchmark = generate.BENCHMARKS / "spec-inheritance"
+        entry, chain = generate.benchmark_entry(benchmark)
         self.assertEqual(entry.name, "spec_study.yaml")
         self.assertEqual(
             [path.name for path in chain],
             ["spec_organization.yaml", "spec_compound.yaml"],
         )
-        page = generate.render_example(example).decode("ascii")
+        page = generate.render_benchmark(benchmark).decode("ascii")
         self.assertEqual(
             re.findall(r'data-filename="([^"]+)"', page),
             ["spec_organization.yaml", "spec_compound.yaml", "spec_study.yaml", "spec_resolved.yaml"],
@@ -303,21 +303,21 @@ class DashboardTests(unittest.TestCase):
             page,
         )
 
-    def test_spec_prefixed_example_gets_its_own_gallery_category(self):
-        example = generate.EXAMPLES / "spec-inheritance"
-        title, category = generate.describe_example(example)
+    def test_spec_prefixed_benchmark_gets_its_own_gallery_category(self):
+        benchmark = generate.BENCHMARKS / "spec-inheritance"
+        title, category = generate.describe_benchmark(benchmark)
         self.assertEqual(title, "Spec Inheritance")
         self.assertEqual(category, "Specification")
 
     def test_dashboard_badge_is_not_rendered_on_its_own_page(self):
-        page = generate.render_example(generate.EXAMPLES / "sdtm-dm-basic").decode("ascii")
+        page = generate.render_benchmark(generate.BENCHMARKS / "sdtm-dm-basic").decode("ascii")
         self.assertNotIn("badge/Dashboard", page)
         self.assertIn("Create DM from EDC extract", page)
 
     def test_readme_lifecycle_extracts_state_and_badge_url(self):
         text = (
-            "# Example\n\n"
-            "[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://example.org/x.html)"
+            "# Benchmark\n\n"
+            "[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://benchmark.org/x.html)"
             " [![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)]"
             "(https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)\n"
         )
@@ -328,48 +328,56 @@ class DashboardTests(unittest.TestCase):
 
     def test_readme_lifecycle_defaults_to_draft_without_badge(self):
         self.assertEqual(
-            generate.readme_lifecycle("# Example\n\nBody.\n"),
+            generate.readme_lifecycle("# Benchmark\n\nBody.\n"),
             ("draft", "https://img.shields.io/badge/Lifecycle-draft-lightgrey"),
         )
 
     def test_readme_lifecycle_defaults_to_draft_for_unknown_state(self):
-        text = "[![Lifecycle: archived](https://img.shields.io/badge/Lifecycle-archived-red)](https://example.org)\n"
+        text = "[![Lifecycle: archived](https://img.shields.io/badge/Lifecycle-archived-red)](https://benchmark.org)\n"
         self.assertEqual(
             generate.readme_lifecycle(text),
             ("draft", "https://img.shields.io/badge/Lifecycle-draft-lightgrey"),
         )
 
-    def test_dashboard_renders_lifecycle_badge_beside_title(self):
-        finalized = generate.render_example(generate.EXAMPLES / "adam-adsl-age-group").decode("ascii")
+    def test_dashboard_renders_lifecycle_badge_beside_summary(self):
+        finalized = generate.render_benchmark(generate.BENCHMARKS / "adam-adsl-age-group").decode("ascii")
         self.assertIn('<img src="https://img.shields.io/badge/Lifecycle-finalized-brightgreen"', finalized)
         self.assertIn('alt="Lifecycle: finalized"', finalized)
+        self.assertIn(
+            '<h2 id="readme-heading">Summary</h2><a class="lifecycle-badge"',
+            finalized,
+        )
         self.assertIn(
             '<a class="lifecycle-badge" href="https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle">',
             finalized,
         )
-        draft = generate.render_example(generate.EXAMPLES / "adam-adlb-order-sensitive-sum").decode("ascii")
+        draft = generate.render_benchmark(generate.BENCHMARKS / "adam-adlb-order-sensitive-sum").decode("ascii")
         self.assertIn('<img src="https://img.shields.io/badge/Lifecycle-draft-lightgrey"', draft)
         self.assertIn('alt="Lifecycle: draft"', draft)
+        self.assertIn(
+            '<h2 id="readme-heading">Summary</h2><a class="lifecycle-badge"',
+            draft,
+        )
         self.assertIn(
             '<a class="lifecycle-badge" href="https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle">',
             draft,
         )
 
     def test_unterminated_csv_is_not_silently_repaired(self):
-        page = generate.render_example(generate.EXAMPLES / "negative-source-unterminated-quote").decode("ascii")
+        page = generate.render_benchmark(generate.BENCHMARKS / "negative-source-unterminated-quote").decode("ascii")
         self.assertIn("raw CSV", page)
 
-    def test_neighbor_navigation_links_examples(self):
-        page = generate.render_example(EXAMPLE, "aaa-first", "zzz-last").decode("ascii")
+    def test_neighbor_navigation_links_benchmarks(self):
+        page = generate.render_benchmark(BENCHMARK, "aaa-first", "zzz-last").decode("ascii")
         self.assertIn('<a href="aaa-first.html" rel="prev">Previous benchmark</a>', page)
         self.assertIn('<a href="zzz-last.html" rel="next">Next benchmark</a>', page)
         self.assertIn('<a href="index.html">All benchmarks</a>', page)
-        edges = generate.render_example(EXAMPLE, None, None).decode("ascii")
+        edges = generate.render_benchmark(BENCHMARK, None, None).decode("ascii")
         self.assertIn('<span class="is-disabled" aria-disabled="true">Previous benchmark</span>', edges)
         self.assertIn('<span class="is-disabled" aria-disabled="true">Next benchmark</span>', edges)
 
     def test_gallery_link_is_reachable_without_scrolling(self):
-        page = generate.render_example(EXAMPLE).decode("ascii")
+        page = generate.render_benchmark(BENCHMARK).decode("ascii")
         header, _, footer = page.partition("</header>")
         self.assertIn('<a class="gallery-link" href="index.html">', header)
         self.assertIn('<a href="index.html">All benchmarks</a>', footer)
@@ -404,7 +412,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("\n### ADaM ADSL\n", text)
         self.assertIn("1 benchmark, generated from", text)
 
-    def test_gallery_lists_rejected_examples_apart_from_positive_ones(self):
+    def test_gallery_lists_rejected_benchmarks_apart_from_positive_ones(self):
         entries = [
             ("adam-adsl-one", "ADaM ADSL: derive a flag", "ADaM ADSL"),
             ("negative-adsl-two", "ADaM ADSL: reject a flag", "ADaM ADSL"),
@@ -420,7 +428,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('<a href="#positive">Benchmarks (1)</a>', text)
         self.assertIn('<a href="#negative">Anti-pattern (1)</a>', text)
 
-    def test_gallery_omits_a_group_with_no_examples(self):
+    def test_gallery_omits_a_group_with_no_benchmarks(self):
         text = generate.render_index([("adam-adsl-one", "ADaM ADSL: derive", "ADaM ADSL")]).decode("ascii")
         self.assertIn("{: #positive }", text)
         self.assertNotIn("{: #negative }", text)

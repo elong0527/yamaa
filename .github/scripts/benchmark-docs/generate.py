@@ -17,7 +17,7 @@ from markdown_it import MarkdownIt
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-EXAMPLES = ROOT / "benchmark"
+BENCHMARKS = ROOT / "benchmark"
 DESTINATION = ROOT / "docs/benchmark"
 REPOSITORY = "https://github.com/elong0527/yamaa"
 # Comments are giscus threads in the repository's GitHub Discussions, so they
@@ -63,24 +63,24 @@ def escape(value):
     return html.escape(str(value), quote=True)
 
 
-def example_spec_files(example):
-    if not example.is_dir():
+def benchmark_spec_files(benchmark):
+    if not benchmark.is_dir():
         return []
     return sorted(
         path
-        for path in example.iterdir()
+        for path in benchmark.iterdir()
         if path.is_file() and SPEC_FILE_PATTERN.fullmatch(path.name)
     )
 
 
-def example_has_spec(example):
-    return bool(example_spec_files(example))
+def benchmark_has_spec(benchmark):
+    return bool(benchmark_spec_files(benchmark))
 
 
-def example_entry(example):
-    files = example_spec_files(example)
-    if (example / 'spec.yaml').is_file():
-        return example / 'spec.yaml', []
+def benchmark_entry(benchmark):
+    files = benchmark_spec_files(benchmark)
+    if (benchmark / 'spec.yaml').is_file():
+        return benchmark / 'spec.yaml', []
     specs = {}
     for path in files:
         try:
@@ -245,12 +245,12 @@ def render_table(headers, rows, filename, derived, labels):
     )
 
 
-def render_files(paths, group, example, derived, labels):
+def render_files(paths, group, benchmark, derived, labels):
     panes, widths, subjects = [], [], set()
     row_count = 0
     for index, path in enumerate(paths):
         pane_id = f"{group}-file-{index}"
-        filename = path.relative_to(example).as_posix()
+        filename = path.relative_to(benchmark).as_posix()
         count = ""
         table = None
         width = 1
@@ -281,7 +281,7 @@ def render_files(paths, group, example, derived, labels):
         widths.append(f"minmax(0, {width}fr)")
         count_html = f'<span class="file-count">{count}</span>' if count else ""
         edit_url = (
-            REPOSITORY + "/edit/main/benchmark/" + quote(example.name)
+            REPOSITORY + "/edit/main/benchmark/" + quote(benchmark.name)
             + "/" + "/".join(quote(part) for part in filename.split("/"))
         )
         panes.append(
@@ -342,7 +342,7 @@ def highlight_yaml(line):
     return "".join(result)
 
 
-def example_category(name, title, spec):
+def benchmark_category(name, title, spec):
     if name.startswith("spec-"):
         return "Specification", title
     category, separator, heading = title.partition(": ")
@@ -351,18 +351,18 @@ def example_category(name, title, spec):
     return category, heading
 
 
-def describe_example(example):
+def describe_benchmark(benchmark):
     """Return the page title and category without rendering fixtures."""
-    source_url = REPOSITORY + "/blob/main/benchmark/" + quote(example.name)
-    readme_path = example / "README.md"
-    entry_path, _ = example_entry(example)
+    source_url = REPOSITORY + "/blob/main/benchmark/" + quote(benchmark.name)
+    readme_path = benchmark / "README.md"
+    entry_path, _ = benchmark_entry(benchmark)
     if entry_path is None:
-        raise ValueError(f"benchmark has no spec file: {example.name}")
+        raise ValueError(f"benchmark has no spec file: {benchmark.name}")
     spec_path = entry_path
     title, _ = render_readme(readme_path.read_text(encoding="utf-8"), source_url)
     spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
     spec = spec if isinstance(spec, dict) else {}
-    category, _ = example_category(example.name, title, spec)
+    category, _ = benchmark_category(benchmark.name, title, spec)
     return title, category
 
 
@@ -453,9 +453,9 @@ def render_spec_pane(filename, text, slug, single, edit_url=None):
     return pane, len(lines)
 
 
-def example_code_files(example):
+def benchmark_code_files(benchmark):
     return sorted(
-        path for path in example.iterdir()
+        path for path in benchmark.iterdir()
         if path.is_file() and path.suffix in CODE_SUFFIXES
     )
 
@@ -500,14 +500,14 @@ def render_code_panel(files, edit_base=None):
     )
 
 
-def render_example(example, previous=None, next=None):
-    source_url = REPOSITORY + "/blob/main/benchmark/" + quote(example.name)
-    edit_base = REPOSITORY + "/edit/main/benchmark/" + quote(example.name)
+def render_benchmark(benchmark, previous=None, next=None):
+    source_url = REPOSITORY + "/blob/main/benchmark/" + quote(benchmark.name)
+    edit_base = REPOSITORY + "/edit/main/benchmark/" + quote(benchmark.name)
     readme_edit_url = edit_base + "/README.md"
-    readme_path = example / "README.md"
-    spec_path, chain = example_entry(example)
+    readme_path = benchmark / "README.md"
+    spec_path, chain = benchmark_entry(benchmark)
     if spec_path is None:
-        raise ValueError(f"benchmark has no spec file: {example.name}")
+        raise ValueError(f"benchmark has no spec file: {benchmark.name}")
     spec_edit_url = edit_base + "/" + quote(spec_path.name)
     readme_text = readme_path.read_text(encoding="utf-8")
     lifecycle_state, lifecycle_url = readme_lifecycle(readme_text)
@@ -533,16 +533,16 @@ def render_example(example, previous=None, next=None):
             source = source.get("variable")
         if name and source != f'{spec.get("base")}.{name}':
             derived.add(name)
-    inputs = fixture_files(example / "input")
-    error_path = example / "expected" / "error.yaml"
+    inputs = fixture_files(benchmark / "input")
+    error_path = benchmark / "expected" / "error.yaml"
     is_failure = error_path.is_file()
     outputs = [
         path
-        for path in fixture_files(example / "expected")
+        for path in fixture_files(benchmark / "expected")
         if path.name != SPEC_RESOLVED_NAME and (not is_failure or path.name != "error.yaml")
     ]
-    input_files, _, input_subjects = render_files(inputs, "input", example, set(), {})
-    output_files, output_rows, output_subjects = render_files(outputs, "output", example, derived, labels)
+    input_files, _, input_subjects = render_files(inputs, "input", benchmark, set(), {})
+    output_files, output_rows, output_subjects = render_files(outputs, "output", benchmark, derived, labels)
     subjects = sorted(input_subjects | output_subjects)
     subject_ids = [json.loads(key)[1] for key in subjects]
     subject_options = []
@@ -550,9 +550,9 @@ def render_example(example, previous=None, next=None):
         study, subject = json.loads(key)
         label = f"{study} / {subject}" if subject_ids.count(subject) > 1 else subject
         subject_options.append(f'<option value="{escape(key)}">{escape(label)}</option>')
-    category, heading = example_category(example.name, title, spec)
+    category, heading = benchmark_category(benchmark.name, title, spec)
     taxonomy = readme_taxonomy(readme_text)
-    if taxonomy and not example.name.startswith("spec-"):
+    if taxonomy and not benchmark.name.startswith("spec-"):
         category = ".".join(taxonomy)
     heading = heading[:1].upper() + heading[1:]
     has_csv = any(path.suffix == ".csv" for path in outputs)
@@ -590,7 +590,7 @@ def render_example(example, previous=None, next=None):
         return f"<div{klass}><dt>{label}</dt><dd>{count}</dd></div>"
 
     metrics_html = "".join(metric_cell(*item) for item in metrics)
-    resolved_path = example / "expected" / SPEC_RESOLVED_NAME
+    resolved_path = benchmark / "expected" / SPEC_RESOLVED_NAME
     if not chain and not resolved_path.is_file():
         spec_code, spec_line_count = render_spec_pane(
             spec_path.name, spec_text, "yaml", True
@@ -609,7 +609,7 @@ def render_example(example, previous=None, next=None):
             sources.append(resolved_path)
         for path in sources:
             try:
-                relpath = path.relative_to(example).as_posix()
+                relpath = path.relative_to(benchmark).as_posix()
             except ValueError:
                 relpath = None
             text = path.read_text(encoding="utf-8")
@@ -628,18 +628,18 @@ def render_example(example, previous=None, next=None):
         panes.append(f"<script>{(HERE / 'spec-panes.js').read_text(encoding='utf-8')}</script>")
         spec_code = "".join(panes)
         spec_file_header = ""
-    code_files = example_code_files(example)
+    code_files = benchmark_code_files(benchmark)
     code_panel = render_code_panel(code_files, edit_base) if code_files else ""
     template = Template((HERE / "dashboard.html").read_text(encoding="utf-8"))
     result = template.substitute(
-        example_name=escape(example.name), page_title=escape(title), heading=escape(heading),
+        benchmark_name=escape(benchmark.name), page_title=escape(title), heading=escape(heading),
         category=escape(category), description=description,
         lifecycle_badge=lifecycle_badge,
         failure_section=failure_section,
         datasets_heading=datasets_heading,
         readme_edit_url=readme_edit_url,
         spec_file_header=spec_file_header,
-        source_url=REPOSITORY + "/tree/main/benchmark/" + quote(example.name),
+        source_url=REPOSITORY + "/tree/main/benchmark/" + quote(benchmark.name),
         prev_link=page_link(previous, "Previous benchmark", "prev"),
         next_link=page_link(next, "Next benchmark", "next"),
         metrics=metrics_html,
@@ -653,7 +653,7 @@ def render_example(example, previous=None, next=None):
         giscus_repo=escape(GISCUS["repo"]), giscus_repo_id=escape(GISCUS["repo_id"]),
         giscus_category=escape(GISCUS["category"]), giscus_category_id=escape(GISCUS["category_id"]),
         giscus_theme=escape(GISCUS["theme"]),
-        comment_term=escape(COMMENT_TERM_PREFIX + example.name),
+        comment_term=escape(COMMENT_TERM_PREFIX + benchmark.name),
         discussions_url=REPOSITORY + "/discussions",
         styles=(HERE / "dashboard.css").read_text(encoding="utf-8"),
         script=(HERE / "dashboard.js").read_text(encoding="utf-8"),
@@ -665,41 +665,41 @@ def render_example(example, previous=None, next=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("examples", nargs="*", help="Benchmark directory names; defaults to existing generated dashboards")
+    parser.add_argument("benchmarks", nargs="*", help="Benchmark directory names; defaults to existing generated dashboards")
     parser.add_argument("--all", action="store_true", help="Generate every benchmark containing README.md and a spec file")
     parser.add_argument("--check", action="store_true", help="Fail if a selected dashboard is missing or differs; write nothing")
     parser.add_argument("--quiet", action="store_true", help="Suppress successful generation messages")
     parser.add_argument("--output-dir", type=Path, default=DESTINATION, help="Destination directory (default: docs/benchmark)")
     args = parser.parse_args()
-    if args.all and args.examples:
+    if args.all and args.benchmarks:
         parser.error("choose --all or explicit benchmark names")
-    names = args.examples
+    names = args.benchmarks
     if args.all:
-        names = [path.name for path in sorted(EXAMPLES.iterdir()) if example_has_spec(path) and (path / "README.md").is_file()]
+        names = [path.name for path in sorted(BENCHMARKS.iterdir()) if benchmark_has_spec(path) and (path / "README.md").is_file()]
     elif not names:
         names = [path.stem for path in sorted(args.output_dir.glob("*.html"))]
     if not names:
         parser.error("specify a benchmark name or --all")
     ordered = sorted(set(names))
-    complete = sorted(path.name for path in EXAMPLES.iterdir() if example_has_spec(path) and (path / "README.md").is_file())
+    complete = sorted(path.name for path in BENCHMARKS.iterdir() if benchmark_has_spec(path) and (path / "README.md").is_file())
     neighbors = {name: (complete[index - 1] if index else None, complete[index + 1] if index + 1 < len(complete) else None) for index, name in enumerate(complete) if name in set(ordered)}
-    write_index = args.all or (not args.examples and (args.output_dir / "index.md").is_file())
+    write_index = args.all or (not args.benchmarks and (args.output_dir / "index.md").is_file())
     failures = []
     entries = []
     for name in ordered:
         if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
             parser.error(f"invalid benchmark name: {name}")
-        example = EXAMPLES / name
-        if not (example / "README.md").is_file() or not example_has_spec(example):
+        benchmark = BENCHMARKS / name
+        if not (benchmark / "README.md").is_file() or not benchmark_has_spec(benchmark):
             parser.error(f"benchmark must contain README.md and a spec file: {name}")
         try:
             previous, following = neighbors.get(name, (None, None))
-            rendered = render_example(example, previous, following)
+            rendered = render_benchmark(benchmark, previous, following)
         except (OSError, ValueError, yaml.YAMLError) as error:
             print(f"Cannot generate {name}: {error}", file=sys.stderr)
             failures.append(name)
             continue
-        entries.append((name,) + describe_example(example))
+        entries.append((name,) + describe_benchmark(benchmark))
         destination = args.output_dir / f"{name}.html"
         if args.check:
             if not destination.is_file() or destination.read_bytes() != rendered:

@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-group-count-without-id.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** carry the analysis date (`ADT`), the numeric result
 (`AVAL`), and the baseline flag (`ABLFL`, `Y` on the baseline
 result and blank otherwise) for each subject and parameter, and

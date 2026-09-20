@@ -17,7 +17,7 @@ values.
 From the repository root, generate every benchmark and the gallery:
 
 ```sh
-uv run --with-requirements .github/scripts/example-docs/requirements.txt python .github/scripts/example-docs/generate.py --all
+uv run --with-requirements .github/scripts/benchmark-docs/requirements.txt python .github/scripts/benchmark-docs/generate.py --all
 ```
 
 With explicit benchmark names, regenerate only those dashboards; each keeps the
@@ -25,7 +25,7 @@ previous and next links of the full gallery, and the gallery itself is left
 untouched:
 
 ```sh
-uv run --with-requirements .github/scripts/example-docs/requirements.txt python .github/scripts/example-docs/generate.py adam-adae-death-outcome
+uv run --with-requirements .github/scripts/benchmark-docs/requirements.txt python .github/scripts/benchmark-docs/generate.py adam-adae-death-outcome
 ```
 
 With no benchmark names, regenerate the dashboards already present in
@@ -35,13 +35,13 @@ With no benchmark names, regenerate the dashboards already present in
 Check that existing dashboards match the current fixtures and template:
 
 ```sh
-uv run --with-requirements .github/scripts/example-docs/requirements.txt python .github/scripts/example-docs/generate.py --check
+uv run --with-requirements .github/scripts/benchmark-docs/requirements.txt python .github/scripts/benchmark-docs/generate.py --check
 ```
 
 Run the generator checks:
 
 ```sh
-uv run --with-requirements .github/scripts/example-docs/requirements.txt python -m unittest discover -s .github/scripts/example-docs -p 'test_*.py'
+uv run --with-requirements .github/scripts/benchmark-docs/requirements.txt python -m unittest discover -s .github/scripts/benchmark-docs -p 'test_*.py'
 ```
 
 The dependencies, including the Markdown parser's transitive dependency, are
@@ -118,11 +118,11 @@ generated and the Edit and View buttons Material would draw for it would point
 at a file that is not in the repository; `docs/overrides/partials/actions.html`
 is what honors that.
 
-The `Example dashboards` workflow runs on relevant pushes and pull requests. It
+The `Benchmark dashboards` workflow runs on relevant pushes and pull requests. It
 generates every repository benchmark twice under different time zones and Python
 hash seeds, compares the resulting directories byte for byte, checks that the
 committed pages and gallery are current, and uploads the complete generated
-set as the `yamaa-example-dashboards` workflow artifact. MkDocs builds
+set as the `yamaa-benchmark-dashboards` workflow artifact. MkDocs builds
 `docs/benchmark/index.md` to `benchmark/index.html`, which GitHub Pages serves
 as the directory index, so `index.html` in a dashboard's own links reaches the
 gallery and every page is reachable from the site.

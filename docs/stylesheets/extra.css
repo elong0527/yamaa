@@ -2,7 +2,7 @@
  *
  * The brand palette is sampled from the hex logo: a deep navy outline over
  * steel-blue bands. The generated benchmark dashboards carry the same values
- * in .github/scripts/example-docs/dashboard.css, so the Material pages and
+ * in .github/scripts/benchmark-docs/dashboard.css, so the Material pages and
  * the self-contained pages read as one site. Change a value in one place and
  * change it in the other.
  */
@@ -53,7 +53,7 @@
 }
 
 /* Benchmark gallery (docs/benchmark/index.md, written by
- * .github/scripts/example-docs/generate.py). The page is generated, so its
+ * .github/scripts/benchmark-docs/generate.py). The page is generated, so its
  * lists arrive as plain HTML and are laid out here. */
 .md-typeset .benchmark-jump {
   display: flex;

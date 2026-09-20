@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adsl-portable-text.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** derive `UPPERTXT`, `LOWERTXT`, `EQUALFL`, `LEASTTXT`,
 `GREATESTTXT`, `MAPCAT`, `TEXTSEQ`, `MINTXT`, and `MAXTXT` for each
 subject from the collected text and a comparison text.
