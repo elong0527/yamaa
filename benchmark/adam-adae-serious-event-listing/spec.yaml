@@ -33,13 +33,10 @@ columns:
   - name: AESER
     type: str
     label: Serious Event
+    derivation:
+      literal: "Y"
 
-rows:
-  - id: serious
-    filter: "AE.AESER = 'Y'"
-    derivations:
-      AESER:
-        literal: "Y"
+filter: "AE.AESER = 'Y'"
 
 verifications:
   - unique:

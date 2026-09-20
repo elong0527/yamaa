@@ -2856,6 +2856,15 @@ def _preflight_findings(
                     {"dataset": specification.base},
                 )
             )
+        if specification.filter is not None and rows:
+            diagnostics.append(
+                _diagnostic(
+                    "conflicting_row_construction",
+                    ("filter", "rows"),
+                    {},
+                    requirement="REQ-1171",
+                )
+            )
 
     for index, row in enumerate(rows):
         if not specification.parents:
@@ -2991,9 +3000,44 @@ def plan_execution(
             specification.default_driver is not None
             and specification.default_driver in specification.input
         ):
+            driver = specification.default_driver
+            # REQ-1170: a root filter is the filter-only row template lifted
+            # to root; it reads the base driver like an ungrouped row.filter.
+            filter_ast = None
+            if specification.filter is not None:
+                filter_ast = _parse_predicate_at(
+                    specification.filter, "filter", diagnostics
+                )
+            if filter_ast is not None:
+                for identifier in _predicate_identifiers(filter_ast):
+                    if "." in identifier:
+                        _validate_qualified_reference(
+                            _Reference(identifier, "filter"),
+                            {driver},
+                            bindings,
+                            column_types,
+                            diagnostics,
+                            intermediates=intermediates,
+                        )
+                    else:
+                        diagnostics.append(
+                            _diagnostic(
+                                "phase_boundary",
+                                "filter",
+                                {
+                                    "identifier": identifier,
+                                    "available_phase": "column_derivation",
+                                    "required_phase": "row_filter",
+                                },
+                            )
+                        )
             row_plans.append(
                 PlannedRow(
-                    index=None, declaration=None, driver=specification.default_driver
+                    index=None,
+                    declaration=None,
+                    driver=driver,
+                    filter_path="filter" if filter_ast is not None else None,
+                    filter_predicate=filter_ast,
                 )
             )
     else:

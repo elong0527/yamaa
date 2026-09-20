@@ -5,6 +5,7 @@ input:
   RS: input/rs.csv
   ADSL: input/adsl.csv
 
+base: RS
 output:
   path: adrs.csv
   columns: [STUDYID, USUBJID, RSSEQ, PARAMCD, PARAM, RSDTC, ADT, ADY, AVALC, AVAL, ANL01FL]
@@ -121,11 +122,7 @@ columns:
       allowed_values:
         values: [Y]
 
-rows:
-  - id: overall_response
-    dataset: RS
-    filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSEVAL = 'INVESTIGATOR'"
-    derivations: {}
+filter: "RS.RSTESTCD = 'OVRLRESP' AND RS.RSEVAL = 'INVESTIGATOR'"
 
 verifications:
   - unique:

@@ -1176,3 +1176,5 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1167](../submission/metadata.md#req-1167) | `submission/metadata.md` | Schema prose |
 | [REQ-1168](../submission/metadata.md#req-1168) | `submission/metadata.md` | Schema prose |
 | [REQ-1169](../submission/define-xml.md#req-1169) | `submission/define-xml.md` | Schema prose |
+| [REQ-1170](../execution/rows.md#req-1170) | `execution/rows.md` | Schema prose |
+| [REQ-1171](../execution/rows.md#req-1171) | `execution/rows.md` | Schema prose |

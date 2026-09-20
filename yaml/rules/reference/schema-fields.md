@@ -19,6 +19,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `root_class.output` | `"output_class"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.columns` | `"list[column_class]"` | `true` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.rows` | `"list[row_class]"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
+| `root_class.filter` | `"predicate"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.verifications` | `["dataset_verification", "list[dataset_verification]"]` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.submission` | `"submission_dataset_class"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
 | `root_class.metadata` | `"dict[str, str]"` | `false` | Absent | -- | [REQ-1042](../specification/structure.md#req-1042) |
