@@ -8,4 +8,10 @@ in ADVS using baseline height.
 **Input:** A VS dataset with height and weight information and an ADSL
 dataset with baseline height information.
 
+**Variables:**
+
+- `AVAL` is the collected measurement on collected records and
+  the BMI on BMI records; missing without a usable height, and
+  no BMI record is made without a weight.
+
 **Standard:** ADaM | **Domain:** ADVS
