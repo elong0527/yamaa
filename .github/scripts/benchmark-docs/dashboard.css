@@ -162,9 +162,9 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
 .comments-body { padding: 16px 22px 8px; }
 .comments-body noscript p { margin: 0 0 8px; }
 .page-footer { padding: 16px 28px; color: #66768a; font-size: 12px; gap: 10px; }
-.example-nav { display: flex; align-items: center; gap: 12px; }
-.example-nav a { color: #2d5f8a; }
-.example-nav .is-disabled { color: #a8b4c2; }
+.benchmark-nav { display: flex; align-items: center; gap: 12px; }
+.benchmark-nav a { color: #2d5f8a; }
+.benchmark-nav .is-disabled { color: #a8b4c2; }
 @media (max-width: 1000px) {
   .brand-row { padding: 10px 18px; }
   .title-row { padding: 16px 18px; }
@@ -179,7 +179,7 @@ body.has-js .subject-button { color: var(--brand); text-decoration: underline; t
   .schema-section { position: static; height: 400px; }
   .prose { columns: 1; }
   .title-row { flex-direction: column; align-items: flex-start; gap: 16px; }
-  /* Four metrics do not fit one phone line; a rejected example has four. */
+  /* Four metrics do not fit one phone line; a rejected benchmark has four. */
   .metrics { padding: 0; flex-wrap: wrap; gap: 14px 24px; }
 }
 @media (max-width: 599px) {

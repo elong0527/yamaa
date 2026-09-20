@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-basic.html) [![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** finalized - a human decided to finalize this benchmark.
-
 **Goal:** build one Demographics (DM) record per subject: sex (SEX), age
 (AGE), planned arm (ARM), actual arm (ACTARM) and reason not assigned
 (ARMNRS).

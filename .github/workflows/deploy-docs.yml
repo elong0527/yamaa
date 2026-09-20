@@ -10,7 +10,7 @@ on:
       - 'benchmark/**'
       - 'docs/**'
       - 'mkdocs.yml'
-      - '.github/scripts/example-docs/**'
+      - '.github/scripts/benchmark-docs/**'
       - '.github/workflows/deploy-docs.yml'
 
 permissions:
@@ -33,13 +33,13 @@ jobs:
         with:
           python-version: '3.14'
       - name: Install pinned docs dependencies
-        run: python -m pip install -r docs/requirements.txt -r .github/scripts/example-docs/requirements.txt
-      - name: Generate every example dashboard
+        run: python -m pip install -r docs/requirements.txt -r .github/scripts/benchmark-docs/requirements.txt
+      - name: Generate every benchmark dashboard
         env:
           LC_ALL: C.UTF-8
           PYTHONHASHSEED: '1'
           TZ: UTC
-        run: python .github/scripts/example-docs/generate.py --all --quiet
+        run: python .github/scripts/benchmark-docs/generate.py --all --quiet
       - name: Build the MkDocs site
         run: python -m mkdocs build --strict
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0

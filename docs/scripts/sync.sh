@@ -5,4 +5,4 @@
 # edit it by hand.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
-python "$ROOT/.github/scripts/example-docs/generate.py" --all --quiet
+python "$ROOT/.github/scripts/benchmark-docs/generate.py" --all --quiet

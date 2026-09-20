@@ -16,8 +16,8 @@ From the repository root:
 ```sh
 python -m venv .venv-docs
 source .venv-docs/bin/activate
-pip install -r docs/requirements.txt -r .github/scripts/example-docs/requirements.txt
-python .github/scripts/example-docs/generate.py --all --quiet
+pip install -r docs/requirements.txt -r .github/scripts/benchmark-docs/requirements.txt
+python .github/scripts/benchmark-docs/generate.py --all --quiet
 mkdocs serve
 ```
 
@@ -42,7 +42,7 @@ entry must resolve with zero warnings before merging.
 - Every page under `docs/` must appear in the `nav` section of `mkdocs.yml`.
 - Do not edit generated output under `docs/benchmark/` by hand. Edit the
   benchmark fixtures under `benchmark/` or the generator under
-  `.github/scripts/example-docs/`, then regenerate.
+  `.github/scripts/benchmark-docs/`, then regenerate.
 - Do not edit normative content (`yaml/rules/`, the schema bundle, runnable
   benchmarks) as part of a docs change.
 - Comments on benchmark dashboards are powered by

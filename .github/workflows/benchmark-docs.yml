@@ -1,4 +1,4 @@
-name: Example dashboards
+name: Benchmark dashboards
 
 # PR preview: proves generation is deterministic and uploads the dashboards
 # as an artifact. Nothing generated is committed; deploy-docs.yml builds
@@ -8,8 +8,8 @@ on:
   pull_request:
     paths:
       - 'benchmark/**'
-      - '.github/scripts/example-docs/**'
-      - '.github/workflows/example-docs.yml'
+      - '.github/scripts/benchmark-docs/**'
+      - '.github/workflows/benchmark-docs.yml'
 
 permissions:
   contents: read
@@ -26,27 +26,27 @@ jobs:
         with:
           python-version: '3.14'
       - name: Install pinned rendering dependencies
-        run: python -m pip install -r .github/scripts/example-docs/requirements.txt
+        run: python -m pip install -r .github/scripts/benchmark-docs/requirements.txt
       - name: Test fixture fidelity and deterministic generation
-        run: python -m unittest discover -s .github/scripts/example-docs -p 'test_*.py'
-      - name: Generate every example
+        run: python -m unittest discover -s .github/scripts/benchmark-docs -p 'test_*.py'
+      - name: Generate every benchmark
         env:
           LC_ALL: C.UTF-8
           PYTHONHASHSEED: '1'
           TZ: UTC
-        run: python .github/scripts/example-docs/generate.py --all --quiet --output-dir /tmp/yamaa-example-docs-first
-      - name: Generate every example again in a different environment
+        run: python .github/scripts/benchmark-docs/generate.py --all --quiet --output-dir /tmp/yamaa-benchmark-docs-first
+      - name: Generate every benchmark again in a different environment
         env:
           LC_ALL: C.UTF-8
           PYTHONHASHSEED: '8675309'
           TZ: Pacific/Honolulu
-        run: python .github/scripts/example-docs/generate.py --all --quiet --output-dir /tmp/yamaa-example-docs-second
+        run: python .github/scripts/benchmark-docs/generate.py --all --quiet --output-dir /tmp/yamaa-benchmark-docs-second
       - name: Confirm byte-for-byte deterministic output
-        run: diff -rq /tmp/yamaa-example-docs-first /tmp/yamaa-example-docs-second
-      - name: Upload all generated example dashboards
+        run: diff -rq /tmp/yamaa-benchmark-docs-first /tmp/yamaa-benchmark-docs-second
+      - name: Upload all generated benchmark dashboards
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: yamaa-example-dashboards
-          path: /tmp/yamaa-example-docs-first
+          name: yamaa-benchmark-dashboards
+          path: /tmp/yamaa-benchmark-docs-first
           if-no-files-found: error
           retention-days: 7
