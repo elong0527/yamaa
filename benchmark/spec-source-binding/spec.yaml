@@ -8,7 +8,7 @@ base: VS
 
 output:
   path: advs.csv
-  columns: [USUBJID, VSTESTCD, VSSTRESN, VSSTRESU, SEX, AGE, AGEGR1, RACE]
+  columns: [USUBJID, VSTESTCD, SEX, AGE, AGEGR1, RACE, VSSTRESN, VSSTRESU]
 
 columns:
   - name: USUBJID
@@ -20,16 +20,6 @@ columns:
     type: str
     label: Vital Signs Test Short Name
     derivation: VS.VSTESTCD
-
-  - name: VSSTRESN
-    type: float
-    label: Numeric Result in Standard Units
-    derivation: VS.VSSTRESN
-
-  - name: VSSTRESU
-    type: str
-    label: Standard Units
-    derivation: VS.VSSTRESU
 
   # Another declared dataset is reached through the shared subject key;
   # a missing value stays blank.
@@ -57,6 +47,16 @@ columns:
     type: str
     label: Race
     derivation: DM.RACE
+
+  - name: VSSTRESN
+    type: float
+    label: Numeric Result in Standard Units
+    derivation: VS.VSSTRESN
+
+  - name: VSSTRESU
+    type: str
+    label: Standard Units
+    derivation: VS.VSSTRESU
 
 verifications:
   - unique:
