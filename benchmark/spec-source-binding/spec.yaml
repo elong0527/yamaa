@@ -16,6 +16,11 @@ columns:
     label: Unique Subject Identifier
     derivation: VS.USUBJID
 
+  - name: ASEQ
+    type: int
+    label: Analysis Sequence Number
+    derivation: VS.VSSEQ
+
   - name: VSTESTCD
     type: str
     label: Vital Signs Test Short Name
@@ -47,11 +52,6 @@ columns:
     type: str
     label: Race
     derivation: DM.RACE
-
-  - name: ASEQ
-    type: int
-    label: Analysis Sequence Number
-    derivation: VS.VSSEQ
 
   - name: VSSTRESN
     type: float
