@@ -1,7 +1,3 @@
----
-title: Reading the examples
----
-
 # Reading the examples
 
 ## What the suite is

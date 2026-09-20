@@ -1,7 +1,3 @@
----
-title: Principles
----
-
 # Principles
 
 Two AI-agent sessions read the same prompt to generate SDTM / ADaM datasets.

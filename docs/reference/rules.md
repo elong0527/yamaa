@@ -1,7 +1,3 @@
----
-title: Rules
----
-
 # Derivation contracts
 
 Every contract indexed below is normative. Files have one semantic owner;

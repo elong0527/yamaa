@@ -1,7 +1,3 @@
----
-title: Derivation
----
-
 # Derivation: keys, rows, columns
 
 ## Summary

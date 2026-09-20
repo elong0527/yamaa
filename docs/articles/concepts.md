@@ -1,7 +1,3 @@
----
-title: Core concepts
----
-
 # Core concepts
 
 ## The idea in one table

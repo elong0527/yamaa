@@ -1,7 +1,3 @@
----
-title: Spec anatomy
----
-
 # Spec anatomy
 
 ## A specification, annotated

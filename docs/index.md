@@ -1,7 +1,3 @@
----
-title: YAMAA documentation
----
-
 # YAMAA <img src="assets/logo.jpeg" align="right" width="120" alt="YAMAA logo" />
 
 [![Python tests](https://github.com/elong0527/yamaa/actions/workflows/python.yml/badge.svg)](https://github.com/elong0527/yamaa/actions/workflows/python.yml)

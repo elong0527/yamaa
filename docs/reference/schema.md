@@ -1,7 +1,3 @@
----
-title: Schema reference
----
-
 # Schema reference
 
 The schema bundle lives in [`yaml/`](https://github.com/elong0527/yamaa/tree/main/yaml).
