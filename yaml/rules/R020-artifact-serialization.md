@@ -314,17 +314,25 @@ after its rows are ordered. Rows are not streamed to the target as they are
 constructed, because a partially constructed dataset is not yet ordered and a
 run that fails midway would already have published part of it.
 
-## Rationale
+## Violation-log publication
 
-Two containers serve two readers: `parquet` carries types for production use,
-while `csv` fixes bytes exactly so diffs stay reviewable and golden contracts
-compare byte for byte. Display rounding happens once, after everything a run
-decides, so changing `output.decimals` can never change pass or fail. The tie
-rule operates on the exact binary value because the nearest double is often not
-the decimal written in source, and host rounding routines in both ecosystems
-break ties to even rather than away from zero. Atomic publication through a
-same-directory temporary file keeps readers from ever observing a partial
-artifact.
+**R020-50.** `output.path` and `output.violation_log` must differ. Reusing one
+path fails validation with `artifact_path_collision` and reports both fields.
+Each path's extension independently selects its profile under R020-2; the
+primary may be Parquet while its log is CSV, or the reverse.
+
+**R020-51.** When a successful run has a violation log, a publisher renders
+and validates both complete artifacts before touching either target. It
+publishes the log first and the primary artifact last, applying R020-38 through
+R020-40 to each file. A successful publication therefore never exposes a new
+primary artifact without its completed log already visible.
+
+**R020-52.** Warning violations do not prevent publication. Failure to render
+or replace the log is an output failure, not a warning: the primary target is
+not touched. If replacing the primary fails after the log was replaced, the
+publication fails and the prior primary remains; the complete log may remain as
+the record of the completed candidate run. Atomic replacement is guaranteed per
+file, not simultaneously across two paths.
 
 ## Errors
 
@@ -345,22 +353,14 @@ condition: none is an implementation option. **R020-49.** Rounding with a host
 routine whose ties do not go away from zero, or rounding a value another stage
 can observe: neither is an implementation option.
 
-## Violation-log publication
+## Rationale
 
-**R020-50.** `output.path` and `output.violation_log` must differ. Reusing one
-path fails validation with `artifact_path_collision` and reports both fields.
-Each path's extension independently selects its profile under R020-2; the
-primary may be Parquet while its log is CSV, or the reverse.
-
-**R020-51.** When a successful run has a violation log, a publisher renders
-and validates both complete artifacts before touching either target. It
-publishes the log first and the primary artifact last, applying R020-38 through
-R020-40 to each file. A successful publication therefore never exposes a new
-primary artifact without its completed log already visible.
-
-**R020-52.** Warning violations do not prevent publication. Failure to render
-or replace the log is an output failure, not a warning: the primary target is
-not touched. If replacing the primary fails after the log was replaced, the
-publication fails and the prior primary remains; the complete log may remain as
-the record of the completed candidate run. Atomic replacement is guaranteed per
-file, not simultaneously across two paths.
+Two containers serve two readers: `parquet` carries types for production use,
+while `csv` fixes bytes exactly so diffs stay reviewable and golden contracts
+compare byte for byte. Display rounding happens once, after everything a run
+decides, so changing `output.decimals` can never change pass or fail. The tie
+rule operates on the exact binary value because the nearest double is often not
+the decimal written in source, and host rounding routines in both ecosystems
+break ties to even rather than away from zero. Atomic publication through a
+same-directory temporary file keeps readers from ever observing a partial
+artifact.

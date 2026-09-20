@@ -2,7 +2,7 @@
 id: R011
 title: Column Type Vocabulary, Missing Normalization, and Conversion
 status: normative
-applies_to: [column.type, column_type, literal_value, derivation,
+applies_to: [column.type, column_type, literal_value, expression, derivation,
   conversion_failure]
 ---
 
@@ -16,7 +16,8 @@ to a declared type.
 ## Boundaries
 
 This rule owns the declared types, normalization of any non-finite float
-that enters or is produced by the language, and the defined conversions.
+that enters or is produced by the language, input comparability, and the
+defined conversions.
 R005 owns when conversion happens in the derivation lifecycle and what an
 unhandled failure does to the run. R008 owns `conversion_failure`. R010 owns
 the arithmetic that produces a numeric value in the first place. R014 owns the
@@ -78,6 +79,24 @@ an `allowed_values` verification, as the examples write a flag.
 
 **R011-8.** Extending this vocabulary is a rule change, not an
 implementation choice.
+
+## Input compatibility and comparison
+
+**R011-34.** No implicit conversion occurs between named operation inputs.
+R005 converts only the completed derivation result. Inputs must therefore
+have compatible runtime types.
+
+**R011-35.** Comparability is a property of the runtime type. `int` and
+`float` are mutually comparable, because R010 promotes them. Every other
+type is comparable only with itself. Collected precision, which R016
+defines, is not a runtime type and so takes no part in comparability. Two
+temporal values of one type are comparable whatever precision each carries.
+A comparable type therefore satisfies any input requiring mutually
+comparable values -- `greatest` and `least`, `lookup` key pairing, an
+`order_by` term, and R013's `MIN` and `MAX` -- while a `sources` list or one
+ordering term mixing two types is the R007-38 incompatible-input error rather
+than a comparison over a coerced operand. Each owning rule defines the order
+its type takes.
 
 ## Non-finite floats are missing
 
@@ -203,19 +222,6 @@ occur once, when a field is written. R018's conformance comparison similarly
 operates on a temporary copy and never changes a value used by the
 specification.
 
-## Rationale
-
-Normalizing a non-finite float to missing at its boundary keeps host
-floating-point semantics out of the language. No downstream operation can
-observe infinity or NaN. No operation needs a fallback for either value.
-The policy is value-based rather than a text sentinel, so quoting still
-preserves text and only numeric parsing gives such text a numeric meaning.
-Failing an undefined conversion instead of choosing a representation keeps the
-type system conservative -- a later rule can define a mapping without
-invalidating a specification written under this one. Shortest-round-trip
-float text gives one value one spelling. Two runtimes agree on the
-bytes an artifact carries.
-
 ## Errors
 
 **R011-29.** A `column.type` outside `column_type`: schema failure under
@@ -232,3 +238,16 @@ otherwise fatal under R005.
 
 **R011-33.** Reliance on an unresolved conversion: fail rather than choose a
 representation.
+
+## Rationale
+
+Normalizing a non-finite float to missing at its boundary keeps host
+floating-point semantics out of the language. No downstream operation can
+observe infinity or NaN. No operation needs a fallback for either value.
+The policy is value-based rather than a text sentinel, so quoting still
+preserves text and only numeric parsing gives such text a numeric meaning.
+Failing an undefined conversion instead of choosing a representation keeps the
+type system conservative -- a later rule can define a mapping without
+invalidating a specification written under this one. Shortest-round-trip
+float text gives one value one spelling. Two runtimes agree on the
+bytes an artifact carries.

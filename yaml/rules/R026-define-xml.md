@@ -495,22 +495,6 @@ exist yet. Designing the mapping before that construct exists would fix a
 shape the construct then has to match, which is the failure this deferral
 avoids.
 
-## Rationale
-
-A Define-XML document is study-level. A specification is dataset-level. The
-composition needs its own document. Deriving a submission document from a
-directory makes submission contents a property of the filesystem. Every
-identifier comes from declared names. A reviewer reads a regenerated document
-as a diff of the previous document. A counter or hash makes an unrelated edit
-renumber the file. Definitions are not shared between datasets because sharing
-silently requires two specifications to agree forever. Declared timestamps and
-file identity make generation reproducible. A document generated from a clock
-differs on every run, defeating the golden fixture and review. Bytes, not
-information, are fixed because a diff compares bytes. R020 applies the same
-rule to the `csv` profile. Deferrals reject specifications that carry metadata
-the generator would quietly drop. A submission document must never carry such
-metadata.
-
 ## Errors
 
 **R026-56.** An `output.path` whose extension is not `.xml`: fail validation.
@@ -546,3 +530,19 @@ it.
 schema: fail and report the schema violation. The run publishes nothing.
 **R026-69.** A failed publication: fail and report the target, exactly as
 R020 does. The previous document is unchanged.
+
+## Rationale
+
+A Define-XML document is study-level. A specification is dataset-level. The
+composition needs its own document. Deriving a submission document from a
+directory makes submission contents a property of the filesystem. Every
+identifier comes from declared names. A reviewer reads a regenerated document
+as a diff of the previous document. A counter or hash makes an unrelated edit
+renumber the file. Definitions are not shared between datasets because sharing
+silently requires two specifications to agree forever. Declared timestamps and
+file identity make generation reproducible. A document generated from a clock
+differs on every run, defeating the golden fixture and review. Bytes, not
+information, are fixed because a diff compares bytes. R020 applies the same
+rule to the `csv` profile. Deferrals reject specifications that carry metadata
+the generator would quietly drop. A submission document must never carry such
+metadata.

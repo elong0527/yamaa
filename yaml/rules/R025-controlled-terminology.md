@@ -137,20 +137,6 @@ unreferenced codelist is rejected rather than emitted, because the codelist
 would put terminology into a submission that no column carries. The
 usual cause is a binding that misspells its identifier.
 
-## Rationale
-
-One shared object lets a study upgrade a controlled-terminology version in
-one place. Restating terminology per column creates many places to change
-and makes agreement impossible to prove. A binding enforces only closed
-terminology. Enforcing an extensible or external list would reject values
-the standard admits. Agreement with `allowed_values` is exact equality:
-any other relation leaves the generated document and the executed run
-making different claims about the same column. A submission document whose
-claims the run does not support is the
-failure this design exists to prevent. Decode and rank are all-or-nothing
-within a codelist. A partially decoded list mixes two kinds of list.
-A reader cannot tell an omitted decode from an absent decode.
-
 ## Errors
 
 **R025-22.** A codelist declaring both `items` and `external`, or neither:
@@ -178,3 +164,17 @@ where R009 fails a column verification, reporting the column, the row's key,
 and the value.
 **R025-33.** A `standard` naming a declared standard whose type is not `CT`:
 fail validation.
+
+## Rationale
+
+One shared object lets a study upgrade a controlled-terminology version in
+one place. Restating terminology per column creates many places to change
+and makes agreement impossible to prove. A binding enforces only closed
+terminology. Enforcing an extensible or external list would reject values
+the standard admits. Agreement with `allowed_values` is exact equality:
+any other relation leaves the generated document and the executed run
+making different claims about the same column. A submission document whose
+claims the run does not support is the
+failure this design exists to prevent. Decode and rank are all-or-nothing
+within a codelist. A partially decoded list mixes two kinds of list.
+A reader cannot tell an omitted decode from an absent decode.

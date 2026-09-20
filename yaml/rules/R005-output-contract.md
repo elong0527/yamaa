@@ -132,8 +132,8 @@ under R007, with local handlers under R008.
 **R005-22.** Stage 2: convert the result to the column's declared `type`
 for one value, under R011.
 
-**R005-23.** Stage 3: on conversion failure, substitute
-`conversion_failure` and convert that, for one value, under R008.
+**R005-23.** Stage 3: apply conversion-failure handling under R008-18
+for one value.
 
 **R005-24.** Stage 4: run the column's verifications over the whole column,
 under R009. An error stops execution. Warnings accumulate without changing
@@ -145,7 +145,7 @@ column's final value.
 
 **R005-26.** A row-level derivation therefore completes stages 1 to 3
 during row construction, and a column derivation that depends on it reads a
-converted value of the declared type. The declared type matters. R007
+converted value of the declared type. The declared type matters. R011-34
 permits no implicit conversion between operation inputs, so an operation
 consuming a row-derived column must rely on the column's declared type.
 
@@ -229,20 +229,6 @@ rule applies, so a later layer may refine one inherited declaration.
 Duplicate identifiers within a single layer remain an error. The resolved
 specification contains one declaration for each identifier.
 
-## Rationale
-
-A fixed column list exposes excess dictionary entries as a specification-data
-mismatch. The list does not silently change the artifact schema. The fixed list
-lets a reviewer state key identity in advance. Family grouping by name position
-remains a study design property. No portable construct can state the grouping.
-An internal order term lets a specification withhold a working column. A reader
-cannot always reproduce artifact order from the artifact alone.
-Presentation ordering runs last and changes only the sequence a consumer
-receives. R001 orders construction in base-record order. R014 makes a stored
-artifact a source for another specification. A declared order lets a
-two-specification workflow reproduce the same result rather than rely on the
-runtime's file order.
-
 ## Errors
 
 **R005-40.** A declared column with no derivation: fail and report the
@@ -285,3 +271,17 @@ templates emitting one combination more than once, under R001-12a.
 **R005-52.** A failed error-level verification: fail under R009. A
 warning-level violation leaves the primary artifact intact and enters R009's
 violation log.
+
+## Rationale
+
+A fixed column list exposes excess dictionary entries as a specification-data
+mismatch. The list does not silently change the artifact schema. The fixed list
+lets a reviewer state key identity in advance. Family grouping by name position
+remains a study design property. No portable construct can state the grouping.
+An internal order term lets a specification withhold a working column. A reader
+cannot always reproduce artifact order from the artifact alone.
+Presentation ordering runs last and changes only the sequence a consumer
+receives. R001 orders construction in base-record order. R014 makes a stored
+artifact a source for another specification. A declared order lets a
+two-specification workflow reproduce the same result rather than rely on the
+runtime's file order.

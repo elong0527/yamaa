@@ -3,8 +3,9 @@
 
 Each yaml/rules/RNNN-*.md file must carry minimal frontmatter
 (id, title, status, applies_to), the required section headings
-(Intent, Boundaries, Rationale, Errors), and sequentially numbered
-requirements of the form **RNNN-n.** in document order. The depends_on
+(Intent, Boundaries, Errors, Rationale), and unique, stable requirement
+IDs of the form **RNNN-n.** or **RNNN-na.** independent of document order.
+Existing IDs remain valid when sections move. The depends_on
 and supersedes fields are retired: the former was a cyclic graph the
 validator never checked, the latter never had a schema.
 
@@ -27,9 +28,9 @@ REPO = Path(__file__).resolve().parents[3]
 RULES = REPO / "yaml" / "rules"
 EXAMPLES = REPO / "benchmark"
 ALLOWED_KEYS = {"id", "title", "status", "applies_to"}
-REQUIRED_SECTIONS = ("Intent", "Boundaries", "Rationale", "Errors")
-REQUIREMENT = re.compile(r"\*\*R([0-9]{3})-([1-9][0-9]*)\.\*\*")
-CITATION = re.compile(r"R[0-9]{3}-[1-9][0-9]*$")
+REQUIRED_SECTIONS = ("Intent", "Boundaries", "Errors", "Rationale")
+REQUIREMENT = re.compile(r"\*\*(R[0-9]{3}-[1-9][0-9]*[a-z]?)\.\*\*")
+CITATION = re.compile(r"R[0-9]{3}-[1-9][0-9]*[a-z]?$")
 
 
 def frontmatter(path):
@@ -57,14 +58,21 @@ def check_rule(path, errors, requirements):
     for section in REQUIRED_SECTIONS:
         if section not in headings:
             errors.append(f"ERROR: {label}: missing ## {section}")
+    if headings[:2] != ["Intent", "Boundaries"]:
+        errors.append(f"ERROR: {label}: begin with Intent and Boundaries")
+    if headings[-2:] != ["Errors", "Rationale"]:
+        errors.append(f"ERROR: {label}: end with Errors and Rationale")
     found = REQUIREMENT.findall(body)
-    numbers = [int(number) for rule, number in found if f"R{rule}" == stem]
-    stray = [f"R{rule}-{number}" for rule, number in found if f"R{rule}" != stem]
+    stray = [requirement for requirement in found
+             if not requirement.startswith(f"{stem}-")]
     if stray:
         errors.append(f"ERROR: {label}: requirements of other rules: {stray}")
-    if numbers != list(range(1, len(numbers) + 1)):
-        errors.append(f"ERROR: {label}: requirements must run R{stem[1:]}-1..-{len(numbers)} in order")
-    requirements.update(f"{stem}-{number}" for number in numbers)
+    if not found:
+        errors.append(f"ERROR: {label}: no numbered requirements")
+    duplicates = sorted({item for item in found if found.count(item) > 1})
+    if duplicates:
+        errors.append(f"ERROR: {label}: duplicate requirements: {duplicates}")
+    requirements.update(item for item in found if item.startswith(f"{stem}-"))
 
 
 def check_error(path, requirements, errors):

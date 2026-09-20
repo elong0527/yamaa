@@ -170,7 +170,7 @@ comparable type, is the `greatest` and `least` registry expressions that
 R007 defines. This grammar is not widened to reach them.
 
 **R010-21.** An identifier whose runtime type is neither `int` nor `float`
-is an error. R007 already forbids implicit conversion between operation
+is an error. R011-34 forbids implicit conversion between operation
 inputs, and this rule does not relax that rule. A collected string is
 converted by binding it to a numeric column first.
 
@@ -227,19 +227,6 @@ that do. `a / (b * b)` and `a / b / b` are different formulas and may return
 different doubles. Both are correct. An implementation must return the
 double for the written formula.
 
-## Rationale
-
-Closing the vocabulary to one table keeps portability checkable.
-Anything outside the grammar fails validation instead of inheriting a host
-dialect. There is no rounding function. R, Python with `numpy`,
-and SAS disagree on exactly the half-way values a reviewer checks. Rounding
-inherited from the host would disagree across runtimes. Carrying
-full precision through the derivation and deciding display places at
-reporting time avoids the disagreement. Fixing association and
-forbidding reassociation serves portability. Two formulas that differ only
-in parenthesization may return different doubles, and each implementation
-returns the double for the written formula.
-
 ## Errors
 
 **R010-35.** A `numeric_expression` that does not parse under the grammar:
@@ -261,3 +248,16 @@ or a field of a declared record lookup: fail.
 
 **R010-41.** Any failure condition listed above: fail, reporting the
 expression and the operation that failed.
+
+## Rationale
+
+Closing the vocabulary to one table keeps portability checkable.
+Anything outside the grammar fails validation instead of inheriting a host
+dialect. There is no rounding function. R, Python with `numpy`,
+and SAS disagree on exactly the half-way values a reviewer checks. Rounding
+inherited from the host would disagree across runtimes. Carrying
+full precision through the derivation and deciding display places at
+reporting time avoids the disagreement. Fixing association and
+forbidding reassociation serves portability. Two formulas that differ only
+in parenthesization may return different doubles, and each implementation
+returns the double for the written formula.

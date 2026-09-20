@@ -18,14 +18,17 @@ which handlers are legal.
 
 ## Boundaries
 
-This rule owns the handler lifecycle: which stage each handler belongs to, when
-it fires, what it may substitute, and what must be reported. Which handler
-fields an operation offers is declared by its registry entry under R007.
+This rule owns handler conditions, substitutions, selection, and reporting.
+R005 owns the derivation lifecycle and the order of its result stages. Which
+handler fields an operation offers is declared by its registry entry under
+R007.
 
-## Evaluation order
+## Handler sites
 
-**R008-1.** Handlers occur in this fixed lifecycle. Each listed handler uses a
-literal unless its behavior says otherwise:
+**R008-1.** Each handler applies at the site below. These sites identify
+conditions within expression evaluation or result handling; the ordered
+derivation lifecycle is R005-20 through R005-27. Each handler uses a literal
+unless its behavior says otherwise:
 
 | Stage | Local declaration | Behavior |
 |---|---|---|
@@ -122,7 +125,8 @@ for that wrapper, so every derivation carries its expression in `value`
 once expanded.
 
 **R008-18.** `conversion_failure` supplies a literal replacement only
-when conversion to the declared column type fails. R011 defines which
+when conversion to the declared column type fails. Convert the replacement
+to that same column type. R011 defines which
 conversions fail and states that a missing input is not converted at
 all, so `conversion_failure` never fires for one.
 
@@ -132,18 +136,6 @@ all, so `conversion_failure` never fires for one.
 
 **R008-20.** Implementations must report each handler path's record count.
 A handler firing zero times is reportable and is not an error.
-
-## Rationale
-
-A value with no dictionary entry, a string the pattern does not match,
-and a source an operation cannot use are each a different defect from
-an uncollected value. A specification may answer each defect
-differently, so the present-but-unusable handlers fire only when every
-input is present. With several inputs the two conditions stay disjoint,
-so an incomplete key never reaches the second handler. Filtering to
-no surviving record is an ordinary absent match rather than a handled
-condition, so a narrow filter silently produces missing instead of
-firing the handler.
 
 ## Errors
 
@@ -159,3 +151,15 @@ fail with both the handler and original context.
 failure.
 
 **R008-25.** A conversion replacement that cannot be converted: fail.
+
+## Rationale
+
+A value with no dictionary entry, a string the pattern does not match,
+and a source an operation cannot use are each a different defect from
+an uncollected value. A specification may answer each defect
+differently, so the present-but-unusable handlers fire only when every
+input is present. With several inputs the two conditions stay disjoint,
+so an incomplete key never reaches the second handler. Filtering to
+no surviving record is an ordinary absent match rather than a handled
+condition, so a narrow filter silently produces missing instead of
+firing the handler.

@@ -120,7 +120,7 @@ Otherwise fail as `unknown_field`.
 Otherwise fail as `unknown_field`.
 
 **R003-8.** Each source/key pair must be mutually comparable under
-R007-31. The match converts no operand. A pair that cannot compare fails
+R011-35. The match converts no operand. A pair that cannot compare fails
 as `incompatible_input_type` under R007-38, reporting both declared
 types. R014-4 gives an undeclared field of a typeless container the type
 `str`; a key typed on one side and defaulted on the other needs repair,
@@ -245,7 +245,7 @@ aggregate names no match and fails as `missing_aggregate_keys`.
 
 **R003-31.** An aggregate's declared `key` columns must exist in the
 relation and its `key_base` variables must be known, or fail as
-`unknown_field`. A pair that cannot compare fails under R007-19.
+`unknown_field`. A pair that cannot compare fails under R011-34.
 
 **R003-32.** A grouped-row aggregate reads its own driver group and
 declares no key pairs: the group is the match.
@@ -276,24 +276,6 @@ one column's handling never answers for another.
 among -- an output column, a chosen lookup record, a group key: fail
 as `prohibited_construct`.
 
-## Rationale
-
-An expression returns one value. Before this rule, three mechanisms
-reached another dataset -- the implicit join, `record_lookups`, and
-`mapping_from` -- with three key derivations and three absence
-vocabularies. A reviewer could not see that two columns reading "the
-same" record agreed, and an edit to one key statement and not the other
-broke the agreement silently.
-
-The unification keeps the implicit join where the match is already
-stated: the output `keys` name the row's identity, so a plain
-`source: DATASET.COLUMN` matching on the applicable keys says nothing
-twice. `record_lookups` and `mapping_from` become the one explicit
-`lookup` for everything else -- an unclear key, a key that differs from
-the applicable output keys, or a reusable named read -- so the
-declaration a reviewer reads is the match the engine runs, whichever
-form states it.
-
 ## Review
 
 **R003-39.** Validation reports the source/key pairs for every lookup
@@ -310,7 +292,7 @@ columns of the dataset. At least one applicable key is required; the
 match is left-row preserving, and a current row with no right-side
 match yields a missing result.
 
-**R003-41.** An inferred key must compare equal on both sides. R007-19
+**R003-41.** An inferred key must compare equal on both sides. R011-34
 performs no implicit conversion, so an applicable key whose left and
 right types are not mutually comparable fails as
 `incompatible_input_type`, reporting both types.
@@ -374,7 +356,6 @@ group does not carry varies within the group and names no single match
 value: fail as `ungrouped_driver_field` (R001-36). A key no driver
 record carries fails as `unknown_field` (R002-27), in either mode.
 
-
 ## Errors
 
 The failure vocabulary, in the order the requirements introduce it:
@@ -388,3 +369,21 @@ R003-10, R003-12, R003-15, R003-22, R003-31, R003-47), `incompatible_input_type`
 R003-35), `missing_aggregate_keys` (R003-30), `prohibited_construct`
 (R003-38), `redundant_key_base` (R003-45), and `ungrouped_driver_field`
 (R003-47, under R001-36).
+
+## Rationale
+
+An expression returns one value. Before this rule, three mechanisms
+reached another dataset -- the implicit join, `record_lookups`, and
+`mapping_from` -- with three key derivations and three absence
+vocabularies. A reviewer could not see that two columns reading "the
+same" record agreed, and an edit to one key statement and not the other
+broke the agreement silently.
+
+The unification keeps the implicit join where the match is already
+stated: the output `keys` name the row's identity, so a plain
+`source: DATASET.COLUMN` matching on the applicable keys says nothing
+twice. `record_lookups` and `mapping_from` become the one explicit
+`lookup` for everything else -- an unclear key, a key that differs from
+the applicable output keys, or a reusable named read -- so the
+declaration a reviewer reads is the match the engine runs, whichever
+form states it.

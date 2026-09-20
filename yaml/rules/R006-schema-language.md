@@ -245,18 +245,6 @@ a `description`, and in block form with a `description`. This is a convention
 of how the bundle is written, not a validation requirement. A document that
 mixes the forms differently is still valid.
 
-## Rationale
-
-A document written for one bundle version must not be silently reinterpreted
-under another version. A version mismatch is rejected before validation, not
-coerced. Closed classes and keyword sets make both implementations validate the
-same documents. Undeclared content fails. One implementation cannot ignore
-content that another honors. Shorthand unions expand to a canonical form. Both
-implementations validate the canonical form. Written-form constraints are
-checked before expansion. Uniform quoting of bracketed type expressions makes
-types read the same in flow and block form. Flow descriptors without
-descriptions keep classes readable as tables.
-
 ## Errors
 
 Implementations must fail for:
@@ -272,3 +260,15 @@ Implementations must fail for:
 - **R006-45.** a registry-backed value with zero, multiple, or unknown
   keywords;
 - **R006-46.** a value that fails its type or constraints.
+
+## Rationale
+
+A document written for one bundle version must not be silently reinterpreted
+under another version. A version mismatch is rejected before validation, not
+coerced. Closed classes and keyword sets make both implementations validate the
+same documents. Undeclared content fails. One implementation cannot ignore
+content that another honors. Shorthand unions expand to a canonical form. Both
+implementations validate the canonical form. Written-form constraints are
+checked before expansion. Uniform quoting of bracketed type expressions makes
+types read the same in flow and block form. Flow descriptors without
+descriptions keep classes readable as tables.

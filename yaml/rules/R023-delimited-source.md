@@ -17,10 +17,9 @@ records, fields, and the spellings two runtimes must read alike or reject.
 
 This rule owns source-profile selection and the syntax of the `csv` profile.
 The profile ends at the field with a header and a sequence of records. Each
-delivered field carries its text and whether the field was quoted. R014
-owns what those fields mean, which of them is missing, and what type each
-one takes. R027 owns the `parquet` source profile. Nothing here decides a
-value.
+delivered field carries text or missing under R014-16. Quoting is transport
+and is not reported with a field. R014 owns missing recognition, field
+meaning, and typing. R027 owns the `parquet` source profile.
 
 R020 owns the other direction, and its `csv` profile is the writing
 counterpart of the form this rule reads. The two agree on the bytes, and
@@ -151,15 +150,6 @@ an empty string. Common dataframe readers discard text-versus-missing
 distinctions by default; conformance is a property of what the reader
 delivers, not of which library produced it.
 
-## Rationale
-
-A second spelling is admitted exactly where both spellings deliver the same
-records; every other refused spelling is a file the sponsor repairs before
-a run. A reader that skipped a byte-order mark and one that kept it would
-disagree about the first field's name, and trimming spaces would change a
-collected value. Fixing quoting, width, and names here lets R014 decide
-what fields mean on text both runtimes deliver identically.
-
 ## Errors
 
 **R023-22.** A failure names the input dataset, the path exactly as the
@@ -192,3 +182,12 @@ condition is decided while the snapshot is read and reports under the
 - **R023-25.** Repairing a rejected file in the reader -- skipping a mark,
   trimming a field, padding a record, renaming a duplicate name, or
   normalizing a terminator inside a value: none is an implementation option.
+
+## Rationale
+
+A second spelling is admitted exactly where both spellings deliver the same
+records; every other refused spelling is a file the sponsor repairs before
+a run. A reader that skipped a byte-order mark and one that kept it would
+disagree about the first field's name, and trimming spaces would change a
+collected value. Fixing quoting, width, and names here lets R014 decide
+what fields mean on text both runtimes deliver identically.
