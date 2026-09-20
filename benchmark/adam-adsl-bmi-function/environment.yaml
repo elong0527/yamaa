@@ -5,7 +5,6 @@ runtime:
   language: r
   artifact:
     reference: org.example/yamaa/bmi-r:1.0.0
-    digest: sha256:912ca795a4aba82b4c7776c99d32e76fc874a86d9659266c85b7d9d92c877c79
 
 functions:
   bmi:

@@ -103,9 +103,9 @@ def test_the_committed_contract_mismatch_is_reproduced(repository) -> None:
 
 
 def test_a_rejected_run_reads_no_study_data(repository) -> None:
-    # The negative example's artifact digest names nothing that exists, so
-    # a run that read data before settling the contract would fail on the
-    # artifact instead, and a run that read data at all would be wrong.
+    # The negative example's requested contract version is not the one the
+    # environment provides, so the run is settled before any data is read
+    # and a run that read data at all would be wrong.
     example = repository.examples / "negative-function-contract"
     specification = _specification(repository, "negative-function-contract")
     reached: list[str] = []

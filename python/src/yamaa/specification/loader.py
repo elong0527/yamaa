@@ -28,7 +28,7 @@ def load_specification(
     entry_path: str | Path,
     schema_root: str | Path,
 ) -> LoadedSpecification:
-    """Read, validate, normalize, and model one YAMAA specification."""
+    """Read, validate, normalize, and model one yamaa specification."""
     written_path = Path(entry_path)
     origin_path = written_path.resolve()
     bundle = load_schema_bundle(schema_root)

@@ -5,7 +5,6 @@ runtime:
   language: python
   artifact:
     reference: org.example/yamaa/project-value-python:1.0.0
-    digest: sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
 
 functions:
   project_value:

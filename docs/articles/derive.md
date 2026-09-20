@@ -6,7 +6,7 @@ One specification produces one dataset:
 
 > `output_dataset = derive(input_datasets, spec)`
 
-YAMAA first constructs the output rows and then derives columns onto those
+yamaa first constructs the output rows and then derives columns onto those
 rows. Column derivation never changes the row count.
 
 | Spec field | Question | Answer |
@@ -77,7 +77,7 @@ attach values to those fixed rows.
 
 Each column derivation must resolve to exactly one value for a row. Repeated
 copies of the same present value still count as one value; competing present
-values fail instead of forcing YAMAA to choose. A missing result remains the
+values fail instead of forcing yamaa to choose. A missing result remains the
 row's single missing value.
 
 ## With `rows`: templates construct sections

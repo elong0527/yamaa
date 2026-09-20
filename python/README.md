@@ -1,4 +1,4 @@
-# YAMAA Python
+# yamaa Python
 
 The Python package currently provides general CDISC ODM helpers. It uses
 Pydantic for public data contracts and Polars for tabular data operations.
@@ -509,8 +509,8 @@ result = execute_with_project_functions(
 
 The root's `environment.yaml` is resolved and validated on its own, the
 calls the specification writes are held to the contracts it provides, its
-artifact is verified against the SHA-256 identity it pinned, and every
-activation vector runs -- all before a source is read. Only then does the
+artifact is resolved and read, and every activation vector runs -- all
+before a source is read. Only then does the
 run execute, with `function` registered on the dispatcher every other
 operation already uses.
 

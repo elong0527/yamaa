@@ -1,4 +1,4 @@
-"""Python helpers for the YAMAA clinical data specification."""
+"""Python helpers for the yamaa clinical data specification."""
 
 from importlib.metadata import version as _distribution_version
 

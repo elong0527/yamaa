@@ -127,7 +127,7 @@ set as the `yamaa-benchmark-dashboards` workflow artifact. MkDocs builds
 as the directory index, so `index.html` in a dashboard's own links reaches the
 gallery and every page is reachable from the site.
 
-The generator displays expected artifacts; it does not execute YAMAA or claim
+The generator displays expected artifacts; it does not execute yamaa or claim
 that expected output was reproduced. YAML is parsed only for display metadata.
 Shading identifies output columns whose own derivation is not a direct copy of
 the same-named base column. Subject highlighting matches `STUDYID` and

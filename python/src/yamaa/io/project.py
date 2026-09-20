@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
 import re
 import stat
@@ -12,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from yamaa.specification._yaml import read_yaml_document
 from yamaa.specification.diagnostics import SpecificationError
@@ -68,7 +67,6 @@ class ResourceSnapshot(BaseModel):
 
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
 
-    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     content: bytes
 
 
@@ -688,9 +686,7 @@ class ProjectResources:
                 "resource_path_content_changed", written_path, phase="ingest"
             )
 
-        snapshot = ResourceSnapshot(
-            sha256=hashlib.sha256(content).hexdigest(), content=content
-        )
+        snapshot = ResourceSnapshot(content=content)
         self._store.capture_reads += 1
         self._store.by_identity[identity] = snapshot
         self._store.path_snapshots[opened.key] = snapshot
@@ -736,8 +732,7 @@ class ProjectResources:
             finally:
                 if descriptor >= 0:
                     os.close(descriptor)
-            digest = hashlib.sha256(content).hexdigest()
-            if digest != snapshot.sha256:
+            if content != snapshot.content:
                 raise ResourceFailure(
                     "resource_path_content_changed",
                     written_path,
