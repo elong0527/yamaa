@@ -288,3 +288,18 @@ positions to number or to move along. Omitting it is a validation error.
 `window.order_by`: they locate the baseline row by date and flag, not by a
 declared order. Declaring it is a validation error rather than silently
 ignored.
+
+## Derivation shorthand
+
+**R007-57.** A `derivation` written as a bare string is the source
+shorthand: it desugars to `{source: <string>}` before registry dispatch,
+and the R006-25 handled-expression expansion then applies unchanged. The
+string is always a source reference, never a literal: `derivation: DM`
+with no column `DM` fails validation rather than producing the literal
+`"DM"`. A validated document contains only the canonical dict form.
+
+**R007-58.** A `derivation` that is a non-string scalar is invalid; the
+error names the dict form, so `derivation: 5` must be written
+`{literal: 5}`. The specification reader uses YAML 1.2 core, so only
+`true`/`false` spellings, numbers, and null parse as non-strings; quote a
+column reference that YAML would otherwise parse as a non-string.

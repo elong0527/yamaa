@@ -11,7 +11,7 @@ includes:
     - schema_function.yaml
 
 derivation:
-    type: [expression, handled_expression_class]
+    type: [str, expression, handled_expression_class]
 
 handled_expression_class:
     - value: {type: expression, required: true}
