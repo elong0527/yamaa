@@ -153,7 +153,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `runtime_artifact_class.reference` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1082](../operations/functions.md#req-1082) |
 | `runtime_artifact_class.digest` | `"artifact_digest"` | `true` | Absent | -- | [REQ-1082](../operations/functions.md#req-1082) |
 | `function_contract_class.contract_version` | `"function_contract_version"` | `true` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
-| `function_contract_class.implementation_version` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1083](../operations/functions.md#req-1083) |
+| `function_contract_class.implementation_version` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1083](../operations/functions.md#req-1083) |
 | `function_contract_class.description` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1083](../operations/functions.md#req-1083) |
 | `function_contract_class.comparison_decimals` | `"int"` | `false` | `4` | -- | [REQ-1083](../operations/functions.md#req-1083) |
 | `function_contract_class.may_return_missing` | `"bool"` | `false` | `false` | -- | [REQ-1083](../operations/functions.md#req-1083) |
@@ -167,7 +167,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `function_parameter_class.default` | `"function_value"` | `false` | Absent | -- | Schema constraint |
 | `function_parameter_class.accepts_missing` | `"bool"` | `false` | `false` | -- | Schema constraint |
 | `function_binding_class.call` | `"qualified_callable"` | `true` | Absent | -- | [REQ-1084](../operations/functions.md#req-1084) |
-| `function_binding_class.args` | `"dict[identifier, host_argument_name]"` | `true` | Absent | -- | [REQ-1084](../operations/functions.md#req-1084) |
+| `function_binding_class.args` | `"dict[identifier, host_argument_name]"` | `false` | Absent | -- | [REQ-1084](../operations/functions.md#req-1084) |
 | `function_conformance_class.schema_version` | `"str"` | `true` | Absent | -- | Schema constraint |
 | `function_conformance_class.function` | `"identifier"` | `true` | Absent | -- | Schema constraint |
 | `function_conformance_class.contract_version` | `"function_contract_version"` | `true` | Absent | -- | Schema constraint |
