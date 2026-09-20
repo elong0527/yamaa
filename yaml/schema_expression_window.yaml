@@ -1,97 +1,73 @@
 version: "1.0"
 
-# R007 defines the partitioning, ordering, and filtering one window_spec
-# declares; each window expression below nests it as `window:` and adds only
-# its own specific fields.
+# See REQ-1129 in rules/operations/windows.md.
 
 window_spec:
     - group_by:
         type: "list[variable]"
-        description: Variables defining partitions; omission uses one partition.
+        description: See REQ-1122 in rules/operations/windows.md.
     - order_by:
         type: "list[order_by_term]"
-        description: Terms ordering rows within each partition.
+        description: See REQ-1122 in rules/operations/windows.md.
     - filter:
         type: predicate
-        description: Predicate selecting rows before partitioning; excluded rows receive missing.
+        description: See REQ-1122 in rules/operations/windows.md.
 
 expressions:
-    row_number: # Numbers eligible rows from 1 within each partition.
-        # Filtering happens before partitioning; excluded rows receive missing.
-        # Ordering ties preserve row-template order, then base-record order.
+    row_number: # See REQ-1123 in rules/operations/windows.md.
         - window:
             type: window_spec
-            description: Partition, ordering, and row selection for the window.
-    rank: # Numbers eligible rows from 1 within each partition, sharing a number across ties.
-        # Rows equal on every order term take one number. With competition, they
-        # take the lowest position they occupy and the next distinct value takes
-        # its own position, so intervening numbers are skipped. With dense, the
-        # next distinct value takes the following number and no number is
-        # skipped. Two missing values are equal for this purpose, whatever nulls
-        # places them among. Filtering happens before partitioning; excluded rows
-        # receive missing.
+            description: See REQ-1123 in rules/operations/windows.md.
+    rank: # See REQ-1124 in rules/operations/windows.md.
         - method:
             type: str
             default: competition
             values: [competition, dense]
-            description: Tie numbering; competition leaves position gaps and dense does not.
+            description: See REQ-1124 in rules/operations/windows.md.
         - window:
             type: window_spec
-            description: Partition, ordering, and row selection for the window.
-    row_value: # Returns the source value from another row of the ordered partition.
-        # offset counts along the declared order: positive moves toward later
-        # rows and negative toward earlier ones, so reversing every order_by
-        # direction and negating offset gives the same result.
-        # A row with fewer than |offset| rows on that side of it within its
-        # partition yields missing, which does not distinguish an absent row
-        # from a present row whose value is missing.
+            description: See REQ-1124 in rules/operations/windows.md.
+    row_value: # See REQ-1125 in rules/operations/windows.md.
         - source:
             type: variable
             required: true
-            description: Variable read from the offset row.
+            description: See REQ-1125 in rules/operations/windows.md.
         - offset:
             type: int
             required: true
-            description: Rows to move along the declared order; nonzero.
+            description: See REQ-1125 in rules/operations/windows.md.
         - window:
             type: window_spec
-            description: Partition, ordering, and row selection for the window.
-    previous_non_missing: # Returns the source from the closest strictly earlier non-missing row.
-        # The current row is never a candidate. Missing source values are
-        # skipped, so one result can cross any number of consecutive gaps. A
-        # row with no earlier non-missing source in its partition yields
-        # missing.
+            description: See REQ-1125 in rules/operations/windows.md.
+    previous_non_missing: # See REQ-1126 in rules/operations/windows.md.
         - source:
             type: variable
             required: true
-            description: Variable searched for the closest earlier non-missing value.
+            description: See REQ-1126 in rules/operations/windows.md.
         - window:
             type: window_spec
-            description: Partition and ordering for the window.
-    baseline_flag: # Returns Y for the unique latest eligible row, missing elsewhere.
-        # An eligible row has a non-missing date at or before reference_date.
-        # A tie for the latest eligible date is an error.
+            description: See REQ-1126 in rules/operations/windows.md.
+    baseline_flag: # See REQ-1127 in rules/operations/windows.md.
         - date:
             type: variable
             required: true
-            description: Candidate baseline date.
+            description: See REQ-1127 in rules/operations/windows.md.
         - reference_date:
             type: variable
             required: true
-            description: Inclusive upper bound for the baseline date.
+            description: See REQ-1127 in rules/operations/windows.md.
         - window:
             type: window_spec
-            description: Baseline-selection partitions for the window.
-    baseline_value: # Broadcasts the value from the row whose flag is Y.
-        # No flagged row returns missing; more than one is an error.
+            description: See REQ-1127 in rules/operations/windows.md.
+    baseline_value: # See REQ-1128 in rules/operations/windows.md.
         - value:
             type: variable
             required: true
-            description: Variable copied from the flagged row.
+            description: See REQ-1128 in rules/operations/windows.md.
         - flag:
             type: variable
             required: true
-            description: Variable identifying the source row with Y.
+            description: See REQ-1128 in rules/operations/windows.md.
         - window:
             type: window_spec
-            description: Broadcast partitions for the window.
+            description: See REQ-1128 in rules/operations/windows.md.

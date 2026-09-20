@@ -183,7 +183,7 @@ def test_negative_column_type_matches_committed_diagnostic() -> None:
             "phase": "validation",
             "condition": "value_not_permitted",
             "spec_paths": ["columns.AVAL.type"],
-            "requirement": "R011-29",
+            "requirement": "REQ-0012",
             "context": {
                 "value": "number",
                 "permitted": ["str", "int", "float", "date", "datetime"],
@@ -203,7 +203,7 @@ def test_negative_nested_expression_matches_committed_diagnostic() -> None:
         "phase": "validation",
         "condition": "invalid_field_type",
         "spec_paths": ["columns.COUNTRY.derivation.str_upper.source"],
-        "requirement": "R007-37",
+        "requirement": "REQ-0322",
         "context": {"expected": "variable", "actual": "mapping"},
     }
 
@@ -478,9 +478,7 @@ def test_non_ascii_in_schema_include_reports_the_include_path(tmp_path: Path) ->
     include_path = schema_root / "schema_shared.yaml"
     source = include_path.read_text(encoding="ascii")
     include_path.write_text(
-        source.replace(
-            "# Types shared", "# Types shar\N{LATIN SMALL LETTER E WITH ACUTE}d"
-        ),
+        source + "\n# Invalid source: \N{LATIN SMALL LETTER E WITH ACUTE}\n",
         encoding="utf-8",
     )
 
@@ -613,4 +611,4 @@ def test_non_string_scalar_derivation_names_the_dict_form(
         load_specification(path, SCHEMA_ROOT)
 
     assert caught.value.diagnostics[0].condition == "bare_derivation_scalar"
-    assert caught.value.diagnostics[0].requirement == "R007-58"
+    assert caught.value.diagnostics[0].requirement == "REQ-0320"

@@ -159,5 +159,5 @@ def test_a_display_precision_is_refused_on_the_parquet_profile() -> None:
 
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "decimals_not_applicable"
-    assert diagnostic.requirement == "R020-45"
+    assert diagnostic.requirement == "REQ-0762"
     assert diagnostic.spec_paths == ("output.decimals",)

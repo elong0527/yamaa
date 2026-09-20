@@ -61,6 +61,12 @@ jobs:
         run: |
           uv run --project python --no-sync python .github/scripts/yaml-validation/check_documentation.py
 
+      - name: Check rule migration and generated references
+        run: |
+          uv run --project python --no-sync python .github/scripts/yaml-validation/test_rule_rewrite.py
+          uv run --project python --no-sync python .github/scripts/yaml-validation/check_rule_rewrite.py
+          uv run --project python --no-sync python .github/scripts/yaml-validation/generate_rule_reference.py --check
+
       - name: Check validation blocker issues
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

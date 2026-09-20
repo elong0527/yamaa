@@ -33,7 +33,7 @@ def build_expression_handlers(
 ) -> dict[str, ExpressionHandler]:
     """Return every operation this component registers.
 
-    The operations R007-3 lets nest an expression evaluate it through the
+    The operations REQ-0290 lets nest an expression evaluate it through the
     dispatcher that owns them, so a nested expression reaches exactly the
     registry its parent was dispatched from.
     """
@@ -84,7 +84,7 @@ class ExpressionDispatcher:
                 "validation",
                 "invalid_field_type",
                 {"expected": "one expression operation", "count": len(operations)},
-                requirement="R007-36",
+                requirement="REQ-0321",
             )
         operation, payload = next(iter(operations.items()))
         handler = self._handlers.get(operation)

@@ -2,7 +2,7 @@ phase: ingest
 condition: source_field_name_duplicate
 spec_paths:
   - input.DM.path
-requirement: R023-22
+requirement: REQ-0851
 context:
   dataset: DM
   path: input/dm.csv

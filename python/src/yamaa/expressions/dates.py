@@ -39,12 +39,12 @@ from yamaa.models import (
 
 Precision: TypeAlias = Literal["year", "month", "day"]
 
-# R016-44: one precision ladder, spelled twice. A policy names a level and
+# REQ-0580: one precision ladder, spelled twice. A policy names a level and
 # `date_precision` returns that level's code; they are not two vocabularies.
 _LADDER: tuple[Precision, ...] = ("year", "month", "day")
 _CODES: dict[Precision, str] = {"year": "Y", "month": "M", "day": "D"}
 
-# R016-42: the collected text a truncated date is carried as, which is prefix
+# REQ-0578: the collected text a truncated date is carried as, which is prefix
 # truncation only. A day known without its month cannot be collected, so the
 # ladder has no rung for one.
 _YEAR = re.compile(r"[0-9]{4}")
@@ -85,7 +85,7 @@ def _incompatible(
             "expected": expected,
             "actual": runtime_type_name(value),
         },
-        requirement="R016-65",
+        requirement="REQ-0606",
     )
 
 
@@ -101,7 +101,7 @@ def _read(
         return _condition(
             "invalid_field_type",
             {"operation": operation, "expected": f"a variable for {field!r}"},
-            requirement="R007-36",
+            requirement="REQ-0321",
         )
     resolved = resolver.resolve(variable)
     if isinstance(resolved, FailedResolution):
@@ -122,7 +122,7 @@ def _date_operand(
 ) -> DateValue | None | ConditionResult:
     """Return a `date` operand, or say why the value is not one.
 
-    R016-55 keeps every operation but `to_date` on `date`, and R016-65 makes a
+    REQ-0591 keeps every operation but `to_date` on `date`, and REQ-0606 makes a
     `datetime` reaching one an error rather than a widening.
     """
     if value is MISSING:
@@ -135,7 +135,7 @@ def _date_operand(
 def collected_precision(text: str) -> Precision | None:
     """Return how much of a date the collected text carries, or None.
 
-    R016-42 admits prefix truncation only, so the answer is `day`, `month`,
+    REQ-0578 admits prefix truncation only, so the answer is `day`, `month`,
     `year`, or that the text is not a date prefix at all.
     """
     if _DATE_TEXT.fullmatch(text) is not None:
@@ -162,31 +162,31 @@ def _month_length(year: int, month: int) -> int:
 
 
 def _interval(year: int, month: int | None) -> tuple[dt.date, dt.date]:
-    """Return the days a truncated source still admits (R016-49)."""
+    """Return the days a truncated source still admits (REQ-0585)."""
     if month is None:
         return dt.date(year, 1, 1), dt.date(year, 12, 31)
     return dt.date(year, month, 1), dt.date(year, month, _month_length(year, month))
 
 
 def _resolved_day(day: object, year: int, month: int) -> int | ConditionResult:
-    """Resolve the declared day against the month the date lands in (R016-48)."""
+    """Resolve the declared day against the month the date lands in (REQ-0584)."""
     if day == "first":
         return 1
     if day == "last":
         return _month_length(year, month)
     if type(day) is not int:
-        # R016-68: rejected where the specification is read; reaching here at
+        # REQ-0609: rejected where the specification is read; reaching here at
         # all means the declaration escaped that check.
         return _condition(
             "value_not_permitted",
             {"field": "day", "value": str(day), "permitted": ["first", "last"]},
-            requirement="R016-68",
+            requirement="REQ-0609",
         )
     if not 1 <= day <= 31:
         return _condition(
             "value_not_permitted",
             {"field": "day", "value": day, "permitted": "1 to 31"},
-            requirement="R016-67",
+            requirement="REQ-0608",
         )
     return day
 
@@ -196,7 +196,7 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
         return _condition(
             "invalid_field_type",
             {"operation": "date_impute", "expected": "a mapping"},
-            requirement="R007-36",
+            requirement="REQ-0321",
         )
     source = _read(payload, "source", resolver, "date_impute")
     if isinstance(source, ConditionResult):
@@ -204,12 +204,12 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
 
     month = payload.get("month")
     if type(month) is not int or not 1 <= month <= 12:
-        # R016-56: the range checks apply even when the component is unused,
+        # REQ-0592: the range checks apply even when the component is unused,
         # so a policy cannot hide an invalid literal.
         return _condition(
             "month_out_of_range",
             {"month": month if isinstance(month, int) else str(month)},
-            requirement="R016-67",
+            requirement="REQ-0608",
             field="month",
         )
     declared_day = payload.get("day")
@@ -217,7 +217,7 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
         return _condition(
             "value_not_permitted",
             {"field": "day", "value": declared_day, "permitted": "1 to 31"},
-            requirement="R016-67",
+            requirement="REQ-0608",
         )
 
     if source is MISSING:
@@ -228,19 +228,19 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
             {"operation": "date_impute", "source": str(payload.get("source"))},
             phase="impute",
             handler="missing",
-            requirement="R016-52",
+            requirement="REQ-0588",
         )
     if isinstance(source, DateTimeValue):
         return _incompatible("date_impute", "source", "str", source)
     if isinstance(source, DateValue):
-        # R016-54 types the source `str`; a value is already complete.
+        # REQ-0590 types the source `str`; a value is already complete.
         return ValueResult(value=source)
     if not isinstance(source, str):
         return _incompatible("date_impute", "source", "str", source)
 
     precision = collected_precision(source)
     if precision is None:
-        # R016-52: text that is not a date prefix is a different defect from
+        # REQ-0588: text that is not a date prefix is a different defect from
         # an uncollected value, and a specification may answer them apart.
         if "invalid" in payload:
             return handler_value(payload, "invalid")
@@ -253,7 +253,7 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
             },
             phase="impute",
             handler="invalid",
-            requirement="R016-52",
+            requirement="REQ-0588",
         )
 
     minimum = payload.get("minimum_source_precision", "year")
@@ -261,10 +261,10 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
         return _condition(
             "value_not_permitted",
             {"field": "minimum_source_precision", "value": str(minimum)},
-            requirement="R016-47",
+            requirement="REQ-0583",
         )
     if _LADDER.index(precision) < _LADDER.index(minimum):  # type: ignore[arg-type]
-        # R016-47: below the declared minimum is neither a missing source nor
+        # REQ-0583: below the declared minimum is neither a missing source nor
         # invalid text, so neither handler answers it.
         return ValueResult(value=MISSING)
 
@@ -279,7 +279,7 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
         bound = operand
 
     if precision == "day":
-        # R016-50: a complete source supplied nothing for the bound to move.
+        # REQ-0586: a complete source supplied nothing for the bound to move.
         return ValueResult(value=DateValue.parse(source))
 
     year, source_month = _prefix_fields(source, precision)
@@ -288,7 +288,7 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
     if isinstance(day, ConditionResult):
         return day
     if day > _month_length(year, completed_month):
-        # R016-56: the completed value must be a real calendar date.
+        # REQ-0592: the completed value must be a real calendar date.
         return _condition(
             "invalid_calendar_date",
             {
@@ -296,13 +296,13 @@ def _date_impute(payload: object, resolver: Resolver) -> EvaluationResult:
                 "completed": f"{year:04d}-{completed_month:02d}-{day:02d}",
             },
             phase="impute",
-            requirement="R016-67",
+            requirement="REQ-0608",
         )
 
     completed = dt.date(year, completed_month, day)
     bounded = _apply_bound(completed, bound, year, source_month)
     if bounded is None:
-        # R016-69: the interval admits no day satisfying the bound.
+        # REQ-0610: the interval admits no day satisfying the bound.
         return ValueResult(value=MISSING)
     return ValueResult(
         value=DateValue(
@@ -322,7 +322,7 @@ def _apply_bound(
 ) -> dt.date | None:
     """Move only what imputation supplied, and only inside the interval.
 
-    R016-49 lets the bound move the result within the days the collected
+    REQ-0585 lets the bound move the result within the days the collected
     components still admit, and no further.
     """
     if bound is None:
@@ -340,7 +340,7 @@ def _date_precision(payload: object, resolver: Resolver) -> EvaluationResult:
         return _condition(
             "invalid_field_type",
             {"operation": "date_precision", "expected": "a mapping"},
-            requirement="R007-36",
+            requirement="REQ-0321",
         )
     source = _read(payload, "source", resolver, "date_precision")
     if isinstance(source, ConditionResult):
@@ -353,10 +353,10 @@ def _date_precision(payload: object, resolver: Resolver) -> EvaluationResult:
             {"operation": "date_precision", "source": str(payload.get("source"))},
             phase="impute",
             handler="missing",
-            requirement="R016-52",
+            requirement="REQ-0588",
         )
     if isinstance(source, DateValue):
-        # R016-45: a value reports the precision it carries, which binds the
+        # REQ-0581: a value reports the precision it carries, which binds the
         # flag to the date it describes rather than to the text beside it.
         return ValueResult(value=_CODES[source.collected_precision])
     if isinstance(source, DateTimeValue):
@@ -377,7 +377,7 @@ def _date_precision(payload: object, resolver: Resolver) -> EvaluationResult:
             },
             phase="impute",
             handler="invalid",
-            requirement="R016-52",
+            requirement="REQ-0588",
         )
     return ValueResult(value=_CODES[precision])
 
@@ -388,16 +388,16 @@ def _to_date(payload: object, resolver: Resolver) -> EvaluationResult:
         return _condition(
             "invalid_field_type",
             {"operation": "to_date", "expected": "a mapping"},
-            requirement="R007-36",
+            requirement="REQ-0321",
         )
     source = _read(payload, "source", resolver, "to_date")
     if isinstance(source, ConditionResult):
         return source
     if source is MISSING:
-        # R016-57: a missing source returns a missing date.
+        # REQ-0593: a missing source returns a missing date.
         return ValueResult(value=MISSING)
     if not isinstance(source, DateTimeValue):
-        # R016-66: in particular a `date` is not an identity spelling.
+        # REQ-0607: in particular a `date` is not an identity spelling.
         return _incompatible("to_date", "source", "datetime", source)
     return ValueResult(
         value=DateValue(year=source.year, month=source.month, day=source.day)
@@ -409,7 +409,7 @@ def _study_day(payload: object, resolver: Resolver) -> EvaluationResult:
         return _condition(
             "invalid_field_type",
             {"operation": "study_day", "expected": "a mapping"},
-            requirement="R007-36",
+            requirement="REQ-0321",
         )
     operands = []
     for field in ("date", "reference"):
@@ -441,14 +441,14 @@ def _date_diff(payload: object, resolver: Resolver) -> EvaluationResult:
         return _condition(
             "invalid_field_type",
             {"operation": "date_diff", "expected": "a mapping"},
-            requirement="R007-36",
+            requirement="REQ-0321",
         )
     unit = payload.get("unit")
     if unit not in _UNITS:
         return _condition(
             "value_not_permitted",
             {"field": "unit", "value": str(unit), "permitted": list(_UNITS)},
-            requirement="R007-37",
+            requirement="REQ-0322",
         )
     bounds = payload.get("bounds", "exclusive")
     if bounds not in {"exclusive", "inclusive", "between"}:
@@ -459,15 +459,15 @@ def _date_diff(payload: object, resolver: Resolver) -> EvaluationResult:
                 "value": str(bounds),
                 "permitted": ["exclusive", "inclusive", "between"],
             },
-            requirement="R007-37",
+            requirement="REQ-0322",
         )
     if unit != "day" and bounds != "exclusive":
-        # R016-76 and R016-77: bounds counts endpoints of a day range, and an
+        # REQ-0598 and REQ-0613: bounds counts endpoints of a day range, and an
         # age of 35 does not become 36.
         return _condition(
             "value_not_permitted",
             {"value": bounds, "unit": unit, "permitted": ["exclusive"]},
-            requirement="R016-77",
+            requirement="REQ-0613",
             field="bounds",
         )
 
@@ -492,7 +492,7 @@ def whole_units(
     unit: str,
     bounds: str = "exclusive",
 ) -> int:
-    """Count whole calendar units from `start` to `end` (R016-72 to R016-76)."""
+    """Count whole calendar units from `start` to `end` (REQ-0594 to REQ-0598)."""
     if unit == "day":
         days = _ordinal(end) - _ordinal(start)
         if bounds == "inclusive":
@@ -501,11 +501,11 @@ def whole_units(
             return days - 1
         return days
     if unit == "week":
-        # R016-72: whole seven-day blocks, with any remainder discarded.
+        # REQ-0594: whole seven-day blocks, with any remainder discarded.
         days = _ordinal(end) - _ordinal(start)
         quotient = abs(days) // 7
         return -quotient if days < 0 else quotient
-    # R016-75: an earlier end negates the count with the operands exchanged.
+    # REQ-0597: an earlier end negates the count with the operands exchanged.
     if _ordinal(end) < _ordinal(start):
         return -_anniversaries(end, start, unit)
     return _anniversaries(start, end, unit)
@@ -514,9 +514,9 @@ def whole_units(
 def _anniversaries(start: DateValue, end: DateValue, unit: str) -> int:
     """Count anniversaries of `start` falling on or before `end`.
 
-    R016-73 clamps the k-th anniversary's day to the length of the month it
+    REQ-0595 clamps the k-th anniversary's day to the length of the month it
     lands in, which is what puts a February 29 anniversary on February 28 of a
-    common year (R016-74).
+    common year (REQ-0596).
     """
     months = (end.year - start.year) * 12 + (end.month - start.month)
     if months > 0 and _clamped(start, months) > _ordinal(end):

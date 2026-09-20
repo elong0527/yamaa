@@ -80,11 +80,11 @@ class CandidateRow:
 
     source_rows: dict[str, dict[str, object]]
     values: dict[str, object]
-    # Every driver record feeding this row under R001-12, which a direct
+    # Every driver record feeding this row under REQ-0042, which a direct
     # dataset read collects one value across.
     feeding_rows: dict[str, list[dict[str, object]]] = field(default_factory=dict)
     row_id: str | None = None
-    # Where R001-9 appended this row, which is the order a window falls back
+    # Where REQ-0039 appended this row, which is the order a window falls back
     # to when its terms tie.
     output_position: int = -1
     group_driver: str | None = None
@@ -119,7 +119,7 @@ class RelationalContext:
     ) -> dict[tuple[object, ...], list[CandidateRow]]:
         """Group the constructed rows by these columns, once per key combination.
 
-        R007-9 broadcasts an output-row reduction back to each row of its
+        REQ-0467 broadcasts an output-row reduction back to each row of its
         partition, so every row of one partition asks the same question. The
         columns a partition is taken on are complete before the reduction
         reads them and never change afterwards, so one grouping answers all
@@ -141,8 +141,8 @@ def driver_groups(
 ) -> list[tuple[tuple[RuntimeValue, ...], tuple[IndexedRecord, ...]]]:
     """Partition a driver relation into the candidates a grouped template makes.
 
-    R001-7 partitions the complete driver relation by the equality each
-    value's type owns, with missing equal to missing, and R001-8 orders the
+    REQ-0037 partitions the complete driver relation by the equality each
+    value's type owns, with missing equal to missing, and REQ-0038 orders the
     groups by the position of their first record and keeps driver order
     inside each one.
     """
@@ -173,7 +173,7 @@ def _invalid(operation: str, reason: str) -> ConditionResult:
         condition=_condition(
             "invalid_field_type",
             {"operation": operation, "reason": reason},
-            requirement="R007-36",
+            requirement="REQ-0321",
         )
     )
 
@@ -215,7 +215,7 @@ class RowResolver:
             return self._lookup_read(qualifier, variable.split(".", 1)[1])
         implicit = self._implicit_joins.get(qualifier)
         if implicit is not None:
-            # R003-40: a plain cross-dataset scalar source joins on the
+            # REQ-0150: a plain cross-dataset scalar source joins on the
             # applicable keys the planner inferred.
             return self._implicit_read(implicit, variable.split(".", 1)[1])
         # A row driver needs no join: the read is the current driver record.
@@ -235,7 +235,7 @@ class RowResolver:
         if qualifier is not None:
             implicit = self._implicit_joins.get(qualifier)
             if implicit is not None:
-                # R003-40: a structured cross-dataset source joins on the
+                # REQ-0150: a structured cross-dataset source joins on the
                 # applicable keys, then selects among the matched records.
                 return self._implicit_read(
                     implicit,
@@ -261,10 +261,10 @@ class RowResolver:
                 _condition(
                     "unknown_field",
                     {"identifier": f"{join.dataset}.{field_name}"},
-                    requirement="R003-15",
+                    requirement="REQ-0125",
                 )
             )
-        # R003-46/R003-47: a row-phase join states which current-row
+        # REQ-0156/REQ-0157: a row-phase join states which current-row
         # variables it matches; otherwise the keys match themselves.
         match_variables = (
             join.match_variables if join.match_variables is not None else join.keys
@@ -297,7 +297,7 @@ class RowResolver:
                 _condition(
                     "unknown_field",
                     {"identifier": f"{identifier}.{field_name}"},
-                    requirement="R003-15",
+                    requirement="REQ-0125",
                 )
             )
         outcome = self._candidate.intermediates.get(identifier)
@@ -318,7 +318,7 @@ class RowResolver:
                 )
             )
         if outcome.record is None:
-            # R003-14: an intermediate that yields nothing answers its decided
+            # REQ-0124: an intermediate that yields nothing answers its decided
             # absence, which stays distinct from a record whose value is
             # missing.
             return ResolvedValue(
@@ -371,8 +371,8 @@ class RowResolver:
     ) -> EvaluationResult:
         """Locate this row in its ordered partition and ask the window.
 
-        R007-6 partitions the constructed output rows by the window's own
-        `group_by` and preserves row count, and R007-41 keeps a window out of
+        REQ-0293 partitions the constructed output rows by the window's own
+        `group_by` and preserves row count, and REQ-0326 keeps a window out of
         row construction, so the rows are always the completed ones.
         """
         if self._row_phase:
@@ -433,7 +433,7 @@ class RowResolver:
                 for row, values in members
             ]
             try:
-                # R007-16 falls back to construction order, which is what the
+                # REQ-0301 falls back to construction order, which is what the
                 # shared ordering helper breaks a remaining tie by.
                 ordered = order_records(indexed, terms)
             except OrderError as error:
@@ -441,7 +441,7 @@ class RowResolver:
                     condition=_condition(
                         "incompatible_input_type",
                         {"source": error.variable, "types": sorted(set(error.types))},
-                        requirement="R007-39",
+                        requirement="REQ-0324",
                     )
                 )
             by_position = {
@@ -467,7 +467,7 @@ class RowResolver:
         payload: Mapping[str, object],
         members: Sequence[tuple[CandidateRow, dict[str, object]]],
     ) -> tuple[bool, ...] | ConditionResult:
-        """Say which partition rows the window's filter retained (R007-7)."""
+        """Say which partition rows the window's filter retained (REQ-0294)."""
         predicate = self._predicate(window_spec(payload).get("filter"))
         if isinstance(predicate, ConditionResult):
             return predicate
@@ -526,7 +526,7 @@ class RowResolver:
                 or not key_variables
                 or len(key_fields) != len(key_variables)
             ):
-                # R003-30: the planner requires the declared pairs, so this
+                # REQ-0140: the planner requires the declared pairs, so this
                 # is only reachable on an unplanned path.
                 return _invalid("aggregate", "declared key and source pairs")
             selected = self._right_side(
@@ -567,7 +567,7 @@ class RowResolver:
                 condition=_condition(
                     "invalid_predicate",
                     {"predicate": declared, "position": error.position},
-                    requirement="R004-31",
+                    requirement="REQ-0188",
                 )
             )
 
@@ -581,7 +581,7 @@ class RowResolver:
         key_fields: Sequence[str],
         key_variables: Sequence[str],
     ) -> tuple[list[dict[str, object]], dict[str, object]] | ConditionResult:
-        """Reduce the partition R003-30 selects for the current row."""
+        """Reduce the partition REQ-0140 selects for the current row."""
         relation = self._context.relations[dataset]
         values: list[RuntimeValue] = []
         for name in key_variables:
@@ -630,7 +630,7 @@ class RowResolver:
             )
         value = resolved.value
         if value is MISSING:
-            # R003-27 and R013-8: a missing cutoff admits no record rather
+            # REQ-0137 and REQ-0473: a missing cutoff admits no record rather
             # than silently reducing the unrestricted right side.
             return []
         bounds = [
@@ -647,7 +647,7 @@ class RowResolver:
                         condition=_condition(
                             "unknown_field",
                             {"identifier": f"{relation.dataset}.{bound_field}"},
-                            requirement="R013-44",
+                            requirement="REQ-0509",
                         )
                     )
                 bound = record.values[bound_field]
@@ -664,10 +664,10 @@ class RowResolver:
                                 "source": f"{relation.dataset}.{bound_field}",
                                 "expected": "a comparable bound",
                             },
-                            requirement="R013-44",
+                            requirement="REQ-0509",
                         )
                     )
-                # Every stated endpoint is inclusive under R003-26.
+                # Every stated endpoint is inclusive under REQ-0136.
                 if (side == "lower" and order > 0) or (side == "upper" and order < 0):
                     admitted = False
                     break
@@ -681,7 +681,7 @@ class RowResolver:
         identifiers: Sequence[str],
         predicate: PredicateAst | None,
     ) -> tuple[list[dict[str, object]], dict[str, object]] | ConditionResult:
-        """Reduce the records of the current driver group (R007-10)."""
+        """Reduce the records of the current driver group (REQ-0467)."""
         relation = self._context.relations[dataset]
         eligible = eligible_records(self._candidate.group_records, predicate, relation)
         if isinstance(eligible, ConditionResult):
@@ -695,7 +695,7 @@ class RowResolver:
         group_by: Sequence[str],
         predicate: PredicateAst | None,
     ) -> tuple[list[dict[str, object]], dict[str, object]] | ConditionResult:
-        """Reduce the constructed output rows of this row's partition (R007-9)."""
+        """Reduce the constructed output rows of this row's partition (REQ-0467)."""
         fields = tuple(group_by)
         unavailable = [name for name in fields if name not in self._values]
         if unavailable:
@@ -731,7 +731,7 @@ def _record_values(
 def _readable(row: CandidateRow) -> dict[str, object]:
     """Return every name one partition row answers to.
 
-    R007-12 lets a window field name a qualified source variable as well as a
+    REQ-0297 lets a window field name a qualified source variable as well as a
     current-output column, so a row is read through its completed columns and
     the driver record it was constructed from together.
     """
@@ -779,14 +779,14 @@ def group_candidates(
         values = dict(zip(planned.group_variables, key, strict=True))
         candidates.append(
             CandidateRow(
-                # R001-15: only the grouped variables are scalars of the
+                # REQ-0047: only the grouped variables are scalars of the
                 # candidate; every other driver field varies within the group
                 # and is read through an aggregate or not at all.
                 source_rows={
                     planned.driver: dict(zip(fields, key, strict=True)),
                 },
                 values={},
-                # R001-12b collects a direct read across the records feeding
+                # REQ-0044 collects a direct read across the records feeding
                 # one key combination. A grouped candidate has no such read:
                 # its scalars are the keys, and everything else reduces.
                 feeding_rows={},

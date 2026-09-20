@@ -106,13 +106,13 @@ def test_precedence_association_and_promotion(text: str, expected: object) -> No
 
 
 def test_division_always_returns_float_and_never_truncates() -> None:
-    # R010-16: there is no integer division; FLOOR(a / b) is how it is written.
+    # REQ-0421: there is no integer division; FLOOR(a / b) is how it is written.
     assert _value("7 / 2") == 3.5
     assert _value("FLOOR(7 / 2)") == 3.0
 
 
 def test_the_written_association_is_the_one_evaluated() -> None:
-    # R010-34: `a / (b * b)` and `a / b / b` may differ in the last place and
+    # REQ-0438: `a / (b * b)` and `a / b / b` may differ in the last place and
     # each must return the double the formula as written produces.
     values = {"A": 1.0, "B": 49.0}
 
@@ -160,7 +160,7 @@ def test_every_permitted_function_returns_its_declared_type(
     value = _value(text)
 
     assert value == expected
-    # R010-17 and R010-18 fix which functions return float whatever they are
+    # REQ-0422 and REQ-0423 fix which functions return float whatever they are
     # given, so the type is asserted rather than only the number.
     assert type(value) is type(expected)
 
@@ -200,21 +200,21 @@ def test_missing_propagates_through_every_operator(text: str) -> None:
 def test_the_four_argument_level_functions_answer_missing_themselves(
     text: str, expected: object
 ) -> None:
-    # R010-22 excepts exactly COALESCE, NULLIF, GREATEST, and LEAST.
+    # REQ-0427 excepts exactly COALESCE, NULLIF, GREATEST, and LEAST.
     assert _value(text, {"A": MISSING, "B": MISSING}) == expected
 
 
 @pytest.mark.parametrize(
     ("text", "values", "condition", "requirement"),
     [
-        ("1 / 0", {}, "division_by_zero", "R010-26"),
-        ("1 / A", {"A": 0.0}, "division_by_zero", "R010-26"),
-        ("MOD(1, 0)", {}, "division_by_zero", "R010-26"),
-        ("SQRT(A)", {"A": -1.0}, "sqrt_of_negative", "R010-27"),
-        ("LN(0)", {}, "ln_of_nonpositive", "R010-28"),
-        ("LN(A)", {"A": -1.0}, "ln_of_nonpositive", "R010-28"),
-        ("POWER(0, -1)", {}, "invalid_power", "R010-29"),
-        ("POWER(A, 0.5)", {"A": -4.0}, "invalid_power", "R010-29"),
+        ("1 / 0", {}, "division_by_zero", "REQ-0430"),
+        ("1 / A", {"A": 0.0}, "division_by_zero", "REQ-0430"),
+        ("MOD(1, 0)", {}, "division_by_zero", "REQ-0430"),
+        ("SQRT(A)", {"A": -1.0}, "sqrt_of_negative", "REQ-0431"),
+        ("LN(0)", {}, "ln_of_nonpositive", "REQ-0432"),
+        ("LN(A)", {"A": -1.0}, "ln_of_nonpositive", "REQ-0432"),
+        ("POWER(0, -1)", {}, "invalid_power", "REQ-0433"),
+        ("POWER(A, 0.5)", {"A": -4.0}, "invalid_power", "REQ-0433"),
     ],
 )
 def test_domain_errors_fail_rather_than_become_missing(
@@ -223,7 +223,7 @@ def test_domain_errors_fail_rather_than_become_missing(
     condition: str,
     requirement: str,
 ) -> None:
-    # R010-25: an implementation must not replace an error with missing.
+    # REQ-0429: an implementation must not replace an error with missing.
     failure = _condition(text, values)
 
     assert failure.condition.condition == condition
@@ -248,7 +248,7 @@ def test_integer_overflow_fails_at_the_64_bit_boundary(
     failure = _condition(text, values)
 
     assert failure.condition.condition == "integer_overflow"
-    assert failure.condition.requirement == "R010-30"
+    assert failure.condition.requirement == "REQ-0434"
 
 
 @pytest.mark.parametrize(
@@ -275,7 +275,7 @@ def test_the_representable_boundary_itself_is_not_an_overflow(
 def test_a_non_finite_float_result_normalizes_to_missing(
     text: str, values: dict[str, object]
 ) -> None:
-    # R010-24 applies R011's normalization after every operator, so an
+    # REQ-0006 applies R011's normalization after every operator, so an
     # overflowing double is missing rather than an infinity.
     assert _value(text, values) is MISSING
 
@@ -292,7 +292,7 @@ def test_an_unresolved_identifier_is_a_structured_condition() -> None:
 def test_a_non_numeric_identifier_is_refused_rather_than_converted(
     value: object,
 ) -> None:
-    # R010-21 and R007-19: bind a collected string to a numeric column first.
+    # REQ-0426 and REQ-0004: bind a collected string to a numeric column first.
     failure = _condition("A + 1", {"A": value})
 
     assert failure.condition.condition == "incompatible_input_type"
@@ -316,7 +316,7 @@ def test_a_compute_expression_outside_the_grammar_names_its_field() -> None:
 
     assert isinstance(result, ConditionResult)
     assert result.condition.condition == "prohibited_function"
-    assert result.condition.requirement == "R010-36"
+    assert result.condition.requirement == "REQ-0440"
     assert result.condition.path_suffix == "expr"
     assert result.condition.context == {"expr": "ROUND(A, 2)", "function": "ROUND"}
 
@@ -330,6 +330,6 @@ def test_parsing_is_shared_without_sharing_a_mutable_parse() -> None:
 
 
 def test_floating_point_results_are_not_rounded_away() -> None:
-    # R010-12: no derivation may round, and R010-31 keeps the last place.
+    # REQ-0418: no derivation may round, and REQ-0435 keeps the last place.
     assert _value("0.1 + 0.2") == 0.1 + 0.2
     assert not math.isclose(_value("0.1 + 0.2"), 0.3, rel_tol=0.0, abs_tol=0.0)

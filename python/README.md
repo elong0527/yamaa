@@ -364,9 +364,9 @@ other field is read through an aggregate over the group's records.
 
 An output key and the same-named right-side column must already carry one
 comparable type. R003-13a requires it of an inferred key and R015-8a of a
-declared pair, R007-19 converts no operand between an operation's inputs,
-and R007-31 makes comparability a property of the runtime type, so a
-disagreement is reported under R007-38 rather than quietly matching
+declared pair, REQ-0004 converts no operand between an operation's inputs,
+and REQ-0005 makes comparability a property of the runtime type, so a
+disagreement is reported under REQ-0323 rather than quietly matching
 nothing.
 
 Because a join infers its keys, the plan states what it inferred.
@@ -419,27 +419,27 @@ than off the text beside it:
     date_precision: {source: ASTDT}   # "M"
 ```
 
-R016-32 keeps precision out of the artifact on purpose: a column stores the
+REQ-0570 keeps precision out of the artifact on purpose: a column stores the
 day its value names, and a specification carrying precision further derives
-a column from `date_precision`. R016-35 keeps it out of every comparison
+a column from `date_precision`. REQ-0573 keeps it out of every comparison
 too, so an imputed date and a collected one naming the same day are one
 value wherever a join matches or a partition groups.
 
 ### The temporal matrix
 
 Every case R016 defines is executed. #166 owned the month and year counting
-that was once undefined; it closed as completed, and R016-72 through R016-77
+that was once undefined; it closed as completed, and REQ-0594 through REQ-0613
 now pin it, so nothing in this family is blocked:
 
 | Case | Rule | Status |
 |---|---|---|
-| `unit: day`, all three `bounds` | R016-76 | executed |
-| `unit: week`, whole seven-day blocks | R016-72 | executed |
-| `unit: month` and `unit: year` anniversaries | R016-73 | executed |
-| February 29 anniversary in a common year | R016-74 | executed |
-| An earlier `end` negating the count | R016-75 | executed |
-| Non-`exclusive` `bounds` beyond `unit: day` | R016-77 | rejected, as the rule requires |
-| A `datetime` operand to a date operation | R016-65 | rejected, as the rule requires |
+| `unit: day`, all three `bounds` | REQ-0598 | executed |
+| `unit: week`, whole seven-day blocks | REQ-0594 | executed |
+| `unit: month` and `unit: year` anniversaries | REQ-0595 | executed |
+| February 29 anniversary in a common year | REQ-0596 | executed |
+| An earlier `end` negating the count | REQ-0597 | executed |
+| Non-`exclusive` `bounds` beyond `unit: day` | REQ-0613 | rejected, as the rule requires |
+| A `datetime` operand to a date operation | REQ-0606 | rejected, as the rule requires |
 
 A window reads the constructed output rows of its partition and preserves
 row count: a row its `filter` excludes receives missing rather than
@@ -519,7 +519,7 @@ operation already uses.
 R. The two roots calculate one contract fingerprint and run byte-identical
 vectors, and `benchmark/adam-adsl-bmi-function/spec.yaml` is unchanged
 between them, which is the portability R018 exists for. This runner refuses
-that example's own R project root under R018-6 rather than running it.
+that example's own R project root under REQ-0667 rather than running it.
 
 See the [project function documentation](src/yamaa/functions/README.md) for
 the artifact resolver, the digest a directory hashes to, and what each stage
@@ -550,7 +550,7 @@ R005 says it runs rather than sweeping every check to the end. Each reports
 failures in the committed error shape and leaves the run's fate to its
 caller; `verify_completed_table` runs the three in order and raises. Dataset
 verification accepts typed, per-row record-lookup bindings for the qualified
-fields R004-26 makes visible to predicates.
+fields REQ-0183 makes visible to predicates.
 
 `yamaa.io` writes the other way for the same reason it reads: the artifact
 selects its profile from `output.path`, takes R005's column selection and
@@ -596,7 +596,7 @@ A report carries what a cross-runtime comparison needs and nothing that
 belongs to one implementation: the artifact's column order, declared
 types, record count, R020 bytes and their digest; a failure's `phase`,
 `condition`, `spec_paths`, `requirement`, and context; each unsupported
-operation and where it was declared; and the R008-20 count for every
+operation and where it was declared; and the REQ-0361 count for every
 declared handler path, including the ones that never fired.
 
 ```python

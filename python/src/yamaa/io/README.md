@@ -44,7 +44,7 @@ the three checks above are the same work with the failures in hand.
 - `check_dataset(..., lookup_columns=..., lookup_rows=...)`
   accepts the qualified name and declared type of each resolved lookup
   field, plus one aligned binding per completed row. Verification predicates
-  see those bindings under R004-26; structural checks and artifact columns do
+  see those bindings under REQ-0183; structural checks and artifact columns do
   not. `verify_completed_table` accepts the same keyword arguments.
 - A declaration R009 requires the validation phase to reject -- a reversed
   `range`, a repeated verification id, a grouped `row_count` with no id, a
@@ -57,7 +57,7 @@ the three checks above are the same work with the failures in hand.
 - **`render_artifact`** produces the bytes: `.csv` exactly, down to quoting,
   the distinction between a missing value and a collected empty string, and
   the one display rounding `output.decimals` asks for; `.parquet` under the
-  R020-20 mapping, uncompressed, with no key-value metadata of its own.
+  REQ-0734 mapping, uncompressed, with no key-value metadata of its own.
 - **`publish_artifact`** writes those bytes into a temporary file beside the
   target, flushes them to the filesystem, and replaces the target in one
   step. A failure leaves the previous artifact untouched and removes the

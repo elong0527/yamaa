@@ -2,6 +2,6 @@ phase: validation
 condition: invalid_predicate
 spec_paths:
   - columns.REVIEWFL.derivation.case[0].when
-requirement: R004-31
+requirement: REQ-0188
 context:
   predicate: "AE.AESEQ + 1 > 1"

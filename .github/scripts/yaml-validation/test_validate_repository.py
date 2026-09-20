@@ -330,7 +330,7 @@ class TestPredicateLanguage(unittest.TestCase):
         self.assertIn("unknown identifier 'MISSING'", errors[0])
 
     def test_validates_the_predicate_a_source_filter_declares(self):
-        # R003-22: the filter selects right-side records, so it resolves
+        # REQ-0132: the filter selects right-side records, so it resolves
         # against the dataset the source reads and not against the output.
         spec = {
             'domain': 'DM',
@@ -2052,7 +2052,7 @@ class TestSpecificationInheritance(unittest.TestCase):
         )
 
     def test_bare_string_derivation_normalizes_to_source(self):
-        # R007-57: the repository validator mirrors the engine's parse-time
+        # REQ-0319: the repository validator mirrors the engine's parse-time
         # expansion so resolved fixtures keep the canonical form.
         normalized = VALIDATOR.normalize_single_type_value(
             'DM.AGE', 'derivation', self.env, False
@@ -3757,7 +3757,7 @@ class TestProjectResourceBoundary(unittest.TestCase):
 
     def test_accepts_a_rooted_path_whose_anchor_is_a_symbolic_link(self):
         # macOS spells a temporary directory through /var, a link into
-        # /private. R021-15 exempts the anchor, so the spelling a user writes
+        # /private. REQ-0781 exempts the anchor, so the spelling a user writes
         # is accepted without resolving the written path first.
         store = self.root / "store"
         store.mkdir()
@@ -3949,7 +3949,7 @@ class TestProjectResourceBoundary(unittest.TestCase):
 
 
 class TestProjectConfiguration(unittest.TestCase):
-    """R021-1 to R021-5: the study says where its own data is kept."""
+    """REQ-0767 to REQ-0771: the study says where its own data is kept."""
 
     def setUp(self):
         self.test_dir = tempfile.TemporaryDirectory()
@@ -4515,7 +4515,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
             root = self.contract_root(
                 temp_dir,
                 **{
-                    'yaml/rules/R012-string-templates.md': (
+                    'yaml/rules/operations/text.md': (
                         'placeholder := "{" variable "}"',
                         'placeholder := "{" variable "}" | variable',
                     )
@@ -4525,7 +4525,7 @@ class TestClosedGrammarContracts(unittest.TestCase):
                 root, 'string-template'
             )
         self.assertEqual(len(errors), 1)
-        self.assertIn('R012-string-templates.md', errors[0])
+        self.assertIn('operations/text.md', errors[0])
         self.assertIn('the grammar block is not the one', errors[0])
 
     def test_a_shape_that_drifts_from_this_parser_is_reported(self):
@@ -6166,7 +6166,7 @@ ODM_HEADER = (
 
 
 class TestRetiredOdmItemReferences(unittest.TestCase):
-    """#506 retires R002-20: an ODM item is addressed by a source filter."""
+    """#506 retires REQ-0096: an ODM item is addressed by a source filter."""
 
     def env(self):
         env, errors = VALIDATOR.build_schema_env(TOOL_PATH.parents[3])
@@ -6270,7 +6270,7 @@ class TestRetiredOdmItemReferences(unittest.TestCase):
 
 
 class TestRowPhaseDatasetReads(unittest.TestCase):
-    """R003-46/R003-47 as the repository validator applies them."""
+    """REQ-0156/REQ-0157 as the repository validator applies them."""
 
     def setUp(self):
         self.env, schema_errors = VALIDATOR.build_schema_env(
@@ -6347,7 +6347,7 @@ class TestRowPhaseDatasetReads(unittest.TestCase):
             }
         )
 
-        # R010-4: a row-phase formula names no qualified cross-dataset
+        # REQ-0410: a row-phase formula names no qualified cross-dataset
         # identifier; the value must be bound to a column first.
         self.assertTrue(
             any(

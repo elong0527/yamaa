@@ -24,7 +24,7 @@ def unresolved_directory() -> Iterator[str]:
     """A temporary directory spelled the way the platform hands it out.
 
     pytest resolves tmp_path, which hides the symbolic link macOS puts in
-    front of /var. R021-15 exempts the anchor from the no-link rejection, so
+    front of /var. REQ-0781 exempts the anchor from the no-link rejection, so
     the spelling a user would actually write has to reach the tests unresolved.
     """
     with tempfile.TemporaryDirectory(prefix="yamaa-") as directory:
@@ -437,7 +437,7 @@ def test_failure_text_never_exposes_host_paths(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Project configuration: the study says where its own data is kept (R021-1..5)
+# Project configuration: the study says where its own data is kept (REQ-0767..5)
 # ---------------------------------------------------------------------------
 
 
@@ -508,7 +508,7 @@ def test_a_relative_data_root_is_read_from_the_project_root(tmp_path: Path) -> N
 
 
 def test_an_inherited_layer_cannot_contribute_a_data_root(tmp_path: Path) -> None:
-    # R021-4: only the entry project's configuration is read. A parent layer
+    # REQ-0770: only the entry project's configuration is read. A parent layer
     # carrying its own configuration never widens the run that reaches it.
     study = tmp_path / "study"
     study.mkdir()

@@ -1,112 +1,110 @@
 version: "1.0"
 
 expressions:
-    source: # Copies a named source or derived variable.
+    source: # See REQ-1093 in rules/operations/expressions.md.
         type: [variable, source_binding_class]
-        description: Copies a named source or derived variable.
-    literal: # Returns the declared scalar value unchanged.
+        description: See REQ-1093 in rules/operations/expressions.md.
+    literal: # See REQ-1094 in rules/operations/expressions.md.
         type: literal_value
-        description: Returns the declared scalar value unchanged.
-    first_available: # Returns the value of the first source that is not missing.
-        # When every source is missing, returns the declared default, or missing
-        # when no default is declared.
+        description: See REQ-1094 in rules/operations/expressions.md.
+    first_available: # See REQ-1095 in rules/operations/expressions.md.
         - sources:
             type: "list[filtered_source]"
             required: true
-            description: Variables to test in order.
+            description: See REQ-1095 in rules/operations/expressions.md.
         - default:
             type: literal_value
-            description: Value returned when every source is missing.
-    greatest: # Returns the largest non-missing source, or missing when none exist.
+            description: See REQ-1095 in rules/operations/expressions.md.
+    greatest: # See REQ-1096 in rules/operations/expressions.md.
         - sources:
             type: "list[variable]"
             required: true
-            description: Mutually comparable variables to inspect.
-    least: # Returns the smallest non-missing source, or missing when none exist.
+            description: See REQ-1096 in rules/operations/expressions.md.
+    least: # See REQ-1097 in rules/operations/expressions.md.
         - sources:
             type: "list[variable]"
             required: true
-            description: Mutually comparable variables to inspect.
-    case: # Returns the first true branch's value, then otherwise, or missing.
+            description: See REQ-1097 in rules/operations/expressions.md.
+    case: # See REQ-1098 in rules/operations/expressions.md.
         type: "list[case_item_class]"
-        description: Ordered when/then items with an optional trailing otherwise; R007 defines the item order.
+        description: See REQ-1098 in rules/operations/expressions.md.
 
 source_binding_class:
     - variable:
         type: variable
         required: true
-        description: Variable to copy.
+        description: See REQ-1051 in rules/operations/lookup.md.
     - filter:
         type: predicate
-        description: Predicate selecting the right-side records this source reads; R003 defines the selection.
+        description: See REQ-1051 in rules/operations/lookup.md.
     - missing:
         type: literal_value
-        description: Value used when the source variable or item is absent.
+        description: See REQ-1051 in rules/operations/lookup.md.
     - multiple_matches:
         type: multiple_matches_class
-        description: Rule for selecting one of several right-side matches.
+        description: See REQ-1051 in rules/operations/lookup.md.
 
 filtered_source:
     type: [variable, filtered_source_class]
-    description: A variable, or a variable with the predicate selecting the records it reads.
+    description: See REQ-1052 in rules/operations/lookup.md.
 
 filtered_source_class:
     - variable:
         type: variable
         required: true
-        description: Variable to copy.
+        description: See REQ-1053 in rules/operations/lookup.md.
     - filter:
         type: predicate
         required: true
-        description: Predicate selecting the right-side records this source reads; R003 defines the selection.
+        description: See REQ-1053 in rules/operations/lookup.md.
 
 multiple_matches_class:
     - order_by:
         type: "list[order_by_term]"
         required: true
-        description: Terms used to order eligible right-side matches.
+        description: See REQ-1054 in rules/operations/lookup.md.
     - keep:
         type: str
         required: true
         values: [first, last]
-        description: Ordered match to retain.
+        description: See REQ-1054 in rules/operations/lookup.md.
 
 order_by_term:
     type: [variable, order_term_class]
-    description: Bare variables use ascending order with missing values last.
+    description: See REQ-1102 in rules/execution/ordering.md.
 
 order_term_class:
     - variable:
         type: variable
         required: true
-        description: Variable used as an ordering term.
+        description: See REQ-1103 in rules/execution/ordering.md.
     - direction:
         type: str
         default: asc
         values: [asc, desc]
-        description: Sort direction for non-missing values.
+        description: See REQ-1103 in rules/execution/ordering.md.
     - nulls:
         type: str
         default: last
         values: [first, last]
-        description: Placement of missing values, independent of direction.
+        description: See REQ-1103 in rules/execution/ordering.md.
 
 case_item_class:
     type: [case_branch_class, case_otherwise_class]
-    description: A when/then branch, or the trailing otherwise item.
+    description: See REQ-1099 in rules/operations/expressions.md.
 
 case_branch_class:
     - when:
         type: predicate
         required: true
-        description: Condition that selects this branch when true.
+        description: See REQ-1100 in rules/operations/expressions.md.
     - then:
         type: expression
         required: true
-        description: Result returned when the condition is true.
+        description: See REQ-1100 in rules/operations/expressions.md.
 
 case_otherwise_class:
     - otherwise:
         type: expression
         required: true
-        description: Result used when no branch condition is true.
+        description: See REQ-1101 in rules/operations/expressions.md.

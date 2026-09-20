@@ -2,7 +2,7 @@ phase: row_construction
 condition: aggregate_multiple_records
 spec_paths:
   - rows[1].derivations.WBCVAL.aggregate
-requirement: R013-36
+requirement: REQ-0501
 context:
   reducer: ONLY
   row: derived_lymph

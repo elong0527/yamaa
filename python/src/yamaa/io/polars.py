@@ -39,7 +39,7 @@ def _host_value(value: object) -> object:
     if value is MISSING:
         return None
     if isinstance(value, DateValue):
-        # R016-32: canonical text carries the fields alone, so an imputed
+        # REQ-0570: canonical text carries the fields alone, so an imputed
         # date stores the day it names and its collected precision stops at
         # the derivation. A specification carrying precision past this
         # boundary derives a column from `date_precision`.

@@ -120,7 +120,7 @@ def _producer_contract(
             _diagnostic(
                 "invalid_producer_contract",
                 f"input.{consumer_dataset}.schema.output.columns",
-                "R014-21",
+                "REQ-0534",
                 {"dataset": consumer_dataset, "reason": "empty"},
             )
         )
@@ -130,7 +130,7 @@ def _producer_contract(
                 _diagnostic(
                     "invalid_producer_contract",
                     f"input.{consumer_dataset}.schema.output.columns[{position}]",
-                    "R014-21",
+                    "REQ-0534",
                     {
                         "dataset": consumer_dataset,
                         "field": name,
@@ -146,7 +146,7 @@ def _producer_contract(
                 _diagnostic(
                     "invalid_producer_contract",
                     f"input.{consumer_dataset}.schema.output.columns[{position}]",
-                    "R014-21",
+                    "REQ-0534",
                     {
                         "dataset": consumer_dataset,
                         "field": name,
@@ -162,7 +162,7 @@ def _producer_contract(
                 _diagnostic(
                     "invalid_producer_contract",
                     f"input.{consumer_dataset}.schema.columns.{name}.label",
-                    "R014-21",
+                    "REQ-0534",
                     {"dataset": consumer_dataset, "field": name, "reason": "label"},
                 )
             )
@@ -189,7 +189,7 @@ def _schema_snapshot(
                 _diagnostic(
                     error.condition,
                     f"input.{dataset}.schema",
-                    "R014-21",
+                    "REQ-0534",
                     {"dataset": dataset, "path": source.schema_path},
                 )
             ]
@@ -219,7 +219,7 @@ def plan_workflow(
                     _diagnostic(
                         "producer_workflow_cycle",
                         "input.schema",
-                        "R014-21",
+                        "REQ-0534",
                         {"cycle": [str(item) for item in cycle]},
                     )
                 ]
@@ -245,7 +245,7 @@ def plan_workflow(
                     _diagnostic(
                         "redundant_field_type",
                         f"input.{dataset}.types.{field}",
-                        "R014-10",
+                        "REQ-0523",
                         {"dataset": dataset, "field": field, "type": value},
                     )
                     for field, value in declared.items()
@@ -255,7 +255,7 @@ def plan_workflow(
                         _diagnostic(
                             "redundant_field_type",
                             f"input.{dataset}.types",
-                            "R014-10",
+                            "REQ-0523",
                             {"dataset": dataset, "field": "", "type": ""},
                         )
                     )
@@ -277,7 +277,7 @@ def plan_workflow(
                         _diagnostic(
                             "producer_output_path_mismatch",
                             (f"input.{dataset}.path", f"input.{dataset}.schema"),
-                            "R014-21",
+                            "REQ-0534",
                             {
                                 "dataset": dataset,
                                 "source_path": source.path,
@@ -407,7 +407,7 @@ def _source_failure(entry: Path, datasets: Sequence[str]) -> ExecutionResult:
                 phase="validation",
                 condition="producer_not_completed",
                 spec_paths=(f"input.{dataset}.schema",),
-                requirement="R014-21",
+                requirement="REQ-0534",
                 context={"dataset": dataset, "consumer": str(entry)},
             )
             for dataset in datasets

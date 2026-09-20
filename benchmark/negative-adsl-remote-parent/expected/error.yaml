@@ -2,6 +2,6 @@ phase: validation
 condition: invalid_parent_path
 spec_paths:
   - parents
-requirement: R017-40
+requirement: REQ-0653
 context:
   reason: remote_reference

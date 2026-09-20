@@ -134,7 +134,7 @@ def test_every_reducer_returns_the_value_r013_pins(
 
 
 def test_an_all_missing_group_distinguishes_count_from_every_other_reducer() -> None:
-    # R013-27: an uncollected quantity is never reported as a measured zero,
+    # REQ-0492: an uncollected quantity is never reported as a measured zero,
     # but the records themselves still exist for `COUNT`.
     records = _records("A", [MISSING, MISSING])
 
@@ -146,7 +146,7 @@ def test_an_all_missing_group_distinguishes_count_from_every_other_reducer() -> 
 
 
 def test_an_empty_group_leaves_every_reducer_missing() -> None:
-    # R013-27: an absent record stays distinguishable from a collected zero.
+    # REQ-0492: an absent record stays distinguishable from a collected zero.
     for text in ("SUM(A)", "MIN(A)", "MAX(A)", "MEAN(A)", "COUNT(A)", "ONLY(A)"):
         assert _value(text, []) is MISSING
     assert _value("COUNT(EX.*)", []) is MISSING
@@ -167,7 +167,7 @@ def test_only_rejects_a_group_of_several_records_rather_than_choosing() -> None:
     condition = _condition("ONLY(A)", _records("A", [1, 2]))
 
     assert condition.condition.condition == "aggregate_multiple_records"
-    assert condition.condition.requirement == "R013-36"
+    assert condition.condition.requirement == "REQ-0501"
     assert condition.condition.path_suffix is None
     assert condition.condition.context["record_count"] == 2
     assert condition.condition.context["reducer"] == "ONLY"
@@ -188,7 +188,7 @@ def test_a_reported_group_is_carried_into_the_only_failure() -> None:
 
 
 def test_sum_is_a_left_fold_in_relation_order() -> None:
-    # R013-15 forbids reordering, so the two orders are allowed to differ and
+    # REQ-0480 forbids reordering, so the two orders are allowed to differ and
     # each must match the fold written out by hand.
     forward = _value("SUM(A)", _records("A", [0.1, 0.2, 0.3]))
     reverse = _value("SUM(A)", _records("A", [0.3, 0.2, 0.1]))
@@ -211,7 +211,7 @@ def test_a_reduction_argument_may_compute_before_it_reduces() -> None:
         {"EX.EXDOSE": 1.0, "EX.EXDUR": 5.0},
     ]
 
-    # R013-26: a record missing either factor contributes missing, not zero.
+    # REQ-0491: a record missing either factor contributes missing, not zero.
     assert _value("SUM(EX.EXDOSE * EX.EXDUR)", records) == 11.0
 
 
@@ -254,7 +254,7 @@ def test_min_over_incomparable_values_fails_rather_than_inventing_an_order() -> 
     condition = _condition("MIN(A)", _records("A", [1, "text"]))
 
     assert condition.condition.condition == "incomparable_sources"
-    assert condition.condition.requirement == "R013-46"
+    assert condition.condition.requirement == "REQ-0511"
     assert condition.condition.context["types"] == ["int", "str"]
 
 
@@ -262,7 +262,7 @@ def test_sum_over_a_non_numeric_argument_fails() -> None:
     condition = _condition("SUM(A)", _records("A", ["10"]))
 
     assert condition.condition.condition == "incompatible_input_type"
-    assert condition.condition.requirement == "R013-45"
+    assert condition.condition.requirement == "REQ-0510"
     assert condition.condition.path_suffix == "expr"
     assert condition.condition.context["actual"] == "str"
 

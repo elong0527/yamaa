@@ -19,7 +19,7 @@ Reusable templates flow from the organization level through the compound and
 study levels. Approved study specifications then drive deterministic, validated
 builds while preserving metadata lineage. Their ordered, shallow composition
 and minimal resolved form are defined by
-[R017 specification inheritance](yaml/rules/R017-specification-inheritance.md).
+[specification composition](yaml/rules/specification/composition.md).
 
 ## Repository
 

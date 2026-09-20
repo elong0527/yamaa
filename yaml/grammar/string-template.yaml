@@ -15,7 +15,7 @@
 schema_version: "1.0"
 contract: string-template
 contract_version: "1.0.0"
-rule: R012
+rule: operations/text
 start: template
 productions:
   - name: template

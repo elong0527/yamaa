@@ -2,7 +2,7 @@ phase: verification
 condition: unique_failed
 spec_paths:
   - verifications[0].unique
-requirement: R009-15
+requirement: REQ-0381
 context:
   columns: [SITEID]
   failure_count: 1

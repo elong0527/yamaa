@@ -62,7 +62,7 @@ def test_a_key_column_must_not_depend_on_a_non_key_column_without_rows() -> None
 
     (diagnostic,) = raised.value.diagnostics
     assert diagnostic.condition == "key_dependency"
-    assert diagnostic.requirement == "R001-43"
+    assert diagnostic.requirement == "REQ-0074"
     assert diagnostic.context == {"column": "K", "dependency": "B"}
 
 
@@ -185,7 +185,7 @@ def test_a_grouped_template_carries_the_grain_it_partitions_on() -> None:
 
 
 def test_a_grouped_row_derivation_cannot_read_a_field_outside_the_grain() -> None:
-    # R001-36: a driver field that varies within the group has no single
+    # REQ-0067: a driver field that varies within the group has no single
     # value for the candidate, so it is read through an aggregate or not at
     # all.
     table = frame_from_values(
@@ -211,7 +211,7 @@ def test_a_grouped_row_derivation_cannot_read_a_field_outside_the_grain() -> Non
 
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.condition == "ungrouped_driver_field"
-    assert diagnostic.requirement == "R001-36"
+    assert diagnostic.requirement == "REQ-0067"
     assert diagnostic.context["identifier"] == "SRC.Y"
 
 
@@ -235,7 +235,7 @@ def test_a_grouped_filter_reads_the_columns_that_template_derives() -> None:
 
 
 def test_a_grouped_filter_naming_a_qualified_variable_is_rejected() -> None:
-    # R001-37: a grouped filter runs after the derivation graph, over the
+    # REQ-0068: a grouped filter runs after the derivation graph, over the
     # candidate's completed unqualified columns.
     spec = specification(
         [Column(name="A", type="str")],
@@ -364,7 +364,7 @@ def test_a_named_lookup_with_an_omitted_key_infers_the_applicable_keys() -> None
         supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
     )
 
-    # R003-43: the omitted key is the applicable output keys; R003-44: the
+    # REQ-0153: the omitted key is the applicable output keys; REQ-0154: the
     # omitted source defaults to the key names.
     assert plan.intermediates[0].match_variables == ("X",)
     assert plan.intermediates[0].match_fields == ("X",)
@@ -386,7 +386,7 @@ def test_a_named_lookup_with_an_omitted_source_defaults_to_the_key_names() -> No
         supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
     )
 
-    # R003-44: the omitted source defaults to the declared key names.
+    # REQ-0154: the omitted source defaults to the declared key names.
     assert plan.intermediates[0].match_variables == ("X",)
     assert plan.intermediates[0].match_fields == ("X",)
 
@@ -407,12 +407,12 @@ def test_a_named_lookup_with_an_omitted_key_and_no_applicable_key_fails() -> Non
             supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
         )
 
-    # R003-43: no output key exists on RIGHT, so the omitted key cannot be
+    # REQ-0153: no output key exists on RIGHT, so the omitted key cannot be
     # inferred and the author must declare it.
     [diagnostic] = [
         d for d in raised.value.diagnostics if d.condition == "no_applicable_keys"
     ]
-    assert diagnostic.requirement == "R003-43"
+    assert diagnostic.requirement == "REQ-0153"
     assert diagnostic.spec_paths == ("intermediates[0]",)
 
 
@@ -437,13 +437,13 @@ def test_a_named_lookup_with_mismatched_source_and_key_lengths_fails() -> None:
             supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
         )
 
-    # R003-5: explicit pairs must pair by position after inference.
+    # REQ-0115: explicit pairs must pair by position after inference.
     [diagnostic] = [
         d
         for d in raised.value.diagnostics
         if d.condition == "source_key_length_mismatch"
     ]
-    assert diagnostic.requirement == "R003-5"
+    assert diagnostic.requirement == "REQ-0115"
     assert diagnostic.spec_paths == ("intermediates[0]",)
 
 
@@ -482,7 +482,7 @@ def test_a_named_lookup_pairing_a_key_base_against_an_inferred_key_fails() -> No
             supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
         )
 
-    # R003-5: the two declared key_base names pair with one inferred key, so
+    # REQ-0115: the two declared key_base names pair with one inferred key, so
     # the pairing is reported rather than the intermediate silently vanishing
     # and its readers failing as unknown fields.
     [diagnostic] = [
@@ -490,7 +490,7 @@ def test_a_named_lookup_pairing_a_key_base_against_an_inferred_key_fails() -> No
         for d in raised.value.diagnostics
         if d.condition == "source_key_length_mismatch"
     ]
-    assert diagnostic.requirement == "R003-5"
+    assert diagnostic.requirement == "REQ-0115"
     assert diagnostic.spec_paths == ("intermediates[0]",)
     assert diagnostic.context["key_base"] == ["X", "Y"]
     assert diagnostic.context["key"] == ["X"]
@@ -510,10 +510,10 @@ def test_an_inline_lookup_with_a_key_naming_no_identifiers_is_reported() -> None
         ]
     )
 
-    # R007-36: a written key that names no identifiers is not an omitted key,
+    # REQ-0321: a written key that names no identifiers is not an omitted key,
     # so it is reported here instead of reaching the runtime unvalidated.
     assert diagnostic.condition == "invalid_field_type"
-    assert diagnostic.requirement == "R007-36"
+    assert diagnostic.requirement == "REQ-0321"
     assert diagnostic.spec_paths == ("columns.V.derivation.lookup",)
 
 
@@ -531,10 +531,10 @@ def test_an_aggregate_with_a_key_naming_no_identifiers_is_reported() -> None:
         ]
     )
 
-    # R003-30: a written key that names no identifiers must not silently
+    # REQ-0140: a written key that names no identifiers must not silently
     # reduce over the whole relation unkeyed.
     assert diagnostic.condition == "missing_aggregate_keys"
-    assert diagnostic.requirement == "R003-30"
+    assert diagnostic.requirement == "REQ-0140"
 
 
 def test_an_inline_lookup_with_an_incomplete_between_is_reported() -> None:
@@ -558,10 +558,10 @@ def test_an_inline_lookup_with_an_incomplete_between_is_reported() -> None:
         ]
     )
 
-    # R007-36: the named form requires value, lower and upper together, so a
+    # REQ-0321: the named form requires value, lower and upper together, so a
     # partial inline range is reported before it reaches the runtime.
     assert diagnostic.condition == "invalid_field_type"
-    assert diagnostic.requirement == "R007-36"
+    assert diagnostic.requirement == "REQ-0321"
     assert diagnostic.spec_paths == ("columns.V.derivation.lookup.between",)
 
 
@@ -577,7 +577,7 @@ def test_an_inline_lookup_with_an_omitted_key_infers_the_applicable_keys() -> No
         ]
     )
 
-    # R003-43/R003-44: the inline lookup omits both lists. The inferred
+    # REQ-0153/REQ-0154: the inline lookup omits both lists. The inferred
     # source becomes a dependency of the column.
     [derived] = [column for column in plan.columns if column.column == "V"]
     assert "X" in derived.dependencies
@@ -591,7 +591,7 @@ def test_a_qualified_aggregate_with_an_omitted_key_infers_the_applicable_keys() 
         ]
     )
 
-    # R003-43/R003-44: the aggregate omits both lists and groups on X.
+    # REQ-0153/REQ-0154: the aggregate omits both lists and groups on X.
     [join] = [
         join
         for join in plan.resolved_joins
@@ -615,7 +615,7 @@ def test_an_inferred_lookup_key_typed_differently_on_each_side_is_reported() -> 
         right="int",
     )
 
-    # R003-41: an inferred key must compare equal on both sides.
+    # REQ-0151: an inferred key must compare equal on both sides.
     assert diagnostic.condition == "incompatible_input_type"
 
 
@@ -629,7 +629,7 @@ def test_a_cross_dataset_source_with_clear_keys_uses_the_implicit_join() -> None
         ]
     )
 
-    # R003-40: the output key X exists on RIGHT, so the read joins on it.
+    # REQ-0150: the output key X exists on RIGHT, so the read joins on it.
     [derived] = [column for column in plan.columns if column.column == "V"]
     assert derived.implicit_joins == (ImplicitJoin(dataset="RIGHT", keys=("X",)),)
     assert "X" in derived.dependencies
@@ -663,11 +663,11 @@ def test_a_cross_dataset_source_without_applicable_keys_requires_a_lookup() -> N
             supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
         )
 
-    # R003-42: no output key exists on RIGHT, so the intended match is
+    # REQ-0152: no output key exists on RIGHT, so the intended match is
     # unclear and the author must declare it with an explicit `lookup:`.
     [diagnostic] = raised.value.diagnostics
     assert diagnostic.condition == "no_applicable_keys"
-    assert diagnostic.requirement == "R003-42"
+    assert diagnostic.requirement == "REQ-0152"
     assert diagnostic.spec_paths == ("columns.V.derivation.source",)
 
 
@@ -682,13 +682,13 @@ def test_an_implicit_join_key_typed_differently_on_each_side_is_reported() -> No
         right="int",
     )
 
-    # R003-41: an inferred key must compare equal on both sides.
+    # REQ-0151: an inferred key must compare equal on both sides.
     assert diagnostic.condition == "incompatible_input_type"
-    assert diagnostic.requirement == "R003-41"
+    assert diagnostic.requirement == "REQ-0151"
 
 
 def test_a_lookup_key_typed_differently_on_each_side_is_reported() -> None:
-    # R007-19 performs no implicit conversion, so a type-mismatched
+    # REQ-0004 performs no implicit conversion, so a type-mismatched
     # explicit lookup key is reported.
     diagnostic = first_diagnostic(
         [
@@ -737,7 +737,7 @@ def test_a_declared_key_pair_must_carry_one_comparable_type() -> None:
     )
 
     assert diagnostic.condition == "incompatible_input_type"
-    assert diagnostic.requirement == "R007-21"
+    assert diagnostic.requirement == "REQ-0305"
 
 
 def aggregate_column(payload: dict[str, object]) -> Column:
@@ -757,7 +757,7 @@ def test_an_expression_naming_two_relations_is_not_a_join() -> None:
     diagnostic = aggregate_diagnostic({"expr": "SUM(RIGHT.V) + SUM(SRC.X)"})
 
     assert diagnostic.condition == "mixed_relations"
-    assert diagnostic.requirement == "R013-39"
+    assert diagnostic.requirement == "REQ-0504"
     assert diagnostic.context["relations"] == ["RIGHT", "SRC"]
 
 
@@ -768,12 +768,12 @@ def test_mixing_a_qualified_identifier_with_an_unqualified_one_fails() -> None:
 
 
 def test_an_identifier_outside_a_reduction_must_be_grouped_on() -> None:
-    # R013-20: a value that varies within the group gives the expression no
+    # REQ-0485: a value that varies within the group gives the expression no
     # single answer.
     diagnostic = aggregate_diagnostic({"expr": "SUM(RIGHT.V) / RIGHT.X"})
 
     assert diagnostic.condition == "aggregate_identifier_not_grouped"
-    assert diagnostic.requirement == "R013-38"
+    assert diagnostic.requirement == "REQ-0503"
     assert diagnostic.context["identifier"] == "RIGHT.X"
 
 
@@ -785,7 +785,7 @@ def test_a_grouped_identifier_beside_a_reduction_is_admitted() -> None:
         ]
     )
 
-    # R003-30: the join matches on the declared keys instead of the applicable keys.
+    # REQ-0140: the join matches on the declared keys instead of the applicable keys.
     assert plan.columns[1].dependencies == ("X",)
 
 
@@ -793,7 +793,7 @@ def test_an_output_row_reduction_must_declare_its_partition() -> None:
     diagnostic = aggregate_diagnostic({"expr": "MAX(X)"})
 
     assert diagnostic.condition == "invalid_aggregate_context"
-    assert diagnostic.requirement == "R013-42"
+    assert diagnostic.requirement == "REQ-0507"
 
 
 def test_between_narrows_a_qualified_right_side_only() -> None:
@@ -806,11 +806,11 @@ def test_between_narrows_a_qualified_right_side_only() -> None:
     )
 
     assert diagnostic.condition == "invalid_aggregate_context"
-    assert diagnostic.requirement == "R007-44"
+    assert diagnostic.requirement == "REQ-0329"
 
 
 def test_an_aggregate_has_no_context_in_an_ungrouped_row_template() -> None:
-    # R007-8 through R007-10 permit exactly three contexts, and a
+    # REQ-0295 through REQ-0467 permit exactly three contexts, and a
     # record-driven template is none of them.
     spec = specification(
         [Column(name="A", type="float")],
@@ -866,8 +866,8 @@ def test_a_one_field_aggregate_names_the_shared_shorthand_operation() -> None:
 
 
 def test_a_lookup_may_be_read_from_a_numeric_expression() -> None:
-    # R003-15: R010 admits a qualified identifier for a record a lookup has
-    # already selected, and R010-38 still rejects every other dataset.
+    # REQ-0125: R010 admits a qualified identifier for a record a lookup has
+    # already selected, and REQ-0442 still rejects every other dataset.
     columns = [
         Column(name="X", type="str", derivation=derivation({"source": "SRC.X"})),
         Column(
@@ -915,7 +915,7 @@ def filter_diagnostics(spec: Specification) -> list[object]:
 
 
 def test_a_source_filter_reads_the_stored_fields_of_its_own_right_side() -> None:
-    # R003-22: the predicate selects among right-side records, so it names
+    # REQ-0132: the predicate selects among right-side records, so it names
     # their fields and nothing the output carries.
     spec = specification(
         [
@@ -934,7 +934,7 @@ def test_a_source_filter_reads_the_stored_fields_of_its_own_right_side() -> None
 
     assert diagnostic.condition == "unknown_field"
     assert diagnostic.spec_paths == ("columns.A.derivation.source.filter",)
-    assert diagnostic.requirement == "R003-22"
+    assert diagnostic.requirement == "REQ-0132"
 
 
 def test_a_source_filter_names_a_field_the_dataset_carries() -> None:
@@ -958,7 +958,7 @@ def test_a_source_filter_names_a_field_the_dataset_carries() -> None:
 
 
 def test_an_output_column_source_has_no_records_to_filter() -> None:
-    # R003-38: the source reads one completed value, not a right side.
+    # REQ-0148: the source reads one completed value, not a right side.
     spec = specification(
         [
             Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
@@ -976,7 +976,7 @@ def test_an_output_column_source_has_no_records_to_filter() -> None:
 
     assert diagnostic.condition == "prohibited_construct"
     assert diagnostic.spec_paths == ("columns.A.derivation.source.filter",)
-    assert diagnostic.requirement == "R003-38"
+    assert diagnostic.requirement == "REQ-0148"
 
 
 def test_a_grouped_row_template_source_has_no_records_to_filter() -> None:
@@ -998,7 +998,7 @@ def test_a_grouped_row_template_source_has_no_records_to_filter() -> None:
     diagnostic = filter_diagnostics(spec)[0]
 
     assert diagnostic.condition == "prohibited_construct"
-    assert diagnostic.requirement == "R003-38"
+    assert diagnostic.requirement == "REQ-0148"
 
 
 def test_a_lookup_source_has_already_chosen_its_record() -> None:
@@ -1024,7 +1024,7 @@ def test_a_lookup_source_has_already_chosen_its_record() -> None:
     diagnostic = filter_diagnostics(spec)[0]
 
     assert diagnostic.condition == "prohibited_construct"
-    assert diagnostic.requirement == "R003-38"
+    assert diagnostic.requirement == "REQ-0148"
 
 
 def test_a_filtered_source_reads_records_without_depending_on_their_keys() -> None:
@@ -1103,7 +1103,7 @@ def test_a_row_source_to_another_dataset_joins_on_the_driver_record() -> None:
     )
     plan = plan_execution(spec, row_tables())
 
-    # R003-46: the applicable key matches the driver record's field, so the
+    # REQ-0156: the applicable key matches the driver record's field, so the
     # planned join states driver-qualified match variables.
     [row] = plan.rows
     [derived] = [item for item in row.derivations if item.column == "V"]
@@ -1145,10 +1145,10 @@ def test_a_row_source_without_applicable_keys_reports_only_no_applicable_keys() 
     with pytest.raises(ExecutionPlanningError) as raised:
         plan_execution(spec, tables)
 
-    # R003-42 stands alone: no knock-on phase error follows it.
+    # REQ-0152 stands alone: no knock-on phase error follows it.
     [diagnostic] = raised.value.diagnostics
     assert diagnostic.condition == "no_applicable_keys"
-    assert diagnostic.requirement == "R003-42"
+    assert diagnostic.requirement == "REQ-0152"
     assert diagnostic.spec_paths == ("rows[0].derivations.V.source",)
 
 
@@ -1179,7 +1179,7 @@ def test_a_row_join_key_missing_from_the_driver_is_reported() -> None:
 
     [diagnostic] = raised.value.diagnostics
     assert diagnostic.condition == "unknown_field"
-    assert diagnostic.requirement == "R002-27"
+    assert diagnostic.requirement == "REQ-0103"
     assert diagnostic.context == {"identifier": "SRC.K"}
 
 
@@ -1200,7 +1200,7 @@ def test_a_grouped_row_join_matches_the_group_keys() -> None:
     )
     plan = plan_execution(spec, row_tables())
 
-    # R003-47: the applicable key is a group key, so the join matches it.
+    # REQ-0157: the applicable key is a group key, so the join matches it.
     [row] = plan.rows
     [derived] = [item for item in row.derivations if item.column == "V"]
     assert derived.implicit_joins == (
@@ -1227,10 +1227,10 @@ def test_a_grouped_row_join_needs_group_keys() -> None:
     with pytest.raises(ExecutionPlanningError) as raised:
         plan_execution(spec, row_tables())
 
-    # R003-47: a key the group does not carry varies within it.
+    # REQ-0157: a key the group does not carry varies within it.
     [diagnostic] = raised.value.diagnostics
     assert diagnostic.condition == "ungrouped_driver_field"
-    assert diagnostic.requirement == "R001-36"
+    assert diagnostic.requirement == "REQ-0067"
     assert diagnostic.context["identifier"] == "SRC.K"
 
 
@@ -1260,7 +1260,7 @@ def test_a_row_inline_lookup_matching_driver_fields_is_planned() -> None:
         ],
     )
 
-    # R003-46: an explicit lookup states the same driver-side match.
+    # REQ-0156: an explicit lookup states the same driver-side match.
     plan_execution(
         spec,
         row_tables(),

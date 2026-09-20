@@ -56,7 +56,7 @@ _KEYED_COLLECTIONS: dict[str, tuple[Literal["mapping", "list"], str | None, str]
     "rows": ("list", "id", "row_class"),
 }
 
-# R017-17 composes a matching column member by each field's declared kind.
+# REQ-0630 composes a matching column member by each field's declared kind.
 # Every other keyed collection still replaces a present member field whole.
 _COMPOSING_COLLECTIONS = frozenset({"columns"})
 
@@ -156,7 +156,7 @@ def _validate_partial_member(
             _diagnostic(
                 "invalid_field_type",
                 path,
-                "R017-45",
+                "REQ-0658",
                 {"expected": class_name, "actual": type(value).__name__},
             )
         ]
@@ -169,7 +169,7 @@ def _validate_partial_member(
             _diagnostic(
                 "missing_required_field",
                 _join(path, identity),
-                "R017-45",
+                "REQ-0658",
                 {"field": identity, "class": class_name},
             )
         )
@@ -179,7 +179,7 @@ def _validate_partial_member(
                 _diagnostic(
                     "unknown_field",
                     _join(path, name),
-                    "R017-45",
+                    "REQ-0658",
                     {"field": str(name), "class": class_name},
                 )
             )
@@ -194,7 +194,7 @@ def _validate_partial_member(
                     _diagnostic(
                         "invalid_clear",
                         field_path,
-                        "R017-47",
+                        "REQ-0660",
                         {"field": name},
                     )
                 )
@@ -221,7 +221,7 @@ def _validate_layer(
             _diagnostic(
                 "invalid_field_type",
                 "$",
-                "R017-45",
+                "REQ-0658",
                 {"expected": "root_class", "actual": type(document).__name__},
             )
         ]
@@ -234,7 +234,7 @@ def _validate_layer(
             _diagnostic(
                 "schema_version_mismatch",
                 "schema_version",
-                "R017-43",
+                "REQ-0656",
                 {"expected": bundle.version, "actual": None},
             )
         )
@@ -244,7 +244,7 @@ def _validate_layer(
                 _diagnostic(
                     "unknown_field",
                     str(name),
-                    "R017-45",
+                    "REQ-0658",
                     {"field": str(name), "class": "root_class"},
                 )
             )
@@ -268,7 +268,7 @@ def _validate_layer(
         if supplied is None:
             if descriptor.get("required"):
                 diagnostics.append(
-                    _diagnostic("invalid_clear", name, "R017-47", {"field": name})
+                    _diagnostic("invalid_clear", name, "REQ-0660", {"field": name})
                 )
             else:
                 normalized[name] = None
@@ -292,7 +292,7 @@ def _validate_layer(
                     _diagnostic(
                         "invalid_field_type",
                         name,
-                        "R017-45",
+                        "REQ-0658",
                         {"expected": "dict", "actual": type(supplied).__name__},
                     )
                 )
@@ -331,7 +331,7 @@ def _validate_layer(
                 _diagnostic(
                     "invalid_field_type",
                     name,
-                    "R017-45",
+                    "REQ-0658",
                     {"expected": "list", "actual": type(supplied).__name__},
                 )
             )
@@ -355,7 +355,7 @@ def _validate_layer(
                         _diagnostic(
                             "duplicate_identifier",
                             _join(member_path, identity),
-                            "R017-46",
+                            "REQ-0659",
                             {"identifier": member_id},
                         )
                     )
@@ -504,7 +504,7 @@ def _compose_value(
     A class composes field by field, a mapping key by key, and a registry
     value only when both name one keyword.  Every other kind, including every
     list, replaces.  A null here is an R006 value, never a clearing marker:
-    R017-20 keeps the marker at the two composition boundaries above.
+    REQ-0633 keeps the marker at the two composition boundaries above.
     """
     member = _composing_member(accumulated, incoming, type_value, bundle)
     if member is None:
@@ -563,7 +563,9 @@ def _merge_member(
             descriptor = fields.get(name, {})
             if descriptor.get("required") or name not in accumulated:
                 diagnostics.append(
-                    _diagnostic("invalid_clear", field_path, "R017-47", {"field": name})
+                    _diagnostic(
+                        "invalid_clear", field_path, "REQ-0660", {"field": name}
+                    )
                 )
                 continue
             accumulated.pop(name, None)
@@ -603,7 +605,7 @@ def _merge_layers(
             if value is None:
                 if root_fields.get(name, {}).get("required") or name not in resolved:
                     diagnostics.append(
-                        _diagnostic("invalid_clear", name, "R017-47", {"field": name})
+                        _diagnostic("invalid_clear", name, "REQ-0660", {"field": name})
                     )
                     continue
                 resolved.pop(name, None)
@@ -1126,7 +1128,7 @@ def _order_columns(
         _diagnostic(
             "unknown_reference",
             _join(_join("columns", name), "derivation"),
-            "R001-39",
+            "REQ-0070",
             {"column": name, "dependency": dependency},
         )
         for name, required in dependencies.items()
@@ -1160,7 +1162,7 @@ def _order_columns(
             _diagnostic(
                 "dependency_cycle",
                 "columns",
-                "R001-41",
+                "REQ-0072",
                 {"cycle": cycle},
             )
         ]
@@ -1239,7 +1241,7 @@ def resolve_specification(
                     _diagnostic(
                         "inheritance_cycle",
                         "parents",
-                        "R017-42",
+                        "REQ-0655",
                         {"reason": "parent_chain_returns_to_entry"},
                     )
                 ]
@@ -1256,7 +1258,7 @@ def resolve_specification(
                     _diagnostic(
                         "parent_not_found",
                         "parents",
-                        "R017-41",
+                        "REQ-0654",
                         {"path": str(path)},
                     )
                 ]
@@ -1273,7 +1275,7 @@ def resolve_specification(
                         _diagnostic(
                             "schema_version_mismatch",
                             "schema_version",
-                            "R006-4",
+                            "REQ-0245",
                             {"expected": schema_bundle.version, "actual": version},
                         )
                     ]
@@ -1286,7 +1288,7 @@ def resolve_specification(
                     _diagnostic(
                         "schema_version_mismatch",
                         "parents",
-                        "R017-43",
+                        "REQ-0656",
                         {
                             "entry_version": entry_version,
                             "parent_version": version,
@@ -1302,7 +1304,7 @@ def resolve_specification(
                         _diagnostic(
                             "invalid_parent_path",
                             "parents",
-                            "R017-40",
+                            "REQ-0653",
                             {"reason": "remote_reference"},
                         )
                     ]
@@ -1316,7 +1318,7 @@ def resolve_specification(
                         _diagnostic(
                             "parent_not_found",
                             "parents",
-                            "R017-41",
+                            "REQ-0654",
                             {"path": parent},
                         )
                     ]
@@ -1346,7 +1348,7 @@ def resolve_specification(
                 _diagnostic(
                     "missing_entry_output",
                     "parents",
-                    "R017-44",
+                    "REQ-0657",
                     {"inherited_columns": inherited_columns},
                 )
             ]

@@ -61,7 +61,7 @@ def test_row_number_counts_from_one_along_the_declared_order(current: int) -> No
 
 
 def test_an_excluded_row_receives_missing_and_consumes_no_number() -> None:
-    # R007-7: a window that declares a filter still preserves row count, so
+    # REQ-0294: a window that declares a filter still preserves row count, so
     # an excluded row is answered rather than dropped.
     rows = visits(5, 6, 7)
     eligible = [True, False, True]
@@ -77,7 +77,7 @@ def test_an_excluded_row_receives_missing_and_consumes_no_number() -> None:
 @pytest.mark.parametrize(
     ("method", "expected"),
     [
-        # R007-18: competition leaves the positions a tie occupied out of the
+        # REQ-0303: competition leaves the positions a tie occupied out of the
         # numbers that follow; dense numbers distinct values consecutively.
         ("competition", [1, 2, 2, 4]),
         ("dense", [1, 2, 2, 3]),
@@ -105,7 +105,7 @@ def test_two_missing_values_are_equal_for_the_purpose_of_a_tie() -> None:
 
 
 def test_rank_compares_only_the_declared_terms() -> None:
-    # R007-18: a specification that wants a tie broken declares the term that
+    # REQ-0303: a specification that wants a tie broken declares the term that
     # breaks it, so an undeclared column cannot separate two rows.
     rows = [{"AVAL": "A", "SEQ": 1}, {"AVAL": "A", "SEQ": 2}]
 
@@ -144,11 +144,11 @@ def test_an_offset_moves_along_the_declared_order(
 
 
 def test_a_zero_offset_is_refused_rather_than_read_as_the_current_row() -> None:
-    # R007-43: the current row's own value is `source`.
+    # REQ-0328: the current row's own value is `source`.
     condition = _condition(row_value(partition(visits(5), 0), "AVAL", 0))
 
     assert condition.condition.condition == "zero_offset"
-    assert condition.condition.requirement == "R007-43"
+    assert condition.condition.requirement == "REQ-0328"
 
 
 # --- previous_non_missing ------------------------------------------------
@@ -161,7 +161,7 @@ def test_one_result_crosses_any_number_of_consecutive_gaps() -> None:
 
 
 def test_the_current_row_is_never_its_own_candidate() -> None:
-    # R001-29: it searches a separate completed source column, so nothing
+    # REQ-0061: it searches a separate completed source column, so nothing
     # here reads the column being derived.
     rows = visits(5, 6)
 

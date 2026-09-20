@@ -115,7 +115,7 @@ def test_a_committed_example_reproduces_its_committed_artifact(name: str) -> Non
 def test_every_declared_handler_path_is_reported_with_its_count(
     name: str, expected_counts: list[tuple[str, str, int]]
 ) -> None:
-    # R008-20: each handler path is reported, and a path that fired zero
+    # REQ-0361: each handler path is reported, and a path that fired zero
     # times is reportable rather than absent.
     result = _run(EXAMPLES / name)
 

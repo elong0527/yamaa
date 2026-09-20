@@ -1,6 +1,6 @@
 """Strict models for one project function environment and its vectors.
 
-R018-3 validates an environment independently of any specification, so these
+REQ-0664 validates an environment independently of any specification, so these
 models describe the environment document alone: one immutable runtime, the
 logical contracts it implements, and the singular binding each contract has.
 Nothing here reads a specification, resolves a callable, or runs a vector.
@@ -15,7 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from yamaa.specification.models import ColumnType
 
-# R018-16 extends the R011 column vocabulary with `bool` for parameters only.
+# REQ-0677 extends the Types and conversion contract's column vocabulary with
+# `bool` for parameters only.
 FunctionParamType: TypeAlias = Literal[
     "str", "int", "float", "bool", "date", "datetime"
 ]
@@ -30,7 +31,7 @@ class _StrictModel(BaseModel):
 class FunctionParameter(_StrictModel):
     """One entry of a closed, ordered, named logical signature.
 
-    R018-11 distinguishes an absent default from a present one, so `default`
+    REQ-0672 distinguishes an absent default from a present one, so `default`
     is read through `model_fields_set` rather than by comparing it to
     ``None``: a parameter defaulting to missing is not a parameter with no
     default.
@@ -73,14 +74,14 @@ class FunctionContract(_StrictModel):
 
 
 class RuntimeArtifact(_StrictModel):
-    """The immutable runtime R018-5 pins by verified content identity."""
+    """The immutable runtime REQ-0666 pins by verified content identity."""
 
     reference: str = Field(min_length=1)
     digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
 class ProjectRuntime(_StrictModel):
-    """One language and one artifact, shared by every binding (R018-4)."""
+    """One language and one artifact, shared by every binding (REQ-0665)."""
 
     language: RuntimeLanguage
     artifact: RuntimeArtifact
@@ -116,7 +117,7 @@ class ConformanceDocument(_StrictModel):
 class LoadedEnvironment(_StrictModel):
     """One environment, its vectors, and the identities activation caches.
 
-    R018-30 caches activation for the exact combination of environment
+    REQ-0691 caches activation for the exact combination of environment
     version, artifact digest, every contract fingerprint, every
     implementation version, and the complete vector-content identity. The
     last two are read off this object, so nothing recomputes them from a

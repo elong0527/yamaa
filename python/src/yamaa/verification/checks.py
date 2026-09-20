@@ -47,23 +47,23 @@ from yamaa.verification.diagnostics import (
 
 _NUMERIC: frozenset[ColumnType] = frozenset({"int", "float"})
 
-# The committed `length_failed` fixture names R009-32, the requirement that
+# The committed `length_failed` fixture names REQ-0406, the requirement that
 # fails a run on any verification failure, where the others name the
 # requirement defining their own check. Both identities are reproduced here
 # rather than made uniform, because a runtime must report what is committed.
 _COLUMN_REQUIREMENTS = {
-    "not_missing": ("not_missing_failed", "R009-9"),
-    "allowed_values": ("allowed_values_failed", "R009-10"),
-    "range": ("range_failed", "R009-11"),
-    "max_length": ("length_failed", "R009-32"),
-    "matches": ("matches_failed", "R009-13"),
+    "not_missing": ("not_missing_failed", "REQ-0375"),
+    "allowed_values": ("allowed_values_failed", "REQ-0376"),
+    "range": ("range_failed", "REQ-0377"),
+    "max_length": ("length_failed", "REQ-0406"),
+    "matches": ("matches_failed", "REQ-0379"),
 }
 _DATASET_REQUIREMENTS = {
-    "unique": ("unique_failed", "R009-15"),
-    "all_or_none": ("all_or_none_failed", "R009-16"),
-    "implies": ("implication_failed", "R009-17"),
-    "assert": ("assert_failed", "R009-18"),
-    "row_count": ("row_count_failed", "R009-19"),
+    "unique": ("unique_failed", "REQ-0381"),
+    "all_or_none": ("all_or_none_failed", "REQ-0382"),
+    "implies": ("implication_failed", "REQ-0383"),
+    "assert": ("assert_failed", "REQ-0384"),
+    "row_count": ("row_count_failed", "REQ-0385"),
 }
 _IDENTIFIED = frozenset({"all_or_none", "implies", "assert"})
 
@@ -88,14 +88,14 @@ def _operation(
     if not isinstance(arguments, Mapping):
         raise DeclarationError(
             f"{spec_path}.{keyword}",
-            "R009-23",
+            "REQ-0397",
             "a verification takes named arguments",
         )
     severity = arguments.get("severity", "error")
     if severity not in {"error", "warning"}:
         raise DeclarationError(
             f"{spec_path}.{keyword}.severity",
-            "R009-33",
+            "REQ-0389",
             "verification severity is error or warning",
             condition="value_not_permitted",
             context={"value": severity, "permitted": ["error", "warning"]},
@@ -208,7 +208,7 @@ def _predicate(
     except PredicateError as error:
         raise DeclarationError(
             spec_path,
-            "R004-31",
+            "REQ-0188",
             str(error),
             condition="invalid_predicate",
         ) from error
@@ -219,7 +219,7 @@ def _predicate(
     if unknown:
         raise DeclarationError(
             spec_path,
-            "R009-31",
+            "REQ-0405",
             f"predicate names unknown column {unknown[0]!r}",
             condition="unknown_field",
             context={"identifier": unknown[0]},
@@ -257,10 +257,10 @@ _PREDICATE_SAMPLES: dict[ColumnType, RuntimeValue] = {
 def _raise_predicate_condition(result: ConditionResult, spec_path: str) -> None:
     condition = result.condition
     requirement = {
-        "unknown_field": "R004-32",
-        "incompatible_input_type": "R004-33",
-        "invalid_predicate": "R004-34",
-    }.get(condition.condition, "R009-23")
+        "unknown_field": "REQ-0189",
+        "incompatible_input_type": "REQ-0190",
+        "invalid_predicate": "REQ-0191",
+    }.get(condition.condition, "REQ-0397")
     raise DeclarationError(
         spec_path,
         requirement,
@@ -338,7 +338,7 @@ def check_column(
     declarations = column.verifications or ()
     if not declarations:
         return ()
-    _require_columns(table, [column.name, *keys], f"columns.{column.name}", "R009-31")
+    _require_columns(table, [column.name, *keys], f"columns.{column.name}", "REQ-0405")
     values = _values(table, column.name)
     key_maps = _key_maps(table, keys)
     failures: list[VerificationFailure] = []
@@ -348,7 +348,7 @@ def check_column(
         if keyword not in _COLUMN_REQUIREMENTS:
             raise DeclarationError(
                 f"{path}.{keyword}",
-                "R009-23",
+                "REQ-0397",
                 "unknown column verification",
             )
         condition, requirement = _COLUMN_REQUIREMENTS[keyword]
@@ -413,7 +413,7 @@ def _require_type(
     if column.type not in admitted:
         raise DeclarationError(
             spec_path,
-            "R009-30",
+            "REQ-0404",
             f"a {column.type} column does not admit this verification",
         )
 
@@ -423,14 +423,14 @@ def _allowed_values(
 ) -> list[RuntimeValue]:
     listed = arguments.get("values")
     if not isinstance(listed, list) or not listed:
-        raise DeclarationError(spec_path, "R009-23", "allowed_values requires values")
+        raise DeclarationError(spec_path, "REQ-0397", "allowed_values requires values")
     accepted: list[RuntimeValue] = []
     for value in listed:
         converted = convert_value(value, column.type)
         if not isinstance(converted, ValueResult) or converted.value is MISSING:
             raise DeclarationError(
                 spec_path,
-                "R009-30",
+                "REQ-0404",
                 f"listed value {value!r} is not a {column.type} value",
             )
         accepted.append(converted.value)
@@ -447,11 +447,11 @@ def _range_bounds(
         if bound is not None and (
             isinstance(bound, bool) or not isinstance(bound, (int, float))
         ):
-            raise DeclarationError(spec_path, "R009-23", "a range bound is numeric")
+            raise DeclarationError(spec_path, "REQ-0397", "a range bound is numeric")
     if minimum is None and maximum is None:
-        raise DeclarationError(spec_path, "R009-25", "range requires one bound")
+        raise DeclarationError(spec_path, "REQ-0399", "range requires one bound")
     if minimum is not None and maximum is not None and minimum > maximum:
-        raise DeclarationError(spec_path, "R009-25", "range min exceeds max")
+        raise DeclarationError(spec_path, "REQ-0399", "range min exceeds max")
     return minimum, maximum
 
 
@@ -461,9 +461,9 @@ def _max_length(
     _require_type(column, frozenset({"str"}), spec_path)
     maximum = arguments.get("max")
     if isinstance(maximum, bool) or not isinstance(maximum, int):
-        raise DeclarationError(spec_path, "R009-23", "max_length requires a max")
+        raise DeclarationError(spec_path, "REQ-0397", "max_length requires a max")
     if maximum < 1:
-        raise DeclarationError(spec_path, "R009-26", "max_length max is at least one")
+        raise DeclarationError(spec_path, "REQ-0400", "max_length max is at least one")
     return maximum
 
 
@@ -473,7 +473,7 @@ def _pattern(
     _require_type(column, frozenset({"str"}), spec_path)
     pattern = arguments.get("pattern")
     if not isinstance(pattern, str):
-        raise DeclarationError(spec_path, "R009-23", "matches requires a pattern")
+        raise DeclarationError(spec_path, "REQ-0397", "matches requires a pattern")
     try:
         # `matches` is a search, so the pattern source is compiled as written
         # and is not anchored.
@@ -481,7 +481,7 @@ def _pattern(
     except RegexError as error:
         raise DeclarationError(
             f"{spec_path}.pattern",
-            "R022-27",
+            "REQ-0827",
             error.reason,
             condition="invalid_regex",
             context={"pattern": pattern},
@@ -493,10 +493,10 @@ def check_keys(
 ) -> tuple[VerificationFailure, ...]:
     """Validate output identity once every column's lifecycle is complete."""
     if not keys:
-        raise DeclarationError("keys", "R005-46", "keys names at least one column")
+        raise DeclarationError("keys", "REQ-0235", "keys names at least one column")
     if len(set(keys)) != len(keys):
-        raise DeclarationError("keys", "R005-46", "a key column is repeated")
-    _require_columns(table, keys, "keys", "R005-46")
+        raise DeclarationError("keys", "REQ-0235", "a key column is repeated")
+    _require_columns(table, keys, "keys", "REQ-0235")
 
     columns = {name: _values(table, name) for name in keys}
     key_maps = _key_maps(table, keys)
@@ -512,7 +512,7 @@ def check_keys(
                 _failure(
                     "missing_key",
                     f"keys[{position}]",
-                    "R005-51",
+                    "REQ-0240",
                     {"column": name},
                     offending,
                     count_name="missing_count",
@@ -534,7 +534,7 @@ def check_keys(
             _failure(
                 "duplicate_key",
                 "keys",
-                "R005-51",
+                "REQ-0240",
                 {},
                 duplicated,
                 count_name="duplicate_count",
@@ -557,7 +557,7 @@ def check_dataset(
         if lookup_columns or lookup_rows is not None:
             _lookup_bindings(table, lookup_columns, lookup_rows)
         return ()
-    _require_columns(table, keys, "keys", "R005-46")
+    _require_columns(table, keys, "keys", "REQ-0235")
     lookup_types, lookup_rows = _lookup_bindings(table, lookup_columns, lookup_rows)
     identifiers: dict[str, str] = {}
     failures: list[VerificationFailure] = []
@@ -572,7 +572,7 @@ def check_dataset(
         keyword, arguments, severity = _operation(declaration, path)
         if keyword not in _DATASET_REQUIREMENTS:
             raise DeclarationError(
-                f"{path}.{keyword}", "R009-23", "unknown dataset verification"
+                f"{path}.{keyword}", "REQ-0397", "unknown dataset verification"
             )
         spec_path = f"{path}.{keyword}"
         identifier = _identifier(keyword, arguments, spec_path)
@@ -580,7 +580,7 @@ def check_dataset(
             if identifier in identifiers:
                 raise DeclarationError(
                     spec_path,
-                    "R009-24",
+                    "REQ-0398",
                     f"verification id {identifier!r} repeats {identifiers[identifier]}",
                     condition="duplicate_identifier",
                 )
@@ -611,13 +611,13 @@ def _identifier(
         if keyword in _IDENTIFIED or grouped:
             raise DeclarationError(
                 spec_path,
-                "R009-28" if grouped else "R009-8",
+                "REQ-0402" if grouped else "REQ-0374",
                 f"{keyword} requires a verification id",
                 condition="missing_verification_id",
             )
         return None
     if not isinstance(identifier, str) or not identifier:
-        raise DeclarationError(spec_path, "R009-8", "a verification id is text")
+        raise DeclarationError(spec_path, "REQ-0374", "a verification id is text")
     return identifier
 
 
@@ -690,7 +690,7 @@ def _dataset_failure(
         names = _column_list(arguments, "columns", table, spec_path)
         if len(set(names)) < 2:
             raise DeclarationError(
-                spec_path, "R009-27", "all_or_none names two distinct columns"
+                spec_path, "REQ-0401", "all_or_none names two distinct columns"
             )
         offending = [
             key_maps[index]
@@ -700,8 +700,8 @@ def _dataset_failure(
     elif keyword == "implies":
         when_path = f"{spec_path}.when"
         then_path = f"{spec_path}.then"
-        when = _predicate(arguments.get("when"), when_path, "R009-23", predicate_types)
-        then = _predicate(arguments.get("then"), then_path, "R009-23", predicate_types)
+        when = _predicate(arguments.get("when"), when_path, "REQ-0397", predicate_types)
+        then = _predicate(arguments.get("then"), then_path, "REQ-0397", predicate_types)
         offending = [
             key_maps[index]
             for index, row in enumerate(predicate_rows)
@@ -710,7 +710,7 @@ def _dataset_failure(
     else:
         assertion_path = f"{spec_path}.expr"
         assertion = _predicate(
-            arguments.get("expr"), assertion_path, "R009-23", predicate_types
+            arguments.get("expr"), assertion_path, "REQ-0397", predicate_types
         )
         offending = [
             key_maps[index]
@@ -739,11 +739,11 @@ def _column_list(
     names = arguments.get(field)
     if not isinstance(names, list) or not names:
         raise DeclarationError(
-            spec_path, "R009-23", f"{field} names at least one column"
+            spec_path, "REQ-0397", f"{field} names at least one column"
         )
     if any(not isinstance(name, str) for name in names):
-        raise DeclarationError(spec_path, "R009-23", f"{field} names are text")
-    _require_columns(table, names, f"{spec_path}.{field}", "R009-31")
+        raise DeclarationError(spec_path, "REQ-0397", f"{field} names are text")
+    _require_columns(table, names, f"{spec_path}.{field}", "REQ-0405")
     return names
 
 
@@ -765,23 +765,23 @@ def _row_count_failure(
         if bound is not None and (
             isinstance(bound, bool) or not isinstance(bound, int)
         ):
-            raise DeclarationError(spec_path, "R009-23", "a row_count bound is an int")
+            raise DeclarationError(spec_path, "REQ-0397", "a row_count bound is an int")
     if minimum is None and maximum is None:
-        raise DeclarationError(spec_path, "R009-25", "row_count requires one bound")
+        raise DeclarationError(spec_path, "REQ-0399", "row_count requires one bound")
     if minimum is not None and maximum is not None and minimum > maximum:
-        raise DeclarationError(spec_path, "R009-25", "row_count min exceeds max")
+        raise DeclarationError(spec_path, "REQ-0399", "row_count min exceeds max")
 
     grouped = arguments.get("group_by") is not None
     if grouped:
         names = _column_list(arguments, "group_by", table, spec_path)
         if len(set(names)) != len(names):
             raise DeclarationError(
-                spec_path, "R009-29", "row_count group_by repeats a column"
+                spec_path, "REQ-0403", "row_count group_by repeats a column"
             )
         partitions = _groups([tuple(row[name] for name in names) for row in rows])
     else:
         names = []
-        # R009-19 bounds the whole output, so the ungrouped count exists even
+        # REQ-0385 bounds the whole output, so the ungrouped count exists even
         # when no row does: an empty artifact must still meet a `min`.
         partitions = {(): list(range(len(rows)))}
 
@@ -789,7 +789,7 @@ def _row_count_failure(
     if arguments.get("filter") is not None:
         filter_path = f"{spec_path}.filter"
         predicate = _predicate(
-            arguments["filter"], filter_path, "R009-23", predicate_types
+            arguments["filter"], filter_path, "REQ-0397", predicate_types
         )
         admitted = {
             index
@@ -797,7 +797,7 @@ def _row_count_failure(
             if _truth(predicate, row, filter_path) is TruthValue.TRUE
         }
 
-    # R009-20 partitions the artifact rather than the counted rows, so a
+    # REQ-0386 partitions the artifact rather than the counted rows, so a
     # group whose filter admits nothing still exists and still fails a `min`.
     offending: list[tuple[KeyMap, int]] = []
     for combined, positions in partitions.items():

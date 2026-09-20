@@ -13,10 +13,10 @@
 # It prints one line per disagreement and exits non-zero when there is any.
 
 YAMAA_GRAMMAR_CONTRACTS <- c(
-  predicate = "R004",
-  numeric = "R010",
-  `string-template` = "R012",
-  aggregate = "R013"
+  predicate = "operations/predicates",
+  numeric = "operations/computation",
+  `string-template` = "operations/text",
+  aggregate = "operations/aggregation"
 )
 
 #' The directory holding this script, however it was invoked

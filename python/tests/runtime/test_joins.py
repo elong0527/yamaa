@@ -79,7 +79,7 @@ def test_a_relation_is_read_once_in_record_order() -> None:
 
 
 def test_applicable_keys_are_the_output_keys_the_right_side_carries() -> None:
-    # R003-3 and R003-6: the keys, in output `keys` order.
+    # REQ-0113 and REQ-0116: the keys, in output `keys` order.
     index = ex_relation()
 
     assert applicable_keys(["STUDYID", "USUBJID", "LBSEQ"], index) == (
@@ -98,7 +98,7 @@ def test_a_shared_subject_id_in_another_study_never_combines() -> None:
 
 
 def test_a_record_with_a_missing_key_cannot_match() -> None:
-    # R003-13: an uncollected identifier is not an identity two rows share.
+    # REQ-0123: an uncollected identifier is not an identity two rows share.
     index = relation(
         "EX",
         [("USUBJID", "str"), ("EXTRT", "str")],
@@ -110,7 +110,7 @@ def test_a_record_with_a_missing_key_cannot_match() -> None:
 
 
 def test_partitions_keep_first_occurrence_order_and_group_missing_together() -> None:
-    # R001-7 and R001-8: missing equals missing for grouping, and a group is
+    # REQ-0037 and REQ-0038: missing equals missing for grouping, and a group is
     # ordered by the position of its first record.
     index = relation(
         "LB",
@@ -125,7 +125,7 @@ def test_partitions_keep_first_occurrence_order_and_group_missing_together() -> 
 
 
 def test_ordering_places_missing_where_the_term_declares_and_ties_by_position() -> None:
-    # R007-15: `nulls` does not flip with `direction`.
+    # REQ-0300: `nulls` does not flip with `direction`.
     index = relation(
         "EX",
         [("EXSTDTC", "date"), ("EXSEQ", "int")],
@@ -174,7 +174,7 @@ def test_one_match_is_copied_and_no_match_is_missing() -> None:
 
     assert isinstance(matched, ResolvedValue)
     assert matched.value == "VITAMIN D3"
-    # R003-11 and R003-36: an absent right-side record is ordinary missing.
+    # REQ-0121 and REQ-0146: an absent right-side record is ordinary missing.
     assert isinstance(absent, ResolvedValue)
     assert absent.value is MISSING
 
@@ -186,13 +186,13 @@ def test_several_matches_fail_unless_the_specification_answers_for_them() -> Non
 
     assert isinstance(result, FailedResolution)
     assert result.condition.condition == "multiple_matches"
-    assert result.condition.requirement == "R003-35"
+    assert result.condition.requirement == "REQ-0145"
     assert result.condition.context == {"dataset": "EX", "match_count": 2}
 
 
 def test_a_source_filter_narrows_the_join_without_a_declared_selection() -> None:
-    # R003-21: a filter that leaves one match answers with it, and one that
-    # leaves none is the absent match of R003-36, not a multiple match.
+    # REQ-0131: a filter that leaves one match answers with it, and one that
+    # leaves none is the absent match of REQ-0146, not a multiple match.
     index = ex_relation()
 
     one = join_scalar(
@@ -243,7 +243,7 @@ def test_a_declared_selection_chooses_one_match_and_reports_the_handler() -> Non
 
 
 def test_a_selection_filtered_to_one_record_fires_no_handler() -> None:
-    # R008-15: the count reports only the rows where more than one survived.
+    # REQ-0356: the count reports only the rows where more than one survived.
     index = ex_relation()
 
     result = join_scalar(
@@ -261,7 +261,7 @@ def test_a_selection_filtered_to_one_record_fires_no_handler() -> None:
 
 
 def test_a_selection_filtered_to_nothing_is_an_ordinary_absent_match() -> None:
-    # R008-14: a narrow filter produces missing rather than firing a handler.
+    # REQ-0355: a narrow filter produces missing rather than firing a handler.
     index = ex_relation()
 
     result = join_scalar(
@@ -309,7 +309,7 @@ def test_a_resolution_becomes_the_result_an_expression_returns() -> None:
     assert resolution_result(ResolvedValue(value=3)) == ValueResult(value=3)
 
 
-# R003-40: the implicit join the planner restores for a plain cross-dataset
+# REQ-0150: the implicit join the planner restores for a plain cross-dataset
 # scalar source when the applicable keys are clear.
 
 
@@ -412,7 +412,7 @@ def test_implicit_join_reports_duplicate_right_side_matches() -> None:
 
 
 def test_a_structured_implicit_source_filters_and_selects_before_reading() -> None:
-    # R003-1: a structured cross-dataset source keeps its filter and
+    # REQ-0111: a structured cross-dataset source keeps its filter and
     # multiple_matches on the implicit join.
     left = frame_from_values(
         (

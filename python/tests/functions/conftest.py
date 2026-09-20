@@ -25,7 +25,7 @@ def bmi(weight_kg, height_cm, cm_per_m=100):
 """
 
 # The same arithmetic, with every invocation recorded where a test can read
-# it. R018-30 is an ordering rule, and an order is only observable from
+# it. REQ-0691 is an ordering rule, and an order is only observable from
 # inside the code that gets called.
 RECORDING_CODE = """
 CALLS = []

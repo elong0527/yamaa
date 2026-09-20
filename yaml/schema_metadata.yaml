@@ -1,231 +1,223 @@
 version: "1.0"
 
-# Governed submission metadata. R024 defines what each field means, which
-# combinations a standard admits, and what the derivation graph refutes.
-# R025 owns the codelist a binding names, and R026 composes these declarations
-# with a study document into one Define-XML 2.1 document.
-#
-# Every identifier here names an object the study document declares. A
-# specification validates on its own with the names unresolved; R026 resolves
-# them when the specification joins a document.
+# See REQ-1148 in rules/submission/metadata.md.
 
 submission_dataset_class:
     - label:
         type: str
         required: true
         min_length: 1
-        description: Description of the dataset as a whole, distinct from the domain it derives.
+        description: See REQ-1130 in rules/submission/metadata.md.
     - class:
         type: dataset_class_name
         required: true
-        description: General observation class of the dataset.
+        description: See REQ-1130 in rules/submission/metadata.md.
     - subclass:
         type: dataset_subclass_name
         required: false
-        description: Observation subclass, declared when the standard defines one for the dataset.
+        description: See REQ-1130 in rules/submission/metadata.md.
     - structure:
         type: str
         required: true
         min_length: 1
-        description: Level of detail one record represents, stated in prose.
+        description: See REQ-1130 in rules/submission/metadata.md.
     - repeating:
         type: bool
         required: true
-        description: Whether the dataset may carry more than one record per subject or pool.
+        description: See REQ-1130 in rules/submission/metadata.md.
     - reference_data:
         type: bool
         default: false
-        description: Whether the dataset carries reference data rather than subject data.
+        description: See REQ-1130 in rules/submission/metadata.md.
     - domain:
         type: identifier
         required: false
-        description: Domain the dataset belongs to; defaults to the specification's domain.
+        description: See REQ-1130 in rules/submission/metadata.md.
     - comment:
         type: submission_comment
         required: false
-        description: Sponsor comment carried with the dataset definition.
+        description: See REQ-1130 in rules/submission/metadata.md.
 
 submission_column_class:
     - core:
         type: core_designation
         required: false
-        description: Standard core designation; R024 states which family declares it and what it derives.
+        description: See REQ-1131 in rules/submission/metadata.md.
     - mandatory:
         type: bool
         required: false
-        description: Whether the column must carry a value; R024 states when it is derived and when declared.
+        description: See REQ-1131 in rules/submission/metadata.md.
     - role:
         type: str
         required: false
         min_length: 1
-        description: Role the column plays in its dataset, in the vocabulary its standard publishes.
+        description: See REQ-1131 in rules/submission/metadata.md.
     - data_type:
         type: define_data_type
         required: false
-        description: Submission data type; R024 defaults it from the declared column type.
+        description: See REQ-1131 in rules/submission/metadata.md.
     - length:
         type: int
         required: false
-        description: Maximum expected value length; R024 derives it from a max_length verification and binds it to the constraint that enforces it.
+        description: See REQ-1131 in rules/submission/metadata.md.
     - significant_digits:
         type: int
         required: false
-        description: Digits after the decimal point; required with a float submission data type.
+        description: See REQ-1131 in rules/submission/metadata.md.
     - display_format:
         type: str
         required: false
         min_length: 1
-        description: Presentation format carried for a reader; it never changes a computed value.
+        description: See REQ-1131 in rules/submission/metadata.md.
     - codelist:
         type: identifier
         required: false
-        description: Codelist whose values this column carries; R025 defines the binding.
+        description: See REQ-1131 in rules/submission/metadata.md.
     - origin:
         type: submission_origin_class
         required: true
-        description: Declared provenance of the value; R024 states what the graph refutes.
+        description: See REQ-1131 in rules/submission/metadata.md.
     - method:
         type: submission_method
         required: false
-        description: Algorithm producing the value; R024 requires it for a derived origin.
+        description: See REQ-1131 in rules/submission/metadata.md.
     - comment:
         type: submission_comment
         required: false
-        description: Sponsor comment carried with the column definition.
+        description: See REQ-1131 in rules/submission/metadata.md.
 
 submission_origin_class:
     - type:
         type: origin_type
         required: true
-        description: How the value originated.
+        description: See REQ-1132 in rules/submission/metadata.md.
     - source:
         type: origin_source
         required: false
-        description: Party responsible for the value; R024 closes the pairs each family admits and derives it where one fixes it.
+        description: See REQ-1132 in rules/submission/metadata.md.
     - description:
         type: str
         required: false
         min_length: 1
-        description: Explanatory text, required where R024 states the origin is incomplete without it.
+        description: See REQ-1132 in rules/submission/metadata.md.
     - documents:
         type: "list[document_reference]"
         required: false
-        description: Supporting documents evidencing the origin; R024 derives the annotated case report form reference when a collected origin omits them.
+        description: See REQ-1132 in rules/submission/metadata.md.
 
 submission_method_class:
     - name:
         type: str
         required: false
         min_length: 1
-        description: Name of the algorithm; R026 derives one when it is omitted.
+        description: See REQ-1133 in rules/submission/metadata.md.
     - type:
         type: method_type
         default: Computation
-        description: Kind of algorithm the method describes.
+        description: See REQ-1133 in rules/submission/metadata.md.
     - description:
         type: str
         required: true
         min_length: 1
-        description: Statement of the algorithm in prose.
+        description: See REQ-1133 in rules/submission/metadata.md.
     - expression:
         type: formal_expression_class
         required: false
-        description: Machine-readable code the method is also stated in.
+        description: See REQ-1133 in rules/submission/metadata.md.
     - documents:
         type: "list[document_reference]"
         required: false
-        description: Supporting documents carrying the full algorithm.
+        description: See REQ-1133 in rules/submission/metadata.md.
 
 submission_comment_class:
     - text:
         type: str
         required: true
         min_length: 1
-        description: Text of the comment.
+        description: See REQ-1134 in rules/submission/metadata.md.
     - documents:
         type: "list[document_reference]"
         required: false
-        description: Supporting documents the comment refers to.
+        description: See REQ-1134 in rules/submission/metadata.md.
 
 formal_expression_class:
     - context:
         type: str
         required: true
         min_length: 1
-        description: Language the code is written in, named for a reader that evaluates it.
+        description: See REQ-1135 in rules/submission/metadata.md.
     - code:
         type: str
         required: true
         min_length: 1
-        description: The code itself; nothing in this language parses or executes it.
+        description: See REQ-1135 in rules/submission/metadata.md.
 
 document_reference_class:
     - document:
         type: identifier
         required: true
-        description: Supporting document this reference names.
+        description: See REQ-1136 in rules/submission/metadata.md.
     - pages:
         type: page_reference_class
         required: false
-        description: Place within the document the reference points at.
+        description: See REQ-1136 in rules/submission/metadata.md.
 
 page_reference_class:
     - type:
         type: str
         required: true
         values: [PhysicalRef, NamedDestination]
-        description: Whether refs are physical page numbers or named destinations.
+        description: See REQ-1137 in rules/submission/metadata.md.
     - refs:
         type: str
         required: true
         min_length: 1
-        description: Space-separated page numbers or destination names.
+        description: See REQ-1137 in rules/submission/metadata.md.
     - title:
         type: str
         required: false
         min_length: 1
-        description: Label a reader sees in place of the raw reference.
+        description: See REQ-1137 in rules/submission/metadata.md.
 
 submission_comment:
     type: [str, submission_comment_class]
-    description: Comment text, or text with the documents it refers to.
+    description: See REQ-1138 in rules/submission/metadata.md.
 
 submission_method:
     type: [str, submission_method_class]
-    description: Algorithm stated in prose, or with its name, code, and documents.
+    description: See REQ-1139 in rules/submission/metadata.md.
 
 document_reference:
     type: [identifier, document_reference_class]
-    description: Document identifier, or an identifier with the place it points at.
+    description: See REQ-1140 in rules/submission/metadata.md.
 
 core_designation:
     type: str
     values: [Req, Exp, Perm]
-    description: Required, expected, or permissible in the dataset's standard.
+    description: See REQ-1141 in rules/submission/metadata.md.
 
 origin_type:
     type: str
     values: [Assigned, Collected, Derived, Not Available, Other, Predecessor,
         Protocol]
-    description: Define-XML 2.1 origin type.
+    description: See REQ-1142 in rules/submission/metadata.md.
 
 origin_source:
     type: str
     values: [Investigator, Sponsor, Subject, Vendor]
-    description: Define-XML 2.1 origin source.
+    description: See REQ-1143 in rules/submission/metadata.md.
 
 method_type:
     type: str
     values: [Computation, Imputation]
-    description: Kind of algorithm a method describes.
+    description: See REQ-1144 in rules/submission/metadata.md.
 
 define_data_type:
     type: str
     values: [text, integer, float, date, datetime, time, partialDate,
         partialTime, partialDatetime, incompleteDate, incompleteTime,
         incompleteDatetime, durationDatetime, intervalDatetime, URI]
-    description: Submission data type a column is represented by; R024 closes
-        which ones each declared column type admits.
+    description: See REQ-1145 in rules/submission/metadata.md.
 
 dataset_class_name:
     type: str
@@ -235,13 +227,11 @@ dataset_class_name:
         MEDICAL DEVICE OCCURRENCE DATA STRUCTURE, OCCURRENCE DATA STRUCTURE,
         REFERENCE DATA STRUCTURE, RELATIONSHIP, SPECIAL PURPOSE,
         STUDY REFERENCE, SUBJECT LEVEL ANALYSIS DATASET, TRIAL DESIGN]
-    description: General observation class, in the exact case Define-XML 2.1
-        publishes.
+    description: See REQ-1146 in rules/submission/metadata.md.
 
 dataset_subclass_name:
     type: str
     values: [ADVERSE EVENT, MEDICAL DEVICE TIME-TO-EVENT,
         NON-COMPARTMENTAL ANALYSIS, POPULATION PHARMACOKINETIC ANALYSIS,
         TIME-TO-EVENT]
-    description: Observation subclass, in the exact case Define-XML 2.1
-        publishes.
+    description: See REQ-1147 in rules/submission/metadata.md.

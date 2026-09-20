@@ -8,7 +8,7 @@ module decides only what each operation reports once they are.
 
 Row count is preserved by construction: every operation answers for the row
 it was asked about, and a row its `filter` excluded receives missing rather
-than disappearing (R007-7).
+than disappearing (REQ-0294).
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ class Partition:
 
     `rows` are the partition's rows in the order the window's `order_by`
     terms put them. `current` is the current row's index in that order, and
-    `eligible` says which of them the window's `filter` retained: R007-7
+    `eligible` says which of them the window's `filter` retained: REQ-0294
     keeps an excluded row in the output and gives it missing rather than
     dropping it, so the excluded rows are absent from the numbering and
     present in the row set.
@@ -100,7 +100,7 @@ def rank(
 ) -> WindowResult:
     """Number the eligible rows, sharing one number across a tie.
 
-    R007-18 makes `rank` compare only the declared terms, so records equal on
+    REQ-0303 makes `rank` compare only the declared terms, so records equal on
     every one of them receive a single number rather than the distinct
     numbers their positions would give.
     """
@@ -124,12 +124,12 @@ def rank(
 def row_value(partition: Partition, source: str, offset: int) -> WindowResult:
     """Read one source from the row `offset` places along the declared order."""
     if offset == 0:
-        # R007-43: the current row's own value is `source`, and a window must
+        # REQ-0328: the current row's own value is `source`, and a window must
         # not be a second spelling of it.
-        return _condition("zero_offset", {"offset": offset}, requirement="R007-43")
+        return _condition("zero_offset", {"offset": offset}, requirement="REQ-0328")
     target = partition.current + offset
     if not 0 <= target < len(partition.rows):
-        # R007-7: a row that does not exist reads the same as a present row
+        # REQ-0294: a row that does not exist reads the same as a present row
         # whose value is missing.
         return _missing()
     return ValueResult(value=_read(partition.rows[target], source))
@@ -138,7 +138,7 @@ def row_value(partition: Partition, source: str, offset: int) -> WindowResult:
 def previous_non_missing(partition: Partition, source: str) -> WindowResult:
     """Read the closest strictly earlier row whose source is not missing.
 
-    R001-29 makes this cross any number of missing rows by searching a
+    REQ-0061 makes this cross any number of missing rows by searching a
     separate completed source column; the current row is never a candidate,
     so nothing here reads the column being derived.
     """
@@ -172,7 +172,7 @@ def baseline_flag(
             return _condition(
                 "incompatible_input_type",
                 {"operation": "baseline_flag", "source": date},
-                requirement="R007-38",
+                requirement="REQ-0323",
             )
         if order > 0:
             latest = index
@@ -197,7 +197,7 @@ def baseline_flag(
                 "date": _rendered(_read(partition.rows[latest], date)),
                 "match_count": len(tied) + 1,
             },
-            requirement="R007-37",
+            requirement="REQ-0322",
         )
     return ValueResult(value="Y" if partition.current == latest else MISSING)
 
@@ -221,7 +221,7 @@ def baseline_value(
                 "flag": flag,
                 "flag_count": len(flagged),
             },
-            requirement="R007-37",
+            requirement="REQ-0322",
         )
     return ValueResult(value=_read(partition.rows[flagged[0]], value))
 
@@ -276,7 +276,7 @@ def evaluate_window(
             return _condition(
                 "value_not_permitted",
                 {"field": "method", "value": str(method)},
-                requirement="R007-37",
+                requirement="REQ-0322",
             )
         return rank(partition, _order_variables(payload), method)  # type: ignore[arg-type]
     if operation == "row_value":
@@ -285,7 +285,7 @@ def evaluate_window(
             return _condition(
                 "invalid_field_type",
                 {"operation": operation, "expected": "an integer offset"},
-                requirement="R007-36",
+                requirement="REQ-0321",
             )
         return row_value(partition, str(payload.get("source")), offset)
     if operation == "previous_non_missing":

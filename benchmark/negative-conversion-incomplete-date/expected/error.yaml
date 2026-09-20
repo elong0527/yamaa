@@ -2,7 +2,7 @@ phase: convert
 condition: conversion_failed
 spec_paths:
   - columns.ASTDT
-requirement: R016-60
+requirement: REQ-0601
 context:
   from: str
   to: date

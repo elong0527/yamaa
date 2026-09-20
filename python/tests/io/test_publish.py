@@ -61,10 +61,10 @@ def test_a_failed_replacement_keeps_the_previous_artifact_and_removes_the_residu
     diagnostic = raised.value.diagnostics[0]
     assert diagnostic.phase == "output"
     assert diagnostic.condition == "publication_failed"
-    assert diagnostic.requirement == "R020-47"
+    assert diagnostic.requirement == "REQ-0764"
     assert diagnostic.context["target"] == str(target.path)
-    # R020-39 keeps the temporary file beside the target so the replacement
-    # stays on one filesystem, and R020-40 removes it when one fails.
+    # REQ-0753 keeps the temporary file beside the target so the replacement
+    # stays on one filesystem, and REQ-0754 removes it when one fails.
     assert staged[0].parent == tmp_path
     assert target.path.read_bytes() == b"previous\n"
     assert sorted(entry.name for entry in tmp_path.iterdir()) == ["adsl.csv"]

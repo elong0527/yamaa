@@ -2,7 +2,7 @@ phase: verification
 condition: allowed_values_failed
 spec_paths:
   - columns.SEX.verifications[0].allowed_values
-requirement: R009-10
+requirement: REQ-0376
 context:
   column: SEX
   failure_count: 1
