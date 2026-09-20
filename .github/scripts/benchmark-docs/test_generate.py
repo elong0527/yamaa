@@ -255,7 +255,7 @@ class DashboardTests(unittest.TestCase):
 
     def test_specification_controls_are_generated(self):
         page = generate.render_benchmark(BENCHMARK).decode("ascii")
-        self.assertIn("<span>Hide Spec</span>", page)
+        self.assertIn("<span>Hide yamaa spec</span>", page)
         self.assertIn('role="separator" aria-label="Resize specification panel"', page)
         self.assertIn('aria-valuenow="740"', page)
         self.assertIn("const DEFAULT_SPEC_WIDTH = 740", page)
