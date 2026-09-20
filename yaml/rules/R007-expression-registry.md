@@ -17,13 +17,13 @@ portable. `function` is the explicit project-environment extension point.
 
 This rule owns registration, the nesting policy, evaluation kinds, ordering
 terms, and expression input and result types. R011 owns input compatibility
-and comparability. Behavior specific to one
-operation is documented beside its registry entry. Cross-cutting behavior stays
-in its owning rule: R002 and R003 for source binding and joins, R008 for local
-handlers, R010 for `compute`, R011 for column types, R012 for string templates,
-R013 for aggregate reduction, R014 for the type a source field carries,
-R003 for a record selected once and read by several columns, R016 for dates and
-datetimes, R018 for project functions, and R004 for predicates.
+and comparability. One operation's behavior is documented beside its registry
+entry. Cross-cutting behavior stays in its owning rule: R002 and R003 for
+source binding and joins, R008 for local handlers, R010 for `compute`, R011
+for column types, R012 for string templates, R013 for aggregate reduction,
+R014 for the type a source field carries, R003 for a record selected once and
+read by several columns, R016 for dates and datetimes, R018 for project
+functions, and R004 for predicates.
 R019 owns string values, casing, equality, and order.
 
 ## Registration
@@ -42,7 +42,7 @@ fields fail validation.
 **R007-3.** `source` and `literal` are expression leaves. Every other
 expression names its input variables directly, except in the following fields
 whose declared type contains `expression`. Each is evaluated recursively and
-nests because selecting or composing expressions is the field's purpose:
+nests because its purpose is to select or compose expressions:
 
 - `case` items: `case` selects among expressions, so each `then` and the
   trailing `otherwise` nests an expression.
@@ -106,10 +106,10 @@ where missing values sit among the non-missing ones for that term.
 implementation must apply the declared placement rather than inherit its
 engine's.
 
-**R007-16.** Terms apply in order, each with its own direction and
-placement. Records equal on every term preserve row-template order and then
-base-record order. The result is total: ordering has no
-undefined case and a row's neighbours are determined.
+**R007-16.** Terms apply in order. Each has its own direction and placement.
+Records equal on every term preserve row-template order and then base-record
+order. Ordering is total. It has no undefined case. A row's neighbours are
+determined.
 
 **R007-17.** Non-missing values use the order their type owns: numeric order
 under R010, text order under R019, and chronological order for `date` and
