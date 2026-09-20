@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 import re
+import sys
 from collections.abc import Mapping
 from functools import lru_cache
 from typing import Any, TypeAlias
@@ -23,6 +24,8 @@ from yamaa.expressions.core import (
     ResolvedValue,
     Resolver,
     expression_condition,
+    resolve_operand,
+    source_operand,
 )
 from yamaa.models import (
     INT64_MAX,
@@ -648,4 +651,98 @@ def _compute(payload: object, resolver: Resolver) -> EvaluationResult:
 
 def numeric_handlers() -> dict[str, ExpressionHandler]:
     """Return the R010 arithmetic operation this component registers."""
-    return {"compute": _compute}
+    return {
+        "compute": _compute,
+        "round_half_away_from_zero": _round_half_away_from_zero,
+    }
+
+
+# sqrt(2^-52): values within this times 10^-digits below a tie count as ties,
+# matching metalite::round_half_away_from_zero (adapted from tidytlg::roundSAS).
+_TIE_TOLERANCE_FACTOR = math.sqrt(sys.float_info.epsilon)
+
+
+def _round_half_away_from_zero_scalar(value: float, digits: int) -> float:
+    """Round one finite value with ties half away from zero (REQ-0418)."""
+    sign = -1.0 if value < 0 else 1.0
+    magnitude = abs(value)
+    try:
+        tolerance = _TIE_TOLERANCE_FACTOR * (10.0**-digits)
+    except OverflowError:
+        # Far left of the decimal point every double sits below half a
+        # quantum, so the nudge saturates without changing the rounded result.
+        tolerance = math.inf
+    # Nudge sub-tie values just above the tie without overflowing near DBL_MAX.
+    magnitude += min(tolerance, sys.float_info.max - magnitude)
+    rounded = round(magnitude, digits)
+    if rounded == 0:
+        return 0.0  # Positive zero: formatted output never shows "-0.0".
+    return sign * rounded
+
+
+def _round_half_away_from_zero(payload: object, resolver: Resolver) -> EvaluationResult:
+    if not isinstance(payload, Mapping):
+        return expression_condition(
+            "validation",
+            "invalid_field_type",
+            {"operation": "round_half_away_from_zero", "expected": "a mapping"},
+            requirement="REQ-0321",
+        )
+    digits = payload.get("digits")
+    if type(digits) is not int:
+        return expression_condition(
+            "validation",
+            "invalid_field_type",
+            {
+                "operation": "round_half_away_from_zero",
+                "field": "digits",
+                "expected": "an integer",
+            },
+            requirement="REQ-1172",
+            field="digits",
+        )
+    operand = source_operand(payload.get("source"))
+    if operand is None:
+        return expression_condition(
+            "validation",
+            "invalid_field_type",
+            {"operation": "round_half_away_from_zero", "expected": "a variable name"},
+            requirement="REQ-0321",
+            field="source",
+        )
+    resolved = resolve_operand(resolver, operand[0], operand[1])
+    if isinstance(resolved, ConditionResult):
+        return resolved
+    if isinstance(resolved, FailedResolution):
+        return ConditionResult(condition=resolved.condition)
+    if isinstance(resolved, AbsentValue):
+        return expression_condition(
+            "validation",
+            "unknown_field",
+            {"identifier": operand[0]},
+            requirement="REQ-0103",
+            field="source",
+        )
+    assert isinstance(resolved, ResolvedValue)
+    normalized = normalize_runtime_value(resolved.value)
+    if isinstance(normalized, ValueResult):
+        value = normalized.value
+    else:
+        assert isinstance(normalized, ConditionResult)
+        return normalized
+    if value is MISSING:
+        return ValueResult(value=MISSING)
+    actual = runtime_type_name(value)
+    if actual not in {"int", "float"}:
+        return expression_condition(
+            "validation",
+            "incompatible_input_type",
+            {"source": operand[0], "expected": "numeric", "actual": actual},
+            requirement="REQ-0418",
+            field="source",
+        )
+    number = float(value)  # type: ignore[arg-type]
+    if not math.isfinite(number):
+        # REQ-0006 normalizes non-finite values after every operator.
+        return ValueResult(value=MISSING)
+    return ValueResult(value=_round_half_away_from_zero_scalar(number, digits))

@@ -330,6 +330,106 @@ def test_parsing_is_shared_without_sharing_a_mutable_parse() -> None:
 
 
 def test_floating_point_results_are_not_rounded_away() -> None:
-    # REQ-0418: no derivation may round, and REQ-0435 keeps the last place.
+    # REQ-0418: compute itself never rounds; REQ-0435 keeps the last place.
     assert _value("0.1 + 0.2") == 0.1 + 0.2
     assert not math.isclose(_value("0.1 + 0.2"), 0.3, rel_tol=0.0, abs_tol=0.0)
+
+
+def _round(expression: dict[str, object], values: dict[str, object]) -> object:
+    return evaluate_expression(expression, MappingResolver(values))
+
+
+def _rounded(value: object, digits: int) -> object:
+    result = _round(
+        {"round_half_away_from_zero": {"source": "A", "digits": digits}}, {"A": value}
+    )
+    assert isinstance(result, ValueResult), result
+    return result.value
+
+
+@pytest.mark.parametrize(
+    ("value", "digits", "expected"),
+    [
+        (1.25, 1, 1.3),
+        (-1.25, 1, -1.3),
+        (2.5, 0, 3.0),
+        (-2.5, 0, -3.0),
+        (1.35, 1, 1.4),
+        (1.24, 1, 1.2),
+        (0.05, 1, 0.1),
+        (-0.05, 1, -0.1),
+        (149.0, -1, 150.0),
+        (144.0, -1, 140.0),
+        (145.0, -1, 150.0),
+        (5, 1, 5.0),
+    ],
+)
+def test_round_half_away_from_zero_ties(
+    value: object, digits: int, expected: float
+) -> None:
+    # REQ-0418: ties go away from zero, never to even.
+    assert _rounded(value, digits) == expected
+
+
+def test_round_half_away_from_zero_treats_near_ties_as_ties() -> None:
+    # REQ-0418: within sqrt(2^-52) * 10^-digits below a tie counts as a tie.
+    assert _rounded(1.25 - 1e-9, 1) == 1.3
+    assert _rounded(1.25 - 1e-7, 1) == 1.2
+
+
+def test_round_half_away_from_zero_returns_positive_zero() -> None:
+    # REQ-0418: a value that rounds to zero never displays as "-0.0".
+    result = _rounded(-0.04, 1)
+    assert result == 0.0
+    assert math.copysign(1.0, result) == 1.0  # type: ignore[arg-type]
+
+
+def test_round_half_away_from_zero_propagates_missing() -> None:
+    # REQ-0418: missing stays missing.
+    assert _rounded(MISSING, 1) is MISSING
+
+
+def test_round_half_away_from_zero_rejects_a_non_numeric_source() -> None:
+    result = _round(
+        {"round_half_away_from_zero": {"source": "A", "digits": 1}}, {"A": "M"}
+    )
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "incompatible_input_type"
+    assert result.condition.requirement == "REQ-0418"
+
+
+@pytest.mark.parametrize("digits", [1.5, "1", True, None])
+def test_round_half_away_from_zero_rejects_a_non_integer_digits(digits: object) -> None:
+    result = _round(
+        {"round_half_away_from_zero": {"source": "A", "digits": digits}}, {"A": 1.25}
+    )
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_field_type"
+    assert result.condition.requirement == "REQ-1172"
+
+
+def test_round_half_away_from_zero_rejects_a_missing_digits() -> None:
+    result = _round({"round_half_away_from_zero": {"source": "A"}}, {"A": 1.25})
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_field_type"
+    assert result.condition.requirement == "REQ-1172"
+
+
+def test_round_half_away_from_zero_rejects_a_non_variable_source() -> None:
+    result = _round(
+        {"round_half_away_from_zero": {"source": {"A": 1}, "digits": 1}}, {"A": 1.25}
+    )
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_field_type"
+    assert result.condition.requirement == "REQ-0321"
+
+
+def test_round_half_away_from_zero_survives_extreme_digits() -> None:
+    # REQ-0418: far left of the decimal point every double is below half a
+    # quantum; far right the tolerance underflows and the value is unchanged.
+    assert _rounded(123.456, -400) == 0.0
+    assert _rounded(123.456, 400) == 123.456

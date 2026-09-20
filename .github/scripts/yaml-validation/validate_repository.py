@@ -7206,6 +7206,19 @@ def validate_expression_static_semantics(expression, path, context):
         )
         return errors
 
+    if keyword == 'round_half_away_from_zero' and isinstance(payload, dict):
+        errors.extend(
+            validate_named_input_type(
+                payload,
+                'source',
+                {'int', 'float'},
+                'numeric',
+                f"{path}.round_half_away_from_zero",
+                resolver,
+            )
+        )
+        return errors
+
     temporal_inputs = {
         'date_diff': {
             'start': ({'date'}, 'date'),

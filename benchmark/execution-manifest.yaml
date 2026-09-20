@@ -480,6 +480,9 @@ examples:
   negative-lookup-mismatched:
     status: executable
     runtimes: ['python']
+  negative-round-half-away-from-zero-non-numeric-source:
+    status: executable
+    runtimes: ['python']
   negative-row-number-filter:
     status: executable
     runtimes: ['python']

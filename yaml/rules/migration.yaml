@@ -2195,6 +2195,7 @@ requirements:
   REQ-1119: {"file": "operations/computation.md", "sources": ["schema_expression_numeric.yaml:expressions.compute.expr.description", "schema_expression_numeric.yaml:comment:6"]}
   REQ-1120: {"file": "operations/computation.md", "sources": ["schema_expression_numeric.yaml:numeric_expression.description"]}
   REQ-1121: {"file": "operations/computation.md", "sources": ["schema_expression_numeric.yaml:comment:3"]}
+  REQ-1172: {"file": "operations/computation.md", "sources": ["schema_expression_numeric.yaml:expressions.round_half_away_from_zero.source.description", "schema_expression_numeric.yaml:expressions.round_half_away_from_zero.digits.description"]}
   REQ-1122: {"file": "operations/windows.md", "sources": ["schema_expression_window.yaml:window_spec.group_by.description", "schema_expression_window.yaml:window_spec.order_by.description", "schema_expression_window.yaml:window_spec.filter.description"]}
   REQ-1123: {"file": "operations/windows.md", "sources": ["schema_expression_window.yaml:expressions.row_number.window.description", "schema_expression_window.yaml:comment:19"]}
   REQ-1124: {"file": "operations/windows.md", "sources": ["schema_expression_window.yaml:expressions.rank.method.description", "schema_expression_window.yaml:expressions.rank.window.description", "schema_expression_window.yaml:comment:25"]}
@@ -2597,3 +2598,5 @@ provenance_addenda:
   - {"source": "schema.yaml:root_class.filter.description", "text": "Predicate selecting base input records for row construction when rows is absent; the filter-only row template lifted to root.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
   - {"source": "schema_expression_core.yaml:expressions.first_available.missing.description", "text": "See REQ-1095 in rules/operations/expressions.md.", "owner": "operations/expressions", "group": "expressions.first_available", "target": "REQ-1095"}
   - {"source": "schema_expression_mapping.yaml:expressions.mapping.strict.description", "text": "See REQ-1110 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.mapping", "target": "REQ-1110"}
+  - {"source": "schema_expression_numeric.yaml:expressions.round_half_away_from_zero.source.description", "text": "Numeric variable to round with ties half away from zero.", "owner": "operations/computation", "group": "round_half_away_from_zero", "target": "REQ-1172"}
+  - {"source": "schema_expression_numeric.yaml:expressions.round_half_away_from_zero.digits.description", "text": "Integer decimal places; negative rounds left of the decimal point.", "owner": "operations/computation", "group": "round_half_away_from_zero", "target": "REQ-1172"}

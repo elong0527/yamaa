@@ -288,6 +288,8 @@ requirement link for behavior. It is not an additional semantic contract.
 | Field or value type | Type | Required | Default | Constraints | Contract |
 | --- | --- | --- | --- | --- | --- |
 | `expressions.compute.expr` | `"numeric_expression"` | `true` | Absent | -- | [REQ-1119](../operations/computation.md#req-1119) |
+| `expressions.round_half_away_from_zero.source` | `"variable"` | `true` | Absent | -- | [REQ-1172](../operations/computation.md#req-1172) |
+| `expressions.round_half_away_from_zero.digits` | `"int"` | `true` | Absent | -- | [REQ-1172](../operations/computation.md#req-1172) |
 | `numeric_expression` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1120](../operations/computation.md#req-1120) |
 
 ## schema_expression_str.yaml
