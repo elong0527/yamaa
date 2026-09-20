@@ -11,12 +11,12 @@ sidebarToggle.hidden = false;
 specification.hidden = true;
 workbench.classList.add("without-sidebar");
 sidebarToggle.setAttribute("aria-expanded", "false");
-sidebarToggle.querySelector("span").textContent = "Show Spec";
+sidebarToggle.querySelector("span").textContent = "Show yamaa spec";
 sidebarToggle.addEventListener("click", () => {
   specification.hidden = !specification.hidden;
   workbench.classList.toggle("without-sidebar", specification.hidden);
   sidebarToggle.setAttribute("aria-expanded", String(!specification.hidden));
-  sidebarToggle.querySelector("span").textContent = specification.hidden ? "Show Spec" : "Hide Spec";
+  sidebarToggle.querySelector("span").textContent = specification.hidden ? "Show yamaa spec" : "Hide yamaa spec";
   if (!specification.hidden) setSpecWidth(preferredSpecWidth);
 });
 
