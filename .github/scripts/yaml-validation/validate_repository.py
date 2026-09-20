@@ -7542,6 +7542,12 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
                 'resolver': predicate_resolver(
                     unqualified=row_output,
                     qualified={
+                        # R003-46/R003-47: a row derivation reads another
+                        # dataset through the row-phase join, so binding
+                        # accepts every input dataset here. Formula and
+                        # predicate scopes stay driver-only in their own
+                        # validators (R010-4, R001-26).
+                        **datasets,
                         **intermediates,
                         **(
                             {driver: driver_fields}

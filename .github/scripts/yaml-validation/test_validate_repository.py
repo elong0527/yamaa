@@ -6179,5 +6179,109 @@ class TestRetiredOdmItemReferences(unittest.TestCase):
             )
 
 
+
+class TestRowPhaseDatasetReads(unittest.TestCase):
+    """R003-46/R003-47 as the repository validator applies them."""
+
+    def setUp(self):
+        self.env, schema_errors = VALIDATOR.build_schema_env(
+            TOOL_PATH.parents[3]
+        )
+        self.assertEqual(schema_errors, [])
+        self.test_dir = tempfile.TemporaryDirectory()
+        self.example_dir = Path(self.test_dir.name)
+        self.input_dir = self.example_dir / "input"
+        self.input_dir.mkdir()
+        (self.input_dir / "main.csv").write_text(
+            "ID,KIND,W\ns1,A,10\n", encoding="utf-8"
+        )
+        (self.input_dir / "aux.csv").write_text(
+            "ID,H\ns1,100\n", encoding="utf-8"
+        )
+        self.spec_path = self.example_dir / "spec.yaml"
+
+    def tearDown(self):
+        self.test_dir.cleanup()
+
+    def spec(self, derivations):
+        return {
+            "schema_version": "1.0",
+            "domain": "OUT",
+            "input": {
+                "MAIN": {"path": "input/main.csv", "types": {"W": "float"}},
+                "AUX": {"path": "input/aux.csv", "types": {"H": "float"}},
+            },
+            "keys": ["ID", "KIND"],
+            "output": {"path": "out.csv", "columns": ["ID", "KIND", "VAL"]},
+            "columns": [
+                {
+                    "name": "ID",
+                    "type": "str",
+                    "label": "Identifier",
+                    "derivation": {"source": "MAIN.ID"},
+                },
+                {"name": "KIND", "type": "str", "label": "Kind"},
+                {"name": "VAL", "type": "float", "label": "Value"},
+            ],
+            "rows": [
+                {
+                    "id": "r",
+                    "dataset": "MAIN",
+                    "derivations": derivations,
+                }
+            ],
+        }
+
+    def validate(self, derivations):
+        return VALIDATOR.validate_spec_document(
+            self.spec(derivations),
+            "example/spec.yaml",
+            self.spec_path,
+            self.env,
+        )
+
+    def test_accepts_a_row_source_to_another_dataset(self):
+        errors = self.validate(
+            {
+                "KIND": {"source": "MAIN.KIND"},
+                "VAL": {"source": "AUX.H"},
+            }
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_rejects_a_cross_dataset_identifier_in_a_row_formula(self):
+        errors = self.validate(
+            {
+                "KIND": {"source": "MAIN.KIND"},
+                "VAL": {"compute": {"expr": "MAIN.W / AUX.H"}},
+            }
+        )
+
+        # R010-4: a row-phase formula names no qualified cross-dataset
+        # identifier; the value must be bound to a column first.
+        self.assertTrue(
+            any(
+                "qualified_identifier" in message and "rows[0]" in message
+                for message in errors
+            ),
+            errors,
+        )
+
+    def test_rejects_an_unknown_field_in_a_row_source(self):
+        errors = self.validate(
+            {
+                "KIND": {"source": "MAIN.KIND"},
+                "VAL": {"source": "AUX.MISSING"},
+            }
+        )
+
+        self.assertTrue(
+            any(
+                "unknown_field" in message and "rows[0]" in message
+                for message in errors
+            ),
+            errors,
+        )
 if __name__ == '__main__':
     unittest.main()

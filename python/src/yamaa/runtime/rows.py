@@ -264,9 +264,14 @@ class RowResolver:
                     requirement="R003-15",
                 )
             )
+        # R003-46/R003-47: a row-phase join states which current-row
+        # variables it matches; otherwise the keys match themselves.
+        match_variables = (
+            join.match_variables if join.match_variables is not None else join.keys
+        )
         payload: dict[str, object] = {
             "dataset": join.dataset,
-            "key_base": list(join.keys),
+            "key_base": list(match_variables),
             "key": list(join.keys),
             "value": field_name,
         }

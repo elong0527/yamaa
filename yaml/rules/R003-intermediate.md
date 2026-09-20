@@ -352,6 +352,28 @@ its `key` fails as `redundant_key_base`; the author omits it instead.
 The requirement is on what the author wrote: the `key_base` R003-44
 supplies is never redundant.
 
+## Row construction reads through the same join
+
+**R003-46.** During ungrouped row construction a scalar source qualified
+with a non-driver dataset joins that dataset on the applicable keys
+(R003-40), matching each key against the same-named field of the row
+template's driver record. Each retained input record builds one
+candidate row (R001-6), so the driver record's fields are the only
+single values the match can read; values that only column derivation
+produces are not available yet. An explicit `lookup:` states the same
+match with declared `key_base`/`key` pairs, and its match variables
+follow the same availability: driver-record fields or same-entry
+columns. The join binds one value per row, which later derivations in
+the same entry read through the bound column; a row-phase `compute`
+still names no qualified cross-dataset identifier (R010-4).
+
+**R003-47.** During grouped row construction the same join matches each
+applicable key against the candidate's group-key value, so every
+applicable key must be a group key of the template (R001-7). A key the
+group does not carry varies within the group and names no single match
+value: fail as `ungrouped_driver_field` (R001-36). A key no driver
+record carries fails as `unknown_field` (R002-27), in either mode.
+
 
 ## Errors
 
@@ -359,9 +381,10 @@ The failure vocabulary, in the order the requirements introduce it:
 `no_applicable_keys` (R003-42, R003-43), `duplicate_identifier` (R003-3),
 `missing_required_field` (R003-4, schema phase, no requirement attached),
 `source_key_length_mismatch` (R003-5), `unknown_field` (R003-6, R003-7,
-R003-10, R003-12, R003-15, R003-22, R003-31), `incompatible_input_type`
+R003-10, R003-12, R003-15, R003-22, R003-31, R003-47), `incompatible_input_type`
 (R003-8, R003-41), `unpaired_fields` (R003-9), `incomparable_range_types`
 (R003-11), `conflicting_absent_policy` (R003-13), `unmatched_key`
 (R003-14), `phase_boundary` (R003-16), `multiple_matches` (R003-17,
 R003-35), `missing_aggregate_keys` (R003-30), `prohibited_construct`
-(R003-38), and `redundant_key_base` (R003-45).
+(R003-38), `redundant_key_base` (R003-45), and `ungrouped_driver_field`
+(R003-47, under R001-36).

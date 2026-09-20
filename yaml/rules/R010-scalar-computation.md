@@ -49,14 +49,16 @@ column from `output.columns` keeps the column out of the final dataset.
 **R010-4.** During ungrouped row construction an identifier is either a
 variable of the row template's input dataset, qualified exactly as
 `row.filter` qualifies a variable, or an unqualified column derived by
-the same `rows` entry.
+the same `rows` entry. A value from another dataset reaches the formula
+only through such a column, bound by a row-phase source or lookup under
+R003-46.
 
 **R010-5.** During grouped row construction an identifier qualified to
 the row template's input dataset must be one of the enclosing
 `row.group_by` variables. Other values are first reduced to a row-derived
-column with `aggregate`. No other dataset may be qualified, because row
-construction precedes the R003 join and sees only the row template's
-input dataset.
+column with `aggregate`. A value from another dataset is first bound to
+a row-derived column with a source or lookup under R003-47; the formula
+itself qualifies no dataset but its own.
 
 ```yaml
 - name: HEIGHTCM

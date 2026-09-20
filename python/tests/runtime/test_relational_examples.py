@@ -629,3 +629,108 @@ columns:
     type: str
     derivation: {source: ODM.IT.DM.DIAGGRP}
 """
+
+
+# Row-phase reads reach other datasets through the same join the column
+# phase uses: a bare source joins on the applicable keys against the
+# driver record (R003-46), including in a grouped template whose group
+# keys carry the match (R003-47), and an explicit lookup states
+# driver-side match variables.
+_ROW_JOIN_SPEC = """\
+schema_version: "1.0"
+domain: OUT
+input:
+  MAIN: {path: input/main.csv, types: {W: float}}
+  AUX: {path: input/aux.csv, types: {H: float}}
+keys: [ID, KIND]
+output:
+  path: out.csv
+  columns: [ID, KIND, VAL]
+columns:
+  - name: ID
+    type: str
+    label: Identifier
+    derivation:
+      source: MAIN.ID
+  - name: KIND
+    type: str
+    label: Kind
+  - name: VAL
+    type: float
+    label: Value
+rows:
+  - id: carried
+    dataset: MAIN
+    derivations:
+      KIND: {source: MAIN.KIND}
+      VAL: {source: MAIN.W}
+  - id: looked
+    dataset: MAIN
+    filter: "MAIN.KIND = 'B'"
+    derivations:
+      KIND: {literal: LK}
+      VAL:
+        lookup:
+          dataset: AUX
+          key_base: [MAIN.ID]
+          key: [ID]
+          value: H
+  - id: joined
+    dataset: MAIN
+    filter: "MAIN.KIND = 'A'"
+    derivations:
+      KIND: {literal: JN}
+      VAL: {source: AUX.H}
+  - id: grouped
+    dataset: MAIN
+    group_by: [MAIN.ID]
+    derivations:
+      KIND: {literal: GJ}
+      VAL: {source: AUX.H}
+verifications:
+  - unique:
+      columns: [ID, KIND]
+"""
+
+_ROW_JOIN_MAIN = """\
+ID,KIND,W
+s1,A,10
+s1,B,20
+s2,A,30
+"""
+
+_ROW_JOIN_AUX = """\
+ID,H
+s1,100
+s2,
+"""
+
+_ROW_JOIN_EXPECTED = """\
+ID,KIND,VAL
+s1,A,10
+s1,B,20
+s2,A,30
+s1,LK,100
+s1,JN,100
+s2,JN,
+s1,GJ,100
+s2,GJ,
+"""
+
+
+@pytest.fixture
+def row_join_study(tmp_path: Path) -> Path:
+    (tmp_path / "input").mkdir()
+    (tmp_path / "spec.yaml").write_text(
+        textwrap.dedent(_ROW_JOIN_SPEC), encoding="utf-8"
+    )
+    (tmp_path / "input/main.csv").write_text(_ROW_JOIN_MAIN, encoding="utf-8")
+    (tmp_path / "input/aux.csv").write_text(_ROW_JOIN_AUX, encoding="utf-8")
+    return tmp_path
+
+
+def test_row_phase_reads_reach_other_datasets(row_join_study: Path) -> None:
+    result = _run(row_join_study)
+
+    assert isinstance(result, ExecutionSuccess), result
+    assert render_csv(result.artifact).decode("utf-8") == _ROW_JOIN_EXPECTED
