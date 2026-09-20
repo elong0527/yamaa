@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -385,10 +384,7 @@ def execute_workflow(
         content = render_artifact(latest.artifact)
         generated[
             _physical_path(node.entry_path, node.resolved.specification.output.path)
-        ] = ResourceSnapshot(
-            sha256=hashlib.sha256(content).hexdigest(),
-            content=content,
-        )
+        ] = ResourceSnapshot(content=content)
 
     if latest is None:
         raise ValueError("a producer workflow requires at least one node")

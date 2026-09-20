@@ -1,4 +1,4 @@
-"""Execute normalized YAMAA specifications over typed source tables."""
+"""Execute normalized yamaa specifications over typed source tables."""
 
 from yamaa.runtime.executor import (
     ExecutionFailure,

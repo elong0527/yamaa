@@ -154,7 +154,6 @@ requirement link for behavior. It is not an additional semantic contract.
 | `project_runtime_class.language` | `"str"` | `true` | Absent | `{"values": ["r", "python"]}` | [REQ-1081](../operations/functions.md#req-1081) |
 | `project_runtime_class.artifact` | `"runtime_artifact_class"` | `true` | Absent | -- | [REQ-1081](../operations/functions.md#req-1081) |
 | `runtime_artifact_class.reference` | `"str"` | `true` | Absent | `{"min_length": 1}` | [REQ-1082](../operations/functions.md#req-1082) |
-| `runtime_artifact_class.digest` | `"artifact_digest"` | `true` | Absent | -- | [REQ-1082](../operations/functions.md#req-1082) |
 | `function_contract_class.contract` | `"path"` | `false` | Absent | -- | Schema constraint |
 | `function_contract_class.contract_version` | `"function_contract_version"` | `false` | Absent | -- | [REQ-1083](../operations/functions.md#req-1083) |
 | `function_contract_class.implementation_version` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1083](../operations/functions.md#req-1083) |
@@ -186,7 +185,6 @@ requirement link for behavior. It is not an additional semantic contract.
 | `function_conformance_case_class.covers` | `"list[function_coverage]"` | `true` | Absent | -- | Schema constraint |
 | `function_conformance_case_class.args` | `"dict[identifier, function_value]"` | `true` | Absent | -- | Schema constraint |
 | `function_conformance_case_class.result` | `"function_value"` | `true` | Absent | -- | Schema constraint |
-| `artifact_digest` | `"str"` | `false` | Absent | `{"pattern": "^sha256:[0-9a-f]{64}$"}` | Schema constraint |
 | `qualified_callable` | `"str"` | `false` | Absent | `{"min_length": 1}` | Schema constraint |
 | `host_argument_name` | `"str"` | `false` | Absent | `{"min_length": 1}` | Schema constraint |
 | `function_case_id` | `"str"` | `false` | Absent | `{"pattern": "^[a-z][a-z0-9-]*$"}` | Schema constraint |

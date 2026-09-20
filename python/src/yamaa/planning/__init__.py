@@ -1,4 +1,4 @@
-"""Execution plans for normalized YAMAA specifications."""
+"""Execution plans for normalized yamaa specifications."""
 
 from yamaa.planning.execution import (
     ExecutionDiagnostic,

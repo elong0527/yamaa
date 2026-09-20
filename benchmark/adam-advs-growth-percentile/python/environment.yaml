@@ -5,7 +5,6 @@ runtime:
   language: python
   artifact:
     reference: org.example/yamaa/growth-percentile-python:1.0.0
-    digest: sha256:30ddc7e5270693f91938f09a2809ec8d9ea0d7aacffa9f285f24082f359c7ff4
 
 functions:
   normal_cdf:

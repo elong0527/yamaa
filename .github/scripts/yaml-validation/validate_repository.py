@@ -4,7 +4,6 @@ import copy
 import csv
 import datetime as dt
 import decimal
-import hashlib
 import importlib.util
 import io
 import json
@@ -3779,14 +3778,13 @@ def function_contract_fingerprint(name, contract):
     }
     # The normalized form has no JSON numeric values. Compact sorted JSON is
     # therefore the RFC 8785 representation without host-number formatting.
-    payload = json.dumps(
+    return json.dumps(
         logical,
         ensure_ascii=False,
         allow_nan=False,
         sort_keys=True,
         separators=(',', ':'),
     )
-    return 'sha256:' + hashlib.sha256(payload.encode('utf-8')).hexdigest()
 
 
 R_RESERVED_NAMES = {
@@ -4965,8 +4963,7 @@ def resource_path_error(path, written, condition):
 class ProjectSnapshot:
     """One immutable byte snapshot of one accepted physical file."""
 
-    def __init__(self, digest, content):
-        self.digest = digest
+    def __init__(self, content):
         self.content = content
 
     def csv_header(self, delimiter=','):
@@ -5003,14 +5000,13 @@ class ProjectSnapshots:
             return None, 'resource_path_missing'
 
         identity = (status.st_dev, status.st_ino)
-        digest = hashlib.sha256(content).hexdigest()
         accepted = self._by_identity.get(identity)
         if accepted is None:
             self.reads += 1
-            snapshot = ProjectSnapshot(digest, content)
+            snapshot = ProjectSnapshot(content)
             self._by_identity[identity] = snapshot
             return snapshot, None
-        if accepted.digest != digest:
+        if accepted.content != content:
             return None, 'resource_path_content_changed'
         return accepted, None
 

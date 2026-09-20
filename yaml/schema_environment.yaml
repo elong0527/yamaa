@@ -39,10 +39,6 @@ runtime_artifact_class:
         required: true
         min_length: 1
         description: See REQ-1082 in rules/operations/functions.md.
-    - digest:
-        type: artifact_digest
-        required: true
-        description: See REQ-1082 in rules/operations/functions.md.
 
 function_contract_class:
     - contract:
@@ -129,10 +125,6 @@ function_conformance_case_class:
     - covers: {type: "list[function_coverage]", required: true}
     - args: {type: "dict[identifier, function_value]", required: true}
     - result: {type: function_value, required: true}
-
-artifact_digest:
-    type: str
-    pattern: '^sha256:[0-9a-f]{64}$'
 
 qualified_callable:
     type: str

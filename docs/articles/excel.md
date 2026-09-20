@@ -22,7 +22,7 @@ and five Variable sheet rows:
 | WEIGHTKG | Weight (kg) | Num | 8 | | Predecessor | Perm | SOURCE.WEIGHTKG | ADSL | 4 | |
 | BMI | Body Mass Index (kg/m2) | Num | 8 | | Derived | Perm | `BMI = WEIGHTKG / (HEIGHTCM/100)**2` | ADSL | 5 | |
 
-**As YAMAA writes it,** annotated with the cell each line replaces:
+**As yamaa writes it,** annotated with the cell each line replaces:
 
 ```yaml
 schema_version: "1.0"          # which schema version this spec targets (exact match)
@@ -69,18 +69,18 @@ what has no Excel counterpart at all. Four things:
    height is zero -- missing, an error, or `Inf` are all plausible, and each
    programmer picks differently.
 3. **Dependency order vs delivery order.** One `Variable Order` column does both
-   jobs. YAMAA splits them into `columns` order and `output.columns`.
+   jobs. yamaa splits them into `columns` order and `output.columns`.
 4. **The two verifications.** `Key Variables` looks like it asserts uniqueness,
    but nothing executes it. The `implies` rule -- "BMI is empty only when
    height is unusable" -- normally survives as a sentence in a review email.
 
-Going the other way, two of the eleven columns have no YAMAA field:
+Going the other way, two of the eleven columns have no yamaa field:
 
 - **`Core`** is a conformance classification against a CDISC implementation
   guide, not a statement about derivation. It travels in `column.metadata`.
 - **`Comments for Define`** is documentation by definition -- also
   `column.metadata`. The template already separates it from `Conversion
-  Definition`; YAMAA just makes the split executable-vs-not.
+  Definition`; yamaa just makes the split executable-vs-not.
 
 ---
 
@@ -88,7 +88,7 @@ Going the other way, two of the eleven columns have no YAMAA field:
 
 ### 2.1 Dataset level
 
-| Excel spec | YAMAA | Notes |
+| Excel spec | yamaa | Notes |
 |---|---|---|
 | Dataset Name | `domain` | One dataset per spec |
 | Dataset Label / Class / Structure | free keys under `metadata:` | Never validated; carried along |
@@ -101,7 +101,7 @@ Going the other way, two of the eleven columns have no YAMAA field:
 
 ### 2.2 Variable level
 
-| Excel column | YAMAA | Notes |
+| Excel column | yamaa | Notes |
 |---|---|---|
 | `Variable Name` | `column.name` | |
 | `Variable Label` | `column.label` | |
@@ -124,9 +124,9 @@ Going the other way, two of the eleven columns have no YAMAA field:
 
 ### 2.3 Codelist splits into three constructs
 
-Excel has one Codelist column. YAMAA separates by where the vocabulary lives:
+Excel has one Codelist column. yamaa separates by where the vocabulary lives:
 
-| Situation | YAMAA | Example |
+| Situation | yamaa | Example |
 |---|---|---|
 | Short vocabulary, written in the spec | `mapping` | `M -> M, F -> F` |
 | Vocabulary is an external file (MedDRA, WHODrug, a reference-range table) | `lookup` | [`sdtm-ae-dictionary-coding`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-ae-dictionary-coding) |
@@ -140,7 +140,7 @@ variable's meaning depends on another variable's value, each value needs its
 own derivation. `AVAL` is the standard case -- alanine aminotransferase where
 `PARAMCD` is `ALT`, systolic blood pressure where it is `SYSBP`.
 
-| Excel spec | YAMAA |
+| Excel spec | yamaa |
 |---|---|
 | One VLM row (how AVAL is derived when PARAMCD = "ALT") | One row template under `rows:` |
 | The VLM Where Clause | `row.filter` (an SQL predicate) |
@@ -169,7 +169,7 @@ Excel:
 | SEXN | Sex (N) | Num | 8 | Derived | | M=1, F=2, U=0 |
 | AGEGR1 | Pooled Age Group 1 | Char | 5 | Derived | AGEGR1 | <18 / 18-64 / >=65; UNKNOWN if AGE missing |
 
-YAMAA:
+yamaa:
 
 ```yaml
   - name: SEX
@@ -201,7 +201,7 @@ YAMAA:
 What changed:
 
 - Excel packs "if not collected -> U" and "if unrecognised -> U" into one
-  sentence. YAMAA splits them into `missing` and `unmapped` and requires
+  sentence. yamaa splits them into `missing` and `unmapped` and requires
   **both to be written**, even when the answer is the same. Two conditions stay
   two conditions.
 - The codelist *name* (`SEX`, `AGEGR1`) has no single home. The translation

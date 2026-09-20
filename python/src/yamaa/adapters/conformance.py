@@ -23,7 +23,6 @@ this envelope rather than changing what the engine is asked for.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from collections.abc import Mapping, Sequence
@@ -87,10 +86,16 @@ class ArtifactObservation(_FrozenModel):
     # The CSV profile contract's complete bytes split on the U+000A terminator
     # REQ-0723 writes.
     # A missing value and a quoted empty string render differently and are
-    # kept apart here; `sha256` below decides equality so that a newline
+    # kept apart here; `content` below decides equality so that a newline
     # inside a quoted field cannot make this split the deciding view.
     records: tuple[str, ...]
-    sha256: str = Field(min_length=64, max_length=64)
+    byte_length: int = Field(ge=0)
+    # The rendered text of a CSV artifact, which is what a comparison
+    # decides on: carrying it is what lets equality be the bytes themselves
+    # rather than two identities that are only believed to stand for them.
+    # A non-CSV profile is never compared against a committed artifact and
+    # carries the empty string.
+    content: str = ""
 
 
 class DiagnosticObservation(_FrozenModel):
@@ -159,10 +164,6 @@ class ConformanceError(ValueError):
     """Raised when an example or its output location cannot be used."""
 
 
-def _sha256(payload: bytes) -> str:
-    return hashlib.sha256(payload).hexdigest()
-
-
 def _records(payload: bytes) -> tuple[str, ...]:
     """Split R020's bytes on the U+000A terminator it writes after each."""
     text = payload.decode("utf-8")
@@ -188,7 +189,8 @@ def _observe_artifact(
         types=tuple(column.type for column in artifact.columns),
         row_count=artifact.frame.height,
         records=_records(payload) if artifact.profile == "csv" else (),
-        sha256=_sha256(payload),
+        byte_length=len(payload),
+        content=payload.decode("utf-8") if artifact.profile == "csv" else "",
     )
 
 
@@ -430,7 +432,7 @@ def _artifact_findings(
     payload: bytes,
 ) -> tuple[ComparisonFinding, ...]:
     """Compare one artifact byte for byte, then say where it first differs."""
-    if observation.sha256 == _sha256(payload):
+    if observation.content.encode("utf-8") == payload:
         return ()
 
     committed = _records(payload)
@@ -471,8 +473,8 @@ def _artifact_findings(
             _finding(
                 "artifact.bytes",
                 f"{observation.name}: rendered bytes differ",
-                _sha256(payload),
-                observation.sha256,
+                len(payload),
+                observation.byte_length,
             )
         )
     return tuple(findings)

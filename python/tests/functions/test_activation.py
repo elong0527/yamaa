@@ -137,22 +137,6 @@ def test_a_failing_vector_stops_the_run_before_any_study_data(
     assert reached == []
 
 
-def test_a_mismatched_digest_is_refused_before_the_code_is_read(
-    recording_project, repository
-) -> None:
-    # REQ-0667 verifies the artifact before activation, so nothing inside it
-    # is imported when the bytes are not the ones that were pinned.
-    recording_project.write_code(RECORDING_CODE + "\nEXTRA = 1\n")
-
-    failure = _failure(recording_project, repository)
-
-    diagnostic = failure.diagnostics[0]
-    assert diagnostic.condition == "runtime_artifact_mismatch"
-    assert diagnostic.requirement == "REQ-0697"
-    assert diagnostic.context["declared"] != diagnostic.context["computed"]
-    assert not [name for name in sys.modules if name.startswith("_yamaa_artifact_")]
-
-
 def test_a_runner_that_does_not_support_the_language_refuses_the_project(
     project, repository
 ) -> None:
@@ -398,22 +382,20 @@ def test_a_relative_transitive_import_resolves_inside_the_artifact(
     assert activated.bound("bmi") is not None
 
 
-def test_an_unchanged_project_activates_once_and_a_repinned_one_again(
+def test_an_unchanged_project_activates_once_and_a_reversioned_one_again(
     recording_project, repository
 ) -> None:
     # REQ-0691 caches success for exactly one combination of identities, so
-    # an unchanged project skips the vectors and a new artifact does not.
+    # an unchanged project skips the vectors and a changed one does not.
     first = _activate(recording_project, repository)
     second = _activate(recording_project, repository)
 
-    recording_project.write_code(RECORDING_CODE.replace("CALLS = []", "CALLS = []\n"))
-    recording_project.repin()
+    recording_project.edit_environment('version: "1.0.0"', 'version: "1.0.1"')
     third = _activate(recording_project, repository)
 
     assert first.vectors_executed
     assert not second.vectors_executed
     assert third.vectors_executed
-    assert third.artifact.digest != first.artifact.digest
 
 
 def test_changed_vector_content_activates_again(recording_project, repository) -> None:
