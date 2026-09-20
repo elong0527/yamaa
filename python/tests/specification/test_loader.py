@@ -539,3 +539,80 @@ def test_malformed_schema_version_has_a_structured_diagnostic(tmp_path: Path) ->
         "requirement": None,
         "context": {"expected": "1.0", "actual_type": "mapping"},
     }
+
+
+def _write_bare_string_variant(tmp_path: Path, old: str, new: str) -> Path:
+    source = (EXAMPLES / "sdtm-dm-basic/spec.yaml").read_text(encoding="ascii")
+    assert old in source
+    path = tmp_path / "spec.yaml"
+    path.write_text(source.replace(old, new, 1), encoding="ascii")
+    return path
+
+
+def test_bare_string_derivation_desugars_to_source(tmp_path: Path) -> None:
+    path = _write_bare_string_variant(
+        tmp_path,
+        "    derivation:\n      source: ODM.StudyOID",
+        "    derivation: ODM.StudyOID",
+    )
+
+    loaded = load_specification(path, SCHEMA_ROOT)
+    columns = {column.name: column for column in loaded.specification.columns}
+
+    assert columns["STUDYID"].derivation is not None
+    assert columns["STUDYID"].derivation.value.root == {
+        "source": {"variable": "ODM.StudyOID"}
+    }
+
+
+def test_bare_string_derivation_matches_dict_form(tmp_path: Path) -> None:
+    bare_path = _write_bare_string_variant(
+        tmp_path,
+        "    derivation:\n      source: ODM.StudyOID",
+        "    derivation: ODM.StudyOID",
+    )
+    dict_path = tmp_path / "dict-spec.yaml"
+    dict_path.write_text(
+        (EXAMPLES / "sdtm-dm-basic/spec.yaml").read_text(encoding="ascii"),
+        encoding="ascii",
+    )
+
+    bare = load_specification(bare_path, SCHEMA_ROOT).specification
+    written = load_specification(dict_path, SCHEMA_ROOT).specification
+
+    assert bare == written
+
+
+def test_bare_string_derivation_names_a_source_not_a_literal(
+    tmp_path: Path,
+) -> None:
+    path = _write_bare_string_variant(
+        tmp_path,
+        "    derivation:\n      source: ODM.StudyOID",
+        "    derivation: NOPE.MISSING",
+    )
+
+    loaded = load_specification(path, SCHEMA_ROOT)
+    columns = {column.name: column for column in loaded.specification.columns}
+
+    assert columns["STUDYID"].derivation is not None
+    assert columns["STUDYID"].derivation.value.root == {
+        "source": {"variable": "NOPE.MISSING"}
+    }
+
+
+@pytest.mark.parametrize("scalar", ["5", "1.5", "true"])
+def test_non_string_scalar_derivation_names_the_dict_form(
+    tmp_path: Path, scalar: str
+) -> None:
+    path = _write_bare_string_variant(
+        tmp_path,
+        "    derivation:\n      source: ODM.StudyOID",
+        f"    derivation: {scalar}",
+    )
+
+    with pytest.raises(SpecificationError) as caught:
+        load_specification(path, SCHEMA_ROOT)
+
+    assert caught.value.diagnostics[0].condition == "bare_derivation_scalar"
+    assert caught.value.diagnostics[0].requirement == "R007-58"

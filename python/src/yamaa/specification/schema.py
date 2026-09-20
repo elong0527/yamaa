@@ -792,6 +792,28 @@ def _validate_single(
             nested_active,
             fragment,
         )
+        if (
+            type_name == "derivation"
+            and diagnostics
+            and not isinstance(value, (str, dict))
+        ):
+            # R007-58: a bare derivation is either a string source reference
+            # or a mapping. Name the dict form so the fix is obvious.
+            return [
+                _diagnostic(
+                    path,
+                    "bare_derivation_scalar",
+                    {
+                        "actual": _actual_type(value),
+                        "hint": (
+                            "a bare derivation must be a string column "
+                            "reference such as ADSL.AGE; write a fixed value "
+                            "as {literal: ...}"
+                        ),
+                    },
+                    "R007-58",
+                )
+            ]
         has_matching_outer_type = any(
             _outer_matches(value, member, bundle, nested_active)
             for member in _members(alias["type"])
@@ -964,6 +986,21 @@ def _normalize_single(
         if normalization_key in active:
             return copy.deepcopy(value)
         nested_active = active | {normalization_key}
+        if type_name == "derivation":
+            # R007-57: a bare derivation string is the source shorthand.
+            # Expand it to the dict form, then dispatch on the remaining
+            # union members so the registry and the R006-25
+            # handled-expression expansion apply unchanged. The "str" member
+            # exists for validation; normalization never dispatches on it.
+            if isinstance(value, str):
+                value = {"source": value}
+            return _normalize_type(
+                value,
+                [member for member in _members(alias["type"]) if member != "str"],
+                bundle,
+                nested_active,
+                fragment,
+            )
         registry_name = alias.get("registry")
         if registry_name is not None:
             operation, payload = next(iter(value.items()))  # type: ignore[union-attr]
