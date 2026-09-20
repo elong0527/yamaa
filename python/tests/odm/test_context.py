@@ -81,11 +81,10 @@ def test_form_scoped_fixture_resolves_only_the_current_form() -> None:
         for row in runtime_rows(sources["ODM"].table)
         if row["ItemOID"] == "IT.LB.RESULT"
     ]
-    expression = next(
-        column.derivation.value
-        for column in loaded_spec.specification.columns
-        if column.name == "LBDTC" and column.derivation is not None
-    )
+    # The benchmark spec no longer carries the ODM contextual reference
+    # (migrated to column-only source semantics under #506); the form-scoped
+    # resolution the ODM layer still provides is pinned inline here.
+    expression = {"source": {"variable": "ODM.IT.LB.LBDTC", "missing": None}}
 
     results = [
         evaluate_expression(expression, index.context({"ODM": row})) for row in rows
@@ -118,11 +117,9 @@ def test_a_committed_fixture_resolves_one_item_per_form_without_dropping_rows() 
         for row in runtime_rows(sources["ODM"].table)
         if row["ItemOID"] == "IT.LB.RESULT"
     ]
-    collected = next(
-        column.derivation.value
-        for column in loaded_spec.specification.columns
-        if column.name == "LBDTC" and column.derivation is not None
-    )
+    # As above: the migrated benchmark spec no longer carries the ODM
+    # contextual reference, so the expression under test is pinned inline.
+    collected = {"source": {"variable": "ODM.IT.LB.LBDTC", "missing": None}}
 
     dates = [
         evaluate_expression(collected, index.context({"ODM": row})) for row in rows

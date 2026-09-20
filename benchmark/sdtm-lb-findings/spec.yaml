@@ -52,7 +52,6 @@ columns:
   - name: LBDTC
     type: date
     label: Date/Time of Specimen Collection
-    derivation: ODM.IT.LB.LBDTC
 
   - name: LBSEQ
     type: int
@@ -65,37 +64,51 @@ columns:
 
 rows:
   - id: calcium
-    filter: "ODM.ItemOID = 'IT.LB.CALCIUM' AND ODM.Value IS NOT NULL"
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
+    filter: "LBORRES IS NOT NULL"
     derivations:
       LBTESTCD:
         literal: CA
       LBTEST:
         literal: Calcium
       LBORRES:
-        source: ODM.Value
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.CALCIUM'"
+          expr: "ONLY(ODM.Value)"
+      LBDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
+          expr: "ONLY(ODM.Value)"
       LBORRESU:
         literal: mg/dL
       LBSTRESN:
         value:
-          source: ODM.Value
+          source: LBORRES
         conversion_failure: null
       LBSTRESU:
         literal: mg/dL
 
   - id: creatinine
-    filter: "ODM.ItemOID = 'IT.LB.CREAT' AND ODM.Value IS NOT NULL"
+    group_by: [ODM.StudyOID, ODM.SubjectKey, ODM.StudyEventOID]
+    filter: "LBORRES IS NOT NULL"
     derivations:
       LBTESTCD:
         literal: CREAT
       LBTEST:
         literal: Creatinine
       LBORRES:
-        source: ODM.Value
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.CREAT'"
+          expr: "ONLY(ODM.Value)"
+      LBDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.LB.LBDTC'"
+          expr: "ONLY(ODM.Value)"
       LBORRESU:
         literal: mg/dL
       LBSTRESN:
         value:
-          source: ODM.Value
+          source: LBORRES
         conversion_failure: null
       LBSTRESU:
         literal: mg/dL
