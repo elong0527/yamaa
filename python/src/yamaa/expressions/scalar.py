@@ -117,9 +117,9 @@ def _first_available(payload: object, resolver: Resolver) -> EvaluationResult:
             return resolved
         if resolved.value is not MISSING:
             return ValueResult(value=resolved.value)
-    if "default" in payload:
-        # `default` is not an R008 handler, so it is counted by no path.
-        return normalize_runtime_value(payload["default"])
+    if "missing" in payload:
+        # `missing` is not an R008 handler, so it is counted by no path.
+        return normalize_runtime_value(payload["missing"])
     return ValueResult(value=MISSING)
 
 

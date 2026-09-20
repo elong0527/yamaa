@@ -49,12 +49,14 @@ def describe_mapping(mapping):
         '"' + str(k) + '" ' + ARROW + ' "' + str(v) + '"'
         for k, v in mapping.get("dict", {}).items()
     )
-    fallback = mapping.get("unmapped", mapping.get("missing"))
-    tail = (
-        "; missing or unlisted values " + ARROW + ' "' + str(fallback) + '"'
-        if fallback is not None
-        else ""
-    )
+    fallback = mapping.get("missing")
+    strict = mapping.get("strict", False)
+    if fallback is not None:
+        tail = "; missing or unlisted values " + ARROW + ' "' + str(fallback) + '"'
+    elif strict:
+        tail = "; missing or unlisted values are errors"
+    else:
+        tail = ""
     return "Recode " + str(var) + where + ": " + pairs + tail + "."
 
 

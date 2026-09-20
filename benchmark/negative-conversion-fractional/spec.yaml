@@ -27,4 +27,7 @@ columns:
   - name: AVAL
     type: int
     label: Analysis Value
-    derivation: VS.VSSTRESN
+    derivation:
+      value:
+        source: VS.VSSTRESN
+      strict: true

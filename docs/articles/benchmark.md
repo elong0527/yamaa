@@ -75,11 +75,10 @@ records come out.
           variable: ODM.Value
         dict: {Male: M, Female: F}
         missing: U
-        unmapped: U
 ```
 
 Now the README's sentences have addresses. "Not collected and not recognised
-both become U" is `missing: U` beside `unmapped: U`.
+both become U" is the one `missing: U` knob answering both conditions.
 
 **Step 5 -- `expected/dm.csv`.** Confirm your reading against the artifact.
 

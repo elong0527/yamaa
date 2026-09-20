@@ -119,7 +119,7 @@ Going the other way, two of the eleven columns have no yamaa field:
 | `Comments for Define` | `column.metadata` | Free key-value, never validated, for define generation |
 | Variable-level review checks | `column.verifications` | `not_missing`, `allowed_values`, `range`, `max_length`, `matches` |
 | "if not collected then U" | the `missing:` handler | |
-| "if not in codelist then 99" | the `unmapped:` handler | |
+| "if not in codelist then 99" | the `missing:` handler (same knob) | |
 | "subject X was corrected to 99" | a `case` branch | |
 
 ### 2.3 Codelist splits into three constructs
@@ -185,7 +185,6 @@ yamaa:
         case_sensitive: false
         dict: {M: M, F: F, U: U}
         missing: U
-        unmapped: U
 
   - name: AGEGR1
     type: str
@@ -201,9 +200,9 @@ yamaa:
 What changed:
 
 - Excel packs "if not collected -> U" and "if unrecognised -> U" into one
-  sentence. yamaa splits them into `missing` and `unmapped` and requires
-  **both to be written**, even when the answer is the same. Two conditions stay
-  two conditions.
+  sentence. YAMAA answers both with the one `missing` handler. Two
+  conditions stay two conditions, one knob answers both; `strict: true`
+  makes either one fail instead.
 - The codelist *name* (`SEX`, `AGEGR1`) has no single home. The translation
   lives in `mapping.dict`, the check lives in `allowed_values`, and the name
   itself goes in `column.metadata.codelist` if you generate define.xml.

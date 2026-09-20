@@ -42,5 +42,5 @@ it, exactly as the planned arm does:
       sources:
         - filter: ODM.ItemOID = 'IT.DM.ACTARM'
           variable: ODM.Value
-      default: Unassigned
+      missing: Unassigned
 ```

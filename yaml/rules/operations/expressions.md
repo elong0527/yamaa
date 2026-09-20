@@ -155,8 +155,8 @@ structural constraints come from its schema declaration.
 | Field | Meaning |
 | --- | --- |
 | `expressions.first_available.sources` | Variables to test in order. |
-| `expressions.first_available.default` | Value returned when every source is missing. |
-| `Result` | Returns the value of the first source that is not missing. When every source is missing, returns the declared default, or missing when no default is declared. |
+| `expressions.first_available.missing` | Value returned when every source is missing. |
+| `Result` | Returns the value of the first source that is not missing. When every source is missing, returns the declared `missing`, or missing when none is declared. |
 
 <a id="req-1096"></a>
 

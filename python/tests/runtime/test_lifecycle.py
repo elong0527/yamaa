@@ -16,10 +16,10 @@ from yamaa.runtime.lifecycle import (
 from yamaa.specification.models import Expression, HandledExpression
 
 
-def test_conversion_failure_is_replaced_and_counted() -> None:
+def test_failed_conversion_is_replaced_and_counted() -> None:
     declaration = HandledExpression(
         value=Expression(root={"source": "RAW.X"}),
-        conversion_failure=7,
+        missing=7,
     )
     planned = PlannedDerivation(
         column="A",
@@ -43,8 +43,8 @@ def test_conversion_failure_is_replaced_and_counted() -> None:
     assert value == 7
     assert [count.model_dump() for count in counter.snapshot()] == [
         {
-            "spec_path": "columns.A.derivation.conversion_failure",
-            "handler": "conversion_failure",
+            "spec_path": "columns.A.derivation.missing",
+            "handler": "missing",
             "count": 1,
         }
     ]
