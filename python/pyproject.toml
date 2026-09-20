@@ -5,11 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "yamaa"
 version = "0.1.0"
-description = "Python helpers for the YAMAA clinical data specification"
+description = "Python helpers for the yamaa clinical data specification"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-authors = [{ name = "YAMAA contributors" }]
+authors = [{ name = "yamaa contributors" }]
 dependencies = [
   "lxml>=6.1.0,<7",
   "polars>=1.35.2,<2",

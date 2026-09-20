@@ -31,7 +31,7 @@ def test_a_written_project_root_loads_its_contracts(bmi_project, repository) -> 
     assert loaded.environment.runtime.language == "python"
     assert sorted(loaded.environment.functions) == ["bmi"]
     assert loaded.conformance["bmi"].contract_version == "1.0.0"
-    assert loaded.vector_identity.startswith("sha256:")
+    assert loaded.vector_identity
 
 
 def test_a_root_with_no_environment_is_missing(project, repository) -> None:

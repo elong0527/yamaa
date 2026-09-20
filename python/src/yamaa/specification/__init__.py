@@ -1,4 +1,4 @@
-"""Load validated YAMAA specifications."""
+"""Load validated yamaa specifications."""
 
 from yamaa.specification.diagnostics import (
     SpecificationError,

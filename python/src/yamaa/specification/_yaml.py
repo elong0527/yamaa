@@ -1,4 +1,4 @@
-"""Small YAML 1.2 core reader for authored YAMAA documents."""
+"""Small YAML 1.2 core reader for authored yamaa documents."""
 
 from __future__ import annotations
 

@@ -1,8 +1,8 @@
-# yamaa <img src="docs/assets/logo.jpeg" align="right" width="120" alt="YAMAA logo" />
+# yamaa <img src="docs/assets/logo.jpeg" align="right" width="120" alt="yamaa logo" />
 
-YAMAA is a domain-specific language (DSL) for clinical trial data standardization.
-A YAMAA specification transforms ODM XML data, extracted from an EDC system,
-into SDTM and ADaM datasets following CDISC standards. YAMAA's rules fix what
+yamaa is a domain-specific language (DSL) for clinical trial data standardization.
+A yamaa specification transforms ODM XML data, extracted from an EDC system,
+into SDTM and ADaM datasets following CDISC standards. yamaa's rules fix what
 every item means, so the same specification with the same inputs always
 produces the same dataset.
 
@@ -29,7 +29,7 @@ a small `odm.csv`, so each example stays reviewable by eye.
 
 ## Design
 
-![YAMAA design: inherited templates become study specifications that drive validated SDTM, ADaM](docs/diagrams/design.svg)
+![yamaa design: inherited templates become study specifications that drive validated SDTM, ADaM](docs/diagrams/design.svg)
 
 Reusable templates flow from the organization level through the compound and
 study levels. Approved study specifications then drive deterministic, validated

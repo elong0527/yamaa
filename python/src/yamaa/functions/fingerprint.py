@@ -10,7 +10,6 @@ agree while a project that quietly changed a parameter does not.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import struct
@@ -107,7 +106,13 @@ def _canonical_parameter(parameter: FunctionParameter) -> dict[str, object]:
 
 
 def contract_fingerprint(name: str, contract: FunctionContract) -> str:
-    """Return the `sha256:`-prefixed REQ-0671 identity of one contract."""
+    """Return the REQ-0671 identity of one contract.
+
+    The identity is the canonical encoding itself rather than a hash of it.
+    Two contracts are the same contract when these strings are equal, which
+    is the comparison REQ-0671 needs, and an identity that differs says
+    where it differs instead of only that it does.
+    """
     payload = {
         "format": "yamaa-r018-contract-v1",
         "name": name,
@@ -122,14 +127,13 @@ def contract_fingerprint(name: str, contract: FunctionContract) -> str:
     # RFC 8785 fixes member order and UTF-8 encoding. With no numeric value
     # left in the payload, sorted compact JSON is that canonical form, so no
     # host number formatting reaches the hash.
-    canonical = json.dumps(
+    return json.dumps(
         payload,
         ensure_ascii=False,
         allow_nan=False,
         sort_keys=True,
         separators=(",", ":"),
     )
-    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 __all__ = [

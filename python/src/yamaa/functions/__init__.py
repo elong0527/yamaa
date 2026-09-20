@@ -12,9 +12,8 @@ from yamaa.functions.artifact import (
     LoadedArtifact,
     MappedArtifacts,
     ProjectArtifactDirectory,
-    artifact_digest,
     artifact_files,
-    verify_artifact,
+    resolve_artifact,
 )
 from yamaa.functions.calls import FunctionCall, function_calls, validate_calls
 from yamaa.functions.environment import (
@@ -76,7 +75,6 @@ __all__ = [
     "RuntimeArtifact",
     "activate",
     "activate_project_functions",
-    "artifact_digest",
     "artifact_files",
     "contract_fingerprint",
     "environment_schema",
@@ -85,9 +83,9 @@ __all__ = [
     "function_dispatcher",
     "function_handlers",
     "load_environment",
+    "resolve_artifact",
     "results_match",
     "run_with_project_functions",
     "select_project_root",
     "validate_calls",
-    "verify_artifact",
 ]

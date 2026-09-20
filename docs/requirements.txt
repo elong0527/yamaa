@@ -1,4 +1,4 @@
-# Pinned dependencies for building the YAMAA documentation site with
+# Pinned dependencies for building the yamaa documentation site with
 # MkDocs Material. Install alongside the benchmark-dashboard dependencies:
 #
 #   pip install -r docs/requirements.txt -r .github/scripts/benchmark-docs/requirements.txt

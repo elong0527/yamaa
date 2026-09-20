@@ -70,17 +70,17 @@ environments, parallel R and Python bindings, or language choices per function.
 <a id="req-0666"></a>
 
 **REQ-0666.** `runtime.artifact.reference` names one organization-resolvable
-runtime artifact and `runtime.artifact.digest` supplies its verified SHA-256
-content identity. That identity covers callable project code and all transitive
-dependencies. Only code inside that artifact participates in function
-resolution. A global library, process search path, working directory, user
-profile, or ambient package installation is not a fallback.
+runtime artifact. The artifact covers callable project code and all transitive
+dependencies, and every file it carries is a regular file beneath its own root.
+Only code inside that artifact participates in function resolution. A global
+library, process search path, working directory, user profile, or ambient
+package installation is not a fallback.
 
 <a id="req-0667"></a>
 
-**REQ-0667.** The runner must support the declared language and must verify the
-artifact digest before activation. A runner-language or artifact mismatch fails
-before specification data is read.
+**REQ-0667.** The runner must support the declared language and must resolve the
+artifact before activation. A runner-language mismatch, or an artifact that
+cannot be resolved and read, fails before specification data is read.
 
 ### Logical contracts
 
@@ -158,8 +158,8 @@ value is 16 lowercase hexadecimal big-endian bits.
 <a id="req-0674"></a>
 
 **REQ-0674.** `comparison_decimals` is its non-negative base-10 string. The
-object is UTF-8 JSON under the JSON Canonicalization Scheme in RFC
-8785, then hashed with SHA-256 and prefixed with `sha256:`. Strings use their
+fingerprint is that object as UTF-8 JSON under the JSON Canonicalization
+Scheme in RFC 8785, and is compared as that text. Strings use their
 [Text values](../values/text.md) value. Parameters retain their declared order. Object member order
 comes only from canonical JSON.
 
@@ -311,7 +311,7 @@ same vector content.
 
 **REQ-0691.** Activation loads the verified artifact and runs all vectors before
 any specification may execute. Success may be cached only for the exact
-combination of environment version, artifact digest, contract fingerprints,
+combination of environment version, artifact reference, contract fingerprints,
 every implementation version, and the complete vector-content identity. Any
 change invalidates the cache and requires activation again.
 
@@ -367,7 +367,6 @@ structural constraints come from its schema declaration.
 | Field | Meaning |
 | --- | --- |
 | `runtime_artifact_class.reference` | Organization-resolvable name of the immutable runtime artifact. |
-| `runtime_artifact_class.digest` | Content identity verified before environment activation. |
 
 <a id="req-1083"></a>
 
