@@ -107,6 +107,23 @@ unrounded result, and rounding for display happens once, later, under
 
 ## Where the boundary of this module is
 
+- **The engine never imports this module.** `yamaa_domain` accepts an
+  optional `dispatcher` -- a generic expression-dispatch hook the engine
+  threads through unchanged -- and the runner builds it from the activated
+  project:
+
+  ```python
+  import yamaa
+  from yamaa.functions import activate_project_functions, function_dispatcher
+  from yamaa.specification import load_specification
+
+  specification = load_specification("spec.yaml", "../yaml").specification
+  activated = activate_project_functions(specification, "python", "../yaml")
+  adsl = yamaa.yamaa_domain("spec.yaml", dispatcher=function_dispatcher(activated)).output
+  ```
+
+  All R018 orchestration (environment, calls, artifact, activation) lives
+  here, outside the engine; the engine only ever sees a dispatcher.
 - **Static validation owns the coverage obligations.** R018-28 has the
   static validator check that each contract's vectors demonstrate `normal`,
   `boundary`, every default, every missing behavior, both values of every
