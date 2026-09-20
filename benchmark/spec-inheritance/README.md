@@ -23,3 +23,4 @@ Parents resolve depth-first, left to right, with later levels
 winning; the chain resolves to `expected/spec_resolved.yaml`, the
 default view in the specification dropdown.
 
+**Standard:** ADaM | **Domain:** ADLB
