@@ -66,21 +66,26 @@ def test_a_key_column_must_not_depend_on_a_non_key_column_without_rows() -> None
     assert diagnostic.context == {"column": "K", "dependency": "B"}
 
 
-def test_a_later_column_reference_is_not_silently_sorted() -> None:
-    spec = specification(
-        [
+def test_a_forward_reference_plans_in_dependency_order() -> None:
+    # REQ-0071: a reference to a later declared column is allowed; the
+    # planner orders evaluation topologically.
+    spec = Specification(
+        schema_version="1.0",
+        domain="OUT",
+        input={"SRC": DatasetSource(path="input/source.csv")},
+        base="SRC",
+        keys=["K"],
+        output=Output(path="out.csv", columns=["K", "A", "B"]),
+        columns=[
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.X"})),
             Column(name="A", type="str", derivation=derivation({"source": "B"})),
             Column(name="B", type="str", derivation=derivation({"source": "SRC.X"})),
-        ]
+        ],
     )
 
-    with pytest.raises(ExecutionPlanningError) as raised:
-        plan_execution(spec, {"SRC": source_table()})
+    plan = plan_execution(spec, {"SRC": source_table()})
 
-    diagnostic = raised.value.diagnostics[0]
-    assert diagnostic.condition == "dependency_order"
-    assert diagnostic.spec_paths == ("columns.A.derivation.source",)
-    assert diagnostic.context == {"column": "A", "dependency": "B"}
+    assert [planned.column for planned in plan.columns] == ["K", "B", "A"]
 
 
 def test_a_column_cycle_is_reported_as_a_cycle_not_an_ordering_repair() -> None:

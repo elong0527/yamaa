@@ -2904,7 +2904,6 @@ def plan_execution(
         raise ExecutionPlanningError(diagnostics) from error
 
     column_order = [column.name for column in specification.columns]
-    column_positions = {name: index for index, name in enumerate(column_order)}
     column_types = {column.name: column.type for column in specification.columns}
     resolved_joins: list[ResolvedJoin] = []
 
@@ -3258,7 +3257,6 @@ def plan_execution(
     cycle = _find_cycle(
         [name for name in column_order if name in column_graph], column_graph
     )
-    cycle_members = set(cycle[:-1]) if cycle is not None else set()
     if cycle is not None:
         by_name = {planned.column: planned for planned in column_plans}
         paths = tuple(
@@ -3273,22 +3271,14 @@ def plan_execution(
             )
         )
 
+    # REQ-0071: forward references are allowed; the planner orders column
+    # evaluation topologically, so declaration order is not load-bearing.
+    # Cycles are still rejected above (REQ-0072).
     key_set = set(specification.keys)
-    for planned in column_plans:
-        if planned.column in cycle_members:
-            continue
-        for dependency in planned.dependencies:
-            if dependency in key_set or dependency not in column_positions:
-                continue  # keys predate column derivation (REQ-0074)
-            if column_positions[dependency] >= column_positions[planned.column]:
-                diagnostics.append(
-                    _diagnostic(
-                        "dependency_order",
-                        planned.operation_path,
-                        {"column": planned.column, "dependency": dependency},
-                        requirement="REQ-0071",
-                    )
-                )
+    ordered_column_plans = _topological_row_order(
+        {planned.column: planned for planned in column_plans},
+        column_order,
+    )
 
     planned_by_column = {planned.column: planned for planned in column_plans}
     has_templates = bool(specification.rows)
@@ -3332,7 +3322,7 @@ def plan_execution(
         specification=specification,
         bindings=bindings,
         rows=tuple(row_plans),
-        columns=tuple(column_plans),
+        columns=tuple(ordered_column_plans),
         row_derived_columns=row_derived,
         intermediates=tuple(intermediates.values()),
         resolved_joins=tuple(resolved_joins),

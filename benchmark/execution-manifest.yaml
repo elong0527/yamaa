@@ -305,9 +305,6 @@ examples:
   negative-baseline-value-multiple-flags:
     status: executable
     runtimes: ['python']
-  negative-column-forward-reference:
-    status: executable
-    runtimes: ['python']
   negative-column-type-unknown:
     status: executable
     runtimes: ['python']

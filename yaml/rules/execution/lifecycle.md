@@ -228,8 +228,9 @@ derivation:
 
 <a id="req-0071"></a>
 
-**REQ-0071.** A reference to a later declared column: fail and report both
-  columns.
+**REQ-0071.** A reference to a later declared column: allowed. The planner
+orders column evaluation topologically, so declaration order is not
+load-bearing; only dependency cycles fail (REQ-0072).
 
 <a id="req-0072"></a>
 
@@ -265,7 +266,6 @@ violation log.
 Representative specifications, input data, and expected outcomes:
 
 - [negative-adlb-computed-parameter](../../../benchmark/negative-adlb-computed-parameter/README.md).
-- [negative-column-forward-reference](../../../benchmark/negative-column-forward-reference/README.md).
 - [negative-first-available-self-reference](../../../benchmark/negative-first-available-self-reference/README.md).
 - [negative-keys-conflicting-values](../../../benchmark/negative-keys-conflicting-values/README.md).
 
