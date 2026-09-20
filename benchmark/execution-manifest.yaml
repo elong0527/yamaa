@@ -747,6 +747,10 @@ examples:
     status: blocked
     blocked_by: "#101"
     reason: no yaml executor in R or Python yet
+  schema-birth-date-completion:
+    status: blocked
+    blocked_by: "#101"
+    reason: no yaml executor in R or Python yet
   schema-numeric-functions:
     status: blocked
     blocked_by: "#101"
