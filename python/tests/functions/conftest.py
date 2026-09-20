@@ -2,9 +2,7 @@
 
 Every root these fixtures write is a real one: an `environment.yaml`, the
 vectors it names, and a runtime directory holding the code its binding
-resolves. The digest is substituted after the code is written, so a test
-that changes one byte of that code and re-pins exercises the same path a
-project publishing a new artifact does.
+resolves, so a test exercises the same path a real project does.
 """
 
 from __future__ import annotations
@@ -15,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from yamaa.functions import ACTIVATION_CACHE, artifact_digest
+from yamaa.functions import ACTIVATION_CACHE
 
 _REPOSITORY_ROOT = Path(__file__).parents[3]
 
@@ -43,7 +41,6 @@ runtime:
   language: {language}
   artifact:
     reference: org.example/yamaa/bmi-python:1.0.0
-    digest: {digest}
 
 functions:
   bmi:
@@ -141,32 +138,16 @@ class ProjectRoot:
         directory.mkdir(parents=True, exist_ok=True)
         (directory / f"{name}.yaml").write_text(document, "utf-8")
 
-    def write_environment(self, **fields: str) -> str:
-        """Write the environment, pinning the digest the runtime now has."""
-        digest = artifact_digest(self.runtime)
-        text = ENVIRONMENT.format(
-            **{**ENVIRONMENT_DEFAULTS, **fields, "digest": digest}
-        )
+    def write_environment(self, **fields: str) -> None:
+        """Write the environment this project declares."""
+        text = ENVIRONMENT.format(**{**ENVIRONMENT_DEFAULTS, **fields})
         (self.path / "environment.yaml").write_text(text, "utf-8")
-        return digest
 
     def edit_environment(self, old: str, new: str) -> None:
         """Replace one written fragment, leaving every identity as it was."""
         text = self.environment_text
         assert old in text, old
         (self.path / "environment.yaml").write_text(text.replace(old, new, 1), "utf-8")
-
-    def repin(self) -> str:
-        """Pin the digest the runtime directory now hashes to."""
-        digest = artifact_digest(self.runtime)
-        text = self.environment_text
-        marker = "    digest: sha256:"
-        start = text.index(marker)
-        end = text.index("\n", start)
-        (self.path / "environment.yaml").write_text(
-            text[:start] + f"    digest: {digest}" + text[end:], "utf-8"
-        )
-        return digest
 
 
 @pytest.fixture(autouse=True)

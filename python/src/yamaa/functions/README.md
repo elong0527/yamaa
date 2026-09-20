@@ -37,10 +37,10 @@ which is the portable case REQ-0662 describes.
 2. **Check the calls** the specification writes against the contracts this
    project actually provides (`calls.py`): the logical name, the exact
    contract version, and a closed, exactly typed argument list.
-3. **Verify the artifact** (`artifact.py`). REQ-0667 puts the runner language
-   and the digest before activation, so a project pinned to bytes that are
-   not there never gets as far as importing anything.
-4. **Activate** (`activation.py`): resolve every binding inside the verified
+3. **Resolve the artifact** (`artifact.py`). REQ-0667 puts the runner language
+   and the artifact before activation, so a project whose artifact is not
+   there never gets as far as importing anything.
+4. **Activate** (`activation.py`): resolve every binding inside that
    artifact, then run every vector. REQ-0691 puts all of them before any
    specification executes, so a contract whose implementation has drifted
    fails against its own vectors rather than against study data.
@@ -55,11 +55,11 @@ finishes.
 
 ## Artifacts and the local resolver
 
-REQ-0666 pins the runtime by SHA-256 content identity and makes that identity
-the only place a binding is resolved: the process search path, the working
-directory, and an ambient installation answer for nothing. A binding is
-imported into a private package whose name carries the digest, with the
-artifact directory as its only search path, so `projectbmi.bmi` reaches the
+REQ-0666 pins the runtime by reference and makes that artifact the only place
+a binding is resolved: the process search path, the working directory, and an
+ambient installation answer for nothing. A binding is imported into a private
+package whose name carries the reference, with the artifact directory as its
+only search path, so `projectbmi.bmi` reaches the
 artifact's module and a same-named installed package is invisible to it.
 
 An organization resolver maps `runtime.artifact.reference` to wherever that
@@ -162,13 +162,9 @@ implement one contract, each entry names the shared document once in
 `description`, `comparison_decimals`, `may_return_missing`, `params`, and
 `returns` per function) instead of repeating those fields inline; the entry
 keeps its own `implementation_version`, binding, and conformance path.
-Re-pinning after changing the code is one call:
 
-```python
-from yamaa.functions import artifact_digest
-
-print(artifact_digest(Path("python/tests/projects/bmi-python/runtime")))
-```
+Changing the code under `runtime/` needs no other edit: the artifact is
+pinned by reference, so nothing in `environment.yaml` restates its contents.
 
 ## Focused tests
 

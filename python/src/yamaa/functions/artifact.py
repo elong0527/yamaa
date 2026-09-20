@@ -1,17 +1,15 @@
-"""Resolve and verify the one immutable runtime a project pins.
+"""Resolve the one runtime a project pins.
 
-REQ-0666 makes the artifact digest the identity of everything callable: a
-binding is resolved inside the verified artifact and nowhere else, so a
-global library, the process search path, the working directory, or an
-ambient installation cannot answer for project code. REQ-0667 verifies that
-digest before activation, which is why nothing here imports anything until
-the bytes on disk hash to what the environment declared.
+REQ-0666 makes the pinned artifact the source of everything callable: a
+binding is resolved inside that artifact and nowhere else, so a global
+library, the process search path, the working directory, or an ambient
+installation cannot answer for project code. The artifact is named by its
+reference, and the resolver decides which bytes that reference points at.
 """
 
 from __future__ import annotations
 
 import builtins
-import hashlib
 import importlib
 import importlib.util
 import sys
@@ -26,8 +24,7 @@ from yamaa.functions.errors import FunctionFailure
 from yamaa.functions.models import ProjectRuntime
 
 # A host bytecode cache is written beside the sources it was compiled from
-# and is not project code, so it stays out of the content identity. Without
-# this, importing an artifact once would change its digest for the next run.
+# and is not project code, so it is not part of the artifact.
 _EXCLUDED_DIRECTORIES = frozenset({"__pycache__"})
 _EXCLUDED_SUFFIXES = frozenset({".pyc", ".pyo"})
 
@@ -127,7 +124,12 @@ class MappedArtifacts:
 
 
 def artifact_files(root: Path) -> list[Path]:
-    """Return the regular files whose bytes make up one artifact, in order."""
+    """Return the regular files that make up one artifact, in order.
+
+    Rejecting symlinks is what keeps REQ-0666 true without a content
+    identity to check: every module an artifact can import is a regular file
+    beneath its own root, so a link cannot reach code the pin does not name.
+    """
     files: list[Path] = []
     for candidate in root.rglob("*"):
         relative = candidate.relative_to(root)
@@ -145,40 +147,24 @@ def artifact_files(root: Path) -> list[Path]:
     return sorted(files, key=lambda path: path.relative_to(root).as_posix())
 
 
-def artifact_digest(root: Path) -> str:
-    """Return the `sha256:` content identity of one artifact directory.
-
-    The identity is a hash over a manifest of every file the artifact
-    carries: its path relative to the artifact root, then the hash of its
-    bytes. Renaming a file, reordering a directory, or changing one byte of
-    one file therefore produces a different artifact, which is what REQ-0691
-    needs in order to invalidate an activation.
-    """
-    manifest = hashlib.sha256()
-    for path in artifact_files(root):
-        relative = path.relative_to(root).as_posix()
-        manifest.update(f"{relative}\n".encode())
-        manifest.update(f"{hashlib.sha256(path.read_bytes()).hexdigest()}\n".encode())
-    return f"sha256:{manifest.hexdigest()}"
-
-
 @dataclass(frozen=True, slots=True)
 class LoadedArtifact:
     """One verified artifact, and the only place a binding is resolved."""
 
     reference: str
-    digest: str
     root: Path
 
     @property
     def namespace(self) -> str:
         """Return the private package name this artifact's modules live in.
 
-        The name carries the digest, so code from two artifacts never shares
-        a module identity and a re-pinned artifact is imported afresh rather
-        than answered from the modules the previous one left behind.
+        The name is derived from the reference, so code from two artifacts
+        never shares a module identity. A reference is expected to name one
+        immutable artifact; repointing it at different bytes within a single
+        process reuses the modules already imported under that name.
         """
-        return f"_yamaa_artifact_{self.digest.removeprefix('sha256:')}"
+        safe = "".join(c if c.isalnum() else "_" for c in self.reference)
+        return f"_yamaa_artifact_{safe}"
 
     def load(self, call: str) -> Callable[..., object]:
         """Return the callable `call` names inside this artifact alone."""
@@ -253,18 +239,20 @@ class LoadedArtifact:
         return package
 
 
-def verify_artifact(
+def resolve_artifact(
     runtime: ProjectRuntime,
     resolver: ArtifactResolver,
 ) -> LoadedArtifact:
-    """Resolve one artifact and verify its digest before activation."""
+    """Resolve the one artifact every binding is loaded from."""
     declared = runtime.artifact
     try:
         root = resolver.resolve(declared.reference)
-        computed = artifact_digest(root)
+        # Not for an identity: this rejects a symlink that would let an
+        # import escape the artifact the project pinned.
+        artifact_files(root)
     except (ArtifactUnavailable, OSError) as error:
         raise FunctionFailure(
-            "runtime_artifact_mismatch",
+            "runtime_artifact_unavailable",
             "REQ-0697",
             {
                 "reason": "the pinned artifact could not be read",
@@ -272,21 +260,7 @@ def verify_artifact(
                 "detail": str(error),
             },
         ) from error
-    if computed != declared.digest:
-        raise FunctionFailure(
-            "runtime_artifact_mismatch",
-            "REQ-0697",
-            {
-                "artifact": declared.reference,
-                "declared": declared.digest,
-                "computed": computed,
-            },
-        )
-    return LoadedArtifact(
-        reference=declared.reference,
-        digest=declared.digest,
-        root=root.resolve(),
-    )
+    return LoadedArtifact(reference=declared.reference, root=root.resolve())
 
 
 __all__ = [
@@ -295,7 +269,6 @@ __all__ = [
     "LoadedArtifact",
     "MappedArtifacts",
     "ProjectArtifactDirectory",
-    "artifact_digest",
     "artifact_files",
-    "verify_artifact",
+    "resolve_artifact",
 ]

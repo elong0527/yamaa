@@ -10,7 +10,6 @@ does not describe itself correctly never reaches its own code.
 
 from __future__ import annotations
 
-import hashlib
 import keyword
 import re
 from pathlib import Path, PurePosixPath
@@ -460,7 +459,7 @@ def load_environment(
 
     fingerprints: dict[str, str] = {}
     conformance: dict[str, ConformanceDocument] = {}
-    digest = hashlib.sha256()
+    vector_parts: list[str] = []
     for name, contract in sorted(environment.functions.items()):
         _check_signature(name, contract)
         _check_binding(name, contract, environment.runtime.language)
@@ -475,16 +474,17 @@ def load_environment(
         vectors, content = _load_conformance(root, name, contract, schema)
         conformance[name] = vectors
         # REQ-0691 caches on the complete vector content, so the identity
-        # covers the bytes of every document rather than its declared path.
-        digest.update(f"{name}\n{len(content)}\n".encode())
-        digest.update(content)
+        # carries the bytes of every document rather than its declared path.
+        # The length is kept alongside the text so that no combination of
+        # names and contents can spell the same identity two ways.
+        vector_parts.append(f"{name}\n{len(content)}\n{content.decode('utf-8')}")
 
     return LoadedEnvironment(
         root=root,
         environment=environment,
         conformance=conformance,
         fingerprints=fingerprints,
-        vector_identity=f"sha256:{digest.hexdigest()}",
+        vector_identity="\n".join(vector_parts),
     )
 
 

@@ -10,7 +10,6 @@ read off the loaded environment rather than recomputed here.
 
 from __future__ import annotations
 
-import hashlib
 import inspect
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -22,7 +21,7 @@ from yamaa.functions.artifact import (
     ArtifactResolver,
     LoadedArtifact,
     ProjectArtifactDirectory,
-    verify_artifact,
+    resolve_artifact,
 )
 from yamaa.functions.environment import check_runner_language
 from yamaa.functions.errors import FunctionFailure
@@ -45,10 +44,14 @@ from yamaa.models.values import ConditionResult, RuntimeValue, ValueResult
 class ActivationCache:
     """The REQ-0691 record of which exact pinned identity already passed.
 
-    The key covers the environment version, the artifact digest, every
+    The key covers the environment version, the artifact reference, every
     contract fingerprint, every implementation version, and the complete
-    vector content. Changing any of them is a different key, so a re-pinned
-    artifact or an edited vector is activated again rather than trusted.
+    vector content. Changing any of them is a different key, so an edited
+    contract or vector is activated again rather than trusted.
+
+    The key is the joined content rather than a hash of it: the cache is a
+    set lookup inside one process, so it needs the parts to compare equal,
+    not to be short.
     """
 
     def __init__(self) -> None:
@@ -57,15 +60,13 @@ class ActivationCache:
     @staticmethod
     def key(loaded: LoadedEnvironment) -> str:
         environment = loaded.environment
-        digest = hashlib.sha256()
-        digest.update(f"{environment.version}\n".encode())
-        digest.update(f"{environment.runtime.artifact.digest}\n".encode())
+        parts = [environment.version, environment.runtime.artifact.reference]
         for name, contract in sorted(environment.functions.items()):
-            digest.update(f"{name}\n".encode())
-            digest.update(f"{loaded.fingerprints[name]}\n".encode())
-            digest.update(f"{contract.implementation_version}\n".encode())
-        digest.update(f"{loaded.vector_identity}\n".encode())
-        return f"sha256:{digest.hexdigest()}"
+            parts.append(name)
+            parts.append(loaded.fingerprints[name])
+            parts.append(contract.implementation_version)
+        parts.append(loaded.vector_identity)
+        return "\n".join(parts)
 
     def passed(self, key: str) -> bool:
         return key in self._passed
@@ -278,7 +279,7 @@ def activate(
     environment = loaded.environment
     check_runner_language(environment)
     selected = ProjectArtifactDirectory(loaded.root) if resolver is None else resolver
-    artifact = verify_artifact(environment.runtime, selected)
+    artifact = resolve_artifact(environment.runtime, selected)
     functions: dict[str, BoundFunction] = {}
     for name, contract in environment.functions.items():
         target = artifact.load(contract.binding.call)
