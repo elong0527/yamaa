@@ -9,6 +9,69 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, RootModel, model_v
 
 ColumnType = Literal["str", "int", "float", "date", "datetime"]
 
+DatasetClassName = Literal[
+    "ADAM OTHER",
+    "BASIC DATA STRUCTURE",
+    "DEVICE LEVEL ANALYSIS DATASET",
+    "EVENTS",
+    "FINDINGS",
+    "FINDINGS ABOUT",
+    "INTERVENTIONS",
+    "MEDICAL DEVICE BASIC DATA STRUCTURE",
+    "MEDICAL DEVICE OCCURRENCE DATA STRUCTURE",
+    "OCCURRENCE DATA STRUCTURE",
+    "REFERENCE DATA STRUCTURE",
+    "RELATIONSHIP",
+    "SPECIAL PURPOSE",
+    "STUDY REFERENCE",
+    "SUBJECT LEVEL ANALYSIS DATASET",
+    "TRIAL DESIGN",
+]
+
+DatasetSubclassName = Literal[
+    "ADVERSE EVENT",
+    "MEDICAL DEVICE TIME-TO-EVENT",
+    "NON-COMPARTMENTAL ANALYSIS",
+    "POPULATION PHARMACOKINETIC ANALYSIS",
+    "TIME-TO-EVENT",
+]
+
+CoreDesignation = Literal["Req", "Exp", "Perm"]
+
+OriginType = Literal[
+    "Assigned",
+    "Collected",
+    "Derived",
+    "Not Available",
+    "Other",
+    "Predecessor",
+    "Protocol",
+]
+
+OriginSource = Literal["Investigator", "Sponsor", "Subject", "Vendor"]
+
+MethodType = Literal["Computation", "Imputation"]
+
+DefineDataType = Literal[
+    "text",
+    "integer",
+    "float",
+    "date",
+    "datetime",
+    "time",
+    "partialDate",
+    "partialTime",
+    "partialDatetime",
+    "incompleteDate",
+    "incompleteTime",
+    "incompleteDatetime",
+    "durationDatetime",
+    "intervalDatetime",
+    "URI",
+]
+
+PageRefType = Literal["PhysicalRef", "NamedDestination"]
+
 
 class _StrictModel(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
@@ -75,12 +138,83 @@ class HandledExpression(_StrictModel):
     conversion_failure: JsonValue = None
 
 
+class PageReference(_StrictModel):
+    type: PageRefType
+    refs: str
+    title: str | None = None
+
+
+class DocumentReferenceClass(_StrictModel):
+    document: str
+    pages: PageReference | None = None
+
+
+DocumentReference = str | DocumentReferenceClass
+
+
+class FormalExpression(_StrictModel):
+    context: str
+    code: str
+
+
+class SubmissionMethodClass(_StrictModel):
+    name: str | None = None
+    type: MethodType = "Computation"
+    description: str
+    expression: FormalExpression | None = None
+    documents: list[DocumentReference] | None = None
+
+
+SubmissionMethod = str | SubmissionMethodClass
+
+
+class SubmissionCommentClass(_StrictModel):
+    text: str
+    documents: list[DocumentReference] | None = None
+
+
+SubmissionComment = str | SubmissionCommentClass
+
+
+class SubmissionOrigin(_StrictModel):
+    type: OriginType
+    source: OriginSource | None = None
+    description: str | None = None
+    documents: list[DocumentReference] | None = None
+
+
+class SubmissionColumn(_StrictModel):
+    core: CoreDesignation | None = None
+    mandatory: bool | None = None
+    role: str | None = None
+    data_type: DefineDataType | None = None
+    length: int | None = None
+    significant_digits: int | None = None
+    display_format: str | None = None
+    codelist: str | None = None
+    origin: SubmissionOrigin
+    method: SubmissionMethod | None = None
+    comment: SubmissionComment | None = None
+
+
+class SubmissionDataset(_StrictModel):
+    label: str
+    class_name: DatasetClassName = Field(alias="class")
+    subclass: DatasetSubclassName | None = None
+    structure: str
+    repeating: bool
+    reference_data: bool = False
+    domain: str | None = None
+    comment: SubmissionComment | None = None
+
+
 class Column(_StrictModel):
     name: str
     type: ColumnType
     label: str | None = None
     derivation: HandledExpression | None = None
     verifications: list[Expression] | None = None
+    submission: SubmissionColumn | None = None
     metadata: dict[str, str] | None = None
 
 
@@ -104,6 +238,7 @@ class Specification(_StrictModel):
     columns: list[Column]
     rows: list[Row] | None = None
     verifications: list[Expression] | None = None
+    submission: SubmissionDataset | None = None
     metadata: dict[str, str] | None = None
 
     @property
