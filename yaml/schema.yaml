@@ -220,6 +220,12 @@ dataset_class:
         type: project_path
         required: false
         description: See REQ-1060 in rules/storage/ingestion.md.
+    - empty_string:
+        type: str
+        required: false
+        default: missing
+        values: [missing, present]
+        description: See REQ-1158 in rules/storage/ingestion.md.
 
 intermediate_id:
     type: str
