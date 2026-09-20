@@ -396,9 +396,19 @@ def _to_date(payload: object, resolver: Resolver) -> EvaluationResult:
     if source is MISSING:
         # REQ-0593: a missing source returns a missing date.
         return ValueResult(value=MISSING)
+    if isinstance(source, str):
+        # REQ-0607: ISO date text parses directly; anything else is invalid.
+        try:
+            return ValueResult(value=DateValue.parse(source))
+        except ValueError:
+            return _condition(
+                "invalid_date_text",
+                {"operation": "to_date", "value": source},
+                requirement="REQ-0607",
+            )
     if not isinstance(source, DateTimeValue):
         # REQ-0607: in particular a `date` is not an identity spelling.
-        return _incompatible("to_date", "source", "datetime", source)
+        return _incompatible("to_date", "source", "datetime or ISO date text", source)
     return ValueResult(
         value=DateValue(year=source.year, month=source.month, day=source.day)
     )

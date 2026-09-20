@@ -277,8 +277,8 @@ structural constraints come from its schema declaration.
 
 | Field | Meaning |
 | --- | --- |
-| `expressions.to_date.source` | Datetime whose calendar date is returned. |
-| `Result` | Extracts the calendar date from a datetime. A missing datetime yields a missing date. Other source types are an incompatible input error under this operation contract. |
+| `expressions.to_date.source` | Datetime whose calendar date is returned, or ISO 8601 date text to parse. |
+| `Result` | Extracts the calendar date from a datetime, or parses ISO 8601 date text directly. A missing source yields a missing date. Other source types are an incompatible input error under this operation contract; text that is not a complete ISO date is invalid date text. |
 
 <a id="req-1108"></a>
 
@@ -316,8 +316,9 @@ source.
 
 <a id="req-0607"></a>
 
-**REQ-0607.** `to_date` given anything other than a `datetime`: fail as
-an incompatible input. A missing `datetime` yields a missing date instead.
+**REQ-0607.** `to_date` given anything other than a `datetime` or ISO 8601 date
+text: fail as an incompatible input. Text that is not a complete ISO date fails
+as invalid date text. A missing source yields a missing date instead.
 
 <a id="req-0608"></a>
 
