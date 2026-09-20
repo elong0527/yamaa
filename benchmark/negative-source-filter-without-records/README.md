@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-source-filter-without-records.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** draft - first commit, no review yet.
-
 **Goal:** carry the planned arm (ARM) and the actual arm (ACTARM) for each
 subject.
 
@@ -13,7 +11,7 @@ subject.
 
 - **ARM**: planned arm as collected; `Unassigned` when none was collected.
 - **ACTARM** would be the actual arm, always the planned arm in this
-  benchmark, but the copy also states which collected rows to choose among.
+  example, but the copy also states which collected rows to choose among.
   The planned arm is one value by then rather than a set of rows, so the
   run is rejected before any data is read and no artifact is accepted.
 

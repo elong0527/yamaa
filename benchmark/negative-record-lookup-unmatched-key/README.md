@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-record-lookup-unmatched-key.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** attach the reference upper limit (`LBSTNRHI`) to each
 collected result by test and sex.
 
@@ -27,10 +25,12 @@ absent range is intentionally represented by a missing value, state that policy
 explicitly:
 
 ```yaml
-intermediates:
+record_lookups:
   - id: REFRANGE
     dataset: LBRANGE
+    source: [LBTESTCD, SEX]
     key: [LBTESTCD, SEX]
+    unmatched: missing
 ```
 
 The lookup then returns a missing value for every column read through it when

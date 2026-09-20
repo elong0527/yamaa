@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-compute-aggregate-function.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** attempt the subject-level total result (`AVALTOT`)
 from the collected results for a subject, written as the row
 formula `SUM(AVAL)`.
@@ -29,7 +27,7 @@ data is read and no artifact is accepted.
 
 ## How to fix
 
-Use an aggregate and state the subject-level keys explicitly:
+Use an aggregate and state the subject-level grain explicitly:
 
 ```yaml
 derivation:

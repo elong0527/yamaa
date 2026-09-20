@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-record-lookup-id-collision.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** carry the first treatment received in `TRT01A`, one
 record per subject.
 
@@ -31,7 +29,7 @@ Give the record lookup a name that is distinct from every dataset and from
 the output domain, then read through that name:
 
 ```yaml
-intermediates:
+record_lookups:
   - id: FIRSTEX
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]

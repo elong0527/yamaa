@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-vs-visit-study-day.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** carry each collected vital-signs result with its test,
 result, and collection date, and add the planned visit number, the
 trial period, and the study day: `VSTESTCD`, `VSORRES`, `VSDTC`,
@@ -36,7 +34,7 @@ period with its study-day bounds.
 
 **Note:** the reference start date is used to count the study day
 and then dropped, since it is not part of the result record; the
-epoch-range input is a benchmark fixture rather than a standard
+epoch-range input is an example fixture rather than a standard
 trial-design domain.
 
 **Standard:** SDTM | **Domain:** VS

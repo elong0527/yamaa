@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-mapping-from-partial-key.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** draft - first commit, no review yet.
-
 **Goal:** carry sex and the collected result into the output and
 attach the upper limit of normal (`ANRHI`) chosen by test and sex.
 
@@ -35,8 +33,8 @@ missing reference limit whenever any lookup input is missing, state that with
 the lookup's missing-value answer:
 
 ```yaml
-lookup:
-  key_base: [PARAMCD, SEX]
+mapping_from:
+  source: [PARAMCD, SEX]
   dataset: LBREF
   key: [LBTESTCD, SEX]
   value: ANRHI

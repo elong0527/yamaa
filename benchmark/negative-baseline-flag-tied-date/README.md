@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-baseline-flag-tied-date.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** mark the baseline record of each subject and parameter
 with `ABLFL` and repeat its value with `BASE`.
 
@@ -57,9 +55,10 @@ the first:
   type: str
   derivation:
     case:
-      - when: "ABLRANK = 1"
-        then:
-          literal: Y
+      branches:
+        - when: "ABLRANK = 1"
+          then:
+            literal: Y
 ```
 
 Keep `ABLRANK` internal by omitting it from `output.columns`.

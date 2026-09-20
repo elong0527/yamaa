@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-severity-override.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** derive `ASEV` (analysis severity) and `ASEVN` (its numeric
 rank) for each adverse event (AE) in the Analysis Data Model (ADaM)
 adverse event analysis dataset (ADAE), applying an approved severity
@@ -16,7 +14,7 @@ event sequence identifiers and the reported severity `AESEV`.
 
 - `ASEV`: analysis severity in upper case (`MILD`, `MODERATE`,
   `SEVERE`, `LIFE-THREATENING`); the approved correction reassigns
-  the one event covered by the approved correction in this benchmark
+  the one event covered by the approved correction in this example
   to `SEVERE`. An event with no reported severity and no applicable
   correction leaves `ASEV` empty.
 - `ASEVN`: numeric rank of `ASEV`, from `1` (`MILD`) to `4`

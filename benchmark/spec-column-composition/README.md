@@ -2,10 +2,9 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/spec-column-composition.html) [![Lifecycle: draft](https://img.shields.io/badge/Lifecycle-draft-lightgrey)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** draft - first commit.
-
-**Goal:** demonstrate a study level changing details inside inherited
-columns - `AVAL`, `ANRIND`, and `PARCAT1`.
+**Goal:** demonstrate a study level changing one detail inside an
+inherited column - `AVAL`, `ANRIND`, and `PARCAT1` - without restating
+the rest of that column.
 
 **Input:** three spec files, read root-first:
 

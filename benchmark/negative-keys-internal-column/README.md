@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-keys-internal-column.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** derive `INVID` for each subject.
 
 **Input:** collected demographics carrying input site (`SITEID`)
@@ -32,4 +30,4 @@ output:
 
 If study and subject already form the intended unique identity, remove
 `SITEID` from the record identity instead. Choose the option that matches the
-output's actual row identity.
+output's actual grain.

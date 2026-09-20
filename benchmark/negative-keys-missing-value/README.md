@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-keys-missing-value.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** carry the analysis date (`ADT`), study day (`ADY`), and
 measured value (`AVAL`) through from a pre-derived ADVS slice
 (`ADVSPRE`), placing each record in the analysis window its study
@@ -36,7 +34,7 @@ but the run still fails and no artifact is accepted.
 
 ## How to fix
 
-Decide which keys the dataset is on. If it is one record per analysis visit,
+Decide which grain the dataset is on. If it is one record per analysis visit,
 every record must fall in a window. Recover the analysis date in the governed
 source where it is available. Where it is not, keep the record out of the
 dataset rather than give it a place it does not have. A row template selects

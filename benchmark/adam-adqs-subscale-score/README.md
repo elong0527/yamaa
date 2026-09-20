@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adqs-subscale-score.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** carry each physical functioning item response into
 `PARAMCD`, `PARAM`, and `AVAL`, and add a subscale score record
 coded `PFSCORE` holding the mean answered-item response multiplied
@@ -26,7 +24,7 @@ functioning scale, with study, subject, and visit (`STUDYID`,
   score record when fewer than three of the four items were
   answered.
 
-**Note:** in this benchmark each administered visit carries a score
+**Note:** in this example each administered visit carries a score
 record, even when too few items were answered to score it, so an
 empty score stays apart from a visit with no records at all. Item
 responses are expected within zero to four, and only `PF01`

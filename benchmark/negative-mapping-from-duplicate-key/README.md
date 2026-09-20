@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-mapping-from-duplicate-key.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** carry sex and the numeric result into the output and
 choose the upper limit of normal (`ANRHI`) from a reference table
 by test and sex.
@@ -33,6 +31,6 @@ Make the lookup table unique on `[LBTESTCD, SEX]` by resolving the
 conflicting `ALT/F` reference limits under the study's governed
 reference-range rules. A lookup cannot choose one duplicate by file order. If
 both rows are valid for different conditions, add the distinguishing field to
-both the current-row `key_base` list and the lookup `key` list. For example,
-a method-specific table would use matching lists such as
-`key_base: [PARAMCD, SEX, METHOD]` and `key: [LBTESTCD, SEX, METHOD]`.
+both the current-row source list and the lookup key list. For example, a
+method-specific table would use matching lists such as
+`source: [PARAMCD, SEX, METHOD]` and `key: [LBTESTCD, SEX, METHOD]`.

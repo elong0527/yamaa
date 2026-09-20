@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-arm-assignment.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** assign each subject a planned arm (**ARMCD**, **ARM**) and
 an actual arm (**ACTARMCD**, **ACTARM**), with a reason (**ARMNRS**)
 when an arm is blank and a free-text fallback (**ACTARMUD**) for a

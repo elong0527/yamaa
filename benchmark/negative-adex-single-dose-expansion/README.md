@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-adex-single-dose-expansion.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** build an administration record for each administration
 in a collected exposure (EX) record, carrying the collected
 record's sequence number and `EXTRT`, `EXDOSE`, `EXDOSU`,
@@ -52,22 +50,21 @@ differs between them.
 
 ## How to fix
 
-The per-administration rows belong in the input data. Expand the
+The administration grain belongs in the input data. Expand the
 aggregate record into one collected record for each administration
 upstream, and read those records here one to one. For
 expected-but-uncollected rows, use the long-form planning input in
 `adam-advs-once-measured-carry-forward` and enrich it from collected
 data.
 
-If the analysis genuinely needs only the totals, drop the administration level
-and key on the collected record instead:
+If the analysis genuinely needs only the totals, drop the
+administration grain and key on the collected record instead:
 
 ```yaml
 keys: [STUDYID, USUBJID, EXSEQ]
 ```
 
-Do not keep the administration level and widen the written-out
-administrations to whatever the current extract needs. It answers
-correctly only for data
+Do not keep the grain and widen the written-out administrations to
+whatever the current extract needs. It answers correctly only for data
 that has already been seen, and the next extract with a longer record
 loses administrations again without warning.

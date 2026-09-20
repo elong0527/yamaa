@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-source-output-self-reference.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** build analysis records for alanine aminotransferase
 (`ALT`), aspartate aminotransferase (`AST`), and their ratio
 (`ASTALT`), carrying `ADT` and `AVAL` for each subject, date, and
@@ -48,7 +46,7 @@ Renaming the declaration alone leaves the read pointing at a name that no
 longer exists, so change where it reads from as well:
 
 ```yaml
-lookup:
+mapping_from:
   dataset: ADLBIN
 ```
 

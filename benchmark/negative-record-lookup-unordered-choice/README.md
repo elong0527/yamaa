@@ -2,8 +2,6 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-record-lookup-unordered-choice.html) [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** reviewed - has discussion comments or GitHub issues.
-
 **Goal:** carry the treatment a subject received and the dose they
 received of it onto `TRT01A` and `TRT01DOSE`.
 
@@ -30,7 +28,7 @@ State the full order and which end of that order to keep. To choose the
 earliest administration:
 
 ```yaml
-intermediates:
+record_lookups:
   - id: DOSING
     dataset: EX
     order_by: [EX.EXSTDTC, EX.EXSEQ]
