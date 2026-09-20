@@ -9,6 +9,7 @@ from polars.testing import assert_frame_equal
 
 from yamaa import yamaa_domain
 from yamaa.io import ProjectResources, load_source_tables
+from yamaa.io.csv import fixed_point
 from yamaa.planning import ExecutionDiagnostic
 from yamaa.runtime import (
     ExecutionFailure,
@@ -43,31 +44,6 @@ def positive_runners() -> tuple[Path, ...]:
         for runner in sorted(EXAMPLES.glob("*/run.py"))
         if not (runner.parent / "expected/error.yaml").exists()
     )
-
-
-def entry_spec(example: Path) -> Path:
-    """The specification a benchmark's run.py executes.
-
-    Mirrors the dashboard's entry resolution: `spec.yaml` when present,
-    otherwise the `spec_*.yaml` file no other file names as a parent.
-    """
-    single = example / "spec.yaml"
-    if single.exists():
-        return single
-    specs = sorted(example.glob("spec_*.yaml"))
-    parented = set()
-    for path in specs:
-        document = read_yaml_document(path)
-        parents = document.get("parents", []) if isinstance(document, dict) else []
-        if isinstance(parents, str):
-            parents = [parents]
-        parented.update(
-            Path(parent).name
-            for parent in parents
-            if isinstance(parent, str) and parent
-        )
-    entries = [path for path in specs if path.name not in parented]
-    return entries[0] if entries else specs[0]
 
 
 def negative_contracts() -> tuple[Path, ...]:
@@ -138,6 +114,26 @@ def test_negative_example_spec_paths_match_committed_contracts() -> None:
     assert mismatches == KNOWN_SPEC_PATH_GAPS
 
 
+def _reported_frame(frame: pl.DataFrame, decimals: int) -> pl.DataFrame:
+    """Round every float column the way R020's ``output.decimals`` writes it.
+
+    The committed CSV carries reported values (rounded once, at write,
+    half away from zero); the run.py frame carries the unrounded engine
+    values R011-28 requires. Reusing ``fixed_point`` keeps the test's
+    rounding identical to the artifact writer's.
+    """
+    return frame.with_columns(
+        [
+            pl.col(name).map_elements(
+                lambda value: float(fixed_point(value, decimals)),
+                return_dtype=pl.Float64,
+            )
+            for name, dtype in frame.schema.items()
+            if dtype == pl.Float64
+        ]
+    )
+
+
 @pytest.mark.parametrize(
     "runner",
     positive_runners(),
@@ -161,7 +157,16 @@ def test_positive_example_outputs_match_expected_csvs(
         if not name.startswith("_") and isinstance(value, pl.DataFrame)
     }
 
-    specification = load_specification(entry_spec(example), SCHEMA_ROOT).specification
+    specification = load_specification(example / "spec.yaml", SCHEMA_ROOT).specification
+    if specification.output.decimals is not None:
+        # R020 rounds every float column once, at write, half away from
+        # zero; the committed CSV carries those reported values while the
+        # run.py frame carries the unrounded engine values. Round the same
+        # way before comparing so a decimals benchmark can carry run.py.
+        outputs = {
+            name: _reported_frame(frame, specification.output.decimals)
+            for name, frame in outputs.items()
+        }
     declared_log = specification.output.violation_log
     if declared_log is not None:
         # A violation sidecar is a second artifact the run.py convention
@@ -171,7 +176,7 @@ def test_positive_example_outputs_match_expected_csvs(
         log_stem = Path(declared_log).stem
         assert set(outputs) == set(expected) - {log_stem}
         actual_log = yamaa_domain(
-            entry_spec(example), schema_root=SCHEMA_ROOT
+            example / "spec.yaml", schema_root=SCHEMA_ROOT
         ).violation_log
         assert actual_log is not None
         committed_log = pl.read_csv(expected[log_stem], schema=actual_log.schema)
