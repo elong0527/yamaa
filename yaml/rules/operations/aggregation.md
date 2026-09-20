@@ -515,9 +515,9 @@ fail, reporting the expression and the column that failed.
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-adex-relative-dose-intensity](../../../benchmark/negative-adex-relative-dose-intensity/README.md).
-- [negative-adlb-absolute-wbc-duplicate](../../../benchmark/negative-adlb-absolute-wbc-duplicate/README.md).
-- [negative-sum-non-numeric-source](../../../benchmark/negative-sum-non-numeric-source/README.md).
+- [negative-dose-intensity](../../../benchmark/negative-dose-intensity/README.md).
+- [negative-adlb-duplicate-wbc](../../../benchmark/negative-adlb-duplicate-wbc/README.md).
+- [negative-sum-non-numeric](../../../benchmark/negative-sum-non-numeric/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

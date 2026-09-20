@@ -196,7 +196,7 @@ ignored.
 
 Representative specifications, input data, and expected outcomes:
 
-- [negative-row-value-zero-offset](../../../benchmark/negative-row-value-zero-offset/README.md).
+- [negative-row-no-prior](../../../benchmark/negative-row-no-prior/README.md).
 
 The [execution manifest](../../../benchmark/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

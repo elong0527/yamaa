@@ -22,7 +22,7 @@ test_that("blank fields in the string-handler fixtures are missing", {
     mustWork = FALSE
   )
   handlers_input <- file.path(
-    root, "benchmark", "adam-adae-string-handlers", "input", "ae.csv"
+    root, "benchmark", "adam-adae-text-cleanup", "input", "ae.csv"
   )
   comment_input <- file.path(
     root, "benchmark", "adam-adsl-investigator-comment", "input", "dm.csv"
