@@ -2,21 +2,10 @@
 
 [![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-advs-bmi.html) [![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)](https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)
 
-**Lifecycle:** finalized - a human decided to finalize this benchmark.
-
 **Goal:** derive BMI record for each collected weight record
 in ADVS using baseline height.
 
 **Input:** A VS dataset with height and weight information and an ADSL
 dataset with baseline height information.
-
-**Variables:**
-
-- `AVAL` carries each collected measurement through. On a BMI
-  record it is the weight in kilograms divided by the square of
-  the baseline height in meters (the squared centimeter height
-  divided by 10000); it is missing when that height is missing
-  or zero. A weight record with a missing value yields no BMI
-  record.
 
 **Standard:** ADaM | **Domain:** ADVS

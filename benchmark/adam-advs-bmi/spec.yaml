@@ -48,10 +48,10 @@ rows:
   - id: collected
     dataset: VS
     derivations:
-      PARAMCD: {source: VS.VSTESTCD}
-      PARAM: {source: VS.VSTEST}
+      PARAMCD: VS.VSTESTCD
+      PARAM: VS.VSTEST
       HEIGHTBL: {literal: null}
-      AVAL: {source: VS.VSSTRESN}
+      AVAL: VS.VSSTRESN
 
   - id: derived_bmi
     dataset: VS
