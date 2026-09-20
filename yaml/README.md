@@ -1,220 +1,83 @@
 # YAML derivation specification
 
-This folder defines a compact, language-agnostic specification for ODM-to-SDTM
-and SDTM-to-ADaM derivations. The design is under active development.
+This folder defines a language-agnostic specification for ODM-to-SDTM and
+SDTM-to-ADaM derivations. The design is under active development.
+
+## Start here
+
+The [rule index](rules/README.md) organizes the specification into eight
+logical blocks. Read the block relevant to the work, then follow its owning
+rules and schema entries.
+
+| Block | Subject |
+| --- | --- |
+| [1. Specification structure](rules/README.md#1-specification-structure) | Schema notation and inheritance |
+| [2. Inputs and binding](rules/README.md#2-inputs-and-binding) | Resources, CSV and Parquet, ingestion, name resolution |
+| [3. Values and types](rules/README.md#3-values-and-types) | Conversion, comparison, text, temporal values |
+| [4. Execution and handling](rules/README.md#4-execution-and-handling) | Dependencies, evaluation, ordering, local handlers |
+| [5. Matching and reduction](rules/README.md#5-matching-and-reduction) | Joins, intermediates, lookups, aggregates |
+| [6. Expression languages and extensions](rules/README.md#6-expression-languages-and-extensions) | Predicates, computation, templates, regex, functions |
+| [7. Validation and output](rules/README.md#7-validation-and-output) | Result contracts, verifications, serialization |
+| [8. Submission documentation](rules/README.md#8-submission-documentation) | Metadata, terminology, Define-XML |
+
+## Sources of authority
+
+The schema defines structure and operation-local behavior through adjacent
+comments and parameter descriptions. Descriptions do not themselves perform
+validation. Rule files define shared behavior. Examples demonstrate both
+without redefining them. The [design notes](design-notes.md) explain design
+choices and are non-normative.
+
+Closed grammars are defined once in [grammar/](grammar/README.md). Their rule
+blocks are generated views checked against the grammar files; both
+implementations replay the same vectors.
 
 ## Contents
 
-- `schema.yaml` is the schema-bundle entry point and defines shared structure.
-- `schema_environment.yaml` is the separately validated project-environment
-  entry point.
-- `schema_define.yaml` is the separately validated study-document entry point:
-  one document selects the specifications a Define-XML 2.1 document
-  represents and declares the standards, supporting documents, and codelists
-  they share.
-- `schema_metadata.yaml` registers the governed dataset and column submission
-  metadata that document is generated from.
-- `schema_derivation.yaml`, `schema_expression_*.yaml`, and
-  `schema_verification.yaml` register and document closed derivation and
-  verification types.
-- `schema_function.yaml` registers calls to functions resolved by R018's
-  project environment.
-- `rules/` contains shared execution semantics, with one rule per file.
-- `../benchmark/` sits outside this folder and contains source data, derivation
-  specifications, exact expected outputs, and `validation-manifest.yaml`, which
-  assigns every validation-phase negative fixture to its owning rule and
-  validator family or an open blocking issue.
-- `conformance/` contains language-wide fixtures that every implementation
-  must reproduce, one file per contract.
-- `grammar/` contains one machine-readable grammar per closed language, with
-  the vectors every implementation must reproduce.
-- `agents.md` tells AI coding agents how to discover and maintain the design.
+| Location | Purpose |
+| --- | --- |
+| [schema.yaml](schema.yaml) | Specification entry point and shared structure |
+| [schema_environment.yaml](schema_environment.yaml) | Separate project function environment entry point |
+| [schema_define.yaml](schema_define.yaml) | Separate study-document entry point |
+| [schema_metadata.yaml](schema_metadata.yaml) | Governed submission metadata |
+| [schema_derivation.yaml](schema_derivation.yaml) | Expression modules and derivation wrappers |
+| [schema_verification.yaml](schema_verification.yaml) | Column and dataset verification registries |
+| [schema_function.yaml](schema_function.yaml) | Project function calls |
+| [rules/](rules/README.md) | Shared normative contracts, grouped by subject |
+| [../benchmark/](../benchmark/README.md) | Specifications, inputs, exact expected outputs, and the validation manifest |
+| [conformance/](conformance/) | Language-wide fixtures shared by implementations |
+| [grammar/](grammar/README.md) | Closed grammars and parser vectors |
+| [agents.md](agents.md) | Agent discovery and maintenance instructions |
 
-The schema defines shape and operation-local behavior through adjacent comments
-and validation-neutral parameter descriptions. Rule files define behavior
-shared across operations. Examples demonstrate both without redefining them.
+## Execution overview
 
-R019 gives every string one portable contract: language source is ASCII, data
-may contain Unicode scalar values, casing and case-insensitive mapping affect
-ASCII letters only, no normalization is implicit, and equality and ordering
-operate on the exact scalar sequence.
+This is a reading guide; the linked rules define the actual contracts.
 
-R022 gives every regular expression one executable contract: schema
-`pattern`, `str_extract`, and `matches` are read by one pinned ECMA-262
-engine with the Unicode flag set, each consumer fixes whether it searches or
-must match the whole value, capture groups are numbered by opening
-parenthesis, and a pattern that engine rejects fails validation rather than
-falling back to a host dialect. `conformance/regex.yaml` holds the fixtures
-R and Python must both reproduce.
+1. Resolve inherited specifications under
+   [R017](rules/R017-specification-inheritance.md) and validate their
+   structure under [R006](rules/R006-schema-language.md).
+2. Resolve resources, decode source records, and bind names using the
+   [input contracts](rules/README.md#2-inputs-and-binding).
+3. Construct rows and derive columns in
+   [R001](rules/R001-execution-model.md) dependency order. Each value follows
+   the [R005 lifecycle](rules/R005-output-contract.md#derivation-lifecycle),
+   with handlers under [R008](rules/R008-local-handlers.md).
+4. Check the completed result, apply artifact ordering, and serialize it
+   using the [output contracts](rules/README.md#7-validation-and-output).
 
-The four closed grammars are defined once, in `grammar/`. A grammar written
-in prose, in an R parser, and in a Python parser is three copies that can
-disagree, so each rule's grammar block is rendered from its grammar file,
-each closed vocabulary is compared with the constants its parser uses, and
-both implementations replay the same vectors. Changing a grammar therefore
-starts in `grammar/`, and a change that is not carried into every consumer
-fails validation.
-
-R024, R025, and R026 give a submission one generation contract. R024 closes
-the governed dataset and column metadata and derives everything a
-specification already states: `Mandatory` from `core` where the standard
-defines that mapping and never where it does not, a declared length from the
-`max_length` that enforces it, an origin source where a family fixes it, and a
-collected value's annotated-CRF reference. A standard's family decides which
-origin pairs it admits, and a declared origin the derivation graph refutes is
-rejected rather than carried into a document. What a governed field owns
-cannot also be written into the free-form `metadata` map, so the map is
-annotation rather than a second place provenance can hide. The graph never
-supplies an origin: it can prove a value was computed, but not who collected
-it. R025 makes a codelist one named, versioned object several columns share,
-enforces the values of a closed list, and requires a codelist binding and an
-`allowed_values` verification over the same column to name the same set.
-R026 composes them into one Define-XML 2.1 document whose identifiers are
-built from declared names, whose element and attribute order is fixed, and
-whose bytes two implementations must agree on exactly. Value-level metadata,
-analysis-results metadata, and split datasets are refusals with named re-entry
-triggers rather than silent omissions.
-
-R021 gives every declared source one resource contract: a run receives one
-approved project root and the data roots the study's own `yamaa-project.yaml`
-declares or its runner approved, a declared path is a relative file inside the
-project root or a rooted file inside an approved data root, with no URI scheme,
-no escape above its root, and no symbolic link below it, and each accepted
-physical file is read once as one immutable byte snapshot that cannot be
-substituted between validation and ingestion. A rooted path is how a study
-keeps code and data in different places. The roots are fixed before any
-specification is read and come from the entry study alone, so composition never
-widens them, and a runner can cap or decline what a study declares -- which is
-where a packaging run enforces the portability a submission needs.
-
-R023 selects a source profile from the path extension and gives every `csv`
-source one syntax: UTF-8 without a byte-order mark, a comma between fields,
-`U+000A` or `U+000D U+000A` between records, and double-quote quoting whose
-doubled quote is one literal quote. It admits the second spelling of a
-terminator and a final record without one, because neither changes the records
-a file holds, and rejects every other difference rather than repairing it. A
-field reaches R014 as its text or as missing: one with no characters is
-missing whether it was bare or quoted, so quoting is transport and never
-meaning. R027 is the `parquet` counterpart. It reads the embedded schema
-through the inverse of R020's type mapping and preserves field order, record
-order, nulls, collected empty strings, and typed values.
-
-## Version 1.0 design boundary
-
-Operations consume named variables rather than arbitrary nested expressions.
-This keeps every operation self-contained, exposes dependencies, and avoids
-mixed argument shapes. Multi-step derivations use named columns as intermediate
-values. Nested expressions remain only where nesting is intrinsic: `case`
-results, string concatenation inputs, and final `override` values.
-
-This is the version 1.0 direction for team review.
-
-Three closed mini-languages are narrow exceptions to fields that name
-their inputs directly. Registering an operator per arithmetic operation makes a
-single formula such as
-`WEIGHTKG / POWER(HEIGHTCM / 100, 2)` into several columns and grows the
-registry without end, so `compute` takes one closed numeric expression instead
-and is the only arithmetic expression. It stays inside the boundary's purpose:
-its payload is a leaf field, not a nested argument tree, and R001 extracts its
-identifiers exactly as it already extracts them from `case[].when`, so
-dependencies remain visible. R010 closes its grammar and function vocabulary
-and confines it to numeric results, so it cannot displace the typed string,
-date, mapping, or conditional expressions.
-
-`str_template` is the string counterpart. It permits literal text and braced
-variable placeholders only. R001 extracts every placeholder as a dependency,
-and R012 fixes its grammar and escaping, so it cannot become host-language
-evaluation or displace typed string operations. `str_concat` remains the form
-that composes nested expressions.
-
-`aggregate` is the third, and it replaced `min`, `max`, `sum`, and `count` for
-the reason `compute` replaced the arithmetic operators: an entry per reducer
-grows the registry without end and cannot express arithmetic over the records
-being reduced. R013 closes its reducer table and its grammar, requires every
-identifier to name one relation, and requires every identifier to sit inside a
-reduction unless the reduction groups on it. Those three limits keep it from
-becoming a join, a window, or a second spelling of `compute`, and they leave
-where an aggregate may be used with R007 and the join that consumes it with
-R003. A qualified aggregate may additionally narrow that relation against one
-current-row value through inclusive lower or upper bounds; R013 fixes the
-one-sided and missing-value behavior.
-
-A reduction at one key level followed by a reduction at another remains two
-specifications. The first artifact is a normal stored source of the second, so
-each keeps its own identity and validation contract without adding
-in-memory datasets or inferring pipeline order from paths.
-
-A row template may declare `group_by` when its driver records must first form
-one candidate row per group. Aggregate row derivations reduce the current
-driver group, scalar derivations compose those results, and the template's
-existing `filter` then decides whether the completed candidate is appended.
-Without `group_by`, `row.filter` keeps its original meaning of selecting driver
-records before derivation. R001 owns both modes, and R013's `ONLY` reducer makes
-a required single source record reject duplicates rather than choose one.
-
-`output.columns` keeps binding columns out of the final dataset while retaining
-them as named intermediate values. A `compute` formula may also read a numeric
-field directly from a declared record lookup; this avoids a binding column when
-the lookup already gives the selected record a stable name.
-
-`output.order_by` is the row counterpart. It declares the order the artifact
-presents its rows in, reusing the order terms every window expression and
-record lookup already declares, and leaves R001's construction order to decide
-how rows are built. A term may name an intermediate column, so a submission
-order can rest on a numeric ordinal the artifact itself does not carry. R005
-defines it.
-
-A `lookups` entry names one record of another dataset so that several
-columns can read it, which no expression can do while each returns one value.
-It is not an expression and adds no nesting: its matching, filtering, and
-ordering fields are the ones `lookup` and `multiple_matches` already
-declare, and a column reads it through the qualified variable form it already
-uses for a dataset. R003 defines it.
-
-The version 1.0 input-shape audit covers every registered expression:
-
-| Expressions | Input policy |
-|---|---|
-| `source`, `literal` | Leaf expressions; a source may state which records it reads |
-| `mapping` | One named source, which may state which records it reads; exceptional results are literals |
-| `cut`, `str_extract`, `str_upper`, `str_lower` | One named source; exceptional results are literals |
-| `str_concat` | An ordered list of expressions, because concatenating requires literals beside sources |
-| `str_template` | One closed string template over named variables (R012) |
-| `lookup` | One or more named sources paired by position with declared right-side key columns; exceptional results are literals |
-| `compute` | One closed numeric expression over named output columns and declared lookup fields (R010) |
-| `date_diff`, `study_day` | Named variable operands; `date_diff` declares which endpoints it counts |
-| `date_impute` | One named source, an integer literal or a month-relative token for each imputed component, an optional minimum collected precision, and an optional named lower bound on the completed date; exceptional results are literals |
-| `date_precision` | One named source, either collected text or a temporal value; exceptional results are literals |
-| `to_date` | One named `datetime` source; no literals or nesting |
-| `first_available` | Ordered named variables, each of which may state which records it reads, plus an optional literal default |
-| `greatest`, `least` | Named variables reduced across one row; no literals and no nesting |
-| `row_number`, `rank`, `baseline_flag`, `baseline_value` | Window expressions: named grouping, ordering, and value variables |
-| `row_value` | A window expression: one named source with named grouping and ordering variables, plus a signed integer literal offset along the declared order |
-| `previous_non_missing` | A window expression: one named source searched strictly backward through named grouping and ordering variables |
-| `aggregate` | One closed reducer expression over one relation, optionally narrowed by a current-row range (R013) |
-| `case` | Nested result expressions retained because selecting expressions is its purpose |
-| `function` | Closed named arguments are variables or scalar literal leaves; string and temporal literals use explicit tagged forms (R018) |
-
-At the derivation-result level, `conversion_failure` is a literal and
-`override.value` remains an expression because a final correction may select a
-source, literal, or another registered operation.
-
-`function` is the deliberate extensibility boundary. A portable specification
-may declare a logical call before project code is implemented. When an actual
-implementation is supplied, the runner selects one project root containing one
-`environment.yaml`; the specification cannot override it. R018 closes its
-versioned contracts, singular R or Python runtime, bindings, and conformance
-vectors at that implementation stage.
+Submission-document generation is a separate workflow under
+[R026](rules/R026-define-xml.md); it composes resolved specifications and
+metadata without running their derivations.
 
 ## Review workflow
 
-1. Review the root field in `schema.yaml` and its included schema module.
-2. Review every applicable rule listed in `rules/README.md`.
-3. Review at least one positive example and its expected output.
-4. Add a negative example when the rule defines an error condition.
-5. Require R and Python implementations to produce equivalent outputs and
-   errors from the same examples.
+1. Read [R006](rules/R006-schema-language.md) for schema notation, then the
+   relevant entry point and its transitive schema includes.
+2. Review the owning rules in the [rule index](rules/README.md).
+3. Review a positive example, its input data, and its expected output.
+4. Add or update examples when behavior changes, including negative examples
+   for error conditions.
+5. Require R and Python to produce equivalent outputs and errors.
 
-Behavior not defined by a normative rule must not be inferred by an
-implementation. It should be proposed as a new rule or marked as an unresolved
-design question.
+Unspecified behavior is an unresolved design question or a proposed rule;
+implementations must not infer it.

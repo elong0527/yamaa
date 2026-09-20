@@ -279,6 +279,27 @@ is reported under its owning rule. Its diagnostic identifies the entry
 specification and the contributing file and field from which each implicated
 value came.
 
+## Errors
+
+**R017-39.** All inheritance failures occur in the `validation` phase:
+
+**R017-40.** A URL, URI, empty path, or non-local parent reference fails with
+`invalid_parent_path` and reports the declaring file and `parents` entry.
+**R017-41.** A missing, unreadable, or non-file parent fails with
+`parent_not_found` and reports the declaring file and path. **R017-42.**
+Reaching a file already on the active traversal path fails with
+`inheritance_cycle` and reports the complete canonical path cycle. **R017-43.**
+A missing or inconsistent layer version fails with `schema_version_mismatch`
+and
+reports every implicated file and value. **R017-44.** An entry file that omits
+`output` fails with `missing_entry_output`. **R017-45.** A malformed fragment
+fails under R006 at its contributing file and field. **R017-46.** A duplicate
+identifier within one layer fails with `duplicate_identifier`. **R017-47.** An
+invalid null clearing marker fails with `invalid_clear` and reports the field
+and contributing file. **R017-48.** An unknown reference, cycle, incomplete
+final object, or other invalid final result fails under the rule that owns that
+constraint, with contributing provenance included in the diagnostic.
+
 ## Rationale
 
 Inheritance composes declarations before any data is read. Every
@@ -304,24 +325,3 @@ them into every artifact. Reference checks run after pruning, so a dead
 declaration cannot fail a live declaration. Path rebasing preserves what an
 inherited relative path denotes. The path is never silently reinterpreted
 from the entry directory.
-
-## Errors
-
-**R017-39.** All inheritance failures occur in the `validation` phase:
-
-**R017-40.** A URL, URI, empty path, or non-local parent reference fails with
-`invalid_parent_path` and reports the declaring file and `parents` entry.
-**R017-41.** A missing, unreadable, or non-file parent fails with
-`parent_not_found` and reports the declaring file and path. **R017-42.**
-Reaching a file already on the active traversal path fails with
-`inheritance_cycle` and reports the complete canonical path cycle. **R017-43.**
-A missing or inconsistent layer version fails with `schema_version_mismatch`
-and
-reports every implicated file and value. **R017-44.** An entry file that omits
-`output` fails with `missing_entry_output`. **R017-45.** A malformed fragment
-fails under R006 at its contributing file and field. **R017-46.** A duplicate
-identifier within one layer fails with `duplicate_identifier`. **R017-47.** An
-invalid null clearing marker fails with `invalid_clear` and reports the field
-and contributing file. **R017-48.** An unknown reference, cycle, incomplete
-final object, or other invalid final result fails under the rule that owns that
-constraint, with contributing provenance included in the diagnostic.

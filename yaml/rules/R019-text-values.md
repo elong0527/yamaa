@@ -142,19 +142,6 @@ conformance workflow proves executable value and ordering parity when the
 workflow supports these expressions. Static validation alone is not runtime
 evidence.
 
-## Rationale
-
-Host locales, Unicode versions, and default normalizations differ between R
-and Python installations. Behavior that depends on these host differences
-cannot satisfy the parity requirement. The ASCII source boundary keeps every
-specification, rule, and implementation file comparable byte for byte, while
-real-world text stays in data fixtures with exact bytes checked in.
-Casing is ASCII-only. Full Unicode case folding would pin a Unicode version
-into the contract and break independent implementations on different data.
-Equality and order are defined on raw scalar values for the same reason. Raw
-scalar values compute identically everywhere, with no collator,
-normalizer, or character database.
-
 ## Errors
 
 **R019-20.** A non-ASCII byte in language or repository source: fail
@@ -169,3 +156,16 @@ validation with `ambiguous_dictionary`.
 **R019-23.** An implementation that cannot preserve scalar values or apply
 this exact contract: fail before evaluation with
 `unsupported_text_contract`; it must not substitute a host default.
+
+## Rationale
+
+Host locales, Unicode versions, and default normalizations differ between R
+and Python installations. Behavior that depends on these host differences
+cannot satisfy the parity requirement. The ASCII source boundary keeps every
+specification, rule, and implementation file comparable byte for byte, while
+real-world text stays in data fixtures with exact bytes checked in.
+Casing is ASCII-only. Full Unicode case folding would pin a Unicode version
+into the contract and break independent implementations on different data.
+Equality and order are defined on raw scalar values for the same reason. Raw
+scalar values compute identically everywhere, with no collator,
+normalizer, or character database.

@@ -373,23 +373,6 @@ standard the identifier names. A specification that is never composed carries
 declarations no family has judged. The specification is not yet part of
 a submission.
 
-## Rationale
-
-The metadata a submission document carries is not a vocabulary a project
-may invent, so every field here is closed against the document it
-becomes, and each one has exactly one place to live. Origin is declared rather
-than inferred: the dependency graph proves a value was computed but cannot
-prove who collected the value. Origin is refuted rather than believed: a
-graph that proves a computation also proves a `Collected` claim
-false. Core and mandatory are kept apart: they answer different
-questions -- what the standard requires of every study, and what this study
-requires of itself -- and their relationship differs between
-standards. Length binds to `max_length` on strings so that a declared bound is
-a checked bound, and stays unenforced on numbers for the reason R009 already
-gives: a rendered width is a property of rendering. Comments and methods are
-declared where they are used because sharing them would need an identifier
-space beyond the one R026 derives from position.
-
 ## Errors
 
 **R024-55.** Submission metadata declared for a column outside
@@ -434,3 +417,20 @@ standard of type `CT`: fail with `unknown_standard_family`, reporting the
 dataset and the standard. R026-7 owns the binding that fails.
 **R024-71.** A `reference_data: true` dataset declaring `repeating: true`:
 fail validation and report the dataset.
+
+## Rationale
+
+The metadata a submission document carries is not a vocabulary a project
+may invent, so every field here is closed against the document it
+becomes, and each one has exactly one place to live. Origin is declared rather
+than inferred: the dependency graph proves a value was computed but cannot
+prove who collected the value. Origin is refuted rather than believed: a
+graph that proves a computation also proves a `Collected` claim
+false. Core and mandatory are kept apart: they answer different
+questions -- what the standard requires of every study, and what this study
+requires of itself -- and their relationship differs between
+standards. Length binds to `max_length` on strings so that a declared bound is
+a checked bound, and stays unenforced on numbers for the reason R009 already
+gives: a rendered width is a property of rendering. Comments and methods are
+declared where they are used because sharing them would need an identifier
+space beyond the one R026 derives from position.

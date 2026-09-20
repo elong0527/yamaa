@@ -172,13 +172,6 @@ structured source declares `multiple_matches`, also under R008.
 **R002-26.** A present matched row with a missing `Value` returns missing.
 That row does not invoke the absent-item handler.
 
-## Rationale
-
-Unqualified names address the output dataset. Reusing the output domain
-as a dataset identifier would be ambiguous. Forbidding arbitrary nested
-expressions in variable fields keeps each operation self-contained and
-its dependencies visible.
-
 ## Errors
 
 **R002-27.** An unknown dataset identifier or variable: fail.
@@ -200,3 +193,10 @@ column: fail.
 handled.
 
 **R002-34.** No ODM contextual match: fail unless locally handled.
+
+## Rationale
+
+Unqualified names address the output dataset. Reusing the output domain
+as a dataset identifier would be ambiguous. Forbidding arbitrary nested
+expressions in variable fields keeps each operation self-contained and
+its dependencies visible.

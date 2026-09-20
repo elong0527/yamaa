@@ -114,7 +114,7 @@ dependencies, then evaluate the keyword. Fields whose declared type contains
 a leaf. YAML mapping order has no execution meaning.
 
 **R001-14.** Window expressions evaluate over the partitions declared by their
-own `group_by`. Aggregate expressions evaluate in the contexts R007 permits.
+own `group_by`. Aggregate expressions evaluate in the contexts R013-3 permits.
 All other expressions return one value per current row.
 
 **R001-15.** During group-driven row construction, a source variable of the row
@@ -186,14 +186,6 @@ independently of declaration order, and `output.order_by` orders the
 artifact's rows independently of the construction order this rule defines.
 R005 owns both.
 
-## Rationale
-
-Row count changes only during row construction. A reviewer can therefore
-separate row construction from enrichment: the row templates and their input
-datasets fix the row count before any column is derived. Dependency
-inference makes declaration order checkable and shows cycles.
-Evaluation order never follows mapping order or repeated reads of a partition.
-
 ## Errors
 
 - **R001-32.** A `rows` entry omitting `dataset` when `root.input`
@@ -224,3 +216,11 @@ Evaluation order never follows mapping order or repeated reads of a partition.
   the keys. Missing results are excluded from the count. A source declaring
   `multiple_matches` keeps one of the records carrying those values instead
   of failing, which R008-12 defines.
+
+## Rationale
+
+Row count changes only during row construction. A reviewer can therefore
+separate row construction from enrichment: the row templates and their input
+datasets fix the row count before any column is derived. Dependency
+inference makes declaration order checkable and shows cycles.
+Evaluation order never follows mapping order or repeated reads of a partition.

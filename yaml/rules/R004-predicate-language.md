@@ -16,8 +16,7 @@ literals, comparisons, missing-value behavior, and failures.
 ## Boundaries
 
 This rule owns the `sql` primitive completely. R006 owns schema
-structure. R007 owns runtime types and comparability of operation
-inputs. R010 owns the numeric-valued `numeric_expression` primitive.
+structure. R011 owns input comparability; R007 owns expression input types. R010 owns the numeric-valued `numeric_expression` primitive.
 R011 owns the column type vocabulary. R016 owns temporal values. R019
 owns text values and their equality and order. R001 owns the phase in
 which a predicate runs and the names available in that phase.
@@ -103,7 +102,7 @@ must parse under R016 for the named type. The keyword is required:
 ## Comparison
 
 **R004-10.** No operand is converted. Two non-missing operands compare only
-when R007 makes their runtime types mutually comparable:
+when R011-35 makes their runtime types mutually comparable:
 
 | Types | Order |
 |---|---|
@@ -198,14 +197,6 @@ not inherit implicit coercion, collation, `LIKE` escape, or missing-value
 behavior from a host SQL engine. The implementation must either configure and
 override those behaviors to match these rules or evaluate the grammar itself.
 
-## Rationale
-
-A closed predicate grammar keeps row selection, corrections, and verifications
-reviewable and identical in R and Python. The grammar requires a named column
-for each value computed before comparison. The named column fixes type and
-missing-value behavior. Three-valued logic without implicit conversion
-avoids dependence on host SQL coercion, collation, or escape defaults.
-
 ## Errors
 
 - **R004-31.** Text that does not parse as one Boolean predicate, including a
@@ -218,3 +209,11 @@ avoids dependence on host SQL coercion, collation, or escape defaults.
   escape: fail with `invalid_predicate`.
 - **R004-35.** A temporal literal that R016 rejects: fail with R016's
   applicable temporal condition.
+
+## Rationale
+
+A closed predicate grammar keeps row selection, corrections, and verifications
+reviewable and identical in R and Python. The grammar requires a named column
+for each value computed before comparison. The named column fixes type and
+missing-value behavior. Three-valued logic without implicit conversion
+avoids dependence on host SQL coercion, collation, or escape defaults.

@@ -19,7 +19,7 @@ each subject.
 
 This rule owns pattern syntax, its portable contract, flags, and match
 semantics. R006 owns descriptor structure and `pattern` declarations. R007
-owns expression dispatch. R008 owns the handler lifecycle for `str_extract`.
+owns expression dispatch. R008 owns the local handlers for `str_extract`.
 R009 owns verification timing and failure reporting. R019 owns the scalar
 values patterns apply to. R004's `LIKE` is a predicate operator, not a regular
 expression. It keeps its own matching.
@@ -164,20 +164,6 @@ agree. The shared conformance workflow proves executable parity with R when
 that workflow exists. A fixture file alone is not runtime evidence for an R
 runtime that has not run the workflow.
 
-## Rationale
-
-Host regular-expression libraries differ in syntax, flags, and match choice,
-so any behavior that depends on one host library cannot satisfy the parity
-requirement. The portable grammar plus the normalization make the verdict the
-contract even where the standard admits more than one reading. The `u` flag
-equivalent keeps a pattern on the same scalar values every other text rule
-counts, and the remaining flags stay clear so anchoring, dot, case, and
-iteration behavior are fixed rather than selectable. Property escapes and
-lookbehind of variable length are excluded because consumers cannot implement
-them the same way. Repository fixtures replayed against the Python consumer
-prove the Python side agrees with them, while executable R parity needs the
-shared conformance workflow rather than the fixture file alone.
-
 ## Known limitation
 
 The contract no longer requires linear time matching. The Python consumer
@@ -190,22 +176,6 @@ keeps the host `re` behavior under `re.ASCII`: it excludes only ASCII
 whitespace, so it still matches non-ASCII whitespace scalars such as U+00A0
 that the contract counts as whitespace. This is a known consumer edge of the
 normalization, not a second dialect.
-
-## Errors
-
-- **R022-27.** A pattern the grammar or the normalization rejects, in any of
-  the three consumers: fail validation with `invalid_regex` and report the
-  declaring path and the rejection. A pattern is rejected the same way
-  whether its syntax is malformed or merely outside the portable grammar.
-- **R022-28.** A `str_extract.group` that is negative or exceeds the
-  capturing groups its pattern declares: fail validation with
-  `regex_group_out_of_range` and report the path, the requested group, and
-  the count the pattern declares.
-- **R022-29.** A consumer that cannot implement the normalization contract:
-  fail before evaluation with `unsupported_regex_engine` and report what it
-  cannot provide. It must not read patterns with a host default that violates
-  the normalization, translate the pattern into another dialect, or skip the
-  check.
 
 ## Normalization
 
@@ -236,3 +206,33 @@ names before compiling the pattern.
 `\\p{...}` property escapes, malformed escapes such as `\\a`, and lookbehind
 whose length can vary. Fixed length lookbehind stays allowed, and
 `(?<name>...)` stays the way to name a group.
+
+## Errors
+
+- **R022-27.** A pattern the grammar or the normalization rejects, in any of
+  the three consumers: fail validation with `invalid_regex` and report the
+  declaring path and the rejection. A pattern is rejected the same way
+  whether its syntax is malformed or merely outside the portable grammar.
+- **R022-28.** A `str_extract.group` that is negative or exceeds the
+  capturing groups its pattern declares: fail validation with
+  `regex_group_out_of_range` and report the path, the requested group, and
+  the count the pattern declares.
+- **R022-29.** A consumer that cannot implement the normalization contract:
+  fail before evaluation with `unsupported_regex_engine` and report what it
+  cannot provide. It must not read patterns with a host default that violates
+  the normalization, translate the pattern into another dialect, or skip the
+  check.
+
+## Rationale
+
+Host regular-expression libraries differ in syntax, flags, and match choice,
+so any behavior that depends on one host library cannot satisfy the parity
+requirement. The portable grammar plus the normalization make the verdict the
+contract even where the standard admits more than one reading. The `u` flag
+equivalent keeps a pattern on the same scalar values every other text rule
+counts, and the remaining flags stay clear so anchoring, dot, case, and
+iteration behavior are fixed rather than selectable. Property escapes and
+lookbehind of variable length are excluded because consumers cannot implement
+them the same way. Repository fixtures replayed against the Python consumer
+prove the Python side agrees with them, while executable R parity needs the
+shared conformance workflow rather than the fixture file alone.
