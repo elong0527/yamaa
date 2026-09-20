@@ -119,11 +119,23 @@ def _rooted_project_path(value: str) -> bool:
 
 
 def _rebase_path(value: str, layer: Path, entry: Path) -> str:
+    """Respell one layer's written path from the entry's directory.
+
+    The spelling is rearranged, never resolved: a written path is decided
+    against the filesystem itself, and a path rewritten through a symlink
+    would reach the link's target with the link's own condition -- and its
+    error text -- already lost. Joining and normalizing lexically leaves a
+    path the entry names exactly as its layer wrote it.
+    """
     if _rooted_project_path(value):
         return value
-    target = (layer.parent / value).resolve()
+    layer_directory = layer.parent.resolve()
+    entry_directory = entry.parent.resolve()
+    if layer_directory == entry_directory:
+        return value
+    target = os.path.normpath(os.path.join(layer_directory, value))
     try:
-        return Path(os.path.relpath(target, entry.parent.resolve())).as_posix()
+        return Path(os.path.relpath(target, entry_directory)).as_posix()
     except ValueError:
         return str(target)
 

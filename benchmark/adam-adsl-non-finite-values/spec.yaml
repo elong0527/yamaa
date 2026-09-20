@@ -67,7 +67,7 @@ columns:
     label: Positive Infinity Function Result
     derivation:
       function:
-        name: non_finite_value
+        name: numeric_constant
         contract_version: "1.0.0"
         args:
           kind: {literal: positive-infinity}
@@ -77,7 +77,7 @@ columns:
     label: Negative Infinity Function Result
     derivation:
       function:
-        name: non_finite_value
+        name: numeric_constant
         contract_version: "1.0.0"
         args:
           kind: {literal: negative-infinity}
@@ -87,7 +87,7 @@ columns:
     label: Not-a-Number Function Result
     derivation:
       function:
-        name: non_finite_value
+        name: numeric_constant
         contract_version: "1.0.0"
         args:
           kind: {literal: nan}

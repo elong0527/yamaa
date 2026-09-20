@@ -50,6 +50,23 @@ jobs:
       - name: Test
         run: uv run --project python --no-sync pytest python/tests
 
+      # #101: every benchmark runs through one runner, on both platforms,
+      # and the reports it writes are the per-example parity artifact.
+      - name: Run the conformance suite
+        run: >-
+          uv run --project python --no-sync python -m yamaa.adapters.conformance
+          $(ls -d benchmark/*/ | xargs -n1 basename)
+          --run-dir "${{ runner.temp }}/conformance"
+          --examples-root benchmark
+
+      - name: Upload conformance reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: conformance-${{ matrix.os }}-${{ matrix.python-version }}
+          path: ${{ runner.temp }}/conformance/reports
+          if-no-files-found: error
+
       - name: Import installed package outside the checkout
         working-directory: ${{ runner.temp }}
         run: >-

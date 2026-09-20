@@ -105,4 +105,4 @@ verifications:
   - implies:
       id: percentile-requires-a-growth-reference
       when: "AVAL IS NOT NULL"
-      then: "GROWTH.L IS NOT NULL AND GROWTH.M IS NOT NULL AND GROWTH.S IS NOT NULL"
+      then: "ZNUM IS NOT NULL"

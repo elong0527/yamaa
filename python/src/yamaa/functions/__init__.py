@@ -19,8 +19,10 @@ from yamaa.functions.artifact import (
 from yamaa.functions.calls import FunctionCall, function_calls, validate_calls
 from yamaa.functions.environment import (
     ENVIRONMENT_NAME,
+    RUNNER_LANGUAGE,
     environment_schema,
     load_environment,
+    select_project_root,
 )
 from yamaa.functions.errors import FunctionActivationError, FunctionFailure
 from yamaa.functions.evaluator import (
@@ -51,6 +53,7 @@ __all__ = [
     "ACTIVATION_CACHE",
     "ENVIRONMENT_NAME",
     "FUNCTION_OPERATION",
+    "RUNNER_LANGUAGE",
     "ActivatedEnvironment",
     "ActivationCache",
     "ArtifactResolver",
@@ -84,6 +87,7 @@ __all__ = [
     "load_environment",
     "results_match",
     "run_with_project_functions",
+    "select_project_root",
     "validate_calls",
     "verify_artifact",
 ]

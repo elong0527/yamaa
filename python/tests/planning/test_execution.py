@@ -78,7 +78,7 @@ def test_a_later_column_reference_is_not_silently_sorted() -> None:
         plan_execution(spec, {"SRC": source_table()})
 
     diagnostic = raised.value.diagnostics[0]
-    assert diagnostic.condition == "dependency_order"
+    assert diagnostic.condition == "forward_reference"
     assert diagnostic.spec_paths == ("columns.A.derivation.source",)
     assert diagnostic.context == {"column": "A", "dependency": "B"}
 

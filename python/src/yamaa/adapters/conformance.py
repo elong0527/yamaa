@@ -33,6 +33,13 @@ from typing import Literal, TypeAlias
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from yamaa import __version__
+from yamaa.functions import (
+    ActivatedEnvironment,
+    FunctionActivationError,
+    activate_project_functions,
+    function_dispatcher,
+    select_project_root,
+)
 from yamaa.io import (
     Artifact,
     ArtifactTarget,
@@ -217,6 +224,50 @@ def _report(name: str, outcome: Outcome, **observations: object) -> ExampleRepor
     )
 
 
+def entry_specification(example: Path) -> Path:
+    """Return the specification an example is entered through.
+
+    A benchmark states one specification as `spec.yaml`. One that keeps its
+    inheritance levels side by side names none of them that, and the level
+    no other level names in `parents` is the entry.
+    """
+    single = example / SPEC_NAME
+    if single.is_file():
+        return single
+    levels = sorted(example.glob("spec_*.yaml"))
+    parented = set()
+    for path in levels:
+        document = read_yaml_document(path)
+        parents = document.get("parents", ()) if isinstance(document, dict) else ()
+        if isinstance(parents, str):
+            parents = (parents,)
+        parented.update(
+            Path(parent).name
+            for parent in parents
+            if isinstance(parent, str) and parent
+        )
+    entries = [path for path in levels if path.name not in parented]
+    if len(entries) != 1:
+        raise ConformanceError(f"example has no single entry specification: {example}")
+    return entries[0]
+
+
+def _activated_environment(
+    workflow: object,
+    environment_root: Path | None,
+    schema_root: Path,
+) -> ActivatedEnvironment | None:
+    """Activate the selected project root before any source is read."""
+    if environment_root is None:
+        return None
+    activated: ActivatedEnvironment | None = None
+    for node in workflow.nodes:
+        activated = activate_project_functions(
+            node.resolved.specification, environment_root, schema_root
+        )
+    return activated
+
+
 def _execute(
     name: str,
     entry: Path,
@@ -240,7 +291,25 @@ def _execute(
             diagnostics=tuple(_observe_diagnostic(item) for item in error.diagnostics),
         )
 
-    execution = execute_workflow(workflow, resources)
+    # REQ-0663: the runner selects the project root, and this runner selects
+    # the one the example offers for the language it speaks. An example
+    # offering none stays portable and reports `function` as unimplemented.
+    try:
+        activated = _activated_environment(
+            workflow, select_project_root(entry.parent), schema_root
+        )
+    except FunctionActivationError as error:
+        return _report(
+            name,
+            "failure",
+            diagnostics=tuple(_observe_diagnostic(item) for item in error.diagnostics),
+        )
+
+    execution = execute_workflow(
+        workflow,
+        resources,
+        dispatcher=None if activated is None else function_dispatcher(activated),
+    )
     result = execution.result
     handler_counts = tuple(
         HandlerObservation(
@@ -318,9 +387,7 @@ def execute_example(
     against.
     """
     example_path = Path(example).resolve()
-    entry = example_path / SPEC_NAME
-    if not entry.is_file():
-        raise ConformanceError(f"example has no {SPEC_NAME}: {example_path}")
+    entry = entry_specification(example_path)
 
     destination = _isolated_destination(Path(output_dir), example_path)
     destination.mkdir(parents=True, exist_ok=True)
@@ -628,8 +695,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--schema-root",
         type=Path,
-        default=Path("yaml"),
-        help="directory holding schema.yaml",
+        default=None,
+        help=(
+            "directory holding schema.yaml; defaults to the bundle beside "
+            "the examples root"
+        ),
     )
     parser.add_argument(
         "--no-compare",
@@ -639,7 +709,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     examples_root = args.examples_root.resolve()
-    schema_root = args.schema_root.resolve()
+    # The examples and the schema they are written against come from one
+    # checkout, so an unnamed schema root follows the examples root rather
+    # than the working directory a runner happened to start in.
+    schema_root = (
+        examples_root.parent / "yaml"
+        if args.schema_root is None
+        else args.schema_root.resolve()
+    )
     report_dir = args.run_dir / "reports"
     failed = False
 

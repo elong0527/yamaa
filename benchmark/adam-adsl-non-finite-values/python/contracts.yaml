@@ -1,0 +1,8 @@
+numeric_constant:
+  contract_version: "1.0.0"
+  description: Return the numeric constant the named kind spells.
+  may_return_missing: true
+  params:
+    - name: kind
+      type: str
+  returns: float

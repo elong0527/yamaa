@@ -1,0 +1,7 @@
+normal_cdf:
+  contract_version: "1.0.0"
+  description: Calculate the standard normal cumulative probability.
+  params:
+    - name: q
+      type: float
+  returns: float

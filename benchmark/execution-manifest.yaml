@@ -1,9 +1,10 @@
 version: "1.0"
 
 # Execution manifest for #101: every benchmark exactly once.
-# status is executable or blocked. Python now executes the
-# specification via yamaa_domain; blocked entries name the
-# missing capability.
+# status is executable or blocked, and an executable entry names the
+# runtimes that reproduce what it committed. Python reproduces every
+# benchmark today, through `yamaa.adapters.conformance`; the R engine is
+# #200 and joins `runtimes` benchmark by benchmark as it lands.
 examples:
   adam-adae-death-outcome:
     status: executable
@@ -174,9 +175,8 @@ examples:
     status: executable
     runtimes: ['python']
   adam-adsl-non-finite-values:
-    status: blocked
-    blocked_by: "#101"
-    reason: requires function operation not yet supported in Python
+    status: executable
+    runtimes: ['python']
   adam-adsl-population-flags:
     status: executable
     runtimes: ['python']
@@ -223,9 +223,8 @@ examples:
     status: executable
     runtimes: ['python']
   adam-advs-growth-percentile:
-    status: blocked
-    blocked_by: "#101"
-    reason: requires function operation not yet supported in Python
+    status: executable
+    runtimes: ['python']
   adam-advs-mean-arterial-pressure:
     status: executable
     runtimes: ['python']
@@ -590,9 +589,8 @@ examples:
     status: executable
     runtimes: ['python']
   sdtm-dm-metadata-contract:
-    status: blocked
-    blocked_by: "#101"
-    reason: requires define.xml generation not yet supported in Python
+    status: executable
+    runtimes: ['python']
   sdtm-dm-reference-dates:
     status: executable
     runtimes: ['python']

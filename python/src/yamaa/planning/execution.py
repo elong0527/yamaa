@@ -2456,8 +2456,25 @@ def _find_cycle(
         if name not in state:
             cycle = visit(name)
             if cycle is not None:
-                return cycle
+                return _rooted_at_first_declared(cycle, position)
     return None
+
+
+def _rooted_at_first_declared(
+    cycle: tuple[str, ...],
+    position: Mapping[str, int],
+) -> tuple[str, ...]:
+    """Rotate a cycle so it starts at its earliest declared member.
+
+    REQ-0072 asks for the cycle path, and a traversal reports whichever
+    member it happened to enter from. Two runtimes would then name one
+    cycle two ways, so the reported path is rotated to one spelling: the
+    member declared first, which is also the order its `spec_paths` take.
+    """
+    members = cycle[:-1]
+    start = min(range(len(members)), key=lambda index: position[members[index]])
+    rotated = members[start:] + members[:start]
+    return (*rotated, rotated[0])
 
 
 def _topological_row_order(
@@ -3283,7 +3300,7 @@ def plan_execution(
             if column_positions[dependency] >= column_positions[planned.column]:
                 diagnostics.append(
                     _diagnostic(
-                        "dependency_order",
+                        "forward_reference",
                         planned.operation_path,
                         {"column": planned.column, "dependency": dependency},
                         requirement="REQ-0071",
