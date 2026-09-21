@@ -145,6 +145,11 @@ this closed mapping, which is the inverse of [REQ-0734](parquet.md#req-0734):
 | Parquet type | Column type |
 |---|---|
 | `BYTE_ARRAY` annotated `String` | `str` |
+
+The two Arrow string widths are the same physical/logical pair: a
+`BYTE_ARRAY` field annotated `String` reads as `str` whether the file's
+embedded Arrow schema names it `string` or `large_string` (the offset width
+differs; nothing else does).
 | `INT64` with no logical type | `int` |
 | `DOUBLE` with no logical type | `float` |
 | `INT32` annotated `Date` | `date` |
