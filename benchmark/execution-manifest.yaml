@@ -99,6 +99,9 @@ examples:
   adam-adlb-shift-criteria:
     status: executable
     runtimes: ['python']
+  adam-adlbc-row-window:
+    status: executable
+    runtimes: ['python']
   adam-adoe-study-eye:
     status: executable
     runtimes: ['python']
@@ -490,6 +493,9 @@ examples:
     status: executable
     runtimes: ['python']
   negative-row-no-prior:
+    status: executable
+    runtimes: ['python']
+  negative-row-window-on-window-result:
     status: executable
     runtimes: ['python']
   negative-sex-code:

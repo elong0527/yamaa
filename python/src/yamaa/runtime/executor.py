@@ -471,22 +471,65 @@ def _construct_rows(
     """Run R001's row construction phase, in specification order."""
     column_types = {column.name: column.type for column in plan.specification.columns}
     constructed: list[CandidateRow] = []
+    # REQ-0039 fixes where each row was appended, which is the order a
+    # window falls back to when its own terms tie. Positions are assigned as
+    # rows are appended, so a template's window pass (REQ-0326) sees them
+    # before its grouped filter drops rows.
+    position = 0
     for planned in plan.rows:
         relation = context.relations[planned.driver]
         if planned.declaration is None:
             # REQ-0042: with no template the key table is the output row set.
-            constructed.extend(
-                _key_grain_candidates(
-                    plan, planned, relation, column_types, context, dispatcher, counter
-                )
+            new_rows = _key_grain_candidates(
+                plan, planned, relation, column_types, context, dispatcher, counter
             )
+            for candidate in new_rows:
+                candidate.output_position = position
+                position += 1
+            constructed.extend(new_rows)
             continue
         if planned.grouped:
             candidates = group_candidates(planned, relation)
         else:
             candidates = _record_candidates(planned, relation, context.bindings)
-        for candidate in candidates:
+        window_columns = {
+            derivation.column
+            for derivation in planned.derivations
+            if derivation.declaration.value.operation in WINDOW_OPERATIONS
+        }
+        # A derivation that transitively reads a window result evaluates
+        # after the window pass; planning (REQ-0326) already rejected a
+        # window that reads one.
+        deferred_columns = set(window_columns)
+        changed = True
+        while changed:
+            changed = False
             for derivation in planned.derivations:
+                if derivation.column not in deferred_columns and any(
+                    dependency in deferred_columns
+                    for dependency in derivation.dependencies
+                ):
+                    deferred_columns.add(derivation.column)
+                    changed = True
+        immediate = [
+            derivation
+            for derivation in planned.derivations
+            if derivation.column not in deferred_columns
+        ]
+        window_plans = [
+            derivation
+            for derivation in planned.derivations
+            if derivation.column in window_columns
+        ]
+        tail = [
+            derivation
+            for derivation in planned.derivations
+            if derivation.column in deferred_columns
+            and derivation.column not in window_columns
+        ]
+        staged: list[CandidateRow] = []
+        for candidate in candidates:
+            for derivation in immediate:
                 candidate.values[derivation.column] = _evaluate_one(
                     derivation,
                     column_types,
@@ -497,13 +540,45 @@ def _construct_rows(
                     plan.specification.keys,
                     row_phase=True,
                 )
+            staged.append(candidate)
+        if window_plans:
+            # REQ-0326: a template's windows partition the rows the template
+            # constructs. Positions are fixed first so the REQ-0301
+            # tie-break sees construction order, then the partition scope
+            # exposes exactly this template's rows to the window resolver —
+            # the same shape _key_space uses for windows over keys.
+            for index, candidate in enumerate(staged):
+                candidate.output_position = position + index
+            with _partition_scope(context, staged):
+                for derivation in window_plans:
+                    for candidate in staged:
+                        candidate.values[derivation.column] = _evaluate_one(
+                            derivation,
+                            column_types,
+                            candidate,
+                            context,
+                            dispatcher,
+                            counter,
+                            plan.specification.keys,
+                        )
+            for candidate in staged:
+                for derivation in tail:
+                    candidate.values[derivation.column] = _evaluate_one(
+                        derivation,
+                        column_types,
+                        candidate,
+                        context,
+                        dispatcher,
+                        counter,
+                        plan.specification.keys,
+                        row_phase=True,
+                    )
+        for candidate in staged:
             if planned.grouped and not _grouped_filter(planned, candidate):
                 continue
+            candidate.output_position = position
+            position += 1
             constructed.append(candidate)
-    for position, candidate in enumerate(constructed):
-        # REQ-0039 fixes where each row was appended, which is the order a
-        # window falls back to when its own terms tie.
-        candidate.output_position = position
     context.rows.extend(constructed)
     return constructed
 

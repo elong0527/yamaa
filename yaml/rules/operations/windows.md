@@ -26,7 +26,9 @@ This contract owns the requirements below. Related contracts:
 
 **REQ-0293.** Scalar expressions return one value per row. Window expressions
 partition constructed output rows by their `window` specification's
-`group_by` and preserve row count. Omitting `group_by` creates one
+`group_by` and preserve row count. During row construction the partitioned
+rows are the enclosing row template's constructed rows (REQ-0326), not the
+specification's output rows. Omitting `group_by` creates one
 partition. Within a declared group, missing values equal other missing
 values. Rows with equal present values and equal missing group positions
 share one partition. A window partition is the KRC
@@ -155,7 +157,12 @@ structural constraints come from its schema declaration.
 
 <a id="req-0326"></a>
 
-**REQ-0326.** A window expression used during row construction: fail.
+**REQ-0326.** A window expression used during row construction partitions
+the rows its enclosing row template constructs; a window that reads rows
+from another template or from outside row construction: fail. Row
+construction evaluates a template's windows in one pass over those rows,
+so a window that depends on another window's result, directly or through
+a value computed from one: fail.
 
 <a id="req-0327"></a>
 
