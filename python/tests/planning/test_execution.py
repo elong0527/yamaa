@@ -1333,6 +1333,123 @@ def test_a_row_inline_lookup_matching_driver_fields_is_planned() -> None:
     )
 
 
+def test_a_grouped_row_lookup_keyed_on_group_keys_is_planned() -> None:
+    spec = row_two_dataset_specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.K"})),
+            Column(name="V", type="float"),
+        ],
+        [
+            Row(
+                id="g",
+                dataset="SRC",
+                group_by=["SRC.K"],
+                derivations={"V": derivation({"source": "LOOK.V"})},
+            )
+        ],
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(id="LOOK", dataset="RIGHT", key_base=["SRC.K"], key=["K"])
+            ]
+        }
+    )
+
+    # Issue #711: group keys are known while grouped rows are built, so the
+    # lookup key_base needs no template derivation.
+    plan_execution(
+        spec,
+        row_tables(),
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+
+def test_an_ungrouped_row_lookup_keyed_on_driver_fields_is_planned() -> None:
+    spec = row_two_dataset_specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.K"})),
+            Column(name="V", type="float"),
+        ],
+        [
+            Row(
+                id="r",
+                dataset="SRC",
+                derivations={"V": derivation({"source": "LOOK.V"})},
+            )
+        ],
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(id="LOOK", dataset="RIGHT", key_base=["SRC.K"], key=["K"])
+            ]
+        }
+    )
+
+    # Issue #711: an ungrouped template reads its driver record 1:1, so
+    # driver fields are available at row construction.
+    plan_execution(
+        spec,
+        row_tables(),
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+
+def test_a_grouped_row_lookup_keyed_on_a_varying_driver_field_still_fails() -> None:
+    tables = {
+        "SRC": frame_from_values(
+            (
+                TypedColumn(name="K", type="str"),
+                TypedColumn(name="S", type="str"),
+            ),
+            [["a", "one"], ["a", "two"]],
+        ),
+        "RIGHT": frame_from_values(
+            (
+                TypedColumn(name="K", type="str"),
+                TypedColumn(name="V", type="float"),
+            ),
+            [["one", 10.0]],
+        ),
+    }
+    spec = row_two_dataset_specification(
+        [
+            Column(name="K", type="str", derivation=derivation({"source": "SRC.K"})),
+            Column(name="V", type="float"),
+        ],
+        [
+            Row(
+                id="g",
+                dataset="SRC",
+                group_by=["SRC.K"],
+                derivations={"V": derivation({"source": "LOOK.V"})},
+            )
+        ],
+    ).model_copy(
+        update={
+            "intermediates": [
+                Intermediate(id="LOOK", dataset="RIGHT", key_base=["SRC.S"], key=["K"])
+            ]
+        }
+    )
+
+    # REQ-0126 still holds for a driver field that varies within the group.
+    with pytest.raises(ExecutionPlanningError) as raised:
+        plan_execution(
+            spec,
+            tables,
+            supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+        )
+
+    diagnostics = [
+        diagnostic
+        for diagnostic in raised.value.diagnostics
+        if diagnostic.condition == "phase_boundary"
+    ]
+    assert diagnostics
+    assert diagnostics[0].context["identifier"] == "SRC.S"
+    assert diagnostics[0].context["required_phase"] == "row_construction"
+
+
 def test_a_root_filter_is_the_filter_only_row_template() -> None:
     spec = specification(
         [
