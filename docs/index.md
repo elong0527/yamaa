@@ -28,7 +28,7 @@ stage. Nothing is left for the coding stage to guess.
 | Schema | Declares the vocabulary of the language: what a specification may contain. Anything the schema does not declare is rejected before execution. | [Schema introduction](articles/schema-intro.md), [Schema reference](articles/schema.md) |
 | Rules | Fix the meaning of every written item, so the R and Python engines execute the same specification in exactly one way. | [Rules](articles/rules.md) |
 | Engine | Runs specifications in Python and R; the same specification with the same inputs produces the same output dataset. | [Python engine](https://github.com/elong0527/yamaa/tree/main/python), [R engine](https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder) |
-| Benchmark | 214 runnable specifications with input data and byte-exact expected outputs. | [Reading the examples](articles/benchmark.md), [Benchmark](benchmark/index.md) |
+| Benchmark | 218 runnable specifications with input data and byte-exact expected outputs. | [Reading the examples](articles/benchmark.md), [Benchmark](benchmark/index.md) |
 
 ## A complete specification in 20 lines
 
@@ -92,7 +92,7 @@ devtools::install_github("elong0527/yamaa", subdir = "R/cdiscbuilder")
 
 - New here? [Introduction](articles/intro.md) explains the model in five minutes.
 - Coming from Excel specs? [Excel to yamaa](articles/excel.md) translates what you already know.
-- Want worked examples? [Reading the examples](articles/benchmark.md) shows how to read the 214 benchmarks.
+- Want worked examples? [Reading the examples](articles/benchmark.md) shows how to read the 218 benchmarks.
 
 ## License
 

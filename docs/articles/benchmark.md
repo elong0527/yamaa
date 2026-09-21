@@ -2,17 +2,17 @@
 
 ## What the suite is
 
-`benchmarks/` holds **214 directories**. Each one is a complete, runnable
+`benchmarks/` holds **218 directories**. Each one is a complete, runnable
 specification with its input data and the exact output an implementation must
 reproduce:
 
 | Group | Count | What it is |
 |---|---|---|
-| `adam-*` | 76 | ADaM derivations |
-| `sdtm-*` | 23 | SDTM derivations |
-| `negative-*` | 109 | Specifications the design **must reject**, with the exact error |
+| `adam-*` | 77 | ADaM derivations |
+| `sdtm-*` | 24 | SDTM derivations |
+| `negative-*` | 111 | Specifications the design **must reject**, with the exact error |
 | `odm-*` | 1 | An ODM resolution behavior |
-| `schema-*`, `spec-*` | 5 | Schema and inheritance behaviors |
+| `schema-*` | 5 | Schema behaviors |
 
 Half the suite is negative. That ratio is the point: a portable specification
 language is defined as much by what it refuses as by what it computes, and a
@@ -34,11 +34,11 @@ The suite serves three audiences at once:
 Take [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-basic), the suggested first read.
 
 **Step 1 -- the README, for intent.** One record per subject; `SEX` is the
-collected sex translated to `M`/`F`/`U`, and a sex that was never collected and
-one the study does not recognise both become `U`; `AGE` is empty for a subject
-whose age was never collected; a subject with no arm gets `Unassigned`. A
-README describes **data, not the specification** -- what each output variable
-means and what it holds when the inputs do not support it.
+collected sex translated to `M`/`F`/`U`, and a sex that was never collected or
+that the study does not recognise becomes `U`; `AGE` is blank when it was
+never collected; a subject with no arm gets null `ARM` with the reason in
+`ARMNRS`. A README describes **data, not the specification** -- what each
+output variable means and what it holds when the inputs do not support it.
 
 **Step 2 -- the header of `spec.yaml`, for shape.**
 
@@ -52,10 +52,10 @@ input:
 
 output:
   path: dm.csv
-  columns: [STUDYID, DOMAIN, USUBJID, SUBJID, SEX, AGE, ARM, ACTARM]
+  columns: [DOMAIN, STUDYID, USUBJID, SUBJID, SEX, AGE, ARM, ACTARM, ARMNRS]
 ```
 
-One input, one driver, two keys, eight delivered columns, one produced file.
+One input, one driver, two keys, nine delivered columns, one produced file.
 
 **Step 3 -- what is not in the file, for row count.** There is no `rows:`
 block, and `keys: [STUDYID, USUBJID]` is the whole answer. The distinct
@@ -73,7 +73,9 @@ records come out.
         source:
           filter: ODM.ItemOID = 'IT.DM.SEX'
           variable: ODM.Value
-        dict: {Male: M, Female: F}
+        dict:
+          Male: M
+          Female: F
         missing: U
         unmapped: U
 ```
@@ -110,11 +112,6 @@ After those three, pick by the question you have:
 | How do corporate, compound and study layers compose? | `schema-inheritance` -- three levels, `expected/spec_resolved.yaml` records the outcome |
 | When should a calculation leave the specification? | `adam-adsl-bmi-function` vs `adam-adsl-bmi-compute` -- closed expression vs versioned project function |
 
-The full construct-by-construct index lives in the suite's own
-[benchmark README](https://github.com/elong0527/yamaa/tree/main/benchmark#readme);
-every example is browsable with its input and expected output at
-[Benchmark](../benchmark/index.md).
-
 ## Negative examples
 
 A negative example is a specification, its input, and an `expected/error.yaml`
@@ -137,3 +134,13 @@ Reading them by family is faster than reading them alphabetically:
 An example that **cannot express something** is recorded as a design finding in
 the issue tracker, so the last family is also the honest inventory of what the
 language cannot yet do.
+
+## The dashboard
+
+Two links cover the suite:
+
+- **dashboard** -- [the listing of benchmarks](../benchmark/index.md): every
+  example browsable with its README, input fixtures, spec, and expected
+  output.
+- **overview** -- [the suite README](https://github.com/elong0527/yamaa/tree/main/benchmarks#readme):
+  the high-level overview of the suite, with a pointer to the dashboard.
