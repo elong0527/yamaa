@@ -346,6 +346,8 @@ _TEMPORAL_VARIABLES: dict[str, tuple[tuple[str, ColumnType | None, str], ...]] =
         ("not_before", "date", "REQ-0585"),
     ),
     "date_precision": (("source", None, "REQ-0581"),),
+    "datetime_impute": (("source", "str", "REQ-1182"),),
+    "datetime_precision": (("source", None, "REQ-1183"),),
     "to_date": (("source", "datetime", "REQ-0607"),),
 }
 

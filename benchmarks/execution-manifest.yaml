@@ -384,6 +384,12 @@ examples:
   negative-precision-bad-source:
     status: executable
     runtimes: ['python']
+  negative-datetime-impute-bad-source:
+    status: executable
+    runtimes: ['python']
+  negative-datetime-precision-bad-source:
+    status: executable
+    runtimes: ['python']
   negative-datetime-zones:
     status: executable
     runtimes: ['python']

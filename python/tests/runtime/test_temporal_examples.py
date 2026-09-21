@@ -39,6 +39,7 @@ ARTIFACT_EXAMPLES = [
     "adam-adae-worst-severity",
     "adam-adsl-analysis-age",
     "adam-adsl-duration",
+    "adam-adsl-treatment",
     "adam-advs-prior-result",
     "adam-adae-severity-rank",
     "sdtm-vs-study-day",
@@ -50,6 +51,8 @@ ERROR_EXAMPLES = [
     "negative-impute-bad-month",
     "negative-impute-bad-source",
     "negative-precision-bad-source",
+    "negative-datetime-impute-bad-source",
+    "negative-datetime-precision-bad-source",
     "negative-study-day-datetime",
     "negative-date-conversion",
     "negative-date-diff-units",
@@ -176,3 +179,21 @@ def test_a_completed_date_and_a_collected_one_are_one_partition_key() -> None:
     assert len({collected, imputed}) == 1
     assert collected == imputed
     assert MISSING not in {collected, imputed}
+
+
+def test_treatment_datetimes_record_supplied_start_and_end_times() -> None:
+    result = _run(EXAMPLES / "adam-adsl-treatment")
+    assert isinstance(result, ExecutionSuccess), result
+    rows = {row["USUBJID"]: row for row in result.table.frame.to_dicts()}
+
+    imputed = rows["CATH-UCSD-0001"]
+    assert imputed["TRTSDTM"].isoformat() == "2025-01-08T00:00:00"
+    assert imputed["TRTSTMF"] == "H"
+    assert imputed["TRTEDTM"].isoformat() == "2025-01-28T23:59:59"
+    assert imputed["TRTETMF"] == "H"
+
+    collected = rows["CATH-UCSD-0002"]
+    assert collected["TRTSDTM"].isoformat() == "2025-02-08T09:00:00"
+    assert collected["TRTSTMF"] is None
+    assert collected["TRTEDTM"].isoformat() == "2025-02-28T17:00:00"
+    assert collected["TRTETMF"] is None

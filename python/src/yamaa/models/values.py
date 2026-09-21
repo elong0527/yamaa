@@ -112,7 +112,7 @@ class DateValue(_FrozenModel):
 
 
 class DateTimeValue(_FrozenModel):
-    """A complete zone-free local civil datetime at whole-second precision."""
+    """A complete zone-free local civil datetime with collected precision."""
 
     year: int = Field(ge=1, le=9999)
     month: int = Field(ge=1, le=12)
@@ -120,7 +120,7 @@ class DateTimeValue(_FrozenModel):
     hour: int = Field(ge=0, le=23)
     minute: int = Field(ge=0, le=59)
     second: int = Field(ge=0, le=59)
-    collected_precision: Literal["second"] = "second"
+    collected_precision: Literal["day", "second"] = "second"
 
     @model_validator(mode="after")
     def validate_civil_datetime(self) -> DateTimeValue:
@@ -165,6 +165,15 @@ class DateTimeValue(_FrozenModel):
             self.minute,
             self.second,
         )
+
+    def __eq__(self, other: object) -> bool:
+        """Compare datetimes by their fields, not collected precision."""
+        if not isinstance(other, DateTimeValue):
+            return NotImplemented
+        return self.ordering_key == other.ordering_key
+
+    def __hash__(self) -> int:
+        return hash(self.ordering_key)
 
 
 RuntimeValue: TypeAlias = (

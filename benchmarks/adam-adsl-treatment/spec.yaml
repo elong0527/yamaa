@@ -8,7 +8,8 @@ base: DM
 
 output:
   path: adsl.csv
-  columns: [STUDYID, USUBJID, TRT01A, TRTSDT, TRTEDT, TRTDURD, SAFFL]
+  columns: [STUDYID, USUBJID, TRT01A, TRTSDT, TRTSDTM, TRTSTMF,
+    TRTEDT, TRTEDTM, TRTETMF, TRTDURD, SAFFL]
 
 columns:
   - name: STUDYID
@@ -49,21 +50,95 @@ columns:
       allowed_values:
         values: [VITAMIN D3, PLACEBO, NOT TREATED]
 
-  - name: TRTSDT
-    type: date
-    label: Date of First Exposure to Treatment
+  - name: TRTSDTC
+    type: str
+    label: Collected Date/Time of First Exposure to Treatment
     derivation:
       aggregate:
         filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXSTDTC IS NOT NULL"
         expr: "MIN(EX.EXSTDTC)"
 
-  - name: TRTEDT
-    type: date
-    label: Date of Last Exposure to Treatment
+  - name: TRTEDTC
+    type: str
+    label: Collected Date/Time of Last Exposure to Treatment
     derivation:
       aggregate:
         filter: "EX.EXTRT IN ('VITAMIN D3', 'PLACEBO') AND EX.EXENDTC IS NOT NULL"
         expr: "MAX(EX.EXENDTC)"
+
+  - name: TRTSDTM
+    type: datetime
+    label: Datetime of First Exposure to Treatment
+    derivation:
+      datetime_impute:
+        source: TRTSDTC
+        time: first
+        missing: null
+        invalid: null
+
+  - name: TRTSTPR
+    type: str
+    label: First Exposure Date/Time Collected Precision
+    derivation:
+      datetime_precision:
+        source: TRTSDTM
+        missing: null
+
+  - name: TRTSTMF
+    type: str
+    label: Time of First Exposure Imputation Flag
+    derivation:
+      case:
+        - when: "TRTSTPR = 'D'"
+          then:
+            literal: H
+    verifications:
+      allowed_values:
+        values: [H]
+
+  - name: TRTEDTM
+    type: datetime
+    label: Datetime of Last Exposure to Treatment
+    derivation:
+      datetime_impute:
+        source: TRTEDTC
+        time: last
+        missing: null
+        invalid: null
+
+  - name: TRTETPR
+    type: str
+    label: Last Exposure Date/Time Collected Precision
+    derivation:
+      datetime_precision:
+        source: TRTEDTM
+        missing: null
+
+  - name: TRTETMF
+    type: str
+    label: Time of Last Exposure Imputation Flag
+    derivation:
+      case:
+        - when: "TRTETPR = 'D'"
+          then:
+            literal: H
+    verifications:
+      allowed_values:
+        values: [H]
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation:
+      to_date:
+        source: TRTSDTM
+
+  - name: TRTEDT
+    type: date
+    label: Date of Last Exposure to Treatment
+    derivation:
+      to_date:
+        source: TRTEDTM
 
   - name: TRTDURD
     type: int
@@ -101,7 +176,15 @@ verifications:
       max: 4
   - all_or_none:
       id: treatment-period-completeness
-      columns: [TRTSDT, TRTEDT, TRTDURD]
+      columns: [TRTSDT, TRTSDTM, TRTEDT, TRTEDTM, TRTDURD]
+  - implies:
+      id: start-time-imputation-requires-a-start-datetime
+      when: "TRTSTMF = 'H'"
+      then: "TRTSDTM IS NOT NULL"
+  - implies:
+      id: end-time-imputation-requires-an-end-datetime
+      when: "TRTETMF = 'H'"
+      then: "TRTEDTM IS NOT NULL"
   - implies:
       id: placebo-subject-is-in-safety-population
       when: "TRT01A = 'PLACEBO'"

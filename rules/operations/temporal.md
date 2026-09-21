@@ -27,9 +27,9 @@ This contract owns the requirements below. Related contracts:
 
 <a id="req-0309"></a>
 
-**REQ-0309.** `date_diff`, `study_day`, `date_impute`, `date_precision`, and
-`to_date` use the input contracts below; [Temporal values](../values/temporal.md)
-defines the values themselves.
+**REQ-0309.** `date_diff`, `study_day`, `date_impute`, `date_precision`,
+`datetime_impute`, `datetime_precision`, and `to_date` use the input contracts
+below; [Temporal values](../values/temporal.md) defines the values themselves.
 
 ### Partial collected dates
 
@@ -131,12 +131,12 @@ exists is already a value of its type.
 
 <a id="req-0589"></a>
 
-**REQ-0589.** Neither operation answers about a `datetime`. A truncated moment
-has no agreed completion -- an unknown time of day is not the same claim as an
-unknown day -- so the collected text stays `str`. A `datetime` value is not a
-`date_precision` source either, for the same reason it is not an operand of any
-other date operation, and there would be nothing for it to report: a `datetime`
-is collected in full or it is not a value.
+**REQ-0589.** The date operations do not answer about a `datetime`.
+`datetime_impute` supplies only the time of a complete collected date, under an
+explicit first- or last-second rule; it does not supply a missing day.
+`datetime_precision` reports whether a complete date or datetime source
+carried a time. A source truncated before the day stays `str` and is invalid to
+both datetime operations rather than silently combining date and time policies.
 
 ### Operations
 
@@ -151,13 +151,15 @@ any other. Their input and result types are:
 | `study_day` | `date` and `reference` are `date` | `int`, never zero |
 | `date_impute` | inputs in [REQ-0578](temporal.md#req-0578)--53 | `date` |
 | `date_precision` | `source` is `str` or `date` | `str` |
+| `datetime_impute` | `source` is complete date or datetime text; `time` is `first` or `last` | `datetime` |
+| `datetime_precision` | `source` is complete date or datetime text, or `datetime` | `str` |
 | `to_date` | `source` is `datetime` | `date` with collected precision `day` |
 
 <a id="req-0591"></a>
 
-**REQ-0591.** Every temporal operation other than `to_date` is a date operation.
-A `datetime` operand to one of those operations is an error rather than a
-widened one. `date_diff` counts whole calendar units and its `bounds` field
+**REQ-0591.** `date_diff`, `study_day`, `date_impute`, and `date_precision` are
+date operations. A `datetime` operand to one of those operations is an error
+rather than a widened one. `date_diff` counts whole calendar units and its `bounds` field
 counts endpoints of a day range, and neither has a meaning between two moments:
 `unit: day` between `2025-01-01T23:00:00` and `2025-01-02T01:00:00` could be
 `1` or `0`. Widening either operation would make that choice silently, so both
@@ -178,11 +180,13 @@ where the specification is read.
 
 <a id="req-0593"></a>
 
-**REQ-0593.** A `datetime` is produced only by converting text. It is consumed
-by comparisons or by `to_date`, which copies calendar fields and
-drops time fields. A missing source returns a missing date. Any other source
-type is the incompatible-input error [Types and conversion](../values/types.md) defines; in particular, a `date` is
-not accepted as an identity spelling.
+**REQ-0593.** A `datetime` is produced by converting datetime text or by
+`datetime_impute`, which completes a date source under its declared time rule.
+It is consumed by comparisons, `datetime_precision`, or `to_date`, which copies
+calendar fields and drops time fields. A missing `to_date` source returns a
+missing date. Any other source type is the incompatible-input error
+[Types and conversion](../values/types.md) defines; in particular, a `date`
+value is not accepted as an identity spelling.
 
 ### Whole calendar units
 
@@ -300,6 +304,42 @@ structural constraints come from its schema declaration.
 | --- | --- |
 | `day_rule` | Day resolved against the month the completed date lands in. |
 
+<a id="req-1182"></a>
+
+**REQ-1182.** The `expressions.datetime_impute` interface has the following
+meanings. Shape, defaults, and structural constraints come from its schema
+declaration.
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.datetime_impute.source` | ISO 8601 datetime text or complete date text. |
+| `expressions.datetime_impute.time` | Time supplied when the source has no time: `first` is `00:00:00` and `last` is `23:59:59`. |
+| `expressions.datetime_impute.missing` | Result when the source value is missing. |
+| `expressions.datetime_impute.invalid` | Result when the source is neither a datetime nor a complete date. |
+| `Result` | Returns a datetime. A complete datetime is returned unchanged with collected precision `second`; a complete date receives the declared edge of its day and carries collected precision `day`. A source truncated before its day is invalid rather than receiving a second imputation policy. Missing and invalid sources yield no datetime unless their local handlers are declared. |
+
+<a id="req-1183"></a>
+
+**REQ-1183.** The `expressions.datetime_precision` interface has the following
+meanings. Shape, defaults, and structural constraints come from its schema
+declaration.
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.datetime_precision.source` | ISO 8601 datetime or complete date text, or a datetime whose collected precision is reported. |
+| `expressions.datetime_precision.missing` | Result when the source value is missing. |
+| `expressions.datetime_precision.invalid` | Result when the source is neither a datetime nor a complete date. |
+| `Result` | Returns `S` when the source carried a time and `D` when `datetime_impute` supplied it. Reading a datetime value binds the answer to the completed value; reading its source text reports the same distinction before completion. Invalid text and a missing source behave as they do for `datetime_impute`; a datetime value is never invalid. |
+
+<a id="req-1184"></a>
+
+**REQ-1184.** The `time_rule` interface has the following meanings. Shape,
+defaults, and structural constraints come from its schema declaration.
+
+| Field | Meaning |
+| --- | --- |
+| `time_rule` | Whole second at the beginning or end of the completed day. |
+
 ## Error conditions
 
 <a id="req-0337"></a>
@@ -331,6 +371,9 @@ Neither can arise from a `day` naming a position in its month.
 **REQ-0609.** `date_impute` whose `day` is a token that is neither a number nor a declared
 position: rejected where the specification is read, before any data is seen.
 
+`datetime_impute` whose `time` is neither `first` nor `last` is rejected the
+same way under [REQ-1184](temporal.md#req-1184).
+
 <a id="req-0610"></a>
 
 **REQ-0610.** `date_impute` whose completed value cannot satisfy `not_before`
@@ -357,10 +400,13 @@ no artifact is accepted.
 Representative specifications, input data, and expected outcomes:
 
 - [adam-adae-partial-dates](../../benchmarks/adam-adae-partial-dates/README.md).
+- [adam-adsl-treatment](../../benchmarks/adam-adsl-treatment/README.md).
 - [negative-date-diff-units](../../benchmarks/negative-date-diff-units/README.md).
 - [negative-date-diff-endpoints](../../benchmarks/negative-date-diff-endpoints/README.md).
 - [negative-impute-bad-source](../../benchmarks/negative-impute-bad-source/README.md).
 - [negative-impute-bad-month](../../benchmarks/negative-impute-bad-month/README.md).
+- [negative-datetime-impute-bad-source](../../benchmarks/negative-datetime-impute-bad-source/README.md).
+- [negative-datetime-precision-bad-source](../../benchmarks/negative-datetime-precision-bad-source/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared

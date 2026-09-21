@@ -38,11 +38,13 @@ from yamaa.models import (
 )
 
 Precision: TypeAlias = Literal["year", "month", "day"]
+DateTimePrecision: TypeAlias = Literal["day", "second"]
 
 # REQ-0580: one precision ladder, spelled twice. A policy names a level and
 # `date_precision` returns that level's code; they are not two vocabularies.
 _LADDER: tuple[Precision, ...] = ("year", "month", "day")
 _CODES: dict[Precision, str] = {"year": "Y", "month": "M", "day": "D"}
+_DATETIME_CODES: dict[DateTimePrecision, str] = {"day": "D", "second": "S"}
 
 # REQ-0578: the collected text a truncated date is carried as, which is prefix
 # truncation only. A day known without its month cannot be collected, so the
@@ -50,6 +52,10 @@ _CODES: dict[Precision, str] = {"year": "Y", "month": "M", "day": "D"}
 _YEAR = re.compile(r"[0-9]{4}")
 _YEAR_MONTH = re.compile(r"[0-9]{4}-[0-9]{2}")
 _DATE_TEXT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+_DATETIME_TEXT = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+    r"[0-9]{2}:[0-9]{2}(?::[0-9]{2})?"
+)
 
 
 def _condition(
@@ -76,6 +82,7 @@ def _incompatible(
     source: str,
     expected: str,
     value: RuntimeValue,
+    requirement: str = "REQ-0606",
 ) -> ConditionResult:
     return _condition(
         "incompatible_input_type",
@@ -85,7 +92,7 @@ def _incompatible(
             "expected": expected,
             "actual": runtime_type_name(value),
         },
-        requirement="REQ-0606",
+        requirement=requirement,
     )
 
 
@@ -148,6 +155,23 @@ def collected_precision(text: str) -> Precision | None:
         return "month" if 1 <= int(text[5:7]) <= 12 else None
     if _YEAR.fullmatch(text) is not None:
         return "year" if int(text) >= 1 else None
+    return None
+
+
+def collected_datetime_precision(text: str) -> DateTimePrecision | None:
+    """Return whether collected text supplied a time of day (R016-53)."""
+    if _DATETIME_TEXT.fullmatch(text) is not None:
+        try:
+            DateTimeValue.parse(text)
+        except ValueError:
+            return None
+        return "second"
+    if _DATE_TEXT.fullmatch(text) is not None:
+        try:
+            DateValue.parse(text)
+        except ValueError:
+            return None
+        return "day"
     return None
 
 
@@ -382,6 +406,127 @@ def _date_precision(payload: object, resolver: Resolver) -> EvaluationResult:
     return ValueResult(value=_CODES[precision])
 
 
+def _datetime_impute(payload: object, resolver: Resolver) -> EvaluationResult:
+    if not isinstance(payload, Mapping):
+        return _condition(
+            "invalid_field_type",
+            {"operation": "datetime_impute", "expected": "a mapping"},
+            requirement="REQ-0321",
+        )
+    time_rule = payload.get("time")
+    if time_rule not in {"first", "last"}:
+        return _condition(
+            "value_not_permitted",
+            {
+                "field": "time",
+                "value": str(time_rule),
+                "permitted": ["first", "last"],
+            },
+            requirement="REQ-1184",
+        )
+    source = _read(payload, "source", resolver, "datetime_impute")
+    if isinstance(source, ConditionResult):
+        return source
+    if source is MISSING:
+        if "missing" in payload:
+            return handler_value(payload, "missing")
+        return _condition(
+            "missing_input",
+            {"operation": "datetime_impute", "source": str(payload.get("source"))},
+            phase="impute",
+            handler="missing",
+            requirement="REQ-1182",
+        )
+    if isinstance(source, DateTimeValue):
+        return ValueResult(value=source)
+    if not isinstance(source, str):
+        return _incompatible("datetime_impute", "source", "str", source, "REQ-1182")
+
+    precision = collected_datetime_precision(source)
+    if precision is None:
+        if "invalid" in payload:
+            return handler_value(payload, "invalid")
+        return _condition(
+            "invalid_datetime_text",
+            {
+                "operation": "datetime_impute",
+                "source": str(payload.get("source")),
+                "value": source,
+            },
+            phase="impute",
+            handler="invalid",
+            requirement="REQ-1182",
+        )
+    if precision == "second":
+        return ValueResult(value=DateTimeValue.parse(source))
+
+    if time_rule == "first":
+        hour, minute, second = 0, 0, 0
+    else:
+        hour, minute, second = 23, 59, 59
+    date = DateValue.parse(source)
+    return ValueResult(
+        value=DateTimeValue(
+            year=date.year,
+            month=date.month,
+            day=date.day,
+            hour=hour,
+            minute=minute,
+            second=second,
+            collected_precision="day",
+        )
+    )
+
+
+def _datetime_precision(payload: object, resolver: Resolver) -> EvaluationResult:
+    if not isinstance(payload, Mapping):
+        return _condition(
+            "invalid_field_type",
+            {"operation": "datetime_precision", "expected": "a mapping"},
+            requirement="REQ-0321",
+        )
+    source = _read(payload, "source", resolver, "datetime_precision")
+    if isinstance(source, ConditionResult):
+        return source
+    if source is MISSING:
+        if "missing" in payload:
+            return handler_value(payload, "missing")
+        return _condition(
+            "missing_input",
+            {"operation": "datetime_precision", "source": str(payload.get("source"))},
+            phase="impute",
+            handler="missing",
+            requirement="REQ-1183",
+        )
+    if isinstance(source, DateTimeValue):
+        return ValueResult(value=_DATETIME_CODES[source.collected_precision])
+    if not isinstance(source, str):
+        return _incompatible(
+            "datetime_precision",
+            "source",
+            "str or datetime",
+            source,
+            "REQ-1183",
+        )
+
+    precision = collected_datetime_precision(source)
+    if precision is None:
+        if "invalid" in payload:
+            return handler_value(payload, "invalid")
+        return _condition(
+            "invalid_datetime_text",
+            {
+                "operation": "datetime_precision",
+                "source": str(payload.get("source")),
+                "value": source,
+            },
+            phase="impute",
+            handler="invalid",
+            requirement="REQ-1183",
+        )
+    return ValueResult(value=_DATETIME_CODES[precision])
+
+
 def _to_date(payload: object, resolver: Resolver) -> EvaluationResult:
     payload = {"source": payload} if isinstance(payload, str) else payload
     if not isinstance(payload, Mapping):
@@ -549,6 +694,8 @@ def date_handlers() -> dict[str, ExpressionHandler]:
         "date_diff": _date_diff,
         "date_impute": _date_impute,
         "date_precision": _date_precision,
+        "datetime_impute": _datetime_impute,
+        "datetime_precision": _datetime_precision,
         "study_day": _study_day,
         "to_date": _to_date,
     }

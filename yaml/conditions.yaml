@@ -29,6 +29,7 @@ conditions:
   invalid_calendar_date: {rules: [R016], phases: [impute]}
   invalid_clear: {rules: [R017], phases: [validation]}
   invalid_date_text: {rules: [R016], phases: [impute]}
+  invalid_datetime_text: {rules: [R016], phases: [impute]}
   invalid_field_type: {rules: [R006], phases: [validation]}
   invalid_parent_path: {rules: [R017], phases: [validation]}
   invalid_predicate: {rules: [R004], phases: [validation]}

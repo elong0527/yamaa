@@ -7249,6 +7249,12 @@ def validate_expression_static_semantics(expression, path, context):
         'date_precision': {
             'source': ({'str', 'date'}, 'str or date'),
         },
+        'datetime_impute': {
+            'source': ({'str'}, 'str'),
+        },
+        'datetime_precision': {
+            'source': ({'str', 'datetime'}, 'str or datetime'),
+        },
         'to_date': {
             'source': ({'datetime'}, 'datetime'),
         },

@@ -58,6 +58,32 @@ expressions:
         - invalid:
             type: literal_value
             description: See REQ-1106 in rules/operations/temporal.md.
+    datetime_impute: # See REQ-1182 in rules/operations/temporal.md.
+        - source:
+            type: variable
+            required: true
+            description: See REQ-1182 in rules/operations/temporal.md.
+        - time:
+            type: time_rule
+            required: true
+            description: See REQ-1182 in rules/operations/temporal.md.
+        - missing:
+            type: literal_value
+            description: See REQ-1182 in rules/operations/temporal.md.
+        - invalid:
+            type: literal_value
+            description: See REQ-1182 in rules/operations/temporal.md.
+    datetime_precision: # See REQ-1183 in rules/operations/temporal.md.
+        - source:
+            type: variable
+            required: true
+            description: See REQ-1183 in rules/operations/temporal.md.
+        - missing:
+            type: literal_value
+            description: See REQ-1183 in rules/operations/temporal.md.
+        - invalid:
+            type: literal_value
+            description: See REQ-1183 in rules/operations/temporal.md.
     to_date: # See REQ-1107 in rules/operations/temporal.md.
         - source:
             type: variable
@@ -77,3 +103,8 @@ day_rule:
     type: str
     values: [first, last]
     description: See REQ-1109 in rules/operations/temporal.md.
+
+time_rule:
+    type: str
+    values: [first, last]
+    description: See REQ-1184 in rules/operations/temporal.md.
