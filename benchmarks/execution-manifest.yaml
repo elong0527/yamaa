@@ -594,6 +594,9 @@ examples:
   schema-odm-form-items:
     status: executable
     runtimes: ['python']
+  schema-parquet:
+    status: executable
+    runtimes: ['python']
   sdtm-ae-coding:
     status: executable
     runtimes: ['python']

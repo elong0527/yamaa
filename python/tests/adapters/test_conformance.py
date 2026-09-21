@@ -11,6 +11,7 @@ import json
 import shutil
 from pathlib import Path
 
+import polars as pl
 import pytest
 import yaml
 
@@ -31,6 +32,9 @@ SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
 EXAMPLES = REPOSITORY_ROOT / "benchmarks"
 POSITIVE = "sdtm-dm-basic"
 NEGATIVE = "negative-ambiguous-type"
+# The benchmark that carries every artifact as Parquet: input, primary
+# output, and review log.
+SCHEMA_PARQUET = "schema-parquet"
 # A specification that calls a project function; with the project root it
 # carries removed, the call is a logical one no implementation answers.
 PORTABLE = "adam-adsl-bmi-function"
@@ -209,6 +213,118 @@ class TestArtifactMutations:
         golden.rename(golden.with_name("other.csv"))
 
         verdict = verdict_of(POSITIVE, tmp_path, example)
+
+        assert not verdict.passed
+        assert kinds(verdict) == {"artifact.missing", "artifact.unexpected"}
+
+
+class TestParquetGolden:
+    """Every parquet artifact compares by what its bytes read back as.
+
+    REQ-0742 denies parquet a byte guarantee, so the comparison is the
+    logical one REQ-0740 requires: field names in order, logical types,
+    rows in order, nulls, and values. The schema-parquet benchmark carries
+    the primary output and the review log as Parquet, so the mutations
+    below cover both. Each mutation changes what the benchmark committed
+    and expects the comparison to fail.
+    """
+
+    def test_parquet_artifacts_match_their_committed_goldens(
+        self, tmp_path: Path
+    ) -> None:
+        report = run(EXAMPLES / SCHEMA_PARQUET, tmp_path)
+        names = {item.name: item for item in report.artifacts}
+
+        assert names["adsl"].profile == "parquet"
+        assert names["adsl"].records != ()
+        assert names["adsl-violations"].profile == "parquet"
+        assert names["adsl-violations"].records != ()
+        assert compare_example(report, EXAMPLES / SCHEMA_PARQUET).passed
+
+    def test_a_changed_primary_cell_fails(self, tmp_path: Path) -> None:
+        example = copy_example(SCHEMA_PARQUET, tmp_path)
+        golden = example / "expected/adsl.parquet"
+        frame = pl.read_parquet(golden)
+        # int64, the closed profile's integer: the mutation changes the
+        # value, not the logical type under test elsewhere.
+        frame.with_columns(pl.lit(99, dtype=pl.Int64).alias("AGE")).write_parquet(
+            golden
+        )
+
+        verdict = verdict_of(SCHEMA_PARQUET, tmp_path, example)
+
+        assert not verdict.passed
+        assert "artifact.record" in kinds(verdict)
+
+    def test_a_renamed_primary_column_fails(self, tmp_path: Path) -> None:
+        example = copy_example(SCHEMA_PARQUET, tmp_path)
+        golden = example / "expected/adsl.parquet"
+        frame = pl.read_parquet(golden)
+        frame.rename({"AGE": "AGE_X"}).write_parquet(golden)
+
+        verdict = verdict_of(SCHEMA_PARQUET, tmp_path, example)
+
+        assert not verdict.passed
+        assert "artifact.columns" in kinds(verdict)
+
+    def test_a_changed_parquet_cell_fails(self, tmp_path: Path) -> None:
+        example = copy_example(SCHEMA_PARQUET, tmp_path)
+        golden = example / "expected/adsl-violations.parquet"
+        frame = pl.read_parquet(golden)
+        # int64, the closed profile's integer: the mutation changes the
+        # value, not the logical type under test elsewhere.
+        frame.with_columns(
+            pl.lit(2, dtype=pl.Int64).alias("FAILURE_COUNT")
+        ).write_parquet(golden)
+
+        verdict = verdict_of(SCHEMA_PARQUET, tmp_path, example)
+
+        assert not verdict.passed
+        assert "artifact.record" in kinds(verdict)
+
+    def test_a_renamed_parquet_column_fails(self, tmp_path: Path) -> None:
+        example = copy_example(SCHEMA_PARQUET, tmp_path)
+        golden = example / "expected/adsl-violations.parquet"
+        frame = pl.read_parquet(golden)
+        frame.rename({"ARTIFACT": "ARTIFACT_X"}).write_parquet(golden)
+
+        verdict = verdict_of(SCHEMA_PARQUET, tmp_path, example)
+
+        assert not verdict.passed
+        assert "artifact.columns" in kinds(verdict)
+
+    def test_a_changed_parquet_logical_type_fails(self, tmp_path: Path) -> None:
+        example = copy_example(SCHEMA_PARQUET, tmp_path)
+        golden = example / "expected/adsl-violations.parquet"
+        frame = pl.read_parquet(golden)
+        # The engine writes FAILURE_COUNT as int; storing it as float keeps
+        # the values readable but changes the committed logical type.
+        frame.with_columns(pl.col("FAILURE_COUNT").cast(pl.Float64)).write_parquet(
+            golden
+        )
+
+        verdict = verdict_of(SCHEMA_PARQUET, tmp_path, example)
+
+        assert not verdict.passed
+        assert "artifact.types" in kinds(verdict)
+
+    def test_a_dropped_parquet_row_fails(self, tmp_path: Path) -> None:
+        example = copy_example(SCHEMA_PARQUET, tmp_path)
+        golden = example / "expected/adsl-violations.parquet"
+        frame = pl.read_parquet(golden)
+        frame.clear().write_parquet(golden)
+
+        verdict = verdict_of(SCHEMA_PARQUET, tmp_path, example)
+
+        assert not verdict.passed
+        assert "artifact.row_count" in kinds(verdict)
+
+    def test_a_renamed_parquet_golden_fails(self, tmp_path: Path) -> None:
+        example = copy_example(SCHEMA_PARQUET, tmp_path)
+        golden = example / "expected/adsl-violations.parquet"
+        golden.rename(golden.with_name("other.parquet"))
+
+        verdict = verdict_of(SCHEMA_PARQUET, tmp_path, example)
 
         assert not verdict.passed
         assert kinds(verdict) == {"artifact.missing", "artifact.unexpected"}
