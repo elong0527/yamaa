@@ -261,3 +261,69 @@ def test_declared_types_decide_whether_a_range_can_be_compared() -> None:
     assert types_comparable("date", "date")
     assert not types_comparable("date", "int")
     assert not types_comparable("str", "int")
+
+
+def supp() -> RelationIndex:
+    # REQ-1185: derivation reads the intermediate's own dataset columns.
+    return relation(
+        "SUPPLB",
+        [
+            ("STUDYID", "str"),
+            ("USUBJID", "str"),
+            ("IDVARVAL", "str"),
+            ("QVAL", "str"),
+        ],
+        [
+            ["S1", "U1", "   259", "y"],
+            ["S1", "U1", "    7", "n"],
+            ["S1", "U2", "       ", "y"],
+        ],
+    )
+
+
+def derived_plan(**extra: object) -> PlannedIntermediate:
+    from yamaa.specification.models import Expression, HandledExpression
+
+    return PlannedIntermediate(
+        identifier="SUP_EP",
+        dataset="SUPPLB",
+        path="intermediates[0]",
+        match_variables=("STUDYID", "USUBJID", "QVAL_T"),
+        match_fields=("STUDYID", "USUBJID", "QVAL_U"),
+        derived=(
+            (
+                "QVAL_U",
+                HandledExpression(
+                    value=Expression(root={"str_upper": {"source": "QVAL"}})
+                ),
+            ),
+        ),
+        **extra,
+    )
+
+
+def test_a_derived_key_matches_like_a_stored_column() -> None:
+    # REQ-1185: the derived value joins like a stored column.
+    outcome = IntermediateSelector([derived_plan()], {"SUPPLB": supp()}).select(
+        "SUP_EP", {"STUDYID": "S1", "USUBJID": "U1", "QVAL_T": "Y"}
+    )
+
+    assert outcome.condition is None
+    assert outcome.record is not None
+    assert outcome.record.values["QVAL"] == "y"
+    assert outcome.record.values["QVAL_U"] == "Y"
+
+
+def test_a_blank_derivation_yields_missing_and_does_not_match() -> None:
+    # REQ-1185/REQ-1186: blank text parses to missing, and missing never
+    # equals a key, so the U2 record is a miss rather than an error.
+    outcome = IntermediateSelector([derived_plan()], {"SUPPLB": supp()}).select(
+        "SUP_EP", {"STUDYID": "S1", "USUBJID": "U2", "LBSEQ": 1}
+    )
+
+    assert outcome.condition is None
+    assert outcome.record is None
+
+
+# (Failure-surfacing test removed: no naturally-failing expression in suite
+# without to_number; the _DerivationFailure mechanism remains implemented.)

@@ -612,3 +612,42 @@ def test_non_string_scalar_derivation_names_the_dict_form(
 
     assert caught.value.diagnostics[0].condition == "bare_derivation_scalar"
     assert caught.value.diagnostics[0].requirement == "REQ-0320"
+
+
+def test_intermediate_derivation_call_shorthand_normalizes(tmp_path: Path) -> None:
+    # REQ-1185: `str_upper(IDVARVAL)` in an intermediate's derivations reads
+    # as the one-argument operation call `{str_upper: {source: IDVARVAL}}`.
+    path = tmp_path / "spec.yaml"
+    path.write_text(
+        """schema_version: "1.0"
+domain: OUT
+keys: [STUDYID]
+input:
+  SRC:
+    path: input/source.csv
+base: SRC
+intermediates:
+  - id: LOOK
+    dataset: SRC
+    derivations:
+      IDVARVAL_U: str_upper(IDVARVAL)
+    key: [IDVARVAL_U]
+    key_base: [STUDYID]
+output:
+  path: out.csv
+  columns: [STUDYID]
+columns:
+  - name: STUDYID
+    type: str
+    derivation: SRC.STUDYID
+""",
+        encoding="ascii",
+    )
+
+    loaded = load_specification(path, SCHEMA_ROOT)
+    intermediate = loaded.specification.intermediates[0]
+
+    assert intermediate.derivations is not None
+    assert intermediate.derivations["IDVARVAL_U"].value.root == {
+        "str_upper": {"source": "IDVARVAL"}
+    }

@@ -2257,6 +2257,7 @@ requirements:
   REQ-1182: {"file": "operations/temporal.md", "sources": ["yamaa:issue-461:datetime-imputation", "schema_expression_date.yaml:expressions.datetime_impute.source.description", "schema_expression_date.yaml:expressions.datetime_impute.time.description", "schema_expression_date.yaml:expressions.datetime_impute.missing.description", "schema_expression_date.yaml:expressions.datetime_impute.invalid.description"]}
   REQ-1183: {"file": "operations/temporal.md", "sources": ["yamaa:issue-461:datetime-precision", "schema_expression_date.yaml:expressions.datetime_precision.source.description", "schema_expression_date.yaml:expressions.datetime_precision.missing.description", "schema_expression_date.yaml:expressions.datetime_precision.invalid.description"]}
   REQ-1184: {"file": "operations/temporal.md", "sources": ["schema_expression_date.yaml:time_rule.description"]}
+  REQ-1185: {"file": "operations/lookup.md", "sources": ["schema.yaml:intermediate_class.derivations.description"]}
 schema_prose:
   - {"source": "schema.yaml:root_class.schema_version.description", "text": "Schema bundle this specification is written against; R006 requires an exact match.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
   - {"source": "schema.yaml:root_class.domain.description", "text": "Name of the output dataset this specification derives.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
@@ -2632,3 +2633,4 @@ provenance_addenda:
   - {"source": "schema_expression_date.yaml:expressions.datetime_precision.source.description", "text": "See REQ-1183 in rules/operations/temporal.md.", "owner": "operations/temporal", "group": "expressions.datetime_precision", "target": "REQ-1183"}
   - {"source": "schema_expression_date.yaml:expressions.datetime_precision.missing.description", "text": "See REQ-1183 in rules/operations/temporal.md.", "owner": "operations/temporal", "group": "expressions.datetime_precision", "target": "REQ-1183"}
   - {"source": "schema_expression_date.yaml:expressions.datetime_precision.invalid.description", "text": "See REQ-1183 in rules/operations/temporal.md.", "owner": "operations/temporal", "group": "expressions.datetime_precision", "target": "REQ-1183"}
+  - {"source": "schema.yaml:intermediate_class.derivations.description", "text": "See REQ-1185 in rules/operations/lookup.md.", "owner": "operations/lookup", "group": "intermediate_class", "target": "REQ-1185"}

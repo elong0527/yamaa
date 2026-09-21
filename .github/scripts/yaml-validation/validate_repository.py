@@ -7237,6 +7237,8 @@ def validate_expression_static_semantics(expression, path, context):
         )
         return errors
 
+    # (to_number validation removed: REQ-1186 withdrawn per #715 direction)
+
     temporal_inputs = {
         'date_diff': {
             'start': ({'date'}, 'date'),
