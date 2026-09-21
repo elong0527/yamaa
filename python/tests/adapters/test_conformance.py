@@ -11,6 +11,7 @@ import json
 import shutil
 from pathlib import Path
 
+import polars as pl
 import pytest
 import yaml
 
@@ -212,6 +213,128 @@ class TestArtifactMutations:
 
         assert not verdict.passed
         assert kinds(verdict) == {"artifact.missing", "artifact.unexpected"}
+
+
+class TestParquetGolden:
+    """A Parquet primary output compares on schema, order, nulls, and values.
+
+    REQ-0742 fixes Parquet bytes as non-deterministic across writers, so the
+    comparison never touches the bytes; every mutation below changes what the
+    golden means and expects the comparison to fail.
+    """
+
+    PARQUET = "schema-parquet-output"
+
+    def _rewrite_golden(self, example: Path, frame: pl.DataFrame) -> None:
+        golden = example / "expected/out.parquet"
+        frame.write_parquet(golden)
+
+    def test_parquet_primary_output_matches_its_committed_golden(
+        self, tmp_path: Path
+    ) -> None:
+        report = run(EXAMPLES / self.PARQUET, tmp_path)
+
+        assert report.outcome == "success"
+        assert [item.name for item in report.artifacts] == ["out"]
+        assert report.artifacts[0].profile == "parquet"
+        assert compare_example(report, EXAMPLES / self.PARQUET).passed
+
+    def test_a_changed_parquet_cell_fails(self, tmp_path: Path) -> None:
+        example = copy_example(self.PARQUET, tmp_path)
+        frame = pl.read_parquet(example / "expected/out.parquet")
+        self._rewrite_golden(
+            example,
+            frame.with_columns(
+                pl.when(pl.col("USUBJID") == "YAMAA-01-001")
+                .then(99.9)
+                .otherwise(pl.col("BMI"))
+                .alias("BMI")
+            ),
+        )
+
+        verdict = verdict_of(self.PARQUET, tmp_path, example)
+
+        assert not verdict.passed
+        assert "artifact.record" in kinds(verdict)
+
+    def test_a_parquet_type_change_fails(self, tmp_path: Path) -> None:
+        example = copy_example(self.PARQUET, tmp_path)
+        frame = pl.read_parquet(example / "expected/out.parquet")
+        self._rewrite_golden(
+            example, frame.with_columns(pl.col("AGE").cast(pl.Float64))
+        )
+
+        verdict = verdict_of(self.PARQUET, tmp_path, example)
+
+        assert not verdict.passed
+        assert "artifact.types" in kinds(verdict)
+
+    def test_a_reordered_parquet_field_fails(self, tmp_path: Path) -> None:
+        example = copy_example(self.PARQUET, tmp_path)
+        frame = pl.read_parquet(example / "expected/out.parquet")
+        columns = frame.columns
+        columns[0], columns[1] = columns[1], columns[0]
+        self._rewrite_golden(example, frame.select(columns))
+
+        verdict = verdict_of(self.PARQUET, tmp_path, example)
+
+        assert not verdict.passed
+        assert "artifact.columns" in kinds(verdict)
+
+    def test_a_dropped_parquet_row_fails(self, tmp_path: Path) -> None:
+        example = copy_example(self.PARQUET, tmp_path)
+        frame = pl.read_parquet(example / "expected/out.parquet")
+        self._rewrite_golden(example, frame.head(3))
+
+        verdict = verdict_of(self.PARQUET, tmp_path, example)
+
+        assert not verdict.passed
+        assert "artifact.row_count" in kinds(verdict)
+
+    def test_a_rewritten_golden_with_different_bytes_still_passes(
+        self, tmp_path: Path
+    ) -> None:
+        """The same semantics in different bytes is a pass, not a drift.
+
+        REQ-0742 fixes Parquet bytes as non-deterministic across writers, so
+        the golden must mean the same thing, not carry the same bytes.
+        """
+        example = copy_example(self.PARQUET, tmp_path)
+        golden = example / "expected/out.parquet"
+        original = golden.read_bytes()
+        frame = pl.read_parquet(golden)
+        frame.write_parquet(golden, compression="uncompressed")
+
+        assert golden.read_bytes() != original
+        assert verdict_of(self.PARQUET, tmp_path, example).passed
+
+    def test_reordered_parquet_rows_fail(self, tmp_path: Path) -> None:
+        example = copy_example(self.PARQUET, tmp_path)
+        frame = pl.read_parquet(example / "expected/out.parquet")
+        self._rewrite_golden(example, frame.reverse())
+
+        verdict = verdict_of(self.PARQUET, tmp_path, example)
+
+        assert not verdict.passed
+        assert "artifact.record" in kinds(verdict)
+
+    def test_a_parquet_null_instead_of_a_value_fails(self, tmp_path: Path) -> None:
+        example = copy_example(self.PARQUET, tmp_path)
+        frame = pl.read_parquet(example / "expected/out.parquet")
+        self._rewrite_golden(
+            example,
+            frame.with_columns(
+                pl.when(pl.col("USUBJID") == "YAMAA-01-001")
+                .then(None)
+                .otherwise(pl.col("BMI"))
+                .alias("BMI")
+            ),
+        )
+
+        verdict = verdict_of(self.PARQUET, tmp_path, example)
+
+        assert not verdict.passed
+        assert "artifact.record" in kinds(verdict)
 
 
 class TestDiagnosticMutations:

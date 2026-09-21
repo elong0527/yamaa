@@ -180,15 +180,19 @@ def _reported_frame(frame: pl.DataFrame, decimals: int) -> pl.DataFrame:
     positive_runners(),
     ids=lambda runner: runner.parent.name,
 )
-def test_positive_example_outputs_match_expected_csvs(
+def test_positive_example_outputs_match_expected_artifacts(
     runner: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     example = runner.parent
     expected = {
-        path.stem: path for path in sorted((example / "expected").glob("*.csv"))
+        path.stem: path
+        for path in sorted(
+            list((example / "expected").glob("*.csv"))
+            + list((example / "expected").glob("*.parquet"))
+        )
     }
-    assert expected, f"{example.name} has run.py but no expected CSV"
+    assert expected, f"{example.name} has run.py but no expected artifact"
 
     monkeypatch.chdir(example)
     namespace = runpy.run_path(runner.name)
@@ -228,7 +232,12 @@ def test_positive_example_outputs_match_expected_csvs(
         if declared_log is not None and name == Path(declared_log).stem:
             continue
         actual = outputs[name]
-        committed = pl.read_csv(expected_path, schema=actual.schema)
+        if expected_path.suffix == ".parquet":
+            # The Parquet file carries its own typed schema; reading it back
+            # is the golden comparison REQ-0742's non-fixed bytes allow.
+            committed = pl.read_parquet(expected_path)
+        else:
+            committed = pl.read_csv(expected_path, schema=actual.schema)
         assert_frame_equal(actual, committed, check_exact=True)
 
 

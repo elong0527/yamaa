@@ -47,6 +47,7 @@ from yamaa.io import (
     publish_artifact,
     render_artifact,
 )
+from yamaa.io.parquet import parse_parquet
 from yamaa.planning import ExecutionDiagnostic, execute_workflow, plan_workflow
 from yamaa.runtime import (
     ExecutionFailure,
@@ -84,7 +85,9 @@ class ArtifactObservation(_FrozenModel):
     types: tuple[str, ...]
     row_count: int = Field(ge=0)
     # The CSV profile contract's complete bytes split on the U+000A terminator
-    # REQ-0723 writes.
+    # REQ-0723 writes. A Parquet profile carries one deterministic row
+    # serialization per row instead (REQ-0742: the bytes are not fixed, so a
+    # Parquet golden is compared on schema, row order, nulls, and values).
     # A missing value and a quoted empty string render differently and are
     # kept apart here; `content` below decides equality so that a newline
     # inside a quoted field cannot make this split the deciding view.
@@ -93,8 +96,8 @@ class ArtifactObservation(_FrozenModel):
     # The rendered text of a CSV artifact, which is what a comparison
     # decides on: carrying it is what lets equality be the bytes themselves
     # rather than two identities that are only believed to stand for them.
-    # A non-CSV profile is never compared against a committed artifact and
-    # carries the empty string.
+    # A Parquet artifact is compared through `records` instead and carries
+    # the empty string.
     content: str = ""
 
 
@@ -176,6 +179,45 @@ def _sorted_context(context: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
     return {key: context[key] for key in sorted(context)}
 
 
+def _render_parquet_value(column_type: str, value: object) -> str:
+    """Render one Parquet cell so two identical values always match.
+
+    `float.hex` is bit-exact for the `float` column type, which is what
+    R020's bit-identical `DOUBLE` requirement needs: a repr that
+    round-trips could still hide a bit-level difference in a second
+    writer's file.
+    """
+    if value is None:
+        return "null"
+    if column_type == "float":
+        return float(value).hex()
+    if column_type == "str":
+        return json.dumps(value)
+    if column_type in ("date", "datetime"):
+        return value.isoformat()  # type: ignore[union-attr]
+    return str(value)
+
+
+def _typed_parquet_records(payload: bytes) -> tuple[str, ...]:
+    """Serialize one Parquet payload's rows for a semantic comparison.
+
+    REQ-0740 compares a Parquet artifact on field names and order, logical
+    types, row order, nulls, and values rather than bytes. Each row is one
+    tuple of per-column renders keyed on the declared column type, which is
+    deterministic for the closed set of value types the profile admits.
+    """
+    typed = parse_parquet(payload)
+    declared = tuple(column.type for column in typed.columns)
+    rows = []
+    for row in typed.frame.iter_rows(named=False):
+        rendered = tuple(
+            _render_parquet_value(column_type, value)
+            for column_type, value in zip(declared, row)
+        )
+        rows.append(",".join(rendered))
+    return tuple(rows)
+
+
 def _observe_artifact(
     name: str, artifact: Artifact, target: Path
 ) -> ArtifactObservation:
@@ -188,7 +230,11 @@ def _observe_artifact(
         columns=tuple(column.name for column in artifact.columns),
         types=tuple(column.type for column in artifact.columns),
         row_count=artifact.frame.height,
-        records=_records(payload) if artifact.profile == "csv" else (),
+        records=(
+            _records(payload)
+            if artifact.profile == "csv"
+            else _typed_parquet_records(payload)
+        ),
         byte_length=len(payload),
         content=payload.decode("utf-8") if artifact.profile == "csv" else "",
     )
@@ -427,11 +473,74 @@ def expected_kind(example: str | Path) -> Literal["positive", "negative"]:
     return "negative" if contract.is_file() else "positive"
 
 
+def _parquet_findings(
+    observation: ArtifactObservation,
+    payload: bytes,
+) -> tuple[ComparisonFinding, ...]:
+    """Compare one Parquet artifact on schema, row order, nulls, and values.
+
+    REQ-0742 fixes Parquet bytes as non-deterministic across writers, so the
+    comparison reads the committed golden through the closed source profile
+    and compares what it means under REQ-0740, not its bytes.
+    """
+    typed = parse_parquet(payload)
+    findings: list[ComparisonFinding] = []
+    committed_columns = tuple(column.name for column in typed.columns)
+    if committed_columns != observation.columns:
+        findings.append(
+            _finding(
+                "artifact.columns",
+                f"{observation.name}: field names or order differ",
+                list(committed_columns),
+                list(observation.columns),
+            )
+        )
+    committed_types = tuple(column.type for column in typed.columns)
+    if committed_types != observation.types:
+        findings.append(
+            _finding(
+                "artifact.types",
+                f"{observation.name}: logical types differ",
+                list(committed_types),
+                list(observation.types),
+            )
+        )
+    if typed.frame.height != observation.row_count:
+        findings.append(
+            _finding(
+                "artifact.row_count",
+                f"{observation.name}: record count differs",
+                typed.frame.height,
+                observation.row_count,
+            )
+        )
+    committed_records = _typed_parquet_records(payload)
+    for index, (want, got) in enumerate(
+        zip(committed_records, observation.records), start=1
+    ):
+        if want != got:
+            findings.append(
+                _finding(
+                    "artifact.record",
+                    f"{observation.name}: record {index} differs",
+                    want,
+                    got,
+                )
+            )
+    return tuple(findings)
+
+
 def _artifact_findings(
     observation: ArtifactObservation,
     payload: bytes,
 ) -> tuple[ComparisonFinding, ...]:
-    """Compare one artifact byte for byte, then say where it first differs."""
+    """Compare one artifact, then say where it first differs.
+
+    A CSV artifact compares byte for byte; a Parquet artifact compares on
+    schema, row order, nulls, and values (REQ-0740).
+    """
+    if observation.profile == "parquet":
+        return _parquet_findings(observation, payload)
     if observation.content.encode("utf-8") == payload:
         return ()
 
@@ -495,7 +604,11 @@ def _positive_findings(
         )
 
     committed = {
-        path.stem: path for path in sorted((example / EXPECTED_DIR).glob("*.csv"))
+        path.stem: path
+        for path in sorted(
+            list((example / EXPECTED_DIR).glob("*.csv"))
+            + list((example / EXPECTED_DIR).glob("*.parquet"))
+        )
     }
     produced = {item.name: item for item in report.artifacts}
     findings: list[ComparisonFinding] = []

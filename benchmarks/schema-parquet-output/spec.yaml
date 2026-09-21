@@ -1,0 +1,52 @@
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  SUBJECTS: {path: input/subjects.csv, types: {AGE: int, HEIGHT: float, WEIGHT: float, TRTSDT: date}}
+
+output:
+  path: out.parquet
+  columns: [STUDYID, USUBJID, SEX, AGE, BMI, TRTSDT]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: SUBJECTS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: SUBJECTS.USUBJID
+
+  - name: SEX
+    type: str
+    label: Sex
+    derivation: SUBJECTS.SEX
+
+  - name: AGE
+    type: int
+    label: Age
+    derivation: SUBJECTS.AGE
+
+  - name: HEIGHT
+    type: float
+    label: Height
+    derivation: SUBJECTS.HEIGHT
+
+  - name: WEIGHT
+    type: float
+    label: Weight
+    derivation: SUBJECTS.WEIGHT
+
+  - name: BMI
+    type: float
+    label: Body Mass Index
+    derivation:
+      compute:
+        expr: "WEIGHT / POWER(HEIGHT / 100, 2)"
+
+  - name: TRTSDT
+    type: date
+    label: Date of First Exposure to Treatment
+    derivation: SUBJECTS.TRTSDT
