@@ -26,6 +26,11 @@ New to the suite? Read [`sdtm-dm-basic`](sdtm-dm-basic/) for direct mapping,
 [`sdtm-lb-findings`](sdtm-lb-findings/) for row construction, and
 [`adam-adlb-bds`](adam-adlb-bds/) for a full BDS derivation, in that order.
 
+Every example also renders as a self-contained
+[dashboard](https://elong0527.github.io/yamaa/benchmark/) on the documentation
+site: the README, the source fixtures, the expected artifacts, and the YAML
+specification side by side.
+
 ## Lifecycle
 
 Each example carries a lifecycle badge showing its review state:
