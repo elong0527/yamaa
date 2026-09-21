@@ -83,6 +83,10 @@ output_class:
         type: path
         required: false
         description: See REQ-1047 in rules/storage/publication.md.
+    - verification_report:
+        type: path
+        required: false
+        description: See REQ-1047 in rules/storage/publication.md.
     - order_by:
         type: "list[order_by_term]"
         required: false

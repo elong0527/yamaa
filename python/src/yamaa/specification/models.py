@@ -112,6 +112,7 @@ class Output(_StrictModel):
     decimals: int | None = None
     columns: list[str]
     violation_log: str | None = None
+    verification_report: str | None = None
     order_by: list[OrderTerm] | None = None
 
 

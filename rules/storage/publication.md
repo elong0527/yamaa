@@ -45,7 +45,8 @@ the run, not a second derivation target or source within this specification.
 <a id="req-0195"></a>
 
 **REQ-0195.** Serialization follows the [CSV](csv.md) and [Parquet](parquet.md) profiles. `output.path` names the primary
-file and `output.violation_log`, when present, names [Verification](../execution/verification.md)'s sidecar. Each
+file, and `output.violation_log` and `output.verification_report`, when
+present, name [Verification](../execution/verification.md)'s sidecars. Each
 extension selects `parquet` or `csv`. The format profiles own their containers and bytes; this contract owns
 publication. Everything below concerns the primary values and their order,
 which the profiles carry rather than decide.
@@ -87,8 +88,9 @@ keys are used for enrichment and do not change the identity asserted here.
 
 **REQ-0715.** `output.path` names the primary file the specification produces. It
 is required: a specification that derives an artifact says what it produces,
-and there is no default name for one. `output.violation_log` names [Verification](../execution/verification.md)'s
-sidecar when the specification declares one.
+and there is no default name for one. `output.violation_log` and
+`output.verification_report` name [Verification](../execution/verification.md)'s
+sidecars when the specification declares them.
 
 <a id="req-0716"></a>
 
@@ -203,6 +205,31 @@ publication fails and the prior primary remains; the complete log may remain as
 the record of the completed candidate run. Atomic replacement is guaranteed per
 file, not simultaneously across two paths.
 
+### Verification-report publication
+
+<a id="req-1180"></a>
+
+**REQ-1180.** `output.verification_report` must differ from both
+`output.path` and `output.violation_log`. Reusing a path fails validation with
+`artifact_path_collision` and reports both fields. Its extension selects its
+profile under [REQ-0716](publication.md#req-0716) independently of the other
+two, and an extension the mapping does not name fails validation with
+`unknown_artifact_profile`, the condition
+[REQ-0760](publication.md#req-0760) raises for `output.path`.
+
+<a id="req-1181"></a>
+
+**REQ-1181.** The verification report [Verification](../execution/verification.md) fixes is diagnostic output,
+not one of [REQ-0193](publication.md#req-0193)'s artifacts. A successful run
+renders and validates it with the other files before touching any target and
+publishes it first, then the violation log, then the primary artifact,
+applying [REQ-0752](publication.md#req-0752) through
+[REQ-0754](publication.md#req-0754) to each file. A failed run publishes
+neither a primary artifact nor a log and replaces the report alone: it is the
+only file a failed run writes, and writing it accepts nothing. Failure to
+render or replace the report is an output failure that leaves every other
+target untouched.
+
 ### Interface behavior
 
 <a id="req-1047"></a>
@@ -216,6 +243,7 @@ structural constraints come from its schema declaration.
 | `output_class.decimals` | Fixed display digits for every float column of a csv artifact; [CSV profile](csv.md) defines the rounding and rejects it for parquet. |
 | `output_class.columns` | Declared columns selected for the artifact, in the order this contract requires. |
 | `output_class.violation_log` | Sidecar dataset recording warning-level verification violations; [Verification](../execution/verification.md) fixes its schema and [Artifact publication](publication.md) serializes it. |
+| `output_class.verification_report` | Sidecar dataset recording the outcome of every declared verification; [Verification](../execution/verification.md) fixes its schema and [Artifact publication](publication.md) serializes it. |
 | `output_class.order_by` | Terms ordering artifact rows after every verification; omission keeps [Execution lifecycle](../execution/lifecycle.md) construction order. |
 
 ## Error conditions

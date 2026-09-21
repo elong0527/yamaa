@@ -34,7 +34,7 @@ owns the sequence of a run.
 | [Row construction](execution/rows.md) | normative | Construct output rows from declared input records or groups. |
 | [Ordering](execution/ordering.md) | normative | Apply ordering terms, missing placement, stable ties, and final artifact order. |
 | [Local handlers](execution/handlers.md) | normative | Handle conditions at their expression or conversion site and report substitutions. |
-| [Verification](execution/verification.md) | normative | Apply assertions, severity, grouped counts, and warning logs to completed values. |
+| [Verification](execution/verification.md) | normative | Apply assertions, severity, and grouped counts to completed values, and record what ran in the warning log and the verification report. |
 
 ## Operations
 
