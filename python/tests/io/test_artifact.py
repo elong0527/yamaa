@@ -53,7 +53,7 @@ def test_the_extension_selects_the_profile_without_regard_to_case(
 
 @pytest.mark.parametrize(
     "path",
-    # REQ-1222: `.json` is Dataset-JSON, which a study document writes
+    # REQ-1225: `.json` is Dataset-JSON, which a study document writes
     # rather than a specification, so it names no artifact profile here.
     ["adsl", "adsl.xpt", "adsl.csv.gz", "adsl.", "adsl.json"],
 )
