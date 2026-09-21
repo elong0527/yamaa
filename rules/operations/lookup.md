@@ -43,7 +43,7 @@ derivation:
 A structured `source:` keeps its `filter` and `multiple_matches` on the
 implicit join: the filter narrows the eligible records and
 `multiple_matches` chooses among the survivors exactly as an explicit
-lookup's would.
+lookup would.
 
 ### Terminology
 
@@ -68,7 +68,7 @@ either fails as `missing_required_field` with no requirement attached,
 because the contract is structural. An omitted `key` is inferred from
 the applicable output keys ([REQ-0153](lookup.md#req-0153)); an omitted `key_base` defaults to
 the key names ([REQ-0154](lookup.md#req-0154)). State both lists only when the intended match
-differs from what omission would infer.
+differs from the inferred match.
 
 ```yaml
 intermediates:
@@ -181,7 +181,7 @@ available only in a later phase fails as `phase_boundary`.
 <a id="req-0127"></a>
 
 **REQ-0127.** More than one surviving record with no `order_by`/`keep` to
-choose by is the unhandled multiple match this contract refuses: fail as
+choose by is an unhandled multiple match: fail as
 `multiple_matches`.
 
 <a id="req-0128"></a>
@@ -218,8 +218,7 @@ field of the lookup's dataset fails as `unknown_field`.
 <a id="req-0133"></a>
 
 **REQ-0133.** `filter` selects the eligible records once per run.
-Eligibility does not vary by row; the per-row match starts from the same
-eligible set every time.
+Eligibility does not vary by row.
 
 <a id="req-0134"></a>
 
@@ -290,7 +289,7 @@ relation and its `key_base` variables must be known, or fail as
 
 <a id="req-0142"></a>
 
-**REQ-0142.** A grouped-row aggregate reads its own driver group and
+**REQ-0142.** A grouped-row aggregate reads its own input group and
 declares no key pairs: the group is the match.
 
 ### Failures share one vocabulary

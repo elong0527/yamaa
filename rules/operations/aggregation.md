@@ -54,15 +54,15 @@ gives `function` the return type declared by its logical contract.
 returns one value per group. The expression never changes row count. [Lookup and joins](lookup.md) joins
 a right-side reduction to constructed rows. An output-row reduction broadcasts
 under [REQ-0467](aggregation.md#req-0467). A grouped row template asks the expression for one value while [Execution lifecycle](../execution/lifecycle.md)
-owns whether that candidate row is appended.
+decides whether that candidate row is appended.
 
 ### Relations and identifiers
 
 <a id="req-0466"></a>
 
 **REQ-0466.** An identifier is `NAME` or `DATASET.NAME`. [Name binding](../specification/binding.md) resolves each
-identifier in the same phase. A reducer expression and predicate never disagree
-about a name.
+identifier in the same phase. A reducer expression and a predicate agree on
+each name.
 
 <a id="req-0467"></a>
 
@@ -171,8 +171,8 @@ the R implementation read that file. The grammar cannot drift without failure.
 
 <a id="req-0476"></a>
 
-**REQ-0476.** Precedence, associativity, and the permitted `function` names are
-[Numeric computation](computation.md)'s. Reducer and function names and `NULL` are case-insensitive. Identifiers
+**REQ-0476.** Precedence, associativity, and permitted `function` names follow
+[Numeric computation](computation.md). Reducer and function names and `NULL` are case-insensitive. Identifiers
 are case-sensitive.
 
 <a id="req-0477"></a>
@@ -208,7 +208,7 @@ across runtimes without a host language mean.
 
 **REQ-0480.** `SUM(x)` is a left fold of the non-missing argument values in
 relation record order. The accumulator starts with the first such value. Each
-later value is added using [Numeric computation](computation.md)'s `+` semantics. Implementations must not
+later value is added with [Numeric computation](computation.md)'s `+` semantics. Implementations must not
 reorder, reassociate, partition, or use a compensated or correctly rounded
 summation. The `filter`, when present, removes records and keeps the order of
 the records that remain. [Source ingestion](../storage/ingestion.md) defines stored-source record order. [Execution lifecycle](../execution/lifecycle.md)
@@ -260,7 +260,7 @@ columns.
 
 <a id="req-0486"></a>
 
-**REQ-0486.** An identifier that is grouped on is constant within the group and
+**REQ-0486.** An identifier in `group_by` is constant within the group and
 may be used directly, so `SUM(EX.EXDOSE) / EX.EXPLDOS` is legal exactly
 when `EX.EXPLDOS` is declared in `group_by`.
 
