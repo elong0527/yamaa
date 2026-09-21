@@ -175,20 +175,38 @@ def _reported_frame(frame: pl.DataFrame, decimals: int) -> pl.DataFrame:
     )
 
 
+def _read_expected(path: Path, schema: pl.Schema) -> pl.DataFrame:
+    """Read one committed golden in the container its suffix declares.
+
+    A CSV golden is read with the run's schema so the comparison is on
+    values, not on inference. A parquet golden carries its own typed schema;
+    the container has no byte guarantee (REQ-0742), so it is read back and
+    compared as a frame, the same logical comparison the conformance runner
+    applies.
+    """
+    if path.suffix == ".parquet":
+        return pl.read_parquet(path)
+    return pl.read_csv(path, schema=schema)
+
+
 @pytest.mark.parametrize(
     "runner",
     positive_runners(),
     ids=lambda runner: runner.parent.name,
 )
-def test_positive_example_outputs_match_expected_csvs(
+def test_positive_example_outputs_match_expected_artifacts(
     runner: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     example = runner.parent
     expected = {
-        path.stem: path for path in sorted((example / "expected").glob("*.csv"))
+        path.stem: path
+        for path in sorted(
+            list((example / "expected").glob("*.csv"))
+            + list((example / "expected").glob("*.parquet"))
+        )
     }
-    assert expected, f"{example.name} has run.py but no expected CSV"
+    assert expected, f"{example.name} has run.py but no expected artifact"
 
     monkeypatch.chdir(example)
     namespace = runpy.run_path(runner.name)
@@ -220,7 +238,7 @@ def test_positive_example_outputs_match_expected_csvs(
             entry_spec(example), schema_root=SCHEMA_ROOT
         ).violation_log
         assert actual_log is not None
-        committed_log = pl.read_csv(expected[log_stem], schema=actual_log.schema)
+        committed_log = _read_expected(expected[log_stem], actual_log.schema)
         assert_frame_equal(actual_log, committed_log, check_exact=True)
     else:
         assert set(outputs) == set(expected)
@@ -228,7 +246,7 @@ def test_positive_example_outputs_match_expected_csvs(
         if declared_log is not None and name == Path(declared_log).stem:
             continue
         actual = outputs[name]
-        committed = pl.read_csv(expected_path, schema=actual.schema)
+        committed = _read_expected(expected_path, actual.schema)
         assert_frame_equal(actual, committed, check_exact=True)
 
 

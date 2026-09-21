@@ -681,3 +681,6 @@ examples:
   schema-non-finite:
     status: executable
     runtimes: ['python']
+  spec-parquet-sidecar:
+    status: executable
+    runtimes: ['python']
