@@ -15,6 +15,7 @@ from yamaa.io import (
     render_artifact,
 )
 from yamaa.models import TypedColumn, TypedTable
+from yamaa.planning import UnsupportedFeature
 from yamaa.runtime import (
     ExecutionFailure,
     ExecutionHooks,
@@ -196,6 +197,75 @@ def test_warning_without_violation_log_fails_before_source_ingestion() -> None:
     assert result.diagnostics[0].spec_paths == ("output.violation_log",)
     assert result.diagnostics[0].requirement == "REQ-0391"
     assert not provider_called
+
+
+def test_declared_verification_report_is_unsupported_rather_than_dropped() -> None:
+    specification = load_specification(
+        WARNING_EXAMPLE / "spec.yaml", SCHEMA_ROOT
+    ).specification
+    changed = specification.model_copy(
+        update={
+            "output": specification.output.model_copy(
+                update={"verification_report": "adsl-checks.csv"}
+            )
+        }
+    )
+    provider_called = False
+
+    def provide_sources(_datasets):
+        nonlocal provider_called
+        provider_called = True
+        return {}
+
+    result = execute_with_source_provider(changed, provide_sources)
+
+    assert isinstance(result, ExecutionUnsupported)
+    assert result.features == (
+        UnsupportedFeature(
+            operation="verification_report",
+            spec_path="output.verification_report",
+        ),
+    )
+    assert not provider_called
+
+
+@pytest.mark.parametrize(
+    ("declared", "collided"),
+    [
+        ({"verification_report": "adsl.csv"}, ("output.path",)),
+        (
+            {
+                "violation_log": "adsl-checks.csv",
+                "verification_report": "adsl-checks.csv",
+            },
+            ("output.violation_log",),
+        ),
+    ],
+)
+def test_verification_report_path_must_differ_from_every_other_path(
+    declared: dict[str, str], collided: tuple[str, ...]
+) -> None:
+    specification = load_specification(
+        WARNING_EXAMPLE / "spec.yaml", SCHEMA_ROOT
+    ).specification
+    changed = specification.model_copy(
+        update={"output": specification.output.model_copy(update=declared)}
+    )
+
+    result = execute_with_source_provider(changed, lambda _datasets: {})
+
+    assert isinstance(result, ExecutionFailure)
+    collisions = [
+        diagnostic
+        for diagnostic in result.diagnostics
+        if diagnostic.condition == "artifact_path_collision"
+    ]
+    assert len(collisions) == 1
+    assert collisions[0].spec_paths == (
+        *collided,
+        "output.verification_report",
+    )
+    assert collisions[0].requirement == "REQ-1180"
 
 
 def test_execution_uses_source_values_and_never_needs_expected_artifacts() -> None:

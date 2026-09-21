@@ -2946,6 +2946,65 @@ class TestSpecNames(unittest.TestCase):
         )
         self.assertIn("unknown_artifact_profile", "\n".join(unknown_errors))
 
+    def test_rejects_a_colliding_or_unknown_verification_report_path(self):
+        base = {
+            "domain": "ADSL",
+            "input": {"DM": "dm.csv"},
+            "base": "DM",
+            "keys": ["USUBJID"],
+            "columns": [{"name": "USUBJID"}],
+        }
+        primary_collision = copy.deepcopy(base)
+        primary_collision["output"] = {
+            "path": "adsl.csv",
+            "columns": ["USUBJID"],
+            "verification_report": "adsl.csv",
+        }
+        log_collision = copy.deepcopy(base)
+        log_collision["output"] = {
+            "path": "adsl.csv",
+            "columns": ["USUBJID"],
+            "violation_log": "adsl-checks.csv",
+            "verification_report": "adsl-checks.csv",
+        }
+        unknown = copy.deepcopy(base)
+        unknown["output"] = {
+            "path": "adsl.csv",
+            "columns": ["USUBJID"],
+            "verification_report": "adsl-checks.txt",
+        }
+        governed = copy.deepcopy(base)
+        governed["output"] = {
+            "path": "adsl.csv",
+            "columns": ["USUBJID"],
+            "violation_log": "adsl-violations.csv",
+            "verification_report": "adsl-checks.parquet",
+        }
+
+        primary_errors = VALIDATOR.validate_spec_names(
+            primary_collision, "example/spec.yaml"
+        )
+        log_errors = VALIDATOR.validate_spec_names(
+            log_collision, "example/spec.yaml"
+        )
+        unknown_errors = VALIDATOR.validate_spec_names(
+            unknown, "example/spec.yaml"
+        )
+        governed_errors = VALIDATOR.validate_spec_names(
+            governed, "example/spec.yaml"
+        )
+
+        self.assertEqual(
+            sum("artifact_path_collision" in item for item in primary_errors),
+            2,
+        )
+        self.assertEqual(
+            sum("artifact_path_collision" in item for item in log_errors),
+            2,
+        )
+        self.assertIn("unknown_artifact_profile", "\n".join(unknown_errors))
+        self.assertEqual(governed_errors, [])
+
     def test_rejects_duplicate_and_unresolved_columns(self):
         spec = {
             "domain": "ADSL",

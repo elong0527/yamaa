@@ -2767,14 +2767,15 @@ def _warning_verification_paths(specification: Specification) -> tuple[str, ...]
     return tuple(paths)
 
 
-def _violation_log_declarations(
+def _sidecar_declarations(
     specification: Specification,
 ) -> list[ExecutionDiagnostic]:
-    """Validate warning/log relationships before any source is read."""
+    """Validate warning, log, and report relationships before a source is read."""
     diagnostics: list[ExecutionDiagnostic] = []
     warning_paths = _warning_verification_paths(specification)
-    path = specification.output.violation_log
-    if warning_paths and path is None:
+    output = specification.output
+    log, report = output.violation_log, output.verification_report
+    if warning_paths and log is None:
         diagnostics.append(
             _diagnostic(
                 "missing_violation_log",
@@ -2783,22 +2784,42 @@ def _violation_log_declarations(
                 requirement="REQ-0391",
             )
         )
-    if path is not None and profile_of(path) is None:
-        diagnostics.append(
-            _diagnostic(
-                "unknown_artifact_profile",
-                "output.violation_log",
-                {"path": path, "permitted": [".csv", ".parquet"]},
-                requirement="REQ-0760",
+    for field, path in (
+        ("output.violation_log", log),
+        ("output.verification_report", report),
+    ):
+        if path is not None and profile_of(path) is None:
+            diagnostics.append(
+                _diagnostic(
+                    "unknown_artifact_profile",
+                    field,
+                    {"path": path, "permitted": [".csv", ".parquet"]},
+                    requirement="REQ-0760",
+                )
             )
-        )
-    if path is not None and path == specification.output.path:
+    # REQ-0756 and REQ-1180: the primary artifact and the two sidecars name
+    # three different files.
+    for (left_field, left_path), (right_field, right_path), requirement in (
+        (("output.path", output.path), ("output.violation_log", log), "REQ-0756"),
+        (
+            ("output.path", output.path),
+            ("output.verification_report", report),
+            "REQ-1180",
+        ),
+        (
+            ("output.violation_log", log),
+            ("output.verification_report", report),
+            "REQ-1180",
+        ),
+    ):
+        if left_path is None or right_path is None or left_path != right_path:
+            continue
         diagnostics.append(
             _diagnostic(
                 "artifact_path_collision",
-                ("output.path", "output.violation_log"),
-                {"path": path},
-                requirement="REQ-0756",
+                (left_field, right_field),
+                {"path": left_path},
+                requirement=requirement,
             )
         )
     return diagnostics
@@ -2825,8 +2846,18 @@ def _preflight_findings(
         unsupported.append(
             UnsupportedFeature(operation="inheritance", spec_path="parents")
         )
+    if specification.output.verification_report is not None:
+        # REQ-1173 requires a declaring run to produce the report. This
+        # component does not build one yet, so the declaration is reported as
+        # unsupported rather than accepted and dropped.
+        unsupported.append(
+            UnsupportedFeature(
+                operation="verification_report",
+                spec_path="output.verification_report",
+            )
+        )
     diagnostics.extend(_lookup_declarations(specification))
-    diagnostics.extend(_violation_log_declarations(specification))
+    diagnostics.extend(_sidecar_declarations(specification))
 
     rows = specification.rows or ()
     if not specification.parents:

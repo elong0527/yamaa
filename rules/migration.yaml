@@ -2120,7 +2120,7 @@ requirements:
   REQ-1044: {"file": "specification/structure.md", "sources": ["schema.yaml:row_id.description"]}
   REQ-1045: {"file": "specification/structure.md", "sources": ["schema.yaml:comment:3"]}
   REQ-1046: {"file": "specification/structure.md", "sources": ["schema_shared.yaml:identifier.description"]}
-  REQ-1047: {"file": "storage/publication.md", "sources": ["schema.yaml:output_class.path.description", "schema.yaml:output_class.decimals.description", "schema.yaml:output_class.columns.description", "schema.yaml:output_class.violation_log.description", "schema.yaml:output_class.order_by.description"]}
+  REQ-1047: {"file": "storage/publication.md", "sources": ["schema.yaml:output_class.path.description", "schema.yaml:output_class.decimals.description", "schema.yaml:output_class.columns.description", "schema.yaml:output_class.violation_log.description", "schema.yaml:output_class.verification_report.description", "schema.yaml:output_class.order_by.description"]}
   REQ-1048: {"file": "operations/lookup.md", "sources": ["schema.yaml:intermediate_class.id.description", "schema.yaml:intermediate_class.dataset.description", "schema.yaml:intermediate_class.key.description", "schema.yaml:intermediate_class.key_base.description", "schema.yaml:intermediate_class.between.description", "schema.yaml:intermediate_class.filter.description", "schema.yaml:intermediate_class.order_by.description", "schema.yaml:intermediate_class.keep.description", "schema.yaml:intermediate_class.columns.description", "schema.yaml:intermediate_class.missing.description", "schema.yaml:intermediate_class.strict.description"]}
   REQ-1049: {"file": "operations/lookup.md", "sources": ["schema.yaml:intermediate_between_class.value.description", "schema.yaml:intermediate_between_class.lower.description", "schema.yaml:intermediate_between_class.upper.description"]}
   REQ-1050: {"file": "operations/lookup.md", "sources": ["schema.yaml:intermediate_id.description"]}
@@ -2245,6 +2245,15 @@ requirements:
   REQ-1169: {"file": "submission/define-xml.md", "sources": ["yamaa:issue-565:value-level-metadata-generation"]}
   REQ-1170: {"file": "execution/rows.md", "sources": ["yamaa:issue-629:root-filter"]}
   REQ-1171: {"file": "execution/rows.md", "sources": ["yamaa:issue-629:root-filter-conflict"]}
+  REQ-1173: {"file": "execution/verification.md", "sources": ["yamaa:issue-495:verification-report-declaration"]}
+  REQ-1174: {"file": "execution/verification.md", "sources": ["yamaa:issue-495:verification-report-table"]}
+  REQ-1175: {"file": "execution/verification.md", "sources": ["yamaa:issue-495:verification-report-rows"]}
+  REQ-1176: {"file": "execution/verification.md", "sources": ["yamaa:issue-495:verification-report-counts"]}
+  REQ-1177: {"file": "execution/verification.md", "sources": ["yamaa:issue-495:verification-report-failed-run"]}
+  REQ-1178: {"file": "execution/verification.md", "sources": ["yamaa:issue-495:verification-report-validation"]}
+  REQ-1179: {"file": "execution/verification.md", "sources": ["yamaa:issue-495:verification-report-path-error"]}
+  REQ-1180: {"file": "storage/publication.md", "sources": ["yamaa:issue-495:verification-report-path"]}
+  REQ-1181: {"file": "storage/publication.md", "sources": ["yamaa:issue-495:verification-report-publication"]}
 schema_prose:
   - {"source": "schema.yaml:root_class.schema_version.description", "text": "Schema bundle this specification is written against; R006 requires an exact match.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
   - {"source": "schema.yaml:root_class.domain.description", "text": "Name of the output dataset this specification derives.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
@@ -2600,3 +2609,13 @@ provenance_addenda:
   - {"source": "schema_expression_mapping.yaml:expressions.mapping.strict.description", "text": "See REQ-1110 in rules/operations/text.md.", "owner": "operations/text", "group": "expressions.mapping", "target": "REQ-1110"}
   - {"source": "schema_expression_numeric.yaml:expressions.round_half_away_from_zero.source.description", "text": "Numeric variable to round with ties half away from zero.", "owner": "operations/computation", "group": "round_half_away_from_zero", "target": "REQ-1172"}
   - {"source": "schema_expression_numeric.yaml:expressions.round_half_away_from_zero.digits.description", "text": "Integer decimal places; negative rounds left of the decimal point.", "owner": "operations/computation", "group": "round_half_away_from_zero", "target": "REQ-1172"}
+  - {"source": "schema.yaml:output_class.verification_report.description", "text": "See REQ-1047 in rules/storage/publication.md.", "owner": "storage/publication", "group": "output_class", "target": "REQ-1047"}
+  - {"source": "yamaa:issue-495:verification-report-declaration", "text": "Issue #495: output.verification_report names a governed sidecar recording the outcome of every declared verification, produced whenever the field is declared.", "owner": "execution/verification", "group": "verification report", "target": "REQ-1173"}
+  - {"source": "yamaa:issue-495:verification-report-table", "text": "Issue #495: the report is version 1.0 with a fixed column list, types, and order.", "owner": "execution/verification", "group": "verification report", "target": "REQ-1174"}
+  - {"source": "yamaa:issue-495:verification-report-rows", "text": "Issue #495: one row per declared check in execution order, keyed by SPEC_PATH, which joins the report to the violation log; offending keys stay in the log.", "owner": "execution/verification", "group": "verification report", "target": "REQ-1175"}
+  - {"source": "yamaa:issue-495:verification-report-counts", "text": "Issue #495: EVALUATED_COUNT and FAILURE_COUNT count the unit the check counts, and a held check carries no condition and empty details.", "owner": "execution/verification", "group": "verification report", "target": "REQ-1176"}
+  - {"source": "yamaa:issue-495:verification-report-failed-run", "text": "Issue #495: the report is written on a failed run as diagnostic output, outside the accepted artifact set, and carries the checks the run evaluated.", "owner": "execution/verification", "group": "verification report", "target": "REQ-1177"}
+  - {"source": "yamaa:issue-495:verification-report-validation", "text": "Issue #495: the report is verified before it is written, and a malformed report is an execution defect.", "owner": "execution/verification", "group": "verification report", "target": "REQ-1178"}
+  - {"source": "yamaa:issue-495:verification-report-path-error", "text": "Issue #495: a report path that collides with another declared path, or whose extension names no profile, fails validation.", "owner": "execution/verification", "group": "verification report", "target": "REQ-1179"}
+  - {"source": "yamaa:issue-495:verification-report-path", "text": "Issue #495: the report path must differ from output.path and output.violation_log, and its extension selects its profile independently.", "owner": "storage/publication", "group": "verification report", "target": "REQ-1180"}
+  - {"source": "yamaa:issue-495:verification-report-publication", "text": "Issue #495: the report is diagnostic output published before the log and the primary artifact, and is the only file a failed run writes.", "owner": "storage/publication", "group": "verification report", "target": "REQ-1181"}

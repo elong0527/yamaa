@@ -4537,29 +4537,46 @@ def validate_spec_names(spec, spec_label):
                 f"unknown_artifact_profile for {declared_path!r}; R020 maps "
                 + ', '.join(sorted(ARTIFACT_PROFILES)) + " and nothing else"
             )
-        violation_path = output.get('violation_log')
-        if (
-            isinstance(violation_path, str)
-            and artifact_profile({'path': violation_path}) is None
+        # R020 gives each declared path its own profile and requires the
+        # three to name three different files.
+        for field in ('violation_log', 'verification_report'):
+            sidecar_path = output.get(field)
+            if (
+                isinstance(sidecar_path, str)
+                and artifact_profile({'path': sidecar_path}) is None
+            ):
+                errors.append(
+                    f"ERROR: {spec_label}.output.{field}: "
+                    f"unknown_artifact_profile for {sidecar_path!r}; R020 maps "
+                    + ', '.join(sorted(ARTIFACT_PROFILES)) + " and nothing else"
+                )
+        for left, right, subject in (
+            ('path', 'violation_log', 'primary artifact and violation log'),
+            (
+                'path',
+                'verification_report',
+                'primary artifact and verification report',
+            ),
+            (
+                'violation_log',
+                'verification_report',
+                'violation log and verification report',
+            ),
         ):
-            errors.append(
-                f"ERROR: {spec_label}.output.violation_log: "
-                f"unknown_artifact_profile for {violation_path!r}; R020 maps "
-                + ', '.join(sorted(ARTIFACT_PROFILES)) + " and nothing else"
-            )
-        if (
-            isinstance(declared_path, str)
-            and isinstance(violation_path, str)
-            and declared_path == violation_path
-        ):
-            for path in ('output.path', 'output.violation_log'):
+            left_path, right_path = output.get(left), output.get(right)
+            if (
+                not isinstance(left_path, str)
+                or not isinstance(right_path, str)
+                or left_path != right_path
+            ):
+                continue
+            for field in (left, right):
                 errors.append(
                     validation_diagnostic(
-                        f"{spec_label}.{path}",
+                        f"{spec_label}.output.{field}",
                         'artifact_path_collision',
-                        'primary artifact and violation log must name different '
-                        'paths',
-                        context={'path': declared_path},
+                        f'{subject} must name different paths',
+                        context={'path': left_path},
                     )
                 )
 

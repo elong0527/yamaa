@@ -8,7 +8,8 @@ status: normative
 
 ## Purpose
 
-Apply assertions, severity, grouped counts, and warning logs to completed values.
+Apply assertions, severity, and grouped counts to completed values, and
+record what ran in the warning log and the verification report.
 
 ## Scope and dependencies
 
@@ -340,6 +341,96 @@ verifications and before publication. A failure while building or serializing
 it fails the run and leaves the primary artifact ineligible for publication.
 [Artifact publication](../storage/publication.md) defines how a runner publishes the completed pair.
 
+### The verification report
+
+<a id="req-1173"></a>
+
+**REQ-1173.** `output.verification_report` names a governed sidecar recording
+the outcome of every verification the specification declares, held or
+violated. Declaring it is independent of severity: a specification whose
+checks are all `error` may declare it, and one declaring warnings may omit
+it. [Artifact publication](../storage/publication.md) selects its profile from its path by the same closed
+extension mapping and requires that path to differ from `output.path` and
+`output.violation_log`. A run that declares the field always produces the
+report, violations or not, so publication replaces a stale report from an
+earlier run. This is what the violation log cannot state: a header-only log
+is the same bytes whether every declared check held or the specification
+declared no warning at all.
+
+<a id="req-1174"></a>
+
+**REQ-1174.** The verification report is version 1.0 and has exactly these
+columns, in this order and with these [Types and conversion](../values/types.md) types:
+
+| Column | Type | Value |
+|---|---|---|
+| `REPORT_VERSION` | `str` | `1.0` |
+| `ARTIFACT` | `str` | the specification's `output.path` |
+| `SPEC_PATH` | `str` | the check's stable specification path |
+| `VERIFICATION_ID` | `str` | its declared ID, or missing when it has none |
+| `CHECK` | `str` | the registered verification name |
+| `TARGET` | `str` | the verified column, or missing for a dataset verification |
+| `REQUIREMENT` | `str` | the numbered requirement defining the check |
+| `SEVERITY` | `str` | `error` or `warning` |
+| `OUTCOME` | `str` | `held` or `violated` |
+| `CONDITION` | `str` | the stable failed condition, or missing when `OUTCOME` is `held` |
+| `EVALUATED_COUNT` | `int` | rows, or groups for a grouped check, the check examined |
+| `FAILURE_COUNT` | `int` | offending rows or groups; `0` when `OUTCOME` is `held` |
+| `DETAILS` | `str` | remaining condition context as canonical JSON |
+
+<a id="req-1175"></a>
+
+**REQ-1175.** There is one row for every declared check rather than one row
+per violation. A check that ran and held is therefore a row, which is what
+distinguishes it from a check the specification never declared. Rows keep
+execution order: column declaration order first, then dataset-verification
+order, exactly as [REQ-0393](verification.md#req-0393) orders the log.
+`SPEC_PATH` is the key. It is non-missing, unique within the report, and the
+join to the violation log, whose row for the same path carries the complete
+`OFFENDING_KEYS` evidence [REQ-0393](verification.md#req-0393) requires.
+Offending keys stay out of the report so the same unbounded sequence is not
+maintained in two places. `CHECK` is the verification's registered name under
+[REQ-0371](verification.md#req-0371), and `TARGET` is the column a column
+verification infers under [REQ-0372](verification.md#req-0372), missing for a
+dataset verification.
+
+<a id="req-1176"></a>
+
+**REQ-1176.** `EVALUATED_COUNT` and `FAILURE_COUNT` count the unit the check
+itself counts: output rows for a row-wise check, distinct combinations for
+`unique`, and groups for a check that partitions the artifact, where an
+ungrouped `row_count` is the one group [REQ-0385](verification.md#req-0385)
+bounds. `FAILURE_COUNT` is therefore never greater than `EVALUATED_COUNT`,
+and is `0` exactly when `OUTCOME` is `held`. A held check leaves `CONDITION`
+missing and `DETAILS` `{}`. A violated one carries the stable condition its
+failure reports and that failure's remaining context, encoded by
+[REQ-0394](verification.md#req-0394) unchanged rather than by a second
+encoding.
+
+<a id="req-1177"></a>
+
+**REQ-1177.** The report is written for a failed run as well as a successful
+one. It is diagnostic output rather than one of [Artifact publication](../storage/publication.md)'s artifacts, so a
+failed `error` verification still produces no accepted artifact and
+[REQ-0390](verification.md#req-0390) is unchanged: the report records the
+failure, it does not make the run publishable. Its rows are the checks the
+run evaluated, in execution order. The stage that failed contributes the
+checks it evaluated, at least one of them `violated` at `error` severity,
+and a check a stopped run never reached has no row, because the report
+states what was checked and nothing more. This is the one place a rule
+writes a file on a failed run, and it is deliberate: the failing run is the
+one a reviewer most needs in machine-readable form.
+
+<a id="req-1178"></a>
+
+**REQ-1178.** The report is verified before it is written: its columns,
+types, and order; its fixed version; non-missing and unique `SPEC_PATH`;
+`OUTCOME` exactly `held` or `violated`; the count relationship
+[REQ-1176](verification.md#req-1176) fixes; and one-to-one correspondence
+with the checks the executor evaluated, including agreement with the
+violation log about every warning that log carries. A malformed report is an
+execution defect, not a finding that can be recorded inside itself.
+
 ### Interface behavior
 
 <a id="req-1152"></a>
@@ -398,6 +489,12 @@ structural constraints come from its schema declaration.
 **REQ-0406.** Any `error` verification failure: fail and report it. A
   `warning` violation follows [REQ-0389](verification.md#req-0389) through [REQ-0396](verification.md#req-0396) instead.
 
+<a id="req-1179"></a>
+
+**REQ-1179.** An `output.verification_report` whose path collides with
+  `output.path` or `output.violation_log`, or whose extension names no
+  profile: fail validation under [REQ-1180](../storage/publication.md#req-1180).
+
 ## Conformance examples
 
 Representative specifications, input data, and expected outcomes:
@@ -413,5 +510,7 @@ vectors. Static validation does not establish runtime parity.
 
 ## Rationale
 
-Apply assertions, severity, grouped counts, and warning logs to completed values. Keeping this topic in one contract lets
+Apply assertions, severity, and grouped counts to completed values, and
+record what ran in the warning log and the verification report. Keeping this
+topic in one contract lets
 other owners refer to it without defining a second policy.
