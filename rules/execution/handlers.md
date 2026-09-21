@@ -87,17 +87,16 @@ input is present.
 
 <a id="req-0349"></a>
 
-**REQ-0349.** One stage name serves several operations when their
-conditions coincide. The date imputation and precision pair and the datetime
-imputation and precision pair each read the same source domain and answer the
-same missing and invalid conditions, so all four use `impute` in structured
-errors.
+**REQ-0349.** One stage name can serve several operations with the same
+conditions. Date imputation and precision, and datetime imputation and
+precision, each read the same source domain. They answer the same missing and
+invalid conditions. Thus, all four use `impute` in structured errors.
 
 <a id="req-0350"></a>
 
-**REQ-0350.** Where an operation takes several inputs, as `lookup`
-does, `missing` fires when any input is missing. The
-present-but-unusable handler fires only when all inputs are present.
+**REQ-0350.** Where an operation has several inputs, such as `lookup`,
+`missing` fires when any input is missing. The present-but-unusable handler
+fires only when every input is present.
 
 ### Source handlers
 
@@ -115,11 +114,10 @@ source:
 
 <a id="req-0352"></a>
 
-**REQ-0352.** Other expressions type their `source` as a variable or a
-variable with a `filter`, and declare their own handler fields alongside
-it. The binding handlers are not theirs to declare: a source they name
-reaches its records through [Lookup and joins](../operations/lookup.md) and answers to its own handlers once
-it holds a value.
+**REQ-0352.** Other expressions type `source` as a variable or a variable
+with a `filter`. They declare their handler fields beside `source`. Binding
+handlers belong to the source. The source reaches records through lookup and
+joins. The source uses its own handlers after it holds a value.
 
 <a id="req-0353"></a>
 
