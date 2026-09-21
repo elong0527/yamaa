@@ -666,3 +666,6 @@ examples:
   schema-source-binding:
     status: executable
     runtimes: ['python']
+  schema-lookup:
+    status: executable
+    runtimes: ['python']

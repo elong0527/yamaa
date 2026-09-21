@@ -1,0 +1,55 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [USUBJID]
+input:
+  DM: input/dm.csv
+  AE: input/ae.csv
+  MEDDRA: input/meddict.csv
+base: DM
+
+intermediates:
+  # The fatal adverse event per subject. Only fatal records are
+  # eligible; the latest one wins.
+  - id: DEATHEV
+    dataset: AE
+    filter: "AE.AEOUT = 'FATAL'"
+    order_by: [AE.AEDY]
+    keep: last
+
+output:
+  path: adsl.csv
+  columns: [USUBJID, DTHDY, DTHCAUS, DTHPTERM]
+
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: DM.USUBJID
+
+  # The study day of death, read off the selected fatal event.
+  - name: DTHDY
+    type: int
+    label: Study Day of Death
+    derivation: DEATHEV.AEDY
+
+  # The reported cause of death, read off the selected fatal event.
+  - name: DTHCAUS
+    type: str
+    label: Cause of Death
+    derivation: DEATHEV.AEDECOD
+
+  # The coded cause of death: an inline lookup into the dictionary on
+  # differently named key columns.
+  - name: DTHPTERM
+    type: str
+    label: Cause of Death Preferred Term
+    derivation:
+      lookup:
+        dataset: MEDDRA
+        key_base: DTHCAUS
+        key: LLTNAME
+        value: PTNAME
+
+verifications:
+  - unique:
+      columns: [USUBJID]
