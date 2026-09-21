@@ -19,15 +19,16 @@ records by sequence number.
 **Variables:**
 
 - `STARTDT` is the randomization date from `RANDDT`.
-- `ADT` is the earlier of the first adequate progression date
-  (earliest `RSDTC` with `RSSTRESC` of `PD`) and the death date
-  (earliest `DSDTC`); when both are absent it is the last
-  adequate assessment date. A progression and a death on the same
-  day count as progression.
+- `CNSR` is derived first: `0` when an event occurred (a progression or
+  death date is present), `1` otherwise. The event takes priority, and that
+  rule lives here alone: a death after the last adequate assessment is still
+  an event, and a progression and a death on the same day count as
+  progression.
+- `ADT` follows `CNSR`: the event date when the record is an event, else the
+  last adequate assessment date. No separate time-to-event primitive is
+  needed — the event-vs-censor choice is already settled by `CNSR`.
 - `AVAL` is the number of days from `STARTDT` through `ADT`,
   counting the randomization day as day one.
-- `CNSR` is `0` when a progression or death date is present and
-  `1` when both are absent.
 - `EVNTDESC` is `DISEASE PROGRESSION` for a progression event,
   `DEATH` for a death event, and `CENSORED` when both dates are
   absent.
