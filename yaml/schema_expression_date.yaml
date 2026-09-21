@@ -98,6 +98,11 @@ expressions:
             type: variable
             required: true
             description: See REQ-1108 in rules/operations/temporal.md.
+    to_epoch_day: # See REQ-1188 in rules/operations/temporal.md.
+        - source:
+            type: variable
+            required: true
+            description: See REQ-1188 in rules/operations/temporal.md.
 
 day_rule:
     type: str
