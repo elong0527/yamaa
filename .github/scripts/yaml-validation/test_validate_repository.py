@@ -6581,7 +6581,7 @@ class TestRetiredOdmItemReferences(unittest.TestCase):
         examples = TOOL_PATH.parents[3] / 'benchmarks'
         migrated = [
             'adam-adsl-randomization/input/dm.schema.yaml',
-            'odm-form-items/spec.yaml',
+            'schema-odm-form-items/spec.yaml',
             'sdtm-lb-findings/spec.yaml',
             'sdtm-lb-multiform/spec.yaml',
         ]
