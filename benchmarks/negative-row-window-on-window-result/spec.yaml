@@ -1,0 +1,71 @@
+schema_version: "1.0"
+domain: ADLBC
+keys: [STUDYID, USUBJID, PARAMCD, AVISITN]
+input:
+  LB: input/lb.csv
+
+output:
+  path: adlbc.csv
+  columns: [STUDYID, USUBJID, PARAMCD, AVISITN, AVAL, PREV_AVAL, CHG, PREV2]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: LB.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: AVISITN
+    type: int
+    label: Analysis Visit Number
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+
+  - name: PREV_AVAL
+    type: float
+    label: Previous Analysis Value
+
+  - name: CHG
+    type: float
+    label: Change from Previous Value
+
+  - name: PREV2
+    type: float
+    label: Lag of Change
+
+rows:
+  - id: change_alb
+    dataset: LB
+    filter: "LB.LBTESTCD = 'ALB' AND LB.LBSTRESN IS NOT NULL"
+    derivations:
+      USUBJID: LB.USUBJID
+      PARAMCD:
+        literal: "_ALB"
+      AVISITN: LB.VISITNUM
+      AVAL: LB.LBSTRESN
+      PREV_AVAL:
+        row_value:
+          source: AVAL
+          offset: -1
+          window:
+            group_by: [USUBJID, PARAMCD]
+            order_by: [AVISITN]
+      CHG:
+        compute:
+          expr: "AVAL - PREV_AVAL"
+      PREV2:
+        row_value:
+          source: CHG
+          offset: -1
+          window:
+            group_by: [USUBJID, PARAMCD]
+            order_by: [AVISITN]
