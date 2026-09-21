@@ -4,7 +4,11 @@ from yamaa.expressions import parse_predicate
 from yamaa.io.polars import frame_from_values
 from yamaa.models import MISSING, DateValue, TypedColumn
 from yamaa.planning import PlannedIntermediate
-from yamaa.runtime.intermediates import IntermediateSelector, types_comparable
+from yamaa.runtime.intermediates import (
+    IntermediateSelector,
+    _select_eligible,
+    types_comparable,
+)
 from yamaa.runtime.joins import RelationIndex
 from yamaa.specification.models import OrderTerm
 
@@ -327,3 +331,86 @@ def test_a_blank_derivation_yields_missing_and_does_not_match() -> None:
 
 # (Failure-surfacing test removed: no naturally-failing expression in suite
 # without to_number; the _DerivationFailure mechanism remains implemented.)
+
+
+def _outcome_summary(outcome):  # type: ignore[no-untyped-def]
+    condition = outcome.condition.condition.condition if outcome.condition else None
+    position = outcome.record.position if outcome.record is not None else None
+    return (condition, position, outcome.absent)
+
+
+def test_the_match_index_agrees_with_the_record_scan() -> None:
+    # REQ-0134: the hash index answers the same per-row equality the scan
+    # answers, including duplicates, misses, missing keys, int/float
+    # unification, and bool keys (which never compare under R007).
+    rel = relation(
+        "K",
+        [("A", "str"), ("B", "int"), ("C", "float"), ("D", "date"), ("E", "str")],
+        [
+            ["s1", 1, 1.5, DateValue.parse("2025-01-01"), "x"],
+            ["s1", 1, 1.5, DateValue.parse("2025-01-01"), "y"],
+            ["s2", 2, 2.5, DateValue.parse("2025-02-01"), "z"],
+            ["s3", MISSING, 3.5, DateValue.parse("2025-03-01"), "w"],
+        ],
+    )
+    plan = PlannedIntermediate(
+        identifier="K1",
+        dataset="K",
+        path="intermediates[0]",
+        match_variables=("A", "B", "C", "D"),
+        match_fields=("A", "B", "C", "D"),
+        keep="first",
+        order_terms=((OrderTerm(variable="K.E"), "E"),),
+    )
+    sel = IntermediateSelector([plan], {"K": rel})
+    records = list(rel.records)
+    currents = [
+        {"A": "s1", "B": 1, "C": 1.5, "D": DateValue.parse("2025-01-01")},
+        {"A": "s1", "B": 1.0, "C": 1.5, "D": DateValue.parse("2025-01-01")},
+        {"A": "s2", "B": 2, "C": 2.5, "D": DateValue.parse("2025-02-01")},
+        {"A": "nope", "B": 9, "C": 9.5, "D": DateValue.parse("2025-09-09")},
+        {"A": "s1", "B": MISSING, "C": 1.5, "D": DateValue.parse("2025-01-01")},
+        {"A": "s3", "B": 99, "C": 3.5, "D": DateValue.parse("2025-03-01")},
+        {"A": "s1", "B": True, "C": 1.5, "D": DateValue.parse("2025-01-01")},
+    ]
+    for current in currents:
+        indexed = sel.select("K1", current)
+        scanned = _select_eligible(plan, records, current)
+        assert _outcome_summary(indexed) == _outcome_summary(scanned), current
+
+
+def test_the_match_index_agrees_with_the_scan_under_between() -> None:
+    # REQ-0134: range narrowing sees the same matched records either way.
+    rel = relation(
+        "R",
+        [("A", "str"), ("LO", "int"), ("HI", "int"), ("V", "str")],
+        [
+            ["s1", 1, 10, "a"],
+            ["s1", 5, 15, "b"],
+            ["s2", 1, 10, "c"],
+        ],
+    )
+    plan = PlannedIntermediate(
+        identifier="R1",
+        dataset="R",
+        path="intermediates[0]",
+        match_variables=("A",),
+        match_fields=("A",),
+        between_value="X",
+        between_lower="LO",
+        between_upper="HI",
+        keep="first",
+        order_terms=((OrderTerm(variable="R.V"), "V"),),
+    )
+    sel = IntermediateSelector([plan], {"R": rel})
+    records = list(rel.records)
+    for current in [
+        {"A": "s1", "X": 7},
+        {"A": "s1", "X": 12},
+        {"A": "s1", "X": 99},
+        {"A": "s2", "X": 7},
+        {"A": "s9", "X": 7},
+    ]:
+        indexed = sel.select("R1", current)
+        scanned = _select_eligible(plan, records, current)
+        assert _outcome_summary(indexed) == _outcome_summary(scanned), current
