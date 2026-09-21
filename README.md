@@ -7,14 +7,14 @@
 
 yamaa is a domain-specific language (DSL) for clinical trial data standardization.
 A yamaa specification transforms ODM XML data, extracted from an EDC system,
-into SDTM and ADaM datasets following CDISC standards, and on to define.xml.
+into SDTM and ADaM datasets following CDISC standards. The define.xml can also be generated.
 yamaa's rules fix what every item means, so the same specification with the same
 inputs always produces the same dataset, in the R engine and in the Python engine alike.
 
 The one principle behind everything:
 
-> \*\*A yamaa specification has exactly one execution. Where it would have two,
-> yamaa fails instead of choosing.\*\*
+> A yamaa specification has exactly one execution. Where it would have two,
+> yamaa fails instead of choosing.
 
 That is what makes it safe to hand a specification to an AI agent: every
 question gets answered while it is still cheap to answer, at the planning
@@ -34,14 +34,12 @@ benchmark.
 
 ## From ODM XML to SDTM and ADaM
 
-The engine reads the ODM XML extracted from the EDC system — a plain file or a
-TAR archive — and projects it into one long-form clinical-item table: one row
+The engine reads the ODM XML extracted from the EDC system 
+and transforms it into one long-form clinical-item table: one row
 per recorded item, keeping that item's study, event, form and item-group
-context. A yamaa specification reads that projection
+context. A yamaa specification reads the ODM data
 ([example](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-basic.html))
-and derives SDTM and ADaM columns onto the rows it constructs. The benchmarks
-ship the projection directly as a small `odm.csv`, so each example stays
-reviewable by eye.
+and derives SDTM and ADaM datasets.
 
 ## Inheritance
 
@@ -105,7 +103,7 @@ devtools::install_github("elong0527/yamaa", subdir = "R/cdiscbuilder")
 
 - New here? [Introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the model in five minutes.
 - Coming from Excel specs? [Excel to yamaa](https://elong0527.github.io/yamaa/articles/excel/) translates what you already know.
-- Want worked examples? [Reading the examples](https://elong0527.github.io/yamaa/articles/benchmark/) shows how to read the benchmarks.
+- Working example? [Benchmarks](https://elong0527.github.io/yamaa/articles/benchmark/) illustrate the ideas.
 
 ## License
 
