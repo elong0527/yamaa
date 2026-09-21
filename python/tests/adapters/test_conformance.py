@@ -698,3 +698,79 @@ class TestDocumentedCommand:
         second = write_report(report, tmp_path / "two").read_bytes()
 
         assert first == second
+
+
+class TestSuccessfulRunPublishesLogsBeforeThePrimaryArtifact:
+    """REQ-0757/REQ-1181: verification log, warning log, then primary."""
+
+    def test_publication_order(self, tmp_path: Path) -> None:
+        report = run(EXAMPLES / "schema-verification-log", tmp_path)
+
+        assert report.outcome == "success"
+        assert [item.name for item in report.artifacts] == [
+            "adsl-checks",
+            "adsl-warnings",
+            "adsl",
+        ]
+
+
+class TestFailedRunPublishesTheVerificationLogAlone:
+    """REQ-1181: a failed run writes the verification log and nothing else."""
+
+    @staticmethod
+    def _failing_example(tmp_path: Path) -> Path:
+        example = tmp_path / "examples" / "failing-verification-log"
+        (example / "input").mkdir(parents=True)
+        (example / "spec.yaml").write_text(
+            """\
+schema_version: "1.0"
+domain: DM
+keys: [STUDYID, USUBJID]
+input:
+  RAW: input/raw.csv
+
+output:
+  path: dm.csv
+  columns: [STUDYID, USUBJID, AGE]
+  verification_log: report.csv
+
+columns:
+  - name: STUDYID
+    type: str
+    derivation: RAW.STUDYID
+  - name: USUBJID
+    type: str
+    derivation: RAW.USUBJID
+  - name: AGE
+    type: int
+    derivation: RAW.AGE
+    verifications:
+      - range:
+          min: 18
+          max: 100
+""",
+            encoding="ascii",
+        )
+        (example / "input" / "raw.csv").write_text(
+            "STUDYID,USUBJID,AGE\nS,S-1,30\nS,S-2,214\n",
+            encoding="ascii",
+        )
+        return example
+
+    def test_failed_run_publishes_only_the_verification_log(
+        self, tmp_path: Path
+    ) -> None:
+        example = self._failing_example(tmp_path)
+        report = run(example, tmp_path)
+
+        assert report.outcome == "failure"
+        assert [item.name for item in report.artifacts] == ["report"]
+        published = tmp_path / "artifacts" / example.name / "report.csv"
+        assert published.read_bytes() == (
+            b"REPORT_VERSION,ARTIFACT,SPEC_PATH,VERIFICATION_ID,CHECK,TARGET,"
+            b"REQUIREMENT,SEVERITY,OUTCOME,CONDITION,EVALUATED_COUNT,"
+            b"FAILURE_COUNT,DETAILS\n"
+            b"1.0,dm.csv,columns.AGE.verifications[0].range,,range,AGE,"
+            b'REQ-0377,error,violated,range_failed,2,1,"{""column"":""AGE""}"\n'
+        )
+        assert not (tmp_path / "artifacts" / example.name / "dm.csv").exists()

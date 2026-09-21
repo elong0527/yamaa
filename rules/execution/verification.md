@@ -9,7 +9,7 @@ status: normative
 ## Purpose
 
 Apply assertions, severity, and grouped counts to completed values, and
-record what ran in the warning log and the verification report.
+record what ran in the warning log and the verification log.
 
 ## Scope and dependencies
 
@@ -264,7 +264,7 @@ and its `USUBJID` column. A `subset_of` that declares no `id`, names a
 dataset the study document does not declare, or names an unknown column or
 reference column is rejected.
 
-### Severity and the violation log
+### Severity and the warning log
 
 <a id="req-0389"></a>
 
@@ -285,14 +285,14 @@ turn the failed run into a successful one. No accepted artifact is produced.
 <a id="req-0391"></a>
 
 **REQ-0391.** A specification declaring any warning must declare
-`output.violation_log`. Its path must differ from `output.path` and selects an
+`output.warning_log`. Its path must differ from `output.path` and selects an
 [Artifact publication](../storage/publication.md) profile by the same closed extension mapping. A successful run produces
 this sidecar even when no warning is violated; the empty case is a header-only
 dataset, so publication replaces a stale non-empty log from an earlier run.
 
 <a id="req-0392"></a>
 
-**REQ-0392.** The violation log is version 1.0 and has exactly these columns,
+**REQ-0392.** The warning log is version 1.0 and has exactly these columns,
 in this order and with these [Types and conversion](../values/types.md) types:
 
 | Column | Type | Value |
@@ -341,25 +341,25 @@ verifications and before publication. A failure while building or serializing
 it fails the run and leaves the primary artifact ineligible for publication.
 [Artifact publication](../storage/publication.md) defines how a runner publishes the completed pair.
 
-### The verification report
+### The verification log
 
 <a id="req-1173"></a>
 
-**REQ-1173.** `output.verification_report` names a governed sidecar recording
+**REQ-1173.** `output.verification_log` names a governed sidecar recording
 the outcome of every verification the specification declares, held or
 violated. Declaring it is independent of severity: a specification whose
 checks are all `error` may declare it, and one declaring warnings may omit
 it. [Artifact publication](../storage/publication.md) selects its profile from its path by the same closed
 extension mapping and requires that path to differ from `output.path` and
-`output.violation_log`. A run that declares the field always produces the
-report, violations or not, so publication replaces a stale report from an
-earlier run. This is what the violation log cannot state: a header-only log
+`output.warning_log`. A run that declares the field always produces the
+log, violations or not, so publication replaces a stale log from an
+earlier run. This is what the warning log cannot state: a header-only log
 is the same bytes whether every declared check held or the specification
 declared no warning at all.
 
 <a id="req-1174"></a>
 
-**REQ-1174.** The verification report is version 1.0 and has exactly these
+**REQ-1174.** The verification log is version 1.0 and has exactly these
 columns, in this order and with these [Types and conversion](../values/types.md) types:
 
 | Column | Type | Value |
@@ -385,10 +385,10 @@ per violation. A check that ran and held is therefore a row, which is what
 distinguishes it from a check the specification never declared. Rows keep
 execution order: column declaration order first, then dataset-verification
 order, exactly as [REQ-0393](verification.md#req-0393) orders the log.
-`SPEC_PATH` is the key. It is non-missing, unique within the report, and the
-join to the violation log, whose row for the same path carries the complete
+`SPEC_PATH` is the key. It is non-missing, unique within the log, and the
+join to the warning log, whose row for the same path carries the complete
 `OFFENDING_KEYS` evidence [REQ-0393](verification.md#req-0393) requires.
-Offending keys stay out of the report so the same unbounded sequence is not
+Offending keys stay out of the log so the same unbounded sequence is not
 maintained in two places. `CHECK` is the verification's registered name under
 [REQ-0371](verification.md#req-0371), and `TARGET` is the column a column
 verification infers under [REQ-0372](verification.md#req-0372), missing for a
@@ -409,26 +409,26 @@ encoding.
 
 <a id="req-1177"></a>
 
-**REQ-1177.** The report is written for a failed run as well as a successful
+**REQ-1177.** The log is written for a failed run as well as a successful
 one. It is diagnostic output rather than one of [Artifact publication](../storage/publication.md)'s artifacts, so a
 failed `error` verification still produces no accepted artifact and
-[REQ-0390](verification.md#req-0390) is unchanged: the report records the
+[REQ-0390](verification.md#req-0390) is unchanged: the log records the
 failure, it does not make the run publishable. Its rows are the checks the
 run evaluated, in execution order. The stage that failed contributes the
 checks it evaluated, at least one of them `violated` at `error` severity,
-and a check a stopped run never reached has no row, because the report
+and a check a stopped run never reached has no row, because the log
 states what was checked and nothing more. This is the one place a rule
 writes a file on a failed run, and it is deliberate: the failing run is the
 one a reviewer most needs in machine-readable form.
 
 <a id="req-1178"></a>
 
-**REQ-1178.** The report is verified before it is written: its columns,
+**REQ-1178.** The log is verified before it is written: its columns,
 types, and order; its fixed version; non-missing and unique `SPEC_PATH`;
 `OUTCOME` exactly `held` or `violated`; the count relationship
 [REQ-1176](verification.md#req-1176) fixes; and one-to-one correspondence
 with the checks the executor evaluated, including agreement with the
-violation log about every warning that log carries. A malformed report is an
+warning log about every warning that log carries. A malformed log is an
 execution defect, not a finding that can be recorded inside itself.
 
 ### Interface behavior
@@ -491,8 +491,8 @@ structural constraints come from its schema declaration.
 
 <a id="req-1179"></a>
 
-**REQ-1179.** An `output.verification_report` whose path collides with
-  `output.path` or `output.violation_log`, or whose extension names no
+**REQ-1179.** An `output.verification_log` whose path collides with
+  `output.path` or `output.warning_log`, or whose extension names no
   profile: fail validation under [REQ-1180](../storage/publication.md#req-1180).
 
 ## Conformance examples
@@ -511,6 +511,6 @@ vectors. Static validation does not establish runtime parity.
 ## Rationale
 
 Apply assertions, severity, and grouped counts to completed values, and
-record what ran in the warning log and the verification report. Keeping this
+record what ran in the warning log and the verification log. Keeping this
 topic in one contract lets
 other owners refer to it without defining a second policy.

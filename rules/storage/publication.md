@@ -42,13 +42,13 @@ This contract owns column selection; [Ordering](../execution/ordering.md) owns a
 **REQ-0193.** The **primary artifact** is the dataset this specification derives.
 Its columns are exactly the declared columns listed by `output.columns`, in
 that order. Its rows are the rows [Row construction](../execution/rows.md) constructs. A specification may
-also produce [Verification](../execution/verification.md)'s governed warning-violation sidecar. That log reports
+also produce [Verification](../execution/verification.md)'s governed warning sidecar. That log reports
 the run, not a second derivation target or source within this specification.
 
 <a id="req-0195"></a>
 
 **REQ-0195.** Serialization follows the [CSV](csv.md) and [Parquet](parquet.md) profiles. `output.path` names the primary
-file, and `output.violation_log` and `output.verification_report`, when
+file, and `output.warning_log` and `output.verification_log`, when
 present, name [Verification](../execution/verification.md)'s sidecars. Each
 extension selects `parquet` or `csv`. The format profiles own their containers and bytes; this contract owns
 publication. Everything below concerns the primary values and their order,
@@ -91,8 +91,8 @@ keys are used for enrichment and do not change the identity asserted here.
 
 **REQ-0715.** `output.path` names the primary file the specification produces. It
 is required: a specification that derives an artifact says what it produces,
-and there is no default name for one. `output.violation_log` and
-`output.verification_report` name [Verification](../execution/verification.md)'s
+and there is no default name for one. `output.warning_log` and
+`output.verification_log` name [Verification](../execution/verification.md)'s
 sidecars when the specification declares them.
 
 <a id="req-0716"></a>
@@ -265,20 +265,21 @@ after its rows are ordered. Rows are not streamed to the target as they are
 constructed, because a partially constructed dataset is not yet ordered and a
 run that fails midway would already have published part of it.
 
-### Violation-log publication
+### Warning-log publication
 
 <a id="req-0756"></a>
 
-**REQ-0756.** `output.path` and `output.violation_log` must differ. Reusing one
+**REQ-0756.** `output.path` and `output.warning_log` must differ. Reusing one
 path fails validation with `artifact_path_collision` and reports both fields.
 Each path's extension independently selects its profile under [REQ-0716](publication.md#req-0716); the
 primary may be Parquet while its log is CSV, or the reverse.
 
 <a id="req-0757"></a>
 
-**REQ-0757.** When a successful run has a violation log, a publisher renders
+**REQ-0757.** When a successful run has a warning log, a publisher renders
 and validates both complete artifacts before touching either target. It
-publishes the log first and the primary artifact last, applying [REQ-0752](publication.md#req-0752) through
+publishes the log before the primary artifact (after the verification log
+when one is declared, per [REQ-1181](publication.md#req-1181)), applying [REQ-0752](publication.md#req-0752) through
 [REQ-0754](publication.md#req-0754) to each file. A successful publication therefore never exposes a new
 primary artifact without its completed log already visible.
 
@@ -291,12 +292,12 @@ publication fails and the prior primary remains; the complete log may remain as
 the record of the completed candidate run. Atomic replacement is guaranteed per
 file, not simultaneously across two paths.
 
-### Verification-report publication
+### Verification-log publication
 
 <a id="req-1180"></a>
 
-**REQ-1180.** `output.verification_report` must differ from both
-`output.path` and `output.violation_log`. Reusing a path fails validation with
+**REQ-1180.** `output.verification_log` must differ from both
+`output.path` and `output.warning_log`. Reusing a path fails validation with
 `artifact_path_collision` and reports both fields. Its extension selects its
 profile under [REQ-0716](publication.md#req-0716) independently of the other
 two, and an extension the mapping does not name fails validation with
@@ -305,15 +306,15 @@ two, and an extension the mapping does not name fails validation with
 
 <a id="req-1181"></a>
 
-**REQ-1181.** The verification report [Verification](../execution/verification.md) fixes is diagnostic output,
+**REQ-1181.** The verification log [Verification](../execution/verification.md) fixes is diagnostic output,
 not one of [REQ-0193](publication.md#req-0193)'s artifacts. A successful run
 renders and validates it with the other files before touching any target and
-publishes it first, then the violation log, then the primary artifact,
+publishes it first, then the warning log, then the primary artifact,
 applying [REQ-0752](publication.md#req-0752) through
 [REQ-0754](publication.md#req-0754) to each file. A failed run publishes
-neither a primary artifact nor a log and replaces the report alone: it is the
+neither a primary artifact nor a warning log and replaces the verification log alone: it is the
 only file a failed run writes, and writing it accepts nothing. Failure to
-render or replace the report is an output failure that leaves every other
+render or replace the verification log is an output failure that leaves every other
 target untouched.
 
 ### Interface behavior
@@ -328,8 +329,8 @@ structural constraints come from its schema declaration.
 | `output_class.path` | File this specification produces; [Artifact publication](publication.md) selects the serialization profile from its extension. |
 | `output_class.decimals` | Fixed display digits for every float column of a csv artifact; [CSV profile](csv.md) defines the rounding and rejects it for parquet. |
 | `output_class.columns` | Declared columns selected for the artifact, in the order this contract requires. |
-| `output_class.violation_log` | Sidecar dataset recording warning-level verification violations; [Verification](../execution/verification.md) fixes its schema and [Artifact publication](publication.md) serializes it. |
-| `output_class.verification_report` | Sidecar dataset recording the outcome of every declared verification; [Verification](../execution/verification.md) fixes its schema and [Artifact publication](publication.md) serializes it. |
+| `output_class.warning_log` | Sidecar dataset recording warning-level verification violations; [Verification](../execution/verification.md) fixes its schema and [Artifact publication](publication.md) serializes it. |
+| `output_class.verification_log` | Sidecar dataset recording the outcome of every declared verification; [Verification](../execution/verification.md) fixes its schema and [Artifact publication](publication.md) serializes it. |
 | `output_class.order_by` | Terms ordering artifact rows after every verification; omission keeps [Execution lifecycle](../execution/lifecycle.md) construction order. |
 
 ## Error conditions

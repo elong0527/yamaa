@@ -42,6 +42,7 @@ from yamaa.verification.diagnostics import (
     DeclarationError,
     VerificationError,
     VerificationFailure,
+    VerificationRecord,
     VerificationSeverity,
 )
 
@@ -333,8 +334,16 @@ def check_column(
     table: TypedTable,
     column: Column,
     keys: Sequence[str],
+    *,
+    records: list[VerificationRecord] | None = None,
 ) -> tuple[VerificationFailure, ...]:
-    """Run one column's verifications over its completed values (R005 stage 5)."""
+    """Run one column's verifications over its completed values (R005 stage 5).
+
+    Returns one failure per violated check; a check that holds contributes
+    no failure. When ``records`` is given, one :class:`VerificationRecord`
+    is appended per evaluated check, held or violated, in declaration order,
+    so the verification log can report what ran (REQ-1173).
+    """
     declarations = column.verifications or ()
     if not declarations:
         return ()
@@ -352,21 +361,35 @@ def check_column(
                 "unknown column verification",
             )
         condition, requirement = _COLUMN_REQUIREMENTS[keyword]
+        spec_path = f"{path}.{keyword}"
         offending = _column_offenders(
-            keyword, arguments, column, values, key_maps, f"{path}.{keyword}"
+            keyword, arguments, column, values, key_maps, spec_path
         )
+        failure: VerificationFailure | None = None
         if offending:
             context: dict[str, JsonValue] = {"column": column.name}
             if keyword == "max_length":
                 context["max"] = arguments["max"]
-            failures.append(
-                _failure(
-                    condition,
-                    f"{path}.{keyword}",
-                    requirement,
-                    context,
-                    offending,
+            failure = _failure(
+                condition,
+                spec_path,
+                requirement,
+                context,
+                offending,
+                severity=severity,
+            )
+            failures.append(failure)
+        if records is not None:
+            records.append(
+                VerificationRecord(
+                    spec_path=spec_path,
+                    check=keyword,
+                    target=column.name,
+                    requirement=requirement,
+                    verification_id=None,
                     severity=severity,
+                    evaluated_count=len(values),
+                    failure=failure,
                 )
             )
     return tuple(failures)
@@ -551,8 +574,15 @@ def check_dataset(
     *,
     lookup_columns: Sequence[TypedColumn] = (),
     lookup_rows: Sequence[Mapping[str, object]] | None = None,
+    records: list[VerificationRecord] | None = None,
 ) -> tuple[VerificationFailure, ...]:
-    """Run dataset verifications with resolved per-row lookup bindings."""
+    """Run dataset verifications with resolved per-row lookup bindings.
+
+    Returns one failure per violated check; a check that holds contributes
+    no failure. When ``records`` is given, one :class:`VerificationRecord`
+    is appended per evaluated check, held or violated, in declaration order,
+    so the verification log can report what ran (REQ-1173).
+    """
     if not verifications:
         if lookup_columns or lookup_rows is not None:
             _lookup_bindings(table, lookup_columns, lookup_rows)
@@ -585,7 +615,7 @@ def check_dataset(
                     condition="duplicate_identifier",
                 )
             identifiers[identifier] = spec_path
-        failure = _dataset_failure(
+        failure, evaluated_count = _dataset_failure(
             keyword,
             arguments,
             table,
@@ -599,6 +629,19 @@ def check_dataset(
         )
         if failure is not None:
             failures.append(failure)
+        if records is not None:
+            records.append(
+                VerificationRecord(
+                    spec_path=spec_path,
+                    check=keyword,
+                    target=None,
+                    requirement=_DATASET_REQUIREMENTS[keyword][1],
+                    verification_id=identifier,
+                    severity=severity,
+                    evaluated_count=evaluated_count,
+                    failure=failure,
+                )
+            )
     return tuple(failures)
 
 
@@ -645,7 +688,13 @@ def _dataset_failure(
     identifier: str | None,
     spec_path: str,
     severity: VerificationSeverity,
-) -> VerificationFailure | None:
+) -> tuple[VerificationFailure | None, int]:
+    """Evaluate one dataset check, returning the failure and evaluated count.
+
+    The count is what REQ-1176 reports as ``EVALUATED_COUNT``: the distinct
+    combinations for ``unique``, the partition groups for ``row_count``, and
+    the artifact's rows for the checks evaluated row-wise.
+    """
     condition, requirement = _DATASET_REQUIREMENTS[keyword]
     context: dict[str, JsonValue] = {}
     if identifier is not None:
@@ -668,22 +717,32 @@ def _dataset_failure(
     if keyword == "unique":
         names = _column_list(arguments, "columns", table, spec_path)
         combined = [tuple(row[name] for name in names) for row in rows]
+        partitions = _groups(combined)
+        # Each distinct combination is one evaluated unit; a repeated
+        # combination is one failure, and every row carrying it is reported,
+        # because the offending rows differ in their own keys.
+        evaluated = len(partitions)
         repeated = [
-            positions for positions in _groups(combined).values() if len(positions) > 1
+            positions for positions in partitions.values() if len(positions) > 1
         ]
         if not repeated:
-            return None
+            return None, evaluated
         context["columns"] = list(names)
-        # A repeated combination is one failure, and every row carrying it
-        # is reported, because the offending rows differ in their own keys.
-        return _failure(
-            condition,
-            spec_path,
-            requirement,
-            context,
-            [key_maps[position] for positions in repeated for position in positions],
-            count=len(repeated),
-            severity=severity,
+        return (
+            _failure(
+                condition,
+                spec_path,
+                requirement,
+                context,
+                [
+                    key_maps[position]
+                    for positions in repeated
+                    for position in positions
+                ],
+                count=len(repeated),
+                severity=severity,
+            ),
+            evaluated,
         )
 
     if keyword == "all_or_none":
@@ -719,14 +778,17 @@ def _dataset_failure(
         ]
 
     if not offending:
-        return None
-    return _failure(
-        condition,
-        spec_path,
-        requirement,
-        context,
-        offending,
-        severity=severity,
+        return None, len(rows)
+    return (
+        _failure(
+            condition,
+            spec_path,
+            requirement,
+            context,
+            offending,
+            severity=severity,
+        ),
+        len(rows),
     )
 
 
@@ -758,7 +820,7 @@ def _row_count_failure(
     context: dict[str, JsonValue],
     spec_path: str,
     severity: VerificationSeverity,
-) -> VerificationFailure | None:
+) -> tuple[VerificationFailure | None, int]:
     minimum = arguments.get("min")
     maximum = arguments.get("max")
     for bound in (minimum, maximum):
@@ -809,7 +871,7 @@ def _row_count_failure(
                 ({name: combined[order] for order, name in enumerate(names)}, count)
             )
     if not offending:
-        return None
+        return None, len(partitions)
     shown = offending[:REPORTED_KEYS]
     counts: dict[str, JsonValue]
     if len(offending) == 1:
@@ -820,15 +882,18 @@ def _row_count_failure(
         # Keeping only the first count would make every later group ambiguous.
         counts = {"counts": [count for _, count in shown]}
         log_counts = {"counts": [count for _, count in offending]}
-    return _failure(
-        condition,
-        spec_path,
-        requirement,
-        context,
-        [group for group, _ in offending],
-        extra=counts,
-        log_extra=log_counts,
-        severity=severity,
+    return (
+        _failure(
+            condition,
+            spec_path,
+            requirement,
+            context,
+            [group for group, _ in offending],
+            extra=counts,
+            log_extra=log_counts,
+            severity=severity,
+        ),
+        len(partitions),
     )
 
 
@@ -840,16 +905,21 @@ def verify_completed_table(
     *,
     lookup_columns: Sequence[TypedColumn] = (),
     lookup_rows: Sequence[Mapping[str, object]] | None = None,
+    records: list[VerificationRecord] | None = None,
 ) -> TypedTable:
     """Run every stage in R005 order and raise at the first that fails.
 
     Column verifications run first, then output-key validation, then the
     dataset verifications R009 runs last. A stage that fails stops the run
     with every failure it found, because a later stage asserts over values
-    an earlier one has already refused.
+    an earlier one has already refused. When ``records`` is given, one
+    :class:`VerificationRecord` is appended per evaluated check, held or
+    violated, in execution order (REQ-1173).
     """
     failures = [
-        failure for column in columns for failure in check_column(table, column, keys)
+        failure
+        for column in columns
+        for failure in check_column(table, column, keys, records=records)
     ]
     errors = [failure for failure in failures if failure.severity == "error"]
     if errors:
@@ -867,6 +937,7 @@ def verify_completed_table(
             keys,
             lookup_columns=lookup_columns,
             lookup_rows=lookup_rows,
+            records=records,
         )
     )
     errors = [failure for failure in failures if failure.severity == "error"]

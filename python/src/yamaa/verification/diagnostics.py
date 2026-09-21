@@ -35,6 +35,29 @@ class VerificationFailure(BaseModel):
     log_context: dict[str, JsonValue] = Field(default_factory=dict, exclude=True)
 
 
+class VerificationRecord(BaseModel):
+    """One declared check the run evaluated, held or violated.
+
+    The verification log renders one row per record in execution order.
+    ``failure`` is the violated check's failure, or ``None`` when the check
+    held. ``evaluated_count`` counts what the check itself counts
+    (REQ-1176): the artifact's rows for a check evaluated row-wise, the
+    distinct combinations for ``unique``, and the partition groups for a
+    check that partitions the artifact.
+    """
+
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    spec_path: str = Field(min_length=1)
+    check: str = Field(min_length=1)
+    target: str | None = None
+    requirement: str = Field(pattern=r"^(?:REQ-[0-9]{4,}|R[0-9]{3}-[1-9][0-9]*[a-z]?)$")
+    verification_id: str | None = None
+    severity: VerificationSeverity = "error"
+    evaluated_count: int = Field(ge=0)
+    failure: VerificationFailure | None = None
+
+
 class VerificationError(ValueError):
     """Raised when a completed table fails key validation or verification."""
 

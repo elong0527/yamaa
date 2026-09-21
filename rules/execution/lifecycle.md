@@ -257,7 +257,7 @@ derivation:
 
 **REQ-0241.** A failed error-level verification: fail under [Verification](verification.md). A
 warning-level violation leaves the primary artifact intact and enters [Verification](verification.md)'s
-violation log.
+warning log.
 
 ## Conformance examples
 
