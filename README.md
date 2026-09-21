@@ -27,15 +27,15 @@ benchmark.
 
 | Component | Purpose | Links |
 | --- | --- | --- |
-| Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) · [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
-| Rules | Fix the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml/rules) · [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
-| Engine | Runs specifications in Python and R following rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) · [R](https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder) |
-| Benchmark | Runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmark) · [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
+| Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml), [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
+| Rules | Fix the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml/rules), [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
+| Engine | Runs specifications in Python and R following rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python), [R](https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder) |
+| Benchmark | Runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmark), [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
 
 ## From ODM XML to SDTM and ADaM
 
-The engine reads the ODM XML extracted from the EDC system — a plain file or a
-TAR archive — and projects it into one long-form clinical-item table: one row
+The engine reads the ODM XML extracted from the EDC system -- a plain file or a
+TAR archive -- and projects it into one long-form clinical-item table: one row
 per recorded item, keeping that item's study, event, form and item-group
 context. A yamaa specification reads that projection
 ([example](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-basic.html))
