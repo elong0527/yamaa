@@ -5900,7 +5900,17 @@ def validate_expression_predicates(
                 )
             )
 
-    elif keyword in {'row_number', 'rank'} and isinstance(payload, dict):
+    elif keyword == 'lookup' and isinstance(payload, dict):
+        if isinstance(payload.get('filter'), str):
+            errors.extend(validate_predicate_at(
+                payload['filter'], f"{path}.lookup.filter",
+                predicate_resolver(qualified=datasets),
+            ))
+
+    elif keyword in {
+        'row_number', 'rank', 'row_value', 'previous_non_missing', 'locf',
+        'baseline_flag',
+    } and isinstance(payload, dict):
         window = payload.get('window')
         window_filter = window.get('filter') if isinstance(window, dict) else None
         if isinstance(window_filter, str):
@@ -5943,9 +5953,78 @@ def validate_derivation_predicates(derivation, path, resolver, datasets):
     return errors
 
 
+def validate_lookup_filter_scopes(spec, spec_label, env):
+    """Bind correlated lookup predicates to the driver at each use site."""
+    errors = []
+    entries = {
+        item['id']: (item, f"{spec_label}.intermediates[{index}].filter")
+        for index, item in enumerate(spec.get('intermediates') or [])
+        if isinstance(item, dict) and isinstance(item.get('id'), str)
+    }
+    rows = spec.get('rows') or []
+    column_scopes = [
+        (row.get('dataset', default_driver_dataset(spec)), row.get('group_by'))
+        for row in rows
+    ] or [(default_driver_dataset(spec), None)]
+
+    def check(payload, path, scopes):
+        dataset = payload.get('dataset')
+        for name in predicate_identifier_names(payload.get('filter')):
+            if '.' not in name or name.split('.', 1)[0] == dataset:
+                continue  # Existence and mandatory qualification checked separately.
+            for driver, group_by in scopes:
+                if name.split('.', 1)[0] != driver:
+                    errors.append(validation_diagnostic(
+                        path, 'unknown_field',
+                        'a correlated filter must name the current driver',
+                        context={'identifier': name},
+                    ))
+                elif group_by is not None and name not in group_by:
+                    errors.append(validation_diagnostic(
+                        path, 'ungrouped_driver_field',
+                        'a correlated filter must read a driver group key',
+                        context={'identifier': name},
+                    ))
+
+    def visit(node, path, scopes):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == 'lookup' and isinstance(value, dict):
+                    check(value, f"{path}.lookup.filter", scopes)
+                visit(value, f"{path}.{key}", scopes)
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                visit(value, f"{path}[{index}]", scopes)
+
+    def derivation(value, path, scopes):
+        references = (
+            [name for kind, name in collect_type_references(value, 'derivation', env)
+             if kind == 'variable']
+            if env is not None else derive_binding_reference_names(value)
+        )
+        for name in references:
+            qualifier = name.split('.', 1)[0]
+            if qualifier in entries:
+                payload, filter_path = entries[qualifier]
+                check(payload, filter_path, scopes)
+        visit(value, path, scopes)
+
+    for column in spec.get('columns') or []:
+        if 'derivation' in column:
+            derivation(column['derivation'],
+                       f"{spec_label}.columns.{column['name']}.derivation",
+                       column_scopes)
+    for index, row in enumerate(rows):
+        scopes = [(row.get('dataset', default_driver_dataset(spec)),
+                   row.get('group_by'))]
+        for name, value in (row.get('derivations') or {}).items():
+            derivation(value, f"{spec_label}.rows[{index}].derivations.{name}", scopes)
+    return errors
+
+
 def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
     """Parse, resolve, and type-check every R004 predicate in a spec."""
-    errors = []
+    errors = validate_lookup_filter_scopes(spec, spec_label, env)
     datasets = dataset_type_catalog(spec, spec_path, env)
     output_types = specification_column_types(spec)
     intermediates = {}
@@ -5959,11 +6038,7 @@ def validate_spec_predicates(spec, spec_label, spec_path=None, env=None):
             if isinstance(intermediate_id, str) and isinstance(dataset_id, str):
                 intermediates[intermediate_id] = datasets.get(dataset_id, {})
             if isinstance(intermediate.get('filter'), str):
-                resolver = predicate_resolver(
-                    qualified={dataset_id: datasets.get(dataset_id, {})}
-                    if isinstance(dataset_id, str)
-                    else {}
-                )
+                resolver = predicate_resolver(qualified=datasets)
                 errors.extend(
                     validate_predicate_at(
                         intermediate['filter'],
@@ -6621,6 +6696,7 @@ _DERIVE_VARIABLE_FIELDS = {
     'least': ('sources',),
     'mapping': ('source',),
     'previous_non_missing': ('source',),
+    'locf': ('source',),
     'round_half_away_from_zero': ('source',),
     'row_value': ('source',),
     'str_extract': ('source',),
@@ -6638,6 +6714,7 @@ _DERIVE_WINDOW_OPERATIONS = (
     'rank',
     'row_value',
     'previous_non_missing',
+    'locf',
     'baseline_flag',
 )
 
@@ -7315,7 +7392,7 @@ def validate_expression_static_semantics(expression, path, context):
     resolver = context['resolver']
 
     window_order_required = {
-        'row_number', 'rank', 'row_value', 'previous_non_missing',
+        'row_number', 'rank', 'row_value', 'previous_non_missing', 'locf',
     }
     window_order_forbidden = {'baseline_flag'}
     if (
@@ -7748,6 +7825,7 @@ ROW_WINDOW_OPERATIONS = (
     'rank',
     'row_value',
     'previous_non_missing',
+    'locf',
     'baseline_flag',
 )
 

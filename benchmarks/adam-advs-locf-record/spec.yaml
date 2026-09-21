@@ -1,0 +1,48 @@
+schema_version: "1.0"
+domain: ADVS
+keys: [USUBJID, PARAMCD, AVISITN]
+input:
+  PLAN:
+    path: input/plan.csv
+    types: {AVISITN: int}
+  OBS:
+    path: input/vs.csv
+    types: {AVISITN: int, AVAL: float, ADT: date, QSSEQ: int}
+base: PLAN
+intermediates:
+  - id: DONOR
+    dataset: OBS
+    key: [USUBJID, PARAMCD]
+    filter: >-
+      OBS.ANL01FL = 'Y' AND OBS.AVAL IS NOT NULL
+      AND OBS.AVISITN <= PLAN.AVISITN
+    order_by: [OBS.AVISITN, OBS.QSSEQ]
+    keep: last
+output:
+  path: advs.csv
+  columns: [USUBJID, PARAMCD, AVISITN, AVAL, ADT, QSSEQ]
+columns:
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: PLAN.USUBJID
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+    derivation: PLAN.PARAMCD
+  - name: AVISITN
+    type: int
+    label: Analysis Visit Number
+    derivation: PLAN.AVISITN
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation: DONOR.AVAL
+  - name: ADT
+    type: date
+    label: Analysis Date
+    derivation: DONOR.ADT
+  - name: QSSEQ
+    type: int
+    label: Source Sequence Number
+    derivation: DONOR.QSSEQ

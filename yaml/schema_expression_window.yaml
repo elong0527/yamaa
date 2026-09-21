@@ -47,6 +47,14 @@ expressions:
         - window:
             type: window_spec
             description: See REQ-1126 in rules/operations/windows.md.
+    locf: # See REQ-1239 in rules/operations/windows.md.
+        - source:
+            type: variable
+            required: true
+            description: See REQ-1239 in rules/operations/windows.md.
+        - window:
+            type: window_spec
+            description: See REQ-1239 in rules/operations/windows.md.
     baseline_flag: # See REQ-1127 in rules/operations/windows.md.
         - date:
             type: variable

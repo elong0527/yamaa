@@ -25,7 +25,14 @@ from yamaa.expressions.core import (
     normalize_runtime_value,
 )
 from yamaa.expressions.dispatch import evaluate_expression
-from yamaa.expressions.predicates import PredicateError, parse_predicate_cached
+from yamaa.expressions.predicates import (
+    PredicateError,
+    PredicateValue,
+    TruthValue,
+    evaluate_predicate,
+    parse_predicate_cached,
+    predicate_identifiers,
+)
 from yamaa.models import (
     MISSING,
     ColumnType,
@@ -118,6 +125,26 @@ class _DerivedRecordResolver:
         return ResolvedValue(value=self._values[name])
 
 
+class _LookupPredicateResolver(_DerivedRecordResolver):
+    """Bind donor-qualified fields and explicitly planned driver references."""
+
+    def __init__(
+        self,
+        dataset: str,
+        values: Mapping[str, RuntimeValue],
+        current: Mapping[str, RuntimeValue],
+    ) -> None:
+        super().__init__(dataset, values)
+        self._current = current
+
+    def resolve(self, variable: str) -> Resolution:
+        if variable.split(".", 1)[0] == self._dataset:
+            return super().resolve(variable)
+        if variable in self._current:
+            return ResolvedValue(value=self._current[variable])
+        return AbsentValue(variable=variable)
+
+
 class _DerivationFailure(NamedTuple):
     """A derivation that raised an expression condition on a record.
 
@@ -153,16 +180,15 @@ class IntermediateSelector:
     def _filtered(
         self, plan: PlannedIntermediate
     ) -> tuple[IndexedRecord, ...] | ConditionResult:
-        """Apply the intermediate's `filter` once for the whole run.
+        """Cache source-only filtering; defer correlated predicates to selection.
 
-        REQ-0120 makes the filter a predicate over the intermediate's own dataset,
-        so which records are eligible does not vary by current row and the
-        predicate is evaluated once per record rather than once per row.
+        A target-dependent result must never enter this run-wide cache.
         """
         cached = self._eligible.get(plan.identifier)
         if cached is None:
             relation = self._relations[plan.dataset]
-            kept = eligible_records(relation.records, plan.filter_predicate, relation)
+            predicate = None if plan.filter_variables else plan.filter_predicate
+            kept = eligible_records(relation.records, predicate, relation)
             cached = kept if isinstance(kept, ConditionResult) else tuple(kept)
             self._eligible[plan.identifier] = cached
         return cached
@@ -321,6 +347,22 @@ def _select_eligible(
                 for field, value in zip(plan.match_fields, values, strict=True)
             )
         ]
+
+    if plan.filter_variables:
+        filtered: list[IndexedRecord] = []
+        for record in matched:
+            result = evaluate_predicate(
+                plan.filter_predicate,
+                _LookupPredicateResolver(plan.dataset, record.values, current),
+            )
+            if isinstance(result, ConditionResult):
+                return IntermediateOutcome(
+                    condition=result, spec_path=f"{plan.path}.filter"
+                )
+            assert isinstance(result, PredicateValue)
+            if result.value is TruthValue.TRUE:
+                filtered.append(record)
+        matched = filtered
 
     narrowed = _narrowed(plan, matched, current)
     if isinstance(narrowed, IntermediateOutcome):
@@ -567,15 +609,6 @@ def evaluate_intermediate(
             )
         between_value, between_lower, between_upper = (str(bound) for bound in bounds)
         names.append(between_value)
-    for name in names:
-        resolution = resolve(name)
-        if isinstance(resolution, ResolvedValue):
-            current[name] = resolution.value
-        elif isinstance(resolution, FailedResolution):
-            return ConditionResult(condition=resolution.condition)
-        else:
-            current[name] = MISSING
-
     predicate = None
     filter_text = payload.get("filter")
     if isinstance(filter_text, str):
@@ -589,9 +622,20 @@ def evaluate_intermediate(
                     context={"identifier": filter_text},
                 )
             )
-    eligible = eligible_records(relation.records, predicate, relation)
-    if isinstance(eligible, ConditionResult):
-        return eligible
+    filter_variables = tuple(
+        name
+        for name in predicate_identifiers(predicate or {})
+        if name.split(".", 1)[0] != dataset
+    )
+    names.extend(filter_variables)
+    for name in names:
+        resolution = resolve(name)
+        if isinstance(resolution, ResolvedValue):
+            current[name] = resolution.value
+        elif isinstance(resolution, FailedResolution):
+            return ConditionResult(condition=resolution.condition)
+        else:
+            current[name] = MISSING
 
     terms = _order_terms(payload, dataset)
     keep = payload.get("keep")
@@ -603,7 +647,7 @@ def evaluate_intermediate(
         path="lookup",
         match_variables=tuple(sources),
         match_fields=tuple(keys),
-        filter_predicate=None,
+        filter_predicate=predicate,
         order_terms=terms or (),
         keep=keep_value,
         between_value=between_value,
@@ -613,6 +657,11 @@ def evaluate_intermediate(
         strict=bool(payload.get("strict", False)),
         missing_declared="missing" in payload,
     )
+    eligible = eligible_records(
+        relation.records, None if filter_variables else predicate, relation
+    )
+    if isinstance(eligible, ConditionResult):
+        return eligible
     outcome = _select_eligible(plan, eligible, current)
     if outcome.condition is not None:
         return outcome.condition

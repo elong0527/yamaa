@@ -64,6 +64,7 @@ from yamaa.expressions.predicates import (
     evaluate_predicate,
     parse_predicate,
     parse_predicate_cached,
+    predicate_identifiers,
 )
 from yamaa.expressions.strings import (
     TemplateError,
@@ -139,6 +140,7 @@ __all__ = [
     "parse_predicate_cached",
     "parse_template",
     "parse_template_cached",
+    "predicate_identifiers",
     "relational_handler",
     "resolve_operand",
     "source_operand",

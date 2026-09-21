@@ -656,3 +656,20 @@ def _evaluate(node: Mapping[str, Any], resolver: Resolver) -> PredicateResult:
 def evaluate_predicate(ast: PredicateAst, resolver: Resolver) -> PredicateResult:
     """Evaluate a parsed predicate with R004 three-valued logic."""
     return _evaluate(ast, resolver)
+
+
+def predicate_identifiers(ast: PredicateAst) -> tuple[str, ...]:
+    names: list[str] = []
+
+    def visit(value: object) -> None:
+        if isinstance(value, Mapping):
+            if value.get("kind") == "identifier" and isinstance(value.get("name"), str):
+                names.append(value["name"])
+            for nested in value.values():
+                visit(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                visit(nested)
+
+    visit(ast)
+    return tuple(dict.fromkeys(names))

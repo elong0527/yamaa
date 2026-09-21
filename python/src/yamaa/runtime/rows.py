@@ -417,9 +417,7 @@ class RowResolver:
 
     def _lookup_current(self, plan: PlannedIntermediate) -> dict[str, RuntimeValue]:
         """Resolve this row's match values under their declared names."""
-        names = list(plan.match_variables)
-        if plan.between_value is not None:
-            names.append(plan.between_value)
+        names = plan.dependencies
         current: dict[str, RuntimeValue] = {}
         for name in names:
             resolved = self.resolve(name)

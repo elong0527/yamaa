@@ -387,6 +387,15 @@ def test_row_window_still_rejects_zero_offset() -> None:
             [1, 2, 3, 1, 2],
         ),
         (
+            "locf",
+            {
+                "source": "VAL",
+                "window": {"group_by": ["GRP"], "order_by": ["SEQ"]},
+            },
+            "float",
+            [1.0, 2.0, 3.0, 10.0, 20.0],
+        ),
+        (
             "previous_non_missing",
             {
                 "source": "VAL",

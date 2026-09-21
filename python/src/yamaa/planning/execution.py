@@ -22,6 +22,7 @@ from yamaa.expressions import (
     parse_numeric_cached,
     parse_predicate,
     parse_template_cached,
+    predicate_identifiers,
     source_operand,
     template_identifiers,
     ungrouped_identifiers,
@@ -120,14 +121,25 @@ class PlannedIntermediate(_FrozenModel):
     derived: tuple[tuple[str, HandledExpression], ...] = ()
 
     @property
+    def filter_variables(self) -> tuple[str, ...]:
+        """Qualified current-driver fields used by a correlated filter."""
+        if self.filter_predicate is None:
+            return ()
+        return tuple(
+            name
+            for name in predicate_identifiers(self.filter_predicate)
+            if name.split(".", 1)[0] != self.dataset
+        )
+
+    @property
     def dependencies(self) -> tuple[str, ...]:
         """Return the current-row variables REQ-0050 makes this intermediate need.
 
-        `filter` and `order_by` name records of the intermediate's own dataset and
-        contribute no output-column dependency; `source` and `between.value`
-        do, exactly as a column using `intermediate` depends on its sources.
+        Donor fields contribute no current-row dependency. Matching values,
+        range values and correlated filter fields must be available before
+        selecting the shared record.
         """
-        names = list(self.match_variables)
+        names = [*self.match_variables, *self.filter_variables]
         if self.between_value is not None:
             names.append(self.between_value)
         return tuple(dict.fromkeys(names))
@@ -237,6 +249,7 @@ class _Reference:
     path: str
     expected_type: ColumnType | None = None
     current_value_available: bool = False
+    current_driver: bool = False
     # The R007 requirement the owning operation's input type is held to.
     requirement: str | None = None
     # The relation this reference reaches through a declared intermediate pairing,
@@ -530,7 +543,7 @@ def _expression_info(
                             f"{item_path}.when",
                             requirement="REQ-0189",
                         )
-                        for name in _predicate_identifiers(ast)
+                        for name in predicate_identifiers(ast)
                     )
             nest(item.get("then"), f"{item_path}.then")
 
@@ -629,7 +642,7 @@ def _filtered_source_references(
     ast = _parse_predicate_at(selector, filter_path, diagnostics)
     if ast is None:
         return diagnostics
-    for name in _predicate_identifiers(ast):
+    for name in predicate_identifiers(ast):
         if name.split(".", 1)[0] != dataset or "." not in name:
             diagnostics.append(
                 _diagnostic(
@@ -808,8 +821,17 @@ def _lookup_references(
         filter_path = f"{operation_path}.filter"
         predicate = _parse_predicate_at(predicate_text, filter_path, diagnostics)
         if predicate is not None:
-            for identifier in _predicate_identifiers(predicate):
-                if scoped(identifier, filter_path):
+            for identifier in predicate_identifiers(predicate):
+                qualifier, separator, field = identifier.partition(".")
+                if (
+                    separator
+                    and qualifier != dataset
+                    and field in (dataset_fields or {}).get(qualifier, ())
+                ):
+                    references.append(
+                        _Reference(identifier, filter_path, current_driver=True)
+                    )
+                elif scoped(identifier, filter_path):
                     references.append(
                         _Reference(identifier, filter_path, reach="declared")
                     )
@@ -896,6 +918,7 @@ _WINDOW_VARIABLES: dict[str, tuple[str, ...]] = {
     "rank": (),
     "row_value": ("source",),
     "previous_non_missing": ("source",),
+    "locf": ("source",),
     "baseline_flag": ("date", "reference_date"),
 }
 
@@ -907,6 +930,7 @@ _WINDOW_ORDER_BY_REQUIRED: tuple[str, ...] = (
     "rank",
     "row_value",
     "previous_non_missing",
+    "locf",
 )
 _WINDOW_ORDER_BY_FORBIDDEN: tuple[str, ...] = ("baseline_flag",)
 
@@ -982,7 +1006,7 @@ def _window_references(
         ast = _parse_predicate_at(predicate, filter_path, diagnostics)
         if ast is not None:
             references.extend(
-                _Reference(name, filter_path) for name in _predicate_identifiers(ast)
+                _Reference(name, filter_path) for name in predicate_identifiers(ast)
             )
     return diagnostics
 
@@ -1005,6 +1029,7 @@ _DERIVE_VARIABLE_FIELDS: dict[str, tuple[str, ...]] = {
     "least": ("sources",),
     "mapping": ("source",),
     "previous_non_missing": ("source",),
+    "locf": ("source",),
     "round_half_away_from_zero": ("source",),
     "row_value": ("source",),
     "str_extract": ("source",),
@@ -1022,6 +1047,7 @@ _DERIVE_WINDOW_OPERATIONS: tuple[str, ...] = (
     "rank",
     "row_value",
     "previous_non_missing",
+    "locf",
     "baseline_flag",
 )
 
@@ -1052,7 +1078,7 @@ def _derive_reference_names(derivation: object) -> list[str]:
             # The predicate's own validation reports the error; the scan
             # only collects names from predicates that parse.
             return
-        names.extend(_predicate_identifiers(ast))
+        names.extend(predicate_identifiers(ast))
 
     def add_order_by_names(order_by: object) -> None:
         if isinstance(order_by, Sequence) and not isinstance(order_by, str):
@@ -1325,7 +1351,7 @@ def _aggregate_references(
                 filter_declared, f"{operation_path}.filter", []
             )
             if probe_filter is not None:
-                for ref in _predicate_identifiers(probe_filter):
+                for ref in predicate_identifiers(probe_filter):
                     head, dot, _ = ref.partition(".")
                     if dot:
                         qualifiers.add(head)
@@ -1466,7 +1492,7 @@ def _aggregate_references(
         if ast_filter is not None:
             references.extend(
                 relational(name, filter_path)
-                for name in _predicate_identifiers(ast_filter)
+                for name in predicate_identifiers(ast_filter)
             )
     if isinstance(between, Mapping):
         value = between.get("value")
@@ -1600,23 +1626,6 @@ def _template_references(
         for name in template_identifiers(parts)
     )
     return []
-
-
-def _predicate_identifiers(ast: PredicateAst) -> tuple[str, ...]:
-    names: list[str] = []
-
-    def visit(value: object) -> None:
-        if isinstance(value, Mapping):
-            if value.get("kind") == "identifier" and isinstance(value.get("name"), str):
-                names.append(value["name"])
-            for nested in value.values():
-                visit(nested)
-        elif isinstance(value, list):
-            for nested in value:
-                visit(nested)
-
-    visit(ast)
-    return tuple(dict.fromkeys(names))
 
 
 def _parse_predicate_at(
@@ -1875,8 +1884,27 @@ def _validate_qualified_reference(
     """
     qualifier = reference.name.split(".", 1)[0]
     if qualifier in intermediates:
-        _validate_intermediate_reference(
-            reference, intermediates[qualifier], bindings, diagnostics
+        intermediate = intermediates[qualifier]
+        _validate_intermediate_reference(reference, intermediate, bindings, diagnostics)
+        for name in intermediate.filter_variables:
+            _validate_qualified_reference(
+                _Reference(name, f"{intermediate.path}.filter", current_driver=True),
+                drivers,
+                bindings,
+                column_types,
+                diagnostics,
+                row=row,
+                grouped_by_driver=grouped_by_driver,
+            )
+        return
+    if reference.current_driver and set(drivers) != {qualifier}:
+        diagnostics.append(
+            _diagnostic(
+                "unknown_field",
+                reference.path,
+                {"identifier": reference.name, "drivers": sorted(drivers)},
+                requirement="REQ-0120",
+            )
         )
         return
     bound = bindings.bind(reference.name)
@@ -2208,6 +2236,7 @@ def _resolve_implicit_joins(
             or qualifier not in bindings.datasets
             or qualifier in drivers
             or reference.reach != "scalar"
+            or reference.current_driver
             or reference.join_relation is not None
         ):
             annotated.append(reference)
@@ -2677,10 +2706,9 @@ def _plan_lookups(
                 intermediate.filter, f"{path}.filter", diagnostics
             )
             if predicate is not None:
-                for identifier in _predicate_identifiers(predicate):
-                    if identifier.split(".", 1)[0] != intermediate.dataset or (
-                        identifier.split(".", 1)[-1] not in fields
-                    ):
+                for identifier in predicate_identifiers(predicate):
+                    qualifier, separator, field = identifier.partition(".")
+                    if not separator or field not in dataset_fields.get(qualifier, ()):
                         context: dict[str, JsonValue] = {
                             "intermediate": intermediate.id,
                             "identifier": identifier,
@@ -3539,7 +3567,7 @@ def plan_execution(
                     specification.filter, "filter", diagnostics
                 )
             if filter_ast is not None:
-                for identifier in _predicate_identifiers(filter_ast):
+                for identifier in predicate_identifiers(filter_ast):
                     if "." in identifier:
                         _validate_qualified_reference(
                             _Reference(identifier, "filter"),
@@ -3588,7 +3616,7 @@ def plan_execution(
             filter_names: tuple[str, ...] = ()
             if filter_ast is not None:
                 path = filter_path or f"rows[{index}].filter"
-                filter_names = _predicate_identifiers(filter_ast)
+                filter_names = predicate_identifiers(filter_ast)
                 for identifier in filter_names:
                     if "." in identifier:
                         if grouped:

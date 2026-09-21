@@ -62,3 +62,17 @@ that composes specifications and metadata without running their derivations.
 
 Unspecified behavior remains an explicit design question. Implementations
 must not infer a new contract from a host default.
+
+## Carry-forward and donor-record selection
+
+`locf` takes a completed `source` variable and a `window` with `order_by`.
+It preserves a current value and fills gaps from earlier non-missing values
+within the partition; it never constructs additional rows.
+
+A named intermediate or inline `lookup` can compare a donor field with the
+current driver's field in its `filter`, for example
+`OBS.AVISITN < PLAN.AVISITN`. The driver is root `base` without row templates,
+or the explicit template's `dataset`. `order_by` and `keep` select one donor
+from the surviving candidates. Use an explicit planning input for visits
+that do not yet have observed records. See the [window contract](../rules/operations/windows.md)
+and [lookup contract](../rules/operations/lookup.md).

@@ -6743,5 +6743,56 @@ class TestRowPhaseDatasetReads(unittest.TestCase):
             ),
             errors,
         )
+class TestCorrelatedLookupFilters(unittest.TestCase):
+    def specification(self, predicate, *, inline=False, grouped=False):
+        lookup = {
+            'id': 'PRIOR', 'dataset': 'OBS', 'key': ['ID'],
+            'filter': predicate,
+        }
+        expression = {'lookup': {
+            'dataset': 'OBS', 'key': ['ID'], 'filter': predicate, 'value': 'AVAL',
+        }} if inline else 'PRIOR.AVAL'
+        spec = {
+            'input': {'PLAN': 'plan.csv', 'OBS': 'obs.csv', 'OTHER': 'other.csv'},
+            'base': 'PLAN',
+            'columns': [{'name': 'AVAL', 'type': 'float', 'derivation': expression}],
+            'intermediates': [] if inline else [lookup],
+        }
+        if grouped:
+            spec['columns'][0].pop('derivation')
+            spec['rows'] = [{
+                'id': 'planned', 'dataset': 'PLAN',
+                'group_by': ['PLAN.ID'], 'derivations': {'AVAL': expression},
+            }]
+        return spec
+
+    def test_only_current_driver_can_correlate(self):
+        for inline in (False, True):
+            for qualifier, condition in [('PLAN', None), ('OTHER', 'unknown_field')]:
+                with self.subTest(inline=inline, qualifier=qualifier):
+                    errors = VALIDATOR.validate_lookup_filter_scopes(
+                        self.specification(f'OBS.VISIT < {qualifier}.VISIT',
+                                           inline=inline), 'spec', None,
+                    )
+                    self.assertEqual([e.condition for e in errors],
+                                     [] if condition is None else [condition])
+
+    def test_grouped_correlation_requires_a_group_key(self):
+        for inline in (False, True):
+            errors = VALIDATOR.validate_lookup_filter_scopes(
+                self.specification('OBS.VISIT < PLAN.VISIT',
+                                   inline=inline, grouped=True), 'spec', None,
+            )
+            self.assertEqual([e.condition for e in errors], ['ungrouped_driver_field'])
+
+    def test_correlated_predicate_type_checks_both_sides(self):
+        datasets = {'OBS': {'VISIT': 'int'}, 'PLAN': {'VISIT': 'str'}}
+        errors = VALIDATOR.validate_expression_predicates(
+            {'lookup': {'dataset': 'OBS', 'filter': 'OBS.VISIT < PLAN.VISIT'}},
+            'spec.columns.AVAL.derivation', VALIDATOR.predicate_resolver(), datasets,
+        )
+        self.assertEqual([e.condition for e in errors], ['incompatible_input_type'])
+
+
 if __name__ == '__main__':
     unittest.main()

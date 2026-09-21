@@ -92,6 +92,7 @@ project environment, and not before.
 | `to_date` | R016 | the calendar date of a datetime |
 | `row_number`, `rank` | R007 | the position of a row in its ordered partition |
 | `row_value` | R007 | one source read from another row of that partition |
+| `locf` | R007 | the current source value, or the closest earlier non-missing source |
 | `previous_non_missing` | R007 | the closest strictly earlier non-missing source |
 | `baseline_flag` | R007 | the one baseline row |
 | `function` | R018 | one scalar from the pinned project code an activated environment binds |

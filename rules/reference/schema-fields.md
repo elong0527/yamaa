@@ -347,6 +347,8 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.row_value.window` | `"window_spec"` | `false` | Absent | -- | [REQ-1125](../operations/windows.md#req-1125) |
 | `expressions.previous_non_missing.source` | `"variable"` | `true` | Absent | -- | [REQ-1126](../operations/windows.md#req-1126) |
 | `expressions.previous_non_missing.window` | `"window_spec"` | `false` | Absent | -- | [REQ-1126](../operations/windows.md#req-1126) |
+| `expressions.locf.source` | `"variable"` | `true` | Absent | -- | [REQ-1239](../operations/windows.md#req-1239) |
+| `expressions.locf.window` | `"window_spec"` | `false` | Absent | -- | [REQ-1239](../operations/windows.md#req-1239) |
 | `expressions.baseline_flag.date` | `"variable"` | `true` | Absent | -- | [REQ-1127](../operations/windows.md#req-1127) |
 | `expressions.baseline_flag.reference_date` | `"variable"` | `true` | Absent | -- | [REQ-1127](../operations/windows.md#req-1127) |
 | `expressions.baseline_flag.window` | `"window_spec"` | `false` | Absent | -- | [REQ-1127](../operations/windows.md#req-1127) |
