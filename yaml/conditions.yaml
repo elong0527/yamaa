@@ -31,6 +31,7 @@ conditions:
   invalid_date_text: {rules: [R016], phases: [impute]}
   invalid_datetime_text: {rules: [R016], phases: [impute]}
   invalid_field_type: {rules: [R006], phases: [validation]}
+  invalid_mapping_dictionary: {rules: [R007], phases: [validation]}
   invalid_parent_path: {rules: [R017], phases: [validation]}
   invalid_predicate: {rules: [R004], phases: [validation]}
   invalid_regex: {rules: [R022], phases: [validation]}
@@ -39,6 +40,7 @@ conditions:
   key_dependency: {rules: [R001], phases: [validation]}
   length_failed: {rules: [R009], phases: [verification]}
   ln_of_nonpositive: {rules: [R010], phases: [derivation]}
+  mapping_dictionary_source_conflict: {rules: [R007], phases: [validation]}
   matches_failed: {rules: [R009], phases: [verification]}
   missing_entry_output: {rules: [R017], phases: [validation]}
   missing_input: {rules: [R008], phases: [mapping]}

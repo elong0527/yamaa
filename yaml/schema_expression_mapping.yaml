@@ -8,7 +8,11 @@ expressions:
             description: See REQ-1110 in rules/operations/text.md.
         - dict:
             type: "dict[str, literal_value]"
-            required: true
+            required: false
+            description: See REQ-1110 in rules/operations/text.md.
+        - dict_yaml:
+            type: project_path
+            required: false
             description: See REQ-1110 in rules/operations/text.md.
         - case_sensitive:
             type: bool

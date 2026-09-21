@@ -260,3 +260,138 @@ def test_inline_types_conflict_with_producer_before_sources_are_read() -> None:
         "context": {"dataset": "DM", "field": "RANDDT", "type": "date"},
     }
     assert resources.capture_reads == 0
+
+
+def _write_mapping_project(
+    tmp_path: Path, mapping_payload: str, dictionary: str | None
+) -> None:
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "ae.csv").write_text(
+        "USUBJID,AESEQ,AESEV\nP7-501,1,MILD\nP7-501,2,SEVERE\n", encoding="ascii"
+    )
+    if dictionary is not None:
+        (tmp_path / "sevord.yaml").write_text(dictionary, encoding="ascii")
+    (tmp_path / "spec.yaml").write_text(
+        'schema_version: "1.0"\n'
+        "domain: ADAE\n"
+        "keys: [USUBJID, ASEQ]\n"
+        "input:\n"
+        "  AE: input/ae.csv\n"
+        "output:\n"
+        "  path: adae.csv\n"
+        "  columns: [USUBJID, ASEQ, SEVORD]\n"
+        "columns:\n"
+        "  - name: USUBJID\n"
+        "    type: str\n"
+        "    derivation: AE.USUBJID\n"
+        "  - name: ASEQ\n"
+        "    type: int\n"
+        "    derivation: AE.AESEQ\n"
+        "  - name: ASEV\n"
+        "    type: str\n"
+        "    derivation: AE.AESEV\n"
+        "  - name: SEVORD\n"
+        "    type: int\n"
+        "    derivation:\n"
+        f"      mapping:\n{mapping_payload}",
+        encoding="ascii",
+    )
+
+
+def test_mapping_dict_yaml_loads_dictionary_from_file(tmp_path: Path) -> None:
+    _write_mapping_project(
+        tmp_path,
+        "        source: ASEV\n        missing: null\n        dict_yaml: sevord.yaml\n",
+        "MILD: 1\nMODERATE: 2\nSEVERE: 3\n",
+    )
+    resources = ProjectResources(tmp_path)
+    workflow = plan_workflow(
+        tmp_path / "spec.yaml", load_schema_bundle(SCHEMA_ROOT), resources
+    )
+    execution = execute_workflow(workflow, resources)
+
+    assert isinstance(execution.result, ExecutionSuccess)
+    frame = execution.result.artifact.frame
+    assert frame.columns == ["USUBJID", "ASEQ", "SEVORD"]
+    assert frame["SEVORD"].to_list() == [1, 3]
+
+
+def test_mapping_dict_yaml_rejects_inline_dict_beside_it(tmp_path: Path) -> None:
+    _write_mapping_project(
+        tmp_path,
+        "        source: ASEV\n        dict: {MILD: 1}\n        dict_yaml: sevord.yaml\n",
+        "MILD: 1\n",
+    )
+
+    with pytest.raises(SpecificationError) as raised:
+        plan_workflow(
+            tmp_path / "spec.yaml",
+            load_schema_bundle(SCHEMA_ROOT),
+            ProjectResources(tmp_path),
+        )
+
+    diagnostic = raised.value.diagnostics[0]
+    assert diagnostic.condition == "mapping_dictionary_source_conflict"
+    assert diagnostic.requirement == "REQ-1110"
+    assert diagnostic.spec_paths[0] == "columns[3].derivation.value.root.mapping"
+
+
+def test_mapping_dict_yaml_missing_file_is_a_plan_error(tmp_path: Path) -> None:
+    _write_mapping_project(
+        tmp_path,
+        "        source: ASEV\n        dict_yaml: sevord.yaml\n",
+        None,
+    )
+
+    with pytest.raises(SpecificationError) as raised:
+        plan_workflow(
+            tmp_path / "spec.yaml",
+            load_schema_bundle(SCHEMA_ROOT),
+            ProjectResources(tmp_path),
+        )
+
+    diagnostic = raised.value.diagnostics[0]
+    assert diagnostic.condition == "resource_path_missing"
+    assert diagnostic.context["path"] == "sevord.yaml"
+
+
+def test_mapping_dict_yaml_rejects_paths_outside_the_project(tmp_path: Path) -> None:
+    _write_mapping_project(
+        tmp_path,
+        "        source: ASEV\n        dict_yaml: ../escape.yaml\n",
+        None,
+    )
+
+    with pytest.raises(SpecificationError) as raised:
+        plan_workflow(
+            tmp_path / "spec.yaml",
+            load_schema_bundle(SCHEMA_ROOT),
+            ProjectResources(tmp_path),
+        )
+
+    assert raised.value.diagnostics[0].condition == "resource_path_outside_project"
+
+
+@pytest.mark.parametrize(
+    "dictionary",
+    ["- MILD\n- SEVERE\n", "1: one\n"],
+)
+def test_mapping_dict_yaml_rejects_non_mapping_content(
+    tmp_path: Path, dictionary: str
+) -> None:
+    _write_mapping_project(
+        tmp_path,
+        "        source: ASEV\n        dict_yaml: sevord.yaml\n",
+        dictionary,
+    )
+
+    with pytest.raises(SpecificationError) as raised:
+        plan_workflow(
+            tmp_path / "spec.yaml",
+            load_schema_bundle(SCHEMA_ROOT),
+            ProjectResources(tmp_path),
+        )
+
+    diagnostic = raised.value.diagnostics[0]
+    assert diagnostic.condition == "invalid_mapping_dictionary"
+    assert diagnostic.requirement == "REQ-1110"
