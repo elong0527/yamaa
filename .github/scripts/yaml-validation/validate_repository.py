@@ -6663,13 +6663,7 @@ def derive_binding_reference_names(derivation):
             names.append(variable)
         names.extend(predicate_identifier_names(selector))
 
-    def add_window_names(window):
-        if not isinstance(window, dict):
-            return
-        group_by = window.get('group_by')
-        if isinstance(group_by, list):
-            names.extend(entry for entry in group_by if isinstance(entry, str))
-        order_by = window.get('order_by')
+    def add_order_by_names(order_by):
         if isinstance(order_by, list):
             for term in order_by:
                 variable = term
@@ -6677,6 +6671,14 @@ def derive_binding_reference_names(derivation):
                     variable = term.get('variable')
                 if isinstance(variable, str):
                     names.append(variable)
+
+    def add_window_names(window):
+        if not isinstance(window, dict):
+            return
+        group_by = window.get('group_by')
+        if isinstance(group_by, list):
+            names.extend(entry for entry in group_by if isinstance(entry, str))
+        add_order_by_names(window.get('order_by'))
         names.extend(predicate_identifier_names(window.get('filter')))
 
     def visit(node):
@@ -6735,6 +6737,10 @@ def derive_binding_reference_names(derivation):
                     entries = key_base if isinstance(key_base, list) else [key_base]
                     names.extend(entry for entry in entries if isinstance(entry, str))
                     names.extend(predicate_identifier_names(payload.get('filter')))
+                    add_order_by_names(payload.get('order_by'))
+                    between = payload.get('between')
+                    if isinstance(between, dict):
+                        add_variable_field(between.get('value'))
                     return
                 if operation == 'first_available' and isinstance(payload, dict):
                     sources = payload.get('sources')

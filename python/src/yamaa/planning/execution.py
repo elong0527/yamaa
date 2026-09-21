@@ -1054,13 +1054,7 @@ def _derive_reference_names(derivation: object) -> list[str]:
             return
         names.extend(_predicate_identifiers(ast))
 
-    def add_window_names(window: object) -> None:
-        if not isinstance(window, Mapping):
-            return
-        group_by = window.get("group_by")
-        if isinstance(group_by, Sequence) and not isinstance(group_by, str):
-            names.extend(entry for entry in group_by if isinstance(entry, str))
-        order_by = window.get("order_by")
+    def add_order_by_names(order_by: object) -> None:
         if isinstance(order_by, Sequence) and not isinstance(order_by, str):
             for term in order_by:
                 variable = term
@@ -1068,6 +1062,14 @@ def _derive_reference_names(derivation: object) -> list[str]:
                     variable = term.get("variable")
                 if isinstance(variable, str):
                     names.append(variable)
+
+    def add_window_names(window: object) -> None:
+        if not isinstance(window, Mapping):
+            return
+        group_by = window.get("group_by")
+        if isinstance(group_by, Sequence) and not isinstance(group_by, str):
+            names.extend(entry for entry in group_by if isinstance(entry, str))
+        add_order_by_names(window.get("order_by"))
         add_predicate_names(window.get("filter"))
 
     def visit(node: object) -> None:
@@ -1141,6 +1143,10 @@ def _derive_reference_names(derivation: object) -> list[str]:
                     entries = key_base if isinstance(key_base, list) else [key_base]
                     names.extend(entry for entry in entries if isinstance(entry, str))
                     add_predicate_names(payload.get("filter"))
+                    add_order_by_names(payload.get("order_by"))
+                    between = payload.get("between")
+                    if isinstance(between, Mapping):
+                        add_variable_field(between.get("value"))
                     return
                 if operation == "first_available" and isinstance(payload, Mapping):
                     sources = payload.get("sources")
