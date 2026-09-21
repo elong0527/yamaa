@@ -293,6 +293,20 @@ def test_parquet_rejects_an_unsupported_embedded_type(tmp_path: Path) -> None:
     }
 
 
+def test_parquet_accepts_large_string_for_str_columns(tmp_path: Path) -> None:
+    path = tmp_path / "dm.parquet"
+    pq.write_table(
+        pa.table({"ID": pa.array(["001", None], type=pa.large_string())}), path
+    )
+
+    loaded = load_source_table(
+        "DM", DatasetSource(path="dm.parquet"), ProjectResources(tmp_path)
+    )
+
+    assert loaded.table.columns == (TypedColumn(name="ID", type="str"),)
+    assert loaded.table.frame.to_series().to_list() == ["001", None]
+
+
 @pytest.mark.parametrize(
     ("names", "condition", "field"),
     [
