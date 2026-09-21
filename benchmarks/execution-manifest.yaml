@@ -588,13 +588,13 @@ examples:
   negative-implausible-age:
     status: executable
     runtimes: ['python']
-  odm-form-items:
-    status: executable
-    runtimes: ['python']
   schema-birth-date:
     status: executable
     runtimes: ['python']
   schema-numeric-functions:
+    status: executable
+    runtimes: ['python']
+  schema-odm-form-items:
     status: executable
     runtimes: ['python']
   sdtm-ae-coding:

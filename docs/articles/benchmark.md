@@ -2,17 +2,16 @@
 
 ## What the suite is
 
-`benchmarks/` holds **214 directories**. Each one is a complete, runnable
+`benchmarks/` holds **225 directories**. Each one is a complete, runnable
 specification with its input data and the exact output an implementation must
 reproduce:
 
 | Group | Count | What it is |
 |---|---|---|
-| `adam-*` | 76 | ADaM derivations |
-| `sdtm-*` | 23 | SDTM derivations |
-| `negative-*` | 109 | Specifications the design **must reject**, with the exact error |
-| `odm-*` | 1 | An ODM resolution behavior |
-| `schema-*`, `spec-*` | 5 | Schema and inheritance behaviors |
+| `adam-*` | 79 | ADaM derivations |
+| `sdtm-*` | 24 | SDTM derivations |
+| `negative-*` | 115 | Specifications the design **must reject**, with the exact error |
+| `schema-*` | 7 | Schema, inheritance, and resolution behaviors |
 
 Half the suite is negative. That ratio is the point: a portable specification
 language is defined as much by what it refuses as by what it computes, and a

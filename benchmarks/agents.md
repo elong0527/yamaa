@@ -106,14 +106,14 @@ dataset. Reserve this layout for benchmarks whose point is the layering itself;
 a single specification with shared parents keeps `spec.yaml`.
 
 Name the directory for what it derives, not for the construct it uses:
-`sdtm-vs-study-day`, not `sdtm-vs-mapping-from`. The exception is an
-benchmark whose subject is the specification language itself: name it `spec-*`
-(`schema-inheritance`), and the gallery lists it under its own Specification
-category rather than a data domain.
+`sdtm-vs-study-day`, not `sdtm-vs-mapping-from`. The exception is a
+benchmark whose subject is the specification language itself: name it
+`schema-*` (`schema-inheritance`), and the gallery lists it under its own
+Specification category rather than a data domain.
 
 ## The README describes data, not the specification
 
-A reader of an benchmark README wants to know what the output means. The
+A reader of a benchmark README wants to know what the output means. The
 target audience is an average statistician or statistical programmer with a
 general understanding of SDTM and ADaM but limited engineering, ODM XML, or
 tooling detail: expand abbreviations on first use and state effects in
@@ -137,7 +137,7 @@ study-data words. Write:
   the safest correction first and uses a short YAML snippet when it clarifies
   the change.
 
-A `spec-*` benchmark explains spec behavior rather than deriving data, so it
+A `schema-*` benchmark explains spec behavior rather than deriving data, so it
 carries no `Variables:` list: its `Input:` names the spec files and how they
 compose, and its `Note:` states the behavior rule. It still names every
 non-key golden column somewhere in the contract so the coverage check below
@@ -194,7 +194,7 @@ in this repository's issue tracker, grouped by root cause under one work
 item each, so that one limitation is stated once and names the benchmarks
 that show it.
 
-Before removing a finding from an benchmark README, confirm the work item records
+Before removing a finding from a benchmark README, confirm the work item records
 it and names the benchmark. If it does not, migrate it first. Deleting the only
 statement of a limitation is the most common way this suite loses information.
 
@@ -357,7 +357,7 @@ Both scripts print nothing when the suite is clean. Key columns and fixed
 domain values are skipped because they carry no logic; anything the second
 check reports is a variable the README does not explain.
 
-## Adding an benchmark
+## Adding a benchmark
 
 1. Write `spec.yaml`, or the applicable `spec_<variant>.yaml` files, the input
    data, and either the expected output or the expected error. Add an expected
@@ -370,15 +370,15 @@ check reports is a variable the README does not explain.
 4. Record any finding it exposes as a gap on the matching work item in the
    issue tracker, or add the benchmark's name to the gap that already states it.
 
-## Before deleting an benchmark
+## Before deleting a benchmark
 
 Some benchmarks are the only exercise of a construct or a rule, so removing one
-silently drops coverage. Check what an benchmark uniquely covers before deleting
+silently drops coverage. Check what a benchmark uniquely covers before deleting
 or merging it, and replace the coverage in the same change.
 
 ## Adding an expression
 
-An expression enters the vocabulary when an benchmark needs it, a negative
+An expression enters the vocabulary when a benchmark needs it, a negative
 benchmark fixes its failure behavior, and R and Python can implement it the same
 way. Sponsor-specific algorithms stay behind `function`.
 

@@ -3129,7 +3129,7 @@ def _apply_reference(
 # specification written from now on must use the filtered form instead.
 ODM_CONTEXTUAL_REFERENCE_MIGRATION = {
     'adam-adsl-randomization/input/dm.schema.yaml',
-    'odm-form-items/spec.yaml',
+    'schema-odm-form-items/spec.yaml',
     'sdtm-lb-findings/spec.yaml',
     'sdtm-lb-multiform/spec.yaml',
 }
