@@ -324,10 +324,12 @@ VALIDATION_CONTEXT_FIELDS = {
     },
     ('R013', 'invalid_aggregate_context'): {'reason'},
     ('R013', 'invalid_aggregate_expression'): {'expr'},
+    ('R013', 'invalid_derive_step'): {'reason'},
     ('R013', 'mixed_relations'): {'relations'},
     ('R013', 'nested_reduction'): {'expr', 'inner', 'outer'},
     ('R013', 'prohibited_construct'): {'construct', 'expr'},
     ('R013', 'prohibited_function'): {'expr', 'function'},
+    ('R013', 'unknown_derive_variable'): {'identifier'},
     ('R013', 'unknown_field'): {'identifier'},
     ('R013', 'incompatible_input_type'): {
         'actual', 'expected', 'source',
@@ -6606,6 +6608,127 @@ def validate_aggregate_between(
     return errors
 
 
+def derive_binding_reference_names(derivation):
+    """Collect the variable references a derive binding derivation names."""
+    names = []
+    if isinstance(derivation, str):
+        # A bare-string derivation is one source read.
+        names.append(derivation)
+    elif isinstance(derivation, dict):
+        if len(derivation) == 1:
+            operation, payload = next(iter(derivation.items()))
+            if operation == 'source':
+                variable = payload
+                if isinstance(payload, dict):
+                    variable = payload.get('variable')
+                if isinstance(variable, str):
+                    names.append(variable)
+                return names
+            if operation == 'compute':
+                expression = payload.get('expr') if isinstance(payload, dict) else None
+                names.extend(numeric_expression_identifier_names(expression))
+                return names
+        for value in derivation.values():
+            names.extend(derive_binding_reference_names(value))
+    elif isinstance(derivation, list):
+        for item in derivation:
+            names.extend(derive_binding_reference_names(item))
+    return names
+
+
+def validate_derive_step(derive, path, context, filter_text=None):
+    '''Validate an aggregate derive step.
+
+    Returns (bindings, relation, errors): bindings maps each bound name to
+    its declared type, relation is the single dataset the step names, and
+    errors holds any diagnostics. REQ-1189 through REQ-1192.
+    '''
+    errors = []
+    bindings = {}
+
+    def invalid(reason, detail_path, extra=None):
+        errors.append(
+            validation_diagnostic(
+                detail_path,
+                'invalid_derive_step',
+                f'invalid derive step: {reason}',
+                context={'reason': reason, **(extra or {})},
+            )
+        )
+
+    if not isinstance(derive, list) or not derive:
+        invalid('a derive step is a non-empty binding list', f'{path}.derive')
+        return bindings, None, errors
+    datasets = context.get('input', {})
+    qualified_datasets = {
+        key: value for key, value in datasets.items() if isinstance(value, dict)
+    }
+    qualifiers = set()
+    for index, binding in enumerate(derive):
+        binding_path = f'{path}.derive[{index}]'
+        if not isinstance(binding, dict):
+            invalid('a derive binding is a mapping', binding_path)
+            continue
+        name = binding.get('name')
+        if not isinstance(name, str) or not name or name in bindings:
+            invalid(
+                'derive binding names are unique identifiers',
+                binding_path,
+                {'identifier': name},
+            )
+            continue
+        declared = binding.get('type')
+        bindings[name] = declared if isinstance(declared, str) else None
+        # REQ-1189: a binding derivation reads the relation's fields and
+        # earlier bindings, per record.
+        earlier = {
+            earlier_name: bindings[earlier_name] for earlier_name in list(bindings)[:-1]
+        }
+        binding_context = {
+            'resolver': predicate_resolver(
+                unqualified=earlier, qualified=qualified_datasets
+            ),
+            'input': datasets,
+            'env': context.get('env'),
+            'aggregate': context.get('aggregate'),
+        }
+        errors.extend(
+            validate_derivation_static_semantics(
+                binding.get('derivation'),
+                f'{binding_path}.derivation',
+                binding_context,
+            )
+        )
+        for reference in derive_binding_reference_names(binding.get('derivation')):
+            head, dot, _ = reference.partition('.')
+            if dot and head:
+                qualifiers.add(head)
+            elif reference not in earlier:
+                errors.append(
+                    validation_diagnostic(
+                        binding_path,
+                        'unknown_derive_variable',
+                        f'derive binding {name!r} names unknown variable {reference!r}',
+                        context={'identifier': reference, 'binding': name},
+                    )
+                )
+    # REQ-1191: the aggregate filter reads the same relation as the
+    # bindings, so its qualifiers join the single-relation check.
+    if isinstance(filter_text, str):
+        for reference in predicate_identifier_names(filter_text):
+            head, dot, _ = reference.partition('.')
+            if dot and head:
+                qualifiers.add(head)
+    relation = next(iter(qualifiers)) if len(qualifiers) == 1 else None
+    if relation is None:
+        invalid(
+            'a derive step names exactly one relation',
+            f'{path}.derive',
+            {'relations': sorted(qualifiers)},
+        )
+    return bindings, relation, errors
+
+
 def validate_aggregate_at(payload, path, context):
     if isinstance(payload, str):
         expression = payload
@@ -6637,8 +6760,61 @@ def validate_aggregate_at(payload, path, context):
         ]
 
     errors = []
-    qualifiers, has_unqualified = aggregate_relation_names(ast)
-    relations = sorted(qualifiers)
+    derive_bindings = {}
+    derive_relation = None
+    if isinstance(payload, dict) and payload.get('derive') is not None:
+        filter_text = payload.get('filter')
+        derive_bindings, derive_relation, derive_errors = validate_derive_step(
+            payload['derive'],
+            path,
+            context,
+            filter_text if isinstance(filter_text, str) else None,
+        )
+        errors.extend(derive_errors)
+        if derive_errors:
+            return list(dict.fromkeys(errors))
+        # REQ-1189: unqualified names in the reduction name derive
+        # bindings; the step names the reduced relation.
+        unqualified_names = {
+            node['name']
+            for node in iter_expression_ast(ast)
+            if node.get('kind') == 'identifier' and '.' not in node['name']
+        }
+        unknown = sorted(unqualified_names - set(derive_bindings))
+        if unknown:
+            return [
+                validation_diagnostic(
+                    expression_path,
+                    'unknown_derive_variable',
+                    'aggregate expression names unknown derive '
+                    f"variable(s): {', '.join(unknown)}",
+                    context={
+                        'identifier': unknown[0],
+                        'variables': unknown,
+                        'expr': expression,
+                    },
+                )
+            ]
+        # The planner rejects a qualified reference alongside unqualified
+        # names before the derive step is examined (REQ-0504).
+        expr_qualifiers, _ = aggregate_relation_names(ast)
+        if len(expr_qualifiers) > 1 or (expr_qualifiers and unqualified_names):
+            relation_names = sorted(expr_qualifiers) + ['<output>']
+            return [
+                validation_diagnostic(
+                    expression_path,
+                    'mixed_relations',
+                    f'aggregate expression mixes relations {relation_names!r}',
+                    context={'relations': relation_names},
+                    span=ast['span'],
+                )
+            ]
+        qualifiers = {derive_relation}
+        has_unqualified = False
+        relations = sorted(qualifiers)
+    else:
+        qualifiers, has_unqualified = aggregate_relation_names(ast)
+        relations = sorted(qualifiers)
     if len(qualifiers) > 1 or (qualifiers and has_unqualified):
         relation_names = relations + (['<output>'] if has_unqualified else [])
         return [
@@ -6701,7 +6877,10 @@ def validate_aggregate_at(payload, path, context):
                 )
             )
         grouped = set(group_by or []) if isinstance(group_by, list) else set()
+        # REQ-1190: the reduction names derive bindings unqualified with
+        # their declared types; the relation's fields stay qualified.
         resolver = numeric_identifier_resolver(
+            unqualified=derive_bindings,
             qualified={relation: datasets.get(relation, {})}
         )
         for name in grouped:
@@ -7237,8 +7416,6 @@ def validate_expression_static_semantics(expression, path, context):
         )
         return errors
 
-    # (to_number validation removed: REQ-1186 withdrawn per #715 direction)
-
     temporal_inputs = {
         'date_diff': {
             'start': ({'date'}, 'date'),
@@ -7259,6 +7436,9 @@ def validate_expression_static_semantics(expression, path, context):
         },
         'to_date': {
             'source': ({'datetime'}, 'datetime'),
+        },
+        'to_epoch_day': {
+            'source': ({'date'}, 'date'),
         },
     }
     if keyword in temporal_inputs and isinstance(payload, dict):

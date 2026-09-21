@@ -11,19 +11,16 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal, NamedTuple
+from typing import Literal
 
 from pydantic import JsonValue, ValidationError
 
 from yamaa.expressions.core import (
-    AbsentValue,
     FailedResolution,
     Resolution,
     ResolvedValue,
-    Resolver,
     normalize_runtime_value,
 )
-from yamaa.expressions.dispatch import evaluate_expression
 from yamaa.expressions.predicates import PredicateError, parse_predicate_cached
 from yamaa.models import (
     MISSING,
@@ -45,7 +42,7 @@ from yamaa.runtime.joins import (
     json_value,
     select_record,
 )
-from yamaa.specification.models import Expression, OrderTerm
+from yamaa.specification.models import OrderTerm
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,41 +88,6 @@ def types_comparable(left: ColumnType, right: ColumnType) -> bool:
     return left == right or {left, right} <= {"int", "float"}
 
 
-class _DerivedRecordResolver:
-    """Resolve derivation references against one intermediate record.
-
-    REQ-1185 scopes every reference to the intermediate's own dataset: a bare
-    name reads the record's stored field, and a qualified name must name the
-    dataset. The planner rejects anything else before a record is read, so
-    an absent name here is a defect, not a miss.
-    """
-
-    def __init__(self, dataset: str, values: Mapping[str, RuntimeValue]) -> None:
-        self._dataset = dataset
-        self._values = values
-
-    def resolve(self, variable: str) -> Resolution:
-        if "." in variable:
-            qualifier, _, field = variable.partition(".")
-            name = field if qualifier == self._dataset else None
-        else:
-            name = variable
-        if name is None or name not in self._values:
-            return AbsentValue(variable=variable)
-        return ResolvedValue(value=self._values[name])
-
-
-class _DerivationFailure(NamedTuple):
-    """A derivation that raised an expression condition on a record.
-
-    REQ-1185 surfaces the condition at the derivation's own path instead of
-    treating the record as a miss.
-    """
-
-    name: str
-    condition: ConditionResult
-
-
 class IntermediateSelector:
     """Select at most one record per current row for each declared intermediate."""
 
@@ -133,13 +95,10 @@ class IntermediateSelector:
         self,
         plans: Sequence[PlannedIntermediate],
         relations: Mapping[str, RelationIndex],
-        evaluate: Callable[[Expression, Resolver], EvaluationResult] | None = None,
     ) -> None:
         self.plans = {plan.identifier: plan for plan in plans}
         self._relations = relations
         self._eligible: dict[str, tuple[IndexedRecord, ...] | ConditionResult] = {}
-        self._derived: dict[str, tuple[IndexedRecord, ...]] = {}
-        self._evaluate = evaluate or evaluate_expression
 
     def declares(self, identifier: str) -> bool:
         return identifier in self.plans
@@ -161,51 +120,6 @@ class IntermediateSelector:
             self._eligible[plan.identifier] = cached
         return cached
 
-    def _records(
-        self, plan: PlannedIntermediate
-    ) -> tuple[IndexedRecord, ...] | ConditionResult | _DerivationFailure:
-        """Return the plan's eligible records with derivations computed.
-
-        REQ-1185 computes each derivation once per record and caches the
-        augmented records, so matching and selection below read the derived
-        values as if they were stored.
-        """
-        if not plan.derived:
-            return self._filtered(plan)
-        cached = self._derived.get(plan.identifier)
-        if cached is None:
-            eligible = self._filtered(plan)
-            if isinstance(eligible, ConditionResult):
-                return eligible
-            augmented: list[IndexedRecord] = []
-            for record in eligible:
-                outcome = self._augment(plan, record)
-                if isinstance(outcome, _DerivationFailure):
-                    return outcome
-                augmented.append(outcome)
-            cached = tuple(augmented)
-            self._derived[plan.identifier] = cached
-        return cached
-
-    def _augment(
-        self, plan: PlannedIntermediate, record: IndexedRecord
-    ) -> IndexedRecord | _DerivationFailure:
-        """Compute one record's derivations.
-
-        REQ-1185 surfaces a derivation's expression condition: a record the
-        derivation cannot compute is a data error, not a miss. A derivation
-        that yields missing leaves the record augmented with missing, which
-        simply does not match.
-        """
-        values = dict(record.values)
-        resolver = _DerivedRecordResolver(plan.dataset, values)
-        for name, declaration in plan.derived:
-            result = self._evaluate(declaration.value, resolver)
-            if isinstance(result, ConditionResult):
-                return _DerivationFailure(name, result)
-            values[name] = result.value
-        return IndexedRecord(position=record.position, values=values)
-
     def select(
         self,
         identifier: str,
@@ -213,15 +127,10 @@ class IntermediateSelector:
     ) -> IntermediateOutcome:
         """Choose this row's record, in the order R003 lays the steps out."""
         plan = self.plans[identifier]
-        eligible = self._records(plan)
+        eligible = self._filtered(plan)
         if isinstance(eligible, ConditionResult):
             return IntermediateOutcome(
                 condition=eligible, spec_path=f"{plan.path}.filter"
-            )
-        if isinstance(eligible, _DerivationFailure):
-            return IntermediateOutcome(
-                condition=eligible.condition,
-                spec_path=f"{plan.path}.derivations.{eligible.name}",
             )
         return _select_eligible(plan, eligible, current)
 

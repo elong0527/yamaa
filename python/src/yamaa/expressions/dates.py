@@ -588,6 +588,29 @@ def _ordinal(value: DateValue) -> int:
     return dt.date(value.year, value.month, value.day).toordinal()
 
 
+_EPOCH_ORDINAL = dt.date(1970, 1, 1).toordinal()
+
+
+def _to_epoch_day(payload: object, resolver: Resolver) -> EvaluationResult:
+    if not isinstance(payload, Mapping):
+        return _condition(
+            "invalid_field_type",
+            {"operation": "to_epoch_day", "expected": "a mapping"},
+            requirement="REQ-0321",
+        )
+    source = _read(payload, "source", resolver, "to_epoch_day")
+    if isinstance(source, ConditionResult):
+        return source
+    day = _date_operand(source, "to_epoch_day", "source")
+    if isinstance(day, ConditionResult):
+        return day
+    if day is None:
+        # REQ-1187: a missing source returns missing.
+        return ValueResult(value=MISSING)
+    # REQ-1187: integer days since 1970-01-01; earlier dates are negative.
+    return ValueResult(value=_ordinal(day) - _EPOCH_ORDINAL)
+
+
 _UNITS = ("day", "week", "month", "year")
 
 
@@ -698,4 +721,5 @@ def date_handlers() -> dict[str, ExpressionHandler]:
         "datetime_precision": _datetime_precision,
         "study_day": _study_day,
         "to_date": _to_date,
+        "to_epoch_day": _to_epoch_day,
     }

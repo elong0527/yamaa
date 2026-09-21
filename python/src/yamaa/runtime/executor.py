@@ -307,6 +307,7 @@ def _evaluate_one(
                 row_phase=row_phase,
                 column=planned.column,
                 implicit_joins=planned.implicit_joins,
+                dispatcher=dispatcher,
             ),
             dispatcher,
             counter,
@@ -779,9 +780,7 @@ def execute_specification(
         context = RelationalContext(
             bindings=BindingIndex(plan.bindings, sources),
             relations=relations,
-            intermediates=IntermediateSelector(
-                plan.intermediates, relations, selected_dispatcher.evaluate
-            ),
+            intermediates=IntermediateSelector(plan.intermediates, relations),
             output_keys=tuple(specification.keys),
         )
         candidates = _construct_rows(

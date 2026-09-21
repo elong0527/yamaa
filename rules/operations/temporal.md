@@ -154,6 +154,19 @@ any other. Their input and result types are:
 | `datetime_impute` | `source` is complete date or datetime text; `time` is `first` or `last` | `datetime` |
 | `datetime_precision` | `source` is complete date or datetime text, or `datetime` | `str` |
 | `to_date` | `source` is `datetime` | `date` with collected precision `day` |
+| `to_epoch_day` | `source` is `date` | `int` days since 1970-01-01 |
+
+<a id="req-1187"></a>
+
+**REQ-1187.** `to_epoch_day` converts a `date` to the integer count of days
+since 1970-01-01 on the proleptic Gregorian calendar: 1970-01-01 is `0` and
+earlier dates are negative. The integer is ordinary arithmetic input, so a
+per-record derivation converts dates once and aggregates reduce the resulting
+integers; date logic never enters reduction. A `datetime` source is the
+incompatible-input error [Types and conversion](../values/types.md) defines,
+as with every other date operation, and text is not parsed: a text source
+first becomes a `date` through `to_date` or `date_impute`. A missing source
+returns missing.
 
 <a id="req-0591"></a>
 
@@ -294,6 +307,16 @@ structural constraints come from its schema declaration.
 | `expressions.study_day.date` | Date whose study day is returned. |
 | `expressions.study_day.reference` | Reference start date, which is study day 1. |
 | `Result` | Returns the CDISC study day of a date against a reference date. The reference date is day 1 and there is no day zero: a date on or after the reference counts forward from 1, and an earlier date counts back from -1. A missing date or reference yields a missing result. |
+
+<a id="req-1188"></a>
+
+**REQ-1188.** The `expressions.to_epoch_day` interface has the following meanings. Shape, defaults, and
+structural constraints come from its schema declaration.
+
+| Field | Meaning |
+| --- | --- |
+| `expressions.to_epoch_day.source` | Date converted to days since 1970-01-01. |
+| `Result` | Returns the integer count of days since 1970-01-01 for a date. A missing source yields a missing result. A `datetime` or text source is an incompatible input error under this operation contract. |
 
 <a id="req-1109"></a>
 

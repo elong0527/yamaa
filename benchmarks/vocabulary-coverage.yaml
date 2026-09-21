@@ -37,6 +37,7 @@ coverage:
   str_upper: [negative-variable-nested]
   study_day: [negative-study-day-datetime]
   to_date: [negative-date-conversion]
+  to_epoch_day: [negative-epoch-day-non-date]
   verify:all_or_none: [negative-paired-dates]
   verify:allowed_values: [negative-invalid-sex]
   verify:assert: [negative-strata-mismatch]

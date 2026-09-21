@@ -25,10 +25,28 @@ aggregate_class:
         type: [variable, "list[variable]"]
         required: false
         description: See REQ-1088 in rules/operations/aggregation.md.
+    - derive:
+        type: "list[derive_binding_class]"
+        required: false
+        description: See REQ-1189 in rules/operations/aggregation.md.
     - expr:
         type: aggregate_expression
         required: true
         description: See REQ-1088 in rules/operations/aggregation.md.
+
+derive_binding_class:
+    - name:
+        type: identifier
+        required: true
+        description: See REQ-1192 in rules/operations/aggregation.md.
+    - type:
+        type: column_type
+        required: true
+        description: See REQ-1192 in rules/operations/aggregation.md.
+    - derivation:
+        type: derivation
+        required: true
+        description: See REQ-1192 in rules/operations/aggregation.md.
 
 aggregate_expression:
     type: str

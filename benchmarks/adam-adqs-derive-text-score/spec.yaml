@@ -1,0 +1,55 @@
+schema_version: "1.0"
+domain: ADQS
+keys: [STUDYID, USUBJID, VISIT, PARAMCD]
+input:
+  QS: {path: input/qs.csv}
+
+output:
+  path: adqs.csv
+  columns: [STUDYID, USUBJID, VISIT, PARAMCD, PARAM, AVAL]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: QS.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: QS.USUBJID
+
+  - name: VISIT
+    type: str
+    label: Visit Name
+    derivation: QS.VISIT
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
+
+  - name: AVAL
+    type: float
+    label: Analysis Value
+    derivation:
+      aggregate:
+        filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE'"
+        key: [STUDYID, USUBJID, VISIT]
+        derive:
+          - name: QSNUM
+            type: float
+            derivation: QS.QSORRES
+        expr: "SUM(QSNUM)"
+
+rows:
+  - id: subscale
+    filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE' AND QS.QSTESTCD = 'PF01'"
+    derivations:
+      PARAMCD:
+        literal: PFSCORE
+      PARAM:
+        literal: Physical Functioning Subscale Score
