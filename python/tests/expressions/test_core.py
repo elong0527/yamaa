@@ -165,6 +165,16 @@ def test_mapping_validates_dictionary_before_resolving_its_source() -> None:
     assert result.condition.condition == "ambiguous_dictionary"
 
 
+def test_mapping_rejects_unresolved_dict_yaml() -> None:
+    result = evaluate_expression(
+        {"mapping": {"source": "CODE", "dict_yaml": "sevord.yaml"}},
+        MappingResolver({"CODE": "MILD"}),
+    )
+
+    assert isinstance(result, ConditionResult)
+    assert result.condition.condition == "invalid_field_type"
+
+
 def test_unsupported_operation_is_not_a_failure_condition() -> None:
     # `function` is a registered R018 project extension this component does
     # not implement, so it reports its status rather than a failure.

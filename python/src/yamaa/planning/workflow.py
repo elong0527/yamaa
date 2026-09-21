@@ -29,7 +29,7 @@ from yamaa.runtime.executor import (
 from yamaa.schema.inheritance import ResolvedSpecification, resolve_specification
 from yamaa.specification._yaml import read_yaml_bytes
 from yamaa.specification.diagnostics import SpecificationError, ValidationDiagnostic
-from yamaa.specification.models import DatasetSource
+from yamaa.specification.models import DatasetSource, Specification
 from yamaa.specification.schema import SchemaBundle
 
 
@@ -101,6 +101,110 @@ def _physical_path(specification: Path, written: str) -> Path:
     if not candidate.is_absolute():
         candidate = specification.parent / candidate
     return candidate.resolve()
+
+
+def _is_mapping_literal(value: object) -> bool:
+    return value is None or type(value) in (str, int, float, bool)
+
+
+def _expand_mapping_dictionary(
+    payload: dict[str, object],
+    resources: ProjectResources,
+    path: str,
+) -> None:
+    """Replace one mapping dict_yaml with the dictionary it names (REQ-1110).
+
+    The file is read once during workflow planning through the spec's project
+    resources, so evaluation never touches the filesystem. Mutates the
+    expression payload in place; the payload dicts belong to this plan run.
+    """
+    written = payload["dict_yaml"]
+    if "dict" in payload:
+        raise SpecificationError(
+            [
+                _diagnostic(
+                    "mapping_dictionary_source_conflict",
+                    path,
+                    "REQ-1110",
+                    {"fields": ["dict", "dict_yaml"]},
+                )
+            ]
+        )
+    if not isinstance(written, str):
+        raise SpecificationError(
+            [
+                _diagnostic(
+                    "invalid_field_type",
+                    path,
+                    "REQ-1110",
+                    {"operation": "mapping", "expected": "dict_yaml"},
+                )
+            ]
+        )
+    try:
+        snapshot = resources.capture(written)
+        resources.verify(snapshot)
+    except ResourceFailure as error:
+        raise SpecificationError(
+            [
+                _diagnostic(
+                    error.condition,
+                    path,
+                    "REQ-1110",
+                    {"field": "dict_yaml", "path": written},
+                )
+            ]
+        ) from error
+    try:
+        document = read_yaml_bytes(snapshot.content, written)
+    except SpecificationError as error:
+        relocated = [
+            diagnostic.model_copy(update={"spec_paths": (path,)})
+            for diagnostic in error.diagnostics
+        ]
+        raise SpecificationError(relocated) from error
+    if not isinstance(document, dict) or any(
+        not isinstance(key, str) or not _is_mapping_literal(value)
+        for key, value in document.items()
+    ):
+        raise SpecificationError(
+            [
+                _diagnostic(
+                    "invalid_mapping_dictionary",
+                    path,
+                    "REQ-1110",
+                    {"path": written, "expected": "dict[str, literal_value]"},
+                )
+            ]
+        )
+    payload["dict"] = document
+    del payload["dict_yaml"]
+
+
+def _expand_mapping_dictionaries(
+    specification: Specification,
+    resources: ProjectResources,
+) -> None:
+    """Expand every mapping dict_yaml in one resolved specification (REQ-1110)."""
+
+    def visit(node: object, path: str) -> None:
+        if isinstance(node, BaseModel):
+            for name in type(node).model_fields:
+                child = f"{path}.{name}" if path else name
+                visit(getattr(node, name), child)
+        elif isinstance(node, dict):
+            payload = node.get("mapping")
+            if isinstance(payload, dict) and "dict_yaml" in payload:
+                mapping_path = f"{path}.mapping" if path else "mapping"
+                _expand_mapping_dictionary(payload, resources, mapping_path)
+            for key, item in node.items():
+                child = f"{path}.{key}" if path else str(key)
+                visit(item, child)
+        elif isinstance(node, (list, tuple)):
+            for index, item in enumerate(node):
+                visit(item, f"{path}[{index}]")
+
+    visit(specification, "")
 
 
 def _producer_contract(
@@ -235,6 +339,7 @@ def plan_workflow(
         active.append(canonical)
         producer_paths: list[Path] = []
         node_resources = resources.with_base_directory(canonical.parent)
+        _expand_mapping_dictionaries(resolved.specification, node_resources)
         for dataset, source in resolved.specification.input.items():
             if source.schema_path is None:
                 continue
