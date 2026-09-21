@@ -10,7 +10,7 @@ import mapping_doc
 
 
 HERE = Path(__file__).resolve().parent
-BENCHMARKS = HERE.parents[2] / "benchmark"
+BENCHMARKS = HERE.parents[2] / "benchmarks"
 
 
 def load_spec(name):

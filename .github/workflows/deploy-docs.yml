@@ -7,7 +7,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'benchmark/**'
+      - 'benchmarks/**'
       - 'docs/**'
       - 'mkdocs.yml'
       - '.github/scripts/benchmark-docs/**'

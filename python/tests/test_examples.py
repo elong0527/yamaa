@@ -24,7 +24,7 @@ from yamaa.specification import (
 )
 from yamaa.specification._yaml import read_yaml_document
 
-EXAMPLES = Path(__file__).parents[2] / "benchmark"
+EXAMPLES = Path(__file__).parents[2] / "benchmarks"
 SCHEMA_ROOT = EXAMPLES.parent / "yaml"
 
 KNOWN_REQUIREMENT_GAPS: dict[str, tuple[str | None, str | None]] = {}
@@ -235,7 +235,7 @@ def test_positive_example_outputs_match_expected_csvs(
 def test_every_positive_example_carries_a_runner() -> None:
     """A positive benchmark that executes commits the snippet that runs it.
 
-    `benchmark/agents.md` makes `run.py` the mark of a benchmark whose entry
+    `benchmarks/agents.md` makes `run.py` the mark of a benchmark whose entry
     executes and matches its artifact. Every positive benchmark does, so a
     missing runner is a benchmark that stopped executing rather than one
     nobody wrote a runner for.

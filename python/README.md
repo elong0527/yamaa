@@ -517,7 +517,7 @@ operation already uses.
 `python/tests/projects/bmi-python` implements in Python the same logical
 `bmi` contract the committed `adam-adsl-bmi-function` example implements in
 R. The two roots calculate one contract fingerprint and run byte-identical
-vectors, and `benchmark/adam-adsl-bmi-function/spec.yaml` is unchanged
+vectors, and `benchmarks/adam-adsl-bmi-function/spec.yaml` is unchanged
 between them, which is the portability R018 exists for. This runner refuses
 that example's own R project root under REQ-0667 rather than running it.
 
@@ -603,11 +603,11 @@ declared handler path, including the ones that never fired.
 from yamaa.adapters.conformance import compare_example, execute_example
 
 report = execute_example(
-    "benchmark/sdtm-dm-basic",
+    "benchmarks/sdtm-dm-basic",
     schema_root="yaml",
     output_dir="build/conformance/artifacts/sdtm-dm-basic",
 )
-verdict = compare_example(report, "benchmark/sdtm-dm-basic")
+verdict = compare_example(report, "benchmarks/sdtm-dm-basic")
 ```
 
 The two halves stay apart. `execute_example` opens a specification and the
@@ -625,7 +625,7 @@ runner's invocation, report, and comparison protocol and has not published
 the serialization, so this envelope states the observations #101's
 requirements enumerate and expects to be renamed rather than re-derived
 when that contract lands. Promoting an example in
-`benchmark/execution-manifest.yaml` stays with #101, and parity stays
+`benchmarks/execution-manifest.yaml` stays with #101, and parity stays
 with matching R evidence from #200; a passing report here is one runtime's
 evidence, not parity.
 

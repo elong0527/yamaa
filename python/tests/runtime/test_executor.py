@@ -37,7 +37,7 @@ from yamaa.verification import check_column, check_dataset, check_keys
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
-EXAMPLES = REPOSITORY_ROOT / "benchmark"
+EXAMPLES = REPOSITORY_ROOT / "benchmarks"
 DM_EXAMPLE = EXAMPLES / "sdtm-dm-basic"
 WARNING_EXAMPLE = EXAMPLES / "adam-adsl-age-quality"
 

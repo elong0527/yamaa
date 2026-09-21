@@ -18,7 +18,7 @@ def load_blockers(root):
         ('execution-manifest.yaml', 'examples', True),
     )
     for filename, collection, blocked_only in manifests:
-        manifest_path = root / 'benchmark' / filename
+        manifest_path = root / 'benchmarks' / filename
         with open(manifest_path, 'r', encoding='utf-8') as handle:
             manifest = yaml.safe_load(handle)
         entries = (

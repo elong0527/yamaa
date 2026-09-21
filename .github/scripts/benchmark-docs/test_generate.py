@@ -216,7 +216,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("<div><dt>phase</dt><dd>output</dd></div>", page)
         self.assertIn("<div><dt>requirement</dt><dd>REQ-0240</dd></div>", page)
         self.assertIn("<details><summary>expected/error.yaml</summary>", page)
-        base = "https://github.com/elong0527/yamaa/edit/main/benchmark/negative-output-duplicate"
+        base = "https://github.com/elong0527/yamaa/edit/main/benchmarks/negative-output-duplicate"
         self.assertIn(
             '<h2 id="expected-failure-heading">Expected failure</h2>'
             f'<a class="edit-button" href="{base}/expected/error.yaml">Edit</a>',
@@ -308,7 +308,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('data-filename="run.py"', page)
         self.assertIn("import yamaa", page)
         self.assertIn(
-            '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/benchmark/sdtm-dm-basic/run.py">Edit</a>',
+            '<a class="edit-button" href="https://github.com/elong0527/yamaa/edit/main/benchmarks/sdtm-dm-basic/run.py">Edit</a>',
             page,
         )
         self.assertNotIn('id="code-select"', page)
@@ -352,7 +352,7 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertIn("Choose specification document", page)
         self.assertIn('<span class="panel-caption">4 spec files</span>', page)
-        base = "https://github.com/elong0527/yamaa/edit/main/benchmark/schema-inheritance"
+        base = "https://github.com/elong0527/yamaa/edit/main/benchmarks/schema-inheritance"
         for path in [
             "spec_organization.yaml",
             "spec_compound.yaml",
@@ -364,7 +364,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("edit.href = active.dataset.editUrl", page)
         self.assertNotIn('aria-label="expected/spec_resolved.yaml"', page)
         self.assertNotIn('id="section-select"', page)
-        base = "https://github.com/elong0527/yamaa/edit/main/benchmark/schema-inheritance"
+        base = "https://github.com/elong0527/yamaa/edit/main/benchmarks/schema-inheritance"
         for target in (
             "spec_organization.yaml",
             "spec_compound.yaml",
@@ -400,7 +400,7 @@ class DashboardTests(unittest.TestCase):
             "# Benchmark\n\n"
             "[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://benchmark.org/x.html)"
             " [![Lifecycle: finalized](https://img.shields.io/badge/Lifecycle-finalized-brightgreen)]"
-            "(https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle)\n"
+            "(https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)\n"
         )
         self.assertEqual(
             generate.readme_lifecycle(text),
@@ -437,7 +437,7 @@ class DashboardTests(unittest.TestCase):
             finalized,
         )
         self.assertIn(
-            '<a class="lifecycle-badge" href="https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle">',
+            '<a class="lifecycle-badge" href="https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle">',
             finalized,
         )
         draft = generate.render_benchmark(
@@ -452,7 +452,7 @@ class DashboardTests(unittest.TestCase):
             draft,
         )
         self.assertIn(
-            '<a class="lifecycle-badge" href="https://github.com/elong0527/yamaa/blob/main/benchmark/README.md#lifecycle">',
+            '<a class="lifecycle-badge" href="https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle">',
             draft,
         )
 

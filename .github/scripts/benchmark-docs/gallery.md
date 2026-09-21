@@ -6,7 +6,7 @@ hide:
 
 # Benchmark
 
-$total, generated from [`benchmark/`]($source_url). Each page shows
+$total, generated from [`benchmarks/`]($source_url). Each page shows
 the README, the source fixtures, the expected artifacts, and the YAML
 specification.
 

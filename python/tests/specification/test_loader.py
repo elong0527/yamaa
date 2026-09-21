@@ -18,7 +18,7 @@ from yamaa.specification.schema import (
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
 SCHEMA_ROOT = REPOSITORY_ROOT / "yaml"
-EXAMPLES = REPOSITORY_ROOT / "benchmark"
+EXAMPLES = REPOSITORY_ROOT / "benchmarks"
 
 
 def _copy_basic_specification(tmp_path: Path) -> tuple[Path, str]:

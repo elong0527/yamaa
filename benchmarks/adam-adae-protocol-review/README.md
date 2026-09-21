@@ -1,0 +1,28 @@
+# Protocol Review Flags
+
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/adam-adae-protocol-review.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
+**Goal:** flag adverse events needing protocol review.
+
+**Input:** collected adverse events with reported term, protocol
+review score, start date, and start datetime.
+
+**Variables:**
+
+- `ASTDT`: analysis start date as collected; missing when the start
+  date is missing.
+- `ASTDT2`: calendar date of the collected start datetime; missing
+  when that datetime is missing.
+- `REVIEWFL`: `Y` when the event falls in either review window (the
+  start date within 1 January through 31 January 2025, or the start
+  datetime at or after 09:30 on 1 February 2025), its reported term
+  starts with the text `INF_` (the underscore is a literal character,
+  so `INFXREACTION` does not match), and its protocol review score is
+  at least -1.5; otherwise `N`.
+
+**Note:** a missing start date leaves `ASTDT` missing; a missing
+start datetime leaves `ASTDT2` missing. An event with neither review
+date known is `N` in `REVIEWFL`.
+
+**Standard:** ADaM | **Domain:** ADAE

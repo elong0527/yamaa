@@ -63,7 +63,7 @@ The validation ensures:
    specification cannot be combined with inline `types`.
    Negative examples (folders prefixed with `negative-`) are structurally
    validated. For fixtures with `phase: validation`,
-   `benchmark/validation-manifest.yaml` registers every negative example
+   `benchmarks/validation-manifest.yaml` registers every negative example
    whose
    expected phase is `validation`, its owning rule, primary condition, exact
    specification paths, and implemented validator family or open blocking
@@ -102,14 +102,14 @@ The validation ensures:
    `float` column the shortest round-trip text, or exactly the width
    `output.decimals` declares. Static validation checks the form of a golden
    value, not that a derivation would produce it.
-7. **Example Index**: `benchmark/README.md` must accurately list all
+7. **Example Index**: `benchmarks/README.md` must accurately list all
    example directories in alphabetical order without stale entries. The
    descriptions must match the contract defined by the first line of the
    example's `README.md`.
 8. **Example documentation**: Data contracts must stay within 79 columns,
    avoid schema vocabulary, describe each non-key expected column, and use
    only the remediation or specification-variant sections allowed by
-   `benchmark/agents.md`.
+   `benchmarks/agents.md`.
 9. **Regular expressions**: Every pattern the language admits -- a schema
    `pattern` descriptor, `str_extract.pattern`, and a `matches` verification
    -- is compiled by the one ECMA-262 engine R022 pins, with the Unicode flag

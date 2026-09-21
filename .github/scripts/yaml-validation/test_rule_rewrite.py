@@ -18,10 +18,11 @@ class RuleRewriteTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         shutil.copytree(REPO / "yaml", self.root / "yaml")
-        (self.root / "benchmark").symlink_to(
-            REPO / "benchmark", target_is_directory=True
+        shutil.copytree(REPO / "rules", self.root / "rules")
+        (self.root / "benchmarks").symlink_to(
+            REPO / "benchmarks", target_is_directory=True
         )
-        self.rules = self.root / "yaml/rules"
+        self.rules = self.root / "rules"
 
     def replace(self, path, before, after):
         body = path.read_text(encoding="ascii")
@@ -43,13 +44,14 @@ class RuleRewriteTests(unittest.TestCase):
     def test_file_move_preserves_requirement_ids(self):
         source = self.rules / "values/numbers.md"
         source.rename(source.with_name("representation.md"))
-        for path in (self.root / "yaml").rglob("*"):
-            if not path.is_file():
-                continue
-            text = path.read_text()
-            text = text.replace("values/numbers", "values/representation")
-            text = text.replace("(numbers.md", "(representation.md")
-            path.write_text(text)
+        for base in (self.root / "yaml", self.root / "rules"):
+            for path in base.rglob("*"):
+                if not path.is_file():
+                    continue
+                text = path.read_text()
+                text = text.replace("values/numbers", "values/representation")
+                text = text.replace("(numbers.md", "(representation.md")
+                path.write_text(text)
         errors, _ = check(self.root)
         self.assertEqual(errors, [])
         self.assertEqual(

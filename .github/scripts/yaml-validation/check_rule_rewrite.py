@@ -36,7 +36,7 @@ class UniqueLoader(yaml.SafeLoader):
 
 def load_migration(root):
     return yaml.load(
-        (root / "yaml/rules/migration.yaml").read_text(encoding="ascii"),
+        (root / "rules/migration.yaml").read_text(encoding="ascii"),
         Loader=UniqueLoader,
     )
 
@@ -51,7 +51,7 @@ def resolve_requirement(identifier, migration):
 def check(root):
     """Return errors and per-source (mapped, total) coverage."""
     errors = []
-    directory = root / "yaml/rules"
+    directory = root / "rules"
     try:
         migration = load_migration(root)
         if not isinstance(migration, dict) or migration.get("version") != 2:
