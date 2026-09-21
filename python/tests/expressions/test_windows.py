@@ -5,7 +5,6 @@ import pytest
 from yamaa.expressions import Partition, evaluate_window
 from yamaa.expressions.windows import (
     baseline_flag,
-    baseline_value,
     previous_non_missing,
     rank,
     row_number,
@@ -175,7 +174,7 @@ def test_a_row_with_no_earlier_non_missing_value_yields_missing() -> None:
     assert _value(previous_non_missing(partition(rows, 1), "AVAL")) is MISSING
 
 
-# --- baseline_flag and baseline_value ------------------------------------
+# --- baseline_flag --------------------------------------------------------
 
 
 def dated(*pairs: tuple[str | object, str]) -> list[RowValues]:
@@ -221,33 +220,6 @@ def test_a_partition_with_no_eligible_row_flags_nothing() -> None:
     assert _value(baseline_flag(partition(rows, 1), "ADT", "TRTSDT")) is MISSING
 
 
-def test_the_flagged_row_broadcasts_its_value_to_the_partition() -> None:
-    rows = [
-        {"AVAL": 5.1, "ABLFL": "Y"},
-        {"AVAL": 5.4, "ABLFL": MISSING},
-        {"AVAL": 5.2, "ABLFL": MISSING},
-    ]
-
-    values = [
-        _value(baseline_value(partition(rows, index), "AVAL", "ABLFL"))
-        for index in range(3)
-    ]
-
-    assert values == [5.1, 5.1, 5.1]
-
-
-def test_no_flagged_row_broadcasts_missing_and_two_are_refused() -> None:
-    none_flagged = [{"AVAL": 1.0, "ABLFL": MISSING}]
-    two_flagged = [{"AVAL": 1.0, "ABLFL": "Y"}, {"AVAL": 2.0, "ABLFL": "Y"}]
-
-    assert (
-        _value(baseline_value(partition(none_flagged, 0), "AVAL", "ABLFL")) is MISSING
-    )
-    condition = _condition(baseline_value(partition(two_flagged, 0), "AVAL", "ABLFL"))
-    assert condition.condition.condition == "ambiguous_baseline"
-    assert condition.condition.context["flag_count"] == 2
-
-
 # --- dispatch ------------------------------------------------------------
 
 
@@ -268,14 +240,15 @@ def test_every_registered_window_dispatches_to_its_own_operation() -> None:
         _value(evaluate_window("previous_non_missing", {"source": "AVAL"}, located))
         == 5
     )
-    assert (
-        _value(
-            evaluate_window(
-                "baseline_value", {"value": "AVAL", "flag": "ABLFL"}, located
-            )
+
+
+def test_an_unregistered_window_operation_is_rejected() -> None:
+    rows = [{"AVAL": 5, "ABLFL": "Y"}, {"AVAL": 6, "ABLFL": MISSING}]
+
+    with pytest.raises(ValueError, match="unknown window operation"):
+        evaluate_window(
+            "baseline_value", {"value": "AVAL", "flag": "ABLFL"}, partition(rows, 1)
         )
-        == 5
-    )
 
 
 def test_a_method_outside_the_two_r007_names_is_refused() -> None:

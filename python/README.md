@@ -93,7 +93,7 @@ project environment, and not before.
 | `row_number`, `rank` | R007 | the position of a row in its ordered partition |
 | `row_value` | R007 | one source read from another row of that partition |
 | `previous_non_missing` | R007 | the closest strictly earlier non-missing source |
-| `baseline_flag`, `baseline_value` | R007 | the one baseline row, and its value broadcast |
+| `baseline_flag` | R007 | the one baseline row |
 | `function` | R018 | one scalar from the pinned project code an activated environment binds |
 
 `compute` reads the closed R010 grammar: the operators `+ - * /` with unary

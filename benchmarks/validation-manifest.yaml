@@ -248,6 +248,11 @@ fixtures:
     condition: invalid_field_type
     spec_paths: [columns.SEVRANK.derivation.rank.method]
     validator: schema
+  negative-round-half-away-from-zero-non-numeric-source:
+    rule: R007
+    condition: incompatible_input_type
+    spec_paths: [columns.RNDVAL.derivation.round_half_away_from_zero.source]
+    validator: expression_contract
   negative-row-number-filter:
     rule: R006
     condition: invalid_field_type

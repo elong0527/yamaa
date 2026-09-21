@@ -13,7 +13,9 @@ baseline record.
 **Variables:**
 
 - `LBSTRESN`: the numeric result copied from the input record.
-- `BAVL`: the baseline value, taken from the subject's record
+- `LBBLFL`: the baseline flag copied from the input record, which
+  `BAVL` reads to find the subject's baseline row.
+- `BAVL`: the baseline value, taken from the subject's row
   flagged `Y` in `LBBLFL` and repeated on every row for that
   subject.
 

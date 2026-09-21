@@ -103,19 +103,6 @@ def describe_baseline_flag(node):
     )
 
 
-def describe_baseline_value(node):
-    window = node.get("window", {})
-    groups = ", ".join(str(g) for g in window.get("group_by", []))
-    return (
-        str(node.get("value"))
-        + " from the record flagged "
-        + str(node.get("flag"))
-        + ' = "Y" within each ('
-        + groups
-        + ")."
-    )
-
-
 def describe_date_impute(node):
     bits = []
     if node.get("month") is not None:
@@ -152,8 +139,6 @@ def describe_derivation(derivation):
         return describe_compute(derivation["compute"])
     if "baseline_flag" in derivation:
         return describe_baseline_flag(derivation["baseline_flag"])
-    if "baseline_value" in derivation:
-        return describe_baseline_value(derivation["baseline_value"])
     if "date_impute" in derivation:
         return describe_date_impute(derivation["date_impute"])
     return str(derivation)
@@ -257,23 +242,6 @@ def source_cell(col, col_by_name, input_names, seen=None):
             + left
             + "; "
             + str(node.get("reference_date"))
-            + " "
-            + ARROW
-            + " "
-            + right
-        )
-    if "baseline_value" in derivation:
-        node = derivation["baseline_value"]
-        left = resolve_chain(str(node.get("value")), col_by_name, input_names, seen)
-        right = resolve_chain(str(node.get("flag")), col_by_name, input_names, seen)
-        return (
-            str(node.get("value"))
-            + " "
-            + ARROW
-            + " "
-            + left
-            + "; "
-            + str(node.get("flag"))
             + " "
             + ARROW
             + " "

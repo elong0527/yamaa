@@ -9,7 +9,6 @@ version: "1.0"
 coverage:
   aggregate: [negative-sum-non-numeric]
   baseline_flag: [negative-tied-baseline]
-  baseline_value: [negative-multiple-baselines]
   case: [negative-review-arithmetic]
   first_available: [negative-first-available-self]
   compute: [negative-formula-flag]
@@ -25,6 +24,7 @@ coverage:
   lookup: [negative-mapping-unmapped-key]
   previous_non_missing: [negative-previous-fixed]
   rank: [negative-rank-bad-method]
+  round_half_away_from_zero: [negative-round-half-away-from-zero-non-numeric-source]
   row_number: [negative-row-number-filter]
   row_value: [negative-row-no-prior]
   source: [negative-source-undeclared-field]

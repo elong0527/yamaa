@@ -2,7 +2,7 @@ version: "1.0"
 
 conditions:
   aggregate_identifier_not_grouped: {rules: [R013], phases: [validation]}
-  aggregate_multiple_records: {rules: [R013], phases: [row_construction]}
+  aggregate_multiple_records: {rules: [R013], phases: [derivation, row_construction]}
   all_or_none_failed: {rules: [R009], phases: [verification]}
   allowed_values_failed: {rules: [R009], phases: [verification]}
   ambiguous_baseline: {rules: [R007], phases: [derivation]}

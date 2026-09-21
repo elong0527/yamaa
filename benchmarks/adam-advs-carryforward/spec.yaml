@@ -104,11 +104,10 @@ columns:
     type: float
     label: Baseline Height
     derivation:
-      baseline_value:
-        window:
-          group_by: [STUDYID, USUBJID]
-        value: AVALCOL
-        flag: HGTBLFL
+      aggregate:
+        filter: "HGTBLFL = 'Y'"
+        group_by: [STUDYID, USUBJID]
+        expr: "ONLY(AVALCOL)"
 
 verifications:
   - unique:

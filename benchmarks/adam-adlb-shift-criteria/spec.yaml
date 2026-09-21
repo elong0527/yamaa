@@ -88,21 +88,19 @@ columns:
     type: float
     label: Baseline Value
     derivation:
-      baseline_value:
-        window:
-          group_by: [STUDYID, USUBJID, PARAMCD]
-        value: AVAL
-        flag: ABLFL
+      aggregate:
+        filter: "ABLFL = 'Y'"
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        expr: "ONLY(AVAL)"
 
   - name: BNRIND
     type: str
     label: Baseline Reference Range Indicator
     derivation:
-      baseline_value:
-        window:
-          group_by: [STUDYID, USUBJID, PARAMCD]
-        value: ANRIND
-        flag: ABLFL
+      aggregate:
+        filter: "ABLFL = 'Y'"
+        group_by: [STUDYID, USUBJID, PARAMCD]
+        expr: "ONLY(ANRIND)"
     verifications:
       allowed_values:
         values: [LOW, NORMAL, HIGH]

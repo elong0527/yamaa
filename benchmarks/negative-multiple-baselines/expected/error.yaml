@@ -1,11 +1,8 @@
 phase: derivation
-condition: ambiguous_baseline
+condition: aggregate_multiple_records
 spec_paths:
-  - columns.BAVL.derivation.baseline_value
-requirement: REQ-0322
+  - columns.BAVL.derivation.aggregate
+requirement: REQ-0501
 context:
-  column: BAVL
-  flag_count: 2
-  keys:
-    - STUDYID: PILOT7
-      USUBJID: P7-901
+  reducer: ONLY
+  record_count: 2

@@ -69,7 +69,7 @@ that breaks it, whichever method it uses.
 <a id="req-0316"></a>
 
 **REQ-0316.** `row_number` and `rank` return integers; `baseline_flag` returns a string.
-`baseline_value`, `row_value`, and `previous_non_missing` retain the selected
+`row_value` and `previous_non_missing` retain the selected
 value type and preserve a selected temporal value's collected precision.
 Scalar selection follows [REQ-0315](expressions.md#req-0315); temporal operation results follow [REQ-0590](temporal.md#req-0590).
 
@@ -142,18 +142,6 @@ structural constraints come from its schema declaration.
 | `expressions.baseline_flag.window` | Baseline-selection partitions for the window. |
 | `Result` | Returns Y for the unique latest eligible row, missing elsewhere. An eligible row has a non-missing date at or before reference_date. A tie for the latest eligible date is an error. |
 
-<a id="req-1128"></a>
-
-**REQ-1128.** The `expressions.baseline_value` interface has the following meanings. Shape, defaults, and
-structural constraints come from its schema declaration.
-
-| Field | Meaning |
-| --- | --- |
-| `expressions.baseline_value.value` | Variable copied from the flagged row. |
-| `expressions.baseline_value.flag` | Variable identifying the source row with Y. |
-| `expressions.baseline_value.window` | Broadcast partitions for the window. |
-| `Result` | Broadcasts the value from the row whose flag is Y. No flagged row returns missing; more than one is an error. |
-
 <a id="req-1129"></a>
 
 **REQ-1129.** The `module` interface has the following meanings. Shape, defaults, and
@@ -187,8 +175,8 @@ positions to number or to move along. Omitting it is a validation error.
 
 <a id="req-0341"></a>
 
-**REQ-0341.** `baseline_flag` and `baseline_value` do not take
-`window.order_by`: they locate the baseline row by date and flag, not by a
+**REQ-0341.** `baseline_flag` does not take
+`window.order_by`: it locates the baseline row by date, not by a
 declared order. Declaring it is a validation error rather than silently
 ignored.
 

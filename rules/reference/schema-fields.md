@@ -288,6 +288,8 @@ requirement link for behavior. It is not an additional semantic contract.
 | Field or value type | Type | Required | Default | Constraints | Contract |
 | --- | --- | --- | --- | --- | --- |
 | `expressions.compute.expr` | `"numeric_expression"` | `true` | Absent | -- | [REQ-1119](../operations/computation.md#req-1119) |
+| `expressions.round_half_away_from_zero.source` | `"variable"` | `true` | Absent | -- | [REQ-1172](../operations/computation.md#req-1172) |
+| `expressions.round_half_away_from_zero.digits` | `"int"` | `true` | Absent | -- | [REQ-1172](../operations/computation.md#req-1172) |
 | `numeric_expression` | `"str"` | `false` | Absent | `{"min_length": 1}` | [REQ-1120](../operations/computation.md#req-1120) |
 
 ## schema_expression_str.yaml
@@ -328,9 +330,6 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.baseline_flag.date` | `"variable"` | `true` | Absent | -- | [REQ-1127](../operations/windows.md#req-1127) |
 | `expressions.baseline_flag.reference_date` | `"variable"` | `true` | Absent | -- | [REQ-1127](../operations/windows.md#req-1127) |
 | `expressions.baseline_flag.window` | `"window_spec"` | `false` | Absent | -- | [REQ-1127](../operations/windows.md#req-1127) |
-| `expressions.baseline_value.value` | `"variable"` | `true` | Absent | -- | [REQ-1128](../operations/windows.md#req-1128) |
-| `expressions.baseline_value.flag` | `"variable"` | `true` | Absent | -- | [REQ-1128](../operations/windows.md#req-1128) |
-| `expressions.baseline_value.window` | `"window_spec"` | `false` | Absent | -- | [REQ-1128](../operations/windows.md#req-1128) |
 
 ## schema_function.yaml
 

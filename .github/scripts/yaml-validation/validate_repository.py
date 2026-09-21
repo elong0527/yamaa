@@ -6969,7 +6969,7 @@ def validate_expression_static_semantics(expression, path, context):
     window_order_required = {
         'row_number', 'rank', 'row_value', 'previous_non_missing',
     }
-    window_order_forbidden = {'baseline_flag', 'baseline_value'}
+    window_order_forbidden = {'baseline_flag'}
     if (
         keyword in window_order_required | window_order_forbidden
         and isinstance(payload, dict)
@@ -7201,6 +7201,19 @@ def validate_expression_static_semantics(expression, path, context):
                 {'int', 'float'},
                 'numeric',
                 operation_path,
+                resolver,
+            )
+        )
+        return errors
+
+    if keyword == 'round_half_away_from_zero' and isinstance(payload, dict):
+        errors.extend(
+            validate_named_input_type(
+                payload,
+                'source',
+                {'int', 'float'},
+                'numeric',
+                f"{path}.round_half_away_from_zero",
                 resolver,
             )
         )

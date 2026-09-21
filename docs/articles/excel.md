@@ -288,7 +288,7 @@ benchmark for the full side-by-side:
 
 | Example | What it shows |
 |---|---|
-| [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adlb-bds) | VLM and BDS: one row template per PARAMCD, then `baseline_flag` / `baseline_value` / `row_number` as columns |
+| [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adlb-bds) | VLM and BDS: one row template per PARAMCD, then `baseline_flag` / `aggregate`-with-`filter` / `row_number` as columns |
 | [`adam-adex-cumulative-dose`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adex-cumulative-dose) | `aggregate: "SUM(EX.EXDOSE)"` reducing by the applicable keys; a CSV field entering arithmetic must declare its type |
 | [`adam-adae-partial-dates`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adae-partial-dates) | `date_impute` beside `date_precision` reading the same source; `missing` and `invalid` are separate defects |
 | [`sdtm-dm-metadata`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-metadata) | `metadata` vs `verifications`: Length becomes both `metadata.length` (for define.xml) and a `max_length` check |
