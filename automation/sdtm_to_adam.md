@@ -76,16 +76,16 @@ line-by-line transliteration.
 
 Derive in dependency order; every predecessor is staged before it is read:
 
-1. **Staging specs** (e.g. per-record exposure staging) — pure SDTM input.
-2. **ADSL** — from SDTM plus staging specs.
-3. **ADAE / ADADAS / ADTTE / ADLBC** — each from SDTM, the derived
+1. **Staging specs** (e.g. per-record exposure staging) - pure SDTM input.
+2. **ADSL** - from SDTM plus staging specs.
+3. **ADAE / ADADAS / ADTTE / ADLBC** - each from SDTM, the derived
    `adsl-yamaa.parquet`, and any derived predecessors it needs (ADTTE reads
    the derived ADAE; ADLBC reads the derived ADSL). `run.py` auto-includes
    predecessors when a subset is requested.
 
 Derived predecessors are staged into the work directory exactly where the
 specs' input paths point, so the whole pipeline is self-regenerating from
-SDTM — the reference ADaM is never an input.
+SDTM - the reference ADaM is never an input.
 
 ## 4. run.py contract (strict)
 
@@ -129,7 +129,7 @@ Comparison semantics:
 
 - Rows align on the dataset keys (unique in both derived and reference;
   zero unmatched rows on either side, and key columns count as matched).
-- Numeric cells match when `|derived − reference| <= 1e-10` (absolute);
+- Numeric cells match when `|derived - reference| <= 1e-10` (absolute);
   NaN is normalized to null first, and exactly-one-null is a mismatch.
 - Non-numeric cells match exactly, with null and `""` normalized (the
   reference was produced by R, which writes `""` for missing).
