@@ -830,6 +830,7 @@ def _validate_single(
         requirement = {
             "column_type": "REQ-0012",
             "day_rule": "REQ-0609",
+            "time_rule": "REQ-1184",
         }.get(type_name, "REQ-0287")
         return _validate_constraints(value, alias, path, requirement)
 

@@ -1,0 +1,32 @@
+schema_version: "1.0"
+domain: ADSL
+keys: [STUDYID, USUBJID, EXSEQ]
+input:
+  EX: input/ex.csv
+
+output:
+  path: adsl.csv
+  columns: [STUDYID, USUBJID, EXSEQ, TRTSTPR]
+
+columns:
+  - name: STUDYID
+    type: str
+    label: Study Identifier
+    derivation: EX.STUDYID
+
+  - name: USUBJID
+    type: str
+    label: Unique Subject Identifier
+    derivation: EX.USUBJID
+
+  - name: EXSEQ
+    type: int
+    label: Sequence Number
+    derivation: EX.EXSEQ
+
+  - name: TRTSTPR
+    type: str
+    label: First Exposure Date/Time Collected Precision
+    derivation:
+      datetime_precision:
+        source: EX.EXSTDTC

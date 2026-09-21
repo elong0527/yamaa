@@ -17,6 +17,8 @@ coverage:
     negative-date-diff-units]
   date_impute: [negative-impute-bad-month]
   date_precision: [negative-precision-bad-source]
+  datetime_impute: [negative-datetime-impute-bad-source]
+  datetime_precision: [negative-datetime-precision-bad-source]
   greatest: [negative-greatest-mixed]
   least: [negative-least-mixed]
   literal: [negative-literal-structure]

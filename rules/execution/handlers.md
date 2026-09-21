@@ -44,8 +44,8 @@ unless its behavior says otherwise:
 | extract | `missing` | Missing string input |
 | extract | `no_match` | Non-missing string does not match |
 | template | `missing` | Any placeholder value is missing |
-| impute | `date_impute.missing`, `date_precision.missing` | See [Temporal values](../values/temporal.md) |
-| impute | `date_impute.invalid`, `date_precision.invalid` | See [Temporal values](../values/temporal.md) |
+| impute | `date_impute.missing`, `date_precision.missing`, `datetime_impute.missing`, `datetime_precision.missing` | See [Temporal values](../values/temporal.md) |
+| impute | `date_impute.invalid`, `date_precision.invalid`, `datetime_impute.invalid`, `datetime_precision.invalid` | See [Temporal values](../values/temporal.md) |
 | convert | `conversion_failure` | Failed output conversion |
 
 <a id="req-0343"></a>
@@ -82,14 +82,15 @@ input is present.
 <a id="req-0348"></a>
 
 **REQ-0348.** The owning rule states which values an operation cannot use.
-[Temporal values](../values/temporal.md) states them for the two operations on the `impute` stage.
+[Temporal values](../values/temporal.md) states them for the temporal operations on the `impute` stage.
 
 <a id="req-0349"></a>
 
 **REQ-0349.** One stage name serves several operations when their
-conditions coincide. `date_impute` and `date_precision` read the same
-source and answer the same two conditions about it, so both use
-`impute` in structured errors.
+conditions coincide. The date imputation and precision pair and the datetime
+imputation and precision pair each read the same source domain and answer the
+same missing and invalid conditions, so all four use `impute` in structured
+errors.
 
 <a id="req-0350"></a>
 

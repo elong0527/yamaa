@@ -67,26 +67,27 @@ Both value spaces are total and gapless.
 
 **REQ-0544.** Every value is complete and records how much was collected. A value
 is complete or is not a value of the type. A truncated collected value stays
-text until `date_impute` completes it. *Partial collected dates* below defines
-this design's only completion. Each value has a **collected precision**: the
-finest field its collected source supplied.
+text until `date_impute` or `datetime_impute` completes it. Each value has a
+**collected precision**: the finest field its collected source supplied.
 
 <a id="req-0545"></a>
 
 **REQ-0545.** For a `date` that property is `year`, `month`, or `day`. For a
-`datetime` it is always `second`, because this contract admits no truncated moment:
-an omitted `ss` names second zero rather than claiming a coarser value, so a
-`datetime` is collected in full or it is not a value.
+`datetime` it is `day` or `second`. A parsed datetime is collected through the
+second: an omitted `ss` names second zero rather than claiming a coarser value.
+`datetime_impute` may instead complete a collected date with a declared time
+of day, producing a complete datetime whose collected precision remains `day`.
 
 <a id="req-0546"></a>
 
 **REQ-0546.** Where a value gets its collected precision is fixed by where the
-value came from. Only four origins exist:
+value came from. Only five origins exist:
 
 | Origin | Collected precision |
 |---|---|
 | parsed text | `day`; `datetime`: `second` |
 | `date_impute` | the precision its source carried |
+| `datetime_impute` | `day` for a date source; `second` for a datetime source |
 | `to_date` | `day` |
 | selecting an existing value | unchanged; property follows selected value |
 
@@ -99,11 +100,12 @@ expressions that return an operand rather than computing one.
 
 <a id="req-0548"></a>
 
-**REQ-0548.** Provenance is read off collected precision
-rather than recorded beside it. A component finer than the collected
-precision was supplied by `date_impute`, and a value whose collected
-precision is `day` was collected in full. A second flag would be a
-second place to keep correct, and the flag and the property could disagree.
+**REQ-0548.** Provenance is read off collected precision rather than recorded
+beside it. A component finer than the collected precision was supplied by an
+imputation operation. A date whose precision is `day` was collected in full;
+a datetime whose precision is `day` had its time supplied, while `second`
+means the source carried a time. A second property would be a second place to
+keep correct, and the two could disagree.
 
 ### Lexical form
 
@@ -303,7 +305,8 @@ nothing about how much of it was collected. This is deliberate: the property
 answers a question about a study's collection, and a reader holding only the
 text has no way to check an answer to it. A specification that must carry
 precision past any of those three boundaries derives a column from
-`date_precision`, which is data the artifact records like any other.
+`date_precision` or `datetime_precision`, which is data the artifact records
+like any other.
 
 ### Comparison and ordering
 
@@ -362,11 +365,10 @@ bounds the imputation with `not_before`, or states a verification under
 discard a collected time. Each conversion would silently decide what a
 specification did not state. This is why a non-integral `float` does not
 become an `int`. `to_date` explicitly discards time and returns a calendar
-date. No operation composes a moment from a date. An operation enters the
-vocabulary when an example needs one. Its registration declares its intent
-and any time of day it supplies. The conversion cell stays `fail` whether
-or not such an operation is registered, because inventing a component is an
-operation's to declare and never a conversion's to perform.
+date. `datetime_impute` explicitly composes a moment from complete date text
+under a declared first- or last-second rule. The conversion cell stays `fail`
+because inventing a component is an operation's to declare and never a
+conversion's to perform.
 
 <a id="req-0577"></a>
 
@@ -437,6 +439,7 @@ first. An implementation must not round to reach such a value.
 Representative specifications, input data, and expected outcomes:
 
 - [adam-adae-partial-dates](../../benchmarks/adam-adae-partial-dates/README.md).
+- [adam-adsl-treatment](../../benchmarks/adam-adsl-treatment/README.md).
 - [negative-date-incomplete](../../benchmarks/negative-date-incomplete/README.md).
 - [negative-datetime-zones](../../benchmarks/negative-datetime-zones/README.md).
 

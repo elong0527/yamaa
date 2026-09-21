@@ -1,0 +1,12 @@
+phase: impute
+condition: invalid_datetime_text
+spec_paths:
+  - columns.TRTSTPR.derivation.datetime_precision
+requirement: REQ-1183
+context:
+  source: EX.EXSTDTC
+  value: 2025-01
+  keys:
+    - STUDYID: PILOT7
+      USUBJID: P7-901
+      EXSEQ: 1

@@ -3,7 +3,11 @@ from __future__ import annotations
 import pytest
 
 from yamaa.expressions import MappingResolver, evaluate_expression
-from yamaa.expressions.dates import collected_precision, whole_units
+from yamaa.expressions.dates import (
+    collected_datetime_precision,
+    collected_precision,
+    whole_units,
+)
 from yamaa.models import (
     MISSING,
     ConditionResult,
@@ -91,6 +95,90 @@ def test_a_datetime_is_not_a_date_precision_source() -> None:
     )
 
     assert condition.condition.condition == "incompatible_input_type"
+
+
+# --- datetime completion -------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("2025-01-15", "day"),
+        ("2025-01-15T08:30", "second"),
+        ("2025-01-15T08:30:45", "second"),
+        ("2025-01", None),
+        ("2025", None),
+        ("2025-02-30", None),
+        ("2025-01-15T24:00", None),
+        ("2025-01-15T08:30:00Z", None),
+    ],
+)
+def test_datetime_precision_accepts_only_a_datetime_or_complete_date(
+    text: str, expected: str | None
+) -> None:
+    assert collected_datetime_precision(text) == expected
+
+
+def test_datetime_impute_supplies_the_declared_edge_of_a_day() -> None:
+    first = _value(
+        "datetime_impute",
+        {"source": "S", "time": "first"},
+        {"S": "2025-01-08"},
+    )
+    last = _value(
+        "datetime_impute",
+        {"source": "S", "time": "last"},
+        {"S": "2025-01-08"},
+    )
+
+    assert isinstance(first, DateTimeValue)
+    assert first.to_text() == "2025-01-08T00:00:00"
+    assert first.collected_precision == "day"
+    assert isinstance(last, DateTimeValue)
+    assert last.to_text() == "2025-01-08T23:59:59"
+    assert last.collected_precision == "day"
+
+
+def test_datetime_impute_leaves_a_collected_time_unchanged() -> None:
+    value = _value(
+        "datetime_impute",
+        {"source": "S", "time": "last"},
+        {"S": "2025-01-08T09:30"},
+    )
+
+    assert isinstance(value, DateTimeValue)
+    assert value.to_text() == "2025-01-08T09:30:00"
+    assert value.collected_precision == "second"
+
+
+def test_datetime_precision_reports_the_source_bound_to_the_value() -> None:
+    imputed = _value(
+        "datetime_impute",
+        {"source": "S", "time": "first"},
+        {"S": "2025-01-08"},
+    )
+
+    assert _value("datetime_precision", {"source": "S"}, {"S": imputed}) == "D"
+    assert (
+        _value(
+            "datetime_precision",
+            {"source": "S"},
+            {"S": "2025-01-08T09:30:00"},
+        )
+        == "S"
+    )
+
+
+def test_invalid_datetime_completion_text_has_its_own_handler() -> None:
+    condition = _condition(
+        "datetime_impute",
+        {"source": "S", "time": "first"},
+        {"S": "2025-01"},
+    )
+
+    assert condition.condition.condition == "invalid_datetime_text"
+    assert condition.condition.applicable_handler == "invalid"
+    assert condition.condition.requirement == "REQ-1182"
 
 
 def test_the_two_absences_stay_apart_and_each_may_be_answered() -> None:

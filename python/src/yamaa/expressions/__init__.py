@@ -33,7 +33,12 @@ from yamaa.expressions.core import (
     resolve_operand,
     source_operand,
 )
-from yamaa.expressions.dates import collected_precision, date_handlers, whole_units
+from yamaa.expressions.dates import (
+    collected_datetime_precision,
+    collected_precision,
+    date_handlers,
+    whole_units,
+)
 from yamaa.expressions.dispatch import (
     DEFAULT_EXPRESSION_OPERATIONS,
     ExpressionDispatcher,
@@ -113,6 +118,7 @@ __all__ = [
     "ascii_lower",
     "ascii_upper",
     "build_expression_handlers",
+    "collected_datetime_precision",
     "collected_precision",
     "date_handlers",
     "evaluate_aggregate",

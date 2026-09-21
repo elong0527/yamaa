@@ -254,10 +254,18 @@ requirement link for behavior. It is not an additional semantic contract.
 | `expressions.date_precision.source` | `"variable"` | `true` | Absent | -- | [REQ-1106](../operations/temporal.md#req-1106) |
 | `expressions.date_precision.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1106](../operations/temporal.md#req-1106) |
 | `expressions.date_precision.invalid` | `"literal_value"` | `false` | Absent | -- | [REQ-1106](../operations/temporal.md#req-1106) |
+| `expressions.datetime_impute.source` | `"variable"` | `true` | Absent | -- | [REQ-1182](../operations/temporal.md#req-1182) |
+| `expressions.datetime_impute.time` | `"time_rule"` | `true` | Absent | -- | [REQ-1182](../operations/temporal.md#req-1182) |
+| `expressions.datetime_impute.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1182](../operations/temporal.md#req-1182) |
+| `expressions.datetime_impute.invalid` | `"literal_value"` | `false` | Absent | -- | [REQ-1182](../operations/temporal.md#req-1182) |
+| `expressions.datetime_precision.source` | `"variable"` | `true` | Absent | -- | [REQ-1183](../operations/temporal.md#req-1183) |
+| `expressions.datetime_precision.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1183](../operations/temporal.md#req-1183) |
+| `expressions.datetime_precision.invalid` | `"literal_value"` | `false` | Absent | -- | [REQ-1183](../operations/temporal.md#req-1183) |
 | `expressions.to_date.source` | `"variable"` | `true` | Absent | -- | [REQ-1107](../operations/temporal.md#req-1107) |
 | `expressions.study_day.date` | `"variable"` | `true` | Absent | -- | [REQ-1108](../operations/temporal.md#req-1108) |
 | `expressions.study_day.reference` | `"variable"` | `true` | Absent | -- | [REQ-1108](../operations/temporal.md#req-1108) |
 | `day_rule` | `"str"` | `false` | Absent | `{"values": ["first", "last"]}` | [REQ-1109](../operations/temporal.md#req-1109) |
+| `time_rule` | `"str"` | `false` | Absent | `{"values": ["first", "last"]}` | [REQ-1184](../operations/temporal.md#req-1184) |
 
 ## schema_expression_mapping.yaml
 
