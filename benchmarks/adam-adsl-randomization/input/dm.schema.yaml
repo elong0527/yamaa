@@ -22,19 +22,28 @@ columns:
   - name: RFSTDTC
     type: date
     label: Subject Reference Start Date
-    derivation: ODM.IT.DM.RFSTDTC
 
   - name: RANDDT
     type: date
     label: Date of Randomization
-    derivation: ODM.Value
 
   - name: RANDDTTM
     type: datetime
     label: Date and Time of Randomization
-    derivation: ODM.IT.DM.RANDDTTM
 
 rows:
   - id: subject
-    filter: "ODM.ItemOID = 'IT.DM.RANDDT'"
-    derivations: {}
+    group_by: [ODM.StudyOID, ODM.SubjectKey]
+    derivations:
+      RFSTDTC:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DM.RFSTDTC'"
+          expr: "ONLY(ODM.Value)"
+      RANDDT:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DM.RANDDT'"
+          expr: "ONLY(ODM.Value)"
+      RANDDTTM:
+        aggregate:
+          filter: "ODM.ItemOID = 'IT.DM.RANDDTTM'"
+          expr: "ONLY(ODM.Value)"

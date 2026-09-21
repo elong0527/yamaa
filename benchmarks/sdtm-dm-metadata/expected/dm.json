@@ -1,0 +1,30 @@
+{
+  "datasetJSONCreationDateTime": "2026-09-11T00:00:00",
+  "datasetJSONVersion": "1.1.0",
+  "fileOID": "www.example.org/STUDY01/1/Define-XML_2.1.DM",
+  "originator": "Example Sponsor",
+  "sourceSystem": {"name": "yamaa", "version": "1.0"},
+  "studyOID": "STDY.STUDY01",
+  "metaDataVersionOID": "MDV.STUDY01.1",
+  "metaDataRef": "define.xml",
+  "itemGroupOID": "IG.DM",
+  "records": 3,
+  "name": "DM",
+  "label": "Demographics",
+  "columns": [
+    {"itemOID": "IT.DM.DOMAIN", "name": "DOMAIN", "label": "Domain Abbreviation", "dataType": "string", "length": 2},
+    {"itemOID": "IT.DM.STUDYID", "name": "STUDYID", "label": "Study Identifier", "dataType": "string", "length": 20, "keySequence": 1},
+    {"itemOID": "IT.DM.USUBJID", "name": "USUBJID", "label": "Unique Subject Identifier", "dataType": "string", "length": 30, "keySequence": 2},
+    {"itemOID": "IT.DM.SUBJID", "name": "SUBJID", "label": "Subject Identifier for the Study", "dataType": "string", "length": 10},
+    {"itemOID": "IT.DM.SITEID", "name": "SITEID", "label": "Study Site Identifier", "dataType": "string", "length": 10},
+    {"itemOID": "IT.DM.AGE", "name": "AGE", "label": "Age", "dataType": "integer", "length": 3},
+    {"itemOID": "IT.DM.AGEU", "name": "AGEU", "label": "Age Units", "dataType": "string", "length": 5},
+    {"itemOID": "IT.DM.SEX", "name": "SEX", "label": "Sex", "dataType": "string", "length": 1},
+    {"itemOID": "IT.DM.COUNTRY", "name": "COUNTRY", "label": "Country", "dataType": "string", "length": 3}
+  ],
+  "rows": [
+    ["DM", "CATH", "CATH-UCSD-0001", "0001", "UCSD", 34, "YEARS", "F", "USA"],
+    ["DM", "CATH", "CATH-UCSD-0002", "0002", "UCSD", 67, "YEARS", "M", "USA"],
+    ["DM", "CATH", "CATH-MCGILL-0003", "0003", "MCGILL", 52, "YEARS", "F", "CAN"]
+  ]
+}

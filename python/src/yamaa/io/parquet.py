@@ -118,6 +118,11 @@ def _column_type(stored: Any, arrow_type: pa.DataType) -> ColumnType | None:
         "force_set_converted_type": False,
     }:
         column_type = "datetime"
+    if column_type == "str":
+        # REQ-1032: Arrow `large_string` is the same `BYTE_ARRAY`/`String`
+        # physical/logical pair with a wider offset width, so it reads as
+        # `str` exactly like `string`.
+        return "str" if arrow_type in (pa.string(), pa.large_string()) else None
     if column_type is None or arrow_type != _ARROW[column_type]:
         return None
     return column_type

@@ -272,6 +272,32 @@ shared.
 surviving records counts one `multiple_matches` handling, and a declared
 `missing:` that answered an absence counts one `missing` handling.
 
+<a id="req-1185"></a>
+
+**REQ-1185.** An intermediate may declare `derivations:`, a map of names to
+derivations written in the same expression language as row-template
+`derivations:`. Each derivation is computed once per record of the
+intermediate's dataset, before matching, and reads only that dataset: a bare
+name reads the dataset's stored field, and a qualified name must name the
+dataset. A reference to a driver field, another intermediate, another
+derivation in the same map, or anything the dataset does not store fails as
+`unknown_field`; a derived name that shadows a stored column fails as
+`duplicate_derivation`. A derived name may appear as a target-side `key`
+field and is matched like a stored column. A derivation that fails on a
+record fails the run with the expression's condition at the derivation's
+path; a derivation that yields missing for a record simply does not match.
+
+```yaml
+intermediates:
+  - id: SUP_EP
+    dataset: SUPPLB
+    derivations:
+      QVAL_U: str_upper(QVAL)
+    key: [STUDYID, USUBJID, QVAL_U]
+    key_base: [LB.STUDYID, LB.USUBJID, LB.EPFLAG]
+    filter: "SUPPLB.QNAM = 'ENDPOINT'"
+```
+
 ### Aggregates over a qualified relation
 
 <a id="req-0140"></a>
@@ -455,6 +481,7 @@ structural constraints come from its schema declaration.
 | `intermediate_class.order_by` | Terms ordering eligible records; declared with keep. |
 | `intermediate_class.keep` | Ordered record to retain; declared with order_by. |
 | `intermediate_class.columns` | Dataset columns the lookup may read; defaults to every dataset column. |
+| `intermediate_class.derivations` | Per-record derivations over the dataset's own columns, named in `key` ([REQ-1185](lookup.md#req-1185)). |
 | `intermediate_class.missing` | Value returned when the lookup yields nothing; defaults to missing. |
 | `intermediate_class.strict` | Fail when the lookup yields nothing. |
 

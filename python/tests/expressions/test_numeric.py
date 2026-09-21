@@ -433,3 +433,14 @@ def test_round_half_away_from_zero_survives_extreme_digits() -> None:
     # quantum; far right the tolerance underflows and the value is unchanged.
     assert _rounded(123.456, -400) == 0.0
     assert _rounded(123.456, 400) == 123.456
+
+
+def _parse(expression: dict[str, object], values: dict[str, object]) -> object:
+    result = evaluate_expression(expression, MappingResolver(values))
+    if isinstance(result, ValueResult):
+        return None if result.value is MISSING else result.value
+    assert isinstance(result, ConditionResult), result
+    return ("condition", result.condition.condition, result.condition.requirement)
+
+
+# (to_number tests removed: REQ-1186 withdrawn per #715 direction)

@@ -51,7 +51,12 @@ def test_the_extension_selects_the_profile_without_regard_to_case(
     assert profile_of(path) == profile
 
 
-@pytest.mark.parametrize("path", ["adsl", "adsl.xpt", "adsl.csv.gz", "adsl."])
+@pytest.mark.parametrize(
+    "path",
+    # REQ-1233: `.json` is Dataset-JSON, which a study document writes
+    # rather than a specification, so it names no artifact profile here.
+    ["adsl", "adsl.xpt", "adsl.csv.gz", "adsl.", "adsl.json"],
+)
 def test_an_extension_outside_the_mapping_names_no_profile(path: str) -> None:
     assert profile_of(path) is None
     with pytest.raises(ArtifactError) as raised:

@@ -92,6 +92,21 @@ columns:
       least:
         sources: [PDDT, DEATHDT]
 
+  # CNSR is derived first: 0 when the event occurred, 1 when censored. The
+  # event-priority rule lives here alone: an event wins even after the last
+  # adequate assessment, so ADT never needs a separate race primitive.
+  - name: CNSR
+    type: int
+    label: Censor
+    derivation:
+      case:
+        - when: "EVENTDT IS NOT NULL"
+          then:
+            literal: 0
+        - otherwise:
+            literal: 1
+
+  # ADT follows CNSR: the event date for an event, else the censoring date.
   - name: ADT
     type: date
     label: Analysis Date
@@ -108,17 +123,6 @@ columns:
         end: ADT
         unit: day
         bounds: inclusive
-
-  - name: CNSR
-    type: int
-    label: Censor
-    derivation:
-      case:
-        - when: "EVENTDT IS NOT NULL"
-          then:
-            literal: 0
-        - otherwise:
-            literal: 1
 
   - name: EVNTDESC
     type: str

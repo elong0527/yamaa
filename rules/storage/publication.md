@@ -213,6 +213,24 @@ No condition names `.xpt` in particular: a diagnostic that told an author the
 container was recognized but declined would be reporting a profile that does
 not exist, and the author's next step is the same either way.
 
+<a id="req-1233"></a>
+
+**REQ-1233.** CDISC Dataset-JSON is outside the mapping on the other ground.
+It passes [REQ-1234](publication.md#req-1234): the container is not lossy, and
+[Dataset-JSON](../submission/dataset-json.md) writes every value this language
+admits without changing one. What a specification cannot supply is the file's
+identity. Its `studyOID`, `metaDataVersionOID`, `itemGroupOID`, and per-column
+`itemOID` are the identifiers
+[REQ-0970](../submission/define-xml.md#req-0970) builds from a study document's
+declarations, and its creation timestamp is the one
+[REQ-0962](../submission/define-xml.md#req-0962) has that document declare. A
+specification holds none of them, so the file is written by the study document
+that holds them all, beside the Define-XML document it points into. An
+`output.path` ending in `.json` therefore names no profile and fails under
+[REQ-0760](publication.md#req-0760) like any other unmapped extension, and
+[REQ-1237](publication.md#req-1237)'s rule that a run publishes its artifact
+and its sidecars and no other file is untouched.
+
 ### Publication
 
 <a id="req-0752"></a>

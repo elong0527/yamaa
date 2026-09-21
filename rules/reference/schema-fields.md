@@ -40,6 +40,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `intermediate_class.columns` | `"list[identifier]"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.missing` | `"literal_value"` | `false` | Absent | -- | [REQ-1048](../operations/lookup.md#req-1048) |
 | `intermediate_class.strict` | `"bool"` | `false` | `false` | -- | [REQ-1048](../operations/lookup.md#req-1048) |
+| `intermediate_class.derivations` | `"dict[identifier, derivation]"` | `false` | Absent | -- | [REQ-1185](../operations/lookup.md#req-1185) |
 | `intermediate_between_class.value` | `"variable"` | `true` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
 | `intermediate_between_class.lower` | `"identifier"` | `true` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
 | `intermediate_between_class.upper` | `"identifier"` | `true` | Absent | -- | [REQ-1049](../operations/lookup.md#req-1049) |
@@ -127,11 +128,13 @@ requirement link for behavior. It is not an additional semantic contract.
 | `define_dataset_class.spec` | `"project_path"` | `true` | Absent | -- | [REQ-1066](../submission/define-xml.md#req-1066) |
 | `define_dataset_class.standard` | `"identifier"` | `false` | Absent | -- | [REQ-1066](../submission/define-xml.md#req-1066) |
 | `define_dataset_class.has_no_data` | `"bool"` | `false` | `false` | -- | [REQ-1066](../submission/define-xml.md#req-1066) |
+| `define_dataset_class.dataset_json` | `"dataset_json_path"` | `false` | Absent | -- | [REQ-1066](../submission/define-xml.md#req-1066) |
 | `define_output_class.path` | `"define_path"` | `true` | Absent | -- | [REQ-1067](../submission/define-xml.md#req-1067) |
 | `define_id` | `"str"` | `false` | Absent | `{"pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"}` | [REQ-1068](../submission/define-xml.md#req-1068) |
 | `define_version` | `"str"` | `false` | Absent | `{"pattern": "^2\\.1\\.(0\|[1-9][0-9]*)$"}` | [REQ-1069](../submission/define-xml.md#req-1069) |
 | `relative_href` | `"str"` | `false` | Absent | `{"pattern": "^(?!/)(?!.*(^\|/)\\.\\.(/\|$))[^\\\\]+$"}` | [REQ-1070](../submission/define-xml.md#req-1070) |
 | `define_path` | `"str"` | `false` | Absent | `{"pattern": "^[^/\\\\][^\\\\]*\\.[Xx][Mm][Ll]$"}` | [REQ-1071](../submission/define-xml.md#req-1071) |
+| `dataset_json_path` | `"str"` | `false` | Absent | `{"pattern": "^[^/\\\\][^\\\\]*\\.[Jj][Ss][Oo][Nn]$"}` | [REQ-1225](../submission/dataset-json.md#req-1225) |
 | `creation_datetime` | `"str"` | `false` | Absent | `{"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$"}` | [REQ-1072](../submission/define-xml.md#req-1072) |
 | `language_tag` | `"str"` | `false` | Absent | `{"pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$"}` | [REQ-1073](../submission/define-xml.md#req-1073) |
 | `standard_name` | `"str"` | `false` | Absent | `{"values": ["ADaMIG", "ADaMIG-MD", "BIMO", "CDISC/NCI", "SDTMIG", "SDTMIG-AP", "SDTMIG-MD", "SENDIG", "SENDIG-AR", "SENDIG-DART", "SENDIG-GENETOX"]}` | [REQ-1074](../submission/define-xml.md#req-1074) |
