@@ -131,7 +131,7 @@ whitespace is accepted, and no other separator or field order is recognised.
 
 <a id="req-0552"></a>
 
-**REQ-0552.** Rejecting everything else is what makes two implementations agree.
+**REQ-0552.** Rejecting everything else lets two implementations agree.
 Each runtime's own parser accepts a wider and a different set: a space
 separator, lowercase `t`, bare date read as a moment, and trailing `Z` are
 each read by one of them and not the other, so a rule admitting whatever a
@@ -168,13 +168,12 @@ can be stored.
 <a id="req-0554"></a>
 
 **REQ-0554.** `14:00:00` is rejected for a different reason from the rest of the
-table, and the difference is worth naming. Every other row is a spelling of a
-value one of these two types holds; a clock reading carrying no date is not,
-because both types name a position on the calendar. A study that collects one,
-as the `--TM` family does, keeps the collected text as `str`. A time-only
-value would be a third temporal type, not a wider `datetime` -- a new [Types and conversion](types.md)
-vocabulary entry. The type enters when an example needs a time of day with no
-date.
+table. Every other row spells a value one of these two types holds; a clock
+reading carrying no date is not one, because both types name a position on the
+calendar. A study that collects one, as the `--TM` family does, keeps the
+collected text as `str`. A time-only value would be a third temporal type, not
+a wider `datetime` -- a new [Types and conversion](types.md) vocabulary entry.
+The type enters when an example needs a time of day with no date.
 
 ### No zone, no offset
 
@@ -219,8 +218,7 @@ this type does not have:
 <a id="req-0560"></a>
 
 **REQ-0560.** A datetime is never shifted. Nothing normalizes it into another
-  zone, so the value an implementation holds carries the fields the text it
-  parsed carried.
+zone, so the held value carries the fields of the parsed text.
 
 ### Whole seconds
 
