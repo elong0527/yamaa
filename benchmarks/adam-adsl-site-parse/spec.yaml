@@ -41,7 +41,7 @@ columns:
     derivation:
       first_available:
         sources: [SITEIDP, DM.SITEID]
-        default: UNKNOWN
+        missing: UNKNOWN
     verifications:
       not_missing: {}
 

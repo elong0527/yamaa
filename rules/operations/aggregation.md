@@ -143,7 +143,7 @@ computation grammars never parse text or dates themselves.
 `type` through [Types and conversion](../values/types.md)'s REQ-0009 and
 REQ-0010. Text that is not convertible to the declared numeric type fails as
 a conversion failure under [Types and conversion](../values/types.md)'s
-REQ-0013, answered by a declared `conversion_failure` handler and fatal
+REQ-0013, answered by a declared `missing` handler and fatal
 otherwise. A missing value stays missing without attempting conversion.
 
 <a id="req-1191"></a>

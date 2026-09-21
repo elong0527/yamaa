@@ -365,6 +365,7 @@ VALIDATION_CONTEXT_FIELDS = {
     ('R018', 'function_contract_mismatch'): {
         'available', 'function', 'requested',
     },
+    ('R020', 'unknown_artifact_profile'): {'path', 'permitted'},
     ('R021', 'resource_path_missing'): {'path'},
     ('R021', 'resource_path_not_regular_file'): {'path'},
     ('R021', 'resource_path_not_relative'): {'path'},
@@ -4535,9 +4536,17 @@ def validate_spec_names(spec, spec_label):
         declared_path = output.get('path')
         if isinstance(declared_path, str) and artifact_profile(output) is None:
             errors.append(
-                f"ERROR: {spec_label}.output.path: "
-                f"unknown_artifact_profile for {declared_path!r}; R020 maps "
-                + ', '.join(sorted(ARTIFACT_PROFILES)) + " and nothing else"
+                validation_diagnostic(
+                    f"{spec_label}.output.path",
+                    'unknown_artifact_profile',
+                    f"{declared_path!r} names no profile; R020 maps "
+                    + ', '.join(sorted(ARTIFACT_PROFILES))
+                    + " and nothing else",
+                    context={
+                        'path': declared_path,
+                        'permitted': sorted(ARTIFACT_PROFILES),
+                    },
+                )
             )
         # R020 gives each declared path its own profile and requires the
         # three to name three different files.
@@ -4548,9 +4557,17 @@ def validate_spec_names(spec, spec_label):
                 and artifact_profile({'path': sidecar_path}) is None
             ):
                 errors.append(
-                    f"ERROR: {spec_label}.output.{field}: "
-                    f"unknown_artifact_profile for {sidecar_path!r}; R020 maps "
-                    + ', '.join(sorted(ARTIFACT_PROFILES)) + " and nothing else"
+                    validation_diagnostic(
+                        f"{spec_label}.output.{field}",
+                        'unknown_artifact_profile',
+                        f"{sidecar_path!r} names no profile; R020 maps "
+                        + ', '.join(sorted(ARTIFACT_PROFILES))
+                        + " and nothing else",
+                        context={
+                            'path': sidecar_path,
+                            'permitted': sorted(ARTIFACT_PROFILES),
+                        },
+                    )
                 )
         for left, right, subject in (
             ('path', 'violation_log', 'primary artifact and violation log'),
@@ -9213,6 +9230,8 @@ def validate_csv_artifact(csv_path: Path, label: str, spec):
     return errors
 
 
+# REQ-1182 admits a container only when it carries every value the
+# language does; REQ-1183 keeps SAS Transport out on that ground.
 ARTIFACT_PROFILES = {'.csv': 'csv', '.parquet': 'parquet'}
 VIOLATION_LOG_TYPES = {
     'LOG_VERSION': 'str',

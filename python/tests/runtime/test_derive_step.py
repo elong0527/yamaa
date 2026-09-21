@@ -231,7 +231,7 @@ def test_derive_binding_reads_earlier_binding(tmp_path) -> None:
     ]
 
 
-def test_derive_conversion_failure_handler_supplies_fallback(tmp_path) -> None:
+def test_derive_missing_handler_supplies_fallback(tmp_path) -> None:
     """A binding conversion failure falls back to the declared handler value."""
     result = _run_inline(
         tmp_path,
@@ -240,7 +240,7 @@ def test_derive_conversion_failure_handler_supplies_fallback(tmp_path) -> None:
         "  derivation:\n"
         "    value:\n"
         "      source: QS.QSORRES\n"
-        "    conversion_failure: 0",
+        "    missing: 0",
         csv_text=_INLINE_QS_WITH_TEXT,
     )
 
@@ -251,7 +251,7 @@ def test_derive_conversion_failure_handler_supplies_fallback(tmp_path) -> None:
     ]
 
 
-def test_derive_conversion_failure_without_handler_fails(tmp_path) -> None:
+def test_derive_conversion_fails_without_handler(tmp_path) -> None:
     """Without a handler, a binding conversion failure fails the run."""
     result = _run_inline(tmp_path, _qsnum_binding(), csv_text=_INLINE_QS_WITH_TEXT)
 

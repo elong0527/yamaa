@@ -301,7 +301,7 @@ def _diagnostic(
 
 def expression_path(path: str, derivation: HandledExpression) -> str:
     """Recover the authored bare-expression path where normalization permits it."""
-    handled = {"conversion_failure"} & derivation.model_fields_set
+    handled = {"missing", "strict"} & derivation.model_fields_set
     return f"{path}.value" if handled else path
 
 

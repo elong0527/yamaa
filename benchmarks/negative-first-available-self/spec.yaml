@@ -30,4 +30,4 @@ columns:
     derivation:
       first_available:
         sources: [VS.SEVAL, SEVAL]
-        default: 0
+        missing: 0

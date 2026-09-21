@@ -1196,6 +1196,11 @@ are aliases; the linked contract is the sole semantic authority.
 | [REQ-1190](../operations/aggregation.md#req-1190) | `operations/aggregation.md` | Schema prose |
 | [REQ-1191](../operations/aggregation.md#req-1191) | `operations/aggregation.md` | Schema prose |
 | [REQ-1192](../operations/aggregation.md#req-1192) | `operations/aggregation.md` | Schema prose |
+| [REQ-1234](../storage/publication.md#req-1234) | `storage/publication.md` | Schema prose |
+| [REQ-1235](../storage/publication.md#req-1235) | `storage/publication.md` | Schema prose |
+| [REQ-1236](../storage/publication.md#req-1236) | `storage/publication.md` | Schema prose |
+| [REQ-1237](../storage/publication.md#req-1237) | `storage/publication.md` | Schema prose |
+| [REQ-1238](../storage/publication.md#req-1238) | `storage/publication.md` | Schema prose |
 | [REQ-1193](../submission/dataset-json.md#req-1193) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1194](../submission/dataset-json.md#req-1194) | `submission/dataset-json.md` | Schema prose |
 | [REQ-1195](../submission/dataset-json.md#req-1195) | `submission/dataset-json.md` | Schema prose |

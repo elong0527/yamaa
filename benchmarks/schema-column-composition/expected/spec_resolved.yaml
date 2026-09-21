@@ -66,7 +66,7 @@ columns:
             H: HIGH
             L: LOW
           case_sensitive: false
-          unmapped: null
+          missing: null
   - name: PARCAT1
     type: str
     label: Parameter Category

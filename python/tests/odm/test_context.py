@@ -622,7 +622,6 @@ def test_a_mapping_reads_the_records_its_own_filter_selects() -> None:
                 },
                 "dict": {"Male": "M", "Female": "F"},
                 "missing": "U",
-                "unmapped": "U",
             }
         },
         context,
@@ -642,7 +641,7 @@ def test_a_first_available_source_states_the_records_it_reads() -> None:
                 "sources": [
                     {"variable": "ODM.Value", "filter": "ODM.ItemOID = 'IT.DM.ARM'"}
                 ],
-                "default": "Unassigned",
+                "missing": "Unassigned",
             }
         },
         context,
@@ -653,7 +652,7 @@ def test_a_first_available_source_states_the_records_it_reads() -> None:
                 "sources": [
                     {"variable": "ODM.Value", "filter": "ODM.ItemOID = 'IT.DM.RACE'"}
                 ],
-                "default": "Unassigned",
+                "missing": "Unassigned",
             }
         },
         context,

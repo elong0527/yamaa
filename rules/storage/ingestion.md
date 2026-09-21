@@ -164,7 +164,7 @@ only after parsing as numbers.
 <a id="req-0527"></a>
 
 **REQ-0527.** An ingestion failure is not a conversion failure.
-`conversion_failure` is declared on a column and answers for a value the
+`missing` is declared on a result wrapper and answers for a value the
 derivation produced, as [Execution lifecycle](../execution/lifecycle.md) and [Local handlers](../execution/handlers.md) define. A stored value that does not
 match its field's declared type is rejected before any derivation runs. No
 handler answers for the rejected value. A specification that wants to see such

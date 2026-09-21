@@ -20,6 +20,9 @@ This contract owns the requirements below. Related contracts:
 - [Specification structure](../specification/structure.md).
 - [Source ingestion](ingestion.md).
 - [Text values](../values/text.md).
+- [Numeric values](../values/numbers.md).
+- [Temporal values](../values/temporal.md).
+- [Define-XML](../submission/define-xml.md).
 
 ## Requirements
 
@@ -131,17 +134,6 @@ pay for decimal text. `csv` is the reviewable container: a human can read it, a
 diff can show what moved in it, and its bytes are fixed exactly, which is what
 makes it usable as a golden contract.
 
-<a id="req-1233"></a>
-
-**REQ-1233.** A container that carries submission metadata beside its rows is
-not among them. CDISC Dataset-JSON is written by a study document under
-[Dataset-JSON](../submission/dataset-json.md), not by a specification: the file's `studyOID`,
-`metaDataVersionOID`, `itemGroupOID`, and per-column `itemOID` are
-identifiers [Define-XML](../submission/define-xml.md) builds from a document's declarations, and a
-specification holds none of them. An `output.path` ending in `.json`
-therefore names no profile and fails under [REQ-0760](publication.md#req-0760) like any other
-unmapped extension.
-
 <a id="req-0720"></a>
 
 **REQ-0720.** A profile and the specification's `schema_version` identify the
@@ -155,6 +147,89 @@ below therefore changes what a profile means at that schema version, and an
 artifact keeps the meaning its producer's version gives it. A profile that ever
 has to diverge from the schema version is added as a name rather than by
 redefining one of these two.
+
+### Containers the mapping does not admit
+
+<a id="req-1234"></a>
+
+**REQ-1234.** The mapping is closed at two entries, and a container is added to
+it only when it carries every value the language admits without changing one.
+A profile must write [Text values](../values/text.md)'s
+Unicode scalar sequences, [Numeric values](../values/numbers.md)'s binary64
+floats and signed 64-bit integers, and [Temporal values](../values/temporal.md)'s
+dates and local civil datetimes, under the declared names
+[Specification structure](../specification/structure.md) admits. A container
+narrower than that is not admitted under a rule that truncates, re-encodes, or
+rounds on the way out: the same specification would then derive one dataset and
+publish another.
+
+<a id="req-1235"></a>
+
+**REQ-1235.** SAS Transport v5 (`.xpt`) is such a container, and this contract
+does not grow a profile for it. Its dataset and column names are eight
+uppercase ASCII characters and its labels forty, against declared names and
+labels this language does not bound; its character values are two hundred bytes
+of a single-byte encoding, against [REQ-0022](../values/text.md#req-0022)'s
+unbounded Unicode scalar sequence; it has no integer type, so a signed 64-bit
+integer past the exact range of the one 8-byte IBM hexadecimal float it stores
+every number in is changed; and it has no temporal type at all, so a date is a
+number whose meaning lives in a format name beside the value rather than in the
+value. Each of those is a value the language carries and the container does
+not.
+
+<a id="req-1236"></a>
+
+**REQ-1236.** Admitting it would mean choosing, once and for every study,
+either to refuse a conforming specification whose column name is nine
+characters or whose value does not survive the container, or to write a value
+the language says is something else. The first is a second and stricter
+specification language wearing a profile's name, and the second is exactly the
+disagreement [REQ-0716](publication.md#req-0716) closes the mapping to prevent.
+The extension does not even name one container: `.xpt` is written for v5 and
+for v8 and v9, whose names are thirty-two characters, so two runtimes reading
+the same path would not agree on the limits before they disagreed on the bytes.
+
+<a id="req-1237"></a>
+
+**REQ-1237.** Converting a published artifact to a transport container is a
+packaging step outside this language, as
+[REQ-0988](../submission/define-xml.md#req-0988) already states for the
+document's `def:leaf`. A packaging tool reads an artifact under the profile
+that wrote it and answers the questions above against the submission it is
+assembling, which is where the answers belong and where a truncated name or a
+rejected value is a packaging failure rather than a derivation one. A run that
+executes a specification therefore publishes the primary artifact and the
+sidecars [REQ-0193](publication.md#req-0193) names and no other file. A run
+that also wrote a transport file would be publishing bytes no contract
+describes, and a reader could not tell whether a run that reported success had
+written it.
+
+<a id="req-1238"></a>
+
+**REQ-1238.** A transport extension fails as any other unmapped extension does,
+under [REQ-0760](publication.md#req-0760), and [Source ingestion](ingestion.md)'s
+[REQ-0831](ingestion.md#req-0831) carries the same closure to the reading side.
+No condition names `.xpt` in particular: a diagnostic that told an author the
+container was recognized but declined would be reporting a profile that does
+not exist, and the author's next step is the same either way.
+
+<a id="req-1233"></a>
+
+**REQ-1233.** CDISC Dataset-JSON is outside the mapping on the other ground.
+It passes [REQ-1234](publication.md#req-1234): the container is not lossy, and
+[Dataset-JSON](../submission/dataset-json.md) writes every value this language
+admits without changing one. What a specification cannot supply is the file's
+identity. Its `studyOID`, `metaDataVersionOID`, `itemGroupOID`, and per-column
+`itemOID` are the identifiers
+[REQ-0970](../submission/define-xml.md#req-0970) builds from a study document's
+declarations, and its creation timestamp is the one
+[REQ-0962](../submission/define-xml.md#req-0962) has that document declare. A
+specification holds none of them, so the file is written by the study document
+that holds them all, beside the Define-XML document it points into. An
+`output.path` ending in `.json` therefore names no profile and fails under
+[REQ-0760](publication.md#req-0760) like any other unmapped extension, and
+[REQ-1237](publication.md#req-1237)'s rule that a run publishes its artifact
+and its sidecars and no other file is untouched.
 
 ### Publication
 
@@ -276,7 +351,8 @@ or row ID: fail.
 
 <a id="req-0239"></a>
 
-**REQ-0239.** A conversion failure with no `conversion_failure` handler:
+**REQ-0239.** A conversion failure with no `missing` on the result wrapper
+and without `strict: true`:
 fail.
 
 <a id="req-0240"></a>
@@ -313,6 +389,7 @@ Representative specifications, input data, and expected outcomes:
 
 - [negative-keys-internal](../../benchmarks/negative-keys-internal/README.md).
 - [negative-output-duplicate](../../benchmarks/negative-output-duplicate/README.md).
+- [negative-output-transport](../../benchmarks/negative-output-transport/README.md).
 
 The [execution manifest](../../benchmarks/execution-manifest.yaml) records
 which fixtures execute. Grammar contracts additionally replay their shared
