@@ -67,6 +67,7 @@ owns the sequence of a run.
 | [Submission metadata](submission/metadata.md) | normative | Govern dataset and column metadata, origin, methods, and document references. |
 | [Controlled terminology](submission/terminology.md) | normative | Declare codelists once and validate their bindings and allowed values. |
 | [Define-XML](submission/define-xml.md) | normative | Compose study metadata into deterministic Define-XML 2.1 documents. |
+| [Dataset-JSON](submission/dataset-json.md) | normative | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
 
 ## Reference
 

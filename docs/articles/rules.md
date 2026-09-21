@@ -67,6 +67,7 @@ owns the sequence of a run.
 | [Submission metadata](https://github.com/elong0527/yamaa/blob/main/rules/submission/metadata.md) | normative | Govern dataset and column metadata, origin, methods, and document references. |
 | [Controlled terminology](https://github.com/elong0527/yamaa/blob/main/rules/submission/terminology.md) | normative | Declare codelists once and validate their bindings and allowed values. |
 | [Define-XML](https://github.com/elong0527/yamaa/blob/main/rules/submission/define-xml.md) | normative | Compose study metadata into deterministic Define-XML 2.1 documents. |
+| [Dataset-JSON](https://github.com/elong0527/yamaa/blob/main/rules/submission/dataset-json.md) | normative | Write a dataset and its submission metadata as one deterministic Dataset-JSON 1.1 file. |
 
 ## Reference
 

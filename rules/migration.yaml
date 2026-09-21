@@ -2139,7 +2139,7 @@ requirements:
   REQ-1063: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:metadata_version_class.id.description", "schema_define.yaml:metadata_version_class.name.description", "schema_define.yaml:metadata_version_class.description.description"]}
   REQ-1064: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:standard_class.id.description", "schema_define.yaml:standard_class.name.description", "schema_define.yaml:standard_class.type.description", "schema_define.yaml:standard_class.publishing_set.description", "schema_define.yaml:standard_class.version.description", "schema_define.yaml:standard_class.status.description"]}
   REQ-1065: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:document_class.id.description", "schema_define.yaml:document_class.kind.description", "schema_define.yaml:document_class.href.description", "schema_define.yaml:document_class.title.description"]}
-  REQ-1066: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:define_dataset_class.id.description", "schema_define.yaml:define_dataset_class.spec.description", "schema_define.yaml:define_dataset_class.standard.description", "schema_define.yaml:define_dataset_class.has_no_data.description"]}
+  REQ-1066: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:define_dataset_class.id.description", "schema_define.yaml:define_dataset_class.spec.description", "schema_define.yaml:define_dataset_class.standard.description", "schema_define.yaml:define_dataset_class.has_no_data.description", "schema_define.yaml:define_dataset_class.dataset_json.description"]}
   REQ-1067: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:define_output_class.path.description"]}
   REQ-1068: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:define_id.description"]}
   REQ-1069: {"file": "submission/define-xml.md", "sources": ["schema_define.yaml:define_version.description"]}
@@ -2268,6 +2268,47 @@ requirements:
   REQ-1236: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:xpt-one-container"]}
   REQ-1237: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:transport-packaging"]}
   REQ-1238: {"file": "storage/publication.md", "sources": ["yamaa:issue-493:transport-extension-error"]}
+  REQ-1193: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-declaration"]}
+  REQ-1194: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-study-document"]}
+  REQ-1195: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-distinctness"]}
+  REQ-1196: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-has-no-data"]}
+  REQ-1197: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-version"]}
+  REQ-1198: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-ndjson"]}
+  REQ-1199: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-rows-source"]}
+  REQ-1200: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-no-rederivation"]}
+  REQ-1201: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-metadata-provenance"]}
+  REQ-1202: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-submission-required"]}
+  REQ-1203: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-members"]}
+  REQ-1204: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-absent-members"]}
+  REQ-1205: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-empty-rows"]}
+  REQ-1206: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-metadata-ref"]}
+  REQ-1207: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-source-system"]}
+  REQ-1208: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-members-never-written"]}
+  REQ-1209: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-column-block"]}
+  REQ-1210: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-data-type-mapping"]}
+  REQ-1211: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-data-type-rationale"]}
+  REQ-1212: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-values"]}
+  REQ-1213: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-temporal-text"]}
+  REQ-1214: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-missing-and-empty"]}
+  REQ-1215: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-leaf"]}
+  REQ-1216: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-encoding"]}
+  REQ-1217: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-layout"]}
+  REQ-1218: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-escaping"]}
+  REQ-1219: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-numbers"]}
+  REQ-1220: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-byte-identity"]}
+  REQ-1221: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-publication-order"]}
+  REQ-1222: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-publication-failure"]}
+  REQ-1223: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-not-a-source"]}
+  REQ-1224: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-not-a-source-rationale"]}
+  REQ-1225: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-interface", "schema_define.yaml:dataset_json_path.description"]}
+  REQ-1226: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-path-collision"]}
+  REQ-1227: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-without-data"]}
+  REQ-1228: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-source-system-incomplete"]}
+  REQ-1229: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-outside-document"]}
+  REQ-1230: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-artifact-mismatch"]}
+  REQ-1231: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-schema-invalid"]}
+  REQ-1232: {"file": "submission/dataset-json.md", "sources": ["yamaa:issue-494:dataset-json-publication-failed"]}
+  REQ-1233: {"file": "storage/publication.md", "sources": ["yamaa:issue-494:dataset-json-not-an-artifact-profile"]}
 schema_prose:
   - {"source": "schema.yaml:root_class.schema_version.description", "text": "Schema bundle this specification is written against; R006 requires an exact match.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
   - {"source": "schema.yaml:root_class.domain.description", "text": "Name of the output dataset this specification derives.", "owner": "specification/structure", "group": "root_class", "target": "REQ-1042"}
@@ -2659,3 +2700,46 @@ provenance_addenda:
   - {"source": "yamaa:issue-493:xpt-one-container", "text": "Issue #493: admitting .xpt would either refuse conforming specifications or write changed values, and the extension names v5, v8, and v9 rather than one container.", "owner": "storage/publication", "group": "transport containers", "target": "REQ-1236"}
   - {"source": "yamaa:issue-493:transport-packaging", "text": "Issue #493: converting a published artifact to a transport container is a packaging step outside this language, and a specification run publishes no file beyond its artifact and sidecars.", "owner": "storage/publication", "group": "transport containers", "target": "REQ-1237"}
   - {"source": "yamaa:issue-493:transport-extension-error", "text": "Issue #493: a transport extension fails under REQ-760 as any other unmapped extension does, with no condition naming it.", "owner": "storage/publication", "group": "transport containers", "target": "REQ-1238"}
+  - {"source": "yamaa:issue-494:dataset-json-declaration", "text": "Issue #494: a datasets entry's dataset_json names the Dataset-JSON file the study document produces for that dataset, relative to the generated document.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1193"}
+  - {"source": "yamaa:issue-494:dataset-json-study-document", "text": "Issue #494: the study document declares the file because its identifiers and creation timestamp are study-document facts, and R020's artifact mapping stays closed at .csv and .parquet.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1194"}
+  - {"source": "yamaa:issue-494:dataset-json-path-distinctness", "text": "Issue #494: a dataset_json path must differ from the document's output path, from every other entry's dataset_json, and from every composed specification's output path.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1195"}
+  - {"source": "yamaa:issue-494:dataset-json-has-no-data", "text": "Issue #494: an entry declaring has_no_data must not declare dataset_json.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1196"}
+  - {"source": "yamaa:issue-494:dataset-json-version", "text": "Issue #494: the profile writes Dataset-JSON 1.1 and pins datasetJSONVersion to 1.1.0; a later release is a new profile.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1197"}
+  - {"source": "yamaa:issue-494:dataset-json-ndjson", "text": "Issue #494: the newline-delimited form the standard also defines is not this profile.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1198"}
+  - {"source": "yamaa:issue-494:dataset-json-rows-source", "text": "Issue #494: the rows come from the artifact the entry's specification published, read under the producing-specification link.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1199"}
+  - {"source": "yamaa:issue-494:dataset-json-no-rederivation", "text": "Issue #494: composition does not re-derive, reorder, filter, or round, and output.decimals does not reach this file.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1200"}
+  - {"source": "yamaa:issue-494:dataset-json-metadata-provenance", "text": "Issue #494: every metadata member is generated from the declarations Define-XML reads, so the two files cannot disagree and nothing is declared twice.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1201"}
+  - {"source": "yamaa:issue-494:dataset-json-submission-required", "text": "Issue #494: a composed specification already declares root.submission and every output column's label and submission, so a specification without them produces no file.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1202"}
+  - {"source": "yamaa:issue-494:dataset-json-members", "text": "Issue #494: the file's top-level members and their sources, in the order the standard presents them.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1203"}
+  - {"source": "yamaa:issue-494:dataset-json-absent-members", "text": "Issue #494: a member whose source is absent is omitted rather than written as null.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1204"}
+  - {"source": "yamaa:issue-494:dataset-json-empty-rows", "text": "Issue #494: rows is always written, as [] when the dataset has no rows.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1205"}
+  - {"source": "yamaa:issue-494:dataset-json-metadata-ref", "text": "Issue #494: metaDataRef is the generated document expressed relative to the Dataset-JSON file's directory.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1206"}
+  - {"source": "yamaa:issue-494:dataset-json-source-system", "text": "Issue #494: sourceSystem carries name and version, both of which the standard requires.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1207"}
+  - {"source": "yamaa:issue-494:dataset-json-members-never-written", "text": "Issue #494: dbLastModifiedDateTime and targetDataType are never written, and why.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1208"}
+  - {"source": "yamaa:issue-494:dataset-json-column-block", "text": "Issue #494: each output.columns entry produces one column object whose members are the ones the Define-XML document carries for that column.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1209"}
+  - {"source": "yamaa:issue-494:dataset-json-data-type-mapping", "text": "Issue #494: the closed mapping from a resolved submission data type to the Dataset-JSON dataType.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1210"}
+  - {"source": "yamaa:issue-494:dataset-json-data-type-rationale", "text": "Issue #494: the mapping is not a second type system: collapsed types keep their submission type in the ItemDef, and float, boolean, decimal, and double are decided here.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1211"}
+  - {"source": "yamaa:issue-494:dataset-json-values", "text": "Issue #494: how each declared column type's value is written in a row, and that a missing value is null.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1212"}
+  - {"source": "yamaa:issue-494:dataset-json-temporal-text", "text": "Issue #494: a temporal value is canonical text and never a count from an epoch.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1213"}
+  - {"source": "yamaa:issue-494:dataset-json-missing-and-empty", "text": "Issue #494: a missing value is null and a collected empty string is an empty JSON string; which reaches the file is decided by the artifact profile.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1214"}
+  - {"source": "yamaa:issue-494:dataset-json-leaf", "text": "Issue #494: the dataset's def:leaf names the Dataset-JSON file when the entry declares one.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1215"}
+  - {"source": "yamaa:issue-494:dataset-json-encoding", "text": "Issue #494: the file is UTF-8 with no byte-order mark and U+000A line terminators.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1216"}
+  - {"source": "yamaa:issue-494:dataset-json-layout", "text": "Issue #494: the exact layout: indentation, one member per line, one column and one row per line, and no other whitespace.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1217"}
+  - {"source": "yamaa:issue-494:dataset-json-escaping", "text": "Issue #494: the exact string escaping, including which scalars are escaped and which are written as themselves.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1218"}
+  - {"source": "yamaa:issue-494:dataset-json-numbers", "text": "Issue #494: no number carries an exponent, a leading plus, digit grouping, or a leading zero.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1219"}
+  - {"source": "yamaa:issue-494:dataset-json-byte-identity", "text": "Issue #494: two conforming implementations produce byte-identical files and a golden file is compared byte for byte.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1220"}
+  - {"source": "yamaa:issue-494:dataset-json-publication-order", "text": "Issue #494: every file is rendered and validated before any target is touched; data files publish first, in entry order, and the document last.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1221"}
+  - {"source": "yamaa:issue-494:dataset-json-publication-failure", "text": "Issue #494: a failure publishes nothing further and leaves every untouched target as it was.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1222"}
+  - {"source": "yamaa:issue-494:dataset-json-not-a-source", "text": "Issue #494: the container is not a source and R014's extension mapping stays closed.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1223"}
+  - {"source": "yamaa:issue-494:dataset-json-not-a-source-rationale", "text": "Issue #494: the dataType mapping is not a function backwards and the file's types are the study document's, so admitting it as a source would give one dataset two type authorities.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1224"}
+  - {"source": "yamaa:issue-494:dataset-json-path-interface", "text": "Issue #494: dataset_json_path is the relative file a dataset's data is written to, named with a json extension.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1225"}
+  - {"source": "yamaa:issue-494:dataset-json-path-collision", "text": "Issue #494: a dataset_json path colliding with another declared path fails validation.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1226"}
+  - {"source": "yamaa:issue-494:dataset-json-without-data", "text": "Issue #494: a dataset_json on a has_no_data entry fails validation.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1227"}
+  - {"source": "yamaa:issue-494:dataset-json-source-system-incomplete", "text": "Issue #494: a declared source_system with no source_system_version fails when the document declares any dataset_json.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1228"}
+  - {"source": "yamaa:issue-494:dataset-json-outside-document", "text": "Issue #494: a path that cannot be expressed relative to its directory without a parent traversal fails.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1229"}
+  - {"source": "yamaa:issue-494:dataset-json-artifact-mismatch", "text": "Issue #494: an artifact that is absent or does not match the producing specification's output contract fails the generation.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1230"}
+  - {"source": "yamaa:issue-494:dataset-json-schema-invalid", "text": "Issue #494: a generated file that is not valid against the Dataset-JSON 1.1 schema fails and publishes nothing.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1231"}
+  - {"source": "yamaa:issue-494:dataset-json-publication-failed", "text": "Issue #494: a failed publication fails and reports the target.", "owner": "submission/dataset-json", "group": "dataset-json", "target": "REQ-1232"}
+  - {"source": "yamaa:issue-494:dataset-json-not-an-artifact-profile", "text": "Issue #494: an output.path ending in .json names no profile; the container loses nothing, so the exclusion rests on identifiers only a study document holds.", "owner": "storage/publication", "group": "dataset-json", "target": "REQ-1233"}
+  - {"source": "schema_define.yaml:define_dataset_class.dataset_json.description", "text": "See REQ-1066 in rules/submission/define-xml.md.", "owner": "submission/define-xml", "group": "define_dataset_class", "target": "REQ-1066"}
+  - {"source": "schema_define.yaml:dataset_json_path.description", "text": "See REQ-1225 in rules/submission/dataset-json.md.", "owner": "submission/dataset-json", "group": "dataset_json_path", "target": "REQ-1225"}
