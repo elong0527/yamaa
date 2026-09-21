@@ -126,10 +126,10 @@ those four as dependency-free.
 <a id="req-0059"></a>
 
 **REQ-0059.** For each row template, evaluate row derivations using a
-dependency graph. Row derivations cannot depend on values produced only
+dependency graph. A row derivation cannot depend on a value produced only
 during the column phase. Every unqualified identifier in a grouped
-`row.filter` must resolve to a column derived by that same row template. That
-grouped `filter` is not a derivation, adds no graph edge between columns,
+`row.filter` must resolve to a column derived by that row template. The
+grouped `filter` is not a derivation. It adds no graph edge between columns
 and runs only after all columns have completed.
 
 <a id="req-0060"></a>
@@ -155,10 +155,9 @@ instruction to iterate.
 
 <a id="req-0211"></a>
 
-**REQ-0211.** Every derived value passes through the same stages in this
-order. Nothing consumes a value before its lifecycle is complete. A
-dependent column, a verification, and the artifact
-all see the same converted value.
+**REQ-0211.** Every derived value passes through the stages below in order.
+Nothing consumes a value before its lifecycle completes. Dependent columns,
+verifications, and the artifact see the same converted value.
 
 <a id="req-0212"></a>
 
