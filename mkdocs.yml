@@ -9,7 +9,12 @@ copyright: Copyright &copy; 2026 yamaa authors
 
 docs_dir: docs
 site_dir: site
-exclude_docs: requirements.txt
+# requirements.txt is not a page. articles/benchmark.md is the source the
+# benchmark dashboard generator substitutes into docs/benchmark/index.md, so
+# it holds placeholders and is not a page either.
+exclude_docs: |
+  requirements.txt
+  articles/benchmark.md
 
 theme:
   name: material
@@ -73,9 +78,7 @@ nav:
       - Schema introduction: articles/schema-intro.md
       - Schema reference: articles/schema.md
       - Rules: articles/rules.md
-  - Benchmark:
-      - Reading the examples: articles/benchmark.md
-      - Dashboards: benchmark/index.md
+  - Benchmark: benchmark/index.md
   - Engine:
       - Python engine: https://github.com/elong0527/yamaa/tree/main/python
       - R engine: https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder

@@ -22,6 +22,13 @@ import mapping_doc
 ROOT = HERE.parents[2]
 BENCHMARKS = ROOT / "benchmarks"
 DESTINATION = ROOT / "docs/benchmark"
+# The gallery's prose is authored as a documentation page, beside the other
+# articles, rather than as a template buried with the generator: whoever
+# writes the overview edits it where the rest of the documentation lives. It
+# carries substitution placeholders, so MkDocs cannot render it on its own and
+# `exclude_docs` in mkdocs.yml keeps it out of the built site; the generated
+# docs/benchmark/index.md is the page readers see.
+OVERVIEW = ROOT / "docs/articles/benchmark.md"
 REPOSITORY = "https://github.com/elong0527/yamaa"
 # Comments are giscus threads in the repository's GitHub Discussions, so they
 # outlive any deployment. Each benchmark maps to one discussion whose title is
@@ -48,6 +55,17 @@ OUTCOMES = (
         "Each must fail, and expected/error.yaml pins the error it raises.",
     ),
 )
+# The gallery opens with a table saying what each directory-name group is for,
+# counted from the directories themselves so the figures cannot drift from the
+# suite. A group absent from this map is an error rather than a silent
+# omission: adding one costs a single line here and keeps the table a complete
+# account of what the suite holds.
+GROUP_NOTES = {
+    "schema": "Assess yamaa schema",
+    "adam": "Assess SDTM to ADaM derivations",
+    "sdtm": "Assess ODM to SDTM derivations",
+    "negative": "Assess yamaa error handling",
+}
 YAML_TOKEN = re.compile(
     r""""(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|\b(?:null|true|false)\b|\b\d+(?:\.\d+)?\b|[A-Za-z_][\w-]*(?=:)"""
 )
@@ -421,6 +439,41 @@ def plural(count, noun):
     return f"{count} {noun}" + ("" if count == 1 else "s")
 
 
+def render_groups(names):
+    """Render the table of groups and their purpose that opens the gallery.
+
+    Counts come from the directory names, so the table cannot report a total
+    the suite no longer has. A group the notes do not describe raises rather
+    than disappearing from the table.
+    """
+    counts = {}
+    for name in names:
+        family = name.partition("-")[0]
+        if family not in GROUP_NOTES:
+            raise ValueError(
+                f"benchmark family has no gallery description: {family}-* "
+                f"(add it to GROUP_NOTES in generate.py)"
+            )
+        counts[family] = counts.get(family, 0) + 1
+    rows = "".join(
+        f"| `{family}-*` | {counts[family]} | {escape(GROUP_NOTES[family])} |\n"
+        for family in GROUP_NOTES
+        if family in counts
+    )
+    return "| Group | Count | Purpose |\n|---|---|---|\n" + rows.rstrip("\n")
+
+
+def curated_links(template_text):
+    """Return the benchmark names the overview hand-picks.
+
+    The overview names a reading path. Those links outlive the directories
+    they point at unless something checks them, so `main` compares them
+    against the suite and a rename breaks the build instead of shipping a
+    dead link.
+    """
+    return sorted(set(re.findall(r"\]\(([a-z0-9-]+)\.html\)", template_text)))
+
+
 def render_index(entries):
     """Render the gallery page linking every generated dashboard.
 
@@ -434,6 +487,11 @@ def render_index(entries):
     that must produce an artifact, so the two are listed apart rather than
     interleaved by domain. A `negative-` directory name is what marks the
     second group, the same test the repository validator applies.
+
+    The overview above the listing is authored at `docs/articles/benchmark.md`
+    and reaches the reader on the same page as the benchmarks it describes.
+    Its totals are substituted from the directories rather than typed, and its
+    curated links are checked against the suite, so neither can go stale.
     """
     outcomes = {key: {} for key, _, _ in OUTCOMES}
     for name, title, category in entries:
@@ -463,10 +521,12 @@ def render_index(entries):
                 f'<ul class="benchmark-grid">\n{items}</ul>'
             )
         blocks.append("\n\n".join(sections))
-    template = Template((HERE / "gallery.md").read_text(encoding="utf-8"))
+    names = [name for name, _, _ in entries]
+    template = Template(OVERVIEW.read_text(encoding="utf-8"))
     result = template.substitute(
         total=plural(len(entries), "benchmark"),
-        source_url=REPOSITORY + "/tree/main/benchmark",
+        source_url=REPOSITORY + "/tree/main/benchmarks",
+        groups=render_groups(names),
         summary="".join(jumps),
         sections="\n\n".join(blocks) + "\n",
     )
@@ -789,6 +849,15 @@ def main():
         for path in BENCHMARKS.iterdir()
         if benchmark_has_spec(path) and (path / "README.md").is_file()
     )
+    overview_text = OVERVIEW.read_text(encoding="utf-8")
+    dangling = [
+        target for target in curated_links(overview_text) if target not in set(complete)
+    ]
+    if dangling:
+        parser.error(
+            "docs/articles/benchmark.md links to benchmarks that do not exist: "
+            + ", ".join(dangling)
+        )
     neighbors = {
         name: (
             complete[index - 1] if index else None,

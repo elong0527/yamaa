@@ -104,7 +104,7 @@ devtools::install_github("elong0527/yamaa", subdir = "R/cdiscbuilder")
 
 - New here? [Introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the model in five minutes.
 - Coming from Excel specs? [Excel to yamaa](https://elong0527.github.io/yamaa/articles/excel/) translates what you already know.
-- Looking for worked examples? [Benchmarks](https://elong0527.github.io/yamaa/articles/benchmark/) illustrate the ideas.
+- Looking for worked examples? [Benchmarks](https://elong0527.github.io/yamaa/benchmark/) illustrate the ideas.
 
 ## License
 

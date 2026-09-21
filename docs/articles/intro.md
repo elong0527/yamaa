@@ -33,7 +33,7 @@ yamaa writes each layer into a different kind of file:
 | **Structure** | `yaml/schema*.yaml` -- what a specification may contain |
 | **Algorithm** | your `spec.yaml` -- one specification produces one dataset |
 | **Semantics** | `rules/` -- normative contracts for every written item |
-| **Worked proof** | `benchmarks/` -- 214 runnable specifications with byte-exact expected outputs |
+| **Worked proof** | `benchmarks/` -- runnable specifications with byte-exact expected outputs |
 
 In one sentence: **an Excel spec is written to be understood; a yamaa spec is
 written to be executed the same way twice.**
@@ -59,7 +59,7 @@ agreement to the planning stage.
 | Schema | Declares what a specification may contain; anything it does not declare is rejected before execution. | [Schema introduction](schema-intro.md) |
 | Rules | Fix the meaning of every written item, so the R and Python engines cannot read the same spec in two ways. | [Rules](rules.md) |
 | Engine | Runs specifications in Python and R; the same specification with the same inputs produces the same output dataset. | Python and R engines under Engine in the nav |
-| Benchmark | Runnable specifications with input data and byte-exact expected outputs. | [Reading the examples](benchmark.md) |
+| Benchmark | Runnable specifications with input data and byte-exact expected outputs. | [Benchmark](../benchmark/index.md) |
 
 ## What a specification looks like
 
@@ -88,4 +88,4 @@ derivation:
 - Why one execution: [Principles](principles.md).
 - How rows and columns work: [Derivation](derive.md).
 - Coming from Excel specs: [Excel to yamaa](excel.md).
-- How to read a runnable example: [Reading the examples](benchmark.md).
+- How to read a runnable example: [Benchmark](../benchmark/index.md).
