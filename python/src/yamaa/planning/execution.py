@@ -2090,6 +2090,33 @@ def _lookup_dependencies(
     return intermediate.dependencies if intermediate is not None else ()
 
 
+def _lookup_match_available_at_row_construction(
+    match: str,
+    *,
+    row: Row,
+    driver: str | None,
+    bindings: BindingPlan,
+) -> bool:
+    """Tell whether a lookup match variable is known while rows are built.
+
+    REQ-0126 (issue #711): a grouped template knows its group keys during
+    row construction, and an ungrouped template reads its driver record
+    1:1, so driver fields need no template derivation either. This is the
+    same boundary REQ-0156/REQ-0157 draw for implicit joins.
+    """
+    if match in (row.group_by or ()):
+        return True
+    if (
+        driver is not None
+        and row.group_by is None
+        and match.startswith(f"{driver}.")
+        and match.count(".") == 1
+        and match.split(".", 1)[1] in _dataset_types(bindings, driver)
+    ):
+        return True
+    return False
+
+
 def _validate_aggregate_keys(
     reference: _Reference,
     bindings: BindingPlan,
@@ -3208,10 +3235,16 @@ def plan_execution(
                                 requirement="REQ-0126",
                             )
                             # REQ-0126: during row construction, every value
-                            # the intermediate matches on must be derived by this
-                            # template rather than by a later phase.
+                            # the intermediate matches on must be derived by
+                            # this template rather than by a later phase.
+                            # Group keys and ungrouped driver fields are known
+                            # at construction, so they need no derivation
+                            # (issue #711).
                             for match in _lookup_dependencies(reference, intermediates)
                             if match not in row_names
+                            and not _lookup_match_available_at_row_construction(
+                                match, row=row, driver=driver, bindings=bindings
+                            )
                         )
                     elif reference.name not in column_types:
                         diagnostics.append(
