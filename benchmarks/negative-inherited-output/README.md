@@ -1,0 +1,30 @@
+# Reject Inherited Output
+
+[![Dashboard](https://img.shields.io/badge/Dashboard-view-1f3a5c)](https://elong0527.github.io/yamaa/benchmark/negative-inherited-output.html)
+[![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle)
+
+**Goal:** carry the subject identifier from demographics into
+subject-level records, letting a parent file choose which
+variables the final dataset would contain.
+
+**Input:** demographics holding the subject identifier.
+
+**Variables:**
+
+The requested layout would carry the subject identifier from
+demographics into the final dataset, but no dataset is produced:
+the requested dataset must own that choice explicitly, so the run
+is rejected before any data is read.
+
+**Standard:** ADaM | **Domain:** ADSL
+
+## How to fix
+
+Declare the complete `output` in the entry file. Parent files may
+provide a default for reuse, but the entry must replace it
+explicitly:
+
+```yaml
+output:
+  columns: [USUBJID]
+```

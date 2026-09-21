@@ -9,7 +9,7 @@ import pytest
 from yamaa import DomainRunError, yamaa_domain
 
 REPOSITORY_ROOT = Path(__file__).parents[2]
-EXAMPLES = REPOSITORY_ROOT / "benchmark"
+EXAMPLES = REPOSITORY_ROOT / "benchmarks"
 DM_EXAMPLE = EXAMPLES / "sdtm-dm-basic"
 
 

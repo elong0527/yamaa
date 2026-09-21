@@ -32,8 +32,8 @@ yamaa writes each layer into a different kind of file:
 |---|---|
 | **Structure** | `yaml/schema*.yaml` -- what a specification may contain |
 | **Algorithm** | your `spec.yaml` -- one specification produces one dataset |
-| **Semantics** | `yaml/rules/` -- normative contracts for every written item |
-| **Worked proof** | `benchmark/` -- 214 runnable specifications with byte-exact expected outputs |
+| **Semantics** | `rules/` -- normative contracts for every written item |
+| **Worked proof** | `benchmarks/` -- 214 runnable specifications with byte-exact expected outputs |
 
 In one sentence: **an Excel spec is written to be understood; a yamaa spec is
 written to be executed the same way twice.**

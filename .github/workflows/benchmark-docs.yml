@@ -7,7 +7,7 @@ name: Benchmark dashboards
 on:
   pull_request:
     paths:
-      - 'benchmark/**'
+      - 'benchmarks/**'
       - '.github/scripts/benchmark-docs/**'
       - '.github/workflows/benchmark-docs.yml'
 

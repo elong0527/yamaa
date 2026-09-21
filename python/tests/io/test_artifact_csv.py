@@ -10,7 +10,7 @@ from yamaa.io.polars import frame_from_values
 from yamaa.models import DateTimeValue, DateValue, TypedColumn, TypedTable
 from yamaa.specification.models import ColumnType, Output
 
-EXAMPLES = Path(__file__).parents[3] / "benchmark"
+EXAMPLES = Path(__file__).parents[3] / "benchmarks"
 
 
 def table(

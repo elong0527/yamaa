@@ -22,10 +22,10 @@ test_that("blank fields in the string-handler fixtures are missing", {
     mustWork = FALSE
   )
   handlers_input <- file.path(
-    root, "benchmark", "adam-adae-text-cleanup", "input", "ae.csv"
+    root, "benchmarks", "adam-adae-text-cleanup", "input", "ae.csv"
   )
   comment_input <- file.path(
-    root, "benchmark", "adam-adsl-investigator-comment", "input", "dm.csv"
+    root, "benchmarks", "adam-adsl-investigator-comment", "input", "dm.csv"
   )
   skip_if_not(
     file.exists(handlers_input) && file.exists(comment_input),

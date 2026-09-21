@@ -97,8 +97,8 @@ def generated(root):
         )
     index.append("")
     return {
-        root / "yaml/rules/reference/schema-fields.md": "\n".join(fields),
-        root / "yaml/rules/reference/requirements.md": "\n".join(index),
+        root / "rules/reference/schema-fields.md": "\n".join(fields),
+        root / "rules/reference/requirements.md": "\n".join(index),
     }
 
 

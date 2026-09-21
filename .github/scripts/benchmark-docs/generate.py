@@ -20,7 +20,7 @@ sys.path.insert(0, str(HERE))
 import mapping_doc
 
 ROOT = HERE.parents[2]
-BENCHMARKS = ROOT / "benchmark"
+BENCHMARKS = ROOT / "benchmarks"
 DESTINATION = ROOT / "docs/benchmark"
 REPOSITORY = "https://github.com/elong0527/yamaa"
 # Comments are giscus threads in the repository's GitHub Discussions, so they
@@ -315,7 +315,7 @@ def render_files(paths, group, benchmark, derived, labels):
         count_html = f'<span class="file-count">{count}</span>' if count else ""
         edit_url = (
             REPOSITORY
-            + "/edit/main/benchmark/"
+            + "/edit/main/benchmarks/"
             + quote(benchmark.name)
             + "/"
             + "/".join(quote(part) for part in filename.split("/"))
@@ -398,7 +398,7 @@ def benchmark_category(name, title, spec):
 
 def describe_benchmark(benchmark):
     """Return the page title and category without rendering fixtures."""
-    source_url = REPOSITORY + "/blob/main/benchmark/" + quote(benchmark.name)
+    source_url = REPOSITORY + "/blob/main/benchmarks/" + quote(benchmark.name)
     readme_path = benchmark / "README.md"
     entry_path, _ = benchmark_entry(benchmark)
     if entry_path is None:
@@ -547,8 +547,8 @@ def render_code_panel(files, edit_base=None):
 
 
 def render_benchmark(benchmark, previous=None, next=None):
-    source_url = REPOSITORY + "/blob/main/benchmark/" + quote(benchmark.name)
-    edit_base = REPOSITORY + "/edit/main/benchmark/" + quote(benchmark.name)
+    source_url = REPOSITORY + "/blob/main/benchmarks/" + quote(benchmark.name)
+    edit_base = REPOSITORY + "/edit/main/benchmarks/" + quote(benchmark.name)
     readme_edit_url = edit_base + "/README.md"
     readme_path = benchmark / "README.md"
     spec_path, chain = benchmark_entry(benchmark)
@@ -557,7 +557,7 @@ def render_benchmark(benchmark, previous=None, next=None):
     spec_edit_url = edit_base + "/" + quote(spec_path.name)
     readme_text = readme_path.read_text(encoding="utf-8")
     lifecycle_state, lifecycle_url = readme_lifecycle(readme_text)
-    lifecycle_href = REPOSITORY + "/blob/main/benchmark/README.md#lifecycle"
+    lifecycle_href = REPOSITORY + "/blob/main/benchmarks/README.md#lifecycle"
     lifecycle_badge = (
         f'<a class="lifecycle-badge" href="{escape(lifecycle_href)}">'
         f'<img src="{escape(lifecycle_url)}" alt="Lifecycle: {escape(lifecycle_state)}"></a>'
@@ -711,7 +711,7 @@ def render_benchmark(benchmark, previous=None, next=None):
         datasets_heading=datasets_heading,
         readme_edit_url=readme_edit_url,
         spec_file_header=spec_file_header,
-        source_url=REPOSITORY + "/tree/main/benchmark/" + quote(benchmark.name),
+        source_url=REPOSITORY + "/tree/main/benchmarks/" + quote(benchmark.name),
         prev_link=page_link(previous, "Previous benchmark", "prev"),
         next_link=page_link(next, "Next benchmark", "next"),
         metrics=metrics_html,

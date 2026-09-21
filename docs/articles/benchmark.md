@@ -2,7 +2,7 @@
 
 ## What the suite is
 
-`benchmark/` holds **214 directories**. Each one is a complete, runnable
+`benchmarks/` holds **214 directories**. Each one is a complete, runnable
 specification with its input data and the exact output an implementation must
 reproduce:
 
@@ -31,7 +31,7 @@ The suite serves three audiences at once:
 
 ## Reading one example in five minutes
 
-Take [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-basic), the suggested first read.
+Take [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-basic), the suggested first read.
 
 **Step 1 -- the README, for intent.** One record per subject; `SEX` is the
 collected sex translated to `M`/`F`/`U`, and a sex that was never collected and
@@ -90,9 +90,9 @@ handlers -> result.
 
 | # | Example | What it establishes |
 |---|---|---|
-| 1 | [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-dm-basic) | Reading collected items, handlers, and the declared keys as the grain |
-| 2 | [`sdtm-lb-findings`](https://github.com/elong0527/yamaa/tree/main/benchmark/sdtm-lb-findings) | Real row construction: one template per collected test, `row_number` for the sequence |
-| 3 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmark/adam-adlb-bds) | A full Basic Data Structure build: parameters as row templates, then baseline, change and sequence as columns |
+| 1 | [`sdtm-dm-basic`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-dm-basic) | Reading collected items, handlers, and the declared keys as the grain |
+| 2 | [`sdtm-lb-findings`](https://github.com/elong0527/yamaa/tree/main/benchmarks/sdtm-lb-findings) | Real row construction: one template per collected test, `row_number` for the sequence |
+| 3 | [`adam-adlb-bds`](https://github.com/elong0527/yamaa/tree/main/benchmarks/adam-adlb-bds) | A full Basic Data Structure build: parameters as row templates, then baseline, change and sequence as columns |
 
 After those three, pick by the question you have:
 

@@ -13,7 +13,7 @@ Before reviewing, implementing, or modifying this design:
    the derivation or verification vocabulary in scope.
 4. Read `rules/README.md` and every rule applicable to the fields in scope.
 5. Read the relevant example specification, README, input data, and expected
-   output under `../benchmark/`.
+   output under `../benchmarks/`.
 
 Schemas own shape, defaults, and structural constraints. Indexed contracts
 own shared and operation-local semantics. Schema descriptions link to their
@@ -51,7 +51,7 @@ One term per concept across all rules, schema comments, and messages:
   do not recreate a generic exception list.
 - Store each cohesive semantic area in one rule file under `rules/`.
 - Declare governed submission metadata in `submission`, never in the free-form
-  `metadata` map. The [submission contract](rules/submission/metadata.md)
+  `metadata` map. The [submission contract](../rules/submission/metadata.md)
   reserves its governed key names, so the map cannot
   become a second place a governed fact lives.
 - Declare nothing a rule derives. `Mandatory` comes from `core`, a submission
@@ -60,7 +60,7 @@ One term per concept across all rules, schema comments, and messages:
   it.
 - Declare a codelist once in the study document and bind columns to its
   identifier, as required by the
-  [terminology contract](rules/submission/terminology.md).
+  [terminology contract](../rules/submission/terminology.md).
 - Change a closed grammar in its `grammar/` file first. The rule's grammar
   block is rendered from that file, each parser's closed vocabulary is
   compared with it, and both implementations replay its vectors, so a change
@@ -80,11 +80,11 @@ One term per concept across all rules, schema comments, and messages:
   link in a negative example. A rooted path is for a study that declares a
   data root, not for a fixture this repository carries.
 - Write every fixture under the source profile its extension selects. CSV
-  fixtures follow the [CSV profile](rules/storage/csv.md): UTF-8 without a
+  fixtures follow the [CSV profile](../rules/storage/csv.md): UTF-8 without a
   byte-order mark, comma-separated
   fields, a named non-empty field per column, and the same field count in
   every record. Parquet fixtures follow the closed
-  [Parquet profile](rules/storage/parquet.md).
+  [Parquet profile](../rules/storage/parquet.md).
   A file that departs from its profile belongs only in a negative example that
   declares the condition it provokes.
 - Do not duplicate normative behavior across schema definitions, rules, or
