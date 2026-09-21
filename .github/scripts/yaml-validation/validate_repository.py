@@ -305,6 +305,7 @@ VALIDATION_CONTEXT_FIELDS = {
         'key', 'key_count', 'key_base', 'key_base_count',
     },
     ('R007', 'zero_offset'): {'offset'},
+    ('R007', 'window_on_window_result'): {'column', 'depends_on'},
     ('R007', 'window_order_by_required'): {'operation'},
     ('R007', 'window_order_by_forbidden'): {'operation'},
     ('R009', 'missing_verification_id'): set(),
@@ -7384,6 +7385,71 @@ def validate_derivation_static_semantics(derivation, path, context):
     return errors
 
 
+ROW_WINDOW_OPERATIONS = (
+    'row_number',
+    'rank',
+    'row_value',
+    'previous_non_missing',
+    'baseline_flag',
+)
+
+
+def validate_row_window_dependencies(derivations, index, spec_label, env):
+    """Reject a row-construction window that reads another window's result.
+
+    REQ-0326 evaluates a template's windows in one pass over its
+    constructed rows with no declared order between the window
+    expressions, so a window must not depend on another window's result,
+    directly or through a scalar derived from one. A window reading its
+    own column is a cycle, left to the dependency-cycle check.
+    """
+    errors = []
+    window_columns = {}
+    for name, derivation in derivations.items():
+        if isinstance(derivation, dict) and len(derivation) == 1:
+            operation = next(iter(derivation))
+            if operation in ROW_WINDOW_OPERATIONS:
+                window_columns[name] = operation
+    if not window_columns:
+        return errors
+    dependencies = {}
+    for name, derivation in derivations.items():
+        references = collect_type_references(derivation, 'expression', env)
+        dependencies[name] = {
+            ref_name
+            for kind, ref_name in references
+            if kind == 'variable'
+            and '.' not in ref_name
+            and ref_name in derivations
+        }
+    deferred = set(window_columns)
+    changed = True
+    while changed:
+        changed = False
+        for name, deps in dependencies.items():
+            if name not in deferred and any(dep in deferred for dep in deps):
+                deferred.add(name)
+                changed = True
+    for name in sorted(window_columns):
+        blocked = sorted(
+            dep
+            for dep in dependencies[name]
+            if dep in deferred and dep != name
+        )
+        if not blocked:
+            continue
+        errors.append(
+            validation_diagnostic(
+                f"{spec_label}.rows[{index}].derivations.{name}."
+                f"{window_columns[name]}",
+                'window_on_window_result',
+                f"window {name!r} depends on window-derived {blocked[0]!r}",
+                context={'column': name, 'depends_on': blocked},
+            )
+        )
+    return errors
+
+
 def validate_intermediate_static_semantics(
     spec, spec_label, datasets, output_types
 ):
@@ -7795,6 +7861,11 @@ def validate_spec_static_semantics(spec, spec_label, spec_path, env):
                         row_context,
                     )
                 )
+            errors.extend(
+                validate_row_window_dependencies(
+                    derivations, index, spec_label, env
+                )
+            )
 
     errors.extend(
         validate_intermediate_static_semantics(

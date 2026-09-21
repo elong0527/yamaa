@@ -18,8 +18,8 @@ a numeric result (`LBSTRESN`), and a visit number (`VISITNUM`).
 
 A window reads the rows its template constructed, in one pass with no
 declared evaluation order between window expressions. A second window
-depending on the first window's result — directly, or through a value
-derived from one like `CHG` — would read values whose computation order
+depending on the first window's result -- directly, or through a value
+derived from one like `CHG` -- would read values whose computation order
 is unspecified, so the run is rejected before any data is read and no
 artifact is accepted.
 

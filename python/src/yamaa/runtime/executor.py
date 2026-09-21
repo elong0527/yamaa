@@ -545,7 +545,7 @@ def _construct_rows(
             # REQ-0326: a template's windows partition the rows the template
             # constructs. Positions are fixed first so the REQ-0301
             # tie-break sees construction order, then the partition scope
-            # exposes exactly this template's rows to the window resolver —
+            # exposes exactly this template's rows to the window resolver --
             # the same shape _key_space uses for windows over keys.
             for index, candidate in enumerate(staged):
                 candidate.output_position = position + index

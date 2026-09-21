@@ -270,6 +270,11 @@ fixtures:
     condition: zero_offset
     spec_paths: [columns.PREVAL.derivation.row_value.offset]
     validator: window_contract
+  negative-row-window-on-window-result:
+    rule: R007
+    condition: window_on_window_result
+    spec_paths: ['rows[0].derivations.PREV2.row_value']
+    validator: window_contract
   negative-source-self-reference:
     rule: R002
     condition: duplicate_identifier
