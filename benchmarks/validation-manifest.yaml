@@ -323,7 +323,7 @@ fixtures:
   negative-date-conversion:
     rule: R016
     condition: incompatible_input_type
-    spec_paths: [columns.ASTDT2.derivation.to_date.source]
+    spec_paths: [columns.ASTDT2.derivation.to_date]
     validator: temporal_contract
   negative-types-unknown-field:
     rule: R014
