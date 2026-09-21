@@ -9,7 +9,12 @@ copyright: Copyright &copy; 2026 yamaa authors
 
 docs_dir: docs
 site_dir: site
-exclude_docs: requirements.txt
+# requirements.txt is not a page. articles/benchmark.md is the source the
+# benchmark dashboard generator substitutes into docs/benchmark/index.md, so
+# it holds placeholders and is not a page either.
+exclude_docs: |
+  requirements.txt
+  articles/benchmark.md
 
 theme:
   name: material

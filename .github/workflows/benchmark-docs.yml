@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - 'benchmarks/**'
+      - 'docs/articles/benchmark.md'
       - '.github/scripts/benchmark-docs/**'
       - '.github/workflows/benchmark-docs.yml'
 

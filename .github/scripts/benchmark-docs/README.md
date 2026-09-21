@@ -105,15 +105,20 @@ scrolling to the end of it, and the brand beside it returns to the
 documentation site.
 
 The gallery opens with the overview of the suite: what it is, the family
-table, who it serves, a three-benchmark reading path, a question-to-benchmark
-index, and how to read the anti-patterns. It sits on the same page as the
-benchmarks it describes, so a reader never has to hold two pages open, and it
-is the whole of the `Benchmark` nav entry. The prose lives in
-`gallery.md`; the family table is substituted by `render_groups` from the
-directory names, so its counts cannot drift from the suite, and a family
-absent from `GROUP_NOTES` in `generate.py` fails generation rather than
-vanishing from the table. The reading path and the question index name
-benchmarks by hand, so `main` compares every `*.html` link in the template
+table, who it serves, and a three-benchmark reading path. It sits on the same
+page as the benchmarks it describes, so a reader never has to hold two pages
+open, and it is the whole of the `Benchmark` nav entry.
+
+That prose is authored at `docs/articles/benchmark.md`, beside the other
+articles rather than here with the generator, so whoever writes the overview
+edits it where the rest of the documentation lives. It is the template this
+generator substitutes into `docs/benchmark/index.md`: it holds placeholders,
+cannot render on its own, and `exclude_docs` in `mkdocs.yml` keeps MkDocs from
+publishing it as a page of its own. The family table is substituted by
+`render_groups` from the directory names, so its counts cannot drift from the
+suite, and a family absent from `GROUP_NOTES` in `generate.py` fails
+generation rather than vanishing from the table. The reading path names
+benchmarks by hand, so `main` compares every `*.html` link in the overview
 against the benchmark directories and refuses to generate when one has been
 renamed away.
 

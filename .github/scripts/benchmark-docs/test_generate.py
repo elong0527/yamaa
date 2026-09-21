@@ -503,9 +503,9 @@ class DashboardTests(unittest.TestCase):
         for name in ("adam-zzz-one", "adam-aaa-two", "adam-mmm-three"):
             self.assertIn(f'href="{name}.html"', text)
 
-    def test_gallery_counts_families_from_the_directory_names(self):
-        # The family table is the figure readers quote, so it is counted from
-        # the suite rather than typed into the template, where it would drift.
+    def test_gallery_counts_groups_from_the_directory_names(self):
+        # The group table is the figure readers quote, so it is counted from
+        # the suite rather than typed into the overview, where it would drift.
         text = generate.render_index(
             [
                 ("adam-adsl-one", "ADaM ADSL: derive", "ADaM ADSL"),
@@ -513,27 +513,38 @@ class DashboardTests(unittest.TestCase):
                 ("negative-adsl-three", "ADaM ADSL: reject", "ADaM ADSL"),
             ]
         ).decode("ascii")
-        self.assertIn("| `adam-*` | 2 | SDTM to ADaM derivations |", text)
-        self.assertIn("| `negative-*` | 1 |", text)
-        # A family with no benchmarks does not get an empty row.
+        self.assertIn("| Group | Count | Purpose |", text)
+        self.assertIn("| `adam-*` | 2 | Assess SDTM to ADaM derivations |", text)
+        self.assertIn("| `negative-*` | 1 | Assess yamaa error handling |", text)
+        # A group with no benchmarks does not get an empty row.
         self.assertNotIn("`sdtm-*`", text)
 
-    def test_gallery_rejects_a_family_it_cannot_describe(self):
+    def test_gallery_rejects_a_group_it_cannot_describe(self):
         with self.assertRaises(ValueError) as caught:
             generate.render_groups(["mystery-one"])
         self.assertIn("mystery-*", str(caught.exception))
 
     def test_overview_links_name_benchmarks_that_exist(self):
-        # The reading path and question index are hand-picked, so a rename
-        # has to fail the build rather than ship a dead link.
-        template = (generate.HERE / "gallery.md").read_text(encoding="utf-8")
-        targets = generate.curated_links(template)
+        # The reading path is hand-picked, so a rename has to fail the build
+        # rather than ship a dead link.
+        overview = generate.OVERVIEW.read_text(encoding="utf-8")
+        targets = generate.curated_links(overview)
         self.assertGreater(len(targets), 0)
         for name in targets:
             self.assertTrue(
                 (generate.BENCHMARKS / name / "README.md").is_file(),
-                f"gallery.md links to a missing benchmark: {name}",
+                f"the overview links to a missing benchmark: {name}",
             )
+
+    def test_overview_is_authored_as_a_documentation_page(self):
+        # The prose belongs where the other articles live, and MkDocs must not
+        # publish it: it carries the placeholders the generator substitutes.
+        self.assertEqual(
+            generate.OVERVIEW, generate.ROOT / "docs/articles/benchmark.md"
+        )
+        self.assertTrue(generate.OVERVIEW.is_file())
+        excluded = (generate.ROOT / "mkdocs.yml").read_text(encoding="utf-8")
+        self.assertIn("articles/benchmark.md", excluded)
 
     def test_gallery_is_a_markdown_page_for_the_documentation_site(self):
         text = generate.render_index(
