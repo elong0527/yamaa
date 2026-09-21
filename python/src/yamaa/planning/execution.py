@@ -3853,11 +3853,21 @@ def plan_execution(
     row_derived = tuple(
         column.name for column in specification.columns if column.derivation is None
     )
+    # REQ-0050 records an intermediate's match values as dependencies so the
+    # keys' inputs come before the read. The forward_reference check above
+    # exempts keys (REQ-0074); the execution order honors the exemption by
+    # deriving a column after the dependencies the validator allowed through.
+    # The sort is stable: declaration order is kept wherever no dependency
+    # forces a move.
+    ordered_columns = _topological_row_order(
+        {planned.column: planned for planned in column_plans},
+        column_order,
+    )
     return ExecutionPlan(
         specification=specification,
         bindings=bindings,
         rows=tuple(row_plans),
-        columns=tuple(column_plans),
+        columns=tuple(ordered_columns),
         row_derived_columns=row_derived,
         intermediates=tuple(intermediates.values()),
         resolved_joins=tuple(resolved_joins),
