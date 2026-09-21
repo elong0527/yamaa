@@ -1,0 +1,21 @@
+Package: yamaa
+Title: Clean-Room R Derivation Engine for the yamaa Specification Language
+Version: 0.1.0
+Date: 2026-09-21
+Authors@R: person("elong0527-muse-bot", role = c("aut", "cre"),
+    email = "329371256+elong0527-muse-bot@users.noreply.github.com")
+Description: A clean-room R implementation of the yamaa derivation engine:
+    specification loading (including parents: composition), row
+    construction, column derivation, window expressions, lookups,
+    temporal and text operations, verifications, and artifact publishing,
+    driven by the schema and rules in yaml/ and validated against
+    benchmarks/. Self-contained: base R plus the yaml and arrow packages.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Imports:
+    yaml,
+    arrow
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+RoxygenNote: 8.0.0
