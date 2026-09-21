@@ -87,6 +87,7 @@ codelists:
 datasets:
   - id: DM
     spec: spec.yaml
+    dataset_json: dm.json
 
 output:
   path: define.xml

@@ -31,8 +31,8 @@
         <ItemRef ItemOID="IT.DM.SEX" OrderNumber="8" Mandatory="Yes" Role="Record Qualifier"/>
         <ItemRef ItemOID="IT.DM.COUNTRY" OrderNumber="9" Mandatory="Yes" Role="Record Qualifier"/>
         <def:Class Name="SPECIAL PURPOSE"/>
-        <def:leaf ID="LF.DM" xlink:href="dm.csv">
-          <def:title>dm.csv</def:title>
+        <def:leaf ID="LF.DM" xlink:href="dm.json">
+          <def:title>dm.json</def:title>
         </def:leaf>
       </ItemGroupDef>
       <ItemDef OID="IT.DM.STUDYID" Name="STUDYID" DataType="text" Length="20" SASFieldName="STUDYID">

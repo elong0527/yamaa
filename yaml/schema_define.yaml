@@ -271,6 +271,10 @@ define_dataset_class:
         type: bool
         default: false
         description: See REQ-1066 in rules/submission/define-xml.md.
+    - dataset_json:
+        type: dataset_json_path
+        required: false
+        description: See REQ-1066 in rules/submission/define-xml.md.
 
 define_output_class:
     - path:
@@ -297,6 +301,11 @@ define_path:
     type: str
     pattern: '^[^/\\][^\\]*\.[Xx][Mm][Ll]$'
     description: See REQ-1071 in rules/submission/define-xml.md.
+
+dataset_json_path:
+    type: str
+    pattern: '^[^/\\][^\\]*\.[Jj][Ss][Oo][Nn]$'
+    description: See REQ-1214 in rules/submission/dataset-json.md.
 
 creation_datetime:
     type: str

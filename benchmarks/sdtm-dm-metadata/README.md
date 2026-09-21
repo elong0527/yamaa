@@ -24,6 +24,8 @@ labels, provenance, lengths, terminology, class, structure, and
 standard version a review needs, and the benchmark carries the
 data-definition document those declarations produce beside the data
 itself; a combined identifier longer than 30 characters is rejected
-rather than shortened.
+rather than shortened. The same declarations also produce the
+exchange file `dm.json`, which carries the rows and the column
+metadata together and is the file the document points at.
 
 **Standard:** SDTM | **Domain:** DM

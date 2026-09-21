@@ -131,6 +131,17 @@ pay for decimal text. `csv` is the reviewable container: a human can read it, a
 diff can show what moved in it, and its bytes are fixed exactly, which is what
 makes it usable as a golden contract.
 
+<a id="req-1222"></a>
+
+**REQ-1222.** A container that carries submission metadata beside its rows is
+not among them. CDISC Dataset-JSON is written by a study document under
+[Dataset-JSON](../submission/dataset-json.md), not by a specification: the file's `studyOID`,
+`metaDataVersionOID`, `itemGroupOID`, and per-column `itemOID` are
+identifiers [Define-XML](../submission/define-xml.md) builds from a document's declarations, and a
+specification holds none of them. An `output.path` ending in `.json`
+therefore names no profile and fails under [REQ-0760](publication.md#req-0760) like any other
+unmapped extension.
+
 <a id="req-0720"></a>
 
 **REQ-0720.** A profile and the specification's `schema_version` identify the

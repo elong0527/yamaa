@@ -17,6 +17,7 @@ This contract owns the requirements below. Related contracts:
 - [Schema language](../reference/schema-language.md).
 - [Specification structure](../specification/structure.md).
 - [Artifact publication](../storage/publication.md).
+- [Dataset-JSON](dataset-json.md).
 - [Submission metadata](metadata.md).
 - [Controlled terminology](terminology.md).
 - [Temporal values](../values/temporal.md).
@@ -306,8 +307,10 @@ declared value could only agree with or contradict the derivation.
 
 <a id="req-0987"></a>
 
-**REQ-0987.** The dataset's `def:leaf` names the artifact its specification
-produces. `xlink:href` is the specification's `output.path` expressed relative
+**REQ-0987.** The dataset's `def:leaf` names the file the package carries for
+that dataset: the entry's `dataset_json` when it declares one, per
+[REQ-1204](dataset-json.md#req-1204), and otherwise the artifact its
+specification produces. `xlink:href` is that path expressed relative
 to the directory holding the generated document, written with `/` separators,
 and `def:title` is that path's final component. The href must not begin with a
 parent traversal: a document that pointed outside its own directory would
@@ -315,11 +318,12 @@ describe a file that is not in the package it belongs to.
 
 <a id="req-0988"></a>
 
-**REQ-0988.** The leaf names the artifact this language produced. This design
-writes no transport file, so a document that named one would assert a file no
-run wrote. A package that converts its artifacts to another container
-regenerates the document against the converted paths, and that conversion is
-outside this language.
+**REQ-0988.** The leaf names a file this language produced, and the two it
+produces are the artifact [Artifact publication](../storage/publication.md) publishes and the Dataset-JSON file
+[Dataset-JSON](dataset-json.md) writes beside this document. A document that named any other
+container would assert a file no run wrote. A package that converts its
+artifacts to a container neither contract writes regenerates the document
+against the converted paths, and that conversion is outside this language.
 
 <a id="req-0989"></a>
 
@@ -687,6 +691,7 @@ structural constraints come from its schema declaration.
 | `define_dataset_class.spec` | Resolved specification whose output this dataset is. |
 | `define_dataset_class.standard` | Foundational standard this dataset follows; defaults to default_standard. |
 | `define_dataset_class.has_no_data` | Whether the dataset was planned but holds no records; [Define-XML](define-xml.md) requires a comment with it. |
+| `define_dataset_class.dataset_json` | Dataset-JSON file this document produces for the dataset; [Dataset-JSON](dataset-json.md) owns its contents and bytes. |
 
 <a id="req-1067"></a>
 
