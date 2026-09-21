@@ -1,0 +1,8 @@
+phase: validation
+condition: unknown_artifact_profile
+spec_paths:
+  - output.path
+requirement: REQ-0760
+context:
+  path: adsl.xpt
+  permitted: ['.csv', '.parquet']
