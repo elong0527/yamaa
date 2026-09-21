@@ -134,7 +134,12 @@ class RelationalContext:
         if grouped is None:
             grouped = {}
             for row in self.rows:
-                key = tuple(row.values.get(name, MISSING) for name in fields)
+                # REQ-0297 lets a window field name a qualified source
+                # variable as well as a current-output column, so the key
+                # reads each row through the same combined view a window
+                # field resolves against.
+                readable = _readable(row)
+                key = tuple(readable.get(name, MISSING) for name in fields)
                 grouped.setdefault(key, []).append(row)
             self._partitions[fields] = grouped
         return grouped
@@ -425,7 +430,9 @@ class RowResolver:
                     ExecutionDiagnostic(
                         phase=resolved.condition.phase,
                         condition=resolved.condition.condition,
-                        spec_paths=(),
+                        # The diagnostic names the intermediate whose match
+                        # the row could not supply, never an empty path.
+                        spec_paths=(plan.path,),
                         requirement=resolved.condition.requirement,
                         context=resolved.condition.context,
                     )
@@ -500,12 +507,16 @@ class RowResolver:
         """Return this row's partition in declared order, and its place in it."""
         window = window_spec(payload)
         fields = _names(window.get("group_by"))
-        unavailable = [name for name in fields if name not in self._values]
+        # REQ-0297: a window field may name a qualified source variable of
+        # the row's driver, so availability and the partition key read the
+        # row through its completed columns and driver record together.
+        readable = _readable(self._candidate)
+        unavailable = [name for name in fields if name not in readable]
         if unavailable:
             return ConditionResult(
                 condition=_condition("unknown_field", {"identifier": unavailable[0]})
             )
-        key = tuple(self._values[name] for name in fields)
+        key = tuple(readable[name] for name in fields)
         members = [
             (row, _readable(row))
             for row in self._context.partition(fields).get(key, ())
@@ -533,7 +544,7 @@ class RowResolver:
             }
             members = [by_position[record.position] for record in ordered]
         partition_keys = {
-            name: json_value(self._values[name])  # type: ignore[arg-type]
+            name: json_value(readable[name])  # type: ignore[arg-type]
             for name in fields
         }
         for index, (row, _) in enumerate(members):
@@ -885,12 +896,16 @@ class RowResolver:
     ) -> tuple[list[dict[str, object]], dict[str, object]] | ConditionResult:
         """Reduce the constructed output rows of this row's partition (REQ-0467)."""
         fields = tuple(group_by)
-        unavailable = [name for name in fields if name not in self._values]
+        # REQ-0297: a window field may name a qualified source variable of
+        # the row's driver, so availability and the partition key read the
+        # row through its completed columns and driver record together.
+        readable = _readable(self._candidate)
+        unavailable = [name for name in fields if name not in readable]
         if unavailable:
             return ConditionResult(
                 condition=_condition("unknown_field", {"identifier": unavailable[0]})
             )
-        key = tuple(self._values[name] for name in fields)
+        key = tuple(readable[name] for name in fields)
         records: list[dict[str, object]] = []
         for row in self._context.partition(fields).get(key, ()):
             if predicate is not None:
@@ -903,7 +918,7 @@ class RowResolver:
             records.append(
                 {name: row.values.get(name, MISSING) for name in identifiers}
             )
-        return records, {name: self._values[name] for name in fields}
+        return records, {name: readable[name] for name in fields}
 
 
 def _record_values(
