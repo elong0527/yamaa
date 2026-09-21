@@ -23,12 +23,15 @@ this envelope rather than changing what the engine is asked for.
 from __future__ import annotations
 
 import argparse
+import datetime
+import itertools
 import json
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Literal, TypeAlias
 
+import polars as pl
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from yamaa import __version__
@@ -47,6 +50,7 @@ from yamaa.io import (
     publish_artifact,
     render_artifact,
 )
+from yamaa.io.parquet import parse_parquet
 from yamaa.planning import ExecutionDiagnostic, execute_workflow, plan_workflow
 from yamaa.runtime import (
     ExecutionFailure,
@@ -84,17 +88,20 @@ class ArtifactObservation(_FrozenModel):
     types: tuple[str, ...]
     row_count: int = Field(ge=0)
     # The CSV profile contract's complete bytes split on the U+000A terminator
-    # REQ-0723 writes.
-    # A missing value and a quoted empty string render differently and are
-    # kept apart here; `content` below decides equality so that a newline
-    # inside a quoted field cannot make this split the deciding view.
+    # REQ-0723 writes. A missing value and a quoted empty string render
+    # differently and are kept apart here; `content` below decides equality
+    # so that a newline inside a quoted field cannot make this split the
+    # deciding view. A parquet artifact carries one JSON document per
+    # record instead: REQ-0742 denies parquet a byte guarantee, so its
+    # comparison runs over what the bytes read back as (REQ-0740), and JSON
+    # keeps a missing value null rather than the empty string.
     records: tuple[str, ...]
     byte_length: int = Field(ge=0)
     # The rendered text of a CSV artifact, which is what a comparison
     # decides on: carrying it is what lets equality be the bytes themselves
     # rather than two identities that are only believed to stand for them.
-    # A non-CSV profile is never compared against a committed artifact and
-    # carries the empty string.
+    # A parquet artifact carries the empty string: its comparison is the
+    # logical one `records` above encodes, never the bytes.
     content: str = ""
 
 
@@ -171,6 +178,42 @@ def _records(payload: bytes) -> tuple[str, ...]:
     return tuple(text.split("\n")) if text else ()
 
 
+def _parquet_records(frame: pl.DataFrame) -> tuple[str, ...]:
+    """Render one parquet artifact's logical content as canonical records.
+
+    REQ-0742 denies parquet a byte guarantee, so the comparison REQ-0740
+    requires runs over what the bytes read back as: the same field names in
+    the same order, the same logical types, the same rows in the same order,
+    the same nulls, and the same values. One JSON document per record keeps
+    every value distinct from its text rendering: a missing value is null
+    rather than the empty string, and a float renders through repr, the
+    shortest text its bits round-trip through, so bit-identical DOUBLEs
+    compare equal and only then. The logical types ride alongside rather
+    than inside the records, compared field for field.
+    """
+
+    def canonical(value: object) -> JsonValue:
+        if value is None:
+            return None
+        if isinstance(value, float):
+            # json.dumps renders floats with repr: shortest round-trip text.
+            return value
+        if isinstance(value, (datetime.date, datetime.datetime, datetime.time)):
+            return value.isoformat()
+        if isinstance(value, (bytes, bytearray)):
+            return bytes(value).hex()
+        if isinstance(value, (str, int, bool)):
+            return value
+        return str(value)
+
+    header = json.dumps(list(frame.columns), ensure_ascii=True)
+    rows = (
+        json.dumps([canonical(value) for value in row], ensure_ascii=True)
+        for row in frame.iter_rows(named=False)
+    )
+    return (header, *rows)
+
+
 def _sorted_context(context: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
     """Order context keys so one run's report is byte-identical to the next."""
     return {key: context[key] for key in sorted(context)}
@@ -188,7 +231,11 @@ def _observe_artifact(
         columns=tuple(column.name for column in artifact.columns),
         types=tuple(column.type for column in artifact.columns),
         row_count=artifact.frame.height,
-        records=_records(payload) if artifact.profile == "csv" else (),
+        records=(
+            _records(payload)
+            if artifact.profile == "csv"
+            else _parquet_records(artifact.frame)
+        ),
         byte_length=len(payload),
         content=payload.decode("utf-8") if artifact.profile == "csv" else "",
     )
@@ -427,15 +474,11 @@ def expected_kind(example: str | Path) -> Literal["positive", "negative"]:
     return "negative" if contract.is_file() else "positive"
 
 
-def _artifact_findings(
+def _record_findings(
     observation: ArtifactObservation,
-    payload: bytes,
-) -> tuple[ComparisonFinding, ...]:
-    """Compare one artifact byte for byte, then say where it first differs."""
-    if observation.content.encode("utf-8") == payload:
-        return ()
-
-    committed = _records(payload)
+    committed: tuple[str, ...],
+) -> list[ComparisonFinding]:
+    """Say where one artifact's records first differ from the committed ones."""
     produced = observation.records
     findings: list[ComparisonFinding] = []
     if committed and produced and committed[0] != produced[0]:
@@ -466,6 +509,41 @@ def _artifact_findings(
                     got,
                 )
             )
+    return findings
+
+
+def _artifact_findings(
+    observation: ArtifactObservation,
+    payload: bytes,
+) -> tuple[ComparisonFinding, ...]:
+    """Compare one artifact, then say where it first differs.
+
+    A CSV artifact compares byte for byte under the csv profile's byte
+    guarantee; when the records agree but the bytes do not, the bytes decide.
+    A parquet artifact has no byte guarantee (REQ-0742), so its comparison is
+    the logical one REQ-0740 requires: the committed bytes are read back
+    through the closed parquet profile and compared on field names in order,
+    logical types, row order, nulls, and values, never as bytes.
+    """
+    if observation.profile == "parquet":
+        typed = parse_parquet(payload)
+        findings: list[ComparisonFinding] = []
+        committed_types = tuple(column.type for column in typed.columns)
+        if committed_types != observation.types:
+            findings.append(
+                _finding(
+                    "artifact.types",
+                    f"{observation.name}: logical types differ",
+                    list(committed_types),
+                    list(observation.types),
+                )
+            )
+        findings.extend(_record_findings(observation, _parquet_records(typed.frame)))
+        return tuple(findings)
+    if observation.content.encode("utf-8") == payload:
+        return ()
+
+    findings = _record_findings(observation, _records(payload))
     if not findings:
         # The records agree yet the bytes do not: a terminator, an encoding,
         # or a newline inside a quoted field. The bytes decide.
@@ -495,7 +573,13 @@ def _positive_findings(
         )
 
     committed = {
-        path.stem: path for path in sorted((example / EXPECTED_DIR).glob("*.csv"))
+        path.stem: path
+        for path in sorted(
+            itertools.chain(
+                (example / EXPECTED_DIR).glob("*.csv"),
+                (example / EXPECTED_DIR).glob("*.parquet"),
+            )
+        )
     }
     produced = {item.name: item for item in report.artifacts}
     findings: list[ComparisonFinding] = []
