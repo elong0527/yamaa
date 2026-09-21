@@ -86,4 +86,5 @@ conditions:
   unpaired_fields: {rules: [R003], phases: [validation]}
   unwritable_value: {rules: [R020], phases: [output]}
   value_not_permitted: {rules: [R009, R011, R016], phases: [validation]}
+  window_on_window_result: {rules: [R007], phases: [validation]}
   zero_offset: {rules: [R007], phases: [validation]}
