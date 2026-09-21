@@ -22,7 +22,7 @@ benchmark.
 
 The engine reads the ODM XML extracted from the EDC system 
 and projects it into one long-form table with fixed schema ([example](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-basic.html)).  
-A yamma specification reads that projection and derives SDTM then ADaM
+A yamaa specification reads that projection and derives SDTM then ADaM
 columns onto the rows it constructs. 
 
 ## Inheritance
@@ -45,3 +45,7 @@ The specification is deterministic by design and supports SQL expressions. More 
     compute:
       expr: "WEIGHTKG / POWER(NULLIF(HEIGHTCM, 0) / 100, 2)"
 ```
+
+## License
+
+This project is licensed under the terms of the MIT license.
