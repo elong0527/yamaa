@@ -1379,3 +1379,53 @@ def test_a_root_filter_naming_an_unqualified_variable_fails() -> None:
     (diagnostic,) = raised.value.diagnostics
     assert diagnostic.condition == "phase_boundary"
     assert diagnostic.spec_paths == ("filter",)
+
+
+def test_to_date_accepts_iso_text_at_planning() -> None:
+    # Issue #703: the planner no longer pins `to_date.source` to `datetime`;
+    # ISO text is answered at evaluation under REQ-0607.
+    spec = specification(
+        [
+            Column(name="DTC", type="str", derivation=derivation({"source": "SRC.X"})),
+            Column(
+                name="TRTSDT",
+                type="date",
+                derivation=derivation({"to_date": {"source": "DTC"}}),
+            ),
+        ]
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": source_table()},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    assert [column.column for column in plan.columns] == ["DTC", "TRTSDT"]
+
+
+def test_to_date_still_accepts_a_datetime_source_at_planning() -> None:
+    datetime_table = frame_from_values(
+        (TypedColumn(name="X", type="datetime"),),
+        [["2025-01-12T14:30:05"]],
+    )
+    spec = specification(
+        [
+            Column(
+                name="DTM", type="datetime", derivation=derivation({"source": "SRC.X"})
+            ),
+            Column(
+                name="DT",
+                type="date",
+                derivation=derivation({"to_date": {"source": "DTM"}}),
+            ),
+        ]
+    )
+
+    plan = plan_execution(
+        spec,
+        {"SRC": datetime_table},
+        supported_operations=DEFAULT_EXPRESSION_OPERATIONS,
+    )
+
+    assert [column.column for column in plan.columns] == ["DTM", "DT"]
