@@ -267,6 +267,7 @@ class RowResolver:
         row_phase: bool = False,
         column: str | None = None,
         implicit_joins: Sequence[ImplicitJoin] = (),
+        dispatcher: ExpressionDispatcher | None = None,
     ) -> None:
         self._context = context
         self._candidate = candidate
@@ -274,6 +275,10 @@ class RowResolver:
         self._row_phase = row_phase
         self._column = column
         self._implicit_joins = {join.dataset: join for join in implicit_joins}
+        # The derive step evaluates binding derivations with the same
+        # configured dispatcher as every other derivation (REQ-1189), so
+        # project-registered extensions work inside bindings too.
+        self._dispatcher = dispatcher
         self._base = context.bindings.context(
             candidate.source_rows,
             self._values,
@@ -747,7 +752,7 @@ class RowResolver:
         if len(set(names)) != len(names):
             return _invalid("aggregate", "derive binding names that are not unique")
 
-        dispatcher = ExpressionDispatcher()
+        dispatcher = self._dispatcher or ExpressionDispatcher()
         enriched: list[dict[str, object]] = []
         for record in records:
             # The binding sees the record's fields qualified and every

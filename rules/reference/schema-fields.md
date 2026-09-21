@@ -201,7 +201,7 @@ requirement link for behavior. It is not an additional semantic contract.
 | `aggregate_class.group_by` | `"list[variable]"` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `aggregate_class.key` | `["identifier", "list[identifier]"]` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `aggregate_class.key_base` | `["variable", "list[variable]"]` | `false` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
-| `aggregate_class.derive` | `"list[derive_binding_class]"` | `false` | Absent | -- | Schema constraint |
+| `aggregate_class.derive` | `"list[derive_binding_class]"` | `false` | Absent | -- | [REQ-1189](../operations/aggregation.md#req-1189) |
 | `aggregate_class.expr` | `"aggregate_expression"` | `true` | Absent | -- | [REQ-1088](../operations/aggregation.md#req-1088) |
 | `derive_binding_class.name` | `"identifier"` | `true` | Absent | -- | [REQ-1192](../operations/aggregation.md#req-1192) |
 | `derive_binding_class.type` | `"column_type"` | `true` | Absent | -- | [REQ-1192](../operations/aggregation.md#req-1192) |

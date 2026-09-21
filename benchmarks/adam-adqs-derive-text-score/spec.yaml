@@ -11,24 +11,30 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation: QS.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation: QS.USUBJID
 
   - name: VISIT
     type: str
+    label: Visit Name
     derivation: QS.VISIT
 
   - name: PARAMCD
     type: str
+    label: Parameter Code
 
   - name: PARAM
     type: str
+    label: Parameter
 
   - name: AVAL
     type: float
+    label: Analysis Value
     derivation:
       aggregate:
         filter: "QS.QSCAT = 'PHYSICAL FUNCTIONING SCALE'"

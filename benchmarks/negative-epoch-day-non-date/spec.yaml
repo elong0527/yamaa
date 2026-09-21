@@ -11,18 +11,22 @@ output:
 columns:
   - name: STUDYID
     type: str
+    label: Study Identifier
     derivation: EX.STUDYID
 
   - name: USUBJID
     type: str
+    label: Unique Subject Identifier
     derivation: EX.USUBJID
 
   - name: EXSEQ
     type: int
+    label: Sequence Number
     derivation: EX.EXSEQ
 
   - name: EXSTDY
     type: int
+    label: Study Day of Exposure Start
     derivation:
       to_epoch_day:
         source: EX.EXSTDT

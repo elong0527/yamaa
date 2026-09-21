@@ -715,6 +715,257 @@ class TestAggregateExpressionLanguage(unittest.TestCase):
         self.assertEqual(incomparable[0].condition, 'incompatible_input_type')
 
 
+class TestAggregateDeriveStep(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        root = TOOL_PATH.parents[3]
+        cls.schema_env, env_errors = VALIDATOR.build_schema_env(root)
+        assert env_errors == [], env_errors
+
+    def context(self, **changes):
+        datasets = {
+            'QS': {'QSORRES': 'str', 'QSCAT': 'str'},
+            'EX': {'EXSTDT': 'date', 'EXSEQ': 'int'},
+        }
+        output_types = {'AVAL': 'float'}
+        context = {
+            'kind': 'column',
+            'input': datasets,
+            'output_types': output_types,
+            'keys': ['STUDYID', 'USUBJID'],
+            'env': self.schema_env,
+            'aggregate': {
+                'kind': 'column',
+                'input': datasets,
+                'output_types': output_types,
+                'keys': ['STUDYID', 'USUBJID'],
+            },
+        }
+        context.update(changes)
+        return context
+
+    def payload(self, **changes):
+        aggregate = {
+            'filter': "QS.QSCAT = 'SCALE'",
+            'key': ['STUDYID'],
+            'derive': [
+                {
+                    'name': 'QSNUM',
+                    'type': 'float',
+                    'derivation': 'QS.QSORRES',
+                },
+            ],
+            'expr': 'SUM(QSNUM)',
+        }
+        aggregate.update(changes)
+        return aggregate
+
+    def validate(self, payload, context):
+        return VALIDATOR.validate_aggregate_at(
+            payload, 'spec.columns.AVAL.derivation.aggregate', context
+        )
+
+    def test_accepts_derive_bindings_as_reducer_inputs(self):
+        errors = self.validate(self.payload(), self.context())
+        self.assertEqual(errors, [])
+
+    def test_rejects_unknown_derive_variable_in_expression(self):
+        errors = self.validate(self.payload(expr='SUM(MISSING)'), self.context())
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].condition, 'unknown_derive_variable')
+
+    def test_rejects_duplicate_binding_names(self):
+        errors = self.validate(
+            self.payload(
+                derive=[
+                    {
+                        'name': 'QSNUM',
+                        'type': 'float',
+                        'derivation': 'QS.QSORRES',
+                    },
+                    {
+                        'name': 'QSNUM',
+                        'type': 'float',
+                        'derivation': 'QS.QSORRES',
+                    },
+                ]
+            ),
+            self.context(),
+        )
+        self.assertEqual(errors[0].condition, 'invalid_derive_step')
+        self.assertEqual(
+            errors[0].context['reason'],
+            'derive binding names are unique identifiers',
+        )
+
+    def test_rejects_derive_step_naming_two_relations(self):
+        errors = self.validate(
+            self.payload(
+                derive=[
+                    {
+                        'name': 'A',
+                        'type': 'float',
+                        'derivation': 'QS.QSORRES',
+                    },
+                    {
+                        'name': 'B',
+                        'type': 'int',
+                        'derivation': 'EX.EXSEQ',
+                    },
+                ],
+                expr='SUM(A)',
+            ),
+            self.context(),
+        )
+        self.assertEqual(errors[0].condition, 'invalid_derive_step')
+        self.assertEqual(
+            errors[0].context['reason'],
+            'a derive step names exactly one relation',
+        )
+
+    def test_rejects_unknown_binding_reference(self):
+        errors = self.validate(
+            self.payload(
+                derive=[
+                    {
+                        'name': 'A',
+                        'type': 'float',
+                        'derivation': 'MISSING',
+                    },
+                ],
+                expr='SUM(A)',
+            ),
+            self.context(),
+        )
+        self.assertEqual(errors[0].condition, 'unknown_derive_variable')
+        self.assertEqual(errors[0].context['identifier'], 'MISSING')
+
+    def test_rejects_qualified_reference_alongside_bindings(self):
+        errors = self.validate(
+            self.payload(expr='SUM(QSNUM) + QS.QSORRES'), self.context()
+        )
+        self.assertEqual(errors[0].condition, 'mixed_relations')
+
+    def test_validates_binding_derivation_input_types(self):
+        errors = self.validate(
+            self.payload(
+                filter='EX.EXSEQ = 1',
+                derive=[
+                    {
+                        'name': 'EPOCHDAY',
+                        'type': 'int',
+                        'derivation': {
+                            'to_epoch_day': {'source': 'EX.EXSTDT'},
+                        },
+                    },
+                ],
+                expr='ONLY(EPOCHDAY)',
+            ),
+            self.context(),
+        )
+        self.assertEqual(errors, [])
+
+    def test_rejects_wrong_temporal_input_inside_binding(self):
+        context = self.context()
+        context['input'] = {
+            'QS': {'QSORRES': 'str', 'QSCAT': 'str'},
+            'EX': {'EXSTDT': 'str', 'EXSEQ': 'int'},
+        }
+        errors = self.validate(
+            self.payload(
+                filter='EX.EXSEQ = 1',
+                derive=[
+                    {
+                        'name': 'EPOCHDAY',
+                        'type': 'int',
+                        'derivation': {
+                            'to_epoch_day': {'source': 'EX.EXSTDT'},
+                        },
+                    },
+                ],
+                expr='ONLY(EPOCHDAY)',
+            ),
+            context,
+        )
+        self.assertEqual(
+            [error.condition for error in errors],
+            ['incompatible_input_type'],
+        )
+        self.assertEqual(
+            errors[0].path,
+            'spec.columns.AVAL.derivation.aggregate.derive[0].derivation'
+            '.to_epoch_day.source',
+        )
+
+    def test_rejects_forward_binding_reference(self):
+        errors = self.validate(
+            self.payload(
+                derive=[
+                    {
+                        'name': 'DOUBLED',
+                        'type': 'float',
+                        'derivation': 'QSNUM',
+                    },
+                    {
+                        'name': 'QSNUM',
+                        'type': 'float',
+                        'derivation': 'QS.QSORRES',
+                    },
+                ],
+                expr='SUM(DOUBLED)',
+            ),
+            self.context(),
+        )
+        self.assertEqual(errors[0].condition, 'unknown_derive_variable')
+        self.assertEqual(errors[0].context['identifier'], 'QSNUM')
+
+    def test_rejects_self_reference(self):
+        errors = self.validate(
+            self.payload(
+                derive=[
+                    {
+                        'name': 'QSNUM',
+                        'type': 'float',
+                        'derivation': 'QSNUM',
+                    },
+                ],
+                expr='SUM(QSNUM)',
+            ),
+            self.context(),
+        )
+        self.assertEqual(errors[0].condition, 'unknown_derive_variable')
+        self.assertEqual(errors[0].context['identifier'], 'QSNUM')
+
+    def test_rejects_missing_binding_name(self):
+        errors = self.validate(
+            self.payload(
+                derive=[
+                    {
+                        'type': 'float',
+                        'derivation': 'QS.QSORRES',
+                    },
+                ],
+            ),
+            self.context(),
+        )
+        self.assertEqual(errors[0].condition, 'invalid_derive_step')
+        self.assertEqual(
+            errors[0].context['reason'],
+            'derive binding names are unique identifiers',
+        )
+
+    def test_rejects_filter_naming_other_relation(self):
+        errors = self.validate(
+            self.payload(filter='EX.EXSEQ = 1'),
+            self.context(),
+        )
+        self.assertEqual(errors[0].condition, 'invalid_derive_step')
+        self.assertEqual(
+            errors[0].context['reason'],
+            'a derive step names exactly one relation',
+        )
+
+
 class TestStringTemplateLanguage(unittest.TestCase):
     def test_parses_placeholders_and_escaped_braces(self):
         template = '{{{SITEID}}}:{SUBJID}:{ODM.IT.DM.SEX}'
@@ -898,6 +1149,12 @@ class TestStaticSemanticContracts(unittest.TestCase):
         invalid_to_date = self.validate({
             'to_date': {'source': 'A'}
         })
+        valid_epoch_day = self.validate({
+            'to_epoch_day': {'source': 'A'}
+        })
+        invalid_epoch_day = self.validate({
+            'to_epoch_day': {'source': 'TEXT'}
+        })
 
         self.assertEqual(
             {error.condition for error in impute},
@@ -906,6 +1163,10 @@ class TestStaticSemanticContracts(unittest.TestCase):
         self.assertEqual(valid_to_date, [])
         self.assertEqual(
             invalid_to_date[0].condition, 'incompatible_input_type'
+        )
+        self.assertEqual(valid_epoch_day, [])
+        self.assertEqual(
+            invalid_epoch_day[0].condition, 'incompatible_input_type'
         )
 
     def test_intermediate_range_types(self):
