@@ -15,8 +15,8 @@ start (`AESTDTC`).
   reported start.
 - `ASTDT2` would be the calendar date taken from the analysis
   start, but taking a calendar date needs a local datetime while
-  the analysis start is already a date, so the derivation fails
-  when it evaluates and no row is produced.
+  the analysis start is already a date, so the run fails at
+  evaluation and no row is produced.
 
 **Standard:** ADaM | **Domain:** ADAE
 
