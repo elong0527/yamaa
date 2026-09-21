@@ -336,8 +336,9 @@ _TYPED_SOURCES: dict[str, tuple[ColumnType | None, str]] = {
     "cut": (None, "REQ-0306"),
 }
 
-# REQ-0590 types every temporal operand. `date_precision` reads either kind of
-# source, so it states no expected type and answers at evaluation.
+# REQ-0590 types every temporal operand. `date_precision` and `to_date` read
+# more than one source kind, so they state no expected type and answer at
+# evaluation.
 _TEMPORAL_VARIABLES: dict[str, tuple[tuple[str, ColumnType | None, str], ...]] = {
     "date_diff": (("start", "date", "REQ-0606"), ("end", "date", "REQ-0606")),
     "study_day": (("date", "date", "REQ-0606"), ("reference", "date", "REQ-0606")),
@@ -348,7 +349,7 @@ _TEMPORAL_VARIABLES: dict[str, tuple[tuple[str, ColumnType | None, str], ...]] =
     "date_precision": (("source", None, "REQ-0581"),),
     "datetime_impute": (("source", "str", "REQ-1182"),),
     "datetime_precision": (("source", None, "REQ-1183"),),
-    "to_date": (("source", "datetime", "REQ-0607"),),
+    "to_date": (("source", None, "REQ-0607"),),
 }
 
 
