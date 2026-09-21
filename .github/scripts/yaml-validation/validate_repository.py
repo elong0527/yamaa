@@ -3119,30 +3119,6 @@ def _apply_reference(
     return changed
 
 
-# REQ-0096..REQ-0102 address an ODM item by hiding its ItemOID in the
-# variable name. #517 replaced that with a source `filter` over the records
-# a source reads (REQ-0131), and #506 removes the contextual form from the
-# language. These specifications are the migration #506 still owes; a
-# specification written from now on must use the filtered form instead.
-ODM_CONTEXTUAL_REFERENCE_MIGRATION = {
-    'adam-adsl-randomization/input/dm.schema.yaml',
-    'odm-form-items/spec.yaml',
-    'sdtm-lb-findings/spec.yaml',
-    'sdtm-lb-multiform/spec.yaml',
-}
-
-
-def example_migration_label(spec_path):
-    """Return a spec's path below benchmark, or None outside it."""
-    if spec_path is None:
-        return None
-    parts = Path(spec_path).resolve().parts
-    if 'benchmarks' not in parts:
-        return None
-    index = len(parts) - 1 - parts[::-1].index('benchmarks')
-    return '/'.join(parts[index + 1:])
-
-
 def iter_type_reference_paths(data, type_value, env, path, scope=None):
     """Yield (name, path) for each variable reference under a schema type.
 
@@ -3253,16 +3229,15 @@ def _iter_inline_class_reference_paths(data, fields, env, path, scope=None):
 
 
 def validate_retired_odm_item_references(spec, spec_label, spec_path, env):
-    """Reject an ODM contextual item reference outside the #506 migration.
+    """Reject an ODM contextual item reference.
 
     A long-form ODM relation carries `ItemOID` and `Value`, and REQ-0096
     reads any other suffix on it as a complete ItemOID resolved against the
     row's ODM context. REQ-0131 states the replacement: read `Value` under a
     source `filter` on `ItemOID`, so the record the source reaches is
-    written where a reviewer can see it.
+    written where a reviewer can see it. No specification in the repository
+    still uses the retired form, so this check carries no exemption.
     """
-    if example_migration_label(spec_path) in ODM_CONTEXTUAL_REFERENCE_MIGRATION:
-        return []
     long_form = {
         dataset: fields
         for dataset, fields in dataset_type_catalog(spec, spec_path, env).items()
@@ -3284,7 +3259,7 @@ def validate_retired_odm_item_references(spec, spec_label, spec_path, env):
         errors.append(
             f"ERROR: {path}: retired_construct: {name!r} addresses an ODM "
             f"item through the variable name (REQ-0096); read {dataset}.Value "
-            f"under a source filter on ItemOID instead (REQ-0131, #506)"
+            "under a source filter on ItemOID instead (REQ-0131)"
         )
     return sorted(set(errors))
 
