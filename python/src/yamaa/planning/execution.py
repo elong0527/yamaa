@@ -2106,15 +2106,13 @@ def _lookup_match_available_at_row_construction(
     """
     if match in (row.group_by or ()):
         return True
-    if (
+    return (
         driver is not None
         and row.group_by is None
         and match.startswith(f"{driver}.")
         and match.count(".") == 1
         and match.split(".", 1)[1] in _dataset_types(bindings, driver)
-    ):
-        return True
-    return False
+    )
 
 
 def _validate_aggregate_keys(
