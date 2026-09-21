@@ -47,11 +47,11 @@ def _value(result: object) -> object:
     return result.value
 
 
-def _conversion_failure(result: object) -> ConditionResult:
+def _failed_conversion(result: object) -> ConditionResult:
     assert isinstance(result, ConditionResult)
     assert result.condition.phase == "convert"
     assert result.condition.condition == "conversion_failed"
-    assert result.condition.applicable_handler == "conversion_failure"
+    assert result.condition.applicable_handler == "missing"
     return result
 
 
@@ -62,7 +62,7 @@ def test_normalizes_all_missing_boundaries(value: object) -> None:
 
 def test_rejects_boolean_as_an_integer_and_bounds_int64() -> None:
     assert runtime_type_name(True) == "bool"
-    _conversion_failure(convert_value(True, "int"))
+    _failed_conversion(convert_value(True, "int"))
     assert _value(convert_value(-(2**63), "int")) == -(2**63)
     assert _value(convert_value(2**63 - 1, "int")) == 2**63 - 1
 
@@ -142,14 +142,14 @@ def test_numeric_text_that_becomes_non_finite_is_missing(
     ],
 )
 def test_undefined_conversions_fail(source: object, target: ColumnType) -> None:
-    _conversion_failure(convert_value(source, target))
+    _failed_conversion(convert_value(source, target))
 
 
 @pytest.mark.parametrize("target", ["str", "int", "float", "date", "datetime"])
 def test_boolean_conversion_is_undefined_for_every_declared_type(
     target: ColumnType,
 ) -> None:
-    _conversion_failure(convert_value(True, target))
+    _failed_conversion(convert_value(True, target))
 
 
 @pytest.mark.parametrize("target", ["str", "int", "float", "date", "datetime"])
@@ -180,7 +180,7 @@ def test_large_integral_text_that_overflows_binary64_normalizes_to_missing() -> 
 def test_float_to_integer_checks_integrality_and_int64_bounds() -> None:
     assert _value(convert_value(-0.0, "int")) == 0
     assert _value(convert_value(float(-(2**63)), "int")) == -(2**63)
-    _conversion_failure(convert_value(float(2**63), "int"))
+    _failed_conversion(convert_value(float(2**63), "int"))
 
 
 def test_temporal_values_preserve_collected_precision_and_canonical_text() -> None:

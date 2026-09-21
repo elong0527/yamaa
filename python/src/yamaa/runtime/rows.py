@@ -239,13 +239,13 @@ def _normalize_derive_derivation(
     """Split a derive binding's derivation into an expression and handler.
 
     Returns the one-operation expression mapping and the declared
-    `conversion_failure` handler, or None when the binding is unhandled.
+    `missing` handler, or None when the binding is unhandled.
     """
     handler: object | None = None
     if isinstance(derivation, Mapping) and "value" in derivation:
         # The loader wraps a derivation as a handled expression:
-        # {"value": <expression>, "conversion_failure"?: ...}.
-        handler = derivation.get("conversion_failure")
+        # {"value": <expression>, "missing"?: ..., "strict"?: ...}.
+        handler = derivation.get("missing")
         derivation = derivation["value"]
     if isinstance(derivation, str):
         # REQ-0290: a bare string reads one variable.

@@ -15,7 +15,8 @@ derivation:
 
 handled_expression_class:
     - value: {type: expression, required: true}
-    - conversion_failure: {type: literal_value, required: false}
+    - missing: {type: literal_value, required: false}
+    - strict: {type: bool, required: false}
 
 expression:
     registry: expressions

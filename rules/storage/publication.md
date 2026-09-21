@@ -265,7 +265,8 @@ or row ID: fail.
 
 <a id="req-0239"></a>
 
-**REQ-0239.** A conversion failure with no `conversion_failure` handler:
+**REQ-0239.** A conversion failure with no `missing` on the result wrapper
+and without `strict: true`:
 fail.
 
 <a id="req-0240"></a>
