@@ -7,9 +7,10 @@
 
 yamaa is a domain-specific language (DSL) for clinical trial data standardization.
 A yamaa specification transforms ODM XML data, extracted from an EDC system,
-into SDTM and ADaM datasets following CDISC standards. The define.xml can also be generated.
+into SDTM and ADaM datasets following CDISC standards. The engine can also
+generate define.xml.
 yamaa's rules fix what every item means, so the same specification with the same
-inputs always produces the same dataset, in the R engine and in the Python engine alike.
+inputs always produce the same datasets in both the R and Python engines.
 
 The one principle behind everything:
 
@@ -22,22 +23,22 @@ stage. Nothing is left for the coding stage to guess.
 
 The language is written to be read and revised by people and AI agents
 together, keeping derivations reviewable, version-controlled, and consistent
-across implementations. The yamaa project has four components: schema, rules, engine, and
-benchmark.
+across implementations. The yamaa project has four components: schema, rules,
+engine, and benchmark.
 
 | Component | Purpose | Links |
 | --- | --- | --- |
-| Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) · [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
-| Rules | Fix the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml/rules) · [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
-| Engine | Runs specifications in Python and R following rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) · [R](https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder) |
-| Benchmark | Runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmark) · [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
+| Schema | Declares the vocabulary of the specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml) / [Introduction](https://elong0527.github.io/yamaa/articles/schema-intro/) |
+| Rules | Defines the meaning of each specification. | [Repository](https://github.com/elong0527/yamaa/tree/main/yaml/rules) / [Rules](https://elong0527.github.io/yamaa/articles/rules/) |
+| Engine | Runs specifications in Python and R according to the rules. | [Python](https://github.com/elong0527/yamaa/tree/main/python) / [R](https://github.com/elong0527/yamaa/tree/main/R/cdiscbuilder) |
+| Benchmark | Provides runnable specification examples. | [Repository](https://github.com/elong0527/yamaa/tree/main/benchmark) / [Dashboards](https://elong0527.github.io/yamaa/benchmark/) |
 
 ## From ODM XML to SDTM and ADaM
 
-The engine reads the ODM XML extracted from the EDC system 
-and transforms it into one long-form clinical-item table: one row
-per recorded item, keeping that item's study, event, form and item-group
-context. A yamaa specification reads the ODM data
+The engine reads ODM XML extracted from the EDC system and transforms it into
+one long-form clinical-item table. Each row represents one recorded item and
+retains the item's study, event, form, and item-group context. A yamaa
+specification reads the transformed data
 ([example](https://elong0527.github.io/yamaa/benchmark/sdtm-dm-basic.html))
 and derives SDTM and ADaM datasets.
 
@@ -45,9 +46,9 @@ and derives SDTM and ADaM datasets.
 
 ![yamaa design: inherited templates become study specifications that drive validated SDTM, ADaM](https://raw.githubusercontent.com/elong0527/yamaa/main/docs/diagrams/design.svg)
 
-Reusable yamaa specification templates flow from the organization level through the compound and
-study levels. Approved study specifications then drive deterministic, validated
-builds while preserving metadata lineage.
+Reusable yamaa specification templates flow from the organization level through
+the compound and study levels. Approved study specifications then drive
+deterministic, validated builds while preserving metadata lineage.
 
 ## Example
 
@@ -103,7 +104,7 @@ devtools::install_github("elong0527/yamaa", subdir = "R/cdiscbuilder")
 
 - New here? [Introduction](https://elong0527.github.io/yamaa/articles/intro/) explains the model in five minutes.
 - Coming from Excel specs? [Excel to yamaa](https://elong0527.github.io/yamaa/articles/excel/) translates what you already know.
-- Working example? [Benchmarks](https://elong0527.github.io/yamaa/articles/benchmark/) illustrate the ideas.
+- Looking for worked examples? [Benchmarks](https://elong0527.github.io/yamaa/articles/benchmark/) illustrate the ideas.
 
 ## License
 
