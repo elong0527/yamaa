@@ -106,16 +106,18 @@ The owning operation contract defines evaluation, input and result semantics,
 missing behavior, and failures. Schema descriptions link to that contract;
 they do not define a competing operation contract or perform validation.
 
-### Derivation shorthand
+### Source shorthand
 
 <a id="req-0319"></a>
 
-**REQ-0319.** A `derivation` written as a bare string is the source
-shorthand: it desugars to `{source: <string>}` before registry dispatch,
-and the [REQ-0266](../reference/schema-language.md#req-0266) handled-expression expansion then applies unchanged. The
-string is always a source reference, never a literal: `derivation: DM`
-with no column `DM` fails validation rather than producing the literal
-`"DM"`. A validated document contains only the canonical dict form.
+**REQ-0319.** A `derivation`, `case_branch_class.then`, or
+`case_otherwise_class.otherwise` written as a bare string is the source
+shorthand: it desugars to `{source: <string>}` before registry dispatch. For a
+`derivation`, the [REQ-0266](../reference/schema-language.md#req-0266)
+handled-expression expansion then applies unchanged. The string is always a
+source reference, never a literal: a bare `DM` with no variable `DM` fails
+validation rather than producing the literal `"DM"`. A validated document
+contains only the canonical dict form.
 
 <a id="req-0320"></a>
 

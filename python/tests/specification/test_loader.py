@@ -587,6 +587,31 @@ def test_bare_string_derivation_matches_dict_form(tmp_path: Path) -> None:
     assert bare == written
 
 
+def test_bare_case_results_desugar_to_source(tmp_path: Path) -> None:
+    path = _write_bare_string_variant(
+        tmp_path,
+        """    derivation:
+      case:
+        - when: \"TRUE\"
+          then: ODM.StudyOID
+        - otherwise: ODM.StudyOID""",
+    )
+
+    loaded = load_specification(path, SCHEMA_ROOT)
+    columns = {column.name: column for column in loaded.specification.columns}
+
+    assert columns["STUDYID"].derivation is not None
+    assert columns["STUDYID"].derivation.value.root == {
+        "case": [
+            {
+                "when": "TRUE",
+                "then": {"source": {"variable": "ODM.StudyOID"}},
+            },
+            {"otherwise": {"source": {"variable": "ODM.StudyOID"}}},
+        ]
+    }
+
+
 def test_bare_string_derivation_names_a_source_not_a_literal(
     tmp_path: Path,
 ) -> None:

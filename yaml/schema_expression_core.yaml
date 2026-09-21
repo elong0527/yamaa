@@ -99,12 +99,15 @@ case_branch_class:
         required: true
         description: See REQ-1100 in rules/operations/expressions.md.
     - then:
-        type: expression
+        type: case_result
         required: true
         description: See REQ-1100 in rules/operations/expressions.md.
 
 case_otherwise_class:
     - otherwise:
-        type: expression
+        type: case_result
         required: true
         description: See REQ-1101 in rules/operations/expressions.md.
+
+case_result:
+    type: [str, expression]

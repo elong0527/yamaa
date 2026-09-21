@@ -2140,6 +2140,9 @@ def normalize_single_type_value(data, type_ref, env, fragment=False):
             # handled-expression expansion apply unchanged, mirroring the
             # engine's parse-time normalization.
             data = {'source': data}
+        if type_ref == 'case_result' and isinstance(data, str):
+            # REQ-0319: a bare then/otherwise variable is a source read.
+            data = {'source': data}
         return normalize_type_value(data, alias['type'], env, fragment)
     return copy.deepcopy(data)
 

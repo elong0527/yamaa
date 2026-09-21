@@ -968,6 +968,11 @@ def _derivation_shorthand(value: str) -> dict[str, object]:
     return {match.group(1): {"source": match.group(2)}}
 
 
+def _case_result_shorthand(value: str) -> dict[str, object]:
+    """Expand a bare `case` result variable to its source expression."""
+    return {"source": value}
+
+
 def _normalize_single(
     value: object,
     type_name: str,
@@ -1016,6 +1021,19 @@ def _normalize_single(
             # changes meaning.
             if isinstance(value, str):
                 value = _derivation_shorthand(value)
+            return _normalize_type(
+                value,
+                [member for member in _members(alias["type"]) if member != "str"],
+                bundle,
+                nested_active,
+                fragment,
+            )
+        if type_name == "case_result":
+            # REQ-0319: then/otherwise use the same bare-variable source
+            # shorthand as a derivation, but do not admit derivation call
+            # shorthand or top-level handlers.
+            if isinstance(value, str):
+                value = _case_result_shorthand(value)
             return _normalize_type(
                 value,
                 [member for member in _members(alias["type"]) if member != "str"],
