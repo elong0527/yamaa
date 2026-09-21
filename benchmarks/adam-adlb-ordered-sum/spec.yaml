@@ -1,12 +1,12 @@
 schema_version: "1.0"
 domain: ADLB
-keys: [STUDYID, USUBJID, LBSEQ]
+keys: [STUDYID, USUBJID, PARAMCD, AVISIT]
 input:
-  LB: input/lb.csv
+  LB: {path: input/lb.csv, types: {LBSTRESN: float}}
 
 output:
   path: adlb.csv
-  columns: [STUDYID, USUBJID, LBSEQ, AVAL, AVALSUM]
+  columns: [STUDYID, USUBJID, PARAMCD, PARAM, AVISIT, AVAL, DTYPE]
 
 columns:
   - name: STUDYID
@@ -19,27 +19,48 @@ columns:
     label: Unique Subject Identifier
     derivation: LB.USUBJID
 
-  - name: LBSEQ
-    type: int
-    label: Sequence Number
-    derivation: LB.LBSEQ
+  - name: AVISIT
+    type: str
+    label: Analysis Visit
+    derivation: LB.VISIT
+
+  - name: PARAMCD
+    type: str
+    label: Parameter Code
+
+  - name: PARAM
+    type: str
+    label: Parameter
 
   - name: AVAL
     type: float
     label: Analysis Value
-    derivation: LB.LBSTRESN
 
-  - name: AVALSUM
-    type: float
-    label: Sum in Source Record Order
-    derivation:
-      aggregate:
-        group_by: [STUDYID, USUBJID]
-        expr: "SUM(AVAL)"
+  - name: DTYPE
+    type: str
+    label: Derivation Type
+
+rows:
+  - id: collected
+    derivations:
+      PARAMCD: {source: LB.LBTESTCD}
+      PARAM: {source: LB.LBTEST}
+      AVAL: {source: LB.LBSTRESN}
+      DTYPE: {literal: null}
+
+  - id: total
+    group_by: [LB.STUDYID, LB.USUBJID, LB.VISIT]
+    derivations:
+      PARAMCD: {literal: TOTAL}
+      PARAM: {literal: Total of Components}
+      AVAL:
+        aggregate:
+          expr: "SUM(LB.LBSTRESN)"
+      DTYPE: {literal: CALCULATION}
 
 verifications:
   - unique:
-      columns: [STUDYID, USUBJID, LBSEQ]
+      columns: [STUDYID, USUBJID, PARAMCD, AVISIT]
   - row_count:
-      min: 3
-      max: 3
+      min: 4
+      max: 4
