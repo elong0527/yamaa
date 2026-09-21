@@ -34,7 +34,7 @@ columns:
         sources:
           - filter: ODM.ItemOID = 'IT.DM.ARM'
             variable: ODM.Value
-        default: Unassigned
+        missing: Unassigned
 
   - name: ACTARM
     type: str

@@ -259,10 +259,12 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
     operand = source_operand(payload.get("source"))
     dictionary = payload.get("dict")
     case_sensitive = payload.get("case_sensitive", True)
+    strict = payload.get("strict", False)
     if (
         operand is None
         or not isinstance(dictionary, Mapping)
         or type(case_sensitive) is not bool
+        or type(strict) is not bool
     ):
         return expression_condition(
             "validation",
@@ -316,15 +318,17 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
         return normalized
     value = normalized.value
     if value is MISSING:
+        if strict:
+            return expression_condition(
+                "mapping",
+                "missing_input",
+                {"variable": variable},
+                "missing",
+                requirement="REQ-0334",
+            )
         if "missing" in payload:
             return handler_value(payload, "missing")
-        return expression_condition(
-            "mapping",
-            "missing_input",
-            {"variable": variable},
-            "missing",
-            requirement="REQ-0334",
-        )
+        return ValueResult(value=MISSING)
     if not isinstance(value, str):
         return expression_condition(
             "validation",
@@ -339,15 +343,17 @@ def _mapping(payload: object, resolver: Resolver) -> EvaluationResult:
 
     if matched is not None:
         return normalize_runtime_value(dictionary[matched])
-    if "unmapped" in payload:
-        return handler_value(payload, "unmapped")
-    return expression_condition(
-        "mapping",
-        "unmapped_value",
-        {"source": variable, "value": value},
-        "unmapped",
-        requirement="REQ-0334",
-    )
+    if strict:
+        return expression_condition(
+            "mapping",
+            "unmapped_value",
+            {"source": variable, "value": value},
+            "missing",
+            requirement="REQ-0334",
+        )
+    if "missing" in payload:
+        return handler_value(payload, "missing")
+    return ValueResult(value=MISSING)
 
 
 CORE_EXPRESSION_HANDLERS: dict[str, ExpressionHandler] = {

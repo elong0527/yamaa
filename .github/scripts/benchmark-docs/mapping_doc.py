@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the human-review "Derived Excel Specification" section of a benchmark dashboard.
+"""Render the human-review "Mapping spec" section of a benchmark dashboard.
 
 The section is generated from the benchmark's spec.yaml: one row per output
 column carrying the source variable(s), the derivation in plain language, the
@@ -49,12 +49,14 @@ def describe_mapping(mapping):
         '"' + str(k) + '" ' + ARROW + ' "' + str(v) + '"'
         for k, v in mapping.get("dict", {}).items()
     )
-    fallback = mapping.get("unmapped", mapping.get("missing"))
-    tail = (
-        "; missing or unlisted values " + ARROW + ' "' + str(fallback) + '"'
-        if fallback is not None
-        else ""
-    )
+    fallback = mapping.get("missing")
+    strict = mapping.get("strict", False)
+    if fallback is not None:
+        tail = "; missing or unlisted values " + ARROW + ' "' + str(fallback) + '"'
+    elif strict:
+        tail = "; missing or unlisted values are errors"
+    else:
+        tail = ""
     return "Recode " + str(var) + where + ": " + pairs + tail + "."
 
 
@@ -394,7 +396,7 @@ def render_table(tab_id, headers, rows):
         body.append("<tr>" + tds + "</tr>")
     return (
         '<div class="table-scroll mapping-scroll" tabindex="0" role="region" '
-        'aria-label="Derived Excel Specification ' + html.escape(tab_id) + ' table">'
+        'aria-label="Mapping spec ' + html.escape(tab_id) + ' table">'
         '<table class="data-table mapping-table"><thead><tr>'
         + cells
         + "</tr></thead><tbody>"
@@ -404,7 +406,7 @@ def render_table(tab_id, headers, rows):
 
 
 def render_mapping_section(spec):
-    """Full 'Derived Excel Specification' section HTML with tabbed sheet panes."""
+    """Full 'Mapping spec' section HTML with tabbed sheet panes."""
     sheets = mapping_sheets(spec)
     if not sheets:
         return ""
@@ -433,11 +435,11 @@ def render_mapping_section(spec):
     return (
         '<section id="mapping-spec" class="panel mapping-panel" aria-labelledby="mapping-heading">'
         '<header class="panel-header"><span class="panel-title">'
-        '<h2 id="mapping-heading">Derived Excel Specification</h2></span>'
+        '<h2 id="mapping-heading">Mapping spec</h2></span>'
         '<span class="panel-caption">Generated from the YAML spec for human review; '
         "do not edit by hand</span></header>"
         '<div class="mapping-body">'
-        '<div role="tablist" aria-label="Derived Excel Specification sheets" class="mapping-tablist">'
+        '<div role="tablist" aria-label="Mapping spec sheets" class="mapping-tablist">'
         + "".join(tabs)
         + "</div>"
         + "".join(panes)

@@ -108,7 +108,7 @@ columns:
     derivation:
       value:
         source: LBORRES
-      conversion_failure: null
+      missing:
     verifications:
       range:
         min: 0
