@@ -1,30 +1,21 @@
 # Derivation schema examples
 
-These examples exercise `yaml/schema.yaml` with small inputs and exact expected
+These benchmark exercise `yaml/schema.yaml` with small inputs and exact expected
 outputs. They are intended for human review, automated tests, and AI-assisted
 implementation. Each holds a specification, its source CSVs, the exact expected
 CSV or error, and a README describing what the result means.
 
-CSV is used here because these are small, reviewable illustrations. Examples
-do not duplicate each CSV fixture with an equivalent Parquet file: the two
-copies would express the same rows while adding binary review and
-synchronization burden. Production artifacts should use R020's `parquet`
-profile unless a human-reviewable CSV deliverable is specifically required.
-
-Execution behavior is defined by the schema's adjacent operation descriptions
-and the shared normative rules in
-[`../rules/README.md`](../rules/README.md); dataset declarations,
-variable references, and ODM contextual lookups by
-[R002](../rules/specification/binding.md). Example READMEs describe data,
-not the specification; [`agents.md`](agents.md) states that contract.
+CSV is used here because these are small, reviewable illustrations. 
+Production artifacts should use `parquet` unless CSV deliverable is specifically required.
+Benchmarks do not duplicate each CSV fixture with an equivalent Parquet file.
 
 `odm.csv` is a tabular projection of ODM clinical data, not an ODM exchange
 document itself. Its fields map to the official
-[CDISC ODM 2.0 clinical-data schema](https://github.com/cdisc-org/DataExchange-ODM/blob/main/schema/ODM-clinicaldata.xsd).
+[CDISC ODM 2.0 clinical-data schema](https://github.com/cdisc-org/DataExchange-ODM/tree/main).
 
 New to the suite? Read [`sdtm-dm-basic`](sdtm-dm-basic/) for direct mapping,
 [`sdtm-lb-findings`](sdtm-lb-findings/) for row construction, and
-[`adam-adlb-bds`](adam-adlb-bds/) for a full BDS derivation, in that order.
+[`adam-adlb-bds`](adam-adlb-bds/) for BDS derivation.
 
 ## Lifecycle
 
@@ -34,21 +25,9 @@ Each example carries a lifecycle badge showing its review state:
 - `reviewed`: has discussion comments or GitHub issues.
 - `finalized`: human decision to finalize.
 
-## Index
+## Listing
 
-An example that cannot express something records a design finding. The suite
-passes when its declared error occurs. Those findings are collected in this
-repository's issue tracker, which also carries the schema work they justify.
-
-Expected-failure examples carry `expected/error.yaml`. When rejection happens
-after the dataset is completed, an expected CSV records the rows presented to
-the failing check. When a missing capability prevents execution, an expected
-CSV records the intended artifact once that capability exists.
-
-Every expected-failure README ends with a `How to fix` section that recommends
-the safest correction and shows the smallest useful YAML change.
-
-| Example | Derives | Lifecycle |
+| Benchmark | Derives | Dashboard | Lifecycle |
 |---|---|---|
 | [`adam-adae-death`](adam-adae-death/) | carry each subject's death onto every event | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle) |
 | [`adam-adae-occurrence-flags`](adam-adae-occurrence-flags/) | flag the first occurrence at three levels | [![Lifecycle: reviewed](https://img.shields.io/badge/Lifecycle-reviewed-yellow)](https://github.com/elong0527/yamaa/blob/main/benchmarks/README.md#lifecycle) |
