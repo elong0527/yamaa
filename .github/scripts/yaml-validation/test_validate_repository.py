@@ -6572,26 +6572,38 @@ class TestRetiredOdmItemReferences(unittest.TestCase):
             'derivation.case[1].otherwise.source.variable', findings[0]
         )
 
-    def test_exempts_the_specifications_506_still_owes(self):
-        listed = sorted(VALIDATOR.ODM_CONTEXTUAL_REFERENCE_MIGRATION)
+    def test_the_migrated_specifications_carry_no_retired_reference(self):
+        # These four carried the exemption the retirement shipped with. The
+        # check now runs unexempted, so each has to pass it on its own; a
+        # reintroduced contextual reference fails here and not only in a
+        # whole-repository run.
+        env = self.env()
         examples = TOOL_PATH.parents[3] / 'benchmarks'
+        migrated = [
+            'adam-adsl-randomization/input/dm.schema.yaml',
+            'odm-form-items/spec.yaml',
+            'sdtm-lb-findings/spec.yaml',
+            'sdtm-lb-multiform/spec.yaml',
+        ]
 
-        self.assertEqual(
-            listed,
-            [
-                'adam-adsl-randomization/input/dm.schema.yaml',
-                'odm-form-items/spec.yaml',
-                'sdtm-lb-findings/spec.yaml',
-                'sdtm-lb-multiform/spec.yaml',
-            ],
-        )
-        for entry in listed:
-            # An exemption that names a file nobody keeps is an exemption
-            # nobody notices retiring.
-            self.assertTrue((examples / entry).is_file(), entry)
+        for entry in migrated:
+            spec_path = examples / entry
+            self.assertTrue(spec_path.is_file(), entry)
+            with open(spec_path) as handle:
+                spec = yaml.safe_load(handle)
             self.assertEqual(
-                VALIDATOR.example_migration_label(examples / entry), entry
+                VALIDATOR.validate_retired_odm_item_references(
+                    spec, entry, spec_path, env
+                ),
+                [],
+                entry,
             )
+
+    def test_the_check_carries_no_exemption(self):
+        # An exemption list nobody empties is a retirement nobody finishes.
+        self.assertFalse(
+            hasattr(VALIDATOR, 'ODM_CONTEXTUAL_REFERENCE_MIGRATION')
+        )
 
 
 
